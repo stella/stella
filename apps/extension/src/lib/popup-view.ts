@@ -16,7 +16,7 @@ export type PopupSecondaryAction = {
   descriptionMessageKey: PopupMessageKey;
   messageKey: PopupMessageKey;
 };
-export type PopupState =
+type PopupState =
   | { type: "connected"; origin: string }
   | { type: "connected-elsewhere" }
   | { type: "not-connected" }

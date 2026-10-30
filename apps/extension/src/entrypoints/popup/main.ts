@@ -4,6 +4,7 @@ import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
 import { readBrowserController } from "../../lib/controller";
 import { downloadNoticeMessage } from "../../lib/download-guard";
 import { parseControllableUrl } from "../../lib/origin-policy";
+import { runPopupAction } from "../../lib/popup-actions";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import {
   handedTabView,
@@ -167,39 +168,25 @@ const adoptActiveTab = async (
   render(handedTabView(new URL(result.url).origin));
 };
 
-const runAction = async (
-  action: PopupAction["action"] | PopupSecondaryAction["action"],
-): Promise<void> => {
-  const activeTab = await readActiveTab();
-  if (action === "grant" || action === "grant-and-connect") {
-    const granted = await requestAllSiteAccess();
-    if (!granted) {
-      renderFailure("accessUpdateFailed");
-      return;
-    }
-    if (action === "grant-and-connect") {
-      await pairActiveTab(activeTab);
-    } else {
-      await renderAccess();
-    }
-    return;
-  }
-  if (action === "connect") {
-    return pairActiveTab(activeTab);
-  }
-  if (action === "adopt") {
-    return adoptActiveTab(activeTab);
-  }
-  await sendPopupRequest({ type: action });
-  await renderAccess();
-};
-
 const execute = (
   button: HTMLButtonElement,
   action: PopupAction["action"] | PopupSecondaryAction["action"],
 ): void => {
   button.disabled = true;
-  runAction(action)
+  runPopupAction(action, {
+    renderedTab,
+    requestAccess: requestAllSiteAccess,
+    readActiveTab,
+    pair: pairActiveTab,
+    adopt: adoptActiveTab,
+    disconnect: async () => {
+      await sendPopupRequest({ type: "disconnect" });
+    },
+    revoke: async () => {
+      await sendPopupRequest({ type: "revoke" });
+    },
+    render: renderAccess,
+  })
     .catch(() => renderFailure("accessUpdateFailed"))
     .finally(() => {
       button.disabled = false;
@@ -218,12 +205,15 @@ primaryButton.addEventListener("click", () => {
   }
 });
 
+let renderedTab: chrome.tabs.Tab | null = null;
+
 const renderAccess = async (): Promise<void> => {
   const [granted, controller, activeTab] = await Promise.all([
     hasAllSiteAccess(),
     readBrowserController(),
     readActiveTab(),
   ]);
+  renderedTab = activeTab;
   render(
     popupView({ activeTab: activeTabKind(activeTab), controller, granted }),
   );
