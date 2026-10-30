@@ -907,7 +907,7 @@
   "caseLaw.provision.subsection": "para. {value}",
   "caseLaw.reader.documentUpdated": "The document was updated.",
   "caseLaw.reader.expandProvisions": "Expand provisions",
-  "caseLaw.reader.headMatter": "Head matter",
+  "caseLaw.reader.headMatter": "Case information",
   "caseLaw.reader.sourceAttribution": "The source data is freely available at <link>{source}</link>.",
   "caseLaw.research.answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}",
   "caseLaw.research.answers.failureReasons.decisionUnavailable": "Decision unavailable",
