@@ -413,6 +413,31 @@ const runBackfillSession = async ({
   return report.status === "held" ? 1 : 0;
 };
 
+type UnderSourceLeaseOptions<T> = {
+  /** Null in a plan run, which holds no lease. */
+  sourceLease: { release: () => Promise<void> } | null;
+  prepare: () => Promise<void>;
+  work: () => Promise<T>;
+};
+
+/**
+ * Prepare and run the work under an acquired source lease, releasing it
+ * however either ends: a lease left held blocks the source's ingestion
+ * until it expires.
+ */
+export const underSourceLease = async <T>({
+  sourceLease,
+  prepare,
+  work,
+}: UnderSourceLeaseOptions<T>): Promise<T> => {
+  try {
+    await prepare();
+    return await work();
+  } finally {
+    await sourceLease?.release();
+  }
+};
+
 export const runEuEcjLanguageBackfill = async (
   argv: readonly string[],
 ): Promise<number> => {
@@ -452,21 +477,23 @@ export const runEuEcjLanguageBackfill = async (
       );
       return 1;
     }
-    if (flags.apply) {
-      await refreshS3();
-      await refreshCorpusS3();
-    }
-    try {
-      return await runBackfillSession({
-        flags,
-        rootDb,
-        ingestionDb,
-        sourceId: source.id,
-        sourceLease,
-      });
-    } finally {
-      await sourceLease?.release();
-    }
+    return await underSourceLease({
+      sourceLease,
+      prepare: async () => {
+        if (flags.apply) {
+          await refreshS3();
+          await refreshCorpusS3();
+        }
+      },
+      work: async () =>
+        await runBackfillSession({
+          flags,
+          rootDb,
+          ingestionDb,
+          sourceId: source.id,
+          sourceLease,
+        }),
+    });
   } finally {
     await lane.release();
   }
