@@ -136,7 +136,7 @@ export type DecisionFilterFacets = {
 };
 
 /** Whether a stored tier label is one the UI has a heading and a chip for. */
-export const isCourtTier = (value: string): value is CourtTier =>
+const isCourtTier = (value: string): value is CourtTier =>
   COURT_TIER_LABELS.some((tier) => tier === value);
 
 /**

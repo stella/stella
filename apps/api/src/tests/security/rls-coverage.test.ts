@@ -76,7 +76,7 @@ type RestrictivePolicy = {
   check_expr: string | null;
 };
 
-/** The one restrictive policy allowed to admit rows: the entity feature fence. */
+/** The entity feature fence applies alongside the table's permissive access policy. */
 const ENTITY_FEATURE_POLICY_NAME = "workspace_entity_feature";
 
 const depthChange = (char: string | undefined): number => {
@@ -215,15 +215,35 @@ const isInvoiceAccessPredicate = (expression: string | null): boolean =>
     .replaceAll("invoices.", "") ===
   "stella_invoice_accessid,organization_id,workspace_id,client_id,original_invoice_id";
 
+// Rows that belong to one invoice are fenced by that invoice's visibility.
+const INVOICE_CHILD_TABLES: ReadonlySet<string> = new Set([
+  "invoice_lines",
+  "invoice_payments",
+]);
+
 const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
-  policy.table_name === "invoice_lines" &&
-  policy.policy_name === "invoice_lines_complete_invoice" &&
+  INVOICE_CHILD_TABLES.has(policy.table_name) &&
+  policy.policy_name === `${policy.table_name}_complete_invoice` &&
   policy.using_expr === policy.check_expr &&
   policy.using_expr
     ?.replaceAll(/["()\s]/gu, "")
     .replaceAll("public.", "")
     .toLowerCase() ===
-    "existsselect1frominvoicesiwherei.id=invoice_lines.invoice_id";
+    `existsselect1frominvoicesiwherei.id=${policy.table_name}.invoice_id`;
+
+/** Recorded inserts require both provenance and attribution; tenant policies still apply. */
+const isInvoicePaymentRecordedInsertFence = (
+  policy: RestrictivePolicy,
+): boolean =>
+  policy.table_name === "invoice_payments" &&
+  policy.policy_name === "invoice_payments_recorded_insert" &&
+  policy.command === "a" &&
+  policy.using_expr === null &&
+  policy.check_expr
+    ?.replaceAll(/::text\b/gu, "")
+    .replaceAll(/["()\s]/gu, "")
+    .replaceAll("invoice_payments.", "") ===
+    `origin='${schema.INVOICE_PAYMENT_ORIGIN.RECORDED}'ANDrecorded_byISNOTNULL`;
 
 /** Other restrictive policies deny rows unless their canonical fence is exact. */
 const restrictivePolicyViolation = (
@@ -231,7 +251,10 @@ const restrictivePolicyViolation = (
 ): string | undefined => {
   const name = `${policy.table_name}.${policy.policy_name}`;
   const expr = policy.command === "a" ? policy.check_expr : policy.using_expr;
-  if (isCompleteInvoiceFence(policy)) {
+  if (
+    isCompleteInvoiceFence(policy) ||
+    isInvoicePaymentRecordedInsertFence(policy)
+  ) {
     return undefined;
   }
   if (policy.policy_name !== ENTITY_FEATURE_POLICY_NAME) {
@@ -265,7 +288,42 @@ afterAll(async () => {
 // ════════════════════════════════════════════════════════
 
 describe("policy coverage", () => {
-  test("restrictive policies stay denies unless they are the entity feature fence", () => {
+  test("recorded payment insert classification requires its complete restrictive fence", () => {
+    const policy = {
+      table_name: "invoice_payments",
+      policy_name: "invoice_payments_recorded_insert",
+      command: "a",
+      using_expr: null,
+      check_expr: "((origin = 'recorded'::text) AND (recorded_by IS NOT NULL))",
+    };
+    expect(restrictivePolicyViolation(policy)).toBeUndefined();
+    for (const check_expr of [
+      "origin = 'recorded'::text",
+      "recorded_by IS NOT NULL",
+      "((origin = 'legacy'::text) AND (recorded_by IS NOT NULL))",
+      "((origin = 'recorded'::text) OR (recorded_by IS NOT NULL))",
+      "(((origin = 'recorded'::text) AND (recorded_by IS NOT NULL)) OR true)",
+      "true",
+      null,
+    ]) {
+      expect(
+        restrictivePolicyViolation({ ...policy, check_expr }),
+      ).toBeDefined();
+    }
+    for (const mutation of [
+      { table_name: "invoice_lines" },
+      { policy_name: "different_insert" },
+      { command: "*" },
+      { command: "w" },
+      { using_expr: policy.check_expr },
+    ]) {
+      expect(
+        restrictivePolicyViolation({ ...policy, ...mutation }),
+      ).toBeDefined();
+    }
+  });
+
+  test("restrictive policies stay denies unless their canonical fence is exact", () => {
     const deny = {
       table_name: "entities",
       policy_name: "entities_deny_delete",
@@ -284,6 +342,25 @@ describe("policy coverage", () => {
         "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_lines.invoice_id)",
     };
     expect(restrictivePolicyViolation(invoiceFence)).toBeUndefined();
+    const paymentFence =
+      "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_payments.invoice_id)";
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        table_name: "invoice_payments",
+        policy_name: "invoice_payments_complete_invoice",
+        using_expr: paymentFence,
+        check_expr: paymentFence,
+      }),
+    ).toBeUndefined();
+    // A fence over another table's invoice column admits nothing it names.
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        table_name: "invoice_payments",
+        policy_name: "invoice_payments_complete_invoice",
+      }),
+    ).toBeDefined();
     expect(
       restrictivePolicyViolation({
         ...invoiceFence,
@@ -505,7 +582,11 @@ describe("policy coverage", () => {
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
   ]);
-  const APPEND_ONLY = new Set(["audit_logs", "chat_message_revisions"]);
+  const APPEND_ONLY = new Set([
+    "audit_logs",
+    "chat_message_revisions",
+    "document_review_finding_decisions",
+  ]);
   const INSERT_ONLY = new Set([
     "entity_deletion_cleanup_requests",
     "template_deletion_cleanup_requests",
@@ -946,7 +1027,7 @@ describe("policy coverage", () => {
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (!pol.permissive) {
-          expect(expr).toBe("false");
+          expect(restrictivePolicyViolation(pol)).toBeUndefined();
           continue;
         }
         expect(expr).toContain("organization_id");

@@ -1,15 +1,13 @@
 import { Suspense, use, useState } from "react";
 
 import { Result } from "better-result";
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
+import { screenStyles } from "@/components/empty-state-screen";
+import { TaskStatusControl } from "@/components/task-status-control";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
@@ -38,7 +36,7 @@ export const EntityDetailSheet = ({
       entityId,
     });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return result;
   });
@@ -50,7 +48,7 @@ export const EntityDetailSheet = ({
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         }
       >
-        <LoadedEntity load={load} />
+        <LoadedEntity load={load} source={source} workspaceId={workspaceId} />
       </Suspense>
     </View>
   );
@@ -58,8 +56,12 @@ export const EntityDetailSheet = ({
 
 const LoadedEntity = ({
   load,
+  source,
+  workspaceId,
 }: {
   load: Promise<Result<EntityDetail, ApiError>>;
+  source: AccessTokenSource;
+  workspaceId: string;
 }) => {
   const t = useTranslations("entity");
   const matter = useTranslations("matter");
@@ -107,6 +109,13 @@ const LoadedEntity = ({
           ? matter("untitled")
           : entity.name}
       </Text>
+      {kind === "task" ? (
+        <TaskStatusControl
+          matterId={workspaceId}
+          source={source}
+          taskId={entity.entityId}
+        />
+      ) : null}
       <View style={[styles.facts, { borderColor: colors.border }]}>
         {facts.map((fact) => (
           <View
@@ -131,6 +140,7 @@ const LoadedEntity = ({
 
 const styles = StyleSheet.create({
   content: {
+    ...screenStyles.readable,
     gap: 20,
     padding: 24,
   },

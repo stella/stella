@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { ReturnSelected } from "@/features/time-review/return-selected";
 import {
   TimeReviewRow,
   type TimeReviewRowData,
@@ -147,13 +148,18 @@ const TimeApprovals = ({
           {t("billing.approval.timeEntries")}
         </h2>
         {selected.length > 0 && (
-          <Button
-            loading={selected.some(({ id }) => review.isPending(id))}
-            onClick={() => review.approve(selected)}
-            size="sm"
-          >
-            {t("billing.approval.approveSelected", { count: selected.length })}
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ReturnSelected review={review} selected={selected} />
+            <Button
+              loading={selected.some(({ id }) => review.isPending(id))}
+              onClick={() => review.approve(selected)}
+              size="sm"
+            >
+              {t("billing.approval.approveSelected", {
+                count: selected.length,
+              })}
+            </Button>
+          </div>
         )}
       </div>
       <ul className="flex flex-col gap-3">

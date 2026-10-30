@@ -22,6 +22,11 @@ const CLIENT_INVOICES_MIGRATION_PATH = nodePath.join(
   "20261026220000_client_invoices",
   "migration.sql",
 );
+const BILLING_ACTIVITY_HOUR_CAP_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261029076000_billing_activity_rates_hour_caps",
+  "migration.sql",
+);
 const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261015090000_matter_access_rule_function",
@@ -121,6 +126,11 @@ const PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH = nodePath.join(
 const PROVISION_PENDING_SINCE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261010110000_case_law_provision_pending_since",
+  "migration.sql",
+);
+const PROVISION_REDACTION_RETIREMENT_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261027160600_case_law_redaction_retirement",
   "migration.sql",
 );
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
@@ -885,6 +895,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_READER_GRANTS_MIGRATION_PATH,
     PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
     PROVISION_PENDING_SINCE_MIGRATION_PATH,
+    PROVISION_REDACTION_RETIREMENT_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>
@@ -944,6 +955,33 @@ export const installPgliteServiceClientCredentialCascade = async (
       executableSql(statement).startsWith(prefix),
     ),
   );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const CASE_LAW_COVERAGE_SUMMARY_MIGRATIONS = [
+  "20261027160000_case_law_coverage_summary",
+  "20261029141500_case_law_coverage_snapshot_freshness",
+] as const;
+
+/** Install the summary reader and its privileges from the committed migrations, in order. */
+export const installPgliteCaseLawCoverageSummary = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = CASE_LAW_COVERAGE_SUMMARY_MIGRATIONS.flatMap((migration) =>
+    readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("GRANT EXECUTE ON FUNCTION") ||
+      source.startsWith('ALTER TABLE "case_law_coverage_summaries" FORCE')
+    );
+  });
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
@@ -1078,6 +1116,34 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
   }
 };
 
+/**
+ * Install the sitemap change-log functions and triggers from the production
+ * migration after schema push.
+ */
+export const installPgliteCaseLawSitemapChanges = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261029140900_case_law_sitemap_changes",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith('CREATE FUNCTION "log_case_law_sitemap_') ||
+      source.startsWith('CREATE TRIGGER "case_law_')
+    );
+  });
+  if (statements.length !== 8) {
+    panic("Expected the three sitemap change functions and five triggers");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261003120100_organization_member_capacity",
@@ -1173,6 +1239,26 @@ export const installPgliteOrganizationMemberCapacity = async (
 };
 
 /** Install migration-owned timer signals and grants omitted by schema push. */
+/** Install the chat stored-content egress fences on threads and memberships. */
+export const installPgliteChatStoredContentEgress = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261028061100_chat_stored_content_egress",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE)\s/u.test(
+      executableSql(statement),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteTimeEntryTimerSignals = async (
   db: PgliteSchemaDb,
 ) => {
@@ -1373,10 +1459,13 @@ export const installPgliteListVerificationBudgets = async (
 export const installPgliteInvoiceObjects = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(CLIENT_INVOICES_MIGRATION_PATH)
+  const statements = [
+    ...readMigrationStatements(CLIENT_INVOICES_MIGRATION_PATH),
+    ...readMigrationStatements(BILLING_ACTIVITY_HOUR_CAP_MIGRATION_PATH),
+  ]
     .map(executableSql)
     .filter((statement) =>
-      /^(?:CREATE FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION|CREATE TRIGGER|CREATE POLICY)/u.test(
+      /^(?:CREATE (?:OR REPLACE )?FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION|CREATE TRIGGER|CREATE POLICY)/u.test(
         statement,
       ),
     );
@@ -1398,5 +1487,23 @@ export const installPgliteInvoiceObjects = async (
         statement.replace(/^CREATE FUNCTION/u, "CREATE OR REPLACE FUNCTION"),
       ),
     );
+  }
+};
+
+/** Install filing-year semantics from the committed function migration. */
+export const installPgliteDecisionDocketFilingYear = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261027160700_decision_docket_filing_year",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith("CREATE FUNCTION"),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
   }
 };

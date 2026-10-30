@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -323,9 +324,7 @@ const WorkReferences = ({
   const { basis, exceptions } = summarizeProvisionVersions(group.provisions);
   let title = group.title;
   if (statute !== undefined) {
-    title = statute.title.includes(group.title)
-      ? statute.title
-      : `${group.title}, ${statute.title}`;
+    title = statuteDisplayLabel(statute).text;
   }
 
   return (

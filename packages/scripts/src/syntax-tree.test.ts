@@ -4,6 +4,7 @@ import {
   isObjectLiteralProperty,
   isSideEffectImport,
   parseSource,
+  staticPropertyName,
   Visitor,
   walk,
 } from "./syntax-tree";
@@ -24,6 +25,27 @@ test("classifies side-effect imports independently of syntax trivia", () => {
       expect(isSideEffectImport(statement, parsed)).toBe(expected);
     }
   }
+});
+
+test("static property names retain computed-key semantics in objects and bindings", () => {
+  const { program } = parseSource(
+    "fixture.ts",
+    'const { plain, [dynamic]: binding } = source; const object = { plain: 1, ["literal"]: 2, [`template`]: 3, [dynamic]: 4 };',
+  );
+  const names: (string | undefined)[] = [];
+  walk(program, (node) => {
+    if (node.type === "Property") {
+      names.push(staticPropertyName(node));
+    }
+  });
+  expect(names).toEqual([
+    "plain",
+    undefined,
+    "plain",
+    "literal",
+    "template",
+    undefined,
+  ]);
 });
 
 test("walks in source order with ancestors and can skip a subtree", () => {

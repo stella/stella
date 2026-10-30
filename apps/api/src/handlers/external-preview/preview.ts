@@ -5,12 +5,12 @@ import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { fetchWithResolvedAddress } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import {
-  fetchWithResolvedAddress,
   OUTBOUND_PROTOCOL_POLICY,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";

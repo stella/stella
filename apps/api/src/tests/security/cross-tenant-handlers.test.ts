@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeEach,
@@ -25,8 +25,10 @@ import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -63,7 +65,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
@@ -91,6 +93,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatConnector from "@/api/handlers/chat/submit-connector";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
@@ -136,8 +139,8 @@ import createInvoice from "@/api/handlers/invoices/create";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
-import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
-import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
+import { createListReaderAnnotations } from "@/api/handlers/legal-reader/annotations/list";
+import { createListReaderAnswers } from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import deleteMemory from "@/api/handlers/memories/delete";
@@ -204,6 +207,7 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
 import {
   createTestIds,
@@ -219,6 +223,11 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+const readCopies = createTestWithdrawalCopyReader(() => testDb);
+const listReaderAnnotations = createListReaderAnnotations({ readCopies });
+const listReaderAnswers = createListReaderAnswers({ readCopies });
+const lookupResearchAnswers = createLookupResearchAnswers({ readCopies });
 
 beforeEach(() => {
   streamChatStub.mockClear();
@@ -1778,21 +1787,37 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
-    // `pinned: false` matches the fixture, so the positive run reaches the
-    // locked row without writing.
+    // Both probes need a live firm administrator for the in-transaction
+    // authority check. `pinned: false` reaches the locked row without writing.
     name: "memory update",
-    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
-      await runHandler(updateMemory, workspaceA, {
-        featureAccessSnapshot: memoryAccess(workspaceA),
+    runAAgainstB: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsA1],
+        organizationId: testIds.orgA,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsA1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("owner"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
-    runBPositive: async ({ ids: testIds, workspaceB }) =>
-      await runHandler(updateMemory, workspaceB, {
-        featureAccessSnapshot: memoryAccess(workspaceB),
+      });
+    },
+    runBPositive: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsB1],
+        organizationId: testIds.orgB,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsB1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("admin"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
+      });
+    },
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
@@ -2242,6 +2267,23 @@ const isolationCases: IsolationCase[] = [
     runBPositive: async ({ sameUserWorkspaceB }) =>
       await runHandler(submitChatSecret, sameUserWorkspaceB, {
         body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
+    name: "chat connector request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatConnector, workspaceA, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatConnector, sameUserWorkspaceB, {
+        body: { decision: "declined" },
         params: { threadId: chatThreadB, toolCallId: "missing-request" },
         query: {},
       }),
@@ -3328,6 +3370,86 @@ afterAll(async () => {
 });
 
 describe("cross-tenant handler isolation", () => {
+  test.each([
+    "reader answers across organizations",
+    "legal reader annotation list",
+    "case-law research answers lookup",
+  ])(
+    "%s: withdrawal changes content but preserves visible resource identities",
+    async (name) => {
+      const testCase =
+        isolationCases.find((candidate) => candidate.name === name) ??
+        panic("Missing withdrawal isolation case");
+      const context = createIsolationContext();
+      const beforeA = await testCase.runAAgainstB(context);
+      const beforeB = await testCase.runBPositive(context);
+      testCase.expectDenied(beforeA, context);
+      testCase.expectPositive(beforeB, context);
+      const identities = (result: unknown) =>
+        getPageItems(result).map((item) => ({
+          id: item["id"],
+          columnId: item["columnId"],
+          decisionId: item["decisionId"],
+        }));
+      const sourceId = createSafeId<"caseLawSource">();
+      await testDb.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: sourceId,
+        name: "Withdrawal isolation fixture",
+        enabled: false,
+      });
+      const [originalDecision] = await testDb
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, ids.caseLawDecisionB))
+        .limit(1);
+      try {
+        await testDb
+          .insert(caseLawDecisions)
+          .values({
+            id: ids.caseLawDecisionB,
+            sourceId,
+            sourceDocumentId: ids.caseLawDecisionB,
+            caseNumber: "Fixture",
+            court: "Fixture court",
+            country: "POL",
+            language: "pl",
+            redactedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: caseLawDecisions.id,
+            set: {
+              redactedAt: new Date(),
+              fulltext: null,
+              contentHash: null,
+              sections: null,
+              documentAst: null,
+            },
+          });
+        const afterA = await testCase.runAAgainstB(createIsolationContext());
+        const afterB = await testCase.runBPositive(createIsolationContext());
+        expect(getStatusCode(afterA)).toBeNull();
+        expect(getStatusCode(afterB)).toBeNull();
+        expect(identities(afterA)).toEqual(identities(beforeA));
+        expect(identities(afterB)).toEqual(identities(beforeB));
+        expect(JSON.stringify(afterB)).toContain("Withdrawn by publisher");
+      } finally {
+        if (originalDecision !== undefined) {
+          await testDb
+            .update(caseLawDecisions)
+            .set(originalDecision)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        } else {
+          await testDb
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        }
+        await testDb
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId));
+      }
+    },
+  );
   for (const testCase of isolationCases) {
     test(`${testCase.name}: workspace A cannot read workspace/org B resource IDs`, async () => {
       const context = createIsolationContext();

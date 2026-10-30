@@ -11,7 +11,10 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
-import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import {
+  requiresPerCallChatApproval,
+  USE_CONNECTOR_SECRET_TOOL_NAME,
+} from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -27,7 +30,6 @@ import {
   isExternalInputChatToolName,
   isExternalMcpToolName,
   isNonPersistentGrantChatToolName,
-  isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
   isSuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
@@ -49,6 +51,7 @@ import {
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
   formatReadableInputValue,
+  getCompleteConnectorInputRows,
   getReadableInputRows,
   getReaderAnnotationEditTargetId,
   humanizeIdentifier,
@@ -436,7 +439,6 @@ export const ToolApprovalCard = ({
     isBlocked,
     isFailed,
     isProcessing,
-    isPublicOfficialApproval,
     isDenied,
     label,
     showsExternalInput,
@@ -465,23 +467,19 @@ export const ToolApprovalCard = ({
   const isBrowserCommandAutoApproved =
     useBrowserCommandAutoApproved(browserCommand);
   // A stored grant answers a card only once the API confirms it still holds;
-  // public-registry lookups and opted-in browser page reads need no grant.
+  // opted-in browser page reads need no grant.
   const isGrantAutoApproval =
-    !isPublicOfficialApproval &&
     approvalId !== unconfirmedGrantApprovalId &&
     hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
-      isPublicOfficialApproval,
       name,
     });
   const shouldAutoApprove =
     !isBlocked &&
     !requiresPerCallChatApproval(name) &&
-    (isGrantAutoApproval ||
-      isPublicOfficialApproval ||
-      isBrowserCommandAutoApproved);
+    (isGrantAutoApproval || isBrowserCommandAutoApproved);
   const automaticResponse =
     approvalId === null
       ? null
@@ -516,8 +514,7 @@ export const ToolApprovalCard = ({
   // a batch.
   const asksForDecision =
     isAwaitingUser && isApprovalRequested && !responded && !isProcessing;
-  const isAwaitingDecision =
-    asksForDecision && !isBlocked && !isPublicOfficialApproval;
+  const isAwaitingDecision = asksForDecision && !isBlocked;
   const beginManualResponse = (id: string): boolean => {
     if (submittedApprovalIdRef.current === id) {
       return false;
@@ -612,85 +609,82 @@ export const ToolApprovalCard = ({
           />
         )}
 
-      {approvalId &&
-        asksForDecision &&
-        !isBlocked &&
-        !isPublicOfficialApproval && (
-          <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
-            <Button
-              autoFocus
-              onClick={() => {
-                if (!beginManualResponse(approvalId)) {
-                  return;
-                }
-                onApprove(approvalId, name);
-              }}
-              size="xs"
-            >
-              {t("chat.approval.allowOnce")}
-            </Button>
-            {browserCommand !== null &&
-              isReadOnlyBrowserCommand(browserCommand) &&
-              browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
-                <Button
-                  onClick={() => {
-                    if (!beginManualResponse(approvalId)) {
-                      return;
-                    }
-                    setBrowserApprovalMode(
-                      BROWSER_APPROVAL_MODE.autoApproveReads,
-                    );
-                    onApprove(approvalId, name);
-                  }}
-                  size="xs"
-                  variant="outline"
-                >
-                  {t("chat.approval.browser.autoApproveReads")}
-                </Button>
-              )}
-            {canAllowInConversation && (
+      {approvalId && asksForDecision && !isBlocked && (
+        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
+          <Button
+            autoFocus
+            onClick={() => {
+              if (!beginManualResponse(approvalId)) {
+                return;
+              }
+              onApprove(approvalId, name);
+            }}
+            size="xs"
+          >
+            {t("chat.approval.allowOnce")}
+          </Button>
+          {browserCommand !== null &&
+            isReadOnlyBrowserCommand(browserCommand) &&
+            browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
               <Button
                 onClick={() => {
                   if (!beginManualResponse(approvalId)) {
                     return;
                   }
-                  onAllowInConversation(approvalId, name);
+                  setBrowserApprovalMode(
+                    BROWSER_APPROVAL_MODE.autoApproveReads,
+                  );
+                  onApprove(approvalId, name);
                 }}
                 size="xs"
                 variant="outline"
               >
-                {t("chat.approval.allowInConversation")}
+                {t("chat.approval.browser.autoApproveReads")}
               </Button>
             )}
-            {canAlwaysAllow && (
-              <Button
-                onClick={() => {
-                  if (!beginManualResponse(approvalId)) {
-                    return;
-                  }
-                  onAlwaysAllow(approvalId, name);
-                }}
-                size="xs"
-                variant="outline"
-              >
-                {t("chat.approval.alwaysAllow")}
-              </Button>
-            )}
+          {canAllowInConversation && (
             <Button
-              className="ms-auto"
               onClick={() => {
                 if (!beginManualResponse(approvalId)) {
                   return;
                 }
-                onDeny(approvalId);
+                onAllowInConversation(approvalId, name);
               }}
               size="xs"
-              variant="ghost"
+              variant="outline"
             >
-              {t("chat.approval.deny")}
+              {t("chat.approval.allowInConversation")}
             </Button>
-          </div>
-        )}
+          )}
+          {canAlwaysAllow && (
+            <Button
+              onClick={() => {
+                if (!beginManualResponse(approvalId)) {
+                  return;
+                }
+                onAlwaysAllow(approvalId, name);
+              }}
+              size="xs"
+              variant="outline"
+            >
+              {t("chat.approval.alwaysAllow")}
+            </Button>
+          )}
+          <Button
+            className="ms-auto"
+            onClick={() => {
+              if (!beginManualResponse(approvalId)) {
+                return;
+              }
+              onDeny(approvalId);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            {t("chat.approval.deny")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
@@ -751,6 +745,7 @@ const ToolApprovalSummary = ({
           input={externalInput}
           isAwaitingDecision={isAwaitingDecision}
           providerName={providerName}
+          toolName={name}
         />
       )}
       {isRegistryWriteSummaryToolName(name) && input !== undefined && (
@@ -899,7 +894,6 @@ const getToolApprovalState = ({
       isTurnActive &&
       !isDenied &&
       (isApprovalResponded || (responded && isApprovalRequested)),
-    isPublicOfficialApproval: isPublicOfficialChatToolName(name),
     isStructuredEditFailure,
     label: externalMcpProviderName ?? defaultLabel,
     showsExternalInput,
@@ -1029,17 +1023,23 @@ const ExternalMcpInputSummary = ({
   input,
   isAwaitingDecision,
   providerName,
+  toolName,
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
   providerName: string;
+  toolName: ApprovalToolName;
 }) => {
   const t = useTranslations();
-  const rows = getReadableInputRows({
+  const rowOptions = {
     emptyLabel: t("common.empty"),
     input,
     requestLabel: t("chat.toolCall.input"),
-  });
+  };
+  const rows =
+    toolName === USE_CONNECTOR_SECRET_TOOL_NAME
+      ? getCompleteConnectorInputRows(rowOptions)
+      : getReadableInputRows(rowOptions);
 
   return (
     <div className="border-border/50 space-y-2 border-t px-3 py-2">

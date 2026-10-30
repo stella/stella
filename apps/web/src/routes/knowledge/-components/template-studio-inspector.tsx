@@ -87,6 +87,7 @@ import {
   templateFillDiscoverOptions,
   templateRecipesOptions,
 } from "@/lib/knowledge/queries";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -232,12 +233,18 @@ function TemplateStudioInspectorView({
   return (
     <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
       <InspectorTabHeader
-        actions={
-          <>
-            <StudioHealthBadge templateId={templateId} />
-            <StudioSaveAction />
-          </>
-        }
+        actions={[
+          {
+            id: "health",
+            requires: AVAILABLE_EVERYWHERE,
+            render: () => <StudioHealthBadge templateId={templateId} />,
+          },
+          {
+            id: "save",
+            requires: AVAILABLE_EVERYWHERE,
+            render: () => <StudioSaveAction />,
+          },
+        ]}
         label={tab.label}
         matter={
           languages.length > 0 ? (

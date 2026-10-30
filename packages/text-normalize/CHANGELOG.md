@@ -1,5 +1,19 @@
 # @stll/text-normalize
 
+## 0.5.1
+
+### Patch Changes
+
+- [#7103](https://github.com/stella/stella/pull/7103) [`5a279ca`](https://github.com/stella/stella/commit/5a279cac4dcaa80087c6c92f2e621ad124c661d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep every item when the search query folds to an empty key, including items without searchable fields.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#7088](https://github.com/stella/stella/pull/7088) [`0ecb2de`](https://github.com/stella/stella/commit/0ecb2de044bc19abd46d44ac933d0f3c1cd724ef) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `foldLikePostgresSearch`, `foldLikePostgresSearchWithOffsets` and `findPostgresSearchFoldRanges` at `@stll/text-normalize/postgres-search-fold`: PostgreSQL's `lower(unaccent(...))` reproduced code point for code point, with offsets back into the original text, for highlighting exactly what a server-side `unaccent` match found. `POSTGRES_UNACCENT_RULES` (`@stll/text-normalize/unaccent-rules`) is the extension's full default rule set.
+
+- [#7087](https://github.com/stella/stella/pull/7087) [`15e7031`](https://github.com/stella/stella/commit/15e7031924012f3998e399392d1add7eb603583d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `slugify` with the `ascii` charset transliterates Latin letters instead of dropping them: accented letters lose their marks (`café` is `cafe`), and letters with no decomposition follow the `unaccent()` table (`Łódź` is `lodz`, `Straße` is `strasse`, `Æsir` is `aesir`). Keys minted earlier are not recomputed; a caller that re-derives a stored key must recognise both forms.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 3,
+  "reason": "Tool execution errors are model-visible output, so the third-party boundary rethrows them anonymized like a returned value; member removal aborts its transaction when the member row vanished under the egress lock."
+}

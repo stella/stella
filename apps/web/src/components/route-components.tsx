@@ -36,7 +36,6 @@ import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-co
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
-import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
 
 // Lazy so the form stack is fetched only when someone reports the error.
 const FeedbackDialog = lazy(async () => {
@@ -183,23 +182,18 @@ export const DefaultErrorComponent = ({
 
   const t = useTranslations();
 
-  // CancelledError is benign — React Query throws it when a
-  // suspense query unmounts during route transitions or when
-  // sidebar preloads race with the current route. Return early
-  // to avoid showing the error screen; the route will recover
-  // on the next render cycle.
-  if (isCancelledError) {
-    return null;
-  }
-
   if (actionAdmissionOutcome(error)) {
     return (
-      <ActionAdmissionOutcome
-        className={className}
-        disabled={isPending}
-        error={error}
-        onRetry={retryErroredQueries}
-      />
+      <div className={cn("flex flex-col items-center gap-3 p-6", className)}>
+        <ActionAdmissionOutcome
+          disabled={isPending}
+          error={error}
+          onRetry={retryErroredQueries}
+        />
+        <Button render={<Link from="/" to="/workspaces" />} variant="outline">
+          <MattersNavIcon /> {t("routeError.backToMatters")}
+        </Button>
+      </div>
     );
   }
 
@@ -215,11 +209,9 @@ export const DefaultErrorComponent = ({
     return (
       <StatusMessage
         actionButton={
-          retriesExhausted ? (
-            <Button disabled={isPending} onClick={retryErroredQueries}>
-              <RefreshCcwIcon /> {t("common.tryAgain")}
-            </Button>
-          ) : null
+          <Button disabled={isPending} onClick={retryErroredQueries}>
+            <RefreshCcwIcon /> {t("common.tryAgain")}
+          </Button>
         }
         className={className}
         description={
@@ -307,7 +299,6 @@ const UnexpectedRouteError = ({
       recovery: recovery.type,
       reference,
     });
-    recoverFromStaleDeploymentLoad(routeError);
   });
 
   const handleRecovery = () => {
@@ -429,14 +420,25 @@ const UnexpectedRouteError = ({
 };
 
 const UnauthorizedError = () => {
-  const { mutate } = useSignOut();
+  const t = useTranslations();
+  const { mutate, isPending } = useSignOut();
   const signOut = useLatestCallback(mutate);
 
   useMountEffect(() => {
     signOut();
   });
 
-  return null;
+  return (
+    <StatusMessage
+      status="error"
+      title={t("errors.api.unauthorized")}
+      actionButton={
+        <Button disabled={isPending} onClick={() => signOut()}>
+          {t("auth.signIn")}
+        </Button>
+      }
+    />
+  );
 };
 
 export type StatusMessageProps = {

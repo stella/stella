@@ -61,6 +61,32 @@ const producerJobs = (): string[] => {
     .toSorted();
 };
 
+test("baseline regeneration uses the production E2E build owner", () => {
+  const action: unknown = Bun.YAML.parse(
+    readFileSync(
+      path.join(ROOT, ".github/actions/marketing-capture/action.yml"),
+      "utf-8",
+    ),
+  );
+  const runs = isRecord(action) ? action["runs"] : undefined;
+  const steps = isRecord(runs) ? runs["steps"] : undefined;
+  expect(Array.isArray(steps)).toBe(true);
+  const buildSteps = (Array.isArray(steps) ? steps : []).filter(
+    (step) =>
+      isRecord(step) &&
+      (step["uses"] === "./.github/actions/build-e2e-web" ||
+        (typeof step["run"] === "string" &&
+          step["run"].includes("@stll/web build"))),
+  );
+  expect(buildSteps).toHaveLength(1);
+  expect(buildSteps.at(0)).toMatchObject({
+    if: "inputs.web-build-artifact == ''",
+    uses: "./.github/actions/build-e2e-web",
+  });
+  expect(buildSteps.at(0)).not.toHaveProperty("env");
+  expect(buildSteps.at(0)).not.toHaveProperty("run");
+});
+
 test("the wait step watches every job that publishes the web build", () => {
   const watched = [...waitStep().matchAll(/\.name == "([^"]+)"/gu)]
     .map((match) => match[1] ?? "")
