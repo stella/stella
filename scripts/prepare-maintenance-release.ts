@@ -1089,7 +1089,7 @@ const readRequiredRecord: RequiredRecordReader = async (runId, artifact) => {
   );
   try {
     const token = githubToken();
-    const download = Bun.spawnSync(
+    const download = Bun.spawn(
       [
         "gh",
         "run",
@@ -1104,11 +1104,11 @@ const readRequiredRecord: RequiredRecordReader = async (runId, artifact) => {
       ],
       {
         env: token === null ? process.env : { ...process.env, GH_TOKEN: token },
-        stderr: "pipe",
-        stdout: "pipe",
+        stderr: "ignore",
+        stdout: "ignore",
       },
     );
-    if (!download.success) {
+    if ((await download.exited) !== 0) {
       throw new MaintenanceReleaseError(
         `Could not download ${artifact} of run ${runId}`,
       );
