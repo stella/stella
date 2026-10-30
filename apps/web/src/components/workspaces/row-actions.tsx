@@ -1137,7 +1137,7 @@ export const RowActions = ({
             aria-label={t("common.actions")}
             className={cn(
               triggerClassName ??
-                "opacity-0! transition-opacity group-hover/row:opacity-100!",
+                "opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100!",
             )}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1356,7 +1356,7 @@ const RowDuplicatePrimaryAction = ({
 
   return (
     <Button
-      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       disabled={pending}
       onClick={(event) => {
         event.stopPropagation();

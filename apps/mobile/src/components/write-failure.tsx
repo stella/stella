@@ -3,8 +3,9 @@ import { useTransition } from "react";
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
+
 import { useSession } from "@/connection/session-provider";
 import { needsConsent } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
@@ -63,7 +64,6 @@ export const WriteFailureNotice = ({
       <Text variant="caption">{t("consentNeeded")}</Text>
       <Button
         disabled={leaving}
-        label={t("signInAgain")}
         loading={leaving}
         onPress={() => {
           startLeaving(async () => {
@@ -71,7 +71,9 @@ export const WriteFailureNotice = ({
           });
         }}
         variant="outline"
-      />
+      >
+        {t("signInAgain")}
+      </Button>
     </View>
   );
 };

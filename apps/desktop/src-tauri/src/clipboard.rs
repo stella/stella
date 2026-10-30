@@ -1681,11 +1681,17 @@ impl ClipboardManager {
       return Ok(false);
     };
     let checkpoint = self.checkpoint();
-    let mut item = self.items.remove(index);
-    item.set_copied_at(copied_at);
-    self.items.insert(0, item);
+    self.move_to_front(index, copied_at);
     self.persist_or_restore(checkpoint)?;
     Ok(true)
+  }
+
+  /// History runs newest first by `copied_at`, the last time a clip was
+  /// copied or edited; a clip used again takes the front with that time.
+  fn move_to_front(&mut self, index: usize, at: DateTime<Utc>) {
+    let mut item = self.items.remove(index);
+    item.set_copied_at(at);
+    self.items.insert(0, item);
   }
 
   pub fn clear(&mut self) -> Result<(), String> {
@@ -1897,7 +1903,8 @@ impl ClipboardManager {
 
   /// The editor's Save: name, group and, for a text clip, its content land
   /// together or not at all. `text` is required for text clips and refused
-  /// for images.
+  /// for images. A changed name or text is an edit and moves the clip to the
+  /// front as of now; a group-only save files it and keeps its place.
   pub fn save_editor_item(
     &mut self,
     id: &str,
@@ -1926,9 +1933,12 @@ impl ClipboardManager {
       })
       .transpose()?;
     let checkpoint = self.checkpoint();
-    let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
+    let Some(index) = self.items.iter().position(|item| item.id() == id) else {
       return Ok(false);
     };
+    let now = Utc::now();
+    let item = &mut self.items[index];
+    let mut edited = false;
     match (matches!(&*item, ClipboardItem::Image { .. }), text) {
       (true, Some(_)) => {
         return Err("clipboard image cannot be edited as text".to_string());
@@ -1940,16 +1950,23 @@ impl ClipboardManager {
       (false, Some((plain_text, html))) => {
         if !item.same_text_content(plain_text, html.as_deref()) {
           item.replace_content(plain_text.to_string(), html);
+          edited = true;
         }
       }
     }
-    if let Some(name) = name {
+    if let Some(name) = name
+      && item.name() != name.as_deref()
+    {
       item.set_name(name);
+      edited = true;
     }
     if item.group_id() != group_id.as_deref() {
-      item.set_group_id(group_id, Utc::now());
+      item.set_group_id(group_id, now);
     }
-    prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
+    if edited {
+      self.move_to_front(index, now);
+    }
+    prune_items_preserving(&mut self.items, self.retention, now, Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -6627,6 +6644,83 @@ mod tests {
     );
     assert_eq!(manager.items[0].name(), None);
     assert_eq!(manager.items[0].group_id(), None);
+  }
+
+  #[test]
+  fn editor_save_moves_an_edited_clip_to_the_front_and_keeps_a_filed_one_in_place() {
+    let now = Utc::now();
+    let mut manager = ready_manager();
+    let group_id = manager
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#34d399").unwrap(),
+        None,
+      )
+      .unwrap();
+    let newest = text_item(now - Duration::minutes(1), "newest");
+    let older = text_item(now - Duration::hours(2), "older");
+    let newest_id = newest.id().to_string();
+    let older_id = older.id().to_string();
+    manager.items = vec![newest, older];
+    let save = |manager: &mut ClipboardManager,
+                name: ClipboardEditorNameUpdate,
+                group_id: Option<String>,
+                text: &str| {
+      assert!(
+        manager
+          .save_editor_item(&older_id, name, group_id, Some((text, None)))
+          .unwrap()
+      );
+    };
+    let order = |manager: &ClipboardManager| {
+      manager
+        .items
+        .iter()
+        .map(|item| item.id().to_string())
+        .collect::<Vec<_>>()
+    };
+
+    // Filing it, or saving it unchanged, is not an edit.
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Preserve,
+      Some(group_id.clone()),
+      "older",
+    );
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Set {
+        value: String::new(),
+      },
+      Some(group_id.clone()),
+      "older",
+    );
+    assert_eq!(order(&manager), [newest_id.clone(), older_id.clone()]);
+    assert_eq!(manager.items[1].copied_at(), now - Duration::hours(2));
+
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Preserve,
+      Some(group_id.clone()),
+      "older, revised",
+    );
+    assert_eq!(order(&manager), [older_id.clone(), newest_id.clone()]);
+    let edited_at = manager.items[0].copied_at();
+    assert!(edited_at >= now);
+    assert_eq!(manager.items[0].plain_text(), Some("older, revised"));
+
+    // A rename is an edit too.
+    manager.items.swap(0, 1);
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Set {
+        value: "Clause 4".to_string(),
+      },
+      Some(group_id),
+      "older, revised",
+    );
+    assert_eq!(order(&manager), [older_id, newest_id]);
+    assert!(manager.items[0].copied_at() >= edited_at);
   }
 
   #[test]

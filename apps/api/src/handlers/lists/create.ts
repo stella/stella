@@ -19,6 +19,7 @@ const bodySchema = v.object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Create a list in a matter from a name and an optional description; it " +

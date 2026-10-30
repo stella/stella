@@ -1,8 +1,15 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import ts from "typescript6";
 
 import config from "../../oxlint.config.ts";
+import {
+  type CallExpression,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSource,
+  walk,
+} from "../../packages/scripts/src/syntax-tree.ts";
 import {
   isRecord,
   readScopes,
@@ -10,7 +17,6 @@ import {
   ruleOptions,
   scopeMatches,
 } from "../../scripts/oxlint-config-scopes.ts";
-import { parseSource } from "../../scripts/parse-memo.ts";
 import { lintSingleRule, runSingleRule } from "./lint-single-rule.ts";
 
 const plugin = "prefer-bun-native";
@@ -220,163 +226,176 @@ test.each([
   ).not.toContainEqual(expect.objectContaining({ hmacTarget: "bun" }));
 });
 
-const sourceNodes = (source: ReturnType<typeof parseSource>) => {
-  const nodes = [...source.getChildren(source)];
-  for (let index = 0; index < nodes.length; index += 1) {
-    const node = nodes.at(index);
-    if (node !== undefined) {
-      nodes.push(...node.getChildren(source));
+type ParsedSource = ReturnType<typeof parseSource>;
+
+const hasDockerApiRuntimeCall = (source: ParsedSource) => {
+  const bindings = new Set(
+    source.module.staticImports
+      .filter((statement) => statement.moduleRequest.value === "./api")
+      .flatMap((statement) =>
+        statement.entries.flatMap(({ importName, isType, localName }) => {
+          // oxc-parser declares the kind as an ambient const enum of strings.
+          const kind: string = importName.kind;
+          return !isType && kind === "Name" ? [localName.value] : [];
+        }),
+      ),
+  );
+  let called = false;
+  walk(source.program, (node) => {
+    if (
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      bindings.has(node.callee.name)
+    ) {
+      called = true;
     }
-  }
-  return nodes;
+  });
+  return called;
 };
 
-const hasDockerApiRuntimeCall = (source: ReturnType<typeof parseSource>) => {
-  const bindings = new Set(
-    source.statements.flatMap((statement) => {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !== "./api" ||
-        statement.importClause === undefined ||
-        statement.importClause.phaseModifier === ts.SyntaxKind.TypeKeyword
-      ) {
-        return [];
-      }
-      const named = statement.importClause.namedBindings;
-      return named !== undefined && ts.isNamedImports(named)
-        ? named.elements
-            .filter((item) => !item.isTypeOnly)
-            .map((item) => item.name.text)
-        : [];
-    }),
-  );
-  return sourceNodes(source).some(
-    (node) =>
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      bindings.has(node.expression.text),
-  );
+type FetchCall = {
+  readonly call: CallExpression;
+  /** The call's ancestors, nearest last. */
+  readonly ancestors: readonly Node[];
 };
 
 // This owner uses inline objects or direct const objects in the fetch's block.
 // Aliases, outer scopes and control-flow reconstruction are unproven.
-const fetchOptionsObject = (expression: ts.Expression | undefined) => {
+const fetchOptionsObject = ({ call, ancestors }: FetchCall) => {
+  const expression = call.arguments.at(1);
   if (expression === undefined) {
     return undefined;
   }
-  if (ts.isObjectLiteralExpression(expression)) {
+  if (expression.type === "ObjectExpression") {
     return expression;
   }
-  if (!ts.isIdentifier(expression)) {
+  if (expression.type !== "Identifier") {
     return undefined;
   }
-  let scope: ts.Node = expression;
-  for (;;) {
-    if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
-      for (const statement of scope.statements) {
-        if (!ts.isVariableStatement(statement)) {
+  for (const scope of [call, ...ancestors.toReversed()]) {
+    if (scope.type === "BlockStatement" || scope.type === "Program") {
+      for (const item of scope.body) {
+        const statement =
+          item.type === "ExportNamedDeclaration" ? item.declaration : item;
+        if (statement?.type !== "VariableDeclaration") {
           continue;
         }
-        for (const declaration of statement.declarationList.declarations) {
+        for (const declaration of statement.declarations) {
           if (
-            !ts.isIdentifier(declaration.name) ||
-            declaration.name.text !== expression.text
+            declaration.id.type !== "Identifier" ||
+            declaration.id.name !== expression.name
           ) {
             continue;
           }
-          const initializer = declaration.initializer;
-          return statement.declarationList.getFirstToken()?.kind ===
-            ts.SyntaxKind.ConstKeyword &&
-            initializer !== undefined &&
-            ts.isObjectLiteralExpression(initializer)
+          const initializer = declaration.init;
+          return statement.kind === "const" &&
+            initializer?.type === "ObjectExpression"
             ? initializer
             : undefined;
         }
       }
       return undefined;
     }
-    if (ts.isFunctionLike(scope)) {
+    if (
+      scope.type === "ArrowFunctionExpression" ||
+      scope.type === "FunctionDeclaration" ||
+      scope.type === "FunctionExpression"
+    ) {
       return undefined;
     }
-    scope = scope.parent;
   }
+  return undefined;
 };
 
-const literalPropertyName = (name: ts.PropertyName): string | undefined => {
-  if (ts.isComputedPropertyName(name)) {
-    const expression = name.expression;
-    return ts.isStringLiteral(expression) ||
-      ts.isNoSubstitutionTemplateLiteral(expression) ||
-      ts.isNumericLiteral(expression)
-      ? expression.text
+const literalPropertyName = ({
+  computed,
+  key,
+}: ObjectProperty): string | undefined => {
+  if (
+    key.type === "Literal" &&
+    (typeof key.value === "string" || typeof key.value === "number")
+  ) {
+    return String(key.value);
+  }
+  if (computed) {
+    return key.type === "TemplateLiteral" && key.expressions.length === 0
+      ? (key.quasis.at(0)?.value.cooked ?? undefined)
       : undefined;
   }
-  return ts.isIdentifier(name) ||
-    ts.isStringLiteral(name) ||
-    ts.isNumericLiteral(name)
-    ? name.text
-    : undefined;
+  return key.type === "Identifier" ? key.name : undefined;
 };
 
-const spreadCannotOverrideUnix = (expression: ts.Expression): boolean => {
-  if (ts.isParenthesizedExpression(expression)) {
+const spreadCannotOverrideUnix = (expression: Node): boolean => {
+  if (expression.type === "ParenthesizedExpression") {
     return spreadCannotOverrideUnix(expression.expression);
   }
-  if (ts.isConditionalExpression(expression)) {
+  if (expression.type === "ConditionalExpression") {
     return (
-      spreadCannotOverrideUnix(expression.whenTrue) &&
-      spreadCannotOverrideUnix(expression.whenFalse)
+      spreadCannotOverrideUnix(expression.consequent) &&
+      spreadCannotOverrideUnix(expression.alternate)
     );
   }
-  if (!ts.isObjectLiteralExpression(expression)) {
+  if (expression.type !== "ObjectExpression") {
     return false;
   }
   return expression.properties.every((property) => {
-    if (ts.isSpreadAssignment(property)) {
-      return spreadCannotOverrideUnix(property.expression);
+    if (property.type === "SpreadElement") {
+      return spreadCannotOverrideUnix(property.argument);
     }
-    const name = literalPropertyName(property.name);
+    const name = literalPropertyName(property);
     return name !== undefined && name !== "unix";
   });
 };
 
-const hasRequiredUnixSocket = (
-  options: ts.ObjectLiteralExpression | undefined,
-) => {
+const hasRequiredUnixSocket = (options: ObjectExpression | undefined) => {
   if (options === undefined) {
     return false;
   }
   for (const property of options.properties.toReversed()) {
-    if (ts.isSpreadAssignment(property)) {
-      if (!spreadCannotOverrideUnix(property.expression)) {
+    if (property.type === "SpreadElement") {
+      if (!spreadCannotOverrideUnix(property.argument)) {
         return false;
       }
       continue;
     }
-    const name = literalPropertyName(property.name);
+    const name = literalPropertyName(property);
     if (name === undefined) {
       return false;
     }
     if (name === "unix") {
+      // `a?.b.socketPath` reads `socketPath` without its own `?.`.
+      const value =
+        property.value.type === "ChainExpression"
+          ? property.value.expression
+          : property.value;
       return (
-        ts.isPropertyAssignment(property) &&
-        ts.isPropertyAccessExpression(property.initializer) &&
-        property.initializer.questionDotToken === undefined &&
-        property.initializer.name.text === "socketPath"
+        property.kind === "init" &&
+        !property.method &&
+        !property.shorthand &&
+        value.type === "MemberExpression" &&
+        !value.computed &&
+        !value.optional &&
+        value.property.type === "Identifier" &&
+        value.property.name === "socketPath"
       );
     }
   }
   return false;
 };
 
-const fetchCalls = (source: ReturnType<typeof parseSource>) =>
-  sourceNodes(source)
-    .filter(ts.isCallExpression)
-    .filter(
-      (call) =>
-        ts.isIdentifier(call.expression) && call.expression.text === "fetch",
-    );
+const fetchCalls = (source: ParsedSource) => {
+  const calls: FetchCall[] = [];
+  walk(source.program, (node, ancestors) => {
+    if (
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "fetch"
+    ) {
+      calls.push({ call: node, ancestors: [...ancestors] });
+    }
+  });
+  return calls;
+};
 
 test.each([
   {
@@ -398,11 +417,9 @@ test.each([
 ])(
   "Docker transport proof requires a referenced value import: $source",
   ({ source, runtime }) => {
-    expect(
-      hasDockerApiRuntimeCall(
-        parseSource({ fileName: "provider.ts", text: source }),
-      ),
-    ).toBe(runtime);
+    expect(hasDockerApiRuntimeCall(parseSource("provider.ts", source))).toBe(
+      runtime,
+    );
   },
 );
 
@@ -412,12 +429,10 @@ test.each([
   'const requestOptions = { unix: connection.socketPath, ...(options.body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(options.body) }) }; fetch(url, requestOptions);',
   "fetch(url, { ...overrides, unix: connection.socketPath });",
 ])("Unix transport proof follows the actual options expression: %s", (text) => {
-  const calls = fetchCalls(parseSource({ fileName: "api.ts", text }));
+  const calls = fetchCalls(parseSource("api.ts", text));
   expect(calls).toHaveLength(1);
   expect(
-    calls.every((call) =>
-      hasRequiredUnixSocket(fetchOptionsObject(call.arguments.at(1))),
-    ),
+    calls.every((call) => hasRequiredUnixSocket(fetchOptionsObject(call))),
   ).toBe(true);
 });
 
@@ -431,42 +446,38 @@ test.each([
   'fetch(url, { unix: connection.socketPath, ["unix"]: undefined });',
   "fetch(url, { unix: connection.socketPath, ...(condition ? {} : { unix: undefined }) });",
 ])("unproven or shadowed options cannot certify Unix transport: %s", (text) => {
-  const calls = fetchCalls(parseSource({ fileName: "api.ts", text }));
+  const calls = fetchCalls(parseSource("api.ts", text));
   expect(calls).toHaveLength(1);
   expect(
-    calls.every((call) =>
-      hasRequiredUnixSocket(fetchOptionsObject(call.arguments.at(1))),
-    ),
+    calls.every((call) => hasRequiredUnixSocket(fetchOptionsObject(call))),
   ).toBe(false);
 });
 
 test("Docker provider enrollment follows its required Unix fetch transport owner", () => {
-  const provider = parseSource({
-    fileName: "provider.ts",
-    text: readFileSync(
+  const provider = parseSource(
+    "provider.ts",
+    readFileSync(
       new URL(
         "../../packages/agent-engine/src/bun-docker/provider.ts",
         import.meta.url,
       ),
       "utf-8",
     ),
-  });
+  );
   expect(hasDockerApiRuntimeCall(provider)).toBe(true);
-  const source = parseSource({
-    fileName: "api.ts",
-    text: readFileSync(
+  const source = parseSource(
+    "api.ts",
+    readFileSync(
       new URL(
         "../../packages/agent-engine/src/bun-docker/api.ts",
         import.meta.url,
       ),
       "utf-8",
     ),
-  });
+  );
   const calls = fetchCalls(source);
   expect(calls.length).toBeGreaterThan(0);
   for (const call of calls) {
-    expect(
-      hasRequiredUnixSocket(fetchOptionsObject(call.arguments.at(1))),
-    ).toBe(true);
+    expect(hasRequiredUnixSocket(fetchOptionsObject(call))).toBe(true);
   }
 });

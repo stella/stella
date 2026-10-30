@@ -175,7 +175,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
       />
       <AddPropertyCell
         cell={addPropertyCell}
-        columnIndex={renderColumns.length + 1}
+        renderColumns={renderColumns}
         selected={selected}
       />
     </WorkspaceGridRow>
