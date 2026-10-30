@@ -254,10 +254,9 @@ export const readVersionBlocks = async (
 // A comparison batch retains at most 512 MiB of decoded payloads; the AST
 // cache's own heap budget cannot bound values retained by a caller.
 const VERSION_CHANGE_BATCH_MAX_DECODED_BYTES = 512 * 1024 * 1024;
-export const VERSION_CHANGE_PAYLOAD_BATCH_MAX = Math.floor(
-  VERSION_CHANGE_BATCH_MAX_DECODED_BYTES /
-    LIMITS.corpusPayloadMaxDecompressedBytes,
-);
+export const VERSION_CHANGE_COMPARISON_BATCH_MAX = 2;
+const VERSION_CHANGE_PAYLOAD_BATCH_MAX =
+  VERSION_CHANGE_COMPARISON_BATCH_MAX * 2;
 
 class VersionChangePayloadTooLargeError extends TaggedError(
   "VersionChangePayloadTooLargeError",
@@ -292,7 +291,9 @@ export const readVersionChangePayloads = async ({
 }: ReadVersionChangePayloadsOptions) => {
   if (
     VERSION_CHANGE_PAYLOAD_BATCH_MAX < 2 ||
-    ids.length > VERSION_CHANGE_PAYLOAD_BATCH_MAX
+    ids.length > VERSION_CHANGE_PAYLOAD_BATCH_MAX ||
+    ids.length * LIMITS.corpusPayloadMaxDecompressedBytes >
+      VERSION_CHANGE_BATCH_MAX_DECODED_BYTES
   ) {
     return panic("Version comparison payload batch exceeds its bound");
   }

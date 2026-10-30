@@ -30,7 +30,7 @@ import {
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
   readVersionChangePayloads,
-  VERSION_CHANGE_PAYLOAD_BATCH_MAX,
+  VERSION_CHANGE_COMPARISON_BATCH_MAX,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { VersionChangePayload } from "@/api/lib/legal-search/legislation-version-blocks";
 
@@ -284,7 +284,6 @@ export const versionChangeWorkKey = ({
 }: LegislationVersionWork) => JSON.stringify([sourceId, eli, language]);
 
 const SUMMARY_WRITE_BATCH_MAX = 100;
-const COMPARISON_BATCH_MAX = VERSION_CHANGE_PAYLOAD_BATCH_MAX / 2;
 
 class VersionChangeReadLimitError extends TaggedError(
   "VersionChangeReadLimitError",
@@ -408,7 +407,7 @@ export const prepareVersionChanges = async ({
   readPayloads = readVersionChangePayloads,
 }: PrepareVersionChangesOptions): Promise<PreparedVersionChange[]> => {
   const writes: PreparedVersionChange[] = [];
-  for (const batch of chunk(tasks, COMPARISON_BATCH_MAX)) {
+  for (const batch of chunk(tasks, VERSION_CHANGE_COMPARISON_BATCH_MAX)) {
     const ids = [
       ...new Set(
         batch.flatMap(({ target, base }) =>

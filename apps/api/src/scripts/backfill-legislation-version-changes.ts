@@ -151,15 +151,14 @@ const runVersionChangesPass = async (
         })();
         if (decideStart(verdict, "backfill_batch").decision === "wait") {
           throw new BackfillHeldError({
-            message: "Version comparison preparation deferred by the load gate",
+            message: "Version comparison is busy",
             holdUntil: null,
             heldSince: Temporal.Now.instant().epochMilliseconds,
           });
         }
         if (!(await runtime.acquire())) {
           throw new BackfillHeldError({
-            message:
-              "Version comparison preparation deferred by the heavy-work slot",
+            message: "Version comparison is busy",
             holdUntil: null,
             heldSince: Temporal.Now.instant().epochMilliseconds,
           });
