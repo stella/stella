@@ -2,7 +2,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { deleteMatterQueries } from "@/lib/delete-entity-queries";
+import { deleteMatterQueries } from "@/lib/workspaces/delete-matter-queries";
 import {
   overviewOptions,
   workspaceOptions,
@@ -69,7 +69,7 @@ describe("deleted entity query ownership", () => {
     const source = await Bun.file(
       path.resolve(
         import.meta.dir,
-        "../components/workspaces/matter-context-menu.tsx",
+        "../../components/workspaces/matter-context-menu.tsx",
       ),
     ).text();
     expect(deleteSuccessWithoutHelper(source)).toEqual([]);

@@ -39,11 +39,11 @@ import { stellaToast } from "@stll/ui/toast";
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { deleteMatterQueries } from "@/lib/delete-entity-queries";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { deleteMatterQueries } from "@/lib/workspaces/delete-matter-queries";
 import {
   useDeleteWorkspace,
   useUnarchiveWorkspace,
