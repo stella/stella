@@ -38,6 +38,8 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { deleteMatterQueries } from "@/lib/delete-entity-queries";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
@@ -47,7 +49,6 @@ import {
   useUnarchiveWorkspace,
   useUpdateWorkspace,
 } from "@/lib/workspaces/mutations";
-import { workspacesKeys } from "@/lib/workspaces/queries";
 
 // ── Shared menu items ────────────────────────────────────────
 
@@ -206,6 +207,7 @@ export const useMatterActions = (
 ): MatterActions => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const user = useAuthenticatedUser();
   const togglePin = usePinnedStore((s) => s.togglePin);
   const isPinned = usePinnedStore((s) => s.pinnedIds.has(target.id));
   const unarchiveWorkspace = useUnarchiveWorkspace();
@@ -250,8 +252,13 @@ export const useMatterActions = (
             type: "success",
           });
           detached(
-            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "matter-context-menu.invalidate",
+            deleteMatterQueries({
+              activeOrganizationId: user.activeOrganizationId,
+              queryClient,
+              userId: user.id,
+              workspaceId: target.id,
+            }),
+            "matter-context-menu.delete-queries",
           );
           onDeleted?.();
         },
