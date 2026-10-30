@@ -13,6 +13,14 @@ const LEGAL_LISTS_FEATURE = {
 
 /** Declared policies require caller decisions; explicit fallbacks use server deployment availability. */
 export const CALLER_FEATURE = {
+  invoiceLinks: {
+    id: "invoice-links",
+    deployment: "invoiceLinks",
+    requires: [],
+    undeclared: { type: "hidden" },
+    // Optional controls on a billing route; the invoice page remains available.
+    routeImports: [],
+  },
   aiMemory: {
     id: "ai-memory",
     requires: [],
@@ -32,5 +40,14 @@ export const CALLER_FEATURE = {
   legalLists: LEGAL_LISTS_FEATURE,
 } as const;
 
+/**
+ * Keys of the organization settings `deploymentFeatures` map. This module stays
+ * import-free because a lint plugin reads it; access.logic.ts indexes the
+ * settings map with these keys, so a key the contract lacks fails to compile.
+ */
+type WebDeploymentFeature = "legalLists" | "invoiceLinks";
+
 export type CallerFeature =
-  (typeof CALLER_FEATURE)[keyof typeof CALLER_FEATURE];
+  (typeof CALLER_FEATURE)[keyof typeof CALLER_FEATURE] & {
+    deployment?: WebDeploymentFeature;
+  };

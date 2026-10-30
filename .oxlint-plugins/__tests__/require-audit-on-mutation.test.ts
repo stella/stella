@@ -453,3 +453,74 @@ test("the recorder owns audit insertion while other writes still require an even
     ),
   ).toEqual([1]);
 });
+
+describe("raw inserts owned by the canonical audit recorder", () => {
+  const recorderPath = "apps/api/src/lib/db/audit-recording.ts";
+  const lintRawInsert = async (
+    fixtureSource: string,
+    sourcePath = recorderPath,
+  ) =>
+    await lintSingleRule(RULE, fixtureSource, {
+      sourcePath,
+      ruleOptionsForRoot: (root) => ({ root }),
+    });
+
+  test.each([
+    ["@/api/db/schema", "auditLogs"],
+    ["@/api/db/schema", "accountAuditLogs"],
+    ["@/api/db/schema/contacts", "auditLogs"],
+    ["@/api/db/schema/contacts", "accountAuditLogs"],
+  ])("admits %s's %s only in the recorder", async (module, table) => {
+    const insertSource = [
+      'import { sql as query } from "drizzle-orm";',
+      `import { ${table} as auditTable } from "${module}";`,
+      `export const record = (tx) => tx.execute(query\`INSERT INTO \${auditTable} (id) SELECT \${id} WHERE \${live} RETURNING \${auditTable.id}\`);`,
+    ].join("\n");
+    expect(await lintRawInsert(insertSource)).toEqual([]);
+    expect(await lintRawInsert(insertSource, SOURCE_PATH)).toEqual([3]);
+  });
+
+  test.each([
+    "const auditLogs = {};",
+    'import { entities as auditLogs } from "@/api/db/schema";',
+    'import { auditLogs } from "@/api/lib/other-schema";',
+  ])("rejects unproven audit table provenance: %s", async (declaration) => {
+    expect(
+      await lintRawInsert(
+        [
+          'import { sql } from "drizzle-orm";',
+          declaration,
+          `export const record = (tx) => tx.execute(sql\`INSERT INTO \${auditLogs} (id) VALUES (\${id})\`);`,
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+  });
+
+  test("other raw mutations in the recorder still require an audit event", async () => {
+    expect(
+      await lintRawInsert(
+        [
+          'import { sql } from "drizzle-orm";',
+          'import { auditLogs, entities } from "@/api/db/schema";',
+          "export const record = async (tx) => {",
+          `  await tx.execute(sql\`INSERT INTO \${auditLogs} (id) VALUES (\${id})\`);`,
+          `  await tx.execute(sql\`INSERT INTO \${entities} (id) VALUES (\${id})\`);`,
+          `  await tx.execute(sql\`DELETE FROM \${auditLogs} WHERE id = \${id}\`);`,
+          "};",
+        ].join("\n"),
+      ),
+    ).toEqual([5, 6]);
+  });
+
+  test("an audit insert cannot hide a second raw statement", async () => {
+    expect(
+      await lintRawInsert(
+        [
+          'import { sql } from "drizzle-orm";',
+          'import { auditLogs, entities } from "@/api/db/schema";',
+          `export const record = (tx) => tx.execute(sql\`INSERT INTO \${auditLogs} (id) VALUES (\${id}); DELETE FROM \${entities}\`);`,
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+  });
+});

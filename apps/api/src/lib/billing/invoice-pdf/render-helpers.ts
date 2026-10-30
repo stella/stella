@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import type { InvoiceLanguage, InvoiceStatus } from "@stll/api-contract";
 import {
   buildCzechQrPaymentPayload,
@@ -19,9 +20,12 @@ import type {
 import { buildPayBySquarePayload } from "@stll/invoicing/pay-by-square";
 import type { PayBySquareResult } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
+import type { CentsAmount } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
 export type RenderInvoicePdfOptions = {
+  /** Remaining balance for payment fields and QR; zero suppresses the payment block. */
+  paymentAmountMinor: CentsAmount;
   invoice: {
     status: InvoiceStatus;
     documentType: InvoiceDocumentType;
@@ -84,18 +88,33 @@ export type RenderInvoicePdfOptions = {
   originalNumber: string | null;
 };
 
+/**
+ * Whether a document asks its recipient to pay: a credit note never does, and
+ * nothing is asked once the balance is settled. The PDF payment block, its QR
+ * code and the public link summary all decide through here.
+ */
+export const requestsPayment = ({
+  documentType,
+  amountMinor,
+}: {
+  documentType: InvoiceDocumentType;
+  amountMinor: number;
+}): boolean => documentType !== "credit_note" && amountMinor > 0;
+
 export const buildInvoicePaymentPayload = ({
   invoice,
   seller,
-  totals,
+  paymentAmountMinor,
 }: RenderInvoicePdfOptions): InvoicingResult<
   | (CzechQrPaymentResult & { errorCorrection: "M"; scheme: "spayd" })
   | (PayBySquareResult & { errorCorrection: "M"; scheme: "pay_by_square" })
   | (PolishQrPaymentResult & { errorCorrection: "L"; scheme: "zbp" })
 > | null => {
   if (
-    invoice.documentType === "credit_note" ||
-    totals.grossAmountMinor <= 0 ||
+    !requestsPayment({
+      documentType: invoice.documentType,
+      amountMinor: paymentAmountMinor,
+    }) ||
     !seller?.iban
   ) {
     return null;
@@ -107,7 +126,7 @@ export const buildInvoicePaymentPayload = ({
   const payment = {
     documentType: invoice.documentType,
     iban: seller.iban,
-    amountMinor: totals.grossAmountMinor,
+    amountMinor: paymentAmountMinor,
     currency: invoice.currency,
     ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
     ...(variableSymbol === null ? {} : { variableSymbol }),
@@ -192,9 +211,12 @@ export const createInvoiceFormatters = ({
     }
     const canonical =
       kept === 0 ? whole : `${whole}.${decimals.slice(0, kept)}`;
-    const parsed = Number(canonical);
-    return String(parsed) === canonical
-      ? quantityFormat.format(parsed)
+    const parsed = parseDecimalToken(canonical);
+    if (parsed.isErr()) {
+      return panic("Invoice contains an invalid decimal quantity");
+    }
+    return String(parsed.value) === canonical
+      ? quantityFormat.format(parsed.value)
       : canonical;
   };
   return { money, date, vatRate, quantity };

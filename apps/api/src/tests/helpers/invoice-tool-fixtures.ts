@@ -4,7 +4,7 @@ import type * as v from "valibot";
 import { cents } from "@stll/money";
 
 import type { databaseRelations } from "@/api/db/database-relations";
-import type { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import type { INVOICE_DETAIL_RELATIONS } from "@/api/lib/billing/invoice-detail";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { LIST_INVOICES_LIST_PROJECTION } from "@/api/lib/chat/projections";
 

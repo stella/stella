@@ -239,13 +239,13 @@ describe("payment QR as SVG", () => {
     );
   });
 
-  test("a credit note carries no QR code", () => {
+  test("a credit note carries no payment block and so no QR code", () => {
     const fixture = invoiceFixture(1);
     const data = buildInvoiceTemplateData({
       ...fixture,
       invoice: { ...fixture.invoice, documentType: "credit_note" },
     }).unwrap();
-    expect(data.payment?.qrSvg).toBeNull();
+    expect(data.payment).toBeNull();
   });
 });
 

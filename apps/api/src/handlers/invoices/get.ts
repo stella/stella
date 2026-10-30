@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { INVOICE_DETAIL_RELATIONS } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import {
   invoicePaymentAmounts,

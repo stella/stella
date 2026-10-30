@@ -819,6 +819,75 @@ export const installPglitePdfSigningTokenScopes = async (
   }
 };
 
+const INVOICE_SENDS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261030194500_invoice_sends",
+  "migration.sql",
+);
+
+const INVOICE_LINK_STATEMENT_PREFIXES = [
+  'CREATE FUNCTION "invoice_sends_guard_update"',
+  'REVOKE ALL ON FUNCTION "invoice_sends_guard_update"',
+  'CREATE TRIGGER "invoice_sends_immutable"',
+  'CREATE FUNCTION "invoice_link_settlement"',
+  'REVOKE ALL ON FUNCTION "invoice_link_settlement"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_settlement"',
+  'CREATE FUNCTION "invoice_link_mark_viewed"',
+  'REVOKE ALL ON FUNCTION "invoice_link_mark_viewed"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_mark_viewed"',
+  'ALTER TABLE "invoice_sends" FORCE ROW LEVEL SECURITY',
+  'CREATE FUNCTION "invoice_link_scope"',
+  'REVOKE ALL ON FUNCTION "invoice_link_scope"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_scope"',
+  'CREATE FUNCTION "invoice_sends_organization_count"',
+  'REVOKE ALL ON FUNCTION "invoice_sends_organization_count"',
+  'GRANT EXECUTE ON FUNCTION "invoice_sends_organization_count"',
+  'CREATE FUNCTION "invoice_link_invoice"',
+  'REVOKE ALL ON FUNCTION "invoice_link_invoice"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_invoice"',
+  'CREATE FUNCTION "invoice_link_lines"',
+  'REVOKE ALL ON FUNCTION "invoice_link_lines"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_lines"',
+  'CREATE FUNCTION "invoice_link_time"',
+  'REVOKE ALL ON FUNCTION "invoice_link_time"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_time"',
+  'CREATE FUNCTION "invoice_link_expenses"',
+  'REVOKE ALL ON FUNCTION "invoice_link_expenses"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_expenses"',
+  'CREATE FUNCTION "invoice_link_seller"',
+  'REVOKE ALL ON FUNCTION "invoice_link_seller"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_seller"',
+  'CREATE FUNCTION "invoice_link_matters"',
+  'REVOKE ALL ON FUNCTION "invoice_link_matters"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_matters"',
+  'CREATE FUNCTION "invoice_link_original"',
+  'REVOKE ALL ON FUNCTION "invoice_link_original"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_original"',
+] as const;
+
+/**
+ * Install what schema push cannot say about invoice sends: forced row
+ * security, the token lookup an invoice link goes through, and the
+ * organization-wide send count.
+ */
+export const installPgliteInvoiceLinks = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    INVOICE_SENDS_MIGRATION_PATH,
+  ).filter((statement) =>
+    INVOICE_LINK_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  if (statements.length !== INVOICE_LINK_STATEMENT_PREFIXES.length) {
+    panic("Invoice link migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Schema push omits the scoped, owner-executed run-id collision lookup. */
 export const installPgliteChatTurnRunIdLookup = async (
   db: PgliteSchemaDb,

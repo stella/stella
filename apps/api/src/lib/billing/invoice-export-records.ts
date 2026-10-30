@@ -9,17 +9,21 @@ import type {
   InvoiceTotals,
 } from "@stll/invoicing";
 import type { CentsAmount } from "@stll/money";
-import { Temporal, todayFor } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import {
+  INVOICE_DETAIL_RELATIONS,
+  INVOICE_DOCUMENT_COLUMNS,
+  INVOICE_SELLER_COLUMNS,
+} from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
 import {
   invoiceInMatter,
   invoiceTouchesMatter,
 } from "@/api/lib/billing/invoice-scope";
+import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -38,28 +42,21 @@ export const exportPaidDate = (
   },
   timeZone: TimeZoneId,
 ): string | null => {
-  if (invoice.status !== INVOICE_STATUS.PAID) {
-    return null;
-  }
-  let settledOn: string | null = null;
+  let latestPaidOn: string | null = null;
   for (const payment of invoice.payments) {
-    // ISO dates order as text.
     if (
       payment.voidedAt === null &&
-      (settledOn === null || payment.paidOn > settledOn)
+      (latestPaidOn === null || payment.paidOn > latestPaidOn)
     ) {
-      settledOn = payment.paidOn;
+      latestPaidOn = payment.paidOn;
     }
   }
-  if (settledOn !== null) {
-    return settledOn;
-  }
-  return invoice.paidAt === null
-    ? null
-    : todayFor(
-        timeZone,
-        Temporal.Instant.fromEpochMilliseconds(invoice.paidAt.getTime()),
-      ).toString();
+  return invoiceSettledOn({
+    status: invoice.status,
+    paidAt: invoice.paidAt,
+    latestPaidOn,
+    timeZone,
+  });
 };
 
 /**
@@ -163,6 +160,7 @@ export const loadInvoiceExport = async (
     orderBy: { invoiceDate: "asc", invoiceNumber: "asc" },
     // One more than the cap, so an oversized matter is refused, not cut off.
     limit: MAX_EXPORT_INVOICES + 1,
+    columns: INVOICE_DOCUMENT_COLUMNS,
     with: EXPORT_RELATIONS,
   });
   const matterIds = [
@@ -200,6 +198,7 @@ export const loadInvoiceExport = async (
             id: { in: sellerIds },
             organizationId: { eq: organizationId },
           },
+          columns: INVOICE_SELLER_COLUMNS,
           limit: sellerIds.length,
         });
   const originalIds = [
@@ -226,10 +225,14 @@ export const loadInvoiceExport = async (
     userIds.size === 0
       ? []
       : await selectTimekeeperNames(tx, { organizationId, userIds });
+  const timeZone = await readOrganizationTimeZone(tx, organizationId);
   return {
     matter,
     matters: new Map(matterRows.map((row) => [row.id, row])),
-    invoices,
+    invoices: invoices.map(({ payments, ...invoice }) => ({
+      ...invoice,
+      paidDate: exportPaidDate({ ...invoice, payments }, timeZone),
+    })),
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(
       originals.map((original) => [
@@ -238,12 +241,35 @@ export const loadInvoiceExport = async (
       ]),
     ),
     timekeepers: new Map(timekeepers.map((u) => [u.id, u.name])),
-    timeZone: await readOrganizationTimeZone(tx, organizationId),
+    timeZone,
   };
 };
 
-type LoadedExport = Awaited<ReturnType<typeof loadInvoiceExport>>;
-type LoadedInvoice = LoadedExport["invoices"][number];
+type AuthenticatedExport = Awaited<ReturnType<typeof loadInvoiceExport>>;
+type AuthenticatedInvoice = AuthenticatedExport["invoices"][number];
+type DocumentSourceAmounts = Parameters<typeof readInvoiceDocumentLines>[0];
+type LoadedInvoice = Omit<AuthenticatedInvoice, "timeEntries" | "expenses"> & {
+  timeEntries: readonly (DocumentSourceAmounts["timeEntries"][number] &
+    Pick<
+      AuthenticatedInvoice["timeEntries"][number],
+      "workspaceId" | "dateWorked"
+    > &
+    Partial<
+      Pick<
+        AuthenticatedInvoice["timeEntries"][number],
+        "userId" | "taskCode" | "activityCode"
+      >
+    >)[];
+  expenses: readonly (DocumentSourceAmounts["expenses"][number] &
+    Pick<
+      AuthenticatedInvoice["expenses"][number],
+      "workspaceId" | "dateIncurred" | "category"
+    >)[];
+};
+type LoadedExport = Omit<AuthenticatedExport, "invoices" | "timekeepers"> & {
+  invoices: readonly LoadedInvoice[];
+  timekeepers?: AuthenticatedExport["timekeepers"];
+};
 /** The lines and totals `readInvoiceDocumentLines` computes for a document. */
 type DocumentAmounts = {
   lines: readonly (InvoiceLine & {
@@ -319,7 +345,10 @@ const exportLines = ({
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
-        ? { id: entry.userId, name: loaded.timekeepers.get(entry.userId) ?? "" }
+        ? {
+            id: entry.userId,
+            name: loaded.timekeepers?.get(entry.userId) ?? "",
+          }
         : null,
       taskCode: entry?.taskCode ?? null,
       activityCode: entry?.activityCode ?? null,
@@ -450,7 +479,7 @@ export const toExportRecords = (
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
       dueDate: invoice.dueDate,
-      paidDate: exportPaidDate(invoice, loaded.timeZone),
+      paidDate: invoice.paidDate,
       currency: invoice.currency,
       reference: invoice.reference,
       notes: invoice.notes,

@@ -62,7 +62,83 @@ const conditional = {
   },
 };
 
+test("reviewed management exempts billing and invoice invitations only on that dependency path", () => {
+  const management = "apps/api/src/routes/feature/management.ts";
+  const ordinary = "apps/api/src/routes/ordinary.ts";
+  const sources = new Map([
+    ...baseSources,
+    [
+      management,
+      'import { run } from "../../feature/core"; export const manage = () => run();',
+    ],
+    [
+      ordinary,
+      'import { manage } from "./feature/management"; import { run } from "../feature/core"; export const runBoth = () => [manage(), run()];',
+    ],
+  ]);
+  const invoiceManagementFiles = new Set([management]);
+  const endpoints = [
+    { file: management, config: {} },
+    { file: ordinary, config: {} },
+  ];
+  const violations = validateFeatureAccessDeclarations({
+    registry: {
+      "time-billing": registry.fixture,
+      "invoice-links": registry.fixture,
+    },
+    endpoints,
+    sources,
+    invoiceManagementFiles,
+  });
+  expect(violations.filter(({ file }) => file === management)).toEqual([]);
+  for (const featureId of ["time-billing", "invoice-links"]) {
+    expect(violations).toContainEqual({
+      file: ordinary,
+      message: `source ownership requires featureAccess ${featureId}`,
+    });
+  }
+  expect(
+    validateFeatureAccessDeclarations({
+      registry: { fixture: registry.fixture },
+      endpoints: [{ file: management, config: {} }],
+      sources,
+      invoiceManagementFiles,
+    }),
+  ).toContainEqual({
+    file: management,
+    message: "source ownership requires featureAccess fixture",
+  });
+});
+
 describe("feature source declarations", () => {
+  test("the canonical database factory registers schemas without consuming their feature data", () => {
+    const owner = [
+      "apps/api/src/db/sql-client.ts",
+      "export const createDatabase = (options) => options;",
+    ] as const;
+    const registration =
+      'import { createDatabase } from "@/api/db/sql-client"; import * as schema from "../db/schema"; export const db = createDatabase({ relations: schema });';
+    expect(check(registration, {}, [owner])).toEqual([]);
+    expect(
+      check(`${registration} export const leak = schema.featureRows;`, {}, [
+        owner,
+      ]),
+    ).toMatchObject([
+      { message: "source ownership requires featureAccess fixture" },
+    ]);
+  });
+  test("type-only table vocabulary does not consume feature data", () => {
+    expect(
+      check(
+        'export type TableName = "fixture_rows"; export const run = () => true;',
+      ),
+    ).toEqual([]);
+    expect(
+      check("export const run = () => sql`SELECT * FROM fixture_rows`;"),
+    ).toMatchObject([
+      { message: "source ownership requires featureAccess fixture" },
+    ]);
+  });
   test.each(["registry", "admitted"] as const)(
     "%s dispatch boundaries preserve direct-access ownership enforcement",
     (type) => {
@@ -116,7 +192,7 @@ describe("feature source declarations", () => {
       sources.set(
         module,
         type === "registry"
-          ? "export const TOOL_SETS = {};"
+          ? "export const TOOL_SETS = 0;"
           : 'import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access"; export const run = () => true;',
       );
       expect(validate()).toContainEqual({
@@ -296,6 +372,58 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
     expect(
       check('import { type featureRows } from "@/api/db/schema";'),
     ).toEqual([]);
+  });
+  test("required table symbols gate shared-schema consumers without gating sibling tables", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const schemaFile = "apps/api/src/db/schema/feature.ts";
+    const selectedRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          tableSchemaFiles: [],
+          tableSchemas: { [schemaFile]: ["featureRows"] },
+        },
+      },
+    } as const;
+    const sources = new Map([
+      ...baseSources,
+      [
+        schemaFile,
+        'export const featureRows = p.pgTable("fixture_rows", {}); export const siblingRows = p.pgTable("sibling_rows", {});',
+      ],
+    ]);
+    const validate = (source: string, config: Record<string, unknown> = {}) => {
+      sources.set(file, source);
+      return validateFeatureAccessDeclarations({
+        registry: selectedRegistry,
+        endpoints: [{ file, config }],
+        sources,
+      });
+    };
+    for (const specifier of ["../db/schema/feature", "../db/schema"]) {
+      expect(validate(`import { siblingRows } from "${specifier}";`)).toEqual(
+        [],
+      );
+      const read = `import { featureRows as rows } from "${specifier}";`;
+      expect(validate(read)).toHaveLength(1);
+      expect(validate(read, required)).toEqual([]);
+    }
+    for (const read of [
+      'import * as tables from "../db/schema/feature"; const rows = tables.featureRows;',
+      "const rows = sql`select * from fixture_rows`;",
+    ]) {
+      expect(validate(read)).toHaveLength(1);
+      expect(validate(read, required)).toEqual([]);
+    }
+    sources.set(
+      schemaFile,
+      'export const siblingRows = p.pgTable("sibling_rows", {});',
+    );
+    expect(validate("")).toContainEqual({
+      file: schemaFile,
+      message: "feature fixture owns a missing table symbol featureRows",
+    });
   });
   test("helper imports and named reexports preserve table ownership", () => {
     const additional = [
@@ -520,6 +648,43 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       "apps/api/src/handlers/account-exports/download.ts",
       "apps/api/src/handlers/contacts/get.ts",
     ];
+    for (const action of ["create", "list", "revoke"]) {
+      const file = `apps/api/src/handlers/invoices/sends/${action}.ts`;
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: FEATURE_REGISTRY,
+          endpoints: [{ file, config: {} }],
+          sources,
+        }),
+      ).toContainEqual({
+        file,
+        message: "source ownership requires featureAccess invoice-links",
+      });
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: FEATURE_REGISTRY,
+          endpoints: [
+            {
+              file,
+              config: {
+                featureAccess: { type: "required", featureId: "invoice-links" },
+              },
+            },
+          ],
+          sources,
+        }).filter((violation) => violation.file === file),
+      ).toEqual([]);
+      if (action !== "create") {
+        expect(
+          validateFeatureAccessDeclarations({
+            registry: FEATURE_REGISTRY,
+            endpoints: [{ file, config: {} }],
+            sources,
+            invoiceManagementFiles: new Set([file]),
+          }).filter((violation) => violation.file === file),
+        ).toEqual([]);
+      }
+    }
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
     for (const ordinary of ordinaryHandlers) {
       expect(sources.has(ordinary)).toBe(true);

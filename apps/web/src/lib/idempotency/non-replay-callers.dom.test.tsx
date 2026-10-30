@@ -1,13 +1,19 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { parseTimeZoneId } from "@stll/time";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { SampleCaseLoad } from "@/features/avt/types";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import type { InvoiceSends } from "@/lib/workspaces/queries/invoices";
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
+import type { OrganizationSettings } from "@/queries/organization-settings";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -25,6 +31,16 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { viewsOptions } = await import("@/lib/workspaces/queries/views");
 const { api } = await import("@/lib/api");
+const { invoiceSendsOptions } =
+  await import("@/lib/workspaces/queries/invoices");
+const { SendInvoiceForm } =
+  await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends");
+const { useCallerFeatureAdmission } =
+  await import("@/lib/organization/feature-access/access");
+const { CALLER_FEATURE } =
+  await import("@/lib/organization/feature-access/surfaces");
+const { organizationSettingsOptions } =
+  await import("@/queries/organization-settings");
 const { createMemory } = await import("@/lib/memory-api");
 const { useCreateWorkspace } = await import("@/lib/workspaces/mutations");
 const { useIdempotentSubmit } =
@@ -301,5 +317,128 @@ test("the real sample-case callback creates its sample and opens the list withou
   }
   expect(await requests.at(1)?.json()).toMatchObject({
     layout: { listId: sample.listId },
+  });
+});
+
+test("the real invoice send form sends its capability request without an idempotency key", async () => {
+  const requests: Request[] = [];
+  const workspaceId = "00000000-0000-4000-8000-000000000041";
+  const invoiceId = "00000000-0000-4000-8000-000000000042";
+  const userId = "invoice-sender";
+  const invoiceEndpoint = api.invoices({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  })({ invoiceId: toSafeId<"invoice">(invoiceId) });
+  const sent = {
+    id: toSafeId<"invoiceSend">("00000000-0000-4000-8000-000000000043"),
+    deliveryStatus: "delivered",
+    failedRecipients: [],
+    replyTo: "sender@example.test",
+    expiresAt: "2026-12-01T00:00:00Z",
+    invoiceStatus: "sent",
+  } satisfies NonNullable<
+    Awaited<ReturnType<typeof invoiceEndpoint.sends.post>>["data"]
+  >;
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return Response.json(sent);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { enabled: false, retry: false },
+      mutations: { retry: false },
+    },
+  });
+  clients.push(client);
+  const history = {
+    items: [],
+    defaultRecipients: ["recipient@example.test"],
+    replyTo: "sender@example.test",
+    nextCursor: null,
+    limit: 20,
+  } satisfies InvoiceSends;
+  client.setQueryData(
+    invoiceSendsOptions({ workspaceId, invoiceId, userId }).queryKey,
+    history,
+  );
+  client.setQueryData(
+    organizationSettingsOptions({ organizationId: "invoice-org", userId })
+      .queryKey,
+    {
+      declaredFeatureIds: ["invoice-links"],
+      capabilities: { "invoice-links": { status: "enabled" } },
+      deploymentFeatures: { legalLists: false, invoiceLinks: true },
+      documentProcessingMode: "off",
+      matterNumberPattern: "{year}/{number}",
+      matterNumberPadding: 3,
+      matterNumberingEnabled: false,
+      practiceJurisdictions: [],
+      promptCachingEnabled: true,
+      managedAIResidency: "eu",
+      memoryExtractionEnabled: false,
+      timeMinimumUnitMinutes: 1,
+      timeEditWindowDays: 30,
+      timeLockedThroughMonth: null,
+      timeNarrativeRequired: false,
+      timeZone: parseTimeZoneId("UTC") ?? panic("UTC fixture must exist"),
+      timeZoneSource: "organization",
+    } satisfies OrganizationSettings,
+  );
+  const AdmittedSendInvoiceForm = (
+    props: Omit<Parameters<typeof SendInvoiceForm>[0], "admission">,
+  ) => {
+    const admission = useCallerFeatureAdmission(CALLER_FEATURE.invoiceLinks);
+    return admission === undefined ? null : (
+      <SendInvoiceForm {...props} admission={admission} />
+    );
+  };
+  let closed = false;
+  const view = render(
+    <IntlProvider locale="en" messages={messages}>
+      <QueryClientProvider client={client}>
+        <AuthenticatedUserProvider
+          user={{
+            activeOrganizationId: "invoice-org",
+            email: "sender@example.test",
+            id: userId,
+            image: null,
+            name: "Sender",
+            preferredName: null,
+            timezoneId: "UTC",
+            wordEditShortcut: null,
+          }}
+        >
+          <AdmittedSendInvoiceForm
+            workspaceId={workspaceId}
+            invoiceId={invoiceId}
+            invoiceNumber="INV-41"
+            recipients={null}
+            onClose={() => {
+              closed = true;
+            }}
+          />
+        </AuthenticatedUserProvider>
+      </QueryClientProvider>
+    </IntlProvider>,
+  );
+  fireEvent.click(
+    view.getByRole("button", { name: messages.billing.invoices.send }),
+  );
+  await waitFor(() => expect(closed).toBe(true));
+  expect(requests).toHaveLength(1);
+  const request = requests.at(0);
+  expect(request?.method).toBe("POST");
+  expect(new URL(request?.url ?? "").pathname).toBe(
+    `/v1/invoices/${workspaceId}/${invoiceId}/sends`,
+  );
+  expect(request?.headers.get("Idempotency-Key")).toBeNull();
+  expect(request?.headers.get(CAPABILITY_REQUEST_HEADER)).toBe(
+    "invoices.sends.create",
+  );
+  expect(await request?.json()).toEqual({
+    recipients: ["recipient@example.test"],
   });
 });

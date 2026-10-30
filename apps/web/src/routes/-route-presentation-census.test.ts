@@ -76,6 +76,11 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     "/consent": {
       reason: "Standalone consent shell; it does not render app breadcrumbs.",
     },
+    "/invoice-link": {
+      reason:
+        "Standalone invoice document; it does not render app breadcrumbs.",
+      fields: ["breadcrumb"],
+    },
     "/dev": { reason: "Development-only component catalogue." },
     "/law/$country/cases/$court/$slug": {
       reason: "The public law reader owns its document breadcrumb.",

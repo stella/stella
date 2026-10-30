@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { Worker } from "node:worker_threads";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import { createTypstWasmCompiler } from "./compiler";
 import type { TypstWorkerReply, TypstWorkerRequest } from "./protocol";
 
@@ -14,10 +16,14 @@ const send = (reply: TypstWorkerReply) => {
   return process.send(reply);
 };
 
-const maxGrowthBytes = Number(process.argv[2]);
-if (!Number.isSafeInteger(maxGrowthBytes) || maxGrowthBytes <= 0) {
+const growthLimit = parseIntegerToken(process.argv.at(2), {
+  sign: "unsigned",
+  min: 1,
+});
+if (growthLimit.isErr()) {
   panic("The Typst renderer needs a positive memory growth limit");
 }
+const maxGrowthBytes = growthLimit.value;
 
 const compiler = await createTypstWasmCompiler();
 /** Starts the memory watchdog thread; returns the peak RSS it records. */

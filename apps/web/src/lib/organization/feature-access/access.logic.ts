@@ -18,6 +18,12 @@ const admittedByServer = (
   availability: CallerAvailability,
   feature: CallerFeature,
 ): boolean => {
+  if (
+    feature.deployment !== undefined &&
+    !availability.deploymentFeatures[feature.deployment]
+  ) {
+    return false;
+  }
   if (availability.declaredFeatureIds.includes(feature.id)) {
     return availability.capabilities[feature.id]?.status === "enabled";
   }

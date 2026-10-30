@@ -71,6 +71,11 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // Bearer-token reads resolve their own organization and recheck it inside
+  // SECURITY DEFINER projections, rather than using a signed-in member's RLS
+  // scope. handlers/invoice-links/invoice-links.integration.test.ts covers
+  // live-token positive controls and foreign-organization projection denial.
+  "invoice-links": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,

@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -72,4 +74,32 @@ export const loadCallerFeature = async ({
     feature,
     load,
   });
+};
+
+const FEATURE_ADMISSION = Symbol("FeatureAdmission");
+
+/** All caller-gated send, link, and future AI-draft controls reuse this proof; only this owner mints it. */
+export type FeatureAdmission<Id extends CallerFeature["id"]> = {
+  readonly [FEATURE_ADMISSION]: Id;
+};
+
+type CallerFeatureGateProps<Feature extends CallerFeature> = {
+  feature: Feature;
+  children: (admission: FeatureAdmission<Feature["id"]>) => ReactElement;
+};
+
+/** Admission refreshes with the caller decision; controls must not retain it in state. */
+export const useCallerFeatureAdmission = <Feature extends CallerFeature>(
+  feature: Feature,
+): FeatureAdmission<Feature["id"]> | undefined => {
+  const enabled = useCallerFeatureEnabled(feature);
+  return enabled ? { [FEATURE_ADMISSION]: feature.id } : undefined;
+};
+
+export const CallerFeatureGate = <Feature extends CallerFeature>({
+  feature,
+  children,
+}: CallerFeatureGateProps<Feature>): ReactElement | null => {
+  const admission = useCallerFeatureAdmission(feature);
+  return admission === undefined ? null : children(admission);
 };

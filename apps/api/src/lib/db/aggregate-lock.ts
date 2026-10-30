@@ -43,6 +43,7 @@ import {
   fields,
   invoiceLines,
   invoices,
+  invoiceSends,
   organizationSettings,
   pdfSigningSessions,
   requestIdempotencyReceipts,
@@ -74,6 +75,7 @@ export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
+  invoiceSendCapacity: { rank: 15, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
@@ -245,6 +247,7 @@ export const AGGREGATE_CHAINS = {
   ],
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
+  invoiceSends: ["invoiceSendCapacity", "workspace"],
   contactCapacity: ["contactCapacity"],
   fileComparisonCapacity: ["fileComparisonCapacity"],
   billingCodeCapacity: ["billingCodeCapacity"],
@@ -420,6 +423,7 @@ type AggregateIdentities = {
     id: SafeId<"documentProcessingRun">;
     workspaceId: SafeId<"workspace">;
   };
+  invoiceSendCapacity: { organizationId: SafeId<"organization"> };
   contactCapacity: { organizationId: SafeId<"organization"> };
   chatToolGrants: {
     organizationId: SafeId<"organization">;
@@ -1523,6 +1527,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`${0x0f_10_cc_a9}::integer`,
         second: sql`hashtext(${options.id})`,
         order: [options.aggregate, options.id],
+      };
+    case "invoiceSendCapacity":
+      return {
+        first: sql`hashtext('invoice-send-capacity')`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
       };
     case "contactCapacity":
       return {
@@ -3049,6 +3059,35 @@ export const lockInvoiceInStatus = async (
     return undefined;
   }
   return invoice;
+};
+
+type LockInvoiceSendDeliveryOptions = {
+  invoiceId: SafeId<"invoice">;
+  organizationId: SafeId<"organization">;
+  sendId: SafeId<"invoiceSend">;
+};
+
+/** Lock the child only after its invoice and complete matter set are held. */
+export const lockInvoiceSendDelivery = async (
+  tx: Transaction,
+  { invoiceId, organizationId, sendId }: LockInvoiceSendDeliveryOptions,
+) => {
+  const rows = await tx
+    .select({
+      deliveryStatus: invoiceSends.deliveryStatus,
+      revokedAt: invoiceSends.revokedAt,
+    })
+    .from(invoiceSends)
+    .where(
+      and(
+        eq(invoiceSends.id, sendId),
+        eq(invoiceSends.invoiceId, invoiceId),
+        eq(invoiceSends.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
 };
 
 /** Caller holds the timer-owner and complete matter advisory set. */

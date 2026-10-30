@@ -255,6 +255,14 @@ const createApiBudgets = (
         return getConfiguration().RATE_LIMIT_API_TRANSLATE_DURATION_MS;
       },
     },
+    invoiceLink: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_API_INVOICE_LINK_MAX;
+      },
+      get duration() {
+        return getConfiguration().RATE_LIMIT_API_INVOICE_LINK_DURATION_MS;
+      },
+    },
     hostedUsageWebhook: {
       get max() {
         return getConfiguration().RATE_LIMIT_API_HOSTED_USAGE_WEBHOOK_MAX;

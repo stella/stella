@@ -54,6 +54,7 @@ const golden = ({
   buyerVatId: string | null;
   buyerCountry: string;
 }): RenderInvoicePdfOptions => ({
+  paymentAmountMinor: cents(line.netAmount + line.vatAmount),
   invoice: {
     status: "finalized",
     documentType: "invoice",

@@ -19,7 +19,7 @@ const availability = (
   declaredFeatureIds: Object.values(CALLER_FEATURE).map(
     (feature) => feature.id,
   ),
-  deploymentFeatures: { legalLists: false },
+  deploymentFeatures: { legalLists: false, invoiceLinks: true },
 });
 
 for (const feature of Object.values(CALLER_FEATURE)) {
@@ -165,7 +165,10 @@ test("undeclared Legal Lists needs deployment and an enabled verification caller
           status === undefined
             ? { unrelated: { status: "enabled" as const } }
             : { [CALLER_FEATURE.verification.id]: { status } },
-        deploymentFeatures: { legalLists: deploymentEnabled },
+        deploymentFeatures: {
+          legalLists: deploymentEnabled,
+          invoiceLinks: true,
+        },
       };
       const enabled = deploymentEnabled && status === "enabled";
       for (const feature of [
@@ -192,7 +195,7 @@ test("declared features require an explicit decision even when deployment is ena
   const state = {
     declaredFeatureIds: [CALLER_FEATURE.legalLists.id],
     capabilities: {},
-    deploymentFeatures: { legalLists: true },
+    deploymentFeatures: { legalLists: true, invoiceLinks: true },
   };
   expect(callerFeatureEnabled(state, CALLER_FEATURE.legalLists)).toBe(false);
   expect(
@@ -218,7 +221,7 @@ test("declared features require an explicit decision even when deployment is ena
       {
         ...state,
         declaredFeatureIds: [],
-        deploymentFeatures: { legalLists: false },
+        deploymentFeatures: { legalLists: false, invoiceLinks: true },
         capabilities: { [CALLER_FEATURE.legalLists.id]: { status: "enabled" } },
       },
       CALLER_FEATURE.legalLists,
@@ -234,7 +237,10 @@ test("declared Legal Lists decisions do not require verification", () => {
         callerFeatureEnabled(
           {
             declaredFeatureIds: [CALLER_FEATURE.legalLists.id],
-            deploymentFeatures: { legalLists: deploymentEnabled },
+            deploymentFeatures: {
+              legalLists: deploymentEnabled,
+              invoiceLinks: true,
+            },
             capabilities: { [CALLER_FEATURE.legalLists.id]: { status } },
           },
           CALLER_FEATURE.legalLists,
@@ -249,7 +255,7 @@ test("undeclared verification decisions do not admit Legal Lists", () => {
     callerFeatureEnabled(
       {
         declaredFeatureIds: [],
-        deploymentFeatures: { legalLists: true },
+        deploymentFeatures: { legalLists: true, invoiceLinks: true },
         capabilities: {
           [CALLER_FEATURE.verification.id]: { status: "enabled" },
         },
@@ -257,4 +263,49 @@ test("undeclared verification decisions do not admit Legal Lists", () => {
       CALLER_FEATURE.legalLists,
     ),
   ).toBe(false);
+});
+
+test("deployment refusal precedes declared invoice link admission", () => {
+  for (const declared of [false, true]) {
+    for (const enabled of [false, true]) {
+      const state = {
+        declaredFeatureIds: declared ? [CALLER_FEATURE.invoiceLinks.id] : [],
+        capabilities: {
+          [CALLER_FEATURE.invoiceLinks.id]: { status: "enabled" as const },
+        },
+        deploymentFeatures: { legalLists: false, invoiceLinks: enabled },
+      };
+      expect(callerFeatureEnabled(state, CALLER_FEATURE.invoiceLinks)).toBe(
+        enabled && declared,
+      );
+    }
+  }
+});
+
+test("invoice send controls stay hidden unless settings declares an enabled invoice-links decision", () => {
+  const feature = CALLER_FEATURE.invoiceLinks;
+  expect(
+    callerFeatureEnabled(
+      {
+        ...availability({ "invoice-links": { status: "enabled" } }),
+        declaredFeatureIds: ["time-billing"],
+      },
+      feature,
+    ),
+  ).toBe(false);
+  expect(
+    callerFeatureEnabled(
+      availability({
+        "time-billing": { status: "enabled" },
+        "invoice-links": { status: "hidden" },
+      }),
+      feature,
+    ),
+  ).toBe(false);
+  expect(
+    callerFeatureEnabled(
+      availability({ "invoice-links": { status: "enabled" } }),
+      feature,
+    ),
+  ).toBe(true);
 });

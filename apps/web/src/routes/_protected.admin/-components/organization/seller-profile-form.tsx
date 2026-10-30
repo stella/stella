@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { useId } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
@@ -15,6 +16,9 @@ import { cn } from "@stll/ui/utils";
 
 import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import { detached } from "@/lib/detached";
+import { CallerFeatureGate } from "@/lib/organization/feature-access/access";
+import type { FeatureAdmission } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type {
   SellerProfile,
   SellerProfileInput,
@@ -38,6 +42,7 @@ const FIELD_LABELS = {
   city: "contacts.fields.billingAddressCity",
   postalCode: "contacts.fields.billingAddressPostalCode",
   country: "common.country",
+  email: "billing.sellerProfiles.replyEmail",
   iban: "common.anonymizationLabels.iban",
   bic: "billing.sellerProfiles.bic",
   accountNumber: "common.anonymizationLabels.bankAccountNumber",
@@ -66,6 +71,7 @@ export const SellerProfileForm = ({
   const schema = sellerProfileFormSchema({
     required: t("common.required"),
     invalidField: t("errors.actionFailed"),
+    invalidEmail: t("contacts.communication.invalidEmail"),
     invalidIban: t("billing.sellerProfiles.invalidIban"),
     invalidBic: t("billing.sellerProfiles.invalidBic"),
     invalidCurrency: t("billing.sellerProfiles.invalidCurrency"),
@@ -110,54 +116,71 @@ export const SellerProfileForm = ({
           className="grid min-w-0 gap-4 sm:grid-cols-2"
           disabled={disabled}
         >
-          {SELLER_PROFILE_TEXT_FIELDS.map((name) => (
-            <form.Field key={name} name={name}>
-              {(field) => (
-                <Field
-                  name={field.name}
-                  className={cn(name === "footerNotes" && "sm:col-span-2")}
-                >
-                  <FieldLabel htmlFor={`${id}-${name}`}>
-                    {t(FIELD_LABELS[name])}
-                  </FieldLabel>
-                  {name === "footerNotes" ? (
-                    <Textarea
-                      id={`${id}-${name}`}
-                      maxLength={SELLER_PROFILE_LIMITS[name]}
-                      onBlur={field.handleBlur}
-                      onChange={(event) =>
-                        field.handleChange(event.currentTarget.value)
-                      }
-                      rows={3}
-                      value={field.state.value}
-                    />
-                  ) : (
-                    <Input
-                      id={`${id}-${name}`}
-                      dir={
-                        name === "iban" ||
-                        name === "bic" ||
-                        name === "accountNumber" ||
-                        name === "defaultCurrency"
-                          ? "ltr"
-                          : undefined
-                      }
-                      maxLength={SELLER_PROFILE_LIMITS[name]}
-                      onBlur={field.handleBlur}
-                      onChange={(event) =>
-                        field.handleChange(event.currentTarget.value)
-                      }
-                      required={
-                        name === "legalName" || name === "defaultCurrency"
-                      }
-                      value={field.state.value}
-                    />
-                  )}
-                  <FieldError />
-                </Field>
-              )}
-            </form.Field>
-          ))}
+          {SELLER_PROFILE_TEXT_FIELDS.map((name) => {
+            const control = (
+              <form.Field key={name} name={name}>
+                {(field) => (
+                  <Field
+                    name={field.name}
+                    className={cn(name === "footerNotes" && "sm:col-span-2")}
+                  >
+                    <FieldLabel htmlFor={`${id}-${name}`}>
+                      {t(FIELD_LABELS[name])}
+                    </FieldLabel>
+                    {name === "footerNotes" ? (
+                      <Textarea
+                        id={`${id}-${name}`}
+                        maxLength={SELLER_PROFILE_LIMITS[name]}
+                        onBlur={field.handleBlur}
+                        onChange={(event) =>
+                          field.handleChange(event.currentTarget.value)
+                        }
+                        rows={3}
+                        value={field.state.value}
+                      />
+                    ) : (
+                      <Input
+                        id={`${id}-${name}`}
+                        dir={
+                          name === "iban" ||
+                          name === "bic" ||
+                          name === "email" ||
+                          name === "accountNumber" ||
+                          name === "defaultCurrency"
+                            ? "ltr"
+                            : undefined
+                        }
+                        maxLength={SELLER_PROFILE_LIMITS[name]}
+                        onBlur={field.handleBlur}
+                        onChange={(event) =>
+                          field.handleChange(event.currentTarget.value)
+                        }
+                        required={
+                          name === "legalName" || name === "defaultCurrency"
+                        }
+                        value={field.state.value}
+                      />
+                    )}
+                    <FieldError />
+                  </Field>
+                )}
+              </form.Field>
+            );
+            return name === "email" ? (
+              <CallerFeatureGate
+                key={name}
+                feature={CALLER_FEATURE.invoiceLinks}
+              >
+                {(admission) => (
+                  <SellerReplyEmailField admission={admission}>
+                    {control}
+                  </SellerReplyEmailField>
+                )}
+              </CallerFeatureGate>
+            ) : (
+              control
+            );
+          })}
           <form.Field name="vatPayer">
             {(field) => (
               <Field name={field.name} className="sm:col-span-2">
@@ -212,6 +235,7 @@ function sellerProfileDefaults(profile: SellerProfile | undefined) {
     city: profile?.city ?? "",
     postalCode: profile?.postalCode ?? "",
     country: profile?.country ?? "",
+    email: profile?.email ?? "",
     iban: profile?.iban ?? "",
     bic: profile?.bic ?? "",
     accountNumber: profile?.accountNumber ?? "",
@@ -229,3 +253,10 @@ function sellerIdentityDefaults(profile: SellerProfile | undefined) {
     barRegistration: profile?.barRegistration ?? "",
   };
 }
+
+const SellerReplyEmailField = ({
+  children,
+}: {
+  admission: FeatureAdmission<"invoice-links">;
+  children: ReactElement;
+}): ReactElement => children;

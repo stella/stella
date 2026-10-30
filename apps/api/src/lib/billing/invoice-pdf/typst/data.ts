@@ -22,6 +22,7 @@ import { groupInvoiceLinesByMatter } from "../matter-groups";
 import {
   buildInvoicePaymentPayload,
   createInvoiceFormatters,
+  requestsPayment,
 } from "../render-helpers";
 import type { RenderInvoicePdfOptions } from "../render-helpers";
 import payBySquareLogo from "./pay-by-square.svg" with { type: "text" };
@@ -423,12 +424,16 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       homeVat,
     },
     payment:
-      seller === null
+      seller === null ||
+      !requestsPayment({
+        documentType: invoice.documentType,
+        amountMinor: options.paymentAmountMinor,
+      })
         ? null
         : {
             // What a payer needs beside the QR code: amount, due date, reference.
             fields: fields([
-              [l.total, money(totals.grossAmountMinor)],
+              [l.total, money(options.paymentAmountMinor)],
               [
                 l.dueDate,
                 invoice.dueDate === null ? null : date(invoice.dueDate),

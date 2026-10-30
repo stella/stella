@@ -62,6 +62,9 @@ export default createServerEntry({
         })
       : await handler.fetch(request);
     const headers = new Headers(response.headers);
+    if (new URL(request.url).pathname === "/invoice-link") {
+      headers.set("Referrer-Policy", "no-referrer");
+    }
     for (const [name, value] of Object.entries(
       CROSS_ORIGIN_ISOLATION_HEADERS,
     )) {

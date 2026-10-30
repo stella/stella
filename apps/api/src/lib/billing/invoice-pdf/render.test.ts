@@ -28,6 +28,7 @@ const sampleLine = {
 } as const;
 
 const options = {
+  paymentAmountMinor: cents(55_555),
   invoice: {
     status: "finalized",
     documentType: "invoice",
@@ -486,6 +487,7 @@ describe("invoice QR payment", () => {
       expect(
         buildInvoicePaymentPayload({
           ...options,
+          paymentAmountMinor: grossAmountMinor,
           totals: { ...options.totals, grossAmountMinor },
         }),
       ).toBeNull();
