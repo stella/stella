@@ -1760,7 +1760,7 @@
     "@stll/fuzzy-search": "1.4.0",
     "@stll/regex-set": "1.0.5",
     "@stll/regex-set-wasm": "1.0.5",
-    "@stll/text-search": "1.0.11",
+    "@stll/text-search": "1.1.0",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -3420,7 +3420,7 @@
 
     "@stll/text-normalize": ["@stll/text-normalize@workspace:packages/text-normalize"],
 
-    "@stll/text-search": ["@stll/text-search@1.0.11", "", { "dependencies": { "@stll/aho-corasick": "^1.0.4", "@stll/fuzzy-search": "^1.1.4", "@stll/regex-set": "^1.0.5" } }, "sha512-umetpBnznO8BBaRAXyErWkyn22/bjsy2A+ylnqkD9ZYl6aRwxSyOlf5rQSzqqALIzdUVSeIbwOq3EEnWa7/U5Q=="],
+    "@stll/text-search": ["@stll/text-search@1.1.0", "", { "dependencies": { "@stll/aho-corasick": "^1.0.4", "@stll/fuzzy-search": "^1.1.5", "@stll/regex-set": "^1.0.5" } }, "sha512-4SGOZiyUbingL0nEhVplQL4RE0UY6Osx6Ic0PlS/y425kJFIHVCoGEmvte9eayUHOZjIdeRdsKLiS0DXX6bzMw=="],
 
     "@stll/time": ["@stll/time@0.4.1", "", { "dependencies": { "better-result": "3.0.1", "temporal-polyfill": "1.0.5" } }, "sha512-kfssSdiycaokO9nAT6ItmWf+oQ6Vf3SIrWUQ+FaM7JZp84i0yRg975OBcM7scI1RZTPjHti3PAXJE+wmQRdPLw=="],
 

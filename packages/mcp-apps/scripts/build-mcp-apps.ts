@@ -1031,7 +1031,10 @@ const documentParts = await Promise.all(
     const generated = path.join(appsRoot, directory, "generated");
     await Promise.all([
       writeGenerated(path.join(generated, "app.js.txt"), appScript),
-      writeGenerated(path.join(generated, "app.css.txt"), appStyle),
+      writeGenerated(
+        path.join(generated, "app.css.txt"),
+        `/* Generated styles for ${directory}. */\n${appStyle}`,
+      ),
       // The served document, for tests and budgets that read one file.
       writeGenerated(path.join(generated, "app.html.txt"), html),
     ]);
