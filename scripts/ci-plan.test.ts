@@ -33,7 +33,10 @@ import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
-import { workflowSchema as ciWorkflowSchema } from "./check-ci-event-policy";
+import {
+  WHOLE_CONTEXT_ENV_BUDGET_CASES,
+  workflowSchema as ciWorkflowSchema,
+} from "./check-ci-event-policy";
 import { readSelectionGraph } from "./ci-affected-selection";
 import {
   planCiApiTests,
@@ -115,6 +118,53 @@ const PLAN_ENV_BUDGET_BYTES = 64 * 1024;
 // measure selector cases rather than charging its cold scan to the first case.
 markdownReaders();
 
+const publishReleaseSummaryNeeds = () => {
+  const publish = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          needs: v.optional(v.union([v.string(), v.array(v.string())])),
+          outputs: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const needs = [
+    publish.jobs["release-summary"]?.needs ?? panic("Missing release summary"),
+  ].flat();
+  const packages = needs
+    .filter((job) => job.startsWith("release-"))
+    .map((job) => job.slice("release-".length));
+  const worstCase: Record<string, string> = {
+    packages: JSON.stringify(packages),
+    package_files: packages
+      .map((name) => `packages/${name}/package.json`)
+      .join("\n"),
+    source_sha: "0".repeat(40),
+  };
+  return Object.fromEntries(
+    needs.map((job) => [
+      job,
+      {
+        result: "success",
+        outputs: Object.fromEntries(
+          Object.keys(publish.jobs[job]?.outputs ?? {}).map((name) => [
+            name,
+            worstCase[name] ?? "0".repeat(64),
+          ]),
+        ),
+      },
+    ]),
+  );
+};
+
 test("whole workflow contexts stay below the per-variable environment budget", () => {
   const root = realpathSync(new URL("..", import.meta.url));
   const apiRoot = nodePath.join(root, "apps/api");
@@ -182,8 +232,15 @@ test("whole workflow contexts stay below the per-variable environment budget", (
         { result: "success", outputs: {} },
       ]),
     ),
+    // Every release job of the npm workflow, with pack selecting every one.
+    "publish-npm release-summary needs": publishReleaseSummaryNeeds(),
     API_TEST_FILES_ENCODED: plan["api_test_files_encoded"],
   };
+  for (const name of new Set(
+    Object.values(WHOLE_CONTEXT_ENV_BUDGET_CASES).map(({ budget }) => budget),
+  )) {
+    expect(Object.keys(contexts), `${name} is measured`).toContain(name);
+  }
   for (const [name, value] of Object.entries(contexts)) {
     const bytes = Buffer.byteLength(JSON.stringify(value));
     expect(bytes, `${name}: ${bytes} bytes`).toBeLessThan(
