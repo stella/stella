@@ -23,15 +23,29 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const applies = () => {
+          const filename = filenameForContext(context);
+          return (
+            filename.endsWith(FIXTURE) ||
+            (filename.includes("apps/api/") &&
+              filename.endsWith(".test.ts") &&
+              !filename.endsWith(
+                "/apps/api/src/tests/query-plans/plan-walker.test.ts",
+              ))
+          );
+        };
         return {
           Literal(node) {
-            const filename = filenameForContext(context);
-            const applies =
-              filename.endsWith(FIXTURE) ||
-              (filename.includes("apps/api/") &&
-                filename.endsWith(".test.ts") &&
-                !filename.includes("/apps/api/src/tests/query-plans/"));
-            if (applies && SCAN_NODE_TYPES.has(String(node.value))) {
+            if (applies() && SCAN_NODE_TYPES.has(String(node.value))) {
+              context.report({ node, messageId: "useHelper" });
+            }
+          },
+          TemplateLiteral(node) {
+            if (
+              applies() &&
+              node.expressions.length === 0 &&
+              SCAN_NODE_TYPES.has(node.quasis[0]?.value.cooked ?? "")
+            ) {
               context.report({ node, messageId: "useHelper" });
             }
           },

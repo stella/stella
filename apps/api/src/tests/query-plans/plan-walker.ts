@@ -23,6 +23,24 @@ type IndexedAccessPathOptions = {
   accessKind?: IndexedAccessPath["accessKind"];
 };
 
+/** Build synthetic scan inputs without duplicating PostgreSQL node literals. */
+export const indexedScanNodeType = (
+  accessKind: IndexedAccessPath["accessKind"],
+): string => {
+  switch (accessKind) {
+    case "index":
+      return "Index Scan";
+    case "index-only":
+      return "Index Only Scan";
+    case "bitmap":
+      return "Bitmap Heap Scan";
+    default: {
+      const exhaustive: never = accessKind;
+      return exhaustive;
+    }
+  }
+};
+
 export type ScanOccurrence = {
   position: string;
   alias: string | null;
