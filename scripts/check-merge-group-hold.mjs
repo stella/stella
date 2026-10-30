@@ -54,7 +54,7 @@ export const checkMergeGroupHold = ({
     !/^[a-f0-9]{40}$/u.test(group["head_sha"]) ||
     typeof group["head_ref"] !== "string"
   ) {
-    fail("HOLD_INVALID_GROUP");
+    return fail("HOLD_INVALID_GROUP");
   }
   /** @param {string} endpoint @returns {unknown} */
   const read = (endpoint) => {
@@ -87,7 +87,7 @@ export const checkMergeGroupHold = ({
       !array(labels) ||
       !labels.every(label)
     )
-      fail("HOLD_INVALID_PULL");
+      return fail("HOLD_INVALID_PULL");
     if (labels.some(({ name }) => name.toLowerCase() === HOLD_LABEL))
       held.push(number);
   }
@@ -250,7 +250,10 @@ if (
     /** @type {unknown} */
     const event = JSON.parse(readFileSync(eventPath, "utf8"));
     if (!record(event)) throw new TypeError("Invalid GitHub event");
-    group = event["merge_group"];
+    const eventGroup = event["merge_group"];
+    group = record(eventGroup)
+      ? { ...eventGroup, base_sha: process.env["MERGE_GROUP_BASE_SHA"] }
+      : eventGroup;
     /** @param {string[]} args @returns {unknown} */
     const api = (args) =>
       JSON.parse(

@@ -346,6 +346,8 @@ test("the required job runs on PRs and merge groups using only trusted base scri
               if: v.optional(v.string()),
               "timeout-minutes": v.optional(v.number()),
               with: v.optional(v.record(v.string(), v.unknown())),
+              env: v.optional(v.record(v.string(), v.string())),
+              run: v.optional(v.string()),
             }),
           ),
         }),
@@ -373,11 +375,23 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   expect(job?.name).toBe("merge-group-hold");
   expect(job?.if).toBe("github.event_name != 'pull_request_target'");
   expect(job?.steps.at(0)?.with?.["ref"]).toBe(
-    `\${{ github.event.merge_group.base_sha }}`,
+    `\${{ github.event.merge_group.base_ref }}`,
   );
-  expect(job?.steps.at(0)?.with?.["persist-credentials"]).toBe(false);
-  expect(job?.steps.at(1)?.["timeout-minutes"]).toBeGreaterThan(0);
-  expect(job?.steps.at(1)?.if).toBe("github.event_name == 'merge_group'");
+  expect(job?.steps.at(1)?.with?.["ref"]).toBe(
+    `\${{ github.event.merge_group.head_sha }}`,
+  );
+  expect(job?.steps.at(2)?.run).toBe(
+    'bash "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh"',
+  );
+  expect(job?.steps.at(4)?.env?.["MERGE_GROUP_BASE_SHA"]).toBe(
+    `\${{ steps.target-base.outputs.base_sha }}`,
+  );
+  expect(job?.steps.at(3)?.with?.["ref"]).toBe(
+    `\${{ steps.target-base.outputs.base_sha }}`,
+  );
+  expect(job?.steps.at(3)?.with?.["persist-credentials"]).toBe(false);
+  expect(job?.steps.at(4)?.["timeout-minutes"]).toBeGreaterThan(0);
+  expect(job?.steps.at(4)?.if).toBe("github.event_name == 'merge_group'");
   const dequeue = workflow.jobs["dequeue-held-pull-request"];
   expect(dequeue?.if).toBe("github.event_name == 'pull_request_target'");
   expect(dequeue?.permissions).toEqual({
