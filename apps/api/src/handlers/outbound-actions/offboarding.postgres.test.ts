@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { panic } from "better-result";
+import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { OUTBOUND_ACTION_STATUSES } from "@stll/api-contract/outbound-action";
@@ -12,15 +13,12 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 const databaseUrl = process.env["DATABASE_URL"];
 
-test.skipIf(
-  !databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true",
-)(
-  "member removal clears pending outbound actions and retains every delivery outcome",
-  async () => {
-    if (!databaseUrl) {
-      return;
-    }
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+describe.skipIf(!runPostgres)("outbound action offboarding", () => {
+  test("member removal clears pending outbound actions and retains every delivery outcome", async () => {
+    const url = databaseUrl ?? panic("DATABASE_URL required");
+    await withGatedTestClients(url, async ({ openClient }) => {
       const { db } = openClient();
       const organizationId = mintAuthProviderId<"organization">();
       const userId = mintAuthProviderId<"user">();
@@ -104,5 +102,5 @@ test.skipIf(
         await db.delete(user).where(eq(user.id, actorUserId));
       }
     });
-  },
-);
+  });
+});
