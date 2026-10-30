@@ -6530,6 +6530,14 @@
           "started": "بدأ مراجعة المستند"
         },
         "empty": "لا يوجد نشاط في هذا الملف القانوني بعد.",
+        "fields": {
+          "dueDate": "تاريخ الاستحقاق",
+          "parentFolder": "المجلد الأصل",
+          "priority": "الأولوية",
+          "property": "الخاصية",
+          "schedule": "الجدول الزمني",
+          "sortOrder": "الترتيب"
+        },
         "filterLabel": "تصفية النشاط",
         "filters": {
           "all": "كل النشاط",
@@ -6579,6 +6587,7 @@
           "translation": "ترجمة"
         },
         "title": "النشاط",
+        "updatedFields": "تم تحديث {fields}",
         "views": {
           "list": "عرض القائمة",
           "timeline": "عرض الخط الزمني"

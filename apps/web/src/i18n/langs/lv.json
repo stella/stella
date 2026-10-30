@@ -6530,6 +6530,14 @@
           "started": "Sāka dokumenta pārbaudi:"
         },
         "empty": "Šajā lietā vēl nav darbību.",
+        "fields": {
+          "dueDate": "termiņš",
+          "parentFolder": "vecākmape",
+          "priority": "prioritāte",
+          "property": "rekvizīts",
+          "schedule": "grafiks",
+          "sortOrder": "secība"
+        },
         "filterLabel": "Filtrēt darbības",
         "filters": {
           "all": "Visas darbības",
@@ -6579,6 +6587,7 @@
           "translation": "tulkojums"
         },
         "title": "Darbības",
+        "updatedFields": "Atjaunināts: {fields}",
         "views": {
           "list": "Saraksta skats",
           "timeline": "Laika skalas skats"

@@ -6530,6 +6530,14 @@
           "started": "Spustil(a) kontrolu dokumentu"
         },
         "empty": "V tomto spise zatiaľ nie je žiadna aktivita.",
+        "fields": {
+          "dueDate": "termín",
+          "parentFolder": "nadradený priečinok",
+          "priority": "priorita",
+          "property": "vlastnosť",
+          "schedule": "plán",
+          "sortOrder": "poradie"
+        },
         "filterLabel": "Filtrovať aktivitu",
         "filters": {
           "all": "Všetka aktivita",
@@ -6579,6 +6587,7 @@
           "translation": "preklad"
         },
         "title": "Aktivita",
+        "updatedFields": "Aktualizované: {fields}",
         "views": {
           "list": "Zoznam",
           "timeline": "Časová os"

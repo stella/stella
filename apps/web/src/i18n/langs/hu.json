@@ -6530,6 +6530,14 @@
           "started": "Ellenőrzést indított ezen:"
         },
         "empty": "Ebben az ügyben még nincs tevékenység.",
+        "fields": {
+          "dueDate": "határidő",
+          "parentFolder": "szülőmappa",
+          "priority": "prioritás",
+          "property": "tulajdonság",
+          "schedule": "ütemezés",
+          "sortOrder": "sorrend"
+        },
         "filterLabel": "Tevékenység szűrése",
         "filters": {
           "all": "Minden tevékenység",
@@ -6579,6 +6587,7 @@
           "translation": "fordítás"
         },
         "title": "Tevékenység",
+        "updatedFields": "Frissítve: {fields}",
         "views": {
           "list": "Listanézet",
           "timeline": "Idővonalnézet"

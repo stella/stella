@@ -6530,6 +6530,14 @@
           "started": "Started a review of"
         },
         "empty": "No activity in this matter yet.",
+        "fields": {
+          "dueDate": "due date",
+          "parentFolder": "parent folder",
+          "priority": "priority",
+          "property": "property",
+          "schedule": "schedule",
+          "sortOrder": "order"
+        },
         "filterLabel": "Filter activity",
         "filters": {
           "all": "All activity",
@@ -6579,6 +6587,7 @@
           "translation": "translation"
         },
         "title": "Matter activity",
+        "updatedFields": "Updated {fields}",
         "views": {
           "list": "List view",
           "timeline": "Timeline view"
