@@ -514,12 +514,12 @@ export const projectReleaseDates = ({
   previousTag: string;
   refreshed: Readonly<Record<string, string>>;
 }): ReleaseDates => {
-  const projected = { ...dates };
-  for (const [tag, publishedAt] of Object.entries(refreshed)) {
-    if (projected[tag] === null) {
-      projected[tag] = publishedAt;
-    }
-  }
+  const projected: ReleaseDates = Object.fromEntries(
+    Object.entries(dates).map(([tag, publishedAt]) => [
+      tag,
+      publishedAt ?? refreshed[tag] ?? null,
+    ]),
+  );
   if (previousRelease.kind === "published") {
     projected[previousTag] = previousRelease.publishedAt;
   } else if (previousRelease.kind === "unpromoted") {
