@@ -3,7 +3,7 @@ name: Merge group hold
 on:
   pull_request:
   pull_request_target: # zizmor: ignore[dangerous-triggers] executes only immutable trusted base scripts
-    types: [labeled, reopened]
+    types: [labeled, unlabeled, reopened]
   merge_group:
     types: [checks_requested]
 
@@ -64,8 +64,9 @@ jobs:
             /scripts/check-merge-group-hold.mjs
             /scripts/merge-group-entries.mjs
             /scripts/gh-retry.sh
-      - name: Remove held pull request from the queue
+      - name: Restore active hold labels and remove held pull requests from the queue
         timeout-minutes: 2
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_HOLD_VALUE: ${{ vars[format('STELLA_PR_HOLD_{0}', github.event.pull_request.number)] }}
         run: node scripts/check-merge-group-hold.mjs

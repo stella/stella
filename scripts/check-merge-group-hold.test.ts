@@ -157,6 +157,7 @@ const dequeueFixture = () => {
   const pull = {
     number: 17,
     node_id: "PR_fixture_17",
+    head: { sha: "b".repeat(40) },
     labels: labelFixtures([HOLD_LABEL]),
   };
   const event = {
@@ -166,6 +167,8 @@ const dequeueFixture = () => {
   };
   const calls: { query: string; id: string }[] = [];
   const reads: string[] = [];
+  const restored: string[] = [];
+  const hold = { value: "" };
   const responses: { query: unknown; mutation: unknown } = {
     query: {
       data: {
@@ -178,7 +181,9 @@ const dequeueFixture = () => {
       },
     },
   };
-  const transport: { failure: "none" | "query" | "mutation" } = {
+  const transport: {
+    failure: "none" | "query" | "mutation" | "read" | "restore";
+  } = {
     failure: "none",
   };
   return {
@@ -188,12 +193,26 @@ const dequeueFixture = () => {
     reads,
     responses,
     transport,
+    restored,
+    hold,
     run: () =>
       dequeueHeldPullRequest({
         event,
         repository: "stella/stella",
+        holdValue: hold.value,
+        addLabel: (endpoint: string) => {
+          restored.push(endpoint);
+          if (transport.failure === "restore") {
+            throw new TypeError("GitHub API unavailable");
+          }
+          pull.labels = labelFixtures([HOLD_LABEL]);
+          return pull.labels;
+        },
         readApi: (endpoint: string) => {
           reads.push(endpoint);
+          if (transport.failure === "read") {
+            throw new TypeError("GitHub API unavailable");
+          }
           return pull;
         },
         graphql: ({ query, id }) => {
@@ -342,6 +361,7 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   expect(workflow.on).toHaveProperty("pull_request");
   expect(workflow.on.pull_request_target.types).toEqual([
     "labeled",
+    "unlabeled",
     "reopened",
   ]);
   expect(workflow.on.merge_group.types).toEqual(["checks_requested"]);
@@ -370,4 +390,81 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   expect(dequeue?.steps.at(0)?.with?.["persist-credentials"]).toBe(false);
   expect(dequeue?.steps.at(0)?.["timeout-minutes"]).toBeGreaterThan(0);
   expect(dequeue?.steps.at(1)?.["timeout-minutes"]).toBeGreaterThan(0);
+});
+
+test("removing hold while a variable holds this head restores the label and dequeues", () => {
+  for (const value of [
+    "pending",
+    `cleared @${"c".repeat(40)}`,
+    `cleared @${"b".repeat(40)}extra`,
+    ` cleared @${"b".repeat(40)}`,
+    "cleared @short",
+  ]) {
+    const target = dequeueFixture();
+    target.event.action = "unlabeled";
+    target.pull.labels = [];
+    target.hold.value = value;
+    target.run();
+    expect(target.pull.labels).toEqual(labelFixtures([HOLD_LABEL]));
+    expect(target.restored).toEqual(["repos/stella/stella/issues/17/labels"]);
+    expect(target.calls.at(1)?.query).toContain("dequeuePullRequest");
+  }
+});
+
+test("a clearance for the live head leaves the label removed", () => {
+  for (const suffix of ["", " neutral status", "\nstatus", "\tstatus"]) {
+    const target = dequeueFixture();
+    target.event.action = "unlabeled";
+    target.pull.labels = [];
+    target.hold.value = `cleared @${target.pull.head.sha}${suffix}`;
+    target.run();
+    expect(target.restored).toEqual([]);
+    expect(target.calls).toEqual([]);
+    expect(target.pull.labels).toEqual([]);
+  }
+});
+
+test("removing hold without a repository variable needs no API calls", () => {
+  const target = dequeueFixture();
+  target.event.action = "unlabeled";
+  target.pull.labels = [];
+  target.run();
+  expect(target.reads).toEqual([]);
+  expect(target.restored).toEqual([]);
+  expect(target.calls).toEqual([]);
+});
+
+test("restoring a hold outside the queue leaves the label restored", () => {
+  const target = dequeueFixture();
+  target.event.action = "unlabeled";
+  target.pull.labels = [];
+  target.hold.value = "pending";
+  target.responses.query = {
+    data: { node: { id: target.pull.node_id, mergeQueueEntry: null } },
+  };
+  target.run();
+  expect(target.pull.labels).toEqual(labelFixtures([HOLD_LABEL]));
+  expect(target.calls).toHaveLength(1);
+});
+
+test("hold restoration fails loudly on every API failure", () => {
+  for (const failure of ["read", "restore", "query", "mutation"] as const) {
+    const target = dequeueFixture();
+    target.event.action = "unlabeled";
+    target.pull.labels = [];
+    target.hold.value = "pending";
+    target.transport.failure = failure;
+    expect(target.run).toThrow("HOLD_DEQUEUE_API_ERROR: PR #17");
+  }
+});
+
+test("the hold variable travels through env as data on the trusted target job", () => {
+  const source = readFileSync(
+    new URL("../.github/workflows/merge-group-hold.yml", import.meta.url),
+    "utf-8",
+  );
+  expect(source).toContain(
+    `PR_HOLD_VALUE: \${{ vars[format('STELLA_PR_HOLD_{0}', github.event.pull_request.number)] }}`,
+  );
+  expect(source).not.toMatch(/run:.*vars\[/u);
 });

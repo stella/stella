@@ -109,12 +109,16 @@ export class HeldPullRequestError extends Error {
 
 /**
  * @param {{ event: unknown, repository: string | undefined,
+ * holdValue: string | undefined,
+ * addLabel: (endpoint: string) => unknown,
  * readApi: (endpoint: string) => unknown,
  * graphql: (options: { query: string, id: string }) => unknown }} options
  */
 export const dequeueHeldPullRequest = ({
   event,
   repository,
+  holdValue,
+  addLabel,
   readApi,
   graphql,
 }) => {
@@ -139,10 +143,16 @@ export const dequeueHeldPullRequest = ({
     return fail("HOLD_INVALID_PULL_EVENT");
   }
   switch (event["action"]) {
+    case "unlabeled":
     case "labeled": {
       const applied = event["label"];
       if (!label(applied)) return fail("HOLD_INVALID_LABEL_EVENT");
       if (applied.name.toLowerCase() !== HOLD_LABEL) return;
+      if (event["action"] === "unlabeled") {
+        if (typeof holdValue !== "string")
+          return fail("HOLD_MISSING_VARIABLE_CONTEXT");
+        if (holdValue === "") return;
+      }
       break;
     }
     case "reopened":
@@ -162,7 +172,29 @@ export const dequeueHeldPullRequest = ({
       !labels.every(label)
     )
       return fail("HOLD_INVALID_PULL");
-    if (!labels.some(({ name }) => name.toLowerCase() === HOLD_LABEL)) return;
+    if (event["action"] === "unlabeled") {
+      const head = pull["head"];
+      if (
+        !record(head) ||
+        typeof head["sha"] !== "string" ||
+        !/^[a-f0-9]{40}$/u.test(head["sha"])
+      )
+        return fail("HOLD_INVALID_PULL_HEAD");
+      // Match the clearance grammar: an exact head, then optional whitespace/status.
+      const clearance =
+        /^cleared @([a-fA-F0-9]{40})(?:\p{White_Space}|$)/u.exec(
+          holdValue ?? "",
+        );
+      if (clearance?.[1] === head["sha"]) return;
+      const restored = addLabel(`repos/${repository}/issues/${number}/labels`);
+      if (
+        !array(restored) ||
+        !restored.every(label) ||
+        !restored.some(({ name }) => name.toLowerCase() === HOLD_LABEL)
+      )
+        return fail("HOLD_LABEL_RESTORE_FAILED");
+    } else if (!labels.some(({ name }) => name.toLowerCase() === HOLD_LABEL))
+      return;
     const id = pull["node_id"];
     const response = graphql({
       query:
@@ -201,7 +233,7 @@ export const dequeueHeldPullRequest = ({
       code: "HOLD_DEQUEUE_API_ERROR",
       number,
       detail:
-        "GitHub API rejected the queue verification or dequeue; check pull-requests: write permission",
+        "GitHub API rejected label restoration, queue verification or dequeue; check pull-requests: write permission",
     });
   }
 };
@@ -232,6 +264,9 @@ if (
       dequeueHeldPullRequest({
         event,
         repository: process.env["GITHUB_REPOSITORY"],
+        holdValue: process.env["PR_HOLD_VALUE"],
+        addLabel: (endpoint) =>
+          api([endpoint, "--method", "POST", "-f", `labels[]=${HOLD_LABEL}`]),
         readApi: (endpoint) => api([endpoint]),
         graphql: ({ query, id }) =>
           api(["graphql", "-f", `query=${query}`, "-f", `id=${id}`]),
