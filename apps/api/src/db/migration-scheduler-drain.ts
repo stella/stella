@@ -25,7 +25,11 @@ import { declareFingerprintFields } from "@stll/errors";
 
 import type { MigrationTiming } from "./migration-timing";
 
-/** `paused_by` of every pause this step writes; resumes match on it. */
+/**
+ * `paused_by` of every pause this step writes; resumes match on it. A resume
+ * clears the deadline but keeps this value, so only an ACTIVE pause with it
+ * marks a job as already paused by a running step.
+ */
 export const SCHEDULER_DRAIN_ACTOR = "migrate";
 /** The one job the database refuses to pause. */
 export const UNPAUSABLE_SCHEDULER_JOB_ID = "scheduler.pauseAudit.hourly";
@@ -141,7 +145,8 @@ const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
               paused_until::text AS paused_until_text
        FROM scheduler_jobs
        WHERE id <> $4
-         AND paused_by IS DISTINCT FROM $2
+         AND NOT (coalesce(paused_by = $2, false)
+                  AND coalesce(paused_until > now(), false))
          AND (paused_until IS NULL
               OR paused_until < now() + $1::integer * interval '1 millisecond')
      ), paused AS (

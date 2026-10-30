@@ -2018,6 +2018,93 @@ if (!runPostgresTests || databaseUrl === undefined) {
         );
       });
 
+      test("a later run drains the same jobs again after an earlier run resumed them", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            const first = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(first.error).toBeNull();
+            // The resume cleared the deadline but left the step's attribution.
+            const resumed = rowOf(await schedulerRows(observer), "job.reader");
+            expect(resumed).toMatchObject({
+              paused_by: "migrate",
+              paused_until: null,
+            });
+            const next = nodePath.join(folder, "20260929000200_runner_c");
+            mkdirSync(next);
+            writeFileSync(
+              nodePath.join(next, "migration.sql"),
+              "ALTER TABLE lock_probe ADD COLUMN second boolean;",
+            );
+            await leaseJob(observer, "job.reader");
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              await releaseLease(observer, "job.reader");
+            })();
+            const second = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            await runner;
+            expect(second.error).toBeNull();
+            expect(schedulerEvents(second.timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 3 },
+              { outcome: "resumed", resumedCount: 3 },
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+              "second",
+            ]);
+          },
+        );
+      });
+
+      test("an expired pause left by a killed migrate task is paused again by the next run", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "migrate",
+              reason: "Leftover pause",
+              interval: "-1 minute",
+            });
+            await leaseJob(observer, "job.other");
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.other", "migrate");
+              await releaseLease(observer, "job.other");
+            })();
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            await runner;
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 3, takenOverCount: 0 },
+              { outcome: "resumed", resumedCount: 3 },
+            ]);
+          },
+        );
+      });
+
       test("no pending schema migration pauses nothing", async () => {
         await withSchedulerBundle(
           ALTER_AFTER_DRAIN,
