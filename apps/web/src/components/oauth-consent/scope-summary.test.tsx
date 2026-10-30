@@ -23,7 +23,9 @@ describe("concise consent permissions", () => {
     const scopes = Object.values(ACCOUNT_EXPORT_SCOPES);
     const markup = renderToStaticMarkup(
       <IntlProvider locale="en" messages={en} timeZone="UTC">
-        <ScopeSummary scopes={scopes} />
+        <FormattingProvider locale="en" timeZone="UTC">
+          <ScopeSummary scopes={scopes} />
+        </FormattingProvider>
       </IntlProvider>,
     );
     expect(markup).not.toContain('data-slot="consent-sensitive-access"');
