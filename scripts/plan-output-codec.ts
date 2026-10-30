@@ -1,5 +1,11 @@
-import { panic } from "better-result";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
+
+// ci-plan decodes before the dependency install, so this module imports only
+// Node built-ins and fails with its own error instead of better-result.
+class PlanOutputCodecError extends Error {
+  override name = "PlanOutputCodecError";
+  readonly _tag = "PlanOutputCodecError";
+}
 
 export type PostgresTestSelection =
   { mode: "all" | "none" } | { mode: "selected"; files: readonly string[] };
@@ -9,7 +15,7 @@ const encodeJson = (value: unknown) =>
 
 const decodeJson = (value: string): unknown => {
   if (value === "") {
-    panic("Encoded plan output must not be empty");
+    throw new PlanOutputCodecError("Encoded plan output must not be empty");
   }
   return JSON.parse(
     inflateRawSync(Buffer.from(value, "base64")).toString("utf-8"),
@@ -25,7 +31,9 @@ export const encodePlanFileList = (files: readonly string[]): string =>
 export const decodePlanFileList = (value: string): string[] => {
   const decoded = decodeJson(value);
   if (!isStringArray(decoded)) {
-    panic("Encoded plan file list must contain a string array");
+    throw new PlanOutputCodecError(
+      "Encoded plan file list must contain a string array",
+    );
   }
   return decoded;
 };
@@ -39,7 +47,9 @@ export const decodePostgresTestSelection = (
 ): PostgresTestSelection => {
   const decoded = decodeJson(value);
   if (typeof decoded !== "object" || decoded === null || !("mode" in decoded)) {
-    panic("Encoded Postgres selection must contain a selection object");
+    throw new PlanOutputCodecError(
+      "Encoded Postgres selection must contain a selection object",
+    );
   }
   if (decoded.mode === "all" || decoded.mode === "none") {
     return { mode: decoded.mode };
@@ -51,12 +61,14 @@ export const decodePostgresTestSelection = (
   ) {
     return { mode: "selected", files: decoded.files };
   }
-  return panic("Encoded Postgres selection has an invalid mode or file list");
+  throw new PlanOutputCodecError(
+    "Encoded Postgres selection has an invalid mode or file list",
+  );
 };
 
 if (import.meta.main) {
   if (Bun.argv.at(2) !== "decode-postgres") {
-    panic("Expected decode-postgres");
+    throw new PlanOutputCodecError("Expected decode-postgres");
   }
   // An empty selection is no explicit selection: the full suite runs.
   const encoded = process.env["CI_POSTGRES_TEST_SELECTION_ENCODED"] ?? "";

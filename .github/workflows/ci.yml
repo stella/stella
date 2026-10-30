@@ -1194,7 +1194,12 @@ jobs:
           CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ steps.postgres-test-plan.outputs.postgres_test_selection_encoded }}
           REASON: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
         run: |
-          SELECTION=$(bun scripts/plan-output-codec.ts decode-postgres)
+          # A fallback or unplanned run carries no selection; the full suite
+          # runs and the decoder (absent from older checkouts) is not needed.
+          SELECTION='{"mode":"all"}'
+          if [[ -n "$CI_POSTGRES_TEST_SELECTION_ENCODED" ]]; then
+            SELECTION=$(bun scripts/plan-output-codec.ts decode-postgres)
+          fi
           {
             printf '### Postgres test selection\n\n'
             printf '%s\n\n' "$REASON"
