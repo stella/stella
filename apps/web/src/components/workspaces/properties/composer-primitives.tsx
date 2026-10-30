@@ -253,7 +253,7 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
           render={
             <button
               aria-label={t("common.remove")}
-              className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+              className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
               onClick={onRemove}
               type="button"
             />

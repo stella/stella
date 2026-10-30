@@ -4,11 +4,12 @@ import { Result } from "better-result";
 import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
 import { RetryButton } from "@/components/retry-button";
 import { TaskRow } from "@/components/task-row";
-import { Text } from "@/components/ui/text";
 import { dayAt, groupByDue } from "@/state/tasks";
 import type { TasksLoad, TaskSummary } from "@/state/tasks";
 import { useAppColors } from "@/theme";
