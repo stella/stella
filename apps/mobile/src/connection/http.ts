@@ -66,44 +66,95 @@ export const fetchWithTimeout = async (
     });
   const raced = async <T>(read: Promise<T>): Promise<T> =>
     await Promise.race([read, deadline()]);
-  const bounded = async <T>(read: Promise<T>): Promise<T> =>
-    await raced(read).finally(clear);
+  // The response and each clone of it is one body still open; the timer
+  // stops when the last of them has been read, failed or been cancelled.
+  let open = 0;
+  const opened = () => {
+    open += 1;
+    let settled = false;
+    return () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      open -= 1;
+      if (open === 0) {
+        clear();
+      }
+    };
+  };
   // A caller that reads the stream itself gets one that errors at the
   // deadline, made when it first asks, so a `json()` caller never builds it.
-  const boundStream = (source: ReadableStream<Uint8Array>) =>
-    new ReadableStream<Uint8Array>({
+  const boundStream = (
+    source: ReadableStream<Uint8Array>,
+    settle: () => void,
+  ) => {
+    // A cancel during a read ends that read, which holds the source's lock,
+    // and the read cancels the source through its own reader.
+    let cancelled = false;
+    let cancelReason: unknown;
+    let stop: ((reason: unknown) => void) | null = null;
+    let pulling: Promise<void> | null = null;
+    const pullOnce = async (
+      stream: ReadableStreamDefaultController<Uint8Array>,
+    ) => {
       // The reader is taken for one read and released after it, so the
       // source is never left locked between pulls.
-      async pull(stream) {
-        const reader = source.getReader();
-        try {
-          const next = await Result.tryPromise(
-            async () => await raced(reader.read()),
-          );
-          if (Result.isError(next)) {
-            clear();
-            stream.error(next.error.cause);
-            await reader.cancel(next.error.cause);
-            return;
-          }
-          if (next.value.done) {
-            clear();
-            stream.close();
-            return;
-          }
-          stream.enqueue(next.value.value);
-        } finally {
-          reader.releaseLock();
+      const reader = source.getReader();
+      try {
+        const stopped = new Promise<never>((_resolve, reject) => {
+          stop = reject;
+        });
+        const next = await Result.tryPromise(
+          async () => await Promise.race([raced(reader.read()), stopped]),
+        );
+        stop = null;
+        if (cancelled) {
+          await reader.cancel(cancelReason);
+          return;
         }
+        if (Result.isError(next)) {
+          settle();
+          stream.error(next.error.cause);
+          await reader.cancel(next.error.cause);
+          return;
+        }
+        if (next.value.done) {
+          settle();
+          stream.close();
+          return;
+        }
+        stream.enqueue(next.value.value);
+      } finally {
+        reader.releaseLock();
+      }
+    };
+    return new ReadableStream<Uint8Array>({
+      async pull(stream) {
+        pulling = pullOnce(stream);
+        await pulling.finally(() => {
+          pulling = null;
+        });
       },
       async cancel(reason: unknown) {
-        clear();
-        await source.cancel(reason);
+        cancelled = true;
+        cancelReason = reason;
+        settle();
+        if (stop === null || pulling === null) {
+          await source.cancel(reason);
+          return;
+        }
+        stop(reason);
+        await pulling;
       },
     });
+  };
   // Every way to consume the body is held to the deadline, on the response
   // and on each clone of it.
   const bind = (platform: Response): Response => {
+    const settle = opened();
+    const bounded = async <T>(read: Promise<T>): Promise<T> =>
+      await raced(read).finally(settle);
     const readers = {
       arrayBuffer: async () => await bounded(platform.arrayBuffer()),
       blob: async () => await bounded(platform.blob()),
@@ -122,7 +173,8 @@ export const fetchWithTimeout = async (
           return readers[property];
         }
         if (property === "body") {
-          body ??= target.body === null ? null : boundStream(target.body);
+          body ??=
+            target.body === null ? null : boundStream(target.body, settle);
           return body;
         }
         const value: unknown = Reflect.get(target, property, target);
