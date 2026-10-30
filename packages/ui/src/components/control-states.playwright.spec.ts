@@ -12,8 +12,8 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
 });
 
-const boxShadow = async (locator: Locator) =>
-  await locator.evaluate((element) => getComputedStyle(element).boxShadow);
+const outlineWidth = async (locator: Locator) =>
+  await locator.evaluate((element) => getComputedStyle(element).outlineWidth);
 
 const height = async (locator: Locator) =>
   await locator.evaluate((element) => element.getBoundingClientRect().height);
@@ -24,8 +24,8 @@ test("a selected plain target is drawn apart from an unselected one", async ({
   const unselected = page.getByRole("button", { name: "Unselected card" });
   const selected = page.getByRole("button", { name: "Selected card" });
 
-  expect(await boxShadow(unselected)).toBe("none");
-  expect(await boxShadow(selected)).toContain("inset");
+  expect(await outlineWidth(unselected)).toBe("0px");
+  expect(await outlineWidth(selected)).toBe("2px");
 });
 
 test("a fixed textarea is as tall as its rows, and only a growing one has a floor", async ({

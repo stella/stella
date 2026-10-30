@@ -77,15 +77,17 @@ const BUTTON_SIZE_CLASS_NAMES = {
     "size-5 rounded-md before:rounded-[calc(var(--radius-md)-1px)] sm:size-4 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3",
   "icon-xs":
     "size-7 rounded-md before:rounded-[calc(var(--radius-md)-1px)] sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
-  // A button that sits in a line of text: a "show more", a citation, an
-  // inline edit. It draws no box of its own (no height, padding or type
-  // size), takes the font of the line around it and wraps with it, so
-  // swapping a word for an action leaves the line as it was. Its
+  // A short action that sits in a line of text: a "show more", a
+  // paragraph reference, an inline edit. It draws no box of its own (no
+  // height, padding or type size) and takes the font of the line around
+  // it, so swapping a word for an action leaves the line as it was. Its
   // variant still owns colour, focus and the selected treatment; see
   // compoundVariants for the hover fill it does not paint.
-  // It is an inline box, not a flex one, so a long label breaks across
-  // lines with the sentence, and its text stays selectable so a
-  // citation or a reference can be copied with the passage around it.
+  // A <button> stays one atomic box even at `display: inline`: its label
+  // never breaks across the paragraph's lines. A label too long for the
+  // line moves to the next one whole and wraps inside its own box, so it
+  // never overflows; text that has to flow with the prose (a citation in
+  // reader text) is a `ButtonTextRun`.
   inline:
     "inline h-auto rounded-sm border-0 p-0 text-start text-[length:inherit] leading-[inherit] font-normal whitespace-normal select-text before:rounded-[calc(var(--radius-sm)-1px)] sm:text-[length:inherit] [&_svg]:mx-0 [&_svg]:inline [&_svg]:align-[-0.125em] [&_svg:not(:last-child)]:me-1",
   lg: "h-10 px-[calc(--spacing(3.5)-1px)] sm:h-9",
@@ -163,12 +165,14 @@ const buttonVariants = cva(
  * start), so a card's children stack as they would in a `div`; `className`
  * places it (`w-full`, `block`). `shape` gives it the outline its focus ring
  * follows. Like a native button it does not dim when disabled: the content
- * says it is unavailable. Selected (`data-pressed`), it draws an inset ring
- * in the primary colour, inside its outline so a clipping container keeps
- * it, and apart from the focus ring, which still shows over it.
+ * says it is unavailable.
+ *
+ * Selected, it draws the inset edge the other variants draw, as an outline
+ * inside the box: an outline paints above the content, so a card's own
+ * surface cannot cover it the way it would cover an inset shadow.
  */
 const BUTTON_PLAIN_CLASS =
-  "focus-visible:ring-ring focus-visible:ring-offset-background data-pressed:inset-ring-primary relative inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default data-pressed:inset-ring-2";
+  "focus-visible:ring-ring focus-visible:ring-offset-background data-pressed:outline-primary/48 relative inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default data-pressed:outline-2 data-pressed:-outline-offset-2 data-pressed:outline-solid";
 
 /**
  * The outline a plain button's focus ring follows, matching its content:
@@ -362,6 +366,78 @@ function Button({
   });
 }
 
+/**
+ * The run is the visible target: underlined like a link, ringed while its
+ * button has keyboard focus (per line, so a wrapped run rings each line).
+ */
+const BUTTON_TEXT_RUN_CLASS =
+  "has-focus-visible:ring-ring cursor-pointer rounded-xs underline underline-offset-2 box-decoration-clone select-text hover:decoration-2 has-focus-visible:ring-2 has-disabled:cursor-not-allowed has-disabled:opacity-64";
+
+// Visually hidden but focusable: the run, not this box, shows the focus.
+const BUTTON_TEXT_RUN_TARGET_CLASS =
+  "absolute size-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)]";
+
+/**
+ * A run with no box can anchor no tooltip or popup, and carries no variant,
+ * size or icon: its text is its look.
+ */
+type ButtonTextRunProps = Omit<
+  ButtonProps,
+  | "children"
+  | "className"
+  | "focusRing"
+  | "icon"
+  | "loading"
+  | "render"
+  | "selected"
+  | "shape"
+  | "size"
+  | "tooltip"
+  | "variant"
+> & {
+  children: ReactNode;
+  className?: string | undefined;
+};
+
+/**
+ * A long run of prose that acts as one button: a citation or a
+ * cross-reference in reader text. A <button> is an atomic box even at
+ * `display: inline`, so its label cannot break across the paragraph's lines;
+ * here the text sits in a native <label>, an inline box that wraps and copies
+ * with the prose, and the label forwards a press anywhere on the run to the
+ * <button> it holds, which takes its accessible name from the label. Use
+ * `Button size="inline"` for a short action.
+ */
+const ButtonTextRun = ({
+  children,
+  className,
+  disabled,
+  ...props
+}: ButtonTextRunProps) => (
+  <label
+    className={cn(BUTTON_TEXT_RUN_CLASS, className)}
+    data-slot="button-text-run"
+  >
+    {/* Pinned after the spread: a value typed wider than the props could
+        still carry a box, a tooltip or an icon the run cannot show. */}
+    <Button
+      {...props}
+      className={BUTTON_TEXT_RUN_TARGET_CLASS}
+      disabled={disabled}
+      focusRing="outside"
+      icon={undefined}
+      loading={false}
+      render={undefined}
+      selected={false}
+      shape="box"
+      size={undefined}
+      tooltip={undefined}
+      variant={BUTTON_PLAIN_VARIANT}
+    />
+    {children}
+  </label>
+);
+
 export type {
   ButtonFocusRing,
   ButtonPlainShape,
@@ -371,6 +447,7 @@ export type {
 };
 export {
   Button,
+  ButtonTextRun,
   BUTTON_CONTENT,
   BUTTON_SIZE_CONTENT,
   buttonAccessibleDisabledClass,
