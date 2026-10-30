@@ -3,13 +3,13 @@ import { afterEach, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   type StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   czNsFixture,

@@ -15,16 +15,6 @@ import * as cheerio from "cheerio";
 
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  withSourceRawObjects,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import {
@@ -57,6 +47,16 @@ import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parser
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  withSourceRawObjects,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,
@@ -470,7 +470,9 @@ describe("a decision", () => {
                 ? "unrepresentable-identifier"
                 : undefined),
           ).toBe(true);
-          expect(sanitizeResult(decision).caseNumber).toBe(decision.caseNumber);
+          expect(sanitizeResult(decision).unwrap().caseNumber).toBe(
+            decision.caseNumber,
+          );
         }
       }
     }

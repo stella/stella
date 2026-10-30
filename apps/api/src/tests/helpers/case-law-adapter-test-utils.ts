@@ -1,7 +1,7 @@
 import type {
   SourceAdapter,
   SourceReconciliation,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 /**
  * Shared test utilities for case-law adapter tests.
  *

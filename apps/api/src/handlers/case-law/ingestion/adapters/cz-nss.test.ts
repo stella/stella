@@ -26,7 +26,6 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildCzNssDecision,
   CZ_NSS_CONTINUATION_PAGE_ROWS,
@@ -59,6 +58,7 @@ import {
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,

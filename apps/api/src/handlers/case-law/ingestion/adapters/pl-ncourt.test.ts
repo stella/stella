@@ -15,8 +15,6 @@ import {
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
   buildPlDecision,
@@ -51,6 +49,8 @@ import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/p
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   AST_BOUNDARY_WHITESPACE,
   AST_CONTENT_LOST,

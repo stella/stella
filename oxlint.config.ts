@@ -85,6 +85,15 @@ const nonAnonymousHandlerFactories = factoriesWhere(
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
   "Public SSR modules must use a hydration-safe adapter with a deterministic server snapshot.";
+const IDLE_SCHEDULER_MESSAGE =
+  "Use scheduleIdle from '@/lib/platform/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
+const idleCallbackGlobals = ["requestIdleCallback", "cancelIdleCallback"].map(
+  (name) => ({ name, message: IDLE_SCHEDULER_MESSAGE }),
+);
+const idleCallbackProperties = idleCallbackGlobals.map(({ name, message }) => ({
+  property: name,
+  message,
+}));
 const publicSsrBrowserGlobals = [
   "devicePixelRatio",
   "document",
@@ -161,12 +170,16 @@ const publicSsrAmbientProperties = [
 const publicSsrAmbientStateRules = {
   "no-restricted-globals": [
     "error",
-    { globals: publicSsrBrowserGlobals, checkGlobalObject: true },
+    {
+      globals: [...publicSsrBrowserGlobals, ...idleCallbackGlobals],
+      checkGlobalObject: true,
+    },
   ],
   "no-restricted-properties": [
     "error",
     publicSsrDateNowRestriction,
     ...publicSsrAmbientProperties,
+    ...idleCallbackProperties,
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
@@ -408,6 +421,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-valibot-message.fixture.ts", [
     "require-valibot-message/require-valibot-message",
+  ]),
+  fixtureRuleOverride("no-live-test-base.fixture.ts", [
+    "no-live-test-base/no-live-test-base",
   ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
@@ -1385,6 +1401,7 @@ const config = defineConfig({
     "max-classes-per-file": "off",
     // Trailing comments document table rows and literal values (962 findings).
     "no-inline-comments": "off",
+    "no-live-test-base/no-live-test-base": "error",
     "no-raw-child-exit-status/no-raw-child-exit-status": "error",
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
@@ -1904,6 +1921,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-rendered-error-translation.ts",
     "./.oxlint-plugins/require-valibot-message.ts",
+    "./.oxlint-plugins/no-live-test-base.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -2350,6 +2368,17 @@ const config = defineConfig({
     ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/web/src/lib/platform/schedule-idle.ts"],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          { globals: idleCallbackGlobals, checkGlobalObject: true },
+        ],
+        "no-restricted-properties": ["error", ...idleCallbackProperties],
+      },
+    },
     {
       // `apps/web` runs each DOM test file in its own process; the packages
       // run them together, where `screen` reads another file's document.

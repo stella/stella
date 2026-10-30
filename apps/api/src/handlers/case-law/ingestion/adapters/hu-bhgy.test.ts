@@ -16,10 +16,6 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assembleHuBhgyDecision,
   encodeHuBhgyCursor,
   huBhgyAdapter,
@@ -38,6 +34,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   rejectionOf,

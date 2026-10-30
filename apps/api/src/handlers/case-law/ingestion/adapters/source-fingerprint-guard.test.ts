@@ -14,10 +14,10 @@ import { writeFileSync } from "node:fs";
 
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
-import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { SOURCE_FINGERPRINT_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
+import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { plCourtsSearchFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {

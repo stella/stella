@@ -74,7 +74,7 @@ for (const { key } of listSourceRegistrations()) {
     expect(splitStoredDecisionTextMetadata(stored).textFields).toEqual(
       decision.textFields,
     );
-    const normalized = sanitizeResult(decision);
+    const normalized = sanitizeResult(decision).unwrap();
     // Legacy rows stored only non-default reasons. Provenance changes must
     // neither alter the document payload nor require a source refresh.
     const legacyEntries = absence.entries.filter(
@@ -100,8 +100,8 @@ for (const { key } of listSourceRegistrations()) {
       caseLawCanonicalPayload({
         ...normalized,
         metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
-      }),
-    ).toEqual(caseLawCanonicalPayload(normalized));
+      }).unwrap(),
+    ).toEqual(caseLawCanonicalPayload(normalized).unwrap());
     expect(
       shouldSkipRefresh({
         existingMetadata: legacyMetadata,

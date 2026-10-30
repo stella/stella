@@ -9,14 +9,6 @@ import {
 } from "bun:test";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   buildDecision,
   euEcjAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -25,6 +17,14 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

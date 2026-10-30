@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
+import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { readGzipJson } from "@/api/lib/gzip-json";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   rejectionOf,
