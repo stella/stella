@@ -4,20 +4,26 @@ import { APIError } from "@/lib/errors/api";
 
 import {
   batchDeleteTimeEntries,
+  batchUpdateTimeEntries,
   createTimeEntry,
   type CreateTimeEntryBody,
   decideTimeSuggestion,
+  deleteTimeEntry,
   fetchTimeEntries,
   fetchTimeEntrySummary,
+  splitTimeEntry,
   updateTimeEntry,
 } from "./time-entries-api";
 
 const originalFetch = globalThis.fetch;
 const requests: { body: unknown; method: string }[] = [];
 let responses: unknown[] = [];
+const transportRequests: { url: string; method: string; headers: Headers }[] =
+  [];
 
 beforeEach(() => {
   requests.length = 0;
+  transportRequests.length = 0;
   responses = [
     { id: "entry-1" },
     { id: "entry-1" },
@@ -29,6 +35,11 @@ beforeEach(() => {
   ];
   globalThis.fetch = Object.assign(
     mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      transportRequests.push({
+        url: _input instanceof Request ? _input.url : String(_input),
+        method: init?.method ?? "GET",
+        headers: new Headers(init?.headers),
+      });
       requests.push({
         body:
           typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
@@ -152,3 +163,94 @@ const createBodyOmitsCacheMetadata: "queryKey" extends keyof CreateTimeEntryBody
   ? false
   : true = true;
 void createBodyOmitsCacheMetadata;
+
+const cases = [
+  {
+    name: "create",
+    method: "PUT",
+    path: "/time-entries/matter",
+    response: { id: "entry" },
+    send: async () =>
+      await createTimeEntry("matter", {
+        dateWorked: "2026-10-29",
+        timezoneId: "UTC",
+        durationMinutes: 30,
+        narrative: "Review documents",
+        billable: true,
+      }),
+  },
+  {
+    name: "update",
+    method: "PATCH",
+    path: "/time-entries/matter",
+    response: { id: "entry" },
+    send: async () =>
+      await updateTimeEntry("matter", { id: "entry", narrative: "Reviewed" }),
+  },
+  {
+    name: "delete",
+    method: "DELETE",
+    path: "/time-entries/matter",
+    response: { deleted: true },
+    send: async () => await deleteTimeEntry("matter", "entry"),
+  },
+  {
+    name: "batch update",
+    method: "POST",
+    path: "/time-entries/matter/batch",
+    response: { updated: 1 },
+    send: async () =>
+      await batchUpdateTimeEntries("matter", {
+        ids: ["entry"],
+        action: "approve",
+      }),
+  },
+  {
+    name: "batch delete",
+    method: "DELETE",
+    path: "/time-entries/matter/batch",
+    response: { updated: 1 },
+    send: async () => await batchDeleteTimeEntries("matter", ["entry"]),
+  },
+  {
+    name: "split",
+    method: "POST",
+    path: "/time-entries/matter/split",
+    response: { entryIds: ["split-entry"], splitGroupId: "split-group" },
+    send: async () =>
+      await splitTimeEntry("matter", {
+        id: "entry",
+        splits: [{ workItemId: "task", percentage: 100 }],
+      }),
+  },
+  {
+    name: "suggestion decision",
+    method: "POST",
+    path: "/time-entries/matter/suggestions/decisions",
+    response: {
+      fingerprint: "suggestion",
+      status: "dismissed",
+      timeEntryId: null,
+    },
+    send: async () =>
+      await decideTimeSuggestion("matter", {
+        fingerprint: "suggestion",
+        date: "2026-10-29",
+        timezoneId: "UTC",
+        decision: { type: "dismiss" },
+      }),
+  },
+] as const;
+
+test.each(cases)(
+  "$name uses typed transport without an idempotency key",
+  async ({ method, path, response, send }) => {
+    responses = [response];
+    await send();
+    expect(transportRequests).toHaveLength(1);
+    const request = transportRequests.at(0);
+    expect(request?.url).toEndWith(path);
+    expect(request?.method).toBe(method);
+    expect(request?.headers.has("Idempotency-Key")).toBe(false);
+  },
+);
