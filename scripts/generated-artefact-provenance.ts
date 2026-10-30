@@ -16,6 +16,32 @@ const MODEL_MODULES = new Set([
   "apps/api/src/lib/chat/tanstack-chat-runtime",
 ]);
 const PROVENANCE_MODULE = "apps/api/src/lib/generated-artefact-provenance";
+type ProvenancePropertyOwner =
+  | { type: "module"; file: string; reason: string }
+  | {
+      type: "table-definition";
+      file: string;
+      table: string;
+      binding: string;
+      reason: string;
+    };
+export const PROVENANCE_PROPERTY_OWNERS = [
+  {
+    type: "module",
+    file: `${PROVENANCE_MODULE}.ts`,
+    reason:
+      "The provenance owner constructs persisted values and their read projections.",
+  },
+  {
+    type: "table-definition",
+    file: "apps/api/src/db/schema/chat.ts",
+    table: "chat_threads",
+    binding: "chatThreads",
+    reason:
+      "Drizzle declares the provenance column in its canonical table schema.",
+  },
+] as const satisfies readonly ProvenancePropertyOwner[];
+
 const names = new Set<string>(MODEL_OPERATION_NAMES);
 const registered = new Set<string>(MODEL_OPERATIONS.owner);
 const implementations = new Set(
@@ -392,6 +418,63 @@ const isBindingName = (node: ts.Expression): boolean => {
   );
 };
 
+type OwnsProvenancePropertyOptions = {
+  file: string;
+  node: ts.PropertyAssignment | ts.ShorthandPropertyAssignment;
+};
+const ownsProvenanceProperty = ({
+  file,
+  node,
+}: OwnsProvenancePropertyOptions): boolean =>
+  PROVENANCE_PROPERTY_OWNERS.some((owner) => {
+    if (owner.file !== file) {
+      return false;
+    }
+    switch (owner.type) {
+      case "module":
+        return true;
+      case "table-definition": {
+        const object = node.parent;
+        const call = object.parent;
+        if (
+          !ts.isObjectLiteralExpression(object) ||
+          !ts.isCallExpression(call) ||
+          call.arguments.at(1) !== object
+        ) {
+          return false;
+        }
+        const table = call.arguments.at(0);
+        const callee = call.expression;
+        const declaration = call.parent;
+        if (
+          !ts.isVariableDeclaration(declaration) ||
+          !ts.isVariableDeclarationList(declaration.parent) ||
+          !ts.isVariableStatement(declaration.parent.parent) ||
+          !ts.isSourceFile(declaration.parent.parent.parent) ||
+          !declaration.parent.parent.modifiers?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+          )
+        ) {
+          return false;
+        }
+        return (
+          table !== undefined &&
+          ts.isStringLiteral(table) &&
+          table.text === owner.table &&
+          ((ts.isIdentifier(callee) && callee.text === "pgTable") ||
+            (ts.isPropertyAccessExpression(callee) &&
+              callee.name.text === "pgTable")) &&
+          ts.isIdentifier(declaration.name) &&
+          declaration.name.text === owner.binding &&
+          declaration.initializer === call
+        );
+      }
+      default:
+        owner satisfies never;
+        return panic("Unknown provenance property owner");
+    }
+  });
+
 export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
   // Escaped strings still take the AST path; unrelated modules need no parse.
   if (
@@ -506,7 +589,11 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
     ) {
       legacyCalls++;
     }
-    if (!ts.isPropertyAssignment(node)) {
+    if (
+      (!ts.isPropertyAssignment(node) &&
+        !ts.isShorthandPropertyAssignment(node)) ||
+      !ts.isObjectLiteralExpression(node.parent)
+    ) {
       return;
     }
     let key = "";
@@ -514,30 +601,15 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       key = node.name.text;
     } else if (
       ts.isComputedPropertyName(node.name) &&
-      ts.isStringLiteral(node.name.expression)
+      ts.isStringLiteralLike(node.name.expression)
     ) {
       key = node.name.expression.text;
     }
-    if (key !== "generationProvenance") {
-      return;
-    }
-    for (
-      let parent: ts.Node = node.parent;
-      !ts.isSourceFile(parent);
-      parent = parent.parent
+    if (
+      key === "generationProvenance" &&
+      !ownsProvenanceProperty({ file, node })
     ) {
-      if (
-        ts.isCallExpression(parent) &&
-        ts.isPropertyAccessExpression(parent.expression) &&
-        ["set", "values", "onConflictDoUpdate"].includes(
-          parent.expression.name.text,
-        )
-      ) {
-        writes.push(
-          tree.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-        );
-        break;
-      }
+      writes.push(tree.getLineAndCharacterOfPosition(node.getStart()).line + 1);
     }
   });
   const escapes = new Set<number>();
@@ -586,6 +658,20 @@ export const exportedModelOperations = ({
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const result: string[] = [];
   for (const statement of tree.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      if (
+        !statement.isTypeOnly &&
+        statement.exportClause !== undefined &&
+        ts.isNamedExports(statement.exportClause)
+      ) {
+        for (const element of statement.exportClause.elements) {
+          if (!element.isTypeOnly) {
+            result.push(element.name.text);
+          }
+        }
+      }
+      continue;
+    }
     if (
       !ts.canHaveModifiers(statement) ||
       !ts
