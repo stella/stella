@@ -36,6 +36,13 @@ export const queryPerfRegistry = (
 ) =>
   [
     {
+      budgetId: "statement.billingDrafts.candidateMatters",
+      query: seed.billingDraftCandidates,
+      expectedRows: 1,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.billingDrafts.candidateMatters"],
+    },
+    {
       budgetId: "statement.documents.searchHits",
       query: buildDocumentSearchQueries(seed.searchInput).hitsQuery,
       expectedRows: Math.min(seed.searchMatchCount, seed.searchInput.limit + 1),
@@ -208,6 +215,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "statement.billingDrafts.candidateMatters": "tenant",
   "scheduled.caseLaw.refreshCoverage": "corpus",
   "statement.caseLaw.globalSearchHits": "case-law",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",

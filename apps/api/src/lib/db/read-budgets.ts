@@ -35,6 +35,13 @@ type ReadBudget = {
 };
 
 export const READ_BUDGETS = {
+  "statement.billingDrafts.candidateMatters": {
+    surface: "statement",
+    pages: 512,
+    statementDeadlineMs: 30_000,
+    reason:
+      "Two 90-day activity probes plus at most twenty matter projections: 128 pages for each source probe and 256 pages for matter, membership and RLS lookups. Historical same-organization audit rows must not enter either probe.",
+  },
   "scheduled.caseLaw.refreshCoverage": {
     surface: "scheduled-job",
     pages: 150,

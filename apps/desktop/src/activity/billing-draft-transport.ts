@@ -49,6 +49,7 @@ const sendDraft = async (
 export class BillingDraftConsent {
   #state: DraftConsentState;
   #generation = 0;
+  #queue = Promise.resolve(true);
   #scopeKey: string | null = null;
   readonly #listeners = new Set<() => void>();
 
@@ -80,6 +81,19 @@ export class BillingDraftConsent {
         ? { status: "unavailable" }
         : { status: "pending-withdrawal" },
     );
+  }
+  captureScope() {
+    return this.#scopeKey;
+  }
+  ownsScope(scopeKey: string) {
+    return scopeKey === this.#scopeKey;
+  }
+  async enqueue(scopeKey: string, save: () => Promise<boolean>) {
+    const pending = this.#queue.then(async () =>
+      this.ownsScope(scopeKey) ? await save() : false,
+    );
+    this.#queue = pending;
+    return await pending;
   }
   refresh(status: "unavailable" | "revoked" | "granted") {
     switch (this.#state.status) {

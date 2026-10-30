@@ -418,3 +418,118 @@ test("a delayed grant acknowledgement cannot overtake a newer withdrawal and sav
   });
   expect(view.getByRole("status").textContent).toBe("revoked");
 });
+
+for (const action of ["preference", "withdrawal", "grant"] as const) {
+  for (const observed of ["refreshed", "stale"] as const) {
+    test(`queued ${action} stays with its initiating account when the owner is ${observed}`, async () => {
+      const scopeA = JSON.stringify(["firm", "user-a"]);
+      const scopeB = JSON.stringify(["firm", "user-b"]);
+      let activeScope = scopeA;
+      const held = Promise.withResolvers<boolean>();
+      const results: Promise<boolean>[] = [];
+      const puts: { command: string; args: unknown }[] = [];
+      const response = (consent = "granted") => ({
+        scopeKey: activeScope,
+        revision: "1",
+        organizationMode: "enabled",
+        consent,
+        preference: null,
+      });
+      mockIPC((command, args) => {
+        switch (command) {
+          case "billing_draft_get_settings":
+            return response();
+          case "billing_draft_set_preference":
+            puts.push({ command, args });
+            return response();
+          case "billing_draft_set_consent":
+            puts.push({ command, args });
+            return response("revoked");
+          case "desktop_report_error":
+            return undefined;
+          default:
+            return panic("Unexpected account-switch command", command);
+        }
+      });
+      const Probe = () => {
+        const control = useBillingDraftSettings(true);
+        return (
+          <>
+            <output>{control.consent.captureScope()}</output>
+            <button
+              type="button"
+              onClick={() => {
+                void control.consent.enqueue(
+                  scopeA,
+                  async () => await held.promise,
+                );
+              }}
+            >
+              Block
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                results.push(
+                  action === "preference"
+                    ? control.setPreference("Private instructions from A")
+                    : control.setConsent(
+                        action === "withdrawal" ? "revoked" : "granted",
+                      ),
+                );
+              }}
+            >
+              Save
+            </button>
+            <button type="button" onClick={control.reload}>
+              Reload
+            </button>
+          </>
+        );
+      };
+      const view = render(<Probe />);
+      await waitFor(() =>
+        expect(view.getByRole("status").textContent).toBe(scopeA),
+      );
+      fireEvent.click(view.getByRole("button", { name: "Block" }));
+      fireEvent.click(view.getByRole("button", { name: "Save" }));
+      activeScope = scopeB;
+      if (observed === "refreshed") {
+        fireEvent.click(view.getByRole("button", { name: "Reload" }));
+        await waitFor(() =>
+          expect(view.getByRole("status").textContent).toBe(scopeB),
+        );
+      }
+      await act(async () => {
+        held.resolve(true);
+        await Promise.all(results);
+      });
+      expect(await results.at(0)).toBe(false);
+      expect(puts).toEqual([]);
+      expect(
+        localStorage.getItem(`billing-draft-withdrawal:${scopeB}`),
+      ).toBeNull();
+      if (action === "withdrawal") {
+        expect(localStorage.getItem(`billing-draft-withdrawal:${scopeA}`)).toBe(
+          "pending",
+        );
+        activeScope = scopeA;
+        // Reconfigure through B even when its earlier account change had not reached the owner.
+        if (observed === "stale") {
+          activeScope = scopeB;
+          fireEvent.click(view.getByRole("button", { name: "Reload" }));
+          await waitFor(() =>
+            expect(view.getByRole("status").textContent).toBe(scopeB),
+          );
+          activeScope = scopeA;
+        }
+        fireEvent.click(view.getByRole("button", { name: "Reload" }));
+        await waitFor(() => expect(puts).toHaveLength(1));
+        expect(puts.at(0)).toMatchObject({
+          command: "billing_draft_set_consent",
+          args: { scopeKey: scopeA, consent: "revoked" },
+        });
+      }
+    });
+  }
+}

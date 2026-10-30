@@ -294,6 +294,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               [],
             );
             expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
+            if (budgetId !== "statement.documents.searchHits") {
+              continue;
+            }
             await deadline.run(
               `CREATE POLICY ${id}`,
               async () =>

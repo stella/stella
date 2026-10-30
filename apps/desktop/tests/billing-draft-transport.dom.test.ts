@@ -50,6 +50,7 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
           "respond",
           "respond-newest",
           "restart",
+          "switch-account",
           "refresh",
           "draft",
           "redraft",
@@ -61,38 +62,64 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
       async (events) => {
         localStorage.clear();
         let consent = new BillingDraftConsent();
-        consent.configure("transport-model");
-        let server: "granted" | "revoked" = "revoked";
-        let revision = 0;
+        let scopeKey = "transport-model-a";
+        consent.configure(scopeKey);
+        const accounts = new Map<
+          string,
+          { consent: "granted" | "revoked"; revision: number }
+        >([
+          ["transport-model-a", { consent: "revoked", revision: 0 }],
+          ["transport-model-b", { consent: "revoked", revision: 0 }],
+        ]);
+        const currentAccount = () =>
+          accounts.get(scopeKey) ?? panic("Missing model account");
         let owner = 0;
         let intent: {
           value: "granted" | "revoked";
           generation: number;
           revision: number;
           owner: number;
+          scopeKey: string;
         } | null = null;
         const responses: {
           value: "granted" | "revoked";
           generation: number;
           owner: number;
+          scopeKey: string;
           accepted: boolean;
         }[] = [];
         let invokes = 0;
         mockIPC((command) => {
           expect(command).toBe("billing_draft_create_confirmed");
-          expect(server).toBe("granted");
+          expect(currentAccount().consent).toBe("granted");
           expect(consent.getSnapshot()).toBe("granted");
           expect(
-            localStorage.getItem("billing-draft-withdrawal:transport-model"),
+            localStorage.getItem(`billing-draft-withdrawal:${scopeKey}`),
           ).toBeNull();
           invokes += 1;
           return {};
         });
+        const saveIntent = async (queued: NonNullable<typeof intent>) =>
+          await consent.enqueue(queued.scopeKey, async () => {
+            expect(scopeKey).toBe(queued.scopeKey);
+            const account = currentAccount();
+            const accepted = queued.revision === account.revision;
+            if (accepted) {
+              account.consent = queued.value;
+              account.revision += 1;
+            }
+            responses.push({ ...queued, accepted });
+            return accepted;
+          });
+
         const sequence = [
           "grant",
           "save",
           "withdraw",
           "save-failed",
+          "switch-account",
+          "save",
+          "switch-account",
           "restart",
           "draft",
           "save",
@@ -108,8 +135,9 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
               intent = {
                 value,
                 generation: consent.begin(value),
-                revision,
+                revision: currentAccount().revision,
                 owner,
+                scopeKey,
               };
               break;
             }
@@ -119,30 +147,29 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
               if (intent === null) {
                 break;
               }
-              const accepted = intent.revision === revision;
-              if (accepted) {
-                server = intent.value;
-                revision += 1;
-              }
-              responses.push({ ...intent, accepted });
+              await saveIntent(intent);
               break;
             }
             case "respond":
             case "respond-newest": {
               const response =
                 event === "respond" ? responses.shift() : responses.pop();
-              if (response?.accepted && response.owner === owner) {
+              if (
+                response?.accepted &&
+                response.owner === owner &&
+                consent.ownsScope(response.scopeKey)
+              ) {
                 consent.confirm(response.value, response.generation);
               }
               break;
             }
             case "restart": {
               const withdrawal = localStorage.getItem(
-                "billing-draft-withdrawal:transport-model",
+                `billing-draft-withdrawal:${scopeKey}`,
               );
               consent.invalidate();
               consent = new BillingDraftConsent();
-              consent.configure("transport-model");
+              consent.configure(scopeKey);
               owner += 1;
               intent = null;
               if (withdrawal !== null) {
@@ -150,18 +177,28 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
                 intent = {
                   value: "revoked",
                   generation: consent.begin("revoked"),
-                  revision,
+                  revision: currentAccount().revision,
                   owner,
+                  scopeKey,
                 };
               } else {
-                consent.refresh(server);
+                consent.refresh(currentAccount().consent);
               }
               break;
             }
+            case "switch-account": {
+              scopeKey =
+                scopeKey === "transport-model-a"
+                  ? "transport-model-b"
+                  : "transport-model-a";
+              consent.configure(scopeKey);
+              consent.refresh(currentAccount().consent);
+              break;
+            }
             case "refresh": {
-              consent.refresh(server);
-              if (intent !== null) {
-                intent.revision = revision;
+              consent.refresh(currentAccount().consent);
+              if (intent !== null && intent.scopeKey === scopeKey) {
+                intent.revision = currentAccount().revision;
               }
               break;
             }
@@ -186,7 +223,7 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
               event satisfies never;
           }
           if (
-            localStorage.getItem("billing-draft-withdrawal:transport-model") !==
+            localStorage.getItem(`billing-draft-withdrawal:${scopeKey}`) !==
             null
           ) {
             expect(consent.getSnapshot()).not.toBe("granted");

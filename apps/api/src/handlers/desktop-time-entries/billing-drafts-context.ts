@@ -1,10 +1,11 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 
 import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-billing-drafts";
 import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -13,12 +14,14 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import {
   extractBillingGuidelineSections,
   loadBillingGuidelines,
 } from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandValidatedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
@@ -31,6 +34,80 @@ export const BILLING_DRAFT_CONTEXT_LIMITS = {
   promptCharacters: 100_000,
   timeoutMs: 60_000,
 } as const;
+
+export const billingDraftCandidateWindowStart = () =>
+  new Date(
+    Temporal.Now.instant().subtract({
+      hours: BILLING_DRAFT_CONTEXT_LIMITS.historyDays * 24,
+    }).epochMilliseconds,
+  );
+
+type BillingDraftCandidateStatementOptions = {
+  tx: Pick<Transaction, "select">;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  windowStart: Date;
+};
+
+export const billingDraftCandidateMattersStatement = ({
+  tx,
+  organizationId,
+  userId,
+  windowStart,
+}: BillingDraftCandidateStatementOptions) => {
+  const activitySince = sql`${windowStart.toISOString()}::timestamptz`;
+  // Aggregate only the caller's work; firm activity must never select names for this prompt.
+  const ownActivity = tx
+    .select({
+      matterId: timeEntries.workspaceId,
+      at: sql<string>`max(${timeEntries.createdAt})`.as("at"),
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.organizationId, organizationId),
+        eq(timeEntries.userId, userId),
+        gte(timeEntries.createdAt, activitySince),
+      ),
+    )
+    .groupBy(timeEntries.workspaceId)
+    .unionAll(
+      tx
+        .select({
+          matterId: auditLogs.workspaceId,
+          at: sql<string>`max(${auditLogs.createdAt})`.as("at"),
+        })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.organizationId, organizationId),
+            gte(auditLogs.createdAt, activitySince),
+            eq(auditLogs.performerType, "user"),
+            sql`coalesce(${auditLogs.performerId}, ${auditLogs.userId}) = ${userId}`,
+          ),
+        )
+        .groupBy(auditLogs.workspaceId),
+    )
+    .as("own_activity");
+  return tx
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      clientId: workspaces.clientId,
+      billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
+    })
+    .from(workspaces)
+    .innerJoin(ownActivity, eq(ownActivity.matterId, workspaces.id))
+    .where(
+      and(
+        eq(workspaces.organizationId, organizationId),
+        eq(workspaces.status, "active"),
+      ),
+    )
+    .groupBy(workspaces.id)
+    .orderBy(desc(sql`max(${ownActivity.at})`), workspaces.id)
+    .limit(BILLING_DRAFT_CONTEXT_LIMITS.candidateMatters);
+};
 
 type LoadBillingDraftContextOptions = {
   safeDb: SafeDb;
@@ -78,56 +155,18 @@ const loadBillingDraftMatters = async ({
       );
     }
     const candidates = yield* Result.await(
-      safeDb((tx) => {
-        // Aggregate only the caller's work; firm activity must never select names for this prompt.
-        const ownActivity = tx
-          .select({
-            matterId: timeEntries.workspaceId,
-            at: sql<string>`max(${timeEntries.createdAt})`.as("at"),
-          })
-          .from(timeEntries)
-          .where(
-            and(
-              eq(timeEntries.organizationId, organizationId),
-              eq(timeEntries.userId, userId),
-            ),
-          )
-          .groupBy(timeEntries.workspaceId)
-          .unionAll(
-            tx
-              .select({
-                matterId: auditLogs.workspaceId,
-                at: sql<string>`max(${auditLogs.createdAt})`.as("at"),
-              })
-              .from(auditLogs)
-              .where(
-                and(
-                  eq(auditLogs.organizationId, organizationId),
-                  eq(auditLogs.performerType, "user"),
-                  sql`coalesce(${auditLogs.performerId}, ${auditLogs.userId}) = ${userId}`,
-                ),
-              )
-              .groupBy(auditLogs.workspaceId),
-          )
-          .as("own_activity");
-        return tx
-          .select({
-            id: workspaces.id,
-            name: workspaces.name,
-            clientId: workspaces.clientId,
-            billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
-          })
-          .from(workspaces)
-          .innerJoin(ownActivity, eq(ownActivity.matterId, workspaces.id))
-          .where(
-            and(
-              eq(workspaces.organizationId, organizationId),
-              eq(workspaces.status, "active"),
-            ),
-          )
-          .groupBy(workspaces.id)
-          .orderBy(desc(sql`max(${ownActivity.at})`), workspaces.id)
-          .limit(BILLING_DRAFT_CONTEXT_LIMITS.candidateMatters);
+      safeDb(async (tx) => {
+        await setSharedStatementTimeout(
+          tx,
+          READ_BUDGETS["statement.billingDrafts.candidateMatters"]
+            .statementDeadlineMs,
+        );
+        return await billingDraftCandidateMattersStatement({
+          tx,
+          organizationId,
+          userId,
+          windowStart: billingDraftCandidateWindowStart(),
+        });
       }),
     );
     const matterRows = Array.from(

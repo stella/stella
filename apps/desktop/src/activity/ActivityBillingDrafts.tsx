@@ -118,7 +118,6 @@ export const useBillingDraftSettings = (
     consent.subscribe,
     consent.getSnapshot,
   );
-  const queue = useRef(Promise.resolve(true));
   const request = useRef(0);
   const settings = (() => {
     if (!enabled) {
@@ -141,6 +140,10 @@ export const useBillingDraftSettings = (
 
   const setConsent = useCallback(
     async (value: "granted" | "revoked") => {
+      const scopeKey = consent.captureScope();
+      if (scopeKey === null) {
+        return false;
+      }
       const intent = Result.try(() => consent.begin(value));
       if (intent.isErr()) {
         reportActivityError(
@@ -156,17 +159,25 @@ export const useBillingDraftSettings = (
           const current = await settingsFrom(
             await invoke<unknown>("billing_draft_get_settings"),
           );
-          if (current === null || !consent.isCurrent(generation)) {
+          if (
+            current === null ||
+            current.scopeKey !== scopeKey ||
+            !consent.ownsScope(scopeKey) ||
+            !consent.isCurrent(generation)
+          ) {
             return false;
           }
           const next = await settingsFrom(
             await invoke<unknown>("billing_draft_set_consent", {
               consent: value,
+              scopeKey,
               revision: current.revision,
             }),
           );
           if (
             next === null ||
+            next.scopeKey !== scopeKey ||
+            !consent.ownsScope(scopeKey) ||
             next.consent !== value ||
             !consent.isCurrent(generation)
           ) {
@@ -190,9 +201,7 @@ export const useBillingDraftSettings = (
         }
         return true;
       };
-      const pending = queue.current.then(save);
-      queue.current = pending;
-      return await pending;
+      return await consent.enqueue(scopeKey, save);
     },
     [consent],
   );
@@ -259,22 +268,37 @@ export const useBillingDraftSettings = (
     setConsent,
     reload,
     setPreference: async (preference) => {
+      const scopeKey = consent.captureScope();
+      if (scopeKey === null) {
+        return false;
+      }
       const currentRequest = request.current;
       const save = async () => {
         const result = await Result.tryPromise(async () => {
           const current = await settingsFrom(
             await invoke<unknown>("billing_draft_get_settings"),
           );
-          if (current === null) {
+          if (
+            current === null ||
+            current.scopeKey !== scopeKey ||
+            !consent.ownsScope(scopeKey) ||
+            currentRequest !== request.current
+          ) {
             return false;
           }
           const next = await settingsFrom(
             await invoke<unknown>("billing_draft_set_preference", {
               preference,
+              scopeKey,
               revision: current.revision,
             }),
           );
-          if (next === null || currentRequest !== request.current) {
+          if (
+            next === null ||
+            next.scopeKey !== scopeKey ||
+            !consent.ownsScope(scopeKey) ||
+            currentRequest !== request.current
+          ) {
             return false;
           }
           setSettings({ type: "ready", preference: next.preference });
@@ -289,9 +313,7 @@ export const useBillingDraftSettings = (
         }
         return true;
       };
-      const pending = queue.current.then(save);
-      queue.current = pending;
-      return await pending;
+      return await consent.enqueue(scopeKey, save);
     },
   };
 };
