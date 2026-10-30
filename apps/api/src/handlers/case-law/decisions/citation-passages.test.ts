@@ -8,9 +8,9 @@ import {
   citationPassageIn,
   citationTextFields,
   CitationTextGateError,
-  passageTextEligibility,
   polarityExcerptIn,
 } from "@/api/handlers/case-law/decisions/citation-passages";
+import { decisionTextCompletionOf } from "@/api/handlers/case-law/decisions/text-completion";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -344,9 +344,10 @@ test("a citing decision country change invalidates text even within the admitted
     redistributable: true,
     textRevisionFingerprint: "same-text-revision",
     descriptor: { allowsDerivedAi: true },
+    documentUrl: null,
   };
-  const original = passageTextEligibility({ ...eligibility, country: "CZE" });
-  const changed = passageTextEligibility({ ...eligibility, country: "SVK" });
+  const original = decisionTextCompletionOf({ ...eligibility, country: "CZE" });
+  const changed = decisionTextCompletionOf({ ...eligibility, country: "SVK" });
   expect(changed.textEligibilityFingerprint).not.toBe(
     original.textEligibilityFingerprint,
   );

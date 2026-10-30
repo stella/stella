@@ -5,7 +5,10 @@ import * as v from "valibot";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
-import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import {
+  CITATION_TEXT_INCOMPLETE_REASONS,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { assertProperty } from "@stll/property-testing";
 
@@ -37,6 +40,8 @@ const decisionWithText = (text: string) => {
   const textField = { type: TEXT_FIELD_TYPE.PRESENT, text } as const;
   return {
     extractionWarnings: [],
+    textIncompleteReason: null,
+    textWithheldReason: null,
     documentPending: false,
     hasDocument: true,
     documentReadFailed: false,
@@ -273,5 +278,17 @@ test.each([
         ],
       }).success,
     ).toBe(valid);
+  },
+);
+
+test.each(CITATION_TEXT_INCOMPLETE_REASONS)(
+  "decision reader completion accepts %s according to its contract",
+  (reason) => {
+    expect(
+      v.is(
+        readDecisionSuccessResponseSchema.entries.textIncompleteReason,
+        reason,
+      ),
+    ).toBe(reason !== "absent_ast");
   },
 );

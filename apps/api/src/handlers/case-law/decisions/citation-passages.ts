@@ -41,6 +41,11 @@ import {
 } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
+import {
+  decisionTextCompletionColumns,
+  decisionTextCompletionGate,
+  decisionTextCompletionOf,
+} from "@/api/handlers/case-law/decisions/text-completion";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -48,7 +53,6 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
-import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 import type {
   CitationPolaritySource,
   CitationReadDirection,
@@ -73,12 +77,9 @@ import type {
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
-import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -178,47 +179,6 @@ type PassageSourcePointer = {
   textWithheldReason: DecisionTextWithheldReason | null;
 };
 
-type PassageTextEligibility = {
-  country: string;
-  published: boolean;
-  redistributable: boolean;
-  textRevisionFingerprint: string;
-  descriptor: Pick<CorpusSourceDescriptor, "allowsDerivedAi"> | null;
-};
-
-/** Both phases bind country, text revision and source disposition to the publication gate. */
-export const passageTextEligibility = ({
-  country,
-  published,
-  redistributable,
-  textRevisionFingerprint,
-  descriptor,
-}: PassageTextEligibility) => ({
-  textEligibilityFingerprint: JSON.stringify([
-    country,
-    published,
-    textRevisionFingerprint,
-    redistributable,
-    decisionTextWithheldReason(descriptor),
-  ]),
-  textWithheldReason: decisionTextWithheldReason(descriptor),
-});
-
-const passageTextEligibilityColumns = {
-  country: publishedCaseLawDecisions.country,
-  published: sql<boolean>`true`,
-  redistributable: sql<boolean>`${redistributableCaseLawSourceFor(caseLawSources.descriptor)}`,
-  textRevisionFingerprint: citationTextRevisionFingerprintSql({
-    contentHash: publishedCaseLawDecisions.contentHash,
-    sections: publishedCaseLawDecisions.sections,
-  }),
-  descriptor: caseLawSources.descriptor,
-};
-
-const passageTextEligibilityGate = redistributableCaseLawSourceFor(
-  caseLawSources.descriptor,
-);
-
 export const readPassageSourcePointers = async (
   tx: CaseLawPublicReadTransaction,
   ids: readonly SafeId<"caseLawDecision">[],
@@ -237,7 +197,7 @@ export const readPassageSourcePointers = async (
       versionTimestamp: pgTimestampCursorValue(
         publishedCaseLawDecisions.updatedAt,
       ),
-      ...passageTextEligibilityColumns,
+      ...decisionTextCompletionColumns,
     })
     .from(publishedCaseLawDecisions)
     .innerJoin(
@@ -248,7 +208,7 @@ export const readPassageSourcePointers = async (
       and(
         inArray(publishedCaseLawDecisions.id, [...ids]),
         inArray(publishedCaseLawDecisions.country, [...countries]),
-        passageTextEligibilityGate,
+        decisionTextCompletionGate,
       ),
     );
   // The same split the decision read makes: redistribution decides whether a
@@ -259,19 +219,22 @@ export const readPassageSourcePointers = async (
       country,
       published,
       redistributable,
+      documentUrl,
       textRevisionFingerprint,
       descriptor,
       ...row
-    }) => ({
-      ...row,
-      ...passageTextEligibility({
-        country,
-        published,
-        redistributable,
-        textRevisionFingerprint,
-        descriptor,
-      }),
-    }),
+    }) => {
+      const { textEligibilityFingerprint, textWithheldReason } =
+        decisionTextCompletionOf({
+          country,
+          published,
+          redistributable,
+          documentUrl,
+          textRevisionFingerprint,
+          descriptor,
+        });
+      return { ...row, textEligibilityFingerprint, textWithheldReason };
+    },
   );
 };
 

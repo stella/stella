@@ -131,6 +131,8 @@ const COVERAGE_ARRIVALS_FILE =
 const COVERAGE_FILE = "apps/api/src/handlers/case-law/decisions/coverage.ts";
 const CITATION_GRAPH_FILE =
   "apps/api/src/handlers/case-law/decisions/citation-graph.ts";
+const TEXT_COMPLETION_FILE =
+  "apps/api/src/handlers/case-law/decisions/text-completion.ts";
 const LANGUAGE_ALTERNATES_FILE =
   "apps/api/src/lib/case-law/language-alternates.ts";
 const SITEMAP_DECISIONS_FILE =
@@ -574,18 +576,28 @@ describe("public case-law route boundary", () => {
   });
 
   test("public decision payload is an explicit allowlist", async () => {
-    const [source, subjectSource] = await Promise.all([
+    const [source, subjectSource, completionSource] = await Promise.all([
       readDecisionSource(),
       readPublicSubjectSource(),
+      readSource(TEXT_COMPLETION_FILE),
     ]);
 
-    expect(source).not.toContain("...decision");
+    expect(source).not.toMatch(/\.\.\.decision\b/u);
     expect(source).toContain("id: decision.id");
     expect(source).toContain("caseNumber: decision.caseNumber");
     expect(source).toContain("slug: decision.slug");
     expect(source).toContain("languageAlternates,");
     expect(source).toContain("language: decision.language");
     expect(source).toContain("fulltext,");
+    expect(source).toContain(
+      '...decisionTextCompletionReasons({ type: "eligible" })',
+    );
+    for (const field of [
+      "textIncompleteReason",
+      "textWithheldReason",
+    ] as const) {
+      expect(completionSource).toContain(`${field}:`);
+    }
     // Slug lookup and its language matching moved into the gate module, which
     // resolves every subject. Both halves of the normalisation are pinned
     // here; `public-subject.db.test.ts` drives them against Postgres.

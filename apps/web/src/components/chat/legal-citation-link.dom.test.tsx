@@ -185,6 +185,8 @@ const fullDecision = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   fulltext: null,
   headnote: absentText,

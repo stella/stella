@@ -153,6 +153,7 @@ export const TAGGED_FAILURE_REASON = {
   DatabaseRlsError: "tagged_failure",
   DecisionCourtIdentityError: "tagged_failure",
   DecisionParagraphRangeError: "tagged_failure",
+  DecisionTextCompletionReadError: "tagged_failure",
   DecisionWriteExtensionError: "tagged_failure",
   DeepLAuthError: "tagged_failure",
   DeepLDocumentError: "tagged_failure",
