@@ -61,15 +61,21 @@ export const load = (
       .map((node) => serializeOuter(node, { treeAdapter: adapter }))
       .join("");
   };
-  $.fn._make = function (selector, context) {
-    return slimMake.call(
-      this,
-      isMarkup(selector)
-        ? parseFragment(selector, parseOptions).children
-        : selector,
-      isMarkup(context) ? parseFragment(context, parseOptions) : context,
-    );
-  };
+  $.fn._make = new Proxy(slimMake, {
+    apply(
+      target,
+      receiver: unknown,
+      [selector, context]: Parameters<typeof $.fn._make>,
+    ) {
+      return target.call(
+        receiver,
+        isMarkup(selector)
+          ? parseFragment(selector, parseOptions).children
+          : selector,
+        isMarkup(context) ? parseFragment(context, parseOptions) : context,
+      );
+    },
+  });
 
   // Slim's initializer parses markup separately from the instance hooks.
   return new Proxy($, {

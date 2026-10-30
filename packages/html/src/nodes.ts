@@ -14,6 +14,7 @@ import {
 export type AnyNode = DomNode;
 export type ParentNode = DomParent;
 export type Element = DomElement;
+export type Text = DomText;
 export const createElement = (
   ...args: ConstructorParameters<typeof DomElement>
 ) => new DomElement(...args);

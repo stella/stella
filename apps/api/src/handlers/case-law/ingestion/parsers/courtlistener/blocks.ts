@@ -14,13 +14,13 @@ import { panic } from "better-result";
 
 import {
   type AnyNode,
+  createText,
   type Element,
   hasChildren,
   isCDATA,
   isTag,
   isText,
   type ParentNode,
-  Text,
 } from "@stll/html/nodes";
 import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -525,7 +525,7 @@ export const cdataAsText = (root: ParentNode): void => {
     }
     for (const [index, child] of parent.children.entries()) {
       if (isCDATA(child)) {
-        const text = new Text(textOf(child));
+        const text = createText(textOf(child));
         text.parent = parent;
         text.prev = child.prev;
         text.next = child.next;
