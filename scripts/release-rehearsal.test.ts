@@ -11,6 +11,7 @@ import { runReleaseRehearsal } from "./release-rehearsal";
 describe("release rehearsal", () => {
   const contextEffects = {
     latestFinalVersion: () => "1.2.3",
+    readReleaseDates: () => ({}),
     resolveHeadSha: () => "0123456789abcdef0123456789abcdef01234567",
     write: () => undefined,
   };
@@ -34,6 +35,7 @@ describe("release rehearsal", () => {
       preCutGates().map(() => ({
         baseSha: "0123456789abcdef0123456789abcdef01234567",
         previousFinalTag: "v1.2.3",
+        releaseDates: {},
         rootDir: "/release-root",
         write: contextEffects.write,
       })),
@@ -121,13 +123,15 @@ test("rehearsals evaluate a tagged snapshot without requiring the latest main", 
       "-m",
       "advance",
     );
-    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    const advanced = git("rev-parse", "HEAD");
+    git("update-ref", "refs/remotes/origin/main", advanced);
     git("checkout", "--detach", snapshot);
-    expect(git("rev-parse", "HEAD")).not.toBe(git("rev-parse", "origin/main"));
+    expect(git("rev-parse", "HEAD")).not.toBe(advanced);
     const contexts: unknown[] = [];
     const results = await runReleaseRehearsal({
       rootDir,
       resolveHeadSha: () => snapshot,
+      readReleaseDates: () => ({}),
       write: () => undefined,
       runGate: async (_gate, context) => {
         contexts.push({

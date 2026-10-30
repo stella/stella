@@ -405,7 +405,9 @@ export const parseMaintenanceReleaseOptions = (
 // A `null` value records a stable tag that was built but never promoted; the
 // landing changelog omits it. Preserved as written: a maintenance release
 // after an unpromoted one must not turn that record into a publication date.
-const readReleaseDates = (rootDir: string): Record<string, string | null> => {
+export const readReleaseDates = (
+  rootDir: string,
+): Record<string, string | null> => {
   const parsed: unknown = JSON.parse(
     readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
   );

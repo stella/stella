@@ -7,6 +7,8 @@ import {
   type CutGateRunner,
   productionCutGateEffects,
   readLatestFinalVersion,
+  readReleaseDates,
+  type ReleaseDates,
 } from "./prepare-maintenance-release";
 import {
   type PreCutGate,
@@ -26,6 +28,7 @@ type RehearsalOptions = {
   readonly runGate?: CutGateRunner;
   readonly resolveHeadSha?: () => string;
   readonly latestFinalVersion?: () => string;
+  readonly readReleaseDates?: () => ReleaseDates;
   readonly write?: (text: string) => void;
 };
 
@@ -41,6 +44,8 @@ export const runReleaseRehearsal = async ({
   const latestFinalVersion =
     injected.latestFinalVersion ?? (() => readLatestFinalVersion(rootDir));
   const write = injected.write ?? production.write;
+  const releaseDates =
+    injected.readReleaseDates ?? (() => readReleaseDates(rootDir));
   const selected = gates.filter(
     ({ name }) => scope === "all" || name !== "deploy-env-contract",
   );
@@ -71,6 +76,8 @@ export const runReleaseRehearsal = async ({
     context: {
       baseSha: resolveHeadSha(),
       previousFinalTag: `v${latestFinalVersion()}`,
+      // The rehearsal checks the snapshot as recorded, with no network refresh.
+      releaseDates: releaseDates(),
       rootDir,
       write,
     },
