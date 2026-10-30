@@ -554,7 +554,7 @@ export const readDecisionTextGroup = async ({
         logger.warn("case_law.citation_passage.ast_unavailable", {
           "error.type": errorTag(read.error),
         });
-        return { status: "unavailable" as const };
+        return { status: "unavailable" as const, id: pointer.id };
       }
       return read.value === null
         ? null
@@ -577,6 +577,9 @@ export const readDecisionTextGroup = async ({
     ]),
   );
   for (const entry of entries) {
+    if (entry?.status === "unavailable") {
+      textByDecision.set(entry.id, UNAVAILABLE_DECISION_TEXT);
+    }
     if (entry?.status === "found") {
       textByDecision.set(entry.id, {
         type: "source",
@@ -823,6 +826,8 @@ export const completeDecisionCitations = async ({
         ast: disposition.text.ast,
         sections: disposition.text.evidenceSections,
       };
+    } else if (disposition?.type === "source" && textWithheldReason === null) {
+      text = { type: "absent-ast" };
     } else if (textWithheldReason !== null) {
       text = { type: "withheld", reason: textWithheldReason };
     } else {

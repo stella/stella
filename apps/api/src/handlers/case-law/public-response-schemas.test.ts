@@ -132,6 +132,7 @@ test("the REST citation response preserves the text withholding reason", () => {
       {
         id: "00000000-0000-4000-8000-000000000000",
         citationText: null,
+        extractionWarnings: [],
         textWithheldReason: "source_licence",
         textIncompleteReason: null,
         evidenceIncompleteReason: "missing_privileges",
@@ -147,7 +148,7 @@ test("the REST citation response preserves the text withholding reason", () => {
     nextCursor: null,
   };
   const output = projectResponseText(input, citationsResponseSchema);
-  expect(Value.Check(citationsResponseSchema, output)).toBe(true);
+  expect(v.is(citationsResponseSchema, output)).toBe(true);
   expect(output.items.at(0)?.textWithheldReason).toBe("source_licence");
 });
 
