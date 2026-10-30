@@ -39,7 +39,7 @@ type TableState = { isLoading: boolean; isRefreshing: boolean };
 const renderTable = ({ isLoading, isRefreshing }: TableState) =>
   render(
     <IntlProvider locale="en" messages={messages}>
-      <FormattingProvider locale="en">
+      <FormattingProvider locale="en" timeZone="UTC">
         <PublicLawTable<StatuteRowData, PublicLawTableLayout>
           columns={[]}
           firstRowNumber={1}
