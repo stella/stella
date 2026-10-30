@@ -67,7 +67,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.PL_UODO]: 15,
   [ADAPTER_KEYS.PL_UOKIK]: 15,
   [ADAPTER_KEYS.SK_COURTS]: 22,
-  [ADAPTER_KEYS.SK_US]: 19,
+  [ADAPTER_KEYS.SK_US]: 20,
   [ADAPTER_KEYS.UK_FCL]: 4,
 } as const satisfies Record<AdapterKey, number>;
 export const SOURCE_FINGERPRINT_VERSIONS = {
@@ -134,7 +134,7 @@ export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
   [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
   [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving first-line and hanging indentation, line pitch, short final lines and paragraph gaps; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own; publisher head-matter ordering is revalidated across the complete AST"} },
-  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"multiline preamble titles and document-unique block anchors are rebuilt from stored markup, alongside paragraph text, paragraph numbers and anonymization markers before whitespace trimming, including unpainted non-breaking-space redaction runs and uneven letter-spaced chunks witnessed by intact words; none has feature storage of its own; publisher head-matter ordering is revalidated across the complete AST"} },
+  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"multiline preamble titles and document-unique block anchors are rebuilt from stored markup, alongside paragraph text, paragraph numbers and anonymization markers before whitespace trimming, including unpainted non-breaking-space redaction runs and uneven letter-spaced chunks witnessed by intact words; none has feature storage of its own; publisher head-matter ordering is revalidated across the complete AST; paragraph text and line breaks are recomputed from stored markup, retaining a line break when its newline survives whitespace trimming and dropping it when the newline is removed"} },
   [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
 } as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];

@@ -1,4 +1,4 @@
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import type { Href } from "expo-router";
 import { useTranslations } from "use-intl";
 
@@ -17,7 +17,7 @@ import { useSession } from "@/connection/session-provider";
 import { KeyCommands } from "@/native/key-commands";
 import type { KeyCommand } from "@/native/key-commands";
 import { LayoutMetricsProvider } from "@/native/layout-metrics";
-import { useAppColors } from "@/theme";
+import { useAppColors, useNavigationTheme } from "@/theme";
 
 /** Signed out, only sign-in exists; signed in, only the app does. */
 export const ProtectedScreens = () => {
@@ -56,6 +56,7 @@ export const ProtectedScreens = () => {
 const Screens = () => {
   const { state } = useSession();
   const colors = useAppColors();
+  const navigationTheme = useNavigationTheme();
   const tabs = useTranslations("tabs");
   const header = useTranslations("header");
   const matters = useTranslations("matters");
@@ -80,179 +81,181 @@ const Screens = () => {
   const shortcuts = useShortcuts(tabAction);
 
   return (
-    <KeyCommands commands={shortcuts.commands} onCommand={shortcuts.run}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={signedIn}>
-          <Stack.Screen
-            name="(tabs)"
-            options={{
-              headerShadowVisible: false,
-              headerShown: true,
-              headerTintColor: colors.text,
-              headerTransparent: true,
-              // The system's own search button, which opens straight into the
-              // field, as t3code's search does; the bar's trailing edge holds it.
-              ...(tab === "more"
-                ? {}
-                : {
-                    headerSearchBarOptions: {
-                      allowToolbarIntegration: false,
-                      autoCapitalize: "none",
-                      hideWhenScrolling: false,
-                      onClose: () => {
-                        setSearching(false);
+    <ThemeProvider value={navigationTheme}>
+      <KeyCommands commands={shortcuts.commands} onCommand={shortcuts.run}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={signedIn}>
+            <Stack.Screen
+              name="(tabs)"
+              options={{
+                headerShadowVisible: false,
+                headerShown: true,
+                headerTintColor: colors.text,
+                headerTransparent: true,
+                // The system's own search button, which opens straight into the
+                // field, as t3code's search does; the bar's trailing edge holds it.
+                ...(tab === "more"
+                  ? {}
+                  : {
+                      headerSearchBarOptions: {
+                        allowToolbarIntegration: false,
+                        autoCapitalize: "none",
+                        hideWhenScrolling: false,
+                        onClose: () => {
+                          setSearching(false);
+                        },
+                        onChangeText: (event) => {
+                          setQuery(event.nativeEvent.text);
+                        },
+                        onOpen: () => {
+                          setSearching(true);
+                        },
+                        placeholder: header("search"),
+                        placement: "integratedButton",
+                        ref: searchBar,
                       },
-                      onChangeText: (event) => {
-                        setQuery(event.nativeEvent.text);
-                      },
-                      onOpen: () => {
-                        setSearching(true);
-                      },
-                      placeholder: header("search"),
-                      placement: "integratedButton",
-                      ref: searchBar,
-                    },
-                  }),
-              title: "",
-            }}
-          >
-            <Stack.Toolbar placement="left">
-              <Stack.Toolbar.Button
-                onPress={() => {
-                  router.push("/settings");
-                }}
-              >
-                {barGlyph("circle-user-round")}
-                <Stack.Toolbar.Label>{tabs("settings")}</Stack.Toolbar.Label>
-              </Stack.Toolbar.Button>
-            </Stack.Toolbar>
-            <Stack.Toolbar placement="right">
-              {tabAction === undefined ? null : (
-                <Stack.Toolbar.Button onPress={tabAction.onPress}>
-                  {barGlyph("plus")}
-                  <Stack.Toolbar.Label>{tabAction.label}</Stack.Toolbar.Label>
+                    }),
+                title: "",
+              }}
+            >
+              <Stack.Toolbar placement="left">
+                <Stack.Toolbar.Button
+                  onPress={() => {
+                    router.push("/settings");
+                  }}
+                >
+                  {barGlyph("circle-user-round")}
+                  <Stack.Toolbar.Label>{tabs("settings")}</Stack.Toolbar.Label>
                 </Stack.Toolbar.Button>
-              )}
-              {tab === "matters" ? (
-                <Stack.Toolbar.Menu title={matters("groupBy")}>
-                  {barGlyph("sliders-horizontal")}
-                  <Stack.Toolbar.MenuAction
-                    isOn={groupBy === "client"}
-                    onPress={() => {
-                      setGroupBy("client");
-                    }}
-                  >
-                    {matters("groupClient")}
-                  </Stack.Toolbar.MenuAction>
-                  <Stack.Toolbar.MenuAction
-                    isOn={groupBy === "none"}
-                    onPress={() => {
-                      setGroupBy("none");
-                    }}
-                  >
-                    {matters("noGrouping")}
-                  </Stack.Toolbar.MenuAction>
-                </Stack.Toolbar.Menu>
-              ) : null}
-            </Stack.Toolbar>
-          </Stack.Screen>
-          <Stack.Screen
-            name="settings"
-            options={{
-              ...pushedScreen,
-              presentation: "modal",
-              title: tabs("settings"),
-            }}
-          >
-            <Stack.Toolbar placement="right">
-              <Stack.Toolbar.Button
-                onPress={() => {
-                  router.back();
-                }}
-              >
-                {barGlyph("x")}
-                <Stack.Toolbar.Label>{tabs("close")}</Stack.Toolbar.Label>
-              </Stack.Toolbar.Button>
-            </Stack.Toolbar>
-          </Stack.Screen>
-          <Stack.Screen name="thread/[threadId]" />
-          <Stack.Screen
-            name="palette"
-            options={{
-              contentStyle: { backgroundColor: colors.background },
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="matter/new"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.5, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="scan"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen name="timers/index" options={pushedScreen} />
-          <Stack.Screen
-            name="timers/new"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="task/new"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="law/index"
-            options={{
-              ...pushedScreen,
-              title: tabs("law"),
-            }}
-          />
-          <Stack.Screen name="law/[decisionId]" />
-          <Stack.Screen
-            name="matter/[workspaceId]/index"
-            options={pushedScreen}
-          />
-          <Stack.Screen
-            name="document/[workspaceId]/[entityId]"
-            options={pushedScreen}
-          />
-          <Stack.Screen
-            name="matter/[workspaceId]/[entityId]"
-            options={{
-              contentStyle: { backgroundColor: colors.card },
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.5, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-        </Stack.Protected>
-        <Stack.Protected guard={!signedIn}>
-          <Stack.Screen name="sign-in" />
-        </Stack.Protected>
-      </Stack>
-    </KeyCommands>
+              </Stack.Toolbar>
+              <Stack.Toolbar placement="right">
+                {tabAction === undefined ? null : (
+                  <Stack.Toolbar.Button onPress={tabAction.onPress}>
+                    {barGlyph("plus")}
+                    <Stack.Toolbar.Label>{tabAction.label}</Stack.Toolbar.Label>
+                  </Stack.Toolbar.Button>
+                )}
+                {tab === "matters" ? (
+                  <Stack.Toolbar.Menu title={matters("groupBy")}>
+                    {barGlyph("sliders-horizontal")}
+                    <Stack.Toolbar.MenuAction
+                      isOn={groupBy === "client"}
+                      onPress={() => {
+                        setGroupBy("client");
+                      }}
+                    >
+                      {matters("groupClient")}
+                    </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      isOn={groupBy === "none"}
+                      onPress={() => {
+                        setGroupBy("none");
+                      }}
+                    >
+                      {matters("noGrouping")}
+                    </Stack.Toolbar.MenuAction>
+                  </Stack.Toolbar.Menu>
+                ) : null}
+              </Stack.Toolbar>
+            </Stack.Screen>
+            <Stack.Screen
+              name="settings"
+              options={{
+                ...pushedScreen,
+                presentation: "modal",
+                title: tabs("settings"),
+              }}
+            >
+              <Stack.Toolbar placement="right">
+                <Stack.Toolbar.Button
+                  onPress={() => {
+                    router.back();
+                  }}
+                >
+                  {barGlyph("x")}
+                  <Stack.Toolbar.Label>{tabs("close")}</Stack.Toolbar.Label>
+                </Stack.Toolbar.Button>
+              </Stack.Toolbar>
+            </Stack.Screen>
+            <Stack.Screen name="thread/[threadId]" />
+            <Stack.Screen
+              name="palette"
+              options={{
+                contentStyle: { backgroundColor: colors.background },
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="matter/new"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.5, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="scan"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen name="timers/index" options={pushedScreen} />
+            <Stack.Screen
+              name="timers/new"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="task/new"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="law/index"
+              options={{
+                ...pushedScreen,
+                title: tabs("law"),
+              }}
+            />
+            <Stack.Screen name="law/[decisionId]" />
+            <Stack.Screen
+              name="matter/[workspaceId]/index"
+              options={pushedScreen}
+            />
+            <Stack.Screen
+              name="document/[workspaceId]/[entityId]"
+              options={pushedScreen}
+            />
+            <Stack.Screen
+              name="matter/[workspaceId]/[entityId]"
+              options={{
+                contentStyle: { backgroundColor: colors.card },
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.5, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+          </Stack.Protected>
+          <Stack.Protected guard={!signedIn}>
+            <Stack.Screen name="sign-in" />
+          </Stack.Protected>
+        </Stack>
+      </KeyCommands>
+    </ThemeProvider>
   );
 };
 
