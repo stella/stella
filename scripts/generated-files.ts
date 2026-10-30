@@ -1171,6 +1171,19 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "online-migration-entries",
+    outputKind: "committed",
+    outputs: ["apps/api/src/db/online-migration-entries.gen.ts"],
+    inputs: [
+      "scripts/generate-online-migration-entries.ts",
+      "apps/api/src/db/online-migration-entries/*.ts",
+    ],
+    write: ["bun", "scripts/generate-online-migration-entries.ts"],
+    check: ["bun", "scripts/generate-online-migration-entries.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "online-unique-index-names",
     outputKind: "committed",
     outputs: ["apps/api/src/db/online-unique-indexes.ts"],

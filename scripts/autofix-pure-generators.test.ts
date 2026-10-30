@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Emits export lines from committed entry filenames; values stay in their owners.
+  "online-migration-entries": "scripts/generate-online-migration-entries.ts",
   "withdrawn-decision-labels":
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and

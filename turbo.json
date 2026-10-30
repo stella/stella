@@ -1650,6 +1650,7 @@
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/generate-online-migration-entries.ts",
         "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
