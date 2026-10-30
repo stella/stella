@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -7,13 +7,14 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createManagedProviderAvailability } from "@/api/lib/chat/managed-provider-availability";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
-  managedProviderUnavailable,
   fetchManagedProviderCatalog,
+  managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 
 const PROVIDER_CHECK_FAILURE_SINK = failureSink({
   event: "ai.managed_provider_check.failed",
@@ -21,8 +22,7 @@ const PROVIDER_CHECK_FAILURE_SINK = failureSink({
 });
 
 let availability:
-  | ReturnType<typeof createManagedProviderAvailability>
-  | undefined;
+  ReturnType<typeof createManagedProviderAvailability> | undefined;
 
 export const checkManagedOpenRouterModel = (
   model: string,
@@ -50,7 +50,8 @@ export const startManagedProviderChecks = async (
   }
   const controller = new AbortController();
   const monitor = createManagedProviderAvailability({
-    getCredential: getManagedOpenRouterCredential,
+    getCredential: async () =>
+      await getManagedOpenRouterCredential(MANAGED_MODEL_TIER.standard),
     intervalMs,
     timeoutMs,
     signal: controller.signal,

@@ -5,7 +5,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 export type ActionPeriodIdentity = {
   actionKind: string;
@@ -24,8 +24,7 @@ export type ActionPeriodPolicy = {
  * the kind still identifies each admitted phase and its cost record.
  */
 export type ActionPeriodScope =
-  | { type: "per_kind" }
-  | { type: "pooled"; poolKey: string };
+  { type: "per_kind" } | { type: "pooled"; poolKey: string };
 
 export const PER_KIND_PERIOD_SCOPE = {
   type: "per_kind",

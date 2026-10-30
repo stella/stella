@@ -32,8 +32,8 @@ import {
   readCaseLawFixtureFile,
 } from "./lib/case-law-fixture-analyses";
 import {
-  type ReparseFixtureRow,
   adapterReparser,
+  type ReparseFixtureRow,
   reparseFixtureRow,
 } from "./lib/case-law-fixture-reparse";
 

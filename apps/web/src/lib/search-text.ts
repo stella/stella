@@ -47,8 +47,7 @@ export const selectNonOverlappingSearchMatches = <T>({
 };
 
 export type SearchTextQuery =
-  | string
-  | { type: "separate-terms"; terms: readonly string[] };
+  string | { type: "separate-terms"; terms: readonly string[] };
 
 export const searchTextQueryKey = (query: SearchTextQuery): string =>
   typeof query === "string"

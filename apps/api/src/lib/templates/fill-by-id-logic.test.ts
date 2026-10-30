@@ -12,6 +12,7 @@ import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -81,7 +82,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
 const templateId = toSafeId<"template">("tmpl_1");
-const s3Key = "fake-key-fill-by-id-test";
+const s3Key = buildTemplateS3Key(organizationId, templateId);
 
 const recordAuditEvent: AuditRecorder = async () => {
   await Promise.resolve();

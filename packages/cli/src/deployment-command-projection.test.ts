@@ -18,8 +18,8 @@ import registrySnapshot from "./generated/registry-snapshot.json" with { type: "
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import {
   CACHE_SCHEMA_VERSION,
-  DEFAULT_TTL_SECONDS,
   cachePathFor,
+  DEFAULT_TTL_SECONDS,
   writeCacheFile,
 } from "./registry-cache.js";
 import { resolveCommandTree } from "./registry-refresh.js";

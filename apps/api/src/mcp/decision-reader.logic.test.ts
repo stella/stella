@@ -4,8 +4,8 @@ import * as v from "valibot";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import {
-  READER_PAGE_CONTENT_CHARS,
   openDecisionArgs,
+  READER_PAGE_CONTENT_CHARS,
 } from "./decision-reader-contract";
 import {
   decodeReaderCursor,
@@ -199,7 +199,10 @@ describe("decision reader bounded pages", () => {
     for (const cursor of [
       "",
       "invalid",
-      Buffer.from('[{"phase":"blocks","offset":-1}]').toString("base64url"),
+      Buffer.from('[{"phase":"blocks","offset":-1}]').toBase64({
+        alphabet: "base64url",
+        omitPadding: true,
+      }),
     ]) {
       expect(decodeReaderCursor(cursor)).toBeNull();
     }

@@ -1,8 +1,8 @@
 import * as v from "valibot";
 
 import {
-  visualGuestMessageSchema,
   type VisualGuestMessage,
+  visualGuestMessageSchema,
 } from "@stll/api-contract/visual-sandbox";
 
 const frozenVisualData = (data: unknown) => {

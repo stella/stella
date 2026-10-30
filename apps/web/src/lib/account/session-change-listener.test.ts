@@ -52,7 +52,7 @@ globalThis.fetch = Object.assign(
 const { professionalUseOptions, sessionOptions } =
   await import("@/lib/auth-queries");
 const { api } = await import("@/lib/api");
-const { unwrapEden } = await import("@/lib/errors/api");
+const { unwrapApiResponse } = await import("@/lib/errors/api");
 const { installSessionChangeListener } =
   await import("@/lib/account/session-change-listener");
 const { installSessionCacheGuard } = await import("@/lib/session-cache-guard");
@@ -154,7 +154,7 @@ describe("a tab told that the session changed elsewhere", () => {
         ?.getObserversCount(),
     ).toBe(0);
 
-    unwrapEden(
+    unwrapApiResponse(
       await api.me["professional-use"].post({
         statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
       }),

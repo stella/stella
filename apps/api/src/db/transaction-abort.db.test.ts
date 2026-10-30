@@ -5,8 +5,8 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
-  abortTransaction,
   abortableTx,
+  abortTransaction,
   transactionAbortError,
 } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";

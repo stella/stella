@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   ANNOUNCEMENT_TITLE_MAX_LENGTH,
@@ -41,13 +41,13 @@ const config = {
   // `McpCapabilityReason` for operator broadcasts, which does not exist yet.
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "write",
-  body: t.Object({
-    title: t.String({ minLength: 1, maxLength: ANNOUNCEMENT_TITLE_MAX_LENGTH }),
-    /**
-     * Distinguishes two announcements with the same title, and makes a retry
-     * of the same announcement a no-op instead of a second badge for everyone.
-     */
-    announcementKey: t.String({ minLength: 1, maxLength: 128 }),
+  body: v.object({
+    title: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(ANNOUNCEMENT_TITLE_MAX_LENGTH),
+    ),
+    announcementKey: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   }),
 } satisfies HandlerConfig;
 

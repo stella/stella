@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
+import { SOCIAL_LINK_HINT_PATH } from "@/lib/account/auth-code-report";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 
@@ -21,7 +22,7 @@ export const loadSocialLinkHint = async (
 ) => {
   const response = await Result.tryPromise(
     async () =>
-      await authClient.$fetch("/social-link-hint", { method: "POST" }),
+      await authClient.$fetch(SOCIAL_LINK_HINT_PATH, { method: "POST" }),
   );
   const hint = response.andThen(({ data, error }) =>
     error ? Result.err(toAuthClientError(error)) : Result.ok(data),

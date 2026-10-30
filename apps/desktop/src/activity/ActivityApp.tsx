@@ -21,12 +21,12 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeOffIcon,
+  FileTextIcon,
   LockKeyholeIcon,
   PauseIcon,
   PlayIcon,
   ShieldAlertIcon,
   TextIcon,
-  FileTextIcon,
   Trash2Icon,
   XIcon,
 } from "@stll/ui/icons";
@@ -97,6 +97,7 @@ type ActivityCommand =
   | "activity_delete_other_account_history"
   | "activity_set_browser_title_capture"
   | "activity_set_capture_details"
+  | "activity_set_detect_calls"
   | "activity_set_app_detail_capture"
   | "activity_open_accessibility_settings"
   | "activity_exclude_app"
@@ -108,6 +109,7 @@ type RunCommand = (
   command: ActivityCommand,
   args?: Record<string, unknown>,
   onSuccess?: () => void,
+  onFailure?: () => void,
 ) => void;
 
 const RETENTION_LABEL_KEYS = {
@@ -118,13 +120,9 @@ const RETENTION_LABEL_KEYS = {
 
 const reportActivityError = (
   operation: (typeof DESKTOP_TELEMETRY_OPERATIONS)[
-    | "activityRead"
-    | "activitySubscribe"
-    | "activityUpdate"],
+    "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
-    | "eventSubscriptionFailed"
-    | "invalidResponse"
-    | "invokeFailed"],
+    "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
 ) => {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({
@@ -183,6 +181,7 @@ const ActivityWelcomePreview = ({
       matterId: matter.id,
       document: null,
       windowTitle: null,
+      call: false,
     });
   }
   const newest = segments.at(-1);
@@ -324,6 +323,33 @@ const DetailsAccessNotice = ({
       access satisfies never;
       return panic("Unhandled activity details access");
   }
+};
+
+const DetectCallsControl = ({
+  onCommand,
+  snapshot,
+}: {
+  onCommand: RunCommand;
+  snapshot: ActivityDaySnapshot;
+}) => {
+  const t = useTranslations("activity");
+  return (
+    <div className="flex flex-col gap-2">
+      <Label className="items-start gap-2" htmlFor="activity-detect-calls">
+        <Checkbox
+          checked={snapshot.detectCalls}
+          id="activity-detect-calls"
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_detect_calls", { enabled })
+          }
+        />
+        <span>{t("detectCalls")}</span>
+      </Label>
+      <p className="text-muted-foreground text-xs">
+        {t("detectCallsDescription")}
+      </p>
+    </div>
+  );
 };
 
 type CaptureDetailsControlProps = {
@@ -602,8 +628,13 @@ const DayContent = ({
       onReviewStatusChange={onReviewStatusChange}
       header={header}
       snapshot={snapshot}
-      onCopy={(text, onSuccess) =>
-        onCommand("activity_copy_text", { text }, onSuccess)
+      onCopy={(text, onSettled) =>
+        onCommand(
+          "activity_copy_text",
+          { text },
+          () => onSettled(true),
+          () => onSettled(false),
+        )
       }
     />
   );
@@ -830,6 +861,7 @@ const ActivitySettings = ({
   return (
     <section className="flex flex-col gap-4 border-t pt-6">
       <h3 className="text-sm font-semibold">{t("settings")}</h3>
+      <DetectCallsControl onCommand={onCommand} snapshot={snapshot} />
       <CaptureDetailsControl onCommand={onCommand} snapshot={snapshot} />
       {snapshot.appNameOnlyApps.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -1241,6 +1273,7 @@ const ActivityApp = () => {
     command: ActivityCommand,
     args: Record<string, unknown> = {},
     onSuccess?: () => void,
+    onFailure?: () => void,
   ) => {
     const pending =
       REVIEW_PENDING[reviewStatusRef.current] ||
@@ -1277,6 +1310,7 @@ const ActivityApp = () => {
           ? t(BLOCKED_DELETION_NOTICE[view.snapshot.deletionStatus])
           : t("pendingActivityProtected"),
       );
+      onFailure?.();
       return;
     }
     setError(null);
@@ -1286,6 +1320,7 @@ const ActivityApp = () => {
         return undefined;
       })
       .catch((error: unknown) => {
+        onFailure?.();
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,

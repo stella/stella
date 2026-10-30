@@ -1,26 +1,31 @@
+// parser-output-unchanged: Opt-in publisher-fragment comparison changes retention diagnostics only; parser output and default comparisons are unchanged.
+// parser-output-unchanged: hyphenatedLineBreaks is a new option no parser passes; every existing verdict is computed exactly as before.
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
-// parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.
+// parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.
 // parser-output-unchanged: Paragraph input is a new optional entry point used only by cz-us; the HTML path and its results are unchanged for every other caller.
+// parser-output-unchanged: Text helpers are exported under descriptive names for the verdict golden and profiling script; their bodies and validation results are unchanged.
+// parser-output-unchanged: Word boundaries between the paragraphs of a table cell and soft hyphens in the reference text change validation diagnostics only; parsed records are unchanged.
 /**
  * AST sanity checker.
  *
- * Every parser MUST call `validateAst` after producing blocks.
- * It checks for content loss, structural anomalies, and
- * formatting issues. Violations are logged as warnings;
- * in tests, the result can be asserted.
+ * The ingestion pipeline compares parsed blocks with an independent
+ * projection of stored publisher text. The oracle classifies content loss,
+ * structural anomalies and formatting issues; the caller reports the verdict.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
+
+import { visibleHtmlText } from "./visible-html-text";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -66,8 +71,7 @@ export type ValidationResult = {
 
 /** Source text accepted by validation without requiring structured parsers to serialize HTML. */
 export type ValidationSource =
-  | string
-  | { type: "paragraphs"; paragraphs: readonly string[] };
+  string | { type: "paragraphs"; paragraphs: readonly string[] };
 
 /** Explicit publisher policy; other sources keep the shared validation semantics. */
 export type ValidationSourcePolicy = {
@@ -82,8 +86,10 @@ type BlockMarkupResidue = MarkupResidue & { anchorId: string };
 
 // ── Helpers ────────────────────────────────────────────────
 
-const normalize = (text: string): string =>
+export const normalizeValidationText = (text: string): string =>
   text
+    // A soft hyphen prints nothing; a parser that drops it loses no word.
+    .replace(/­/gu, "")
     .replace(/\s+/gu, " ")
     .replace(/\u00a0/gu, " ")
     .trim()
@@ -135,7 +141,7 @@ const trimNonLetters = (word: string): string => {
 // and stays there), and a court document is exactly the oversized input
 // that turns the backtracking into blocking CPU. Both indexOf cursors
 // only ever advance, so this is one pass over the text.
-const separateSkipMarkers = (text: string): string => {
+export const separateValidationSkipMarkers = (text: string): string => {
   let separated = "";
   let index = 0;
   while (index < text.length) {
@@ -161,19 +167,128 @@ const separateSkipMarkers = (text: string): string => {
 const isMeaningfulWord = (clean: string): boolean =>
   clean.length >= 3 && !/^\d+$/u.test(clean) && !SKIP_WORDS.has(clean);
 
-const extractWords = (text: string): Set<string> => {
+const validationWord = (token: string): string =>
+  trimNonLetters(token.replace(/[[\]]/gu, "").toLowerCase());
+
+export const extractValidationWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of separateSkipMarkers(text).split(/\s+/u)) {
+  for (const w of separateValidationSkipMarkers(text).split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
-    const noBrackets = w.replace(/[[\]]/gu, "");
-    const clean = trimNonLetters(noBrackets.toLowerCase());
+    const clean = validationWord(w);
     if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w.toLowerCase())) {
       words.add(clean);
     }
   }
   return words;
+};
+
+/** Bound recovery work even when a publisher splits every letter. */
+const MAX_WORD_BOUNDARY_FRAGMENTS = 64;
+
+type WordTrie = { children: Map<string, WordTrie>; terminal: boolean };
+
+type PublisherComparisonOptions = {
+  source: string;
+  astText: string;
+  options: { wordBoundaries?: "exact" | "publisher-fragments" } | undefined;
+};
+
+/** An AST occurrence belongs to exact source words before it can vouch for fragments. */
+const publisherComparisonWords = ({
+  source,
+  astText,
+  options,
+}: PublisherComparisonOptions): Set<string> | undefined => {
+  if (options?.wordBoundaries !== "publisher-fragments") {
+    return undefined;
+  }
+  const counts = new Map<string, number>();
+  for (const token of separateValidationSkipMarkers(astText).split(/\s+/u)) {
+    const word = validationWord(token);
+    if (isMeaningfulWord(word)) {
+      counts.set(word, (counts.get(word) ?? 0) + 1);
+    }
+  }
+  const fragments = separateValidationSkipMarkers(source)
+    .split(/\s+/u)
+    .map((raw) => ({ raw, word: validationWord(raw) }));
+  for (const { word } of fragments) {
+    const count = counts.get(word);
+    if (count !== undefined && count > 0) {
+      counts.set(word, count - 1);
+    }
+  }
+  const root: WordTrie = { children: new Map(), terminal: false };
+  for (const [word, count] of counts) {
+    if (count === 0) {
+      continue;
+    }
+    let node = root;
+    for (const letter of word) {
+      let child = node.children.get(letter);
+      if (child === undefined) {
+        child = { children: new Map(), terminal: false };
+        node.children.set(letter, child);
+      }
+      node = child;
+    }
+    node.terminal = true;
+  }
+  const comparison: string[] = [];
+  for (let start = 0; start < fragments.length;) {
+    let node: WordTrie | undefined = root;
+    let joined = "";
+    let match: { end: number; word: string } | undefined;
+    for (
+      let end = start;
+      end < Math.min(fragments.length, start + MAX_WORD_BOUNDARY_FRAGMENTS);
+      end += 1
+    ) {
+      const fragment = fragments[end];
+      if (fragment === undefined || fragment.word.length === 0) {
+        break;
+      }
+      joined += fragment.word;
+      for (const letter of fragment.word) {
+        node = node.children.get(letter);
+        if (node === undefined) {
+          break;
+        }
+      }
+      if (node === undefined) {
+        break;
+      }
+      if (
+        end > start &&
+        node.terminal &&
+        (counts.get(joined) ??
+          panic("A terminal word must have an occurrence count")) > 0
+      ) {
+        match = { end, word: joined };
+      }
+      // Punctuation can close the word, but cannot be erased between fragments.
+      if (!/^\p{L}+$/u.test(fragment.raw)) {
+        break;
+      }
+    }
+    if (match === undefined) {
+      const fragment =
+        fragments[start] ?? panic("A source position must have a token");
+      comparison.push(fragment.word);
+      start += 1;
+      continue;
+    }
+    comparison.push(match.word);
+    counts.set(
+      match.word,
+      (counts.get(match.word) ??
+        panic("A matched word must have an occurrence count")) - 1,
+    );
+    start = match.end + 1;
+  }
+  return extractValidationWords(comparison.join(" "));
 };
 
 // NSS renders decorative figures with the alt text "obrázek" (Czech for
@@ -215,8 +330,8 @@ const peelDecorativeMarkers = (word: string): string => {
 // source whose text is entirely numeric. Only a token that peels away to
 // nothing, or to a skip word, counts as decoration.
 const CONTENT_CHAR = /[\p{L}\p{N}]/u;
-const holdsOnlyDecoration = (text: string): boolean =>
-  separateSkipMarkers(text)
+export const validationTextHoldsOnlyDecoration = (text: string): boolean =>
+  separateValidationSkipMarkers(text)
     .split(/\s+/u)
     .every((word) => {
       const bare = word.replace(/[[\]]/gu, "").toLowerCase();
@@ -255,7 +370,7 @@ const hasContentDescendant = (nodes: readonly AnyNode[]): boolean => {
 };
 
 /** Flatten inline nodes to text (line-break → space). */
-const inlineText = (inlines: readonly Inline[]): string => {
+export const validationInlineText = (inlines: readonly Inline[]): string => {
   let text = "";
   for (const node of inlines) {
     if (node.type === "text") {
@@ -266,13 +381,13 @@ const inlineText = (inlines: readonly Inline[]): string => {
       // Typography, not content — no characters.
     } else {
       // Every remaining kind is a container: its text is its children's.
-      text += inlineText(node.children);
+      text += validationInlineText(node.children);
     }
   }
   return text;
 };
 
-const collapseWhitespace = (text: string): string =>
+export const collapseValidationWhitespace = (text: string): string =>
   text.replace(/\s+/gu, " ").trim();
 
 /** Issue code for source markup found in a block's text. */
@@ -280,6 +395,35 @@ const MARKUP_RESIDUE = "MARKUP_RESIDUE";
 const BOUNDARY_WHITESPACE = "BOUNDARY_WHITESPACE";
 
 // ── Validator ──────────────────────────────────────────────
+
+/**
+ * Rejoin words broken at a line end. A hyphen the word really holds and the
+ * next line repeats ("polsko- -niemiecki") is kept once; a break continued
+ * by a lowercase letter ("rozpo- znaniu") loses it. Applied to both sides of
+ * the comparison, so it only ever adds a reading of the same text.
+ */
+const rejoinLineBreakHyphenation = (text: string): string =>
+  text
+    .replace(/(\p{L})-\s+-(\p{L})/gu, "$1-$2")
+    .replace(/(\p{L})-\s*(\p{Ll})/gu, "$1$2");
+
+type WordComparisonTextOptions = {
+  source: string;
+  suggested: string | undefined;
+};
+
+const wordComparisonSource = ({
+  source,
+  suggested,
+}: WordComparisonTextOptions): string => {
+  if (suggested === undefined) {
+    return source;
+  }
+  const normalized = normalizeValidationText(suggested);
+  return normalized.replace(/\s+/gu, "") === source.replace(/\s+/gu, "")
+    ? normalized
+    : source;
+};
 
 export const validateAst = (
   source: ValidationSource,
@@ -289,7 +433,19 @@ export const validateAst = (
     maxMissingWords?: number;
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
+    /** Fragmented publisher typography may join only into complete AST words. */
+    wordBoundaries?: "exact" | "publisher-fragments";
+    /**
+     * The source keeps words a typesetter broke at a line end (a PDF line
+     * ending "rozpo-" before one starting "znaniu"). A parser may faithfully
+     * rejoin such a word or keep the break, so words are compared with the
+     * breaks rejoined on the source side and either form accepted on the
+     * AST side. Retention ratios are measured on the text as it stands.
+     */
+    hyphenatedLineBreaks?: boolean;
     sourcePolicy?: ValidationSourcePolicy;
+    /** Already-parsed source document; subtree sources must omit this. */
+    document?: cheerio.CheerioAPI;
   },
 ): ValidationResult => {
   const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
@@ -316,13 +472,16 @@ export const validateAst = (
       }
     }
   } else {
-    const $ = cheerio.load(source);
+    const $ = options?.document ?? cheerio.load(source);
     $("div[style*='-aw-headerfooter-type']").remove();
     // <br> is a word boundary in the rendered document, but cheerio's
     // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
     // "wrazz") and producing phantom MISSING_WORDS reports against a
     // correct AST. Make it a space before extracting reference text.
     $("br").replaceWith(" ");
+    // The paragraphs of a table cell are read as the cell's text, and the
+    // same gluing applies at their boundaries ("U. H.</p><p>doručovací").
+    $("td :is(p, li, div), th :is(p, li, div)").after(" ");
 
     // Extract text from content elements, but skip nested
     // elements whose text is already included by a parent
@@ -398,16 +557,24 @@ export const validateAst = (
     });
   }
 
-  const originalText = normalize(originalParts.join(" "));
+  const originalText = normalizeValidationText(originalParts.join(" "));
 
-  const astText = normalize(
+  const astText = normalizeValidationText(
     blocks.flatMap((b) => (b.plainText ? [b.plainText] : [])).join(" "),
   );
 
-  const originalWords = extractWords(originalText);
-  const astWords = extractWords(astText);
+  const hyphenated = options?.hyphenatedLineBreaks === true;
+  const originalWords = extractValidationWords(
+    hyphenated ? rejoinLineBreakHyphenation(originalText) : originalText,
+  );
+  const astWords = hyphenated
+    ? new Set([
+        ...extractValidationWords(astText),
+        ...extractValidationWords(rejoinLineBreakHyphenation(astText)),
+      ])
+    : extractValidationWords(astText);
 
-  const sourceHasContent = !holdsOnlyDecoration(originalText);
+  const sourceHasContent = !validationTextHoldsOnlyDecoration(originalText);
 
   const retainedPct = sourceHasContent
     ? (astText.length / originalText.length) * 100
@@ -430,13 +597,20 @@ export const validateAst = (
     });
   // A comparison view that changes anything but whitespace is ignored, so the
   // check falls back to the source words and a real loss stays visible.
-  const wordComparisonText = options?.wordComparisonText;
+  const comparisonText = wordComparisonSource({
+    source: originalText,
+    suggested: options?.wordComparisonText,
+  });
+  const publisherWords = publisherComparisonWords({
+    source: comparisonText,
+    astText,
+    options,
+  });
   const comparisonWords =
-    wordComparisonText === undefined ||
-    normalize(wordComparisonText).replace(/\s+/gu, "") !==
-      originalText.replace(/\s+/gu, "")
+    publisherWords ??
+    (comparisonText === originalText
       ? originalWords
-      : extractWords(normalize(wordComparisonText));
+      : extractValidationWords(comparisonText));
   const missingWords = missingFrom(comparisonWords);
   const boundaryWhitespaceWords =
     comparisonWords === originalWords
@@ -560,9 +734,9 @@ export const validateAst = (
       const inlineLen = (
         options?.sourcePolicy
           ? options.sourcePolicy.projectInlineText(block.inlines)
-          : collapseWhitespace(inlineText(block.inlines))
+          : collapseValidationWhitespace(validationInlineText(block.inlines))
       ).length;
-      const plainLen = collapseWhitespace(block.plainText).length;
+      const plainLen = collapseValidationWhitespace(block.plainText).length;
       // Allow some tolerance for whitespace differences
       if (
         Math.abs(inlineLen - plainLen) > 5 &&

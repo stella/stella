@@ -12,10 +12,6 @@
     "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
   },
   {
-    "command": "[\"bun\",\"--bun\",\"turbo\",\"run\",\"format\",\"${args[@]}\",\"--\",\"--check\"]",
-    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
-  },
-  {
     "command": "[\"bun\",\"scripts/ratchet.ts\",\"--check\"]",
     "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
   },

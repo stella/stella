@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import fc from "fast-check";
 
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -11,10 +10,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import {
-  caseLawDecisions,
   caseLawDecisionCitationStatsState,
+  caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution-sql";
@@ -25,8 +25,8 @@ import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import {
   CITATION_TIMELINE_MAX_YEARS,
-  exactDecisionCitationSummaryQuery,
   EXACT_CITATION_SUMMARY_MAX_ROWS,
+  exactDecisionCitationSummaryQuery,
 } from "./citation-graph";
 import {
   compareDecisionCitationStats,
@@ -111,7 +111,7 @@ const compareFilteredSummary = async (client: SQL, ids: string[]) => {
       currentYear,
     ],
   );
-  const tx = drizzle({ client, relations: databaseRelations });
+  const tx = createDatabase({ client, relations: databaseRelations });
   const actual = [];
   for (const decisionId of ids) {
     const rows = await boundedAll({
@@ -157,7 +157,7 @@ const withFixture = async (
       await client`SET LOCAL lock_timeout = '2s'`;
       await client`SET LOCAL statement_timeout = '5s'`;
       try {
-        const db = drizzle({ client });
+        const db = createDatabase({ client });
         const sources = [0, 1].map(() =>
           caseLawSourceRow({
             adapterKey: `citation-stats-${Bun.randomUUIDv7()}`,
@@ -334,7 +334,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("comparison reports drift without writing and repair restores exact independently recounted buckets", async () => {
       await withFixture(async ({ client, ids }) => {
-        const tx = drizzle({ client });
+        const tx = createDatabase({ client });
         const decisionIds = ids.map((id) => toSafeId<"caseLawDecision">(id));
         await insertEdge(client, {
           citing: member(ids, 0),
@@ -387,7 +387,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("pending projections never claim an exact zero and explicit refresh completes them", async () => {
       await withFixture(async ({ client, ids }) => {
-        const tx = drizzle({ client });
+        const tx = createDatabase({ client });
         const pending = toSafeId<"caseLawDecision">(member(ids, 1));
         const decisionIds = [pending];
         await client`DELETE FROM case_law_decision_citation_stats_state WHERE decision_id = ${pending}::uuid`;
@@ -827,7 +827,9 @@ if (!databaseUrl || !runPostgresTests) {
         try {
           await client.begin(async (tx) => {
             await tx`SET LOCAL statement_timeout = '30s'`;
-            await drizzle({ client: tx }).insert(caseLawSources).values(source);
+            await createDatabase({ client: tx })
+              .insert(caseLawSources)
+              .values(source);
             await tx`INSERT INTO case_law_decisions (id, source_id, country, court, language, case_number, decision_date, metadata)
             SELECT id, ${source.id}::uuid, 'CZE', 'Court', 'cs', 'fan-in-' || id::text, '2020-01-01'::date, '{}'::jsonb
             FROM unnest(${tx.array(allIds, "TEXT")}::uuid[]) AS fixture(id)`;

@@ -92,7 +92,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
 const templateId = toSafeId<"template">("tmpl_1");
-const s3Key = "fake-key-fill-required-fields-parity";
+const s3Key = `${organizationId}/fake-key-fill-required-fields-parity`;
 
 const recordAuditEvent: AuditRecorder = async () => {
   await Promise.resolve();

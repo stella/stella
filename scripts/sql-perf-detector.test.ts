@@ -1057,3 +1057,23 @@ test.each([
     ).not.toContain("per-source-full-count");
   },
 );
+
+test("SQL findings retain the exact source column after interpolation", () => {
+  const source = 'const query = sql`SELECT ${name} LIKE ${"%term%"}`;';
+  expect(analyzeSqlPerf(source, "query.ts").hits).toEqual([
+    {
+      kind: "leading-wildcard",
+      line: 1,
+      column: source.indexOf("LIKE") + 1,
+      anchorLines: [1, 1, 1],
+    },
+  ]);
+});
+
+test("an interpolated selected column is not itself a subquery operand", () => {
+  expect(
+    kinds(
+      'import { or, ilike } from "drizzle-orm"; const selected = db.select({ matched: sql`true` }).from(caseLawDecisions).limit(1); or(ilike(table.name, term), sql`${selected.matched} IS TRUE`);',
+    ),
+  ).toEqual([]);
+});

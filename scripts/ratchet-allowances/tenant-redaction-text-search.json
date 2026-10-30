@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "API tenant-id matching uses the published @stll/text-search literal native engine; the API declares its direct runtime dependency."
+}

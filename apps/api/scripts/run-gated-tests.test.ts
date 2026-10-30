@@ -9,10 +9,10 @@ import {
   assertPostgresWorkerBudget,
   planPostgresWorkers,
   POSTGRES_IDENTIFIER_BYTES,
+  type PostgresAdmin,
   PostgresTemplateConnectionError,
   PostgresWorkerBudgetError,
   runPostgresWorkers,
-  type PostgresAdmin,
   workerDatabaseName,
 } from "./postgres-test-workers";
 import { runTestBatches } from "./run-gated-tests";
@@ -258,6 +258,78 @@ const adminFixture = (): AdminFixture => {
   };
 };
 
+test.each([0, 7])(
+  "cluster-wide migrations drain every worker, remain serial and preserve failure %s",
+  async (ordinaryFailure) => {
+    const fixture = adminFixture();
+    const ordinaryReady = Promise.withResolvers<undefined>();
+    const firstClusterReady = Promise.withResolvers<undefined>();
+    const secondClusterReady = Promise.withResolvers<undefined>();
+    const ordinary = new Map<string, (status: number) => void>();
+    const firstCluster = Promise.withResolvers<number>();
+    const secondCluster = Promise.withResolvers<number>();
+    const started: string[] = [];
+    const result = runPostgresWorkers({
+      files: ["ordinary-one", "ordinary-two", "migration-one", "migration-two"],
+      durations: {},
+      exclusivePaths: new Set(),
+      clusterExclusivePaths: new Set(["migration-one", "migration-two"]),
+      workers: 2,
+      databaseUrl: "postgres://localhost/template_db",
+      admin: fixture.admin,
+      registerSignal: () => () => {},
+      runWorker: ({ files }) => {
+        expect(files).toHaveLength(1);
+        const file = files.at(0);
+        if (file === undefined) {
+          throw new Error("The runner must supply one fixture file");
+        }
+        started.push(file);
+        let exited: Promise<number>;
+        if (file.startsWith("ordinary")) {
+          const completion = Promise.withResolvers<number>();
+          ordinary.set(file, completion.resolve);
+          if (ordinary.size === 2) {
+            ordinaryReady.resolve(undefined);
+          }
+          exited = completion.promise;
+        } else if (file === "migration-one") {
+          firstClusterReady.resolve(undefined);
+          exited = firstCluster.promise;
+        } else {
+          expect(file).toBe("migration-two");
+          secondClusterReady.resolve(undefined);
+          exited = secondCluster.promise;
+        }
+        return { exited, exitCode: null, signalCode: null, kill: () => {} };
+      },
+      log: () => {},
+    });
+
+    await ordinaryReady.promise;
+    expect(new Set(started)).toEqual(new Set(["ordinary-one", "ordinary-two"]));
+    const finishOrdinary = (file: string, status: number) => {
+      const complete = ordinary.get(file);
+      if (complete === undefined) {
+        throw new Error(`The ordinary fixture ${file} must have started`);
+      }
+      complete(status);
+    };
+    finishOrdinary("ordinary-one", ordinaryFailure);
+    expect(started).toHaveLength(2);
+    finishOrdinary("ordinary-two", 0);
+    await firstClusterReady.promise;
+    expect(started.slice(2)).toEqual(["migration-one"]);
+    firstCluster.resolve(9);
+    await secondClusterReady.promise;
+    expect(started.slice(2)).toEqual(["migration-one", "migration-two"]);
+    secondCluster.resolve(0);
+
+    expect(await result).toBe(ordinaryFailure === 0 ? 9 : ordinaryFailure);
+    expect(fixture.calls.at(-1)).toBe("CLOSE");
+  },
+);
+
 const runWorkerFixture = async ({
   exitCode = 0,
   signal,
@@ -307,7 +379,7 @@ test("template cloning precedes workers and databases drop in cleanup on success
   const create = calls.findIndex((call) => call.startsWith("CREATE DATABASE"));
   const terminate = calls.findIndex((call) =>
     call.startsWith(
-      'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 ["template_db_test_',
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend' [\"template_db_test_",
     ),
   );
   const drop = calls.findIndex((call) =>
@@ -365,4 +437,80 @@ test("clone database names fit the identifier limit and stay distinct", () => {
   expect(
     workerDatabaseName({ template: "template_db", runId: "1_a", worker: 1 }),
   ).toStartWith("template_db_test_w1_");
+});
+
+test("an exclusive suite after ordinary ones starts on a fresh clone of the template", async () => {
+  const fixture = adminFixture();
+  const status = await runPostgresWorkers({
+    files: ["ordinary.test.ts", "ddl.test.ts"],
+    durations: { "ordinary.test.ts": 2, "ddl.test.ts": 1 },
+    exclusivePaths: new Set(["ddl.test.ts"]),
+    workers: 1,
+    databaseUrl: "postgres://owner:secret@localhost:5432/template_db",
+    admin: fixture.admin,
+    registerSignal: () => () => {},
+    runWorker: ({ files }) => {
+      fixture.calls.push(`RUN ${files.join(",")}`);
+      return {
+        exited: Promise.resolve(0),
+        exitCode: 0,
+        signalCode: null,
+        kill: () => {},
+      };
+    },
+    log: () => {},
+  });
+  expect(status).toBe(0);
+  const ordinary = fixture.calls.indexOf("RUN ordinary.test.ts");
+  const exclusive = fixture.calls.indexOf("RUN ddl.test.ts");
+  expect(ordinary).toBeGreaterThan(-1);
+  expect(exclusive).toBeGreaterThan(ordinary);
+  const between = fixture.calls.slice(ordinary + 1, exclusive);
+  expect(between.map((call) => call.split(" ").slice(0, 2).join(" "))).toEqual([
+    "SELECT pg_terminate_backend(pid)",
+    "DROP DATABASE",
+    "CREATE DATABASE",
+  ]);
+  expect(between.at(-1)).toContain('TEMPLATE "template_db"');
+});
+
+test("a signal during the fresh-clone reset starts no further suite", async () => {
+  const fixture = adminFixture();
+  let deliver: ((signal: NodeJS.Signals) => void) | undefined;
+  const status = await runPostgresWorkers({
+    files: ["ordinary.test.ts", "ddl.test.ts"],
+    durations: { "ordinary.test.ts": 2, "ddl.test.ts": 1 },
+    exclusivePaths: new Set(["ddl.test.ts"]),
+    workers: 1,
+    databaseUrl: "postgres://owner:secret@localhost:5432/template_db",
+    admin: {
+      ...fixture.admin,
+      query: async (sql, parameters) => {
+        if (
+          sql.startsWith("CREATE DATABASE") &&
+          fixture.calls.includes("RUN ordinary.test.ts")
+        ) {
+          deliver?.("SIGTERM");
+        }
+        return await fixture.admin.query(sql, parameters);
+      },
+    },
+    registerSignal: (handler) => {
+      deliver = handler;
+      return () => {};
+    },
+    runWorker: ({ files }) => {
+      fixture.calls.push(`RUN ${files.join(",")}`);
+      return {
+        exited: Promise.resolve(0),
+        exitCode: 0,
+        signalCode: null,
+        kill: () => {},
+      };
+    },
+    log: () => {},
+  });
+  expect(status).toBe(143);
+  expect(fixture.calls).toContain("RUN ordinary.test.ts");
+  expect(fixture.calls).not.toContain("RUN ddl.test.ts");
 });

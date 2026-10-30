@@ -7,15 +7,19 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./script-error": "./src/script-error.ts"
+    "./script-error": "./src/script-error.ts",
+    "./fingerprint-fields": "./src/fingerprint-fields.ts",
+    "./exception-context": "./src/exception-context.ts",
+    "./exception-scope-context": "./src/exception-scope-context.ts",
+    "./exception-scope": "./src/exception-scope.ts",
+    "./exception-cause-chain": "./src/exception-cause-chain.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/errors",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/errors",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/errors"
   },
   "dependencies": {
     "better-result": "catalog:"

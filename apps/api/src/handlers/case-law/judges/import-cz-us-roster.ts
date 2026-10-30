@@ -19,8 +19,7 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
-import { printError, sanitizeErrorForOutput } from "@stll/errors";
-import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import { sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
@@ -36,7 +35,6 @@ import type {
   PortraitSource,
 } from "@/api/handlers/case-law/judges/consts";
 import { PORTRAIT_SOURCE } from "@/api/handlers/case-law/judges/consts";
-import { relinkUnmatchedDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import {
   judgeNameKey,
   stripAcademicTitles,
@@ -74,6 +72,11 @@ export const CZ_US_ROSTER_LISTINGS = [
 
 const CZ_US_COUNTRY = "CZE";
 const CZ_US_COURT = CZ_ECLI_COURTS.US;
+/** The court whose decisions a run relinks once its roster is in. */
+export const CZ_US_ROSTER_COURT = {
+  country: CZ_US_COUNTRY,
+  court: CZ_US_COURT,
+} as const;
 /** The court credits its own portraits, so the attribution is its name. */
 const PORTRAIT_ATTRIBUTION = CZ_ECLI_COURTS.US;
 const PORTRAIT_KEY_PREFIX = "case-law/judges/";
@@ -94,7 +97,7 @@ const PORTRAIT_EXTENSIONS = {
   "image/webp": "webp",
 } as const satisfies Readonly<Record<string, string>>;
 
-export type PortraitContentType = keyof typeof PORTRAIT_EXTENSIONS;
+type PortraitContentType = keyof typeof PORTRAIT_EXTENSIONS;
 
 type ServedPortraitType = {
   contentType: PortraitContentType;
@@ -159,7 +162,7 @@ const normalizeSpace = (value: string): string =>
 const TERM_DATE_PATTERN =
   /(?:\b(?<until>do)\s+)?(?<date>\d{1,2}\.\s*\d{1,2}\.\s*\d{4})/gu;
 
-export type JusticeTerm = {
+type JusticeTerm = {
   termStart?: string;
   termEnd?: string;
 };
@@ -213,7 +216,7 @@ const latest = (dates: readonly string[]): string | undefined =>
  * listing's non-judicial entries are told from a justice whose dates the
  * court did not print.
  */
-export const parseJusticeTerm = (
+const parseJusticeTerm = (
   lines: readonly string[],
 ): JusticeTerm | undefined => {
   const spans = lines.filter(isBenchLine).map(parseOfficeSpan);
@@ -327,7 +330,7 @@ export const parseJusticePage = ({
 
 /* -- ports --------------------------------------------------------------- */
 
-export type CaseLawJudgeId = SafeId<"caseLawJudge">;
+type CaseLawJudgeId = SafeId<"caseLawJudge">;
 
 export type StoredRosterJudge = {
   id: CaseLawJudgeId;
@@ -338,7 +341,7 @@ export type StoredRosterJudge = {
   portraitS3Key: string | null;
 };
 
-export type NewRosterJudge = {
+type NewRosterJudge = {
   id: CaseLawJudgeId;
   fullName: string;
   nameKey: string;
@@ -352,7 +355,7 @@ export type NewRosterJudge = {
  * columns move together, because the row's check constraint holds them all
  * null or all set.
  */
-export type RosterJudgePatch = {
+type RosterJudgePatch = {
   fullName?: string;
   termStart?: string | null;
   termEnd?: string | null;
@@ -364,7 +367,7 @@ export type RosterJudgePatch = {
   updatedAt?: Date;
 };
 
-export type InsertedRosterJudge = {
+type InsertedRosterJudge = {
   id: CaseLawJudgeId;
   inserted: boolean;
 };
@@ -409,7 +412,7 @@ export type RosterPortraitStore = {
 
 /* -- the import ---------------------------------------------------------- */
 
-export type RosterImportFailure = {
+type RosterImportFailure = {
   name: string;
   profileUrl: string;
   reason: string;
@@ -830,10 +833,13 @@ const ROSTER_COLUMNS = {
  * The roster store against the ingestion role's transaction runner: the role
  * the corpus tables grant writes to, one short transaction per operation, so
  * no lock is held while the court's site answers.
+ *
+ * The relink is not one of its operations: it walks the court's decisions,
+ * so the entrypoint runs it as a load-aware backfill pass of its own.
  */
 export const czUsRosterStore = (
   ingestionDb: CaseLawIngestionHandle,
-): CzUsRosterStore => {
+): Omit<CzUsRosterStore, "relinkUnmatched"> => {
   const findByNameKey = async (
     nameKey: string,
   ): Promise<StoredRosterJudge | undefined> =>
@@ -881,16 +887,6 @@ export const czUsRosterStore = (
           .where(eq(caseLawJudges.id, id));
       });
     },
-    relinkUnmatched: async () =>
-      (
-        await ingestionDb(
-          async (tx) =>
-            await relinkUnmatchedDecisionJudges(tx, {
-              country: CZ_US_COUNTRY,
-              court: CZ_US_COURT,
-            }),
-        )
-      ).linked,
   };
 };
 
@@ -941,27 +937,3 @@ export const corpusPortraitStore: RosterPortraitStore = {
     });
   },
 };
-
-if (import.meta.main) {
-  await runScriptWithErrorOutput(async () => {
-    // The maintenance lane is the door an operator pass takes to the case-law
-    // tables and it holds a connection for the life of the process, so only a
-    // direct run opens one.
-    const { enterCaseLawMaintenanceLane } =
-      await import("@/api/lib/case-law/maintenance-lane");
-    const { ingestionDb } = await enterCaseLawMaintenanceLane();
-    const imported = await importCzUsRoster({
-      store: czUsRosterStore(ingestionDb),
-      fetch: courtSiteFetch,
-      s3: corpusPortraitStore,
-      now: () => new Date(),
-      intervalMs: CZ_US_ROSTER_REQUEST_INTERVAL_MS,
-    });
-    if (Result.isError(imported)) {
-      printError(imported.error);
-      process.exit(1);
-    }
-    process.stdout.write(`${JSON.stringify(imported.value, null, 2)}\n`);
-    process.exit(imported.value.failures.length === 0 ? 0 : 1);
-  });
-}

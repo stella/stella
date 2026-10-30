@@ -10,7 +10,7 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import {
@@ -40,8 +40,8 @@ import type {
 import {
   ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
   type AccountOperationCheck,
+  authorizeMcpToolContext,
   hasMcpToolAuthority,
-  hasMcpToolInputAuthority,
   isAccountAuthorizedForMcpTool,
 } from "@/api/mcp/write-tool-authority";
 
@@ -143,7 +143,7 @@ export type RegistryWriteToolOutputContract = AssertTrue<
 export type RunRegistryWriteToolProps = {
   toolName: RegistryWriteToolName;
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   refRegistry: ChatRefRegistry;
 };
 
@@ -315,7 +315,14 @@ export const runRegistryWriteTool = async (
   }
 
   // The exact grant of the operation the normalized input selects.
-  if (!hasMcpToolInputAuthority(context, staticDefinition, normalized.value)) {
+  const authorization = authorizeMcpToolContext({
+    context,
+    dataAccess: context,
+    definition: staticDefinition,
+    input: normalized.value,
+    toolName,
+  });
+  if (!authorization.authorized) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
@@ -323,6 +330,7 @@ export const runRegistryWriteTool = async (
       }),
     );
   }
+  const authorizedContext = authorization.context;
 
   const visible = await Result.tryPromise(
     async () =>
@@ -336,7 +344,7 @@ export const runRegistryWriteTool = async (
             value: normalized.value,
           },
         ],
-        scopedDb: context.scopedDb,
+        scopedDb: authorizedContext.scopedDb,
       }),
   );
   if (visible.isErr()) {
@@ -360,7 +368,7 @@ export const runRegistryWriteTool = async (
 
   const needsMatter = matterRequiredResult({
     args: normalized.value,
-    context,
+    context: authorizedContext,
     // Chat carries no OAuth scopes, and save_matter is always projected.
     saveMatterCallable: WRITE_TOOL_REF_FIELD_MAP.save_matter.chatProjectable,
     toolName,
@@ -374,10 +382,10 @@ export const runRegistryWriteTool = async (
       args: normalized.value,
       toolName,
     }),
-    context,
+    context: authorizedContext,
   });
   const finished = await finalizeToolEgress({
-    context,
+    context: authorizedContext,
     mode: "default",
     response,
   });

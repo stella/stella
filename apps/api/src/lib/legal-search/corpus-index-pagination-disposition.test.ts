@@ -5,9 +5,9 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {

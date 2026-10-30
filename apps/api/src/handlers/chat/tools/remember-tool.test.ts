@@ -10,6 +10,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { MemoryWriteRefusedError } from "@/api/lib/memory/persist-explicit-memory";
+import type {
+  persistExplicitMemory,
+  PersistExplicitMemoryResult,
+} from "@/api/lib/memory/persist-explicit-memory";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestState } from "@/api/tests/helpers/test-state";
@@ -29,42 +34,37 @@ beforeEach(() => {
 const memoryId = toSafeId<"aiMemory">(Bun.randomUUIDv7());
 
 type RememberHarnessOptions = {
+  persisted?: PersistExplicitMemoryResult;
   role?: MemberRole;
   workspaceStatus?: AccessibleWorkspace["status"];
 };
 
+type PersistMemoryOptions = Parameters<typeof persistExplicitMemory>[0];
+
 const rememberHarness = ({
+  persisted = { id: memoryId, type: "created" },
   role = "member",
   workspaceStatus = "active",
 }: RememberHarnessOptions) => {
-  const inserted: unknown[] = [];
-  const audited: unknown[] = [];
+  const writes: PersistMemoryOptions[] = [];
   const { getCallCount, safeDb } = createScopedDbMock(
-    {
-      insert: () => ({
-        values: (values: unknown) => {
-          inserted.push(values);
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () => await Promise.resolve([{ id: memoryId }]),
-            }),
-          };
-        },
-      }),
-    },
+    {},
     {
       featureAccess: {
         identity: { email: "member@example.test", emailVerified: true },
       },
     },
   );
-  const recordAuditEvent: AuditRecorder = async (_tx, event) => {
-    audited.push(event);
+  const recordAuditEvent: AuditRecorder = async () => {
     await Promise.resolve();
   };
   const tool = createRememberTool({
     authority: sessionMemberRole(role),
     organizationId,
+    persistMemory: async (options) => {
+      writes.push(options);
+      return await Promise.resolve(persisted);
+    },
     recordAuditEvent,
     safeDb,
     resolveSourceDataWorkspaceIds: () => [workspaceId],
@@ -78,11 +78,11 @@ const rememberHarness = ({
     throw new Error("remember must be server-executed");
   }
   return {
-    audited,
     getCallCount,
-    inserted,
+    recordAuditEvent,
     remember: async (input: Parameters<typeof execute>[0]) =>
       await execute(input, asTestRaw<Parameters<typeof execute>[1]>({})),
+    writes,
   };
 };
 
@@ -95,10 +95,9 @@ describe("chat remember tool", () => {
         harness.remember({ content: "Use numbered paragraphs" }),
       ),
     ).toMatchObject({ kind: "unavailable" });
-    expect(harness.inserted).toEqual([]);
-    expect(harness.audited).toEqual([]);
+    expect(harness.writes).toEqual([]);
   });
-  test("saves matter memory under the chat's matter with an audit event", async () => {
+  test("saves matter memory under the chat's matter with an audit recorder", async () => {
     const harness = rememberHarness({});
     expect(
       await harness.remember({
@@ -107,18 +106,44 @@ describe("chat remember tool", () => {
         scope: "workspace",
       }),
     ).toEqual({ status: "saved" });
-    expect(harness.inserted).toEqual([
-      expect.objectContaining({
-        organizationId,
-        scope: "workspace",
-        userId: null,
-        workspaceId,
+    expect(harness.writes).toHaveLength(1);
+    const write = harness.writes.at(0);
+    expect(write?.scope.target).toEqual({
+      createdBy: userId,
+      kind: "decision",
+      organizationId,
+      scope: "workspace",
+      userId: null,
+      workspaceId,
+    });
+    expect(write?.memory).toMatchObject({
+      source: "tool",
+      sourceDataWorkspaceIds: [workspaceId],
+    });
+    expect(write?.recordAuditEvent).toBe(harness.recordAuditEvent);
+  });
+
+  test("returns the write's live-authority refusal instead of a saved status", async () => {
+    const harness = rememberHarness({
+      persisted: {
+        error: new MemoryWriteRefusedError({
+          code: "forbidden",
+          kind: "decision",
+          message: "You no longer have permission to save this memory.",
+        }),
+        type: "authority_unavailable",
+      },
+    });
+    const refusal = await rejectionOf(
+      harness.remember({
+        content: "Opposing counsel accepted the extended deadline",
         kind: "decision",
-        source: "tool",
-        createdBy: userId,
+        scope: "workspace",
       }),
-    ]);
-    expect(harness.audited).toHaveLength(1);
+    );
+    expect(refusal).toBeInstanceOf(ChatToolError);
+    expect(refusal).toMatchObject({ kind: "invalid-input" });
+    expect(harness.writes).toHaveLength(1);
   });
 
   test("refuses an archived matter's memory with the archive reason, before any write", async () => {

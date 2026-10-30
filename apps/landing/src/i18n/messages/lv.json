@@ -96,6 +96,19 @@
     "changelog": "Izmaiņu žurnāls",
     "chooseLanguage": "Izvēlieties valodu",
     "docxEditor": "Atsevišķs DOCX redaktors",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Komentāri"
+      },
+      "matters": {
+        "done": "Pabeigts",
+        "inProgress": "Izpildē",
+        "open": "Atvērts"
+      },
+      "research": {
+        "caseLaw": "Judikatūra"
+      }
+    },
     "github": "stella vietnē GitHub",
     "openMenu": "Atvērt navigāciju",
     "pillars": {

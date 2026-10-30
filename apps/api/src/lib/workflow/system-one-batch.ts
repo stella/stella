@@ -60,8 +60,7 @@ export const batesStamp = (simplifiedName: string, pageIndex: number): string =>
  * locator, rather than leaving it to the caller's discipline.
  */
 type SourceLocator =
-  | { type: "cited"; file: string; citation: string }
-  | { type: "uncited" };
+  { type: "cited"; file: string; citation: string } | { type: "uncited" };
 
 export type BatchSources = {
   sources: AnswerSource[];
@@ -245,6 +244,7 @@ export type SystemOneOutcomeResult = {
   output: WorkflowDataOutput;
   /** Properties outside the typed plan. */
   fallbackPropertyIds: SafeId<"property">[];
+  refusedPropertyIds: SafeId<"property">[];
 };
 
 /**
@@ -261,6 +261,7 @@ export const outputFromSystemOneOutcomes = ({
 > => {
   const output: WorkflowDataOutput = {};
   const fallbackPropertyIds: SafeId<"property">[] = [];
+  const refusedPropertyIds: SafeId<"property">[] = [];
   for (const property of properties) {
     const outcome = outcomes.get(property.id);
     if (outcome === undefined) {
@@ -271,6 +272,7 @@ export const outputFromSystemOneOutcomes = ({
       case "undecided":
         switch (outcome.reason) {
           case "refusal":
+            refusedPropertyIds.push(property.id);
             break;
           case "failed":
           case "no-backend":
@@ -310,5 +312,5 @@ export const outputFromSystemOneOutcomes = ({
     }
     output[property.id] = { answer: null, justification: [] };
   }
-  return Result.ok({ output, fallbackPropertyIds });
+  return Result.ok({ output, fallbackPropertyIds, refusedPropertyIds });
 };

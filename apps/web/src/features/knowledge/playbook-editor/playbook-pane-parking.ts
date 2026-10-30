@@ -9,10 +9,7 @@ import { detached } from "@/lib/detached";
 import type { PlaybookApprovalStatus } from "@/lib/knowledge/playbook-types";
 
 export type PaneDraftState =
-  | "saved"
-  | "dirty-autosaveable"
-  | "dirty-unsaveable"
-  | "save-failed";
+  "saved" | "dirty-autosaveable" | "dirty-unsaveable" | "save-failed";
 
 type ResolvePaneDraftStateArgs = {
   isDirty: boolean;

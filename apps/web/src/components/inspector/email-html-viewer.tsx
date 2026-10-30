@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -22,15 +22,15 @@ import {
   EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
   EMAIL_VIEWER_LAYOUT,
-  getEmailBodyFrameHeight,
-  getEmailFileChatContext,
-  localizeEmailBodyHtml,
-  parseEmailDate,
   type EmailBodyFoldLabels,
   type EmailChatHost,
   type EmailChatMode,
   type EmailResolvedChatMode,
   type EmailViewerLayout,
+  getEmailBodyFrameHeight,
+  getEmailFileChatContext,
+  localizeEmailBodyHtml,
+  parseEmailDate,
 } from "@/components/inspector/email-html-viewer.logic";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";

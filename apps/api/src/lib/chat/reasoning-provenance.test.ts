@@ -1,7 +1,7 @@
 import {
-  StreamProcessor,
   convertMessagesToModelMessages,
   modelMessagesToUIMessages,
+  StreamProcessor,
 } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -9,10 +9,10 @@ import { describe, expect, test } from "bun:test";
 import type { ReasoningProvenance } from "@stll/ai-catalog";
 
 import {
+  applyChatPartPersistenceBudget,
   chatMessageFromPersisted,
   isChatPart,
   isIncomingChatPart,
-  applyChatPartPersistenceBudget,
   restoreServerOwnedChatParts,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,

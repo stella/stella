@@ -28,9 +28,9 @@ import {
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
+  absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import {
   isReadRefusal,
@@ -1241,6 +1241,49 @@ describe("czUsAdapter.fetchPage", () => {
     expect(readAgainByReconciliation(decision)).toBe(false);
   });
 
+  test("joins the printed lines of a typewriter-era legal sentence", async () => {
+    // The court's own cell: one `<br/>` per printed line of the typescript.
+    const page = new TextDecoder().decode(
+      Bun.gunzipSync(
+        await Bun.file(
+          new URL(
+            "__fixtures__/cz-us-abstract-i-us-549-2000.html.gz",
+            import.meta.url,
+          ),
+        ).bytes(),
+      ),
+    );
+    const cell =
+      /<table[^>]*class="legalSentenceContent"[^>]*>\s*<tr>\s*<td[^>]*>(?<cell>[\s\S]*?)<\/td>/u.exec(
+        page,
+      )?.groups?.["cell"];
+    expect(cell).toContain("zásadám<br/>spravedlivého");
+    installSearchMock({
+      rows: [
+        {
+          id: "5002",
+          sz: "1-549-2000",
+          caseNumber: "I.ÚS 549/2000",
+          date: "18. 4. 2001",
+        },
+      ],
+      legalSentence: cell ?? "",
+    });
+
+    const decision = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2001), {}),
+    ).decisions.at(0);
+    const legalSentence = decision?.textFields.legalSentence;
+    const text =
+      legalSentence?.type === TEXT_FIELD_TYPE.PRESENT ? legalSentence.text : "";
+
+    expect(text).toStartWith(
+      "Ústavní soud již opakovaně judikoval, že zásadám spravedlivého procesu odpovídá nejen možnost účastníka řízení vyjádřit se k provedeným důkazům, nýbrž i navrhnout důkazy vlastní;",
+    );
+    expect(text).not.toContain("\n");
+    expect(text).not.toMatch(/ {2}/u);
+  });
+
   test("moves the source hash when publisher text changes", async () => {
     const row = {
       id: "fixture-text-hash",
@@ -2340,6 +2383,31 @@ describe("the record card the court prints beside a decision", () => {
     expect(fields?.note).toEqual([]);
   });
 
+  test("reads each listed act as its own provision value", async () => {
+    const fields = parseNalusDetail(
+      await recordCardFixture("cz-us-record-card-dissents.html.gz"),
+    );
+
+    expect(fields?.otherProvisions.slice(0, 4)).toEqual([
+      "111/2006 Sb., § 18a, § 61 odst.4",
+      "116/2012 Sb.",
+      "182/1993 Sb., § 71 odst.2, § 35 odst.2",
+      "20/1966 Sb., § 67c, § 11 odst.1",
+    ]);
+    expect(fields?.constitutionalProvisions.slice(0, 2)).toEqual([
+      "1/1993 Sb., čl. 15, čl. 5, čl. 6, čl. 1 odst.1",
+      "115/2001 Sb./Sb.m.s., čl. 5",
+    ]);
+    // The card lists one act per item, so a value naming a second act is
+    // two items run together.
+    for (const value of [
+      ...(fields?.otherProvisions ?? []),
+      ...(fields?.constitutionalProvisions ?? []),
+    ]) {
+      expect(value.match(/\d+\/\d{4} Sb\./gu)).toHaveLength(1);
+    }
+  });
+
   test("states no dissent where the court printed none", async () => {
     const fields = parseNalusDetail(
       await recordCardFixture("cz-us-record-card.html.gz"),
@@ -2450,6 +2518,52 @@ describe("czUsAdapter judges", () => {
 
     expect(decision?.judges).toBeUndefined();
     expect(decision?.metadata["recordCard"] === "absent").toBe(true);
+  });
+
+  const OPENING_BENCH =
+    "Ústavní soud rozhodl v senátě složeném z předsedy Jana Svatoně (soudce zpravodaje), soudce Milana Hulmáka a soudkyně Daniely Zemanové o ústavní stížnosti";
+
+  test("adds the bench the opening sentence states, ahead of the card", async () => {
+    const decision = await decisionWithCard({
+      documentText: OPENING_BENCH,
+      rapporteur: "Svatoň Jan",
+    });
+
+    // Declined as the sentence prints them; the roster resolves them when
+    // the row is written.
+    expect(
+      Bun.deepEquals(decision?.judges, [
+        { role: "presiding", czechDeclinedName: "Jana Svatoně" },
+        { role: "rapporteur", czechDeclinedName: "Jana Svatoně" },
+        { role: "panel-member", czechDeclinedName: "Milana Hulmáka" },
+        { role: "panel-member", czechDeclinedName: "Daniely Zemanové" },
+        { role: "rapporteur", nameAsPrinted: "Svatoň Jan" },
+      ]),
+    ).toBe(true);
+    expect(decision?.metadata["judge"] === "Svatoň Jan").toBe(true);
+  });
+
+  test("states the sentence's bench where the court holds no card", async () => {
+    const decision = await decisionWithCard({
+      documentText: OPENING_BENCH,
+      recordCardStatus: 404,
+    });
+
+    expect(decision?.judges?.map(({ role }) => role)).toEqual([
+      "presiding",
+      "rapporteur",
+      "panel-member",
+      "panel-member",
+    ]);
+  });
+
+  test("leaves the stored judges alone where the card could not be read, bench or not", async () => {
+    const decision = await decisionWithCard({
+      documentText: OPENING_BENCH,
+      recordCardStatus: 500,
+    });
+
+    expect(decision?.judges).toBeUndefined();
   });
 
   test("states an empty bench where the card names no judge", async () => {

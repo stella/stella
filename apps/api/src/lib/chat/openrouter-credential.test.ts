@@ -5,15 +5,19 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import {
-  getManagedOpenRouterConfiguration,
   createManagedOpenRouterCredentialProvider,
+  getManagedOpenRouterConfiguration,
 } from "@/api/lib/chat/openrouter-credential";
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import {
-  setMetricLineSinkForTesting,
   resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const POLICY_ID = "fixture-policy";
 const AUDIENCE = "https://openrouter.ai";
@@ -112,7 +116,9 @@ const createHarness = ({
   exchangeReplies = [],
   exchangeFetcher,
   random = () => 0,
-  timeoutMs = 100,
+  // The deadline runs on a real timer while the fixture clock is fake, so the
+  // default leaves room for a loaded machine; timeout tests pass their own.
+  timeoutMs = 30_000,
 }: {
   configuration?: ProviderOptions["configuration"];
   clock?: ReturnType<typeof createClock>;
@@ -213,7 +219,7 @@ const createHarness = ({
       clock.advance(delayMs);
     },
     random,
-    timeoutMs, // timeout: fixture default, elapsed only on the fake clock
+    timeoutMs, // timeout: fixture default (real timer), shortened only by timeout tests
   });
   return {
     provider,
@@ -235,6 +241,8 @@ const createHarness = ({
 
 const originalWifEnvironment = () => ({
   OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY: env.OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: env.OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID: env.OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE: env.OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION: env.OPENROUTER_WIF_STS_REGION,
@@ -244,6 +252,14 @@ const restoreWifEnvironment = (
   previous: ReturnType<typeof originalWifEnvironment>,
 ) => {
   env.OPENROUTER_API_KEY = previous.OPENROUTER_API_KEY;
+  testState.setConfig(
+    "OPENROUTER_FAST_TIER_API_KEY",
+    previous.OPENROUTER_FAST_TIER_API_KEY,
+  );
+  testState.setConfig(
+    "OPENROUTER_FAST_TIER_WIF_POLICY_ID",
+    previous.OPENROUTER_FAST_TIER_WIF_POLICY_ID,
+  );
   env.OPENROUTER_WIF_POLICY_ID = previous.OPENROUTER_WIF_POLICY_ID;
   env.OPENROUTER_WIF_AUDIENCE = previous.OPENROUTER_WIF_AUDIENCE;
   env.OPENROUTER_WIF_STS_REGION = previous.OPENROUTER_WIF_STS_REGION;
@@ -254,11 +270,12 @@ describe("managed OpenRouter credentials", () => {
     const previous = originalWifEnvironment();
     env.OPENROUTER_API_KEY = "fixture-static-key";
     env.OPENROUTER_WIF_POLICY_ID = POLICY_ID;
-    env.OPENROUTER_WIF_AUDIENCE = AUDIENCE;
-    env.OPENROUTER_WIF_STS_REGION = REGION;
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
     try {
       const harness = createHarness({
-        configuration: getManagedOpenRouterConfiguration,
+        configuration: () =>
+          getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
       });
       const staticResult = await harness.provider.get();
       expect(staticResult).toEqual(Result.ok("fixture-static-key"));
@@ -269,17 +286,89 @@ describe("managed OpenRouter credentials", () => {
       env.OPENROUTER_WIF_POLICY_ID = undefined;
       env.OPENROUTER_WIF_AUDIENCE = undefined;
       env.OPENROUTER_WIF_STS_REGION = undefined;
-      expect(getManagedOpenRouterConfiguration()).toEqual({
+      expect(
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+      ).toEqual({
         type: "unavailable",
       });
       managedUnavailable(
         await createHarness({
-          configuration: getManagedOpenRouterConfiguration,
+          configuration: () =>
+            getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
         }).provider.get(),
       );
     } finally {
       restoreWifEnvironment(previous);
     }
+  });
+
+  test("keeps fast and standard static credentials isolated", () => {
+    const previous = originalWifEnvironment();
+    testState.setConfig("OPENROUTER_API_KEY", "standard-key");
+    testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", "fast-key");
+    try {
+      expect(
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+      ).toEqual({ type: "static", apiKey: "standard-key" });
+      expect(
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
+      ).toEqual({ type: "static", apiKey: "fast-key" });
+
+      testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", undefined);
+      expect(
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
+      ).toEqual({ type: "unavailable" });
+    } finally {
+      restoreWifEnvironment(previous);
+    }
+  });
+
+  test("selects the tier-specific federation policy", () => {
+    const previous = originalWifEnvironment();
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", undefined);
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", "standard-policy");
+    testState.setConfig("OPENROUTER_FAST_TIER_WIF_POLICY_ID", "fast-policy");
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
+    try {
+      expect(
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+      ).toMatchObject({ type: "federated", policyId: "standard-policy" });
+      expect(
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
+      ).toMatchObject({ type: "federated", policyId: "fast-policy" });
+    } finally {
+      restoreWifEnvironment(previous);
+    }
+  });
+
+  test("keeps federated token caches independent between tiers", async () => {
+    const standard = createHarness({
+      configuration: () => ({
+        type: "federated",
+        policyId: "standard-policy",
+        audience: AUDIENCE,
+        region: REGION,
+      }),
+      exchangeReplies: [successExchange("standard-token")],
+    });
+    const fast = createHarness({
+      configuration: () => ({
+        type: "federated",
+        policyId: "fast-policy",
+        audience: AUDIENCE,
+        region: REGION,
+      }),
+      exchangeReplies: [successExchange("fast-token")],
+    });
+
+    expect(await standard.provider.get()).toEqual(Result.ok("standard-token"));
+    expect(await fast.provider.get()).toEqual(Result.ok("fast-token"));
+    expect(await standard.provider.get()).toEqual(Result.ok("standard-token"));
+    expect(await fast.provider.get()).toEqual(Result.ok("fast-token"));
+    expect(standard.exchangeCalls).toBe(1);
+    expect(fast.exchangeCalls).toBe(1);
   });
 
   test("requests a 900 second RS256 token for the configured audience and STS region", async () => {

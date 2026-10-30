@@ -22,10 +22,10 @@ import { normalizeDateFormatSpec, normalizeLocale } from "@stll/agent-input";
 import type {
   FieldDateFormat,
   FieldLookup,
+  fieldMetaToolInputSchema,
   FieldSource,
   FieldSourceKey,
   FieldValidation,
-  fieldMetaToolInputSchema,
 } from "@/api/lib/docx/types";
 import {
   CLEARED_FIELD_SOURCE,

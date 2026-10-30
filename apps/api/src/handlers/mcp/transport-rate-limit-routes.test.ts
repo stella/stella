@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import {
@@ -9,8 +8,11 @@ import {
   mcpTransportAddressRateLimitKey,
   mcpTransportRateLimitKey,
 } from "@/api/handlers/mcp/transport-rate-limit";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const createCountingContext = () => {
   let increments = 0;
@@ -50,16 +52,9 @@ describe("MCP transport route metering", () => {
     const transport = createCountingContext();
     const authentication = createCountingContext();
     let handlerRuns = 0;
-    const app = new Elysia()
-      .use(
-        rateLimit({
-          ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
-          context: transport.context,
-          generator: mcpTransportRateLimitKey,
-        }),
-      )
-      .use(
-        createMcpRoute({
+    await using app = serveForTest(
+      createHttpApp({
+        routes: createMcpRoute({
           handleMcpHttpRequest: async () => {
             handlerRuns += 1;
             return new Response("authentication required", { status: 401 });
@@ -69,8 +64,19 @@ describe("MCP transport route metering", () => {
             context: authentication.context,
             generator: mcpTransportAddressRateLimitKey,
           }),
+          // The production composition: the transport budget runs on the
+          // JSON-RPC transport routes only.
+          transportMiddleware: [
+            rateLimit({
+              ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
+              context: transport.context,
+              generator: mcpTransportRateLimitKey,
+            }),
+          ],
         }),
-      );
+        middleware: [errorBoundary],
+      }),
+    );
 
     const outcomes: Record<string, boolean> = {};
     for (const path of ROUTE_CENSUS) {
@@ -79,7 +85,7 @@ describe("MCP transport route metering", () => {
         handler: handlerRuns,
         transport: transport.increments(),
       };
-      await app.handle(
+      await app.fetch(
         new Request(`http://localhost${path}`, {
           body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
           headers: {

@@ -1,9 +1,9 @@
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
-  NO_ORGANIZATION_MODEL_DISPATCH,
   type ModelDispatchAdmission,
   type ModelDispatchScope,
+  NO_ORGANIZATION_MODEL_DISPATCH,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import type { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";

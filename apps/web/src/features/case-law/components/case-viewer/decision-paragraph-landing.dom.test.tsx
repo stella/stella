@@ -67,6 +67,42 @@ test("highlights the complete range, reveals folded text, focuses and scrolls to
   expect(first.hasAttribute("tabindex")).toBe(false);
 });
 
+test("an anchor landing highlights and scrolls to a table cell without an id", () => {
+  const { container } = render(null);
+  container.innerHTML =
+    '<article><table><tbody><tr><td data-anchor="table:block-1:0:1">Cited cell</td></tr></tbody></table></article>';
+  const cell = container.querySelector<HTMLElement>(
+    '[data-anchor="table:block-1:0:1"]',
+  );
+  if (cell === null) {
+    throw new Error("Expected table cell fixture");
+  }
+  expect(cell.hasAttribute("id")).toBe(false);
+  const scroll = mock(() => {});
+  cell.scrollIntoView = scroll;
+
+  const release = applyDecisionParagraphLanding(container, {
+    type: "anchor",
+    anchorId: "table:block-1:0:1",
+  });
+
+  expect(cell.dataset["readerLanding"]).toBe("");
+  expect(cell.classList.contains("bg-accent")).toBe(true);
+  expect(cell.classList.contains("text-accent-foreground")).toBe(true);
+  expect(container.ownerDocument.activeElement).toBe(cell);
+  expect(scroll).toHaveBeenCalledWith({
+    behavior: "instant",
+    block: "center",
+    inline: "nearest",
+  });
+
+  release?.();
+  expect(cell.dataset["readerLanding"]).toBeUndefined();
+  expect(cell.classList.contains("bg-accent")).toBe(false);
+  expect(cell.classList.contains("text-accent-foreground")).toBe(false);
+  expect(cell.hasAttribute("tabindex")).toBe(false);
+});
+
 test("valid missing ranges hold the start instead of retaining a stale passage", () => {
   const { container } = fixture();
   const scroll = mock(() => {});

@@ -1,0 +1,189 @@
+{
+  "format": 1,
+  "scenario": "deny-write-tool",
+  "provider": "openrouter",
+  "model": "openai/gpt-6-sol",
+  "entries": [
+    {
+      "type": "expect_outbound",
+      "label": "ask",
+      "request": {
+        "path": "/api/v1/chat/completions",
+        "headers": {
+          "accept": "text/event-stream",
+          "content-type": "application/json"
+        },
+        "body": {
+          "max_completion_tokens": 128000,
+          "messages": [
+            {
+              "content": "[system prompt]",
+              "role": "system"
+            },
+            {
+              "content": "Delete the draft",
+              "role": "user"
+            }
+          ],
+          "model": "openai/gpt-6-sol",
+          "service_tier": "default",
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "tools": [
+            "ask-user",
+            "request_secret",
+            "use_connector_secret",
+            "list_connectable_connectors",
+            "connect_connector",
+            "execute_typescript",
+            "discover_tools",
+            "load-skill",
+            "read-skill-resource",
+            "counterparty_check",
+            "update-entity-fields",
+            "list_templates",
+            "describe_template",
+            "fill_template",
+            "suggest_template_fields",
+            "search-chat-history",
+            "expand-chat-history",
+            "search-past-chats",
+            "create-document",
+            "review_folder_consistency",
+            "set_practice_jurisdictions",
+            "create_template",
+            "configure_template_fields",
+            "save_document",
+            "delete_document",
+            "set_field_value",
+            "save_matter",
+            "delete_matter",
+            "save_contact",
+            "delete_contact",
+            "save_task",
+            "delete_task",
+            "link_matter_contact",
+            "save_clause",
+            "delete_clause",
+            "save_playbook",
+            "run_playbook",
+            "create_reader_annotation",
+            "update_reader_annotation",
+            "delete_reader_annotation",
+            "add_matter_member",
+            "remove_matter_member",
+            "update_organization_settings",
+            "mcp__external__delete",
+            "spawn_subagents"
+          ]
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "tool-call"
+    },
+    {
+      "type": "expect_outbound",
+      "label": "after-denial",
+      "request": {
+        "path": "/api/v1/chat/completions",
+        "headers": {
+          "accept": "text/event-stream",
+          "content-type": "application/json"
+        },
+        "body": {
+          "max_completion_tokens": 128000,
+          "messages": [
+            {
+              "content": "[system prompt]",
+              "role": "system"
+            },
+            {
+              "content": "Delete the draft",
+              "role": "user"
+            },
+            {
+              "content": null,
+              "role": "assistant",
+              "tool_calls": [
+                {
+                  "function": {
+                    "arguments": "{\"name\":\"draft\"}",
+                    "name": "mcp__external__delete"
+                  },
+                  "id": "[id-1]",
+                  "type": "function"
+                }
+              ]
+            },
+            {
+              "content": "{\"error\":\"User declined tool execution\"}",
+              "role": "tool",
+              "tool_call_id": "[id-1]"
+            }
+          ],
+          "model": "openai/gpt-6-sol",
+          "service_tier": "default",
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "tools": [
+            "ask-user",
+            "request_secret",
+            "use_connector_secret",
+            "list_connectable_connectors",
+            "connect_connector",
+            "execute_typescript",
+            "discover_tools",
+            "load-skill",
+            "read-skill-resource",
+            "counterparty_check",
+            "update-entity-fields",
+            "list_templates",
+            "describe_template",
+            "fill_template",
+            "suggest_template_fields",
+            "search-chat-history",
+            "expand-chat-history",
+            "search-past-chats",
+            "create-document",
+            "review_folder_consistency",
+            "set_practice_jurisdictions",
+            "create_template",
+            "configure_template_fields",
+            "save_document",
+            "delete_document",
+            "set_field_value",
+            "save_matter",
+            "delete_matter",
+            "save_contact",
+            "delete_contact",
+            "save_task",
+            "delete_task",
+            "link_matter_contact",
+            "save_clause",
+            "delete_clause",
+            "save_playbook",
+            "run_playbook",
+            "create_reader_annotation",
+            "update_reader_annotation",
+            "delete_reader_annotation",
+            "add_matter_member",
+            "remove_matter_member",
+            "update_organization_settings",
+            "mcp__external__delete",
+            "spawn_subagents"
+          ]
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text"
+    }
+  ]
+}

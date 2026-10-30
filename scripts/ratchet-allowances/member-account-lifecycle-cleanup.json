@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "The member and account removal owners record one parent lifecycle event in the same transaction. Child cleanup adds no independent user action: removeOrganizationMemberInTransaction records membership removal, and verifyAndDeleteUser records the account-deletion request. Statement-scoped directives keep those existing event boundaries."
+}

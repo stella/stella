@@ -5,6 +5,7 @@ import { declareFailureClass } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -266,9 +267,7 @@ class ToolOutputContractDegradedError extends TaggedError(
 export type ToolOutputDegradeDefect = "undeclared_fields" | "unmapped_id";
 
 export type ToolOutputDegradeSource =
-  | "mcp"
-  | "run-registry-tool"
-  | "run-registry-write-tool";
+  "mcp" | "run-registry-tool" | "run-registry-write-tool";
 
 export const TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT =
   "tool_output.contract_degraded";
@@ -302,6 +301,11 @@ export const reportToolOutputDegrade = ({
     new ToolOutputContractDegradedError({
       message: `Tool output degraded (${defect}) at ${joinedPaths}`,
     }),
-    { defect, paths: joinedPaths, source, toolName },
+    handlerErrorContext(`chat.toolOutput.${source}.${toolName}.${defect}`, {
+      defect,
+      paths: joinedPaths,
+      source,
+      toolName,
+    }),
   );
 };

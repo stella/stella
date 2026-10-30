@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
-import * as ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -16,51 +15,16 @@ const CANDIDATE_SUFFIXES = [
   "/index.tsx",
 ];
 
-const collectStaticImports = (file: string, text: string) => {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false);
-  const imports: string[] = [];
-  for (const statement of source.statements) {
-    if (ts.isImportDeclaration(statement)) {
-      const clause = statement.importClause;
-      if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
-        continue;
-      }
-      const bindings = clause?.namedBindings;
-      if (
-        clause?.name === undefined &&
-        bindings !== undefined &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.length > 0 &&
-        bindings.elements.every((element) => element.isTypeOnly)
-      ) {
-        continue;
-      }
-      if (ts.isStringLiteral(statement.moduleSpecifier)) {
-        imports.push(statement.moduleSpecifier.text);
-      }
-      continue;
-    }
-    if (
-      !ts.isExportDeclaration(statement) ||
-      statement.isTypeOnly ||
-      statement.moduleSpecifier === undefined ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-    const clause = statement.exportClause;
-    if (
-      clause !== undefined &&
-      ts.isNamedExports(clause) &&
-      clause.elements.length > 0 &&
-      clause.elements.every((element) => element.isTypeOnly)
-    ) {
-      continue;
-    }
-    imports.push(statement.moduleSpecifier.text);
-  }
-  return imports;
-};
+const importScanner = new Bun.Transpiler({
+  loader: "tsx",
+  tsconfig: { compilerOptions: { jsx: "react" } },
+});
+const scriptImportScanner = new Bun.Transpiler({ loader: "ts" });
+const collectStaticImports = (file: string, text: string) =>
+  (file.endsWith("x") ? importScanner : scriptImportScanner)
+    .scanImports(text)
+    .filter(({ kind }) => kind === "import-statement")
+    .map(({ path }) => path);
 
 type WalkEagerGraphOptions = {
   root: string;

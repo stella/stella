@@ -1,4 +1,4 @@
-import { describe, expect, test, expectTypeOf } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
@@ -310,6 +310,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -369,6 +370,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -548,6 +550,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -570,6 +573,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -595,6 +599,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -662,5 +667,15 @@ describe("legal AST output identifiers", () => {
     expect(() =>
       defineMcpToolOutput(v.strictObject({ blocks: v.array(blockSchema) })),
     ).not.toThrow();
+  });
+
+  test("recursive block output keeps every citation target status visible", () => {
+    const contract = defineMcpToolOutput(
+      v.strictObject({ blocks: v.array(blockSchema) }),
+    );
+    const published = JSON.stringify(contract.outputSchema);
+    for (const status of ["identified", "unresolved", "legislation"]) {
+      expect(published).toContain(JSON.stringify(status));
+    }
   });
 });

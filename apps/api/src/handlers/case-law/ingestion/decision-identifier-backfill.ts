@@ -25,8 +25,8 @@ import {
   settledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
-  decisionIdentifierTypeOfCitation,
   decisionIdentifiersFromStoredMetadata,
+  decisionIdentifierTypeOfCitation,
   normalizeDecisionIdentifierIn,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -85,8 +85,7 @@ type CompleteBackfillCheckpoint = BackfillCheckpointBase & {
 };
 
 type BackfillCheckpoint =
-  | RunningBackfillCheckpoint
-  | CompleteBackfillCheckpoint;
+  RunningBackfillCheckpoint | CompleteBackfillCheckpoint;
 
 export type DecisionIdentifierBackfillGaps = {
   decisionIdentifierMismatches: number;

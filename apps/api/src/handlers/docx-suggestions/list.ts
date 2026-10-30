@@ -1,0 +1,237 @@
+import { panic, Result } from "better-result";
+import { and, asc, eq } from "drizzle-orm";
+import * as v from "valibot";
+
+import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
+import { numberFromString } from "@stll/api-contract/http-input";
+
+import { docxSuggestions } from "@/api/db/schema";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+
+import { docxSuggestionCursor } from "./cursor";
+import { DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT } from "./schemas";
+
+/**
+ * Where a suggestion came from, as the reader groups it: a document review
+ * stages each finding's fix as a suggestion of its own, everything else was
+ * proposed in the chat over the document. Named rather than shipping the
+ * finding id, because a client listing suggestions has no run to resolve one
+ * against; named rather than a flag, because a third producer would need a
+ * name here rather than a second boolean.
+ *
+ * The response type is what the web client's own origin union is checked
+ * against, so the two cannot drift apart without failing that build.
+ */
+const DOCX_SUGGESTION_ORIGIN = {
+  chat: "chat",
+  review: "review",
+} as const;
+
+type DocxSuggestionOrigin =
+  (typeof DOCX_SUGGESTION_ORIGIN)[keyof typeof DOCX_SUGGESTION_ORIGIN];
+
+type DocxSuggestionRow = typeof docxSuggestions.$inferSelect;
+
+const DOCX_SUGGESTION_LIST_COLUMNS = {
+  id: docxSuggestions.id,
+  opPayload: docxSuggestions.opPayload,
+  comment: docxSuggestions.comment,
+  severity: docxSuggestions.severity,
+  area: docxSuggestions.area,
+  status: docxSuggestions.status,
+  appliedMode: docxSuggestions.appliedMode,
+  createdAt: docxSuggestions.createdAt,
+  originReviewFindingId: docxSuggestions.originReviewFindingId,
+} as const;
+
+const UNPROJECTED_DOCX_SUGGESTION_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the entity feature gate.
+  "workspaceId", // The authorized route already identifies the matter.
+  "entityId", // The route parameter already identifies the document.
+  "originThreadId", // The response exposes only the user-facing origin kind.
+  "sourceDataWorkspaceIds", // RLS enforces source visibility; clients do not need its policy inputs.
+  "resolvedByUserId", // The list displays resolution state, not the internal actor id.
+  "resolvedAt", // Resolution state is sufficient for the current list contract.
+] as const satisfies readonly (keyof DocxSuggestionRow)[];
+
+type MissingDocxSuggestionColumn = UnprojectedColumns<
+  DocxSuggestionRow,
+  typeof DOCX_SUGGESTION_LIST_COLUMNS,
+  (typeof UNPROJECTED_DOCX_SUGGESTION_COLUMNS)[number]
+>;
+type UnexpectedDocxSuggestionColumn = UnbackedProjectionKeys<
+  DocxSuggestionRow,
+  typeof DOCX_SUGGESTION_LIST_COLUMNS,
+  (typeof UNPROJECTED_DOCX_SUGGESTION_COLUMNS)[number]
+>;
+
+true satisfies MissingDocxSuggestionColumn extends never ? true : never;
+true satisfies UnexpectedDocxSuggestionColumn extends never ? true : never;
+
+// Annotated: an inline ternary in the projection literal would widen to
+// `string`, and the client would lose the union.
+const suggestionOrigin = (
+  originReviewFindingId: string | null,
+): DocxSuggestionOrigin =>
+  originReviewFindingId === null
+    ? DOCX_SUGGESTION_ORIGIN.chat
+    : DOCX_SUGGESTION_ORIGIN.review;
+
+/**
+ * List an entity's persisted suggestions (pending and resolved), oldest
+ * first, cursor-paginated. `entity read` permission (workspace-level read
+ * grant). The client re-derives block id / summary / inline preview from
+ * `opPayload` against the live document on hydration, so the projection is
+ * minimal.
+ */
+const listDocxSuggestions = createSafeHandler(
+  {
+    contract: "patch",
+    description:
+      "List the redline suggestions queued on one document, oldest first: " +
+      "each suggestion's id, its document operation, comment, severity, " +
+      "area, status (pending, accepted, rejected) and origin (chat or " +
+      "review). Filter by status to find what still awaits a decision; pass " +
+      "a suggestion id to docx-suggestions.resolve or docx-suggestions.revert.",
+    permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "document_processing",
+      consumesServices: false,
+    },
+    access: "read",
+    params: workspaceParams({ entityId: resourceIdSchema("entity") }),
+    query: v.object({
+      cursor: v.optional(paginationCursorSchema()),
+      limit: v.optional(
+        numberFromString(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(1),
+            v.maxValue(DOCX_SUGGESTIONS_PAGE_SIZE_MAX),
+          ),
+        ),
+      ),
+      status: v.optional(v.picklist(["pending", "accepted", "rejected"])),
+    }),
+  },
+  async function* ({ workspaceId, params, query, safeDb }) {
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT,
+    );
+
+    const conditions = [
+      eq(docxSuggestions.workspaceId, workspaceId),
+      eq(docxSuggestions.entityId, params.entityId),
+    ];
+    if (query.status !== undefined) {
+      conditions.push(eq(docxSuggestions.status, query.status));
+    }
+    if (query.cursor !== undefined) {
+      const decodedCursor = docxSuggestionCursor.decode(query.cursor);
+      if (decodedCursor === null) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+      let cursor = decodedCursor;
+      if (cursor.timestamp.precision === "milliseconds") {
+        // The legacy timestamp cannot order rows inside its millisecond. Its
+        // id can: resolve that row's exact timestamp without leaving the DB's
+        // precision, scoped to the same entity and workspace as the list.
+        const [boundary] = yield* Result.await(
+          safeDb((tx) =>
+            tx
+              .select({
+                createdAtCursor:
+                  docxSuggestionCursor.cursorValue.as("created_at_cursor"),
+              })
+              .from(docxSuggestions)
+              .where(
+                and(
+                  eq(docxSuggestions.workspaceId, workspaceId),
+                  eq(docxSuggestions.entityId, params.entityId),
+                  eq(docxSuggestions.id, cursor.id),
+                ),
+              )
+              .limit(1),
+          ),
+        );
+        if (boundary === undefined) {
+          return Result.ok({ items: [], limit, nextCursor: null });
+        }
+        const exactCursor = docxSuggestionCursor.decode(
+          docxSuggestionCursor.encode(boundary.createdAtCursor, cursor.id),
+        );
+        if (exactCursor === null) {
+          return panic("Encoded suggestion cursor boundary did not decode");
+        }
+        cursor = exactCursor;
+      }
+      const keyset = docxSuggestionCursor.keysetAfter({
+        cursor,
+        idColumn: docxSuggestions.id,
+        direction: "ascending",
+      });
+      if (keyset !== undefined) {
+        conditions.push(keyset);
+      }
+    }
+
+    const rows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            ...DOCX_SUGGESTION_LIST_COLUMNS,
+            createdAtCursor:
+              docxSuggestionCursor.cursorValue.as("created_at_cursor"),
+          })
+          .from(docxSuggestions)
+          .where(and(...conditions))
+          .orderBy(asc(docxSuggestions.createdAt), asc(docxSuggestions.id))
+          .limit(limit + 1),
+      ),
+    );
+
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (item) =>
+        docxSuggestionCursor.encode(item.createdAtCursor, item.id),
+    });
+
+    // `createdAtCursor` is the serialization projection, not part of the
+    // response contract; drop it after the page is cut.
+    return Result.ok({
+      ...page,
+      items: page.items.map((item) => ({
+        id: item.id,
+        opPayload: item.opPayload,
+        comment: item.comment,
+        severity: item.severity,
+        area: item.area,
+        status: item.status,
+        appliedMode: item.appliedMode,
+        createdAt: item.createdAt,
+        origin: suggestionOrigin(item.originReviewFindingId),
+      })),
+    });
+  },
+);
+
+export default listDocxSuggestions;

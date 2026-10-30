@@ -9,6 +9,8 @@ import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug
 
 export const publicRouteExceptions: Record<string, string> = {
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
+  "/auth/handoff":
+    "The handoff confirmation route requires root-loader state captured from an MCP handoff; its panel is covered separately.",
   "/knowledge/clauses:anonymous":
     "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
   "/knowledge/styles:anonymous":
@@ -22,8 +24,10 @@ export const publicRouteExceptions: Record<string, string> = {
 const absentText = { type: "absent", reason: "not_published" } as const;
 
 const decision = {
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  citationCount: 0,
   citationsFrom: [],
   citationsNextCursor: null,
   citationsTo: [],
@@ -172,6 +176,9 @@ export const publicFixtureResponse = (
         color: null,
         registrationNumber: null,
         taxId: null,
+        vatId: null,
+        vatPayer: false,
+        invoiceLanguage: null,
         bankAccounts: [],
         billingAddress: null,
         defaultHourlyRate: null,

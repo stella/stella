@@ -3,8 +3,8 @@ import { eq, sql } from "drizzle-orm";
 
 import {
   isSingleViewLayout,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   type ViewLayoutType,
 } from "@stll/api-contract";
 
@@ -24,8 +24,8 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  rejectAvtLayout,
   avtLayoutErrorDetail,
+  rejectAvtLayout,
 } from "@/api/lib/lists/verification/view-layout";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";

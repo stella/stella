@@ -3,20 +3,20 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec";
 import {
-  EventType,
   convertSchemaToJsonSchema,
+  EventType,
   parsePartialJSON,
 } from "@tanstack/ai";
 import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
-  TokenUsage,
   StructuredOutputPart,
   SystemPrompt,
+  TokenUsage,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -39,8 +39,8 @@ import type {
   OrgAIConfig,
 } from "@/api/lib/ai-config";
 import {
-  classifyAIError,
   type AIErrorKind,
+  classifyAIError,
   providerErrorBody,
   providerStatusCode,
 } from "@/api/lib/ai-error";
@@ -63,8 +63,8 @@ import {
 } from "@/api/lib/chat/openrouter-credential";
 import { OUTPUT_CEILING_OPTION } from "@/api/lib/chat/output-ceiling";
 import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   checkManagedProviderAvailable,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";
@@ -200,9 +200,7 @@ type TanStackTextForTaskOptions = GenerateTanStackBaseOptions &
  * run. `allow-incomplete` returns whatever text arrived.
  */
 export type TanStackTextFinishPolicy =
-  | "allow-incomplete"
-  | "allow-output-ceiling"
-  | "require-complete";
+  "allow-incomplete" | "allow-output-ceiling" | "require-complete";
 
 /**
  * A bound on one awaited model call, owned by the call rather than threaded in
@@ -278,6 +276,7 @@ const cancelledGenerationError = (): HandlerError =>
   classifyFailure(
     new HandlerError({
       status: 502,
+      code: "internal_error",
       message: CANCELLED_GENERATION_MESSAGE,
       cause: new AIGenerationCancelledError({
         message: CANCELLED_GENERATION_MESSAGE,
@@ -678,8 +677,7 @@ const admittedAbortController = ({
   userId,
   abortController,
 }: Pick<AdmittedChatRunOptions, "admission" | "userId" | "abortController">):
-  | AbortController
-  | undefined => {
+  AbortController | undefined => {
   switch (admission.type) {
     case "organization": {
       // Checks the proof still admits work, then joins its signal.
@@ -1866,6 +1864,7 @@ const streamTanStackStructuredOutput = async function* <
   if (!completed) {
     throw new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "TanStack AI structured output stream ended before completion.",
     });
   }
@@ -1894,7 +1893,7 @@ export const resolveTanStackTextModel = async (
   options: ResolveTextModelOptions,
   credentials: ReturnType<
     typeof getManagedOpenRouterCredentialProvider
-  > = getManagedOpenRouterCredentialProvider(),
+  > = getManagedOpenRouterCredentialProvider(options.admission.modelTier),
 ): Promise<ResolvedTanStackTextModel> => {
   // Every inference path resolves its model here with the proof that its
   // action was admitted; the type requires the proof, this binds it to the
@@ -1936,7 +1935,7 @@ export const resolveTanStackTextModel = async (
       if (Result.isError(availability)) {
         throw availability.error;
       }
-      const configuration = getManagedOpenRouterConfiguration();
+      const configuration = getManagedOpenRouterConfiguration(modelTier);
       const credential = await credentials.get();
       if (Result.isError(credential)) {
         throw credential.error;

@@ -1,14 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyContentType } from "@/lib/api-contract";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
-  WorkspaceProperty,
   SelectPropertyOption,
+  WorkspaceProperty,
 } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 
@@ -31,7 +34,8 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async ({
       name,
       contentType,
@@ -62,7 +66,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
           ...(fallback !== undefined ? { fallback } : {}),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       // Reflect the actor's own write immediately instead of waiting on
@@ -73,7 +77,11 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateProperty:failure",
+        scope: { type: "handler", handlerId: "useCreateProperty:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -96,34 +104,40 @@ export const useCreatePropertiesBatch = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({ items }: { items: CreatePropertySpec[] }) => {
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
+    mutationFn: async ({ items }: { items: CreatePropertySpec[] }, request) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .batch.put({
-          items: items.map((item) => ({
-            name: item.name,
-            contentType: item.contentType,
-            ...(item.toolType ? { toolType: item.toolType } : {}),
-            ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
-            ...(item.dependencies && item.dependencies.length > 0
-              ? {
-                  dependencies: item.dependencies.map((dep) => ({
-                    dependsOnPropertyId: toSafeId<"property">(
-                      dep.dependsOnPropertyId,
-                    ),
-                    condition: dep.condition,
-                  })),
-                }
-              : {}),
-            ...(item.options && item.options.length > 0
-              ? { options: item.options }
-              : {}),
-            ...(item.fallback !== undefined ? { fallback: item.fallback } : {}),
-          })),
-        });
+        .batch.put(
+          {
+            items: items.map((item) => ({
+              name: item.name,
+              contentType: item.contentType,
+              ...(item.toolType ? { toolType: item.toolType } : {}),
+              ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
+              ...(item.dependencies && item.dependencies.length > 0
+                ? {
+                    dependencies: item.dependencies.map((dep) => ({
+                      dependsOnPropertyId: toSafeId<"property">(
+                        dep.dependsOnPropertyId,
+                      ),
+                      condition: dep.condition,
+                    })),
+                  }
+                : {}),
+              ...(item.options && item.options.length > 0
+                ? { options: item.options }
+                : {}),
+              ...(item.fallback !== undefined
+                ? { fallback: item.fallback }
+                : {}),
+            })),
+          },
+          request,
+        );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -131,7 +145,14 @@ export const useCreatePropertiesBatch = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreatePropertiesBatch:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useCreatePropertiesBatch:failure",
+        },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -189,7 +210,11 @@ export const useUpdateProperty = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateProperty:failure",
+        scope: { type: "handler", handlerId: "useUpdateProperty:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -212,7 +237,7 @@ export const suggestPropertyPrompt = async ({
   currentPrompt,
   instruction,
 }: SuggestPromptVars) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["suggest-prompt"].post({
@@ -232,7 +257,11 @@ export const useSuggestPrompt = () => {
   return useMutation({
     mutationFn: suggestPropertyPrompt,
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useSuggestPrompt:failure",
+        scope: { type: "handler", handlerId: "useSuggestPrompt:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -263,7 +292,11 @@ export const useDeleteProperty = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteProperty:failure",
+        scope: { type: "handler", handlerId: "useDeleteProperty:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

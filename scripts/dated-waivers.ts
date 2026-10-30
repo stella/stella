@@ -12,6 +12,7 @@ import {
   DOC_SOURCE_EXCLUSIONS,
   type NoLlmsTxtExclusion,
 } from "../.claude/mcp/doc-sources";
+import { PENDING_CONTRACT_MIGRATIONS } from "../apps/api/src/lib/db/pending-contract-migrations/registry";
 import {
   readReleaseAgeExceptions,
   readTemporaryExcludes,
@@ -20,9 +21,9 @@ import {
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
 import {
   parseRegistry,
+  type QuarantineEntry,
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   splitTestId,
-  type QuarantineEntry,
 } from "./flaky-test-quarantine";
 import { parseLedger } from "./suppression-waivers";
 
@@ -42,6 +43,8 @@ export const ZERO_AGE_OVERRIDE =
   /[ \t]--minimum-release-age(?:=|[ \t]+)0(?=$|[\s"'`;&|)])/u;
 
 export const DOC_SOURCE_FILE = ".claude/mcp/doc-sources.ts";
+export const PENDING_CONTRACT_MIGRATIONS_SOURCE =
+  "apps/api/src/lib/db/pending-contract-migrations/registry.ts";
 
 export const RECHECK_INSTRUCTIONS = {
   "no-llms-txt": "Check canonical llms.txt and register an available source.",
@@ -56,9 +59,18 @@ export const RECHECK_INSTRUCTIONS = {
     "Run the test without its quarantine entry, fix its flake, and remove the entry.",
   "suppression-waiver":
     "Recheck the suppression invariant and evidence; remove the suppression.",
+  "pending-contract-migration":
+    "Ship the contract step as a drizzle migration once its older readers are retired, or renew the deadline with the reason in review.",
 } as const;
 
 export type ProbeKind = keyof typeof RECHECK_INSTRUCTIONS;
+
+/**
+ * The llms.txt URL a documentation waiver's recheck probes: the first one its
+ * explanation names, or "" when it names none and so cannot be rechecked.
+ */
+export const docProbeUrl = (explanation: string): string =>
+  /https:\/\/[^\s()]+\/llms\.txt\b/u.exec(explanation)?.at(0) ?? "";
 
 export type DatedWaiver = {
   source: string;
@@ -99,6 +111,10 @@ type CollectWaiversOptions = {
   releaseAgeSources: Readonly<Record<string, string>>;
   quarantineSources?: Readonly<Record<string, string>>;
   flakyTestQuarantines?: readonly QuarantineEntry[];
+  pendingContractMigrations?: readonly {
+    name: string;
+    expiresAt: string;
+  }[];
 };
 
 export const collectWaivers = ({
@@ -109,6 +125,7 @@ export const collectWaivers = ({
   releaseAgeSources,
   quarantineSources = {},
   flakyTestQuarantines = [],
+  pendingContractMigrations = [],
 }: CollectWaiversOptions): DatedWaiver[] => {
   const entries: DatedWaiver[] = docs.map((entry) => ({
     source: DOC_SOURCE_FILE,
@@ -122,7 +139,7 @@ export const collectWaivers = ({
         "bun",
         "scripts/dated-waiver-probes.ts",
         "--doc-url",
-        /https:\/\/[^\s()]+\/llms\.txt\b/u.exec(entry.explanation)?.at(0) ?? "",
+        docProbeUrl(entry.explanation),
       ],
       attempts: NETWORK_ATTEMPTS,
     },
@@ -247,6 +264,20 @@ export const collectWaivers = ({
       },
     });
   }
+  const pendingSource = read(PENDING_CONTRACT_MIGRATIONS_SOURCE);
+  for (const entry of pendingContractMigrations) {
+    entries.push({
+      source: PENDING_CONTRACT_MIGRATIONS_SOURCE,
+      line: sourceLine(pendingSource, entry.name),
+      id: entry.name,
+      kind: "pending-contract-migration",
+      expiresAt: entry.expiresAt,
+      probe: {
+        command: ["test", "-d", `apps/api/drizzle/${entry.name}`],
+        attempts: TEST_ATTEMPTS,
+      },
+    });
+  }
   const identities = new Set<string>();
   for (const entry of entries) {
     expiryInstant(entry.expiresAt);
@@ -286,11 +317,13 @@ export const waiverWarnings = (
   );
 
 // How the per-change gate treats an elapsed waiver. An elapsed release-age
-// exclusion is the owner's cleanup (dated-waiver-healing opens it), and an
+// exclusion is the owner's cleanup (dated-waiver-healing opens it) and stops
+// exempting new pins in scripts/check-lockfile-release-ages.ts, and an
 // elapsed flaky-test quarantine is enforced on main by the scheduled
 // flaky-test-quarantine workflow, which fails naming its owner: neither is a defect
 // of whichever change is under review, so pull requests and merge groups only
-// annotate them. Every other elapsed waiver, including a dated test quarantine
+// annotate them. Dependency acceptance dates warn unless their source changes.
+// Every other elapsed waiver, including a dated test quarantine
 // that still skips its test, keeps failing the gate.
 export const EXPIRY_AT_CHANGE_GATE = {
   "no-llms-txt": "fail",
@@ -300,6 +333,7 @@ export const EXPIRY_AT_CHANGE_GATE = {
   "quarantined-test": "fail",
   "flaky-test-quarantine": "annotate",
   "suppression-waiver": "fail",
+  "pending-contract-migration": "fail",
 } as const satisfies Record<ProbeKind, "annotate" | "fail">;
 
 const isExpired = (entry: DatedWaiver, now: Date): boolean =>
@@ -325,7 +359,8 @@ export const expiredWaiverAnnotations = (
  * `changedFiles`: an expiry fails it only when the change touches the file that
  * declares the waiver (adding, renewing or editing it, or the waived code a
  * test quarantine sits on). Time alone never fails an unrelated change; the
- * scheduled run on the default branch checks every waiver and alerts owners.
+ * scheduled run checks other waivers; dependency acceptance dates remain warnings
+ * until a change touches the acceptance file.
  */
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
@@ -337,12 +372,37 @@ export const expiredWaiverFailures = (
       (entry) =>
         EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
         isExpired(entry, now) &&
-        (changedFiles === undefined || changedFiles.has(entry.source)),
+        (entry.kind === "dependency-audit"
+          ? changedFiles?.has(entry.source) === true
+          : changedFiles === undefined || changedFiles.has(entry.source)),
     )
     .map(
       (entry) =>
         `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
     );
+
+/**
+ * Due waivers this check neither fails nor already annotates: each warns on
+ * the file declaring it from WARNING_DAYS before its expiry, so the owner
+ * renews or removes it before the date, and keeps warning after the date on
+ * changes that do not touch that file.
+ */
+export const dueWaiverWarnings = (
+  entries: readonly DatedWaiver[],
+  now: Date,
+  changedFiles?: ReadonlySet<string>,
+): string[] =>
+  waiverWarnings(
+    entries.filter(
+      (entry) =>
+        !isExpired(entry, now) ||
+        (EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
+          (entry.kind === "dependency-audit"
+            ? changedFiles?.has(entry.source) !== true
+            : changedFiles !== undefined && !changedFiles.has(entry.source))),
+    ),
+    now,
+  );
 
 // Runs one test through its owning package script, filtered by its title.
 type TestProbeOptions = { file: string; title: string };
@@ -462,8 +522,8 @@ export const readTestQuarantines = (
   return entries;
 };
 
-// Only expiry-bearing declarations in policy/config files enter the census.
-// Ordinary timestamps, historical dates and runtime credential TTLs do not.
+// Expiry-bearing declarations in policy/config files and application/package
+// source enter the census. Ordinary timestamps and historical dates do not.
 export const uncoveredExpirySources = (
   sources: Readonly<Record<string, string>>,
   covered: ReadonlySet<string>,
@@ -513,10 +573,12 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   );
   const policyFiles = tracked.filter(
     (file) =>
-      /(?:^(?:scripts\/|\.claude\/mcp\/|\.oxlint-plugins\/|\.github\/)|config|baseline|waivers|allowances|bunfig\.toml$)/u.test(
-        file,
-      ) &&
-      /\.(?:ts|json|toml|ya?ml)$/u.test(file) &&
+      ((/^(?:apps|packages)\//u.test(file) &&
+        /\.(?:[cm]?tsx?|json)$/u.test(file)) ||
+        (/(?:^(?:scripts\/|\.claude\/mcp\/|\.oxlint-plugins\/|\.github\/)|config|baseline|waivers|allowances|bunfig\.toml$)/u.test(
+          file,
+        ) &&
+          /\.(?:ts|json|toml|ya?ml)$/u.test(file))) &&
       !/(?:\.test\.|\.spec\.|fixtures\/|__fixtures__\/)/u.test(file),
   );
   const uncovered = uncoveredExpirySources(
@@ -527,6 +589,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
       "scripts/dependency-audit-baseline.json",
+      PENDING_CONTRACT_MIGRATIONS_SOURCE,
       ...RELEASE_AGE_EXCEPTION_SOURCES,
       ...files,
     ]),
@@ -564,6 +627,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     flakyTestQuarantines: flakyTestQuarantines(
       read(FLAKY_TEST_QUARANTINE_FILE),
     ),
+    pendingContractMigrations: PENDING_CONTRACT_MIGRATIONS,
     quarantineSources: Object.fromEntries(
       tracked
         .filter((file) => /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file))
@@ -608,6 +672,9 @@ if (import.meta.main) {
               .split("\0")
               .filter((file) => file !== ""),
           );
+    for (const warning of dueWaiverWarnings(entries, now, changedFiles)) {
+      console.log(warning);
+    }
     const failures = expiredWaiverFailures(entries, now, changedFiles);
     if (failures.length > 0) {
       console.error(failures.join("\n"));

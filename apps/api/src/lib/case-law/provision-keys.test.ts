@@ -5,12 +5,12 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   PROVISION_KEY_MAX_BYTES,
-  PROVISION_KEYS_MAX_SERIALIZED_BYTES,
   PROVISION_KEYS_MAX_COUNT,
+  PROVISION_KEYS_MAX_SERIALIZED_BYTES,
   provisionFilterKey,
   provisionKey,
-  provisionKeysOfLinks,
   type ProvisionKeyFilter,
+  provisionKeysOfLinks,
 } from "@/api/lib/case-law/provision-keys";
 
 const WORK = "262/2006 Sb.";

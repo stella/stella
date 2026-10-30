@@ -22,8 +22,12 @@ const CHAT_FETCH_TIMEOUT_MS = 600_000;
  * `APIError` that `captureError` already lifts onto the reported event.
  *
  * Only a refused response is read; a 2xx stream is handed on untouched.
+ * The rejoin probe reads its refusals the same way, so a session that ended
+ * mid-answer still reaches the page as the server's 401.
  */
-const chatResponseError = async (response: Response): Promise<APIError> => {
+export const chatResponseError = async (
+  response: Response,
+): Promise<APIError> => {
   const body = await Result.tryPromise(
     async (): Promise<unknown> => await response.json(),
   );

@@ -11,7 +11,7 @@ import type {
   ProposalProjection,
 } from "@/components/entity-views/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { InboxView } from "@/lib/inbox/queries";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { localISODate } from "@/lib/local-iso-date";
@@ -58,7 +58,7 @@ export const entityViewRowsOptions = ({
     ],
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ signal, pageParam }) => {
-      const page = unwrapEden(
+      const page = unwrapApiResponse(
         await api["entity-views"]["query-window"].post(
           {
             scope:
@@ -71,7 +71,7 @@ export const entityViewRowsOptions = ({
             filters: layout.filters,
             sorts: layout.sorts,
             includeAssignees: true,
-            fieldMode: "full",
+            fieldMode: "visible",
             inboxView,
             asOf,
             ...(pageParam ? { cursor: pageParam } : {}),
@@ -142,5 +142,5 @@ export const entityViewsOptions = (organizationId: string, userId: string) =>
   queryOptions({
     queryKey: ["entity-view-layouts", organizationId, userId],
     queryFn: async ({ signal }) =>
-      unwrapEden(await api["entity-views"].get({ fetch: { signal } })),
+      unwrapApiResponse(await api["entity-views"].get({ fetch: { signal } })),
   });

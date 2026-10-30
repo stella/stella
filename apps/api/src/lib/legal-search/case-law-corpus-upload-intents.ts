@@ -1,8 +1,8 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -23,6 +23,7 @@ import {
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { reclaimCorpusUpload } from "@/api/lib/legal-search/corpus-storage";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const CLEANUP_RETRY_MAX_DELAY_MS = DAY_IN_MS;
 const CLEANUP_RETRY_UNIT_MS = 60 * 1000;
@@ -409,8 +410,7 @@ const recordCorpusPackRefsTx = async (
 };
 
 export type CaseLawCorpusUploadApplyResult =
-  | { type: "applied" }
-  | { type: "superseded" };
+  { type: "applied" } | { type: "superseded" };
 
 type SettleReservedCaseLawCorpusUploadOptions = {
   /**
@@ -882,10 +882,13 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
           catch: (cause) => cause,
         });
         if (Result.isError(released)) {
-          captureError(released.error, {
-            corpusUploadIntentId: row.id,
-            step: "reconcileCaseLawCorpusUploadIntents.reclaim",
-          });
+          captureError(
+            released.error,
+            handlerErrorContext("legalsearch.cleanupResults.released_error", {
+              corpusUploadIntentId: row.id,
+              step: "reconcileCaseLawCorpusUploadIntents.reclaim",
+            }),
+          );
           return null;
         }
         switch (released.value.type) {

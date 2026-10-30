@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -36,7 +37,7 @@ const setup = ({
     request: new Request(
       "https://api.example.test/v1/chat/tool-grants/coverage",
     ),
-    route: "/v1/chat/tool-grants/coverage",
+    route: "/v1/chat/tool-grants/coverage" satisfies ApiRoutePath,
   });
   return context;
 };

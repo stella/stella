@@ -31,8 +31,8 @@ import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-repla
 import {
   keptHeaders,
   MAX_RESPONSE_BYTES,
-  offeredModel,
   newRedaction,
+  offeredModel,
   recordOne,
   sanitizeEventPayload,
   sanitizeJson,

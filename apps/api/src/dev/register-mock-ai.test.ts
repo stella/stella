@@ -9,6 +9,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -111,11 +112,11 @@ const novelSchema = v.strictObject({
 });
 
 // A required-nullable ISO-date leaf: the `"mock"` string primitive fails
-// `v.isoDate()`, so only synthesizing `null` for a nullable field keeps this
+// `v.isoDate(), API_CALENDAR_DATE_CHECK`, so only synthesizing `null` for a nullable field keeps this
 // parseable. Under the Google projection the field arrives as
 // `nullable: true` rather than an `anyOf` null branch.
 const nullableIsoDateSchema = v.strictObject({
-  when: v.nullable(v.pipe(v.string(), v.isoDate())),
+  when: v.nullable(apiDateSchema),
 });
 
 // A genuinely optional (not nullable) field: valid to omit, invalid as null.

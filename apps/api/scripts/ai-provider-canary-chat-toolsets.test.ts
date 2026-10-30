@@ -13,8 +13,8 @@ import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
-  FEATURE_REGISTRY,
   CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  FEATURE_REGISTRY,
 } from "@/api/lib/feature-access/registry";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";

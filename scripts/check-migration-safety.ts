@@ -29,6 +29,7 @@ import { createSha256 } from "@stll/sha256/node";
 
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
+import { PENDING_CONTRACT_MIGRATIONS } from "../apps/api/src/lib/db/pending-contract-migrations/registry";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
 import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
@@ -39,6 +40,9 @@ type Statement = {
   identifiers: { index: number; name: string }[];
   literals: { index: number; end: number; value: string }[];
   executableIndexHint?: boolean;
+  // This statement runs EXECUTE in a DO block whose literals hold an
+  // operation the pre-deploy phase refuses.
+  executableRefusedOperation?: boolean;
   // Comment, string, and identifier content masked to spaces so keyword scans
   // cannot be fooled by literals.
   text: string;
@@ -53,6 +57,9 @@ type Statement = {
   // Start line of the outermost statement whose dollar-quoted body surfaced
   // this one. An acknowledgement above that statement also covers this one.
   enclosingLine?: number;
+  // A dollar-quoted DO/routine body contains a loop plus a relation read or
+  // write. The body is inspected after comments and literals are masked.
+  rowLoop?: boolean;
 };
 
 type GuardedCategory = (typeof GUARDED_CATEGORIES)[number];
@@ -116,6 +123,7 @@ const GUARDED_CATEGORIES = [
   "destructive-change",
   "bulk-backfill",
   "access-control",
+  "schema-contract",
 ] as const;
 
 const GUARDED_CATEGORY_GUIDANCE = {
@@ -125,6 +133,8 @@ const GUARDED_CATEGORY_GUIDANCE = {
     "Migrations should be fast, additive DDL. Move bulk or idempotent backfills to an out-of-band batched script (see the pattern in apps/api/src/scripts/backfill-case-law-slugs.ts), or add a bounded WHERE clause.",
   "access-control":
     "Privilege, ownership, and policy changes widen or shift data access. Confirm least privilege and workspace isolation are preserved.",
+  "schema-contract":
+    "Ship uniqueness after compatible writers: move the SQL to the pending-contract registry, or name the writers that already enforce it in a typed acknowledgement.",
 } as const satisfies Record<GuardedCategory, string>;
 
 const ACKNOWLEDGEMENT_MARKER_PATTERN =
@@ -137,6 +147,15 @@ const LINE_COMMENT_PATTERN = /^\s*--/u;
 const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 
 const DEFAULT_MIGRATIONS_DIR = "apps/api/drizzle";
+const PENDING_CONTRACT_MIGRATIONS_DIR =
+  "apps/api/src/lib/db/pending-contract-migrations";
+// Migrations at or before this timestamp were already immutable when the
+// uniqueness contract rule shipped. New history must sort after this cutoff;
+// do not extend it when adding migrations.
+const UNIQUE_CONTRACT_MIGRATION_CUTOFF = "20261027160600";
+const PENDING_CONTRACT_SQL_FILES = new Set(
+  PENDING_CONTRACT_MIGRATIONS.map(({ name }) => `${name}.sql`),
+);
 // Migrations applied before the current rule set. Shared with squawk via
 // scripts/check-migrations.sh. Entries are immutable migrations, so the list
 // only shrinks (scripts/check-migration-baseline.ts); a listed file that no
@@ -410,7 +429,113 @@ const isCreateTableAsQuery = (statement: string): boolean => {
   return firstParenthesis === -1 || asQuery.index < firstParenthesis;
 };
 
+type UniquenessToken = { kind: "word" | "punctuation"; value: string };
+
+const isUniquenessWordCharacter = (char: string): boolean => {
+  const code = char.codePointAt(0) ?? -1;
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    code === 95 ||
+    (code >= 97 && code <= 122)
+  );
+};
+
+const uniquenessTokens = (statement: string): UniquenessToken[] => {
+  const tokens: UniquenessToken[] = [];
+  for (let index = 0; index < statement.length;) {
+    const char = statement[index] ?? "";
+    if (char === "(" || char === ")" || char === ",") {
+      tokens.push({ kind: "punctuation", value: char });
+      index++;
+      continue;
+    }
+    if (!isUniquenessWordCharacter(char)) {
+      index++;
+      continue;
+    }
+    const start = index;
+    while (
+      index < statement.length &&
+      isUniquenessWordCharacter(statement[index] ?? "")
+    ) {
+      index++;
+    }
+    tokens.push({
+      kind: "word",
+      value: statement.slice(start, index).toUpperCase(),
+    });
+  }
+  return tokens;
+};
+
+const isUniquenessKeyword = (
+  tokens: UniquenessToken[],
+  index: number,
+): boolean => {
+  const token = tokens[index];
+  return (
+    token?.kind === "word" &&
+    (token.value === "UNIQUE" ||
+      token.value === "EXCLUDE" ||
+      (token.value === "PRIMARY" && tokens[index + 1]?.value === "KEY"))
+  );
+};
+
+// ALTER TABLE's ADD grammar has two uniqueness-producing branches: table
+// constraints and column definitions. Their contract keyword is at the action's
+// top level, while commas in modifiers such as INCLUDE are parenthesized.
+const addsUniquenessContract = (tokens: UniquenessToken[]): boolean => {
+  if (tokens[0]?.value !== "ALTER" || tokens[1]?.value !== "TABLE") {
+    return false;
+  }
+
+  let depth = 0;
+  let actionIsAdd = false;
+  for (let index = 2; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token?.value === "(") {
+      depth++;
+      continue;
+    }
+    if (token?.value === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth !== 0) {
+      continue;
+    }
+    if (token?.value === ",") {
+      actionIsAdd = false;
+      continue;
+    }
+    if (!actionIsAdd) {
+      actionIsAdd = token?.value === "ADD";
+      continue;
+    }
+    if (isUniquenessKeyword(tokens, index)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const addsUniqueIndex = (tokens: UniquenessToken[]): boolean =>
+  tokens[0]?.value === "CREATE" &&
+  tokens[1]?.value === "UNIQUE" &&
+  tokens[2]?.value === "INDEX";
+
 const GUARDED_RULES = [
+  {
+    id: "add-unique-constraint",
+    description:
+      "adds a uniqueness contract to a table that predates this migration",
+    category: "schema-contract",
+    matches: (statement) => {
+      const tokens = uniquenessTokens(statement);
+      return addsUniqueIndex(tokens) || addsUniquenessContract(tokens);
+    },
+  },
   {
     id: "drop-object",
     description: "drops a database object",
@@ -599,14 +724,15 @@ const DML_VERB_BY_TOKEN = new Map<string, DmlVerb>(
   DML_VERBS.map((verb) => [verb.toLowerCase(), verb]),
 );
 
-type DmlTarget = { verb: DmlVerb; table: string };
+type DmlTarget = { verb: DmlVerb; schema: string; table: string };
 
 // The relations a statement writes rows of when the migration runs, read from
 // the token stream: comments and string literals are masked there and quoted
 // identifiers are tokens of their own, so no keyword or name inside a comment
 // or literal counts, and a comment between tokens (`INSERT /* x */ INTO`) is
-// plain whitespace. A relation outside the public schema is none of the
-// registered tables. A stored-routine body executes nothing at migration
+// plain whitespace. Targets keep their schema: registered tables live in
+// public, while a row update is one in any schema. A stored-routine body
+// executes nothing at migration
 // time, and an UPDATE after a clause keyword (`FOR UPDATE`, `DO UPDATE`) is
 // not a statement of its own.
 const executedDmlTargets = (statement: Statement): DmlTarget[] => {
@@ -633,6 +759,20 @@ const executedDmlTargets = (statement: Statement): DmlTarget[] => {
       continue;
     }
 
+    // A privilege or a trigger event names UPDATE before ON, OF, OR, a column
+    // list or the next privilege (`GRANT SELECT, UPDATE ON t`, `UPDATE OR
+    // INSERT ON t`, `UPDATE (c)`); a statement names its relation next.
+    const following = tokens[position + 1];
+    if (
+      verb === UPDATE_KEYWORD &&
+      (following?.kind === "punctuation" ||
+        isIndexKeyword(following, "on") ||
+        isIndexKeyword(following, "of") ||
+        isIndexKeyword(following, "or"))
+    ) {
+      continue;
+    }
+
     let next = position + 1;
     const keyword = DML_TARGET_KEYWORDS[verb];
     if (keyword !== undefined) {
@@ -646,11 +786,15 @@ const executedDmlTargets = (statement: Statement): DmlTarget[] => {
     }
 
     const relation = readIndexRelation(tokens, next)?.relation;
-    if (relation?.schema.toLowerCase() !== "public") {
+    if (relation === undefined) {
       continue;
     }
 
-    targets.push({ verb, table: relation.name.toLowerCase() });
+    targets.push({
+      verb,
+      schema: relation.schema.toLowerCase(),
+      table: relation.name.toLowerCase(),
+    });
   }
 
   return targets;
@@ -660,7 +804,8 @@ const executedDmlTargets = (statement: Statement): DmlTarget[] => {
 // INSERT counts only when it copies rows out of another relation.
 const isHighVolumeTableDml = (statement: Statement): boolean =>
   executedDmlTargets(statement).some(
-    ({ verb, table }) =>
+    ({ verb, schema, table }) =>
+      schema === "public" &&
       HIGH_VOLUME_TABLE_NAMES.has(table) &&
       (verb !== "INSERT" || isInsertFromQuery(statement.text)),
   );
@@ -671,7 +816,10 @@ const CODE_OWNED_TABLE_NAMES = new Set<string>(CODE_OWNED_TABLES);
 // older migration seeded, converges every database on the code's state.
 const isCodeOwnedTableWrite = (statement: Statement): boolean =>
   executedDmlTargets(statement).some(
-    ({ verb, table }) => verb !== "DELETE" && CODE_OWNED_TABLE_NAMES.has(table),
+    ({ verb, schema, table }) =>
+      verb !== "DELETE" &&
+      schema === "public" &&
+      CODE_OWNED_TABLE_NAMES.has(table),
   );
 
 // Calls whose result depends on when, or by which draw, the statement runs.
@@ -687,9 +835,97 @@ const VOLATILE_VALUE_PATTERN =
 // are not writes and stay allowed; DELETE writes no value.
 const isVolatileDataWrite = (statement: Statement): boolean =>
   VOLATILE_VALUE_PATTERN.test(statement.text) &&
-  executedDmlTargets(statement).some(({ verb }) => verb !== "DELETE");
+  executedDmlTargets(statement).some(
+    ({ verb, schema }) => verb !== "DELETE" && schema === "public",
+  );
+
+const ONLINE_BACKFILL_GUIDANCE =
+  "Move data changes to the post-deploy online phase owned by apps/api/src/db/backfill-runtime.ts; use its bounded, resumable backfill pattern.";
+
+const isPreDeployUpdate = (statement: Statement): boolean =>
+  executedDmlTargets(statement).some(({ verb }) => verb === "UPDATE");
+
+// Every form that copies or materialises existing rows; WITH NO DATA creates
+// the relation empty.
+const isPreDeployValidateConstraint = (text: string): boolean =>
+  /\bALTER\s+TABLE\b[\s\S]*\bVALIDATE\s+CONSTRAINT\b/iu.test(text);
+
+const isPreDeployRowCopy = (text: string): boolean =>
+  isInsertFromQuery(text) ||
+  /\bMERGE\s+INTO\b/iu.test(text) ||
+  /\bREFRESH\s+MATERIALIZED\s+VIEW\b/iu.test(text) ||
+  ((isCreateTableAsQuery(text) ||
+    /\bCREATE\s+MATERIALIZED\s+VIEW\b/iu.test(text)) &&
+    !/\bWITH\s+NO\s+DATA\b/iu.test(text));
+
+// SQL `SELECT ... INTO t` creates and fills table t. Inside a PL/pgSQL body
+// the same words assign a variable, so callers apply it to top-level
+// statements and EXECUTE command strings only.
+const isSelectIntoTable = (text: string): boolean =>
+  /^\s*(?:WITH\b[\s\S]*?)?\bSELECT\b[\s\S]*?\bINTO\b/iu.test(text);
+
+// A command string a DO block runs through EXECUTE, judged by the same
+// detectors as a plain statement. format() placeholders (`%I`, `%1$s`) stand
+// in for names, so they are read as one.
+const isRefusedPreDeployCommand = (command: string): boolean =>
+  parseStatements(command.replace(/%(?:\d+\$)?-?\d*[ILs]/gu, "x")).some(
+    (statement) =>
+      isPreDeployUpdate(statement) ||
+      isPreDeployRowCopy(statement.text) ||
+      isSelectIntoTable(statement.text) ||
+      isPreDeployValidateConstraint(statement.text),
+  );
 
 const STATEMENT_INVARIANT_RULES = [
+  {
+    id: "pre-deploy-concurrent-index",
+    description: "builds an index concurrently during the pre-deploy phase",
+    matches: ({ deferred, text }) =>
+      !deferred &&
+      /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/iu.test(text),
+    guidance:
+      "Register the index in ONLINE_MIGRATION_INDEXES in apps/api/src/db/online-migrations.ts, which builds it concurrently after deploy.",
+  },
+  {
+    id: "pre-deploy-validate-constraint",
+    description: "validates a constraint during the pre-deploy phase",
+    matches: ({ deferred, text }) =>
+      !deferred && isPreDeployValidateConstraint(text),
+    guidance:
+      "Add the constraint NOT VALID in the migration, then validate it in the post-deploy online phase owned by apps/api/src/db/online-migrations.ts.",
+  },
+  {
+    id: "pre-deploy-update",
+    description: "updates existing rows during the pre-deploy phase",
+    matches: isPreDeployUpdate,
+    guidance: ONLINE_BACKFILL_GUIDANCE,
+  },
+  {
+    id: "pre-deploy-row-copy",
+    description:
+      "copies or materialises existing rows (INSERT ... SELECT, MERGE, CREATE TABLE AS, a populated materialized view) during the pre-deploy phase",
+    matches: ({ deferred, enclosingLine, text }) =>
+      !deferred &&
+      (isPreDeployRowCopy(text) ||
+        (enclosingLine === undefined && isSelectIntoTable(text))),
+    guidance: ONLINE_BACKFILL_GUIDANCE,
+  },
+  {
+    id: "pre-deploy-dynamic-sql",
+    description:
+      "runs an operation the pre-deploy phase refuses (a row update or copy, VALIDATE CONSTRAINT) through EXECUTE in a DO block",
+    matches: ({ executableRefusedOperation }) =>
+      executableRefusedOperation === true,
+    guidance:
+      "Run the operation as plain SQL in the post-deploy online phase: backfills through apps/api/src/db/backfill-runtime.ts, validation through apps/api/src/db/online-migrations.ts.",
+  },
+  {
+    id: "pre-deploy-row-loop",
+    description:
+      "loops over relation rows in a DO block or stored function during the pre-deploy phase",
+    matches: ({ rowLoop }) => rowLoop === true,
+    guidance: ONLINE_BACKFILL_GUIDANCE,
+  },
   {
     id: "on-conflict-column-target",
     description: "uses a column-target ON CONFLICT clause",
@@ -954,6 +1190,14 @@ type QuotedBodyOptions = {
 const INDEX_BUILD_HINT_PATTERN =
   /\b(?:CREATE\s+(?:UNIQUE\s+)?INDEX|REINDEX|ALTER\s+TABLE[\s\S]*?\bADD\b[\s\S]*?\b(?:PRIMARY\s+KEY|UNIQUE|EXCLUDE))\b/iu;
 
+// This deliberately recognizes only loops whose masked body also contains a
+// relation read or write. Numeric/control loops remain valid DDL helpers, while
+// cursor loops and batch-looking DML cannot hide a data backfill in a DO block
+// or stored function.
+const ROW_LOOP_PATTERN = /\bLOOP\b/iu;
+const RELATION_ACCESS_PATTERN =
+  /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO)\b/iu;
+
 const surfaceQuotedBody = ({
   prefix,
   body,
@@ -966,13 +1210,26 @@ const surfaceQuotedBody = ({
   // DO executes now; routine definitions are deferred, including nested bodies.
   const deferred = !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(prefix);
   const bodyStatements = parseStatements(body);
+  const maskedBody = bodyStatements.map(({ text }) => text).join("\n");
+  const rowLoop =
+    ROW_LOOP_PATTERN.test(maskedBody) &&
+    RELATION_ACCESS_PATTERN.test(maskedBody);
   const literalFragments = bodyStatements.flatMap(({ literals }) =>
     literals.map(({ value }) => value),
   );
   const executableIndexHint = INDEX_BUILD_HINT_PATTERN.test(
     literalFragments.join(" "),
   );
-  return bodyStatements.map((statement) => {
+  // An executed body that runs EXECUTE: every literal in it may become the
+  // command, alone, assembled with `||`, or through a variable assigned
+  // earlier in the body, so each one and all of them in order are judged.
+  const executableRefusedOperation =
+    !deferred &&
+    /\bEXECUTE\b/iu.test(maskedBody) &&
+    [...literalFragments, literalFragments.join(" x ")].some(
+      isRefusedPreDeployCommand,
+    );
+  return bodyStatements.map((statement, index) => {
     statement.line += startLine - 1;
     statement.enclosingLine = enclosingLine;
     if (executableIndexHint) {
@@ -980,6 +1237,12 @@ const surfaceQuotedBody = ({
     }
     if (deferred) {
       statement.deferred = true;
+    }
+    if (rowLoop && index === 0) {
+      statement.rowLoop = true;
+    }
+    if (executableRefusedOperation && /\bEXECUTE\b/iu.test(statement.text)) {
+      statement.executableRefusedOperation = true;
     }
     return statement;
   });
@@ -2074,10 +2337,30 @@ type StatementAcknowledgementLookup = (
   ruleId: string,
 ) => Acknowledgement | undefined;
 
-const createAcknowledgementLookup = (
-  lines: string[],
-  acknowledgements: Acknowledgement[],
-): StatementAcknowledgementLookup => {
+type AcknowledgementLookupOptions = {
+  lines: string[];
+  acknowledgements: Acknowledgement[];
+  statements: Statement[];
+};
+
+const createAcknowledgementLookup = ({
+  lines,
+  acknowledgements,
+  statements,
+}: AcknowledgementLookupOptions): StatementAcknowledgementLookup => {
+  const firstStatementByLine = new Map<number, Statement>();
+  for (const statement of statements) {
+    const first = firstStatementByLine.get(statement.line);
+    // Quoted bodies surface before their header; they must not take its
+    // acknowledgement when both start on the same physical line.
+    if (
+      first === undefined ||
+      (first.enclosingLine !== undefined &&
+        statement.enclosingLine === undefined)
+    ) {
+      firstStatementByLine.set(statement.line, statement);
+    }
+  }
   const blockCache = new Map<number, Set<number>>();
   const blockFor = (statementLine: number): Set<number> => {
     const cached = blockCache.get(statementLine);
@@ -2090,7 +2373,13 @@ const createAcknowledgementLookup = (
   };
 
   return (statement, ruleId) => {
-    const candidateLines = new Set(blockFor(statement.line));
+    // A preceding comment block belongs to the first statement on a line.
+    // Executable bodies retain their explicit enclosing-statement contract.
+    const candidateLines = new Set(
+      firstStatementByLine.get(statement.line) === statement
+        ? blockFor(statement.line)
+        : [],
+    );
     if (statement.enclosingLine !== undefined) {
       for (const lineNumber of blockFor(statement.enclosingLine)) {
         candidateLines.add(lineNumber);
@@ -2105,10 +2394,152 @@ const createAcknowledgementLookup = (
   };
 };
 
+// Share the statement boundary and acknowledgement contract with the lock census.
+export {
+  parseStatements as parseMigrationStatements,
+  indexTokens as migrationStatementTokens,
+  readIndexRelation as readMigrationRelation,
+  splitAlterActions as splitMigrationAlterActions,
+};
+
+export type MigrationGuardedRuleId = (typeof GUARDED_RULES)[number]["id"];
+
+export const matchingMigrationGuardedRules = (sql: string) =>
+  GUARDED_RULES.filter((rule) => guardedRuleMatches(rule, sql)).map(
+    ({ id }) => id,
+  );
+
+export const reviewedMigrationStatements = (source: string) => {
+  const lines = source.split("\n");
+  const { acknowledgements, errors } = parseAcknowledgements(
+    "migration.sql",
+    lines,
+  );
+  const reviewed = new Map<number, Set<MigrationGuardedRuleId>>();
+  if (errors.length > 0) {
+    return reviewed;
+  }
+  const statements = parseStatements(source);
+  const findAcknowledgement = createAcknowledgementLookup({
+    lines,
+    acknowledgements,
+    statements,
+  });
+  for (const [statementIndex, statement] of statements.entries()) {
+    const rules = matchingMigrationGuardedRules(statement.text).filter(
+      (rule) => findAcknowledgement(statement, rule) !== undefined,
+    );
+    if (rules.length > 0) {
+      reviewed.set(statementIndex, new Set(rules));
+    }
+  }
+  return reviewed;
+};
+
 type FileCheckResult = {
   invariantFindings: Finding[];
   guardedFindings: (Finding & { category: GuardedCategory })[];
   acknowledgementErrors: Finding[];
+};
+
+const SQL_IDENTIFIER_SOURCE = '(?:"(?:""|[^"])+"|[A-Za-z_][A-Za-z0-9_$]*)';
+const SQL_RELATION_SOURCE = `${SQL_IDENTIFIER_SOURCE}(?:\\s*\\.\\s*${SQL_IDENTIFIER_SOURCE})?`;
+const CREATE_TABLE_RELATION_PATTERN = new RegExp(
+  `^\\s*CREATE\\s+(?:UNLOGGED\\s+)?TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?<relation>${SQL_RELATION_SOURCE})`,
+  "iu",
+);
+const UNIQUE_INDEX_RELATION_PATTERN = new RegExp(
+  `^\\s*CREATE\\s+UNIQUE\\s+INDEX\\s+(?:CONCURRENTLY\\s+)?(?:IF\\s+NOT\\s+EXISTS\\s+)?${SQL_IDENTIFIER_SOURCE}\\s+ON\\s+(?:ONLY\\s+)?(?<relation>${SQL_RELATION_SOURCE})`,
+  "iu",
+);
+const ALTER_TABLE_RELATION_PATTERN = new RegExp(
+  `^\\s*ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?(?<relation>${SQL_RELATION_SOURCE})`,
+  "iu",
+);
+const UNIQUENESS_WRITER_PATTERN = /^[A-Za-z0-9_./#:-]+$/u;
+
+const hasUniquenessWriters = (reason: string): boolean => {
+  if (!reason.startsWith("writers:")) {
+    return false;
+  }
+  const separator = reason.indexOf(";");
+  if (separator === -1) {
+    return false;
+  }
+  const reviewReason = reason.slice(separator + 1);
+  if (reviewReason.length < 12 || reviewReason.includes("\n")) {
+    return false;
+  }
+  return reason
+    .slice("writers:".length, separator)
+    .split(",")
+    .every((writer) => UNIQUENESS_WRITER_PATTERN.test(writer.trim()));
+};
+
+const normalizeSqlRelation = (relation: string): string => {
+  const parts = relation
+    .split(".")
+    .map((part) => part.trim().replace(/^"|"$/gu, "").replace(/""/gu, '"'))
+    .map((part) => part.toLowerCase());
+  if (parts.length > 1) {
+    return parts.join(".");
+  }
+  return `public.${parts.at(0) ?? panic("SQL relation has no identifier")}`;
+};
+
+const matchedRelation = (pattern: RegExp, statement: Statement) => {
+  const relation = pattern.exec(statement.raw)?.groups?.["relation"];
+  return relation === undefined ? undefined : normalizeSqlRelation(relation);
+};
+
+const uniquenessContractRuleAppliesToFile = (file: string): boolean => {
+  const normalized = file.replaceAll("\\", "/");
+  if (
+    (normalized.startsWith(`${PENDING_CONTRACT_MIGRATIONS_DIR}/`) ||
+      normalized.includes(`/${PENDING_CONTRACT_MIGRATIONS_DIR}/`)) &&
+    PENDING_CONTRACT_SQL_FILES.has(path.posix.basename(normalized))
+  ) {
+    return false;
+  }
+
+  const migration = new RegExp(
+    `(?:^|/)${DEFAULT_MIGRATIONS_DIR}/(?<name>[^/]+)/migration\\.sql$`,
+    "u",
+  ).exec(normalized)?.groups?.["name"];
+  if (migration === undefined) {
+    return true;
+  }
+
+  const timestamp = /^\d{14}/u.exec(migration)?.[0];
+  return (
+    timestamp === undefined || timestamp > UNIQUE_CONTRACT_MIGRATION_CUTOFF
+  );
+};
+
+const existingTableUniquenessStatements = (
+  file: string,
+  statements: Statement[],
+): Set<Statement> => {
+  if (!uniquenessContractRuleAppliesToFile(file)) {
+    return new Set();
+  }
+
+  const createdTables = new Set(
+    statements
+      .map((statement) =>
+        matchedRelation(CREATE_TABLE_RELATION_PATTERN, statement),
+      )
+      .filter((relation) => relation !== undefined),
+  );
+
+  return new Set(
+    statements.filter((statement) => {
+      const relation =
+        matchedRelation(UNIQUE_INDEX_RELATION_PATTERN, statement) ??
+        matchedRelation(ALTER_TABLE_RELATION_PATTERN, statement);
+      return relation !== undefined && !createdTables.has(relation);
+    }),
+  );
 };
 
 const checkSource = (
@@ -2117,6 +2548,10 @@ const checkSource = (
 ): FileCheckResult => {
   const lines = source.split("\n");
   const statements = parseStatements(source);
+  const existingTableUniqueness = existingTableUniquenessStatements(
+    file,
+    statements,
+  );
 
   const invariantFindings = indexFindings.filter(
     (finding) => finding.file === file,
@@ -2150,10 +2585,11 @@ const checkSource = (
 
   const { acknowledgements, errors: acknowledgementErrors } =
     parseAcknowledgements(file, lines);
-  const findAcknowledgement = createAcknowledgementLookup(
+  const findAcknowledgement = createAcknowledgementLookup({
     lines,
     acknowledgements,
-  );
+    statements,
+  });
   const guardedFindings: FileCheckResult["guardedFindings"] = [];
 
   for (const [position, statement] of statements.entries()) {
@@ -2169,6 +2605,13 @@ const checkSource = (
       }
 
       if (
+        rule.id === "add-unique-constraint" &&
+        !existingTableUniqueness.has(statement)
+      ) {
+        continue;
+      }
+
+      if (
         rule.id === "drop-object" &&
         isIndexRebuiltLater(statements, position)
       ) {
@@ -2178,6 +2621,18 @@ const checkSource = (
       const acknowledgement = findAcknowledgement(statement, rule.id);
       if (acknowledgement) {
         acknowledgement.usedRuleIds.add(rule.id);
+        if (
+          rule.id === "add-unique-constraint" &&
+          !hasUniquenessWriters(acknowledgement.reason)
+        ) {
+          acknowledgementErrors.push({
+            file,
+            line: acknowledgement.line,
+            ruleId: "invalid-uniqueness-writers",
+            description:
+              'add-unique-constraint acknowledgement must use "writers: <path-or-symbol>[, ...]; <review reason>"',
+          });
+        }
         continue;
       }
 

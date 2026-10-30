@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  assertProperty,
   propertyConfig,
   propertySeed,
   propertyTestTimeout,
@@ -10,8 +11,18 @@ import {
 import { normalizeUnicode, stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { AliasQuality, SanctionsEntry } from "./entry";
-import { buildNameIndex, matchNames, MAX_SCREENING_WORK } from "./name-match";
-import { nameReading, nameTokens } from "./normalise";
+import { buildNameIndex, matchNames } from "./name-match";
+import {
+  MAX_QUERY_CHARACTERS,
+  MAX_QUERY_TOKENS,
+  nameReading,
+  nameTokens,
+} from "./normalise";
+import {
+  bruteForceNameMatches,
+  nameIndexSteps,
+  runSteps,
+} from "./test-fixtures/legacy-name-match";
 
 const config = () => propertyConfig({ seed: propertySeed() });
 const word = fc.oneof(
@@ -69,12 +80,10 @@ const matchesFor = (
     index,
     reading: nameReading(query, "person"),
     ceiling: Math.sqrt,
-    rankEntry: (_entry, nameScore) => nameScore,
     cutoff: 0,
     work: {
-      remaining: MAX_SCREENING_WORK,
+      remaining: Number.MAX_SAFE_INTEGER,
       exhausted: false,
-      selection: "complete",
     },
   });
   if (result === undefined) {
@@ -106,7 +115,7 @@ describe("name matching (properties)", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("keeps supplementary-plane letters in compact character histograms", () => {
+  test("keeps supplementary-plane letters in fuzzy token lookup", () => {
     const index = buildNameIndex([entry("𐐨obert Smith")]);
     expect(matchesFor(index, "𐐨obert Smith").get(0)?.score).toBe(1);
     expect(matchesFor(index, "𐐨obertt Smith").get(0)?.score).toBeGreaterThan(0);
@@ -131,6 +140,38 @@ describe("name matching (properties)", () => {
             }
           },
         ),
+        config(),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+
+  test(
+    "an exact listed name always matches at the maximum score",
+    () => {
+      assertProperty(
+        "an exact listed name always matches at the maximum score",
+        fc.property(fullName, (name) => {
+          expect(score(name, name)).toBe(1);
+        }),
+        config(),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+
+  test(
+    "clearly different generated names stay below the screening cutoff",
+    () => {
+      const differentNames = fc.tuple(
+        fc.constantFrom("Anna Novak", "Petr Dvorak", "Lucia Horvath"),
+        fc.constantFrom("Xerxes Quillon", "Zubair Wexford", "Yara Bexley"),
+      );
+      assertProperty(
+        "clearly different generated names stay below the screening cutoff",
+        fc.property(differentNames, ([listed, query]) => {
+          expect(score(listed, query)).toBeLessThan(0.8);
+        }),
         config(),
       );
     },
@@ -318,3 +359,90 @@ describe("name matching (properties)", () => {
     propertyTestTimeout(5000),
   );
 });
+
+test(
+  "indexed candidates contain every brute-force accepted generated name",
+  () => {
+    const inflectedWord = fc
+      .tuple(word, fc.constantFrom("", "a", "u", "ovi", "ová", "em"))
+      .map(([stem, ending]) => `${stem}${ending}`);
+    const generatedName = fc
+      .oneof(
+        fc.array(inflectedWord, { minLength: 1, maxLength: MAX_QUERY_TOKENS }),
+        fc.tuple(inflectedWord, fc.integer({ min: 0, max: 9999 }).map(String)),
+        fc.array(inflectedWord, {
+          minLength: MAX_QUERY_TOKENS,
+          maxLength: MAX_QUERY_TOKENS,
+        }),
+        fc
+          .tuple(inflectedWord, inflectedWord)
+          .chain(([alpha, beta]) =>
+            fc.constantFrom(
+              [alpha, alpha],
+              [alpha, beta, alpha],
+              [beta, alpha, alpha, beta],
+            ),
+          ),
+      )
+      .map((parts) => parts.join(" "));
+    assertProperty(
+      "indexed candidates contain every brute-force accepted generated name",
+      fc.property(
+        fc.array(generatedName, { minLength: 1, maxLength: 8 }),
+        fc.nat(),
+        fc.constantFrom(0, 0.5, 0.7, 0.8, 0.9, 1),
+        fc.constantFrom("strong", "weak", "unknown"),
+        (names, selected, cutoff, quality) => {
+          const listed =
+            names.at(selected % names.length) ??
+            panic("Missing generated name");
+          // The repeated differently split spelling makes "alpha42" a dense
+          // join without listing either query part. Candidate completeness
+          // therefore depends on retaining the numeric query join.
+          const joinWitnesses = Array.from({ length: 257 }, () => "Al pha42");
+          const entries = [...names, ...joinWitnesses].map((name) =>
+            entry(name, quality),
+          );
+          const index = buildNameIndex(entries);
+          const oracle = runSteps(nameIndexSteps(entries));
+          for (const query of [
+            listed,
+            `${listed}z`,
+            listed.padEnd(MAX_QUERY_CHARACTERS, " "),
+            normalizeUnicode(listed, "NFD"),
+            stripUnicodeMarks(listed, { form: "NFD", markClass: "combining" }),
+            listed.split(" ").toReversed().join(" "),
+            "Alpha 42",
+          ]) {
+            expect(query.length).toBeLessThanOrEqual(MAX_QUERY_CHARACTERS);
+            const reading = nameReading(query, "person");
+            const expected = bruteForceNameMatches(oracle, reading);
+            const work = {
+              remaining: Number.MAX_SAFE_INTEGER,
+              exhausted: false,
+            } as const;
+            const actual = matchNames({
+              index,
+              reading,
+              ceiling: Math.sqrt,
+              cutoff,
+              work,
+            });
+            expect(work.exhausted).toBe(false);
+            expect(actual?.truncated).toBe(false);
+            for (const [entryIndex, match] of expected) {
+              if (match.score >= cutoff) {
+                expect(actual?.matches.get(entryIndex)?.score).toBeCloseTo(
+                  match.score,
+                  12,
+                );
+              }
+            }
+          }
+        },
+      ),
+      { numRuns: 40 },
+    );
+  },
+  propertyTestTimeout(20_000),
+);

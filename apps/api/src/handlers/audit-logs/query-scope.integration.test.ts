@@ -12,7 +12,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, workspaces } from "@/api/db/schema";
-import { createSafeDb, createMembershipSafeDb } from "@/api/db/scoped";
+import { createMembershipSafeDb, createSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

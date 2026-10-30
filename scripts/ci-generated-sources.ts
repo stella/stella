@@ -7,9 +7,9 @@ import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-invento
 import {
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedSources,
   requireUnchangedGeneratedInputs,
   restorePreparedGeneratedSources,
-  hasPreparedGeneratedSources,
 } from "../packages/scripts/src/prepared-generated-sources";
 import { checkMcpGeneratedTracking } from "./check-mcp-generated-tracking";
 import { CI_GENERATION_COMMANDS } from "./generated-files";

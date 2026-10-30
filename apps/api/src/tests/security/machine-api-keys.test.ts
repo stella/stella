@@ -57,7 +57,9 @@ type KeyOverrides = {
 };
 
 const validKey = (overrides: KeyOverrides = {}) => ({
+  createdAt: new Date("2026-07-01T00:00:00.000Z"),
   enabled: true,
+  expiresAt: null,
   id: KEY_ID,
   metadata: { organizationId: ORG_ID, scopes: SCOPES },
   name: "Machine API key",
@@ -581,7 +583,9 @@ describe("authenticateMcpRequest credential dispatch", () => {
     // invalid.
     const { authenticateMcpRequest } = await import("@/api/mcp/auth");
 
-    const rejected = await authenticateMcpRequest("header.payload.signature");
+    const rejected = await authenticateMcpRequest("header.payload.signature", {
+      resolveApiKeySession: resolveMachineApiKeySession,
+    });
 
     expect(Result.isError(rejected)).toBe(true);
 

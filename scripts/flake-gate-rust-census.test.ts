@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -90,6 +90,10 @@ test("tracked Rust test attributes remain within the supported detector census",
       },
       {
         "hasArgs": false,
+        "path": "tokio::test",
+      },
+      {
+        "hasArgs": true,
         "path": "tokio::test",
       },
     ]

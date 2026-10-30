@@ -27,6 +27,7 @@ describe("canonical PDF search", () => {
   test("finds case-insensitive text and returns LibPDF geometry", async () => {
     const result = await findPDFSearchResults({
       bytes: await createSearchablePDF(),
+      pageSource: "portfolio",
       searchText: "DILIGENCE",
       signal: new AbortController().signal,
     });
@@ -45,6 +46,7 @@ describe("canonical PDF search", () => {
 
     const result = await findPDFSearchResults({
       bytes: await pdf.save(),
+      pageSource: "portfolio",
       searchText: "odštěpení",
       signal: new AbortController().signal,
     });
@@ -68,6 +70,7 @@ describe("canonical PDF search", () => {
 
     const result = await findPDFSearchResults({
       bytes: await pdf.save(),
+      pageSource: "portfolio",
       searchText: "Y",
       signal: new AbortController().signal,
     });
@@ -79,6 +82,7 @@ describe("canonical PDF search", () => {
   test("finds every query term when the exact phrase is absent", async () => {
     const result = await findPDFSearchResults({
       bytes: await createSearchablePDF(),
+      pageSource: "portfolio",
       searchText: "introduction diligence",
       signal: new AbortController().signal,
     });
@@ -97,6 +101,7 @@ describe("canonical PDF search", () => {
 
     const result = await findPDFSearchResults({
       bytes: await pdf.save(),
+      pageSource: "portfolio",
       searchText: "common rare",
       signal: new AbortController().signal,
     });
@@ -116,6 +121,7 @@ describe("canonical PDF search", () => {
 
     const result = await findPDFSearchResults({
       bytes: await pdf.save(),
+      pageSource: "portfolio",
       searchText: "needle",
       signal: new AbortController().signal,
     });
@@ -133,6 +139,7 @@ describe("canonical PDF search", () => {
   test("finds every independently marked term even when one forms a phrase", async () => {
     const result = await findPDFSearchResults({
       bytes: await createSearchablePDF(),
+      pageSource: "portfolio",
       searchText: {
         type: "separate-terms",
         terms: ["Due Diligence", "Introduction"],
@@ -150,6 +157,7 @@ describe("canonical PDF search", () => {
 
     const result = await findPDFSearchResults({
       bytes: await pdf.save(),
+      pageSource: "portfolio",
       searchText: {
         type: "separate-terms",
         terms: ["bar", "foobar"],
@@ -200,11 +208,44 @@ describe("canonical PDF search", () => {
     );
     portfolio.addAttachment("ignored.txt", new TextEncoder().encode("needle"));
 
+    const bytes = await portfolio.save();
     const result = await findPDFSearchResults({
-      bytes: await portfolio.save(),
+      bytes,
+      pageSource: "portfolio",
       searchText: "needle",
       signal: new AbortController().signal,
     });
+    // AVT's offsets refer to the container, even when its attachments have
+    // the same words at different coordinates and page numbers.
+    const documentResult = await findPDFSearchResults({
+      bytes,
+      pageSource: "document",
+      searchText: "needle",
+      signal: new AbortController().signal,
+    });
+    expect(documentResult?.matches).toHaveLength(1);
+    expect(documentResult?.matches.at(0)?.pageIndex).toBe(0);
+    const containerMatch = await findPDFSearchResults({
+      bytes,
+      pageSource: "document",
+      searchText: "container",
+      signal: new AbortController().signal,
+    });
+    expect(containerMatch?.matches).toHaveLength(1);
+    const hiddenAttachment = await findPDFSearchResults({
+      bytes,
+      pageSource: "document",
+      searchText: "second",
+      signal: new AbortController().signal,
+    });
+    expect(hiddenAttachment).toBeNull();
+    const shownAttachment = await findPDFSearchResults({
+      bytes,
+      pageSource: "portfolio",
+      searchText: "second",
+      signal: new AbortController().signal,
+    });
+    expect(shownAttachment?.matches).toHaveLength(1);
 
     expect(result?.matches).toHaveLength(3);
     expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1, 2]);
@@ -233,6 +274,7 @@ describe("canonical PDF search", () => {
 
     const result = await findPDFSearchResults({
       bytes: await pdf.save(),
+      pageSource: "portfolio",
       searchText: "needle",
       signal: new AbortController().signal,
     });
@@ -250,11 +292,13 @@ describe("canonical PDF search", () => {
 
     const atCap = await findPDFSearchResults({
       bytes: await createPDFWithHits(MAX_SEARCH_PREVIEW_MATCHES),
+      pageSource: "portfolio",
       searchText: "hit",
       signal: new AbortController().signal,
     });
     const overCap = await findPDFSearchResults({
       bytes: await createPDFWithHits(MAX_SEARCH_PREVIEW_MATCHES + 1),
+      pageSource: "portfolio",
       searchText: "hit",
       signal: new AbortController().signal,
     });
@@ -276,6 +320,7 @@ describe("canonical PDF search", () => {
 
     const result = await findPDFSearchResults({
       bytes: await pdf.save(),
+      pageSource: "portfolio",
       searchText: "odštěpení",
       signal: new AbortController().signal,
     });
@@ -292,6 +337,7 @@ describe("canonical PDF search", () => {
       try: async () =>
         await findPDFSearchResults({
           bytes: new Uint8Array(),
+          pageSource: "portfolio",
           searchText: "term",
           signal: abortController.signal,
         }),

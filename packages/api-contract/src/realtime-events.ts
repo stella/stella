@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "./api-date";
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
 import {
   isResourceRef,
@@ -197,7 +198,7 @@ const takeoverRequestedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED),
   data: v.object({
     requestedBy: nonEmptyStringSchema,
-    requestedAt: v.pipe(v.string(), v.isoTimestamp()),
+    requestedAt: apiDateTimeSchema,
   }),
 });
 
@@ -226,6 +227,31 @@ const desktopEditSessionRealtimeEventSchema = v.variant("type", [
 export type DesktopEditSessionRealtimeEvent = v.InferOutput<
   typeof desktopEditSessionRealtimeEventSchema
 >;
+
+/**
+ * Every event kind each realtime channel carries, read off the channel's own
+ * schema so the list is the channel's contract rather than a copy of it. The
+ * keys are the channels the API fans events out on.
+ */
+export const REALTIME_CHANNEL_EVENT_TYPES = {
+  workspace: workspaceRealtimeEventSchema.options.map(
+    (option) => option.entries.type.literal,
+  ),
+  organization: [organizationRealtimeEventSchema.entries.type.literal],
+  user: userRealtimeEventSchema.options.map(
+    (option) => option.entries.type.literal,
+  ),
+  session: desktopEditSessionRealtimeEventSchema.options.map(
+    (option) => option.entries.type.literal,
+  ),
+} as const satisfies {
+  workspace: readonly WorkspaceRealtimeEvent["type"][];
+  organization: readonly OrganizationRealtimeEvent["type"][];
+  user: readonly UserRealtimeEvent["type"][];
+  session: readonly DesktopEditSessionRealtimeEvent["type"][];
+};
+
+export type RealtimeChannel = keyof typeof REALTIME_CHANNEL_EVENT_TYPES;
 export type DesktopEditSessionClientEvent = Exclude<
   DesktopEditSessionRealtimeEvent,
   { type: typeof REALTIME_EVENT_TYPE.DESKTOP_EDIT_SESSION_CLOSED }

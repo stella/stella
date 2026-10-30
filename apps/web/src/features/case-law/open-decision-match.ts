@@ -15,15 +15,18 @@ import { SEARCH_PAGE_END, type SearchExcerpt } from "@stll/api-contract/search";
 
 import {
   decisionDateRange,
-  decisionSortOrder,
   isStrictSearch,
 } from "@/features/case-law/case-law-index-search.logic";
 import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-search.logic";
 import { caseLawCountryScope } from "@/features/case-law/case-law-jurisdiction";
+import {
+  decisionListSortOf,
+  searchSortOf,
+} from "@/features/case-law/decision-order.logic";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
-  decisionsPageOptions,
   type DecisionListFilters,
+  decisionsPageOptions,
 } from "@/features/case-law/queries/decisions";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -85,7 +88,7 @@ export const createDecisionFiltersFromSearch = (
     readDecisionIntent(q, { jurisdiction: scope }),
   );
 
-  return {
+  const scoped = {
     country: scope,
     excerpt,
     ...(court ? { court } : {}),
@@ -94,17 +97,18 @@ export const createDecisionFiltersFromSearch = (
     ...(range.to === undefined ? {} : { dateTo: range.to }),
     ...(type ? { decisionType: type } : {}),
     ...(lang ? { language: lang } : {}),
-    // An order is a property of a ranked answer, so a browse listing carries
-    // none: it is newest-first by definition. Requiring every word is a
-    // property of a query, so a listing carries that no more than an order.
-    ...(search === undefined
-      ? {}
-      : {
-          search,
-          sort: decisionSortOrder(sort),
-          ...(isStrictSearch(strict) ? { strict: true } : {}),
-        }),
   };
+  // Each kind of result set takes its own orders: a search ranks, a listing
+  // walks the dates. Requiring every word is a property of a query, so a
+  // listing carries it no more than a ranking.
+  return search === undefined
+    ? { ...scoped, sort: decisionListSortOf(sort) }
+    : {
+        ...scoped,
+        search,
+        sort: searchSortOf(sort),
+        ...(isStrictSearch(strict) ? { strict: true } : {}),
+      };
 };
 
 type OpenDecisionMatchOptions = {

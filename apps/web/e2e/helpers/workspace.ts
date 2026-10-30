@@ -1,10 +1,10 @@
 import {
-  expect,
   type APIRequestContext,
+  expect,
   type Page,
   type TestInfo,
 } from "@playwright/test";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { randomUUID } from "node:crypto";
 
 import { apiDeleteStatus, apiGet, apiPut } from "./api";

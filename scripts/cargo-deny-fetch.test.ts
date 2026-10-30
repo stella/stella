@@ -45,6 +45,7 @@ const runFetch = (
     chmodSync(path.join(commands, "cargo"), 0o755);
     writeFileSync(calls, "");
     const result = spawnSync("bash", [script, "app/Cargo.toml", ...sources], {
+      maxBuffer: 2 ** 30,
       encoding: "utf-8",
       env: {
         ...process.env,

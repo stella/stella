@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
 import nodePath from "node:path";
 
 import { printError } from "@stll/errors";
@@ -13,6 +12,7 @@ import {
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { runMigrationsUntilSettled } from "./migration-runner";
+import { createSqlClient } from "./sql-client";
 
 // An index build would hold forever on a load gate nobody configured, and the
 // deploy waits on this process: reject that before any connection opens.
@@ -30,7 +30,7 @@ if (!url) {
 }
 
 await runScriptWithErrorOutput(async () => {
-  const client = new SQL({ url, max: 1 });
+  const client = createSqlClient({ url, max: 1 });
   // The loose source and single-file bundle both resolve drizzle from this file.
   const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
   const connection = await client.reserve();
@@ -46,7 +46,7 @@ await runScriptWithErrorOutput(async () => {
       console.info("[migrate] migrations applied");
     }
   } finally {
-    connection.release();
+    await connection.release();
     await client.end();
   }
 });

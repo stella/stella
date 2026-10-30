@@ -51,6 +51,16 @@ export const isMcpDescriptorFeatureEnabled = (
   });
 };
 
+/**
+ * The unavailable projection depends on the definition alone, so it is built
+ * once per definition: a stable schema object is what lets `tools/list` reuse
+ * its wire conversion instead of rebuilding it on every call.
+ */
+const unavailableFeatureInputProjections = new WeakMap<
+  McpToolDefinition,
+  McpToolDefinition
+>();
+
 /** Mixed tools keep their ordinary operations while projecting unavailable feature inputs. */
 export const projectMcpFeatureInput = (
   context: McpFeatureAccessContext | undefined,
@@ -68,11 +78,17 @@ export const projectMcpFeatureInput = (
   ) {
     return definition;
   }
-  return {
+  const cached = unavailableFeatureInputProjections.get(definition);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const projected = {
     ...definition,
     description: input.unavailableDescription,
     inputSchema: input.projectInputSchema(definition.inputSchema),
   };
+  unavailableFeatureInputProjections.set(definition, projected);
+  return projected;
 };
 
 type McpFeatureInputAccessOptions = {

@@ -36,26 +36,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Dispatch pinned release proofs once
+      - name: Dispatch release candidate tag
+        timeout-minutes: 3
         env:
           GH_TOKEN: ${{ github.token }}
           PROOF_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          bash scripts/check-release-environment.sh "$GITHUB_REPOSITORY"
           bash scripts/verify-release-tree-proof.sh --allow-pr-head "$GITHUB_REPOSITORY" "$PROOF_SHA" "$PROOF_SHA" >/dev/null
-          for workflow in deploy-staging main-heavy; do
-            case "$workflow" in
-              deploy-staging) title="Staging release proof $PROOF_SHA" ;;
-              main-heavy) title="Main heavy suites $PROOF_SHA" ;;
-            esac
-            runs=$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow.yml/runs?event=workflow_dispatch&per_page=100")
-            existing=$(jq -r --arg repo "$GITHUB_REPOSITORY" --arg title "$title" --arg path ".github/workflows/$workflow.yml" '
-              [.[].workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
-                .path == $path and .display_title == $title)][0] // empty | .id
-            ' <<< "$runs")
-            if [[ -n "$existing" ]]; then
-              echo "Proof already dispatched: $workflow run $existing"
-              continue
-            fi
-            gh workflow run "$workflow.yml" --repo "$GITHUB_REPOSITORY" --ref main -f sha="$PROOF_SHA" -f release_candidate=true
-          done
+          bash scripts/gh-retry.sh workflow run release-tag.yml --repo "$GITHUB_REPOSITORY" --ref main -f mode=rc -f sha="$PROOF_SHA"

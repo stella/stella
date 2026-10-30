@@ -10,8 +10,8 @@ import { PL_UOKIK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
 import {
   ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
@@ -50,6 +50,7 @@ export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.AT_FINDOK]: undefined,
   [ADAPTER_KEYS.EU_ECJ]: EU_ECJ_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.HU_BHGY]: undefined,
+  [ADAPTER_KEYS.UK_FCL]: undefined,
   [ADAPTER_KEYS.PL_KIS]: PL_KIS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.PL_UODO]: undefined,
   [ADAPTER_KEYS.PL_UOKIK]: PL_UOKIK_METADATA_URL_SCHEMA,

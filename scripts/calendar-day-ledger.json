@@ -115,11 +115,6 @@
     "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
   },
   {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/document-processing-ocr.ts::dispatchDocumentOcr::new Date()",
-    "count": 1,
-    "reason": "Continuation or run budget: schedules the next batch or bounds this run in elapsed time, not a calendar decision."
-  },
-  {
     "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts::selectRepairPage::Temporal.Now.instant()",
     "count": 1,
     "reason": "Elapsed-time window (lease, staleness or retention cutoff) measured from now; no calendar day is involved, so a late tick only widens the window."

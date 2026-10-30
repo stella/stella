@@ -51,6 +51,7 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
+import type { SafeId } from "@/api/lib/branded-types";
 import { flattenCourtWeightEntries } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { loadLocalCourtWeights } from "@/api/lib/case-law/local-case-law-config";
@@ -167,8 +168,7 @@ export const CITATION_AUTHORITY_WRITE_TOLERANCE = 1e-3;
  * against `citationScore` at the same instant.
  */
 type CitationAuthorityInstant =
-  | { type: "database" }
-  | { type: "pinned"; at: Date };
+  { type: "database" } | { type: "pinned"; at: Date };
 
 const instantSql = (instant: CitationAuthorityInstant): SQL => {
   switch (instant.type) {
@@ -435,4 +435,21 @@ export const tryAdvanceCitationAuthoritySweep = async (
     passStarted,
   });
   return { type: "advanced", batch, passComplete };
+};
+
+/** Remove cached contributions before the graph drops a decision's edges. */
+export const invalidateRemovedCitationAuthorityTx = async (
+  tx: CitationAuthorityTx,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<void> => {
+  // audit: skip — derived ranking invalidation belongs to the canonical removal audit.
+  await tx.execute(sql`
+    UPDATE case_law_decisions
+    SET citation_authority = 0, citation_count = 0
+    WHERE id IN (
+      SELECT ${decisionId}::uuid UNION
+      SELECT cited_decision_id FROM case_law_citations
+      WHERE citing_decision_id = ${decisionId} AND cited_decision_id IS NOT NULL
+    )
+  `);
 };

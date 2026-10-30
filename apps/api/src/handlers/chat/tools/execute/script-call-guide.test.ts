@@ -6,8 +6,8 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   buildScriptCallGuide,
   classifyScriptName,
-  scriptNameMessage,
   type ScriptCallCatalog,
+  scriptNameMessage,
 } from "@/api/handlers/chat/tools/execute/script-call-guide";
 
 const CATALOG = {

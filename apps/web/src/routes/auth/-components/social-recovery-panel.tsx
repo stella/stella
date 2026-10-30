@@ -66,12 +66,15 @@ export const SocialRecoveryPanel = ({
   const [email, setEmail] = useState("");
   const finish = async () => await navigate(afterSignInNavigation(redirectTo));
   const onError = (cause: unknown) => {
-    analytics.captureError(cause);
+    analytics.captureError(cause, {
+      fingerprintKey: "SocialRecoveryPanel:cause",
+      scope: { type: "handler", handlerId: "SocialRecoveryPanel:cause" },
+    });
     notifyUserError(cause, t("errors.actionFailed"));
   };
   const sendCode = useMutation({
     mutationFn: async () => {
-      const parsed = v.parse(emailSchema(), email);
+      const parsed = v.parse(emailSchema(t("validation.invalidEmail")), email);
       const result = await authClient.emailOtp.sendVerificationOtp({
         email: parsed,
         type: "sign-in",
@@ -204,7 +207,9 @@ export const SocialRecoveryPanel = ({
               className="w-full"
               loading={sendCode.isPending}
               disabled={
-                sendCode.isPending || !v.safeParse(emailSchema(), email).success
+                sendCode.isPending ||
+                !v.safeParse(emailSchema(t("validation.invalidEmail")), email)
+                  .success
               }
             >
               {t("auth.continueWithEmail")}

@@ -27,3 +27,26 @@
 }
 
 @source "../../../../packages/decision-reader/src/**/*.{ts,tsx}";
+
+.pele {
+  --pele-bg: var(--background);
+  --pele-fg: var(--foreground);
+  --pele-muted: var(--muted-foreground);
+  --pele-line: var(--muted-foreground);
+  --pele-surface: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --pele-surface-alt: color-mix(
+    in oklab,
+    var(--foreground) 12%,
+    var(--background)
+  );
+  --pele-border: color-mix(in oklab, var(--foreground) 35%, var(--background));
+  --pele-accent: var(--chart-1);
+  --pele-series-1: var(--chart-1);
+  --pele-series-2: var(--chart-2);
+  --pele-series-3: var(--chart-3);
+  --pele-series-4: var(--chart-4);
+  --pele-series-5: var(--chart-5);
+  --pele-series-6: var(--chart-6);
+  --pele-series-7: var(--chart-7);
+  --pele-series-8: var(--chart-8);
+}

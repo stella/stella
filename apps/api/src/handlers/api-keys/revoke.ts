@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   disableMachineApiKey,
@@ -11,8 +11,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
 
-const revokeApiKeyBody = t.Object({
-  keyId: t.String({ minLength: 1, maxLength: 128 }),
+const revokeApiKeyBody = v.object({
+  keyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 });
 
 const config = {

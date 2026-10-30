@@ -14,7 +14,8 @@ import type {
   KnowledgeTemplate,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { detached } from "@/lib/detached";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /** A catalogue template's id in the shared views: its pack and its slug. */
 const catalogueTemplateKey = (template: CatalogueTemplate): string =>
@@ -112,8 +113,8 @@ const useCatalogueTemplatePreview = (
     catalogueTemplatePreviewOptions(packId, templateId),
   );
   const { isLoading } = dataQuery;
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useCatalogueTemplatePreview:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   if (isLoading) {
     return { status: "loading" };

@@ -27,8 +27,7 @@ import { sql } from "drizzle-orm";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
 type GroupName<J extends CaseLawJurisdiction> =
-  | Lowercase<J>
-  | `${string}_${string}`;
+  Lowercase<J> | `${string}_${string}`;
 
 /**
  * Index group of every declared jurisdiction in the generations that were
@@ -45,6 +44,7 @@ export const CASE_LAW_INDEX_GROUP_OF = {
   AUT: "aut",
   CZE: "cs_sk",
   EU: "eu",
+  GBR: "gbr",
   HUN: "hun",
   POL: "pol",
   SVK: "cs_sk",
@@ -108,6 +108,7 @@ export const CASE_LAW_INDEX_GROUP_CONTRACT_OF = {
   cs_sk: "base",
   cze: "provision_keys_v1",
   eu: "base",
+  gbr: "base",
   hun: "base",
   pol: "base",
   usa: "court_partition_v1",

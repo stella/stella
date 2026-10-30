@@ -18,14 +18,19 @@ const { IntlProvider } = await import("use-intl");
 const { createTranslator } = await import("use-intl/core");
 const { actionAdmissionOutcome } =
   await import("@/lib/errors/action-admission");
-const { stellaToast, ToastProvider } = await import("@stll/ui/toast");
-const { ActionAdmissionOutcome, notifyActionAdmissionRefusal } =
-  await import("./action-admission-outcome");
-const { notifyAuthClientError, notifyUserError } =
-  await import("@/lib/errors/user-toast");
+const { stellaToast } = await import("@stll/ui/toast");
+const { ActionAdmissionOutcome } = await import("./action-admission-outcome");
+const {
+  notifyAuthClientError,
+  notifyUserError,
+  resetUserErrorReportDedupeForTests,
+} = await import("@/lib/errors/user-toast");
 const { toAPIError } = await import("@/lib/errors/api");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetUserErrorReportDedupeForTests();
+});
 afterAll(async () => {
   cleanup();
   await act(async () => {
@@ -122,7 +127,7 @@ test("refusal toasts use a calm tone while unrelated errors produce no toast", (
         contactUrl: "https://example.test/help",
       },
     });
-    expect(notifyActionAdmissionRefusal(error)).toBe(true);
+    expect(notifyUserError(error, "Generic failure")).toBe(false);
     expect(add).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "action_not_enabled",
@@ -130,10 +135,10 @@ test("refusal toasts use a calm tone while unrelated errors produce no toast", (
         title: englishMessages.errors.actionAdmission.notEnabled,
       }),
     );
-    expect(notifyActionAdmissionRefusal(new Error("Unrelated failure"))).toBe(
-      false,
-    );
-    expect(add).toHaveBeenCalledTimes(1);
+    expect(
+      notifyUserError(new Error("Unrelated failure"), "Generic failure"),
+    ).toBe(true);
+    expect(add).toHaveBeenCalledTimes(2);
   } finally {
     add.mockRestore();
   }
@@ -182,7 +187,7 @@ test("refused error updates close pending toasts and coalesce with the localized
         value: { code, message: "Private server detail" },
       });
       // The response observer runs before the local mutation failure handler.
-      expect(notifyActionAdmissionRefusal(error)).toBe(true);
+      expect(notifyUserError(error, "Generic failure")).toBe(false);
       expect(
         notifyUserError(error, "Generic failure", {
           toastId: `pending-${code}`,
@@ -245,44 +250,13 @@ test("repeated refusal notifications retain one stable toast identity per code",
         status: refusal.status,
         value: { code, message: "Refused" },
       });
-      notifyActionAdmissionRefusal(error);
-      notifyActionAdmissionRefusal(error);
+      notifyUserError(error, "Generic failure");
+      notifyUserError(error, "Generic failure");
       expect(add.mock.calls.at(-1)?.at(0)?.id).toBe(code);
       expect(add.mock.calls.at(-2)?.at(0)?.id).toBe(code);
     }
   } finally {
     add.mockRestore();
-  }
-});
-
-test("observer and local failure handlers render one refusal notice", async () => {
-  const view = render(<ToastProvider />);
-  try {
-    for (const [code, refusal] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
-      const error = toAPIError({
-        status: refusal.status,
-        value: { code, message: "Private detail" },
-      });
-      await act(async () => {
-        notifyActionAdmissionRefusal(error);
-        notifyUserError(error, "Generic failure");
-      });
-      const outcome = actionAdmissionOutcome(error);
-      expect(outcome).toBeDefined();
-      if (outcome) {
-        const title = createTranslator({
-          locale: "en",
-          messages: englishMessages,
-        })(outcome.messageKey);
-        expect(view.getAllByText(title)).toHaveLength(1);
-      }
-    }
-    expect(view.queryByText("Generic failure")).toBeNull();
-    expect(view.queryByText("Private detail")).toBeNull();
-  } finally {
-    await act(async () => {
-      stellaToast.close();
-    });
   }
 });
 

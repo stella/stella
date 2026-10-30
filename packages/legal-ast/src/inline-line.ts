@@ -9,7 +9,7 @@
  * text is always `plainTextOf(inlines)`, before and after a cut.
  */
 
-import { plainTextOf, type Inline } from "./document-ast.js";
+import { type Inline, plainTextOf } from "./document-ast.js";
 import { hasInlineChildren } from "./inline.js";
 
 /**
@@ -167,4 +167,129 @@ export const stripInlinePrefix = (
   }
 
   return trimInlineWhitespace(result, "start");
+};
+
+// parser-output-unchanged: adds stripInlineSuffix, mapInlineText and rewriteInlineWhitespace; the existing helpers are unchanged.
+/**
+ * Cut `charCount` characters off the end of an inline list, descending
+ * through emphasis wrappers to reach them, and drop the whitespace the cut
+ * exposed. The mirror of {@link stripInlinePrefix}: a marker printed at the
+ * end of a line (a page number after the last word) leaves the same tree it
+ * would have had without it.
+ */
+export const stripInlineSuffix = (
+  inlines: readonly Inline[],
+  charCount: number,
+): Inline[] => {
+  const result = [...inlines];
+  let remaining = charCount;
+  for (let index = result.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const node = result[index];
+    if (node === undefined) {
+      continue;
+    }
+    const length = plainTextOf([node]).length;
+    if (length === 0) {
+      // Zero characters on the text axis (a page anchor); kept where it is.
+      continue;
+    }
+    if (length <= remaining) {
+      remaining -= length;
+      result.splice(index, 1);
+      continue;
+    }
+    if (node.type === "text") {
+      result[index] = { ...node, text: node.text.slice(0, -remaining) };
+    } else if (hasInlineChildren(node)) {
+      result[index] = {
+        ...node,
+        children: stripInlineSuffix(node.children, remaining),
+      };
+    }
+    remaining = 0;
+  }
+  return trimInlineWhitespace(result, "end");
+};
+
+/** The same inline tree with every text node's text passed through `map`. */
+export const mapInlineText = (
+  inlines: readonly Inline[],
+  map: (text: string) => string,
+): Inline[] =>
+  inlines.map((node): Inline => {
+    if (node.type === "text") {
+      return { ...node, text: map(node.text) };
+    }
+    return hasInlineChildren(node)
+      ? { ...node, children: mapInlineText(node.children, map) }
+      : node;
+  });
+
+const isWhitespace = (char: string | undefined): boolean =>
+  char !== undefined && /^\s$/u.test(char);
+
+/**
+ * What each character of `before` becomes in `after`: itself, other
+ * whitespace, or nothing. `undefined` when `after` is not `before` with only
+ * whitespace removed or replaced.
+ */
+const whitespaceEdits = (
+  before: string,
+  after: string,
+): string[] | undefined => {
+  const kept: string[] = [];
+  let next = 0;
+  // Code units, not code points: the offsets below are a text node's length.
+  for (const char of before.split("")) {
+    const target = after[next];
+    if (char === target || (isWhitespace(char) && isWhitespace(target))) {
+      kept.push(target ?? "");
+      next += 1;
+    } else if (isWhitespace(char)) {
+      kept.push("");
+    } else {
+      return undefined;
+    }
+  }
+  return next === after.length ? kept : undefined;
+};
+
+/**
+ * Apply a rewrite of a line's whole text that only removes whitespace or
+ * replaces it with other whitespace, and keep the inline tree it came from.
+ *
+ * A rewrite that reads across words (letter-spaced emphasis) has to see the
+ * line as one text: run node by node, a wrapper's edge reads as the edge of
+ * the line, and `k e` beside `lektronickému` would be judged without the
+ * word it touches. The edit is read back onto the tree by aligning the two
+ * texts; a rewrite that changes anything but whitespace leaves the tree as
+ * it was.
+ */
+export const rewriteInlineWhitespace = (
+  inlines: readonly Inline[],
+  rewrite: (text: string) => string,
+): Inline[] => {
+  const before = plainTextOf(inlines);
+  const after = rewrite(before);
+  const kept = after === before ? undefined : whitespaceEdits(before, after);
+  if (kept === undefined) {
+    return [...inlines];
+  }
+  let offset = 0;
+  const apply = (nodes: readonly Inline[]): Inline[] =>
+    nodes.flatMap((node): Inline[] => {
+      if (node.type === "text") {
+        const text = kept.slice(offset, offset + node.text.length).join("");
+        offset += node.text.length;
+        return text.length === 0 ? [] : [{ ...node, text }];
+      }
+      if (node.type === "line-break") {
+        offset += 1;
+        return [node];
+      }
+      return hasInlineChildren(node)
+        ? [{ ...node, children: apply(node.children) }]
+        : [node];
+    });
+  return apply(inlines);
 };

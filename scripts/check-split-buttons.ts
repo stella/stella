@@ -1,7 +1,16 @@
 #!/usr/bin/env bun
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type JSXAttributeName,
+  type JSXChild,
+  type JSXElementName,
+  type JSXOpeningElement,
+  type Node,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const OWNER = "packages/ui/src/components/split-button.tsx";
@@ -17,27 +26,68 @@ export type SplitButtonFinding = {
   message: string;
 };
 
-const opening = (node: ts.Node) => {
-  if (ts.isJsxElement(node)) {
-    return node.openingElement;
+const opening = (node: Node): JSXOpeningElement | undefined =>
+  node.type === "JSXElement" ? node.openingElement : undefined;
+
+const jsxName = (name: JSXElementName | JSXAttributeName): string => {
+  if (name.type === "JSXNamespacedName") {
+    return `${name.namespace.name}:${name.name.name}`;
   }
-  if (ts.isJsxSelfClosingElement(node)) {
-    return node;
+  if (name.type === "JSXMemberExpression") {
+    return `${jsxName(name.object)}.${name.property.name}`;
   }
-  return undefined;
+  return name.name;
 };
 
-const hasAttribute = (node: ts.Node, name: string): boolean =>
-  opening(node)?.attributes.properties.some(
+const tagName = (node: Node): string | undefined => {
+  const element = opening(node);
+  return element === undefined ? undefined : jsxName(element.name);
+};
+
+/** The node's direct children in source order. */
+const childrenOf = (node: Node): Node[] => {
+  const children: Node[] = [];
+  walk(node, (child) => {
+    if (child === node) {
+      return undefined;
+    }
+    children.push(child);
+    return "skip-children";
+  });
+  return children;
+};
+
+const FUNCTION_LIKE = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "TSDeclareFunction",
+  "TSEmptyBodyFunctionExpression",
+  "MethodDefinition",
+  "TSAbstractMethodDefinition",
+  "TSFunctionType",
+  "TSConstructorType",
+  "TSCallSignatureDeclaration",
+  "TSConstructSignatureDeclaration",
+  "TSMethodSignature",
+  "TSIndexSignature",
+]);
+
+const isFunctionLike = (node: Node): boolean =>
+  FUNCTION_LIKE.has(node.type) ||
+  (node.type === "Property" && (node.method || node.kind !== "init"));
+
+const hasAttribute = (node: Node, name: string): boolean =>
+  opening(node)?.attributes.some(
     (attribute) =>
-      ts.isJsxAttribute(attribute) && attribute.name.getText() === name,
+      attribute.type === "JSXAttribute" && jsxName(attribute.name) === name,
   ) ?? false;
 
 const containsPrimaryAction = (
-  node: ts.Node,
+  node: Node,
   localActions: ReadonlySet<string>,
 ): boolean => {
-  const tag = opening(node)?.tagName.getText();
+  const tag = tagName(node);
   if (tag && TRIGGER.test(tag)) {
     return false;
   }
@@ -55,10 +105,25 @@ const containsPrimaryAction = (
   if (tag && tag !== "Tooltip") {
     return false;
   }
-  return node
-    .getChildren()
-    .some((child) => containsPrimaryAction(child, localActions));
+  return childrenOf(node).some((child) =>
+    containsPrimaryAction(child, localActions),
+  );
 };
+
+/** A JSX child that is neither blank text nor an empty `{}`. */
+const isMeaningfulChild = (child: Node): boolean =>
+  !(child.type === "JSXText" && child.value.trim().length === 0) &&
+  !(
+    child.type === "JSXExpressionContainer" &&
+    child.expression.type === "JSXEmptyExpression"
+  );
+
+/** A child that can hold a control: not plain text. */
+const isJsxChild = (node: Node): node is JSXChild =>
+  node.type === "JSXElement" ||
+  node.type === "JSXExpressionContainer" ||
+  node.type === "JSXSpreadChild" ||
+  node.type === "JSXFragment";
 
 export const findAdHocSplitButtons = (
   file: string,
@@ -67,173 +132,165 @@ export const findAdHocSplitButtons = (
   if (file === OWNER || !/(?:ChevronDown|CaretDown)/u.test(content)) {
     return [];
   }
-  const source = ts.createSourceFile(
-    file,
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const source = parseSource(file, content);
   const chevrons = new Set<string>();
   const triggers = new Set<string>();
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement)) {
+  for (const statement of source.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const specifier of bindings.elements) {
-      const imported = (specifier.propertyName ?? specifier.name).text;
+    for (const specifier of statement.specifiers) {
+      if (specifier.type !== "ImportSpecifier") {
+        continue;
+      }
+      const imported =
+        specifier.imported.type === "Identifier"
+          ? specifier.imported.name
+          : specifier.imported.value;
       if (CHEVRON.test(imported)) {
-        chevrons.add(specifier.name.text);
+        chevrons.add(specifier.local.name);
       }
       if (TRIGGER.test(imported)) {
-        triggers.add(specifier.name.text);
+        triggers.add(specifier.local.name);
       }
     }
   }
-  const containsChevron = (node: ts.Node): boolean => {
-    const tag = opening(node)?.tagName.getText();
+  const containsChevron = (node: Node): boolean => {
+    const tag = tagName(node);
     if (tag && (CHEVRON.test(tag) || chevrons.has(tag))) {
       return true;
     }
-    return node.getChildren().some(containsChevron);
+    return childrenOf(node).some(containsChevron);
   };
   const localActions = new Set<string>();
-  const collectActions = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      ts.isArrowFunction(node.initializer)
-    ) {
-      const containsAction = (child: ts.Node): boolean => {
-        if (ts.isReturnStatement(child)) {
-          return (
-            child.expression !== undefined &&
-            containsPrimaryAction(child.expression, localActions)
-          );
-        }
-        if (ts.isFunctionLike(child)) {
-          return false;
-        }
-        if (opening(child)) {
-          return containsPrimaryAction(child, localActions);
-        }
-        return ts.forEachChild(child, containsAction) ?? false;
-      };
-      if (containsAction(node.initializer.body)) {
-        localActions.add(node.name.text);
-      }
-    }
-    ts.forEachChild(node, collectActions);
-  };
-  collectActions(source);
-  const hasVisibleLabel = (node: ts.Node): boolean => {
-    if (ts.isJsxText(node)) {
-      return node.text.trim().length > 0;
-    }
-    if (ts.isJsxExpression(node)) {
-      return node.expression !== undefined && hasVisibleLabel(node.expression);
-    }
-    if (ts.isParenthesizedExpression(node)) {
-      return hasVisibleLabel(node.expression);
-    }
-    if (ts.isConditionalExpression(node)) {
-      return hasVisibleLabel(node.whenTrue) || hasVisibleLabel(node.whenFalse);
-    }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
-    ) {
-      return hasVisibleLabel(node.right);
-    }
-    if (ts.isJsxFragment(node)) {
-      return node.children.some(hasVisibleLabel);
-    }
-    const element = opening(node);
-    if (!element) {
+  const containsAction = (child: Node): boolean => {
+    if (child.type === "ReturnStatement") {
       return (
-        node.kind !== ts.SyntaxKind.NullKeyword &&
-        node.kind !== ts.SyntaxKind.FalseKeyword
+        child.argument !== null &&
+        containsPrimaryAction(child.argument, localActions)
       );
     }
-    const name = element.tagName.getText();
+    if (isFunctionLike(child)) {
+      return false;
+    }
+    if (opening(child)) {
+      return containsPrimaryAction(child, localActions);
+    }
+    return childrenOf(child).some(containsAction);
+  };
+  walk(source.program, (node) => {
+    if (
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init?.type === "ArrowFunctionExpression" &&
+      containsAction(node.init.body)
+    ) {
+      localActions.add(node.id.name);
+    }
+  });
+  const hasVisibleLabel = (node: Node): boolean => {
+    if (node.type === "JSXText") {
+      return node.value.trim().length > 0;
+    }
+    if (node.type === "JSXExpressionContainer") {
+      return (
+        node.expression.type !== "JSXEmptyExpression" &&
+        hasVisibleLabel(node.expression)
+      );
+    }
+    if (
+      node.type === "JSXSpreadChild" ||
+      node.type === "ParenthesizedExpression"
+    ) {
+      return hasVisibleLabel(node.expression);
+    }
+    if (node.type === "ConditionalExpression") {
+      return (
+        hasVisibleLabel(node.consequent) || hasVisibleLabel(node.alternate)
+      );
+    }
+    if (node.type === "LogicalExpression" && node.operator === "&&") {
+      return hasVisibleLabel(node.right);
+    }
+    if (node.type === "JSXFragment") {
+      return node.children.some(hasVisibleLabel);
+    }
+    if (node.type !== "JSXElement") {
+      return !(
+        node.type === "Literal" &&
+        (node.value === false || (node.value === null && node.raw === "null"))
+      );
+    }
+    const element = node.openingElement;
+    const name = jsxName(element.name);
     if (CHEVRON.test(name) || chevrons.has(name)) {
       return false;
     }
     if (name.endsWith("Icon")) {
       return true;
     }
-    if (ts.isJsxElement(node) && node.children.some(hasVisibleLabel)) {
+    if (node.children.some(hasVisibleLabel)) {
       return true;
     }
     // Base UI commonly places the icon inside the render button.
-    return element.attributes.properties.some(
+    return element.attributes.some(
       (attribute) =>
-        ts.isJsxAttribute(attribute) &&
-        attribute.name.getText() === "render" &&
-        attribute.initializer &&
-        ts.isJsxExpression(attribute.initializer) &&
-        attribute.initializer.expression &&
-        hasVisibleLabel(attribute.initializer.expression),
+        attribute.type === "JSXAttribute" &&
+        jsxName(attribute.name) === "render" &&
+        attribute.value?.type === "JSXExpressionContainer" &&
+        attribute.value.expression.type !== "JSXEmptyExpression" &&
+        hasVisibleLabel(attribute.value.expression),
     );
   };
   const findings: SplitButtonFinding[] = [];
-  const visit = (node: ts.Node): void => {
-    const tag = opening(node)?.tagName.getText();
+  walk(source.program, (node, ancestors) => {
+    const tag = tagName(node);
     if (
-      tag &&
-      (TRIGGER.test(tag) || triggers.has(tag)) &&
-      containsChevron(node) &&
-      !hasVisibleLabel(node)
+      !tag ||
+      !(TRIGGER.test(tag) || triggers.has(tag)) ||
+      !containsChevron(node) ||
+      hasVisibleLabel(node)
     ) {
-      let branch = node;
-      // Menu/Popover roots, render props and conditionals may sit between the
-      // trigger and the layout's child list. Stop at the first adjacent action.
-      while (!ts.isSourceFile(branch.parent)) {
-        const parent = branch.parent;
-        if (ts.isJsxElement(parent) || ts.isJsxFragment(parent)) {
-          const siblings = parent.children.filter(
-            (child) =>
-              !(ts.isJsxText(child) && child.text.trim().length === 0) &&
-              !(ts.isJsxExpression(child) && child.expression === undefined),
-          );
-          const index =
-            ts.isJsxElement(branch) ||
-            ts.isJsxSelfClosingElement(branch) ||
-            ts.isJsxExpression(branch) ||
-            ts.isJsxFragment(branch)
-              ? siblings.indexOf(branch)
-              : -1;
-          const previous = siblings.at(index - 1);
-          if (
-            index > 0 &&
-            previous &&
-            containsPrimaryAction(previous, localActions)
-          ) {
-            findings.push({
-              file,
-              line:
-                source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-              message:
-                "adjacent primary action and chevron trigger must use SplitButton",
-            });
-            break;
-          }
-          const parentTag = opening(parent)?.tagName.getText();
-          if (parentTag && !TRIGGER_WRAPPER.test(parentTag)) {
-            break;
-          }
-        }
-        branch = parent;
-      }
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    let branch = node;
+    // Menu/Popover roots, render props and conditionals may sit between the
+    // trigger and the layout's child list. Stop at the first adjacent action.
+    // The outermost ancestor is the program itself.
+    for (let index = ancestors.length - 1; index > 0; index -= 1) {
+      const parent = ancestors[index];
+      if (parent === undefined) {
+        break;
+      }
+      // A self-closing element has no child list.
+      if (
+        (parent.type === "JSXElement" && parent.closingElement !== null) ||
+        parent.type === "JSXFragment"
+      ) {
+        const siblings = parent.children.filter(isMeaningfulChild);
+        const position = isJsxChild(branch) ? siblings.indexOf(branch) : -1;
+        const previous = siblings.at(position - 1);
+        if (
+          position > 0 &&
+          previous &&
+          containsPrimaryAction(previous, localActions)
+        ) {
+          findings.push({
+            file,
+            line: source.locate(node.start).line,
+            message:
+              "adjacent primary action and chevron trigger must use SplitButton",
+          });
+          break;
+        }
+        const parentTag = tagName(parent);
+        if (parentTag && !TRIGGER_WRAPPER.test(parentTag)) {
+          break;
+        }
+      }
+      branch = parent;
+    }
+  });
   return findings;
 };
 
@@ -245,13 +302,7 @@ export const findSplitButtonMenuControls = (
   if (file === OWNER || !content.includes("SplitButton")) {
     return [];
   }
-  const source = ts.createSourceFile(
-    file,
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const source = parseSource(file, content);
   const splitButtons = new Set(["SplitButton"]);
   const menuItemNames = new Set([
     "MenuItem",
@@ -272,40 +323,45 @@ export const findSplitButtonMenuControls = (
     "Textarea",
     "Button",
   ]);
-  const definitions = new Map<string, ts.Node>();
-  const collect = (node: ts.Node): void => {
-    if (ts.isImportSpecifier(node)) {
-      const imported = (node.propertyName ?? node.name).text;
+  const definitions = new Map<string, Node>();
+  walk(source.program, (node) => {
+    if (node.type === "ImportSpecifier") {
+      const imported =
+        node.imported.type === "Identifier"
+          ? node.imported.name
+          : node.imported.value;
       if (imported === "SplitButton") {
-        splitButtons.add(node.name.text);
+        splitButtons.add(node.local.name);
       }
       if (controls.has(imported)) {
-        controls.add(node.name.text);
+        controls.add(node.local.name);
       }
       if (menuItemNames.has(imported)) {
-        menuItemAliases.add(node.name.text);
+        menuItemAliases.add(node.local.name);
       }
     }
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init !== null
     ) {
-      definitions.set(node.name.text, node.initializer);
+      definitions.set(node.id.name, node.init);
     }
-    if (ts.isFunctionDeclaration(node) && node.name && node.body) {
-      definitions.set(node.name.text, node.body);
+    if (
+      node.type === "FunctionDeclaration" &&
+      node.id !== null &&
+      node.body !== null
+    ) {
+      definitions.set(node.id.name, node.body);
     }
-    ts.forEachChild(node, collect);
-  };
-  collect(source);
+  });
   const findings: SplitButtonFinding[] = [];
-  const inspect = (node: ts.Node, seen: Set<ts.Node>): void => {
+  const inspect = (node: Node, seen: Set<Node>): void => {
     if (seen.has(node)) {
       return;
     }
     seen.add(node);
-    const tag = opening(node)?.tagName.getText();
+    const tag = tagName(node);
     if (
       tag &&
       !menuItemAliases.has(tag) &&
@@ -316,7 +372,7 @@ export const findSplitButtonMenuControls = (
     ) {
       findings.push({
         file,
-        line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+        line: source.locate(node.start).line,
         message: `${tag} inside a SplitButton menu requires surface="popover"; menu surfaces contain menuitems`,
       });
       return;
@@ -327,39 +383,47 @@ export const findSplitButtonMenuControls = (
         inspect(definition, seen);
       }
     }
-    if (ts.isIdentifier(node)) {
-      const definition = definitions.get(node.text);
+    // JSX tag and attribute names resolve like any identifier.
+    if (node.type === "Identifier" || node.type === "JSXIdentifier") {
+      const definition = definitions.get(node.name);
       if (definition) {
         inspect(definition, seen);
       }
     }
-    ts.forEachChild(node, (child) => inspect(child, seen));
-  };
-  const visit = (node: ts.Node): void => {
-    const element = opening(node);
-    if (element && splitButtons.has(element.tagName.getText())) {
-      const attributes = element.attributes.properties.filter(
-        ts.isJsxAttribute,
-      );
-      const surface = attributes.find(
-        (attribute) => attribute.name.getText() === "surface",
-      )?.initializer;
-      const surfaceValue =
-        surface && ts.isJsxExpression(surface) ? surface.expression : surface;
-      const isPopover =
-        surfaceValue &&
-        ts.isStringLiteral(surfaceValue) &&
-        surfaceValue.text === "popover";
-      const menu = attributes.find(
-        (attribute) => attribute.name.getText() === "menu",
-      )?.initializer;
-      if (!isPopover && menu && ts.isJsxExpression(menu) && menu.expression) {
-        inspect(menu.expression, new Set());
-      }
+    for (const child of childrenOf(node)) {
+      inspect(child, seen);
     }
-    ts.forEachChild(node, visit);
   };
-  visit(source);
+  walk(source.program, (node) => {
+    const element = opening(node);
+    if (element === undefined || !splitButtons.has(jsxName(element.name))) {
+      return;
+    }
+    const attributeValue = (name: string) => {
+      for (const attribute of element.attributes) {
+        if (
+          attribute.type === "JSXAttribute" &&
+          jsxName(attribute.name) === name
+        ) {
+          return attribute.value ?? undefined;
+        }
+      }
+      return undefined;
+    };
+    const surface = attributeValue("surface");
+    const surfaceValue =
+      surface?.type === "JSXExpressionContainer" ? surface.expression : surface;
+    const isPopover =
+      surfaceValue?.type === "Literal" && surfaceValue.value === "popover";
+    const menu = attributeValue("menu");
+    if (
+      !isPopover &&
+      menu?.type === "JSXExpressionContainer" &&
+      menu.expression.type !== "JSXEmptyExpression"
+    ) {
+      inspect(menu.expression, new Set());
+    }
+  });
   return findings;
 };
 

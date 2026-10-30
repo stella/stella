@@ -1,7 +1,9 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
@@ -9,11 +11,13 @@ import { databaseRelations } from "@/api/db/database-relations";
 import {
   caseLawCitations,
   caseLawDecisions,
-  caseLawSources,
   caseLawProvisionCitations,
+  caseLawSources,
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -29,6 +33,7 @@ import {
   APP_READER_TEXT,
   type AppReaderText,
 } from "@/api/lib/legal-search/adapter-manifest";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   PARTIAL_OBSERVATION_FIELD,
@@ -42,8 +47,9 @@ import {
   PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -75,6 +81,18 @@ const listingOnlyId = createSafeId<"caseLawDecision">();
 const redactedId = createSafeId<"caseLawDecision">();
 const unavailableCountryId = createSafeId<"caseLawDecision">();
 const missingId = createSafeId<"caseLawDecision">();
+const fulltextId = createSafeId<"caseLawDecision">();
+const placeholderFulltextId = createSafeId<"caseLawDecision">();
+const emptyAstFulltextId = createSafeId<"caseLawDecision">();
+const bodylessId = createSafeId<"caseLawDecision">();
+const astAndFulltextId = createSafeId<"caseLawDecision">();
+const withheldFulltextId = createSafeId<"caseLawDecision">();
+const FULLTEXT = "First paragraph.\n\nReference 40 Cdo 1/2026.";
+const fulltextCases = [
+  { name: "absent AST", id: fulltextId },
+  { name: "placeholder AST", id: placeholderFulltextId },
+  { name: "empty AST", id: emptyAstFulltextId },
+] as const;
 const provisionSmallId = createSafeId<"caseLawDecision">();
 const provisionLargeId = createSafeId<"caseLawDecision">();
 const provisionStaleId = createSafeId<"caseLawDecision">();
@@ -242,6 +260,37 @@ beforeAll(
     });
     await db.insert(caseLawDecisions).values([
       {
+        ...row(fulltextId, sourceId),
+        caseNumber: "40 Cdo 10/2026",
+        fulltext: FULLTEXT,
+      },
+      {
+        ...row(placeholderFulltextId, sourceId),
+        caseNumber: "40 Cdo 11/2026",
+        documentAst: EMPTY_AST,
+        fulltext: FULLTEXT,
+      },
+      {
+        ...row(emptyAstFulltextId, sourceId),
+        caseNumber: "40 Cdo 12/2026",
+        documentAst: documentAst({ blockCount: 0, citationCount: 0 }),
+        fulltext: FULLTEXT,
+      },
+      {
+        ...row(bodylessId, sourceId),
+        fulltext: "",
+        documentAst: EMPTY_AST,
+      },
+      {
+        ...row(astAndFulltextId, sourceId),
+        documentAst: smallAst,
+        fulltext: FULLTEXT,
+      },
+      {
+        ...row(withheldFulltextId, withheldSourceId),
+        fulltext: FULLTEXT,
+      },
+      {
         ...row(smallId, sourceId),
         documentAst: smallAst,
       },
@@ -384,6 +433,12 @@ beforeAll(
       );
     }
     await db.insert(caseLawCitations).values([
+      ...fulltextCases.map(({ id }) => ({
+        id: createSafeId<"caseLawCitation">(),
+        citingDecisionId: id,
+        citedDecisionId: largeId,
+        citationText: citationText(0),
+      })),
       {
         id: createSafeId<"caseLawCitation">(),
         citingDecisionId: smallId,
@@ -436,6 +491,158 @@ const measuredRead = async (
   });
 
 describe("public decision reader database boundary", () => {
+  test.each(fulltextCases)(
+    "$name retains flat text in reader blocks, MCP pages and resolution",
+    async ({ id }) => {
+      const result = await read(id, "blocks");
+      if (result?.status !== "read" || result.ast === null) {
+        throw new Error("Expected fulltext reader document");
+      }
+      expect(result.textAccess).toBe("readable");
+      expect(result.ast.blocks).toEqual(buildFulltextParagraphBlocks(FULLTEXT));
+      expect(result.ast.source).toMatchObject({
+        system: ADAPTER_KEYS.CZ_NS,
+        documentId: id,
+      });
+      expect(result.ast.metadata).toMatchObject({
+        caseNumber: result.decision.caseNumber,
+        court: result.decision.court,
+        ecli: result.decision.ecli,
+      });
+      const citations = await read(id, "citations");
+      expect(citations?.status).toBe("read");
+      if (citations?.status !== "read") {
+        throw new Error("Expected fulltext citation source");
+      }
+      expect(citations.citationAnchors).toMatchObject([
+        {
+          pieceId: "fulltext:1",
+          start: "Reference ".length,
+          end: "Reference 40 Cdo 1/2026".length,
+          decisionId: largeId,
+        },
+      ]);
+      const readSource = async (options: ReaderSourceOptions) =>
+        await readDecisionReaderSource({
+          ...options,
+          caseLawDb,
+          legislationDb,
+        });
+      const page =
+        await DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks({
+          args: { decision_id: id },
+          context: asTestRaw<AuthorizedMcpRequestContext>({
+            testDependencies: { readDecisionReaderSource: readSource },
+          }),
+        });
+      expect(page).toMatchObject({
+        status: "success",
+        data: { content: { status: "available" } },
+      });
+      expect(JSON.stringify(page)).toContain("fulltext:0");
+      expect(JSON.stringify(page)).toContain("First paragraph.");
+      const organizationId =
+        parseAuthProviderId<"organization">("reader-fixture");
+      if (organizationId === null) {
+        throw new Error("Invalid reader fixture organization");
+      }
+      const admitted = admitLawRead({
+        organizationId,
+        publicLawEnabled: () => true,
+      });
+      if (Result.isError(admitted)) {
+        throw new TypeError("Reader fixture admission failed");
+      }
+      const resolved = await resolveDecision({
+        admission: admitted.value,
+        country: "CZE",
+        identifier: result.decision.caseNumber,
+        dependencies: {
+          lookup: async () => [
+            {
+              ...result.decision,
+              identifiers: [],
+              decisionType: null,
+            },
+          ],
+          read: readSource,
+        },
+      });
+      expect(resolved).toMatchObject({
+        status: "resolved",
+        document: {
+          text: {
+            status: "readable",
+            blocks: buildFulltextParagraphBlocks(FULLTEXT),
+            extent: { type: "complete" },
+          },
+        },
+      });
+    },
+  );
+
+  test("usable AST keeps its anchors in preference to fallback flat text", async () => {
+    const result = await read(astAndFulltextId, "blocks");
+    expect(result?.status).toBe("read");
+    if (result?.status !== "read") {
+      throw new Error("Expected AST reader source");
+    }
+    expect(result.ast?.blocks).toEqual(
+      documentAst({ blockCount: 1, citationCount: 1 }).blocks,
+    );
+    expect(JSON.stringify(result.ast)).not.toContain("fulltext:0");
+  });
+
+  test("a placeholder without text stays unavailable", async () => {
+    const result = await read(bodylessId, "blocks");
+    expect(result?.status).toBe("read");
+    if (result?.status !== "read") {
+      throw new Error("Expected bodyless reader source");
+    }
+    expect(result.ast).toBeNull();
+  });
+
+  test.each([
+    {
+      audience: "model",
+      appReaderText: APP_READER_TEXT.FULL,
+      expected: "withheld",
+    },
+    {
+      audience: "app",
+      appReaderText: APP_READER_TEXT.METADATA_ONLY,
+      expected: "withheld",
+    },
+    {
+      audience: "app",
+      appReaderText: APP_READER_TEXT.FULL,
+      expected: "readable",
+    },
+  ] as const)(
+    "flat text follows the $audience audience and $appReaderText source setting",
+    async ({ audience, appReaderText, expected }) => {
+      const result = await readDecisionReaderSource({
+        caseLawDb,
+        legislationDb,
+        decisionId: withheldFulltextId,
+        phase: "blocks",
+        audience,
+        surface: "search",
+        appReaderTextOf: () => appReaderText,
+      });
+      expect(result?.status).toBe("read");
+      if (result?.status !== "read") {
+        throw new Error("Expected fulltext licence reader source");
+      }
+      expect(result.textAccess).toBe(expected);
+      expect(result.ast?.blocks ?? null).toEqual(
+        expected === "readable" ? buildFulltextParagraphBlocks(FULLTEXT) : null,
+      );
+      expect(result.citationAnchors).toEqual([]);
+      expect(result.provisionAnchors).toEqual([]);
+    },
+  );
+
   test("unpublished, restricted, unavailable-country and missing decisions expose no reader data", async () => {
     for (const decisionId of [
       listingOnlyId,
@@ -498,7 +705,7 @@ describe("public decision reader database boundary", () => {
     const blocksFor = async (appReaderText: AppReaderText) =>
       await DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks({
         args: { decision_id: withheldId },
-        context: asTestRaw<McpRequestContext>({
+        context: asTestRaw<AuthorizedMcpRequestContext>({
           testDependencies: {
             readDecisionReaderSource: async (options: ReaderSourceOptions) =>
               await readDecisionReaderSource({

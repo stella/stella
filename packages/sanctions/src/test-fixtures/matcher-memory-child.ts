@@ -2,10 +2,10 @@ import { panic } from "better-result";
 
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "../screening";
 import {
-  MONITORING_CONTACT_COUNT,
-  MONITORING_SCREENING_PASSES,
   MATCHER_REPORT_BATCH_SIZE,
+  MONITORING_CONTACT_COUNT,
   MONITORING_ENTRY_COUNT,
+  MONITORING_SCREENING_PASSES,
   syntheticMonitoringEntry,
   syntheticMonitoringName,
 } from "./monitoring-corpus";

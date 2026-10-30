@@ -100,6 +100,55 @@
   --warning-foreground: #fcd34d;
 }
 
+/* Tokens the @stll/workspace-ui feature previews (the Product menu's scenes)
+   draw with beyond the landing's own set, valued as in @stll/ui/theme.css.
+   The landing does not import that theme: its base layer and surface tokens
+   would restyle the whole site. */
+@theme inline {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 0.875rem;
+  --color-destructive: var(--destructive);
+  --color-info: var(--info);
+  --color-foreground-disabled: var(--foreground-disabled);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-strong-muted: var(--foreground-strong-muted);
+}
+
+:root {
+  --destructive: var(--color-red-500);
+  --info: var(--color-blue-500);
+  --foreground-disabled: color-mix(in srgb, var(--foreground) 40%, transparent);
+  --foreground-subtle: color-mix(in srgb, var(--foreground) 50%, transparent);
+  --foreground-muted: color-mix(in srgb, var(--foreground) 60%, transparent);
+  --foreground-strong-muted: color-mix(
+    in srgb,
+    var(--foreground) 80%,
+    transparent
+  );
+  --option-amber: var(--color-amber-500);
+  --option-blue: var(--color-blue-500);
+  --option-violet: var(--color-violet-500);
+  --option-yellow: var(--color-yellow-500);
+}
+
+.dark {
+  --destructive: color-mix(
+    in srgb,
+    var(--color-red-500) 90%,
+    var(--color-white)
+  );
+}
+
+/* The theme's base layer gives every border the `--border` token; the
+   landing's base keeps Tailwind's currentColor, so restore it inside the
+   scenes only. */
+:where([data-slot="feature-preview"], [data-slot="feature-preview"] *) {
+  border-color: var(--border);
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);

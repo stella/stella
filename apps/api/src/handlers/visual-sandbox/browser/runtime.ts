@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
-  VISUAL_DATA_SCRIPT_ID,
   generatedVisualInputSchema,
+  VISUAL_DATA_SCRIPT_ID,
 } from "@stll/api-contract/generated-visual";
 import {
   VISUAL_GUEST_MARKER_ATTRIBUTE,
@@ -14,8 +14,8 @@ import {
 } from "@stll/api-contract/visual-sandbox";
 import {
   VISUAL_THEME_SCRIPT_ID,
-  visualThemeSchema,
   type VisualTheme,
+  visualThemeSchema,
 } from "@stll/api-contract/visual-theme";
 
 import { createVisualMessageHandler, visualGuestPortFrom } from "../bridge";

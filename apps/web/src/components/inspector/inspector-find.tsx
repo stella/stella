@@ -1,22 +1,30 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { buildSearchResults } from "@stll/decision-reader/reader-search";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";
 
+import {
+  buildReaderFindIndex,
+  findReaderMatches,
+  rangeOfMatch,
+} from "./reader-find-index";
+import type { ReaderFindIndex, ReaderFindMatch } from "./reader-find-index";
+
 type InspectorFindOptions = {
-  /** The text the bar searches: every text node under it is walked. */
+  /**
+   * The text the bar searches. Its text nodes are read once per version of
+   * the text; queries, steps and scrolling reuse that reading.
+   */
   contentRef: RefObject<HTMLElement | null>;
   /** While false the surface is not a candidate and its bar cannot open. */
   enabled: boolean;
@@ -86,6 +94,15 @@ type FindInputs = {
   landingRequest: number;
 };
 
+/**
+ * The page's highlight registry, or nothing in a browser without the CSS
+ * Custom Highlight API. Every mark goes through here, so that absence is
+ * handled in one place.
+ */
+const highlightRegistry = (): HighlightRegistry | undefined =>
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+  CSS.highlights ?? undefined;
+
 /** The state after a find command: opened, or open with focus asked for again. */
 const findCommanded = (prev: FindBarState): FindBarState =>
   prev.open ? { ...prev, focusRequest: prev.focusRequest + 1 } : FIND_OPENED;
@@ -118,10 +135,8 @@ export const useInspectorFind = ({
     setFindState((prev) =>
       prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
     );
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(allHighlightName);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(activeHighlightName);
+    highlightRegistry()?.delete(allHighlightName);
+    highlightRegistry()?.delete(activeHighlightName);
   }, [activeHighlightName, allHighlightName]);
 
   const closeFind = useCallback(() => {
@@ -239,6 +254,18 @@ export const useInspectorFind = ({
     };
   }, [closeFind, enabled, findOpen, panelRef]);
 
+  // The text read once, until it changes, and the drawing of the current
+  // query's matches over it. Both outlive renders: a keystroke queries the
+  // index, a step moves only the active mark, and scrolling draws the
+  // matches that come near the viewport.
+  const indexRef = useRef<ReaderFindIndex | null>(null);
+  const paintRef = useRef<FindPaint | null>(null);
+
+  const stopFindPaint = () => {
+    stopPaint(paintRef.current);
+    paintRef.current = null;
+  };
+
   // One collection for both things that change what matches: the bar's own
   // values, and the reader's text arriving later. Called with the values
   // rather than closing over them, so the effect below lists what it reads.
@@ -249,30 +276,52 @@ export const useInspectorFind = ({
       findQuery: queryInput,
       scrollIntent: intent,
     }: FindInputs) => {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.delete(allHighlightName);
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.delete(activeHighlightName);
-
       const root = contentRef.current;
       const query = queryInput.trim();
       if (!isEnabled || !root || query.length === 0) {
+        stopFindPaint();
+        highlightRegistry()?.delete(allHighlightName);
+        highlightRegistry()?.delete(activeHighlightName);
         setFindState((prev) =>
           prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
             ? { ...prev, matchCount: 0, activeIndex: 0 }
             : prev,
         );
-        return undefined;
+        return;
       }
 
-      const ranges = collectTextRanges(root, query);
+      let textIndex = indexRef.current;
+      if (textIndex === null || textIndex.root !== root) {
+        textIndex = buildReaderFindIndex(root);
+        indexRef.current = textIndex;
+      }
+      let paint = paintRef.current;
+      if (
+        paint === null ||
+        paint.index !== textIndex ||
+        paint.query !== query ||
+        paint.allName !== allHighlightName ||
+        paint.activeName !== activeHighlightName
+      ) {
+        stopFindPaint();
+        paint = startPaint({
+          activeName: activeHighlightName,
+          allName: allHighlightName,
+          index: textIndex,
+          query,
+        });
+        paintRef.current = paint;
+      }
+      const { matches } = paint;
       setFindState((prev) =>
-        prev.open && prev.matchCount !== ranges.length
-          ? { ...prev, matchCount: ranges.length }
+        prev.open && prev.matchCount !== matches.length
+          ? { ...prev, matchCount: matches.length }
           : prev,
       );
 
-      if (ranges.length === 0) {
+      if (matches.length === 0) {
+        paint.active = null;
+        highlightRegistry()?.delete(activeHighlightName);
         setFindState((prev) =>
           prev.open &&
           (prev.activeIndex !== 0 ||
@@ -284,58 +333,56 @@ export const useInspectorFind = ({
               }
             : prev,
         );
-        return undefined;
+        return;
       }
 
-      const safeActiveIndex = index >= ranges.length ? 0 : index;
+      const safeActiveIndex = index >= matches.length ? 0 : index;
       if (safeActiveIndex !== index) {
         setFindState((prev) =>
           prev.open ? { ...prev, activeIndex: safeActiveIndex } : prev,
         );
-        return undefined;
+        return;
       }
 
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.set(allHighlightName, new Highlight(...ranges));
-      const activeRange = ranges.at(safeActiveIndex);
-      if (activeRange) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
-        if (intent === FIND_SCROLL_INTENT.reveal) {
-          scrollRangeIntoView(activeRange);
-          setFindState((prev) =>
-            prev.open && prev.scrollIntent === FIND_SCROLL_INTENT.reveal
-              ? { ...prev, scrollIntent: FIND_SCROLL_INTENT.stay }
-              : prev,
-          );
-        }
+      const activeRange = paintActive(paint, safeActiveIndex);
+      if (activeRange && intent === FIND_SCROLL_INTENT.reveal) {
+        scrollRangeIntoView(activeRange);
+        setFindState((prev) =>
+          prev.open && prev.scrollIntent === FIND_SCROLL_INTENT.reveal
+            ? { ...prev, scrollIntent: FIND_SCROLL_INTENT.stay }
+            : prev,
+        );
       }
-
-      return () => {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.delete(allHighlightName);
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.delete(activeHighlightName);
-      };
     },
   );
 
-  useLayoutEffect(
-    () =>
-      applyFind({
-        activeIndex,
-        enabled,
-        findQuery,
-        landingRequest,
-        scrollIntent,
-      }),
-    [activeIndex, applyFind, enabled, findQuery, landingRequest, scrollIntent],
-  );
+  useLayoutEffect(() => {
+    applyFind({
+      activeIndex,
+      enabled,
+      findQuery,
+      landingRequest,
+      scrollIntent,
+    });
+  }, [
+    activeIndex,
+    applyFind,
+    enabled,
+    findQuery,
+    landingRequest,
+    scrollIntent,
+  ]);
+
+  // The marks belong to this reader: they go when it unmounts.
+  useMountEffect(() => () => {
+    stopFindPaint();
+  });
 
   // The reader fills in after the bar can be open: citations, provision
   // history and "load more" insert text later. Each insertion is a new
-  // document to match against, so the collection runs again on it.
+  // version of the text, so it is read again and the query rerun on it.
   const reapplyFind = useLatestCallback(() => {
+    indexRef.current = null;
     applyFind({
       activeIndex,
       enabled,
@@ -516,74 +563,130 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
   );
 };
 
-type TextNodeSegment = { node: Node; start: number; end: number };
-type TextPiece = { id: string; text: string; nodes: TextNodeSegment[] };
+/**
+ * One query's matches drawn over one version of the text.
+ *
+ * The count and the steps cover every match; the marks are drawn only for
+ * matches whose block is on screen or near it, so the ranges a reader holds
+ * stay proportional to what it shows, not to the document. The active match
+ * is drawn wherever it is.
+ */
+type FindPaint = {
+  active: { index: number; range: Range } | null;
+  readonly activeName: string;
+  readonly all: Highlight;
+  readonly allName: string;
+  readonly index: ReaderFindIndex;
+  readonly matches: readonly ReaderFindMatch[];
+  readonly observer: IntersectionObserver;
+  readonly query: string;
+};
 
-/** Inline markup shares a search piece; paragraph boundaries keep words apart. */
-const collectTextRanges = (root: HTMLElement, query: string): Range[] => {
-  const pieces: TextPiece[] = [];
-  const textRoot = root.matches('[data-slot="reader-document-column"]')
-    ? root
-    : (root.querySelector<HTMLElement>(
-        '[data-slot="reader-document-column"]',
-      ) ?? root);
-  const walker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
-  let previousBlock: Element | null = null;
-  let piece: TextPiece | undefined;
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const parent = node.parentElement;
-    if (
-      parent?.closest(
-        "[data-reader-chrome], [aria-hidden='true'], .sr-only, script, style",
-      )
-    ) {
-      continue;
+/** How far beyond the visible text marks are drawn ahead of a scroll. */
+const PAINT_MARGIN = "100% 0px";
+
+const startPaint = ({
+  activeName,
+  allName,
+  index,
+  query,
+}: {
+  activeName: string;
+  allName: string;
+  index: ReaderFindIndex;
+  query: string;
+}): FindPaint => {
+  const matches = findReaderMatches(index, query);
+  const all = new Highlight();
+  highlightRegistry()?.set(allName, all);
+  const matchesByBlock = new Map<Element, ReaderFindMatch[]>();
+  for (const match of matches) {
+    const blockMatches = matchesByBlock.get(match.block);
+    if (blockMatches) {
+      blockMatches.push(match);
+    } else {
+      matchesByBlock.set(match.block, [match]);
     }
-    const text = node.textContent ?? "";
-    if (text.length === 0) {
-      continue;
-    }
-    const block =
-      parent?.closest(
-        "p, li, dt, dd, h1, h2, h3, h4, h5, h6, td, th, blockquote, pre, figcaption",
-      ) ?? textRoot;
-    if (piece === undefined || block !== previousBlock) {
-      piece = { id: String(pieces.length), text: "", nodes: [] };
-      pieces.push(piece);
-      previousBlock = block;
-    }
-    piece.nodes.push({
-      node,
-      start: piece.text.length,
-      end: piece.text.length + text.length,
-    });
-    piece.text += text;
   }
-  const results = buildSearchResults({ pieces, query });
-  const ranges: Range[] = [];
-  for (const textPiece of pieces) {
-    const pieceRanges = results.rangesByPieceId[textPiece.id];
-    if (pieceRanges === undefined) {
-      continue;
-    }
-    for (const match of pieceRanges) {
-      const start = textPiece.nodes.find(
-        (segment) => match.start >= segment.start && match.start < segment.end,
-      );
-      const end = textPiece.nodes.find(
-        (segment) => match.end > segment.start && match.end <= segment.end,
-      );
-      if (start === undefined || end === undefined) {
-        panic("Reader search match must map to its source text nodes");
+  const drawn = new Map<Element, Range[]>();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const block = entry.target;
+        const ranges = drawn.get(block);
+        if (entry.isIntersecting && ranges === undefined) {
+          const blockMatches = matchesByBlock.get(block);
+          if (blockMatches === undefined) {
+            continue;
+          }
+          const blockRanges = blockMatches.map(rangeOfMatch);
+          for (const range of blockRanges) {
+            all.add(range);
+          }
+          drawn.set(block, blockRanges);
+        } else if (!entry.isIntersecting && ranges !== undefined) {
+          for (const range of ranges) {
+            all.delete(range);
+          }
+          drawn.delete(block);
+        }
       }
-      const range = document.createRange();
-      range.setStart(start.node, match.start - start.start);
-      range.setEnd(end.node, match.end - end.start);
-      ranges.push(range);
+    },
+    { root: scrollRootOf(index.root), rootMargin: PAINT_MARGIN },
+  );
+  for (const block of matchesByBlock.keys()) {
+    observer.observe(block);
+  }
+  return {
+    active: null,
+    activeName,
+    all,
+    allName,
+    index,
+    matches,
+    observer,
+    query,
+  };
+};
+
+const stopPaint = (paint: FindPaint | null): void => {
+  if (paint === null) {
+    return;
+  }
+  paint.observer.disconnect();
+  highlightRegistry()?.delete(paint.allName);
+  highlightRegistry()?.delete(paint.activeName);
+};
+
+/** Draws the active mark, making its range only when the active match moves. */
+const paintActive = (paint: FindPaint, index: number): Range | undefined => {
+  const match = paint.matches.at(index);
+  if (match === undefined) {
+    return undefined;
+  }
+  if (paint.active?.index !== index) {
+    paint.active = { index, range: rangeOfMatch(match) };
+  }
+  const { range } = paint.active;
+  // A reader's clear removes the registrations; drawing again restores them.
+  highlightRegistry()?.set(paint.allName, paint.all);
+  highlightRegistry()?.set(paint.activeName, new Highlight(range));
+  return range;
+};
+
+/** The element the reader scrolls in: what "near the viewport" is measured in. */
+const scrollRootOf = (element: HTMLElement): Element | null => {
+  for (
+    let current: HTMLElement | null = element;
+    current !== null;
+    current = current.parentElement
+  ) {
+    const { overflowY } = getComputedStyle(current);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return current;
     }
   }
-  return ranges;
+  return null;
 };
 
 /**

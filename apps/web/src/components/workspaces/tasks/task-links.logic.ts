@@ -2,9 +2,9 @@ import { panic } from "better-result";
 
 import {
   parseResourceRef,
-  resourceRef,
   RESOURCE_TYPE,
   type ResourceRef,
+  resourceRef,
 } from "@stll/api-contract";
 
 import { toSafeId } from "@/lib/safe-id";

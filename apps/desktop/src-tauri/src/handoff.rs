@@ -245,7 +245,8 @@ async fn recover(
         tracing::warn!(%error, "required handoff update check failed")
       }
       crate::updater::CheckOutcome::Deferred { .. }
-      | crate::updater::CheckOutcome::UpToDate => {}
+      | crate::updater::CheckOutcome::UpToDate
+      | crate::updater::CheckOutcome::Disabled => {}
     }
   }
   let accepted = host.confirm(&failure).await?;
@@ -1747,6 +1748,7 @@ mod tests {
           store.link_fixture(live_b.clone()).await.unwrap_err(),
           "Disconnect the current desktop account before connecting another"
         );
+        drop(store);
       }
       let mismatch = AccountMismatch {
         linked_server: server_a.clone(),
@@ -1803,6 +1805,7 @@ mod tests {
           store.link_fixture(live_b).await.unwrap(),
           crate::account::LinkOutcome::Linked
         );
+        drop(store);
       }
       let resumed = match take_parked_for_account(&origin).await {
         ResumeAfterLink::Ready(parked) => parked,

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "./api-date";
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
 import { publicCountriesFor } from "./public-country-capability";
@@ -33,7 +34,7 @@ const launchReadinessCountrySchema = v.pipe(
 const launchReadinessEntrySchema = v.strictObject({
   country: launchReadinessCountrySchema,
   evalSetExists: v.literal(true),
-  lastCensusDate: v.pipe(v.string(), v.isoDate()),
+  lastCensusDate: apiDateSchema,
   lastCensusGreen: v.literal(true),
 });
 
@@ -83,10 +84,10 @@ type CaseLawExplicitLaunch = {
 /** Countries launched to case-law search by an explicit decision; null means none. */
 export const CASE_LAW_EXPLICIT_LAUNCHES = {
   CZE: null,
-  EU: null,
-  HUN: null,
+  EU: { decidedBy: "project owner", decidedOn: "2026-10-23" },
+  HUN: { decidedBy: "project owner", decidedOn: "2026-10-23" },
   POL: { decidedBy: "project owner", decidedOn: "2026-10-20" },
-  SVK: null,
+  SVK: { decidedBy: "project owner", decidedOn: "2026-10-23" },
 } as const satisfies Record<
   CaseLawBrowserCountry,
   CaseLawExplicitLaunch | null

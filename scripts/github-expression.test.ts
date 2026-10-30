@@ -1,14 +1,75 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  UNKNOWN,
   contextFromNested,
   contextWithPlanOutputs,
   definitelyFalse,
   evaluate,
+  expressionValueSources,
+  UNKNOWN,
 } from "./github-expression";
 
 const none = { values: {} };
+
+test.each([
+  ["needs.plan.outputs.image", ["needs.plan.outputs.image"]],
+  [
+    "matrix.shard == 1 && needs.plan.outputs.required == 'true' && needs.plan.outputs.image || ''",
+    ["needs.plan.outputs.image", ""],
+  ],
+  [
+    "needs.plan.outputs.unresolved || needs.plan.outputs.image",
+    ["needs.plan.outputs.unresolved", "needs.plan.outputs.image"],
+  ],
+  [
+    "needs.plan.outputs.image || needs.plan.outputs.unresolved",
+    ["needs.plan.outputs.image", "needs.plan.outputs.unresolved"],
+  ],
+  [
+    "(needs.plan.outputs.required == 'true') || needs.plan.outputs.image",
+    [true, "needs.plan.outputs.image"],
+  ],
+  ["false && needs.plan.outputs.unresolved || ''", [""]],
+  ["format('{0}', needs.plan.outputs.image)", ["computed"]],
+] as const)(
+  "value provenance retains every possible source of %s",
+  (source, expected) => {
+    const values = expressionValueSources(source).map((value) => {
+      switch (value.type) {
+        case "reference":
+          return value.path;
+        case "literal":
+          return value.value;
+        case "computed":
+          return "computed";
+        default: {
+          const exhaustive: never = value;
+          return exhaustive;
+        }
+      }
+    });
+    expect([...new Set(values)]).toEqual([...expected]);
+  },
+);
+
+test("gated images use GitHub operand-returning semantics for every shard and flag", () => {
+  const source =
+    "matrix.shard == 1 && needs.plan.outputs.required == 'true' && needs.plan.outputs.image || ''";
+  for (const shard of [1, 2, 3]) {
+    for (const required of ["true", "false", ""]) {
+      const image = "docker.io/library/postgres:18";
+      expect(
+        evaluate(source, {
+          values: {
+            "matrix.shard": shard,
+            "needs.plan.outputs.required": required,
+            "needs.plan.outputs.image": image,
+          },
+        }),
+      ).toBe(shard === 1 && required === "true" ? image : "");
+    }
+  }
+});
 
 describe("GitHub expression evaluation", () => {
   test("nested contexts preserve projections, status functions and unknown paths", () => {
@@ -115,6 +176,27 @@ describe("GitHub expression evaluation", () => {
     };
     expect(evaluate("needs.a.outputs.anything == ''", context)).toBe(true);
     expect(evaluate("needs.b.outputs.anything == ''", context)).toBe(UNKNOWN);
+  });
+
+  test("values of different types compare as GitHub coerces them", () => {
+    // An unset job output renders as null; GitHub reads `null == ''` as true,
+    // so a selection gate such as `outputs.x == '' || contains(...)` keeps
+    // the step when the planner wrote no selection.
+    const unset = {
+      values: {},
+      fallback: (path: string) =>
+        path.startsWith("needs.plan.outputs.") ? null : undefined,
+    };
+    expect(evaluate("needs.plan.outputs.selection == ''", unset)).toBe(true);
+    expect(evaluate("needs.plan.outputs.selection != ''", unset)).toBe(false);
+    expect(evaluate("null == 0 && false == 0 && true == 1", none)).toBe(true);
+    expect(evaluate("'1.5' == 1.5 && ' 2 ' == 2 && '' == false", none)).toBe(
+      true,
+    );
+    expect(evaluate("'true' == true", none)).toBe(false);
+    expect(evaluate("'abc' == 0 || 'abc' == null", none)).toBe(false);
+    expect(evaluate("fromJSON('[]') == 0", none)).toBe(false);
+    expect(evaluate("fromJSON('[]') == fromJSON('[]')", none)).toBe(false);
   });
 
   test("unsupported syntax throws instead of guessing", () => {

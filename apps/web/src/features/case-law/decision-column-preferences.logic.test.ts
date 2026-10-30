@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
-  DEFAULT_DECISION_TABLE_LAYOUT,
-  StoredDecisionLayoutSchema,
   decisionTableLayouts,
+  DEFAULT_DECISION_TABLE_LAYOUT,
   layoutForCountry,
+  StoredDecisionLayoutSchema,
 } from "./decision-column-preferences.logic";
 
 const parse = (raw: unknown) => v.parse(StoredDecisionLayoutSchema, raw);

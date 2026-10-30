@@ -1,20 +1,20 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
+import { getDomain } from "tldts";
 
 import { Temporal } from "@stll/time";
 
 import { isValidLinkIconImage } from "@/api/handlers/chat/link-icons/image";
 import type { LinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  parseSafeOutboundUrl,
-  safeOutboundFetchBytes,
-} from "@/api/lib/safe-outbound-fetch";
+import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 
 const LINK_ICON_MAX_BYTES = 64 * 1024;
 const ORIGIN_DEADLINE_MS = 3000;
 const MAX_REDIRECTS = 2;
 const MAX_ORIGIN_CONCURRENCY = 2;
+export const ICON_URL_MAX_LENGTH = 2048;
 const HOSTNAME_PATTERN =
   /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 
@@ -24,6 +24,30 @@ export const isCanonicalIconHostname = (hostname: string): boolean => {
   }
   const parsed = parseSafeOutboundUrl(`https://${hostname}/favicon.ico`);
   return Result.isOk(parsed) && parsed.value.hostname === hostname;
+};
+
+export type RegistrableIconSite = {
+  readonly kind: "registrable-icon-site";
+  readonly value: string;
+};
+
+class NotIconSite extends TaggedError("NotIconSite")<{
+  message: string;
+}> {}
+
+export const toRegistrableIconSite = (hostname: string) => {
+  if (!isCanonicalIconHostname(hostname)) {
+    return Result.err(
+      new NotIconSite({ message: "Hostname is not an icon site" }),
+    );
+  }
+  const domain = getDomain(hostname, { allowPrivateDomains: false });
+  if (domain === null) {
+    return Result.err(
+      new NotIconSite({ message: "Hostname has no registrable domain" }),
+    );
+  }
+  return Result.ok({ kind: "registrable-icon-site", value: domain } as const);
 };
 
 const unavailableIcon = ({
@@ -45,8 +69,46 @@ const isRetryableIconStatus = (status: number) =>
 
 type HttpsIconUrl = `https://${string}`;
 
+export type ExactIconUrl = {
+  readonly kind: "exact-icon-url";
+  readonly value: HttpsIconUrl;
+};
+
+/**
+ * What one cached icon belongs to. A site value is a bare registrable domain
+ * and an exact value always carries a scheme, so the two never share a key.
+ */
+export type LinkIconTarget = RegistrableIconSite | ExactIconUrl;
+
 const isHttpsIconUrl = (url: string): url is HttpsIconUrl =>
   url.startsWith("https://");
+
+const normalizeExactIconUrl = (value: string): HttpsIconUrl | null => {
+  if (value.length > ICON_URL_MAX_LENGTH) {
+    return null;
+  }
+  const parsed = parseSafeOutboundUrl(value);
+  if (Result.isError(parsed)) {
+    return null;
+  }
+  const url = parsed.value;
+  if (
+    url.protocol !== "https:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.hash !== ""
+  ) {
+    return null;
+  }
+  return isHttpsIconUrl(url.href) ? url.href : null;
+};
+
+export const toExactIconUrl = (value: string): ExactIconUrl | null => {
+  const normalized = normalizeExactIconUrl(value);
+  return normalized === null
+    ? null
+    : { kind: "exact-icon-url", value: normalized };
+};
 
 type FetchIconBytes = (
   options: Parameters<typeof safeOutboundFetchBytes>[0] & { url: HttpsIconUrl },
@@ -58,26 +120,24 @@ type OriginOptions = {
 };
 
 /** The local admission bound complements the shared per-host lease. */
-export const createLinkIconOrigin = ({
+const createIconOrigin = ({
   fetchBytes = safeOutboundFetchBytes,
   now = () => Temporal.Now.instant().epochMilliseconds,
 }: OriginOptions = {}) => {
   let active = 0;
 
   return async (
-    hostname: string,
+    initialUrl: HttpsIconUrl,
     permit: ThirdPartyOutboundPermit,
+    normalizeRedirect: (url: string) => HttpsIconUrl | null,
   ): Promise<LinkIconOutcome> => {
-    if (!isCanonicalIconHostname(hostname)) {
-      return unavailableIcon({ type: "no-icon", reason: "hostname" });
-    }
     if (active >= MAX_ORIGIN_CONCURRENCY) {
       return unavailableIcon({ type: "temporary", reason: "capacity" });
     }
     active += 1;
     const deadline = now() + ORIGIN_DEADLINE_MS;
     const signal = AbortSignal.timeout(ORIGIN_DEADLINE_MS);
-    let url: HttpsIconUrl = `https://${hostname}/favicon.ico`;
+    let url = initialUrl;
     let remainingBytes = LINK_ICON_MAX_BYTES;
 
     try {
@@ -134,22 +194,14 @@ export const createLinkIconOrigin = ({
             });
           }
           const redirectedUrl = redirected.value.href;
-          const parsed = parseSafeOutboundUrl(redirectedUrl);
-          if (
-            !isHttpsIconUrl(redirectedUrl) ||
-            Result.isError(parsed) ||
-            !isCanonicalIconHostname(parsed.value.hostname) ||
-            parsed.value.port !== "" ||
-            parsed.value.hash !== "" ||
-            parsed.value.search !== "" ||
-            parsed.value.pathname !== "/favicon.ico"
-          ) {
+          const normalizedRedirect = normalizeRedirect(redirectedUrl);
+          if (normalizedRedirect === null) {
             return unavailableIcon({
               type: "no-icon",
               reason: "redirect_target",
             });
           }
-          url = redirectedUrl;
+          url = normalizedRedirect;
           continue;
         }
         if (isRetryableIconStatus(status)) {
@@ -184,5 +236,42 @@ export const createLinkIconOrigin = ({
     } finally {
       active -= 1;
     }
+  };
+};
+
+const normalizeFaviconUrl = (value: string): HttpsIconUrl | null => {
+  const parsed = parseSafeOutboundUrl(value);
+  if (
+    Result.isError(parsed) ||
+    !isHttpsIconUrl(value) ||
+    !isCanonicalIconHostname(parsed.value.hostname) ||
+    parsed.value.port !== "" ||
+    parsed.value.hash !== "" ||
+    parsed.value.search !== "" ||
+    parsed.value.pathname !== "/favicon.ico"
+  ) {
+    return null;
+  }
+  return value;
+};
+
+export const createLinkIconOrigin = (options: OriginOptions = {}) => {
+  const readOrigin = createIconOrigin(options);
+  return async (site: RegistrableIconSite, permit: ThirdPartyOutboundPermit) =>
+    await readOrigin(
+      `https://${site.value}/favicon.ico`,
+      permit,
+      normalizeFaviconUrl,
+    );
+};
+
+export const createExactIconOrigin = (options: OriginOptions = {}) => {
+  const readOrigin = createIconOrigin(options);
+  return async (url: string, permit: ThirdPartyOutboundPermit) => {
+    const normalized = normalizeExactIconUrl(url);
+    if (normalized === null) {
+      return unavailableIcon({ type: "no-icon", reason: "url" });
+    }
+    return await readOrigin(normalized, permit, normalizeExactIconUrl);
   };
 };

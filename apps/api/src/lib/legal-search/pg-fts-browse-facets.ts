@@ -4,8 +4,8 @@ import type { SQL } from "drizzle-orm";
 
 import {
   caseLawBrowseFacetCounts,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import {
   caseLawPublicReadDb,

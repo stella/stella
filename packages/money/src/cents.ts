@@ -21,7 +21,7 @@ export const isMinorUnitAmount = (value: number): value is CentsAmount =>
 /**
  * Construct a CentsAmount from a value already known to be in minor
  * units. Use at boundaries where the input is validated as an integer
- * minor-unit value (e.g. after Elysia `tMinorUnitAmount(...)` or after
+ * minor-unit value (e.g. after `minorUnitAmountSchema(...)` or after
  * scaling a typed major-unit amount by the currency's exponent).
  *
  * SAFE integer, not merely integer: `Number.isInteger` is true for 2^53 and

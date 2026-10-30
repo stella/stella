@@ -5,17 +5,17 @@ import { Buffer } from "node:buffer";
 
 import { stellaPublicLawReader } from "@/api/db/rls";
 import {
-  softLawSources,
+  softLawDocumentLocators,
   softLawDocuments,
   softLawDocumentVersions,
-  softLawDocumentLocators,
   softLawIngestionAttempts,
+  softLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type {
-  SoftLawExtractionQuality,
   SoftLawEntry,
+  SoftLawExtractionQuality,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -64,9 +64,7 @@ const entry = ({ language, revision, stage }: EntryOptions): SoftLawEntry => ({
   sourceRaw: [
     {
       role: "index",
-      contentBase64: Buffer.from("Publisher index snapshot 1").toString(
-        "base64",
-      ),
+      contentBase64: Buffer.from("Publisher index snapshot 1").toBase64(),
       contentType: "text/html",
     },
   ],
@@ -525,7 +523,7 @@ if (!databaseUrl || !enabled) {
                 role: "index",
                 contentBase64: Buffer.from(
                   "Publisher index snapshot 2",
-                ).toString("base64"),
+                ).toBase64(),
                 contentType: "text/html",
               },
             ],

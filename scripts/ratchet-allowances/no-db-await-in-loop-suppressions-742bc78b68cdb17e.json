@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/erasure.ts",
+  "delta": 1,
+  "reason": "Redaction acquires each canonical and alias decision's projection fence in sorted order before locking decision rows or mutating them. The per-subject lock call preserves projection-writer lock order and leaves every row unchanged if any fence fails."
+}

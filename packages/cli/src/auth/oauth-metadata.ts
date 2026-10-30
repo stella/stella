@@ -21,8 +21,7 @@ export type AuthorizationServerMetadata = {
   readonly code_challenge_methods_supported?: readonly string[] | undefined;
   readonly scopes_supported?: readonly string[] | undefined;
   readonly token_endpoint_auth_methods_supported?:
-    | readonly string[]
-    | undefined;
+    readonly string[] | undefined;
 };
 
 const authorizationServerMetadataSchema = v.object({

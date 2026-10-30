@@ -1,9 +1,9 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   FIELD_VALUE_WRITE_PERMISSIONS,
   upsertFieldContentSchema,
@@ -28,11 +28,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: fieldRealtimeUpdates,
   mcp: { type: "tool", name: "set_field_value" },
-  body: t.Object({
-    propertyId: tSafeId("property", {
+  body: v.object({
+    propertyId: resourceIdSchema("property", {
       description: "Property ID, as returned by list_properties",
     }),
-    entityId: tSafeId("entity", {
+    entityId: resourceIdSchema("entity", {
       description: "Document entity ID whose cell to set",
     }),
     content: upsertFieldContentSchema,

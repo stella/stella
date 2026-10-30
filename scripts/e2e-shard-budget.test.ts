@@ -253,14 +253,14 @@ test("every shard Playwright deadline exceeds its configured test timeout and st
   expect(checked).toBeGreaterThan(0);
 });
 
-test("measured wall-time budgets cover every shard and retain the existing sparse-sample margin", () => {
+test("every shard inherits a measured parent budget with the sparse-sample margin", () => {
   expect(
     [
       ...new Set(
         configuredBudgets.e2eProductionShards.samples.map(({ shard }) => shard),
       ),
     ].toSorted((left, right) => left - right),
-  ).toEqual(allE2eMatrix().shard.filter((shard) => typeof shard === "number"));
+  ).toEqual([1, 2]);
   const step = job.steps.find(({ name }) => name === "Run Playwright shard");
   expect(step?.["timeout-minutes"]).toBe(
     `\${{ fromJSON(steps.e2e-budget.outputs.minutes) }}`,
@@ -268,7 +268,7 @@ test("measured wall-time budgets cover every shard and retain the existing spars
   for (let shard = 1; shard <= E2E_SHARD_COUNT; shard++) {
     const budget = measuredShardBudget(shard);
     const samples = configuredBudgets.e2eProductionShards.samples.filter(
-      (sample) => sample.shard === shard,
+      (sample) => sample.shard === Math.ceil(shard / 2),
     );
     expect(budget.seconds).toBeGreaterThanOrEqual(budget.p95 * 1.5);
     for (const sample of samples) {
@@ -298,7 +298,11 @@ test("changing the measured shard split requires fresh wall-time evidence", () =
     fingerprint(run),
     "Remeasure the current split before updating its fingerprint",
   ).toBe(configuredBudgets.e2eProductionShards.planSha256);
-  expect(fingerprint(run.replaceAll("/2", "/3"))).not.toBe(
+  // The shard total comes from the matrix planner's step output: changing it
+  // must change the fingerprint.
+  const shardTotal = `/\${{ steps.e2e-shards.outputs.count }}`;
+  expect(run).toContain(shardTotal);
+  expect(fingerprint(run.replaceAll(shardTotal, "/5"))).not.toBe(
     configuredBudgets.e2eProductionShards.planSha256,
   );
   expect(run).toContain(

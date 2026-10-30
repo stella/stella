@@ -25,8 +25,8 @@ import {
   publisherStamp,
 } from "./values";
 import {
-  childText,
   childrenNamed,
+  childText,
   parseXmlList,
   readXmlListVersion,
 } from "./xml";

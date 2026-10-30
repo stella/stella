@@ -2,24 +2,27 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import fc from "fast-check";
+import { readFile } from "node:fs/promises";
+import { gunzipSync } from "node:zlib";
 
 import type { fetchWithTimeout } from "@stll/fetch";
 import { assertProperty } from "@stll/property-testing";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  stellaCaseLawReader,
-  stellaPublicLawReader,
   stellaCaseLawAnalysisReader,
+  stellaCaseLawReader,
   stellaCorpusSampleReader,
   stellaIngestion,
+  stellaPublicLawReader,
 } from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  softLawSources,
-  softLawIngestionAttempts,
+  softLawDocumentLocators,
   softLawDocuments,
   softLawDocumentVersions,
-  softLawDocumentLocators,
+  softLawIngestionAttempts,
+  softLawSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -29,9 +32,9 @@ import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-st
 import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
-  SoftLawSourceAdapter,
-  SoftLawEntry,
   SoftLawDocumentInput,
+  SoftLawEntry,
+  SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import {
   SoftLawIngestionError,
@@ -40,6 +43,7 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
+import { createBfdiAdapter } from "./adapters/bfdi";
 import { parseWp29Archive, wp29Adapter } from "./adapters/wp29";
 import { runSoftLawIngestion } from "./ingestion";
 
@@ -245,6 +249,99 @@ if (!databaseUrl || !enabled) {
         expect(stored.at(0)?.id).toBe(documentId);
       }));
 
+    test("BfDI replay persists one expression and retains discovery and document provenance", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const origin = "https://www.bfdi.bund.de";
+        const indexUrl = `${origin}/DE/Fachthemen/Datenschutzpraxis/Datenverarbeitung/Datenverarbeitung-node.html`;
+        const detailUrl = `${origin}/SharedDocs/Downloads/DE/DokumenteBfDI/Stellungnahmen/2020/Auskunftsersuchen_Besch%C3%A4ftigtendatenschutz.html?nn=340692`;
+        const documentUrl = `${origin}/SharedDocs/Downloads/DE/DokumenteBfDI/Stellungnahmen/2020/Auskunftsersuchen_Besch%C3%A4ftigtendatenschutz.pdf?__blob=publicationFile&v=5`;
+        const sourceAdapter = createBfdiAdapter({
+          version: 1,
+          admissionReference: "fixture-only",
+          indexes: [
+            {
+              url: indexUrl,
+              documents: [
+                { url: detailUrl, documentUrl, sourceDocumentId: "340692" },
+              ],
+            },
+          ],
+        }).unwrap();
+        const responses = new Map<
+          string,
+          { bytes: Uint8Array; contentType: string }
+        >();
+        for (const [url, name, contentType] of [
+          [indexUrl, "bfdi-topical.html", "text/html"],
+          [detailUrl, "bfdi-recommendation.html", "text/html"],
+          [documentUrl, "bfdi-recommendation.pdf", "application/pdf"],
+        ] as const) {
+          responses.set(url, {
+            bytes: gunzipSync(
+              await readFile(
+                new URL(`adapters/__fixtures__/${name}.gz`, import.meta.url),
+              ),
+            ),
+            contentType,
+          });
+        }
+        const request: typeof fetchWithTimeout = async (url) => {
+          let requestUrl: string;
+          if (typeof url === "string") {
+            requestUrl = url;
+          } else if (url instanceof URL) {
+            requestUrl = url.href;
+          } else {
+            requestUrl = url.url;
+          }
+          const response =
+            responses.get(requestUrl) ??
+            panic("Unexpected BfDI fixture request");
+          return new Response(Buffer.from(response.bytes), {
+            headers: { "content-type": response.contentType },
+          });
+        };
+        expect(await run(sourceAdapter, { request })).toEqual({
+          status: "complete",
+        });
+        expect(await run(sourceAdapter, { request })).toEqual({
+          status: "complete",
+        });
+        const documents = await db
+          .select({
+            id: softLawDocuments.id,
+            authority: softLawDocuments.authority,
+          })
+          .from(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId))
+          .limit(2);
+        expect(documents).toHaveLength(1);
+        expect(documents.at(0)?.authority).toBe("de-bfdi");
+        const documentId =
+          documents.at(0)?.id ?? panic("Missing BfDI fixture expression");
+        const versions = await db
+          .select({ rawObjects: softLawDocumentVersions.rawObjects })
+          .from(softLawDocumentVersions)
+          .where(eq(softLawDocumentVersions.documentId, documentId))
+          .limit(2);
+        expect(versions).toHaveLength(1);
+        const raw =
+          versions.at(0)?.rawObjects ?? panic("Missing BfDI fixture raw");
+        expect(raw.map((part) => part.role)).toEqual([
+          "index",
+          "detail",
+          "document",
+        ]);
+        for (const part of raw) {
+          const provenance =
+            part.provenance ?? panic("Missing persisted provenance");
+          const response =
+            responses.get(provenance.url) ??
+            panic("Unexpected persisted source URL");
+          expect(provenance.sha256).toBe(sha256Hex(response.bytes));
+        }
+      }));
+
     test("a URL move preserves identity and raw versions; a changed hash creates history", async () =>
       await withSource(databaseUrl, async ({ db, sourceId, run }) => {
         const item = entry();
@@ -390,7 +487,7 @@ if (!databaseUrl || !enabled) {
         const sourceRaw = [
           {
             role: "detail",
-            contentBase64: Buffer.from("malformed detail").toString("base64"),
+            contentBase64: Buffer.from("malformed detail").toBase64(),
             contentType: "text/html",
           },
         ];
@@ -1158,7 +1255,7 @@ if (!databaseUrl || !enabled) {
                   sourceRaw: [
                     {
                       role: "source-page-0",
-                      contentBase64: Buffer.from(html).toString("base64"),
+                      contentBase64: Buffer.from(html).toBase64(),
                       contentType: "text/html",
                     },
                   ],

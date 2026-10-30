@@ -14,7 +14,6 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuGroup,
@@ -23,13 +22,14 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import type { MattersColumnId } from "@/lib/workspaces/types";
@@ -63,9 +63,11 @@ export const MattersToolbar = ({
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Input
-        className="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
-        onChange={(e) => onSearchChange(e.currentTarget.value)}
+      <SearchField
+        aria-label={t("common.search")}
+        clearLabel={t("common.clearSearch")}
+        groupClassName="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
+        onValueChange={onSearchChange}
         placeholder={t("common.search")}
         ref={searchRef}
         size="sm"
@@ -194,7 +196,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 

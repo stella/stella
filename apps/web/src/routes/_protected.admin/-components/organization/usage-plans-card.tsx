@@ -13,7 +13,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
@@ -166,7 +166,7 @@ function PolicyRow({
         usagePolicyId: policy.id,
         ...(withSeats && perSeat ? { seats } : {}),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: () => setPending(true),
     onSuccess: ({ url }) => {

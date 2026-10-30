@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -10,10 +10,10 @@ import {
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
-  DocumentWriteRefusedError,
   documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -26,6 +26,7 @@ import {
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 
 import {
@@ -48,12 +49,12 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({
-    fieldId: tSafeId("field"),
-    attachmentId: t.String({ minLength: 1, maxLength: 64 }),
+    fieldId: resourceIdSchema("field"),
+    attachmentId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   }),
-  body: t.Object({
-    destinationWorkspaceId: tSafeId("workspace"),
-    parentId: t.Nullable(tSafeId("entity")),
+  body: v.object({
+    destinationWorkspaceId: resourceIdSchema("workspace"),
+    parentId: v.nullable(resourceIdSchema("entity")),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -140,10 +141,10 @@ export default createSafeHandler(
 
     const encryption = uploadFileEncryption(
       await detectFileEncryption({ mimeType: attachment.mimeType, scanned }),
-      {
+      handlerErrorContext("emailAttachment.detectEncryption", {
         mimeType: attachment.mimeType,
         sizeBytes: String(attachment.bytes.byteLength),
-      },
+      }),
     );
     if (encryption === null) {
       return Result.err(
@@ -185,10 +186,13 @@ export default createSafeHandler(
       organizationId: session.activeOrganizationId,
       fileName: created.fileName,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId: created.entityId,
-        workspaceId: destinationWorkspaceId,
-      });
+      captureError(
+        error,
+        handlerErrorContext("emailattachment.capture", {
+          entityId: created.entityId,
+          workspaceId: destinationWorkspaceId,
+        }),
+      );
     });
     broadcastOrganizationResourceSetUpdated(
       session.activeOrganizationId,

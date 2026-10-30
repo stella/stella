@@ -13,6 +13,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { writeOwnedRawPayload } from "@/api/handlers/case-law/ingestion/pipeline/raw-payload";
+import type { ProcessDecisionAttemptOptions } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
@@ -24,6 +25,7 @@ import type {
   RawSourceWriteFailure,
   RawSourceWriteWindow,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
@@ -77,11 +79,14 @@ export const recordAbandonedRawWrite = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(recorded)) {
-    captureError(recorded.error, {
-      decisionId,
-      sourceId,
-      step: "processDecision.recordAbandonedRawWrite",
-    });
+    captureError(
+      recorded.error,
+      handlerErrorContext("pipeline.recordAbandonedRawWrite.recorded_error", {
+        decisionId,
+        sourceId,
+        step: "processDecision.recordAbandonedRawWrite",
+      }),
+    );
   }
 };
 
@@ -154,7 +159,13 @@ export const acquireSourceRawArtifact = async ({
         ...pgErrorFields(error),
         "error.detail": wrappedErrorDetail(safeError),
       });
-      captureError(safeError, { sourceId, step: "uploadSourceRaw" });
+      captureError(
+        safeError,
+        handlerErrorContext("rawSource.insertFailure", {
+          sourceId,
+          step: "uploadSourceRaw",
+        }),
+      );
 
       return {
         type: "retry",
@@ -166,7 +177,13 @@ export const acquireSourceRawArtifact = async ({
       } as const;
     }
 
-    captureError(safeError, { sourceId, step: "uploadSourceRaw" });
+    captureError(
+      safeError,
+      handlerErrorContext("rawSource.updateFailure", {
+        sourceId,
+        step: "uploadSourceRaw",
+      }),
+    );
 
     // Update: preserve existing S3 key and DO NOT advance sourceHash.
     // If we wrote the new hash with the old key, the hash mismatch
@@ -225,6 +242,46 @@ export const acquireSourceRawArtifact = async ({
     signal?.throwIfAborted();
     return rawWriteFailed(error);
   }
+};
+
+type ArchivePreservedObservationRawOptions = AcquireSourceRawArtifactOptions &
+  Pick<ProcessDecisionAttemptOptions, "inputProvenance" | "scopedDb">;
+
+/** Archive fetched bodies before a partial observation advances only its watermark. */
+export const archivePreservedObservationRaw = async ({
+  inputProvenance,
+  preservesExistingDetail,
+  scopedDb,
+  ...rawOptions
+}: ArchivePreservedObservationRawOptions): Promise<ProcessResult | null> => {
+  if (
+    inputProvenance.type !== "observation" ||
+    !preservesExistingDetail ||
+    rawOptions.existing === undefined
+  ) {
+    return null;
+  }
+  // The richer row retains its pointer and derived fields. The incoming
+  // envelope and files remain archived under that decision's raw owner.
+  const archived = await acquireSourceRawArtifact({
+    ...rawOptions,
+    preservesExistingDetail: false,
+  });
+  if (archived.type === "acquired" && !archived.artifact.s3UploadFailed) {
+    return null;
+  }
+  await recordAbandonedRawWrite({
+    scopedDb,
+    existing: rawOptions.existing,
+    rawWrites: rawOptions.rawWrites,
+    decisionId: rawOptions.decisionId,
+    sourceId: rawOptions.sourceId,
+  });
+  return {
+    status: PROCESS_DECISION_STATUS.RETRYABLE,
+    inserted: false,
+    reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
+  };
 };
 
 /**

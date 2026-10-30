@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import {
   chmodSync,
   cpSync,
@@ -30,6 +30,9 @@ import {
   createPublicKnowledgeRoute,
   publicKnowledgeRoute,
 } from "@/api/handlers/public-knowledge/routes";
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
+import type { RouteDefinition, RouteEntry } from "@/api/http/route";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import {
@@ -37,13 +40,36 @@ import {
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+/**
+ * The routes on a real port behind the pipeline stages their answers depend
+ * on: the error boundary, and the cache policy that stamps every answer.
+ */
+const serve = (route: readonly RouteEntry[]) =>
+  serveForTest(
+    createHttpApp({
+      routes: route,
+      middleware: [responseCachePolicy, errorBoundary],
+    }),
+  );
+
+const production = serve(publicKnowledgeRoute);
+afterAll(async () => {
+  await production.stop();
+});
 
 const request = async (path: string, cookie?: string) =>
-  await publicKnowledgeRoute.handle(
+  await production.fetch(
     new Request(`http://localhost${path}`, {
       headers: cookie ? { cookie } : undefined,
     }),
   );
+
+/** The handler a safe factory registered, behind its route definition. */
+const handlerOf = (definition: RouteDefinition): unknown =>
+  "handler" in definition ? definition.handler : undefined;
 
 const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
   const previous = env.FEATURE_PUBLIC_KNOWLEDGE;
@@ -102,14 +128,14 @@ describe("public knowledge routes", () => {
       if (!privateTemplate) {
         throw new Error("Fixture template missing");
       }
-      const privateRoute = createPublicKnowledgeRoute(() =>
-        createFixtureTemplatePackCatalogue(),
+      await using privateRoute = serve(
+        createPublicKnowledgeRoute(() => createFixtureTemplatePackCatalogue()),
       );
       for (const path of [
         `/public/knowledge/template-packs/${privatePack.id}`,
         `/public/knowledge/template-packs/${privatePack.id}/templates/${privateTemplate.slug}`,
       ]) {
-        const response = await privateRoute.handle(
+        const response = await privateRoute.fetch(
           new Request(`http://localhost${path}`),
         );
         expect(response.status).toBe(404);
@@ -189,9 +215,9 @@ describe("public knowledge routes", () => {
           contentRoot,
           availability: "readable",
         });
-        const route = createPublicKnowledgeRoute(() => catalogue);
+        await using route = serve(createPublicKnowledgeRoute(() => catalogue));
         await withFeature(true, async () => {
-          const response = await route.handle(
+          const response = await route.fetch(
             new Request("http://localhost/public/knowledge/template-packs"),
           );
           expect(response.status).toBe(200);
@@ -204,7 +230,7 @@ describe("public knowledge routes", () => {
             `${packPath}/templates/${template.slug}`,
             `${packPath}/templates/${template.slug}/preview`,
           ]) {
-            const missing = await route.handle(
+            const missing = await route.fetch(
               new Request(`http://localhost${path}`),
             );
             expect(missing.status).toBe(404);
@@ -234,24 +260,26 @@ describe("public knowledge routes", () => {
       ]);
       let scans = 0;
       const rendered: ScannedFile[] = [];
-      const route = createPublicKnowledgeRoute(() => catalogue, {
-        scan: async (input) => {
-          scans += 1;
-          return await scanUpload(input);
-        },
-        renderPreview: async (file) => {
-          rendered.push(file);
-          return await Promise.resolve({
-            paragraphs: [],
-            charCount: 0,
-            structureErrors: [],
-            clauseSlots: [],
-          });
-        },
-      });
+      await using route = serve(
+        createPublicKnowledgeRoute(() => catalogue, {
+          scan: async (input) => {
+            scans += 1;
+            return await scanUpload(input);
+          },
+          renderPreview: async (file) => {
+            rendered.push(file);
+            return await Promise.resolve({
+              paragraphs: [],
+              charCount: 0,
+              structureErrors: [],
+              clauseSlots: [],
+            });
+          },
+        }),
+      );
       const path = `/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`;
-      const first = await route.handle(new Request(`http://localhost${path}`));
-      const second = await route.handle(new Request(`http://localhost${path}`));
+      const first = await route.fetch(new Request(`http://localhost${path}`));
+      const second = await route.fetch(new Request(`http://localhost${path}`));
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
       expect(await first.text()).toBe(await second.text());
@@ -282,32 +310,34 @@ describe("public knowledge routes", () => {
       }
       let scans = 0;
       let renders = 0;
-      const route = createPublicKnowledgeRoute(() => catalogue, {
-        scan: async () => {
-          scans += 1;
-          return await Promise.resolve(
-            Result.err(
-              new FileScanRejectedError({
-                message: rejection.message,
-                rejection,
-                inspectionFailures: [],
-              }),
-            ),
-          );
-        },
-        renderPreview: async () => {
-          renders += 1;
-          return await Promise.resolve({
-            paragraphs: [],
-            charCount: 0,
-            structureErrors: [],
-            clauseSlots: [],
-          });
-        },
-      });
+      await using route = serve(
+        createPublicKnowledgeRoute(() => catalogue, {
+          scan: async () => {
+            scans += 1;
+            return await Promise.resolve(
+              Result.err(
+                new FileScanRejectedError({
+                  message: rejection.message,
+                  rejection,
+                  inspectionFailures: [],
+                }),
+              ),
+            );
+          },
+          renderPreview: async () => {
+            renders += 1;
+            return await Promise.resolve({
+              paragraphs: [],
+              charCount: 0,
+              structureErrors: [],
+              clauseSlots: [],
+            });
+          },
+        }),
+      );
       const path = `/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`;
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const response = await route.handle(
+        const response = await route.fetch(
           new Request(`http://localhost${path}`),
         );
         expect(response.status).toBe(503);
@@ -343,7 +373,7 @@ describe("public knowledge routes", () => {
           availability: "readable",
         });
         expect(catalogue.list()).toHaveLength(1);
-        const route = createPublicKnowledgeRoute(() => catalogue);
+        await using route = serve(createPublicKnowledgeRoute(() => catalogue));
         const file = nodePath.join(
           contentRoot,
           "packs",
@@ -363,11 +393,11 @@ describe("public knowledge routes", () => {
             `${packPath}/templates/${template.slug}`,
           ]) {
             expect(
-              (await route.handle(new Request(`http://localhost${path}`)))
+              (await route.fetch(new Request(`http://localhost${path}`)))
                 .status,
             ).toBe(200);
           }
-          const response = await route.handle(
+          const response = await route.fetch(
             new Request(
               `http://localhost${packPath}/templates/${template.slug}/preview`,
             ),
@@ -394,18 +424,20 @@ describe("public knowledge routes", () => {
       const catalogue = createFixtureTemplatePackCatalogue([
         { ...pack, publicDisplay: true },
       ]);
-      const route = createPublicKnowledgeRoute(() => ({
-        ...catalogue,
-        readTemplateDocx: async (ref) =>
-          Result.err(
-            new TemplatePackContentError({
-              message: "hash mismatch",
-              packId: ref.packId,
-              slug: ref.slug,
-            }),
-          ),
-      }));
-      const response = await route.handle(
+      await using route = serve(
+        createPublicKnowledgeRoute(() => ({
+          ...catalogue,
+          readTemplateDocx: async (ref) =>
+            Result.err(
+              new TemplatePackContentError({
+                message: "hash mismatch",
+                packId: ref.packId,
+                slug: ref.slug,
+              }),
+            ),
+        })),
+      );
+      const response = await route.fetch(
         new Request(
           `http://localhost/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`,
         ),
@@ -426,12 +458,14 @@ describe("public knowledge routes", () => {
       const catalogue = createFixtureTemplatePackCatalogue([
         { ...pack, publicDisplay: true },
       ]);
-      const route = createPublicKnowledgeRoute(() => catalogue, {
-        renderPreview: async () => {
-          throw new Error("Preview failed");
-        },
-      });
-      const response = await route.handle(
+      await using route = serve(
+        createPublicKnowledgeRoute(() => catalogue, {
+          renderPreview: async () => {
+            throw new Error("Preview failed");
+          },
+        }),
+      );
+      const response = await route.fetch(
         new Request(
           `http://localhost/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`,
         ),
@@ -478,11 +512,10 @@ describe("public knowledge routes", () => {
   });
 
   test("every declared route uses the public handler factory", () => {
-    const declared = publicKnowledgeRoute.routes.filter(
-      (route) => typeof route.handler === "function",
-    );
     expect(
-      declared.map((route) => `${route.method} ${route.path}`).toSorted(),
+      publicKnowledgeRoute
+        .map((route) => `${route.method} ${route.path}`)
+        .toSorted(),
     ).toEqual([
       "GET /public/knowledge/playbook-starters",
       "GET /public/knowledge/playbook-starters/:id",
@@ -491,8 +524,10 @@ describe("public knowledge routes", () => {
       "GET /public/knowledge/template-packs/:packId/templates/:templateId",
       "GET /public/knowledge/template-packs/:packId/templates/:templateId/preview",
     ]);
-    expect(declared.every((route) => isSafePublicHandler(route.handler))).toBe(
-      true,
-    );
+    expect(
+      publicKnowledgeRoute.every((route) =>
+        isSafePublicHandler(handlerOf(route.definition)),
+      ),
+    ).toBe(true);
   });
 });

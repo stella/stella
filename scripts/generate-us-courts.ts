@@ -41,6 +41,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   isUsCourtRegion,
+  US_ABBREVIATED_COURT_ID_LIST,
   US_ACCEPTED_COURT_FIELDS,
   US_COURT_CLASSIFICATIONS,
   US_COURT_DIRECTORY_FIELD_SEPARATOR,
@@ -53,7 +54,6 @@ import {
   US_SCOPE_REGIONS,
   US_STATE_REGIONS,
   US_TERRITORY_REGIONS,
-  US_ABBREVIATED_COURT_ID_LIST,
   usCourtPartitionLabel,
 } from "../packages/api-contract/src/us-court-vocabulary";
 import type {
@@ -998,7 +998,7 @@ const sha256 = hashGeneratedSource;
 const literal = (value: string | boolean | null): string =>
   typeof value === "string" ? JSON.stringify(value) : String(value);
 
-/** One string property of a formatted object literal, wrapped as oxfmt wraps it. */
+/** One string property of a formatted object literal, wrapped as the formatter wraps it. */
 const property = (key: string, value: string): string => {
   const line = `  ${key}: ${literal(value)},`;
   return line.length <= 80 ? line : `  ${key}:\n    ${literal(value)},`;
@@ -1083,7 +1083,7 @@ export const renderDirectory = (
     " * checker reads one string instead of thousands of object literals;",
     " * `us-courts.ts` reads it into checked rows once.",
     " */",
-    "// oxfmt-ignore",
+    "// prettier-ignore",
     `export const US_COURT_DIRECTORY_TEXT: string = \`${entries.map(renderEntry).join("\n")}\`;`,
     "",
   ].join("\n");
@@ -1114,7 +1114,7 @@ export const renderAbbreviatedCourts = (
     "};",
     "",
     "/** Each abbreviated court and the canonical name its decisions are under. */",
-    "// oxfmt-ignore",
+    "// prettier-ignore",
     "export const US_ABBREVIATED_COURTS: readonly UsAbbreviatedCourt[] = [",
     ...US_ABBREVIATED_COURT_ID_LIST.map((id) => {
       const court =
@@ -1297,7 +1297,7 @@ const main = async (): Promise<number> => {
   // the renderers have to produce the formatted text themselves.
   for (const rendered of [directory, abbreviatedCourts]) {
     if ((await formattedLikeRepository(rendered, "ts")) !== rendered) {
-      return panic("oxfmt changes a generated file; fix its renderer");
+      return panic("bun fmt changes a generated file; fix its renderer");
     }
   }
   const artifacts = [

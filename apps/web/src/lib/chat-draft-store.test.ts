@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";

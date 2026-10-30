@@ -4,28 +4,36 @@ import { eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { softLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SoftLawAdapterConfiguration } from "@/api/lib/legal-search/soft-law-types";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import {
-  SOFT_LAW_ADMISSIONS,
+  configureSoftLawAdapter,
   type RegisteredSoftLawAuthority,
+  SOFT_LAW_ADMISSIONS,
 } from "./adapters/registry";
 import { runSoftLawIngestion } from "./ingestion";
 
 type SyncSoftLawOptions = {
   authority: RegisteredSoftLawAuthority;
+  configuration: SoftLawAdapterConfiguration;
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
 
 /** Registration and retries share the existing source identity and ingestion lease. */
-export const syncEuSoftLaw = async ({
+export const syncSoftLaw = async ({
   authority,
+  configuration,
   scopedDb,
   signal,
 }: SyncSoftLawOptions) => {
   const { adapter, descriptor } = SOFT_LAW_ADMISSIONS[authority];
+  const configured = await configureSoftLawAdapter(adapter, configuration);
+  if (configured.isErr()) {
+    return { status: "failed" as const, error: configured.error };
+  }
   const auditSubject = createSafeId<"systemScriptRun">();
   const registration = await Result.tryPromise(
     async () =>
@@ -82,7 +90,7 @@ export const syncEuSoftLaw = async ({
   }
   return await runSoftLawIngestion({
     sourceId: registration.value.id,
-    adapter,
+    adapter: configured.value,
     scopedDb,
     signal,
   });

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -42,7 +44,7 @@ if (!databaseUrl || !enabled) {
         .where(eq(caseLawSources.id, otherSourceId));
     });
 
-    test("pages only parser lag by ID and excludes all terminal receipts in their parser generation", async () => {
+    test("pages incomplete current-input parses by ID and preserves exact-input rejections", async () => {
       await db.insert(caseLawSources).values([
         {
           id: sourceId,
@@ -59,6 +61,13 @@ if (!databaseUrl || !enabled) {
         { parserVersion: null, eligible: true },
         { parserVersion: 1, eligible: true },
         { parserVersion: 2, eligible: false },
+        { parserVersion: 2, eligible: true, unproved: true },
+        {
+          parserVersion: 1,
+          eligible: true,
+          legacyReceipt: true,
+          blockedVersion: 2,
+        },
         { parserVersion: 3, eligible: false },
         {
           parserVersion: 1,
@@ -67,13 +76,13 @@ if (!databaseUrl || !enabled) {
           outcome: "rejected" as const,
         },
         {
-          parserVersion: 1,
+          parserVersion: 2,
           eligible: false,
           blockedVersion: 2,
           outcome: "changed" as const,
         },
         {
-          parserVersion: 1,
+          parserVersion: 2,
           eligible: false,
           blockedVersion: 2,
           outcome: "unchanged" as const,
@@ -98,6 +107,18 @@ if (!databaseUrl || !enabled) {
           language: "cs",
           parserVersion: fixture.parserVersion,
           sourceRawS3Key: fixture.missingRaw ? null : `fixture/${fixture.id}`,
+          sourceHash: "a".repeat(64),
+          sourceHashVersion: 1,
+          ...(!fixture.unproved &&
+          !fixture.missingRaw &&
+          fixture.parserVersion !== null &&
+          fixture.parserVersion >= 2
+            ? {
+                parsedSourceHash: "a".repeat(64),
+                parsedSourceHashVersion: 1,
+                parsedSourceRawS3Key: `fixture/${fixture.id}`,
+              }
+            : {}),
           redactedAt: fixture.redacted
             ? new Date("2026-01-01T00:00:00Z")
             : null,
@@ -106,6 +127,9 @@ if (!databaseUrl || !enabled) {
         });
         if (fixture.blockedVersion !== undefined) {
           await db.insert(caseLawReplayBlocked).values({
+            sourceRawS3Key: fixture.legacyReceipt
+              ? null
+              : `fixture/${fixture.id}`,
             sourceId,
             decisionId: fixture.id,
             parserVersionFrom: fixture.parserVersion,
@@ -137,7 +161,7 @@ if (!databaseUrl || !enabled) {
       const expected = cases
         .filter((fixture) => fixture.eligible)
         .map((fixture) => fixture.id)
-        .toSorted();
+        .toSorted(compareCodeUnit);
       const seen: typeof expected = [];
       let after: (typeof expected)[number] | null = null;
       for (let step = 0; step <= cases.length; step += 1) {
@@ -160,6 +184,15 @@ if (!databaseUrl || !enabled) {
         await db
           .update(caseLawDecisions)
           .set({ parserVersion: 2 })
+          .where(eq(caseLawDecisions.id, row.id));
+        await db
+          .update(caseLawDecisions)
+          .set({
+            parsedSourceHash: "a".repeat(64),
+            parsedSourceHashVersion: 1,
+            parsedSourceRawS3Key: `fixture/${row.id}`,
+            updatedAt: sql`${caseLawDecisions.updatedAt}`,
+          })
           .where(eq(caseLawDecisions.id, row.id));
       }
       expect(seen).toEqual(expected);
@@ -203,7 +236,7 @@ if (!databaseUrl || !enabled) {
               fixture.parserVersion !== 3,
           )
           .map((fixture) => fixture.id)
-          .toSorted(),
+          .toSorted(compareCodeUnit),
       );
     });
   });

@@ -19,8 +19,8 @@ import type {
   SupplementJudgmentCandidate,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";

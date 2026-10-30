@@ -37,6 +37,24 @@ type CollabLogEvent =
       roomId: string;
     }
   | {
+      attempt: number;
+      event: "snapshot_store_failed";
+      level: "error";
+      retryInMs: number | null;
+      roomId: string;
+      status: number | null;
+    }
+  | {
+      event: "snapshot_store_abandoned";
+      level: "error";
+      roomId: string;
+    }
+  | {
+      event: "snapshot_store_retired";
+      level: "warn";
+      roomId: string;
+    }
+  | {
       event: "shutdown_drain_timeout";
       level: "error";
     };

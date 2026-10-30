@@ -544,6 +544,7 @@ type ConcurrencyContext = {
   event_name: string;
   ref: string;
   run_id: number;
+  run_attempt?: string;
   inputs?: { base_ref?: string };
   event: {
     action?: string;
@@ -668,6 +669,7 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
   const codeRun = {
     ...recording,
     workflow: "CI Checks",
+    run_attempt: "1",
     event: { ...recording.event, action: "synchronize" },
   };
   const metadataRun = {
@@ -694,6 +696,20 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
       },
     }),
   ).not.toBe(await groupFor(file, metadataRun));
+  // Re-run attempts of metadata runs of one head never share a group, so
+  // none of them replaces another while pending.
+  const reruns = await Promise.all(
+    [2, 3, 4].map(async (run_id) =>
+      groupFor(file, { ...metadataRun, run_id, run_attempt: "2" }),
+    ),
+  );
+  expect(new Set([...reruns, await groupFor(file, metadataRun)]).size).toBe(4);
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", {
+      ...metadataRun,
+      run_attempt: "2",
+    }),
+  ).toBe("false");
   // A draft runs no CI, so ready_for_review is the first code run, and a
   // prove-fix label changes the suites: both stay in the code-run group.
   for (const event of [
@@ -707,5 +723,16 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
         event,
       }),
     ).toBe("true");
+  }
+  for (const event of [
+    { ...codeRun.event, action: "auto_merge_enabled" },
+    { ...codeRun.event, action: "labeled", label: { name: "merge-armed" } },
+    { ...codeRun.event, action: "unlabeled", label: { name: "merge-armed" } },
+  ]) {
+    const armed = { ...codeRun, event };
+    expect(await groupFor(file, armed)).toBe("CI Checks-pr-12-head-one-meta");
+    expect(await concurrencyValueFor(file, "cancel-in-progress", armed)).toBe(
+      "false",
+    );
   }
 });

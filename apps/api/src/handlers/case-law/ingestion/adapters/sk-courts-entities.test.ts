@@ -11,8 +11,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleSkCourtsDecision,
-  skCourtsListingIdentity,
   skCourtsAdapter,
+  skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
 

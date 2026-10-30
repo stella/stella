@@ -1,12 +1,33 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim).
+# Pin to digest for supply-chain integrity (oven/bun:1.4.4-slim).
 # Run the JavaScript toolchain on the native build host. Cross-platform
 # installs select the target's optional native packages explicitly; the final
 # image alone belongs to the deployment target.
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS build-base
+ARG PREVIOUS_WEB_IMAGE=runtime-base
+
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS build-base
 WORKDIR /app
 
-FROM --platform=$TARGETPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS runtime-base
+FROM --platform=$TARGETPLATFORM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS runtime-base
 WORKDIR /app
+
+# Standalone image builds may carry assets from one immutable previous image.
+# Omission reuses the pinned runtime base, which contains no previous assets.
+FROM --platform=$TARGETPLATFORM ${PREVIOUS_WEB_IMAGE} AS previous-web-image
+ARG PREVIOUS_WEB_IMAGE
+USER root
+COPY --chmod=0755 scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
+COPY --chmod=0755 scripts/validate-previous-web-image.sh /usr/local/bin/validate-previous-web-image
+RUN if [ "$PREVIOUS_WEB_IMAGE" != runtime-base ]; then \
+      /usr/local/bin/validate-previous-web-image "$PREVIOUS_WEB_IMAGE"; \
+    fi && \
+    mkdir -p /previous-web-assets && : > /previous-web-assets.manifest && \
+    if [ -f /app/apps/web/dist/.stella-client-assets ]; then \
+      /usr/local/bin/merge-web-assets \
+        /app/apps/web/dist/client \
+        /app/apps/web/dist/.stella-client-assets \
+        /previous-web-assets \
+        /previous-web-assets.manifest; \
+    fi
 
 FROM build-base AS install-inputs
 # Preserve Bun's committed root lockfile and full workspace manifest map.
@@ -67,6 +88,7 @@ ARG PUBLIC_BROWSER_API_URL
 ARG PUBLIC_APP_URL
 ARG PUBLIC_GOOGLE_LOGIN_ENABLED
 ARG PUBLIC_MICROSOFT_LOGIN_ENABLED
+ARG PUBLIC_APPLE_LOGIN_ENABLED
 ARG PUBLIC_POSTHOG_TOKEN
 ARG PUBLIC_POSTHOG_HOST
 ARG PUBLIC_POSTHOG_UI_HOST
@@ -108,6 +130,7 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_PUBLIC_APP_URL="${PUBLIC_APP_URL}" \
     VITE_AUTH_GOOGLE="${PUBLIC_GOOGLE_LOGIN_ENABLED}" \
     VITE_AUTH_MICROSOFT="${PUBLIC_MICROSOFT_LOGIN_ENABLED}" \
+    VITE_AUTH_APPLE="${PUBLIC_APPLE_LOGIN_ENABLED}" \
     VITE_POSTHOG_KEY="${PUBLIC_POSTHOG_TOKEN}" \
     VITE_POSTHOG_HOST="${PUBLIC_POSTHOG_HOST}" \
     VITE_POSTHOG_UI_HOST="${PUBLIC_POSTHOG_UI_HOST}" \
@@ -141,6 +164,9 @@ RUN --mount=type=secret,id=posthog_cli_api_key \
     POSTHOG_CLI_HOST="${PUBLIC_POSTHOG_UI_HOST}" \
     POSTHOG_CLI_PROJECT_ID="${POSTHOG_SOURCEMAP_PROJECT_ID}" \
     bun apps/web/scripts/publish-sourcemaps.ts
+# Record only this build's output before any previous-release files are added.
+RUN find apps/web/dist/client -type f -printf '%P\n' | LC_ALL=C sort \
+    > apps/web/dist/.stella-client-assets
 # Stage the workspace packages reached by externalized runtime dependencies
 # (closure derived from bun.lock) in their published dist shape. The runner
 # overlays this tree so it never resolves TypeScript source. Restore the
@@ -152,7 +178,9 @@ RUN --mount=type=secret,id=posthog_cli_api_key \
 # which no stage copies), so the committed one from the deps stage survives,
 # but this install must never depend on that staying true.
 COPY --from=install-inputs /json/bun.lock /json/package.json ./
-COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/stage-web-runtime.ts /app/scripts/web-runtime-closure.ts ./scripts/
+# The staged packages' tsdown configs resolve their build tools through
+# scripts/resolve-package-binary.ts.
+COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/resolve-package-binary.ts /app/scripts/stage-web-runtime.ts /app/scripts/web-runtime-closure.ts ./scripts/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun scripts/stage-web-runtime.ts /app/web-runtime-stage --install-build-deps
 
@@ -170,6 +198,14 @@ COPY --from=deps-prod /app/ .
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
 COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
+COPY --chown=stella:stella --chmod=0755 scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
+COPY --chown=stella:stella --from=previous-web-image /previous-web-assets /tmp/previous-web-assets
+COPY --chown=stella:stella --from=previous-web-image /previous-web-assets.manifest /tmp/previous-web-assets.manifest
+RUN /usr/local/bin/merge-web-assets \
+      /tmp/previous-web-assets \
+      /tmp/previous-web-assets.manifest \
+      /app/apps/web/dist/client && \
+    rm -rf /tmp/previous-web-assets /tmp/previous-web-assets.manifest /usr/local/bin/merge-web-assets
 WORKDIR /app/apps/web
 USER stella
 EXPOSE 3002

@@ -99,7 +99,7 @@ export const TypeChipsRow = <TType extends string>({
           showSeparator && "border-t pt-2",
         )}
       >
-        <span className="text-foreground-label text-2xs shrink-0 px-1.5 font-medium">
+        <span className="text-foreground-label text-2xs shrink-0 font-medium">
           {t("workspaces.properties.returnsLabel")}
         </span>
         {chipDefs.map(({ type, icon: Icon, label }) => {
@@ -253,7 +253,7 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
           render={
             <button
               aria-label={t("common.remove")}
-              className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+              className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
               onClick={onRemove}
               type="button"
             />

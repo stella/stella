@@ -17,8 +17,8 @@ import {
   validatedCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";

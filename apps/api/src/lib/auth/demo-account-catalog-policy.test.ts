@@ -7,9 +7,9 @@ import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -168,6 +168,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/vat-rates/archive.ts",
   "apps/api/src/handlers/vat-rates/create.ts",
   "apps/api/src/handlers/vat-rates/list.ts",
+  "apps/api/src/handlers/vat-rates/presets/create.ts",
   "apps/api/src/handlers/vat-rates/update.ts",
   "apps/api/src/handlers/views/table/export.ts",
   "apps/api/src/handlers/workspaces/correspondence/address/create.ts",

@@ -5,6 +5,7 @@ import type { CountryCode } from "@stll/country-codes";
 import {
   buildScreeningIndex,
   DEFAULT_CUTOFF,
+  MAX_QUERY_CHARACTERS,
   MAX_QUERY_TOKENS,
   SANCTIONS_SOURCES,
   screen,
@@ -41,6 +42,7 @@ import type {
   SanctionsUnavailableReason,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
+import { emitSanctionsScreeningCompletionMetric } from "@/api/lib/observability/request-metrics";
 
 import {
   reportSanctionsScreeningFailure,
@@ -221,6 +223,7 @@ const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
 
 export const SANCTIONS_SUBJECT_ERROR_MESSAGES = {
+  "excess-query-characters": `The name to screen must contain at most ${MAX_QUERY_CHARACTERS} characters`,
   "empty-query": "The name to screen has no letters",
   "invalid-birth-date": "The date of birth is not a valid calendar date",
   "excess-query-tokens": `The name to screen must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
@@ -367,6 +370,14 @@ type SanctionsListMatchFailure =
       code: "warming" | "load-failed";
       stage: "public-warmup";
       reason: null;
+    }
+  // The index cache reports its own load failure once, with its cause, and
+  // remembers it: every screening that waits on that load or meets it in the
+  // memo window answers without a report of its own.
+  | {
+      code: "load-failed";
+      stage: "index-cache";
+      reason: null;
     };
 
 type SanctionsListMatcher = (props: {
@@ -436,8 +447,8 @@ const screenList = async ({
     if (index.isErr()) {
       return Result.err({
         code: index.error.code,
-        reason: "index-load" as const,
-        stage: "list-screening" as const,
+        stage: "index-cache" as const,
+        reason: null,
       });
     }
     const screened = screen(index.value, query, {
@@ -470,6 +481,11 @@ const screenList = async ({
   if (matched.value.isErr()) {
     const failure = matched.value.error;
     if (failure.code === "work-limit") {
+      reportFailure({
+        stage: "list-screening",
+        reason: "work-limit",
+        source: freshness.source,
+      });
       return incompleteList(base, screenedEdition);
     }
     if (failure.reason !== null) {
@@ -633,23 +649,28 @@ export const screenSanctionsSubjects = async ({
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
-      lists.push(
-        // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
-        await screenList({
-          db,
-          freshness: sourceFreshness,
-          query: query.query,
-          base: listBase({
-            source: sourceFreshness.source,
-            practiceJurisdictions,
-            heldUpdate: sourceFreshness.heldUpdate,
-          }),
-          indexCache,
-          matcher,
-          resultMode,
-          reportFailure,
+      // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
+      const list = await screenList({
+        db,
+        freshness: sourceFreshness,
+        query: query.query,
+        base: listBase({
+          source: sourceFreshness.source,
+          practiceJurisdictions,
+          heldUpdate: sourceFreshness.heldUpdate,
         }),
-      );
+        indexCache,
+        matcher,
+        resultMode,
+        reportFailure,
+      });
+      if (list.status !== "unavailable") {
+        emitSanctionsScreeningCompletionMetric({
+          source: list.source,
+          outcome: list.status === "incomplete" ? "incomplete" : "complete",
+        });
+      }
+      lists.push(list);
     }
     results.push(
       Result.ok({

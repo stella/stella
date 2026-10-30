@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -9,6 +9,7 @@ import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitations,
   caseLawDecisions,
   caseLawSources,
@@ -18,9 +19,9 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CITATION_SCOPE_METADATA_KEY,
-  CitationScopesRejectedError,
   citationScopeAstHash,
   citationScopeEnvelope,
+  CitationScopesRejectedError,
   validatedCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -29,14 +30,15 @@ import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipel
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -839,4 +841,180 @@ test("a metadata refresh retries when a document wins before the scope read", as
     refreshed: true,
     [CITATION_SCOPE_METADATA_KEY]: winningEnvelope,
   });
+});
+
+test.each([inlineCorpus, packedCorpus])(
+  "the pipeline retains text and reports a reader-rejected AST before storage ($mode)",
+  async (corpus) => {
+    const documentId = createSafeId<"caseLawDecision">();
+    const ast = sourceAst(documentId, "Decision text.");
+    const first = ast.blocks.at(0);
+    if (first === undefined) {
+      expect.unreachable("Fixture contains a paragraph");
+    }
+    ast.blocks.push({ ...first, id: "p2" });
+    const report = spyOn(logger, "error");
+    try {
+      const outcome = await processDecision({
+        input: plainTextIngestionResult({
+          ...input(documentId, "Decision text."),
+          parserVersion: 37,
+          documentAst: ast,
+        }),
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-10-26T10:00:00Z"),
+        observationOrder: 1n,
+        corpus,
+      });
+      expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+      expect(report).toHaveBeenCalledWith(
+        "case_law.ingestion.ast_schema_rejected",
+        expect.objectContaining({
+          source: "test",
+          parserVersion: 37,
+          checks: expect.arrayContaining([
+            "Block ids and anchorIds must be unique",
+          ]),
+          "error.type": "IngestedAstRejectedError",
+        }),
+      );
+      const row = (
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceDocumentId, documentId))
+      ).at(0);
+      expect(row).toBeDefined();
+      if (row === undefined) {
+        expect.unreachable("Rejected structure must not drop the decision");
+      }
+      if (corpus.mode === "off") {
+        expect(row.fulltext).toBe("Decision text.");
+        expect(row.documentAst).toEqual({});
+      } else {
+        const pack = packs.at(-1);
+        if (pack === undefined) {
+          expect.unreachable("Canonical mode stores a pack");
+        }
+        expect(await storedAst(pack, row.id)).toEqual({});
+        const textEntry = pack.entries.find(
+          ({ member }) =>
+            member.documentId === row.id && member.kind === "text",
+        );
+        if (textEntry === undefined) {
+          expect.unreachable("Text remains in the canonical pack");
+        }
+        expect(
+          await zstdDecompressToStringBounded(
+            pack.bytes.slice(
+              textEntry.member.offset,
+              textEntry.member.offset + textEntry.member.length,
+            ),
+            1024,
+          ),
+        ).toBe("Decision text.");
+      }
+    } finally {
+      report.mockRestore();
+    }
+  },
+);
+
+test("the pipeline stores a reader-valid AST unchanged", async () => {
+  const documentId = createSafeId<"caseLawDecision">();
+  const decision = input(documentId, "Decision text.");
+  await processDecision({
+    input: decision,
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-10-26T10:00:00Z"),
+    observationOrder: 1n,
+    corpus: inlineCorpus,
+  });
+  const row = (
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceDocumentId, documentId))
+  ).at(0);
+  expect(row?.documentAst).toEqual(decision.documentAst);
+});
+
+test("a pending mirror replay removes unreadable structure while retaining stored text", async () => {
+  const documentId = createSafeId<"caseLawDecision">();
+  const decision = input(documentId, "Decision text.");
+  await processDecision({
+    input: decision,
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-10-26T10:00:00Z"),
+    observationOrder: 1n,
+    corpus: inlineCorpus,
+  });
+  const block = decision.documentAst.blocks.at(0);
+  if (block === undefined) {
+    expect.unreachable("Fixture has a paragraph");
+  }
+  const invalid = {
+    ...sourceAst(documentId, "Decision text."),
+    blocks: [block, { ...block, id: "p2" }],
+  };
+  await db
+    .update(caseLawDecisions)
+    .set({
+      documentAst: invalid,
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      parserVersion: 37,
+    })
+    .where(eq(caseLawDecisions.sourceDocumentId, documentId));
+  await processDecision({
+    input: plainTextIngestionResult({
+      ...decision,
+      rawHash: `refresh-${documentId}`,
+      fulltext: undefined,
+      documentAst: {},
+      citationScopes: undefined,
+    }),
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-10-26T10:01:00Z"),
+    observationOrder: 2n,
+    corpus: inlineCorpus,
+    refresh: DECISION_REFRESH.ALWAYS,
+  });
+  const row = (
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceDocumentId, documentId))
+  ).at(0);
+  expect(row?.fulltext).toBe("Decision text.");
+  expect(row?.documentAst).toEqual({});
+  const refreshed = await processDecision({
+    input: plainTextIngestionResult({
+      ...decision,
+      rawHash: `second-refresh-${documentId}`,
+      fulltext: undefined,
+      documentAst: {},
+      citationScopes: undefined,
+    }),
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-10-26T10:02:00Z"),
+    observationOrder: 3n,
+    corpus: inlineCorpus,
+    refresh: DECISION_REFRESH.ALWAYS,
+  });
+  expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+  expect(row?.metadata?.[CITATION_SCOPE_METADATA_KEY]).toBeUndefined();
+  const afterRefresh = (
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceDocumentId, documentId))
+  ).at(0);
+  expect(afterRefresh?.fulltext).toBe("Decision text.");
+  expect(afterRefresh?.documentAst).toEqual({});
+  expect(afterRefresh?.metadata?.[CITATION_SCOPE_METADATA_KEY]).toBeUndefined();
 });

@@ -13,7 +13,7 @@ import {
   SKILL_READ_SURFACE,
 } from "@/api/lib/agent-skills/skill-read-audit";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { toDynamicToolTitle } from "@/api/mcp/gateway/list-tools";
 import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
@@ -50,7 +50,7 @@ export const listSkillPrompts = async ({
   mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes: readonly string[] | undefined;
 }): Promise<Prompt[]> => {
@@ -92,7 +92,7 @@ export const getSkillPrompt = async ({
   name,
 }: {
   args: Readonly<Record<string, string>> | undefined;
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   name: string;
 }): Promise<Result<GetPromptResult, UnknownSkillPromptError>> => {
@@ -171,7 +171,7 @@ const embedResources = async ({
   paths,
   skill,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   paths: readonly string[];
   skill: ResolvedSkillTool;
 }): Promise<{
@@ -218,7 +218,7 @@ const auditReads = async ({
   skill,
   success,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   paths: readonly (string | null)[];
   skill: ResolvedSkillTool;
   success: boolean;

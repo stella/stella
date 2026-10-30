@@ -5,6 +5,7 @@ import type { flowDefinitions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { errorTag } from "@/api/lib/errors/utils";
 import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   ensureSchedulerJob,
@@ -53,7 +54,12 @@ export const syncFlowScheduleTrigger = async ({
   });
 
   if (Result.isError(result)) {
-    captureError(result.error, { definitionId: id });
+    captureError(
+      result.error,
+      handlerErrorContext("flows.syncFlowScheduleTrigger.result_error", {
+        definitionId: id,
+      }),
+    );
     logger.error("flow.schedule_sync_failed", {
       definitionId: id,
       triggerType: trigger.type,

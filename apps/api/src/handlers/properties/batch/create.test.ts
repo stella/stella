@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -46,7 +47,7 @@ describe("createPropertiesBatch", () => {
           ],
         },
         request: new Request("https://example.test/v1/properties/batch"),
-        route: "/v1/properties/:workspaceId/batch",
+        route: "/v1/properties/:workspaceId/batch" satisfies ApiRoutePath,
         safeDb,
         scopedDb,
         workspaceId: toSafeId<"workspace">("workspace_test"),

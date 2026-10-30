@@ -7,8 +7,8 @@ import {
 } from "./case-law-canary";
 import {
   CASE_LAW_CANARY_LIMIT,
-  type CaseLawCanary,
   caseLawCanariesEnvSchema,
+  type CaseLawCanary,
 } from "./config-schema";
 
 const CONTEXT = {

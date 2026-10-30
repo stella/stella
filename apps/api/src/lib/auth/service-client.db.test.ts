@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
@@ -12,10 +12,10 @@ import {
   organization,
 } from "@/api/db/auth-schema";
 import {
-  createServiceOAuthClient,
   changeServiceOAuthClient,
-  rootDb,
+  createServiceOAuthClient,
   recordLegalResolveAudit,
+  rootDb,
 } from "@/api/db/root";
 import { auditLogs, serviceOAuthClients } from "@/api/db/schema";
 import { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
@@ -33,11 +33,17 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 import {
   readServiceOAuthClient,
   resolveServiceOAuthToken,
 } from "./service-client";
+
+const routeServer = serveRoutesForTest(meRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 beforeAll(initAgentAuthTestDb);
 afterAll(releaseAgentAuthTestDb);
@@ -391,7 +397,7 @@ describe("confidential service OAuth lifecycle", () => {
     const token = v.parse(tokenSchema, await (await issue(client)).json());
     const payload = decodeJwt(token.access_token);
     expect(Result.isError(extractMcpSession(payload))).toBe(true);
-    const response = await meRoute.handle(
+    const response = await routeServer.fetch(
       new Request("http://localhost/me/oauth-connections", {
         headers: { authorization: `Bearer ${token.access_token}` },
       }),

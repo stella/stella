@@ -13,8 +13,8 @@ import {
 } from "@/api/handlers/chat/message-page";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -253,7 +253,11 @@ describe("loadClientMessages", () => {
       id: fileId,
       mimeType: "image/png",
       placeholder: "data:image/png;base64,AAAA",
-      s3Key: testFileKey(`chat/${ids.userA1}/${fileId}`),
+      s3Key: createUserFileKey({
+        fileId,
+        mimeType: "image/png",
+        organizationId: ids.orgA,
+      }),
       sha256Hex: "b".repeat(64),
       sizeBytes: 4,
       threadId,

@@ -1,7 +1,9 @@
 import { createRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
+
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -10,7 +12,7 @@ import { createWebTestEnvironment } from "../../../tests/environment.test-fixtur
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
 testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
-const { act, cleanup, fireEvent, render } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { QueryClientProvider } = await import("@tanstack/react-query");
@@ -48,6 +50,7 @@ Object.defineProperty(Range.prototype, "getClientRects", {
 afterEach(async () => {
   document.getSelection()?.removeAllRanges();
   await act(async () => cleanup());
+  mock.restore();
 });
 afterAll(async () => {
   if (originalRects) {
@@ -74,7 +77,7 @@ const mountSelection = async ({
     role: "member",
     ai,
     deepl: false,
-    ocr: false,
+    ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
     desktop: "none",
     settings: undefined,
   });
@@ -177,6 +180,20 @@ test("a member without AI receives no AI selection actions", async () => {
   const view = await mountSelection({ ai: false });
   expect(view.queryByRole("button", { name: "Request edits" })).toBeNull();
   expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
+});
+
+test("copying a selection confirms in place", async () => {
+  const write = spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const view = await mountSelection();
+
+  fireEvent.click(view.getByRole("button", { name: messages.common.copy }));
+
+  await waitFor(() =>
+    expect(
+      view.getByRole("button", { name: messages.common.copied }),
+    ).toBeDefined(),
+  );
+  expect(write).toHaveBeenCalledWith(SELECTED_TEXT);
 });
 
 test("streaming prevents opening an edit from the selection toolbar", async () => {

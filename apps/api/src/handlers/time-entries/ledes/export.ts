@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
-import { timeEntryAmount, MoneyTotals } from "@stll/money";
+import { MoneyTotals, timeEntryAmount } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 

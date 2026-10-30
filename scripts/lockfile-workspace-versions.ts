@@ -3,9 +3,9 @@ import { panic } from "better-result";
 import {
   applyReplacements,
   directPropertyValue,
+  type JsonTextReplacement,
   rootObjectStart,
   stringTokenAt,
-  type JsonTextReplacement,
 } from "./json-text-edit";
 
 type WorkspaceVersions = Readonly<Record<string, string>>;

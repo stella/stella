@@ -4,8 +4,8 @@ import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
-  DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_ABSENCE_FIELD_KEYS,
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";

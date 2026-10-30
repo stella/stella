@@ -4,9 +4,9 @@ import { randomUUID } from "node:crypto";
 import { apiDelete, apiPut, apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 // The table store keeps one entry per signed-in user, keyed

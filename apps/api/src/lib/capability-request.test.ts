@@ -1,35 +1,50 @@
-import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import {
   CAPABILITY_REQUEST_ERROR_CODE,
   CAPABILITY_REQUEST_HEADER,
 } from "@stll/api-contract/capability-request";
 
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import {
-  buildCapabilityRouteIndex,
+  buildCapabilityIndex,
   capabilityRequestGuard,
-  resolveCapabilityRequest,
-  type MountedRoute,
 } from "@/api/lib/capability-request";
+import type { CapabilityEndpoint } from "@/api/lib/capability-request";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
-const createThing = { id: "things.create", handler: () => "created" };
-const updateThing = { id: "things.update", handler: () => "updated" };
-const readHealth = () => "ok";
+const answering = (answer: string): RouteDefinition => ({
+  access: "public",
+  config: {},
+  run: async () => await Promise.resolve(answer),
+});
 
-const createApp = () => {
-  const app = new Elysia()
-    .use(
-      capabilityRequestGuard({
-        mountedRoutes: (): readonly MountedRoute[] => app.routes,
-        loadEndpoints: async () => [createThing, updateThing],
-      }),
-    )
-    .post("/things", createThing.handler)
-    .patch("/things/:id", updateThing.handler)
-    .get("/health", readHealth);
-  return app;
+const createThing = { id: "things.create", definition: answering("created") };
+const updateThing = { id: "things.update", definition: answering("updated") };
+const readHealth = answering("ok");
+
+const loads: string[] = [];
+const loadEndpoints = async (): Promise<readonly CapabilityEndpoint[]> => {
+  loads.push("load");
+  return await Promise.resolve([createThing, updateThing]);
 };
+
+const server = serveForTest(
+  createHttpApp({
+    middleware: [capabilityRequestGuard(loadEndpoints)],
+    routes: routes({
+      "/things": { POST: createThing.definition },
+      "/things/:id": { PATCH: updateThing.definition },
+      "/health": { GET: readHealth },
+    }),
+  }),
+);
+
+afterAll(async () => {
+  await server.stop();
+});
 
 const send = async ({
   method,
@@ -40,7 +55,7 @@ const send = async ({
   path: string;
   declared?: string;
 }) =>
-  await createApp().handle(
+  await server.fetch(
     new Request(`http://localhost${path}`, {
       method,
       headers:
@@ -48,64 +63,38 @@ const send = async ({
     }),
   );
 
-describe("capability route index", () => {
-  test("maps each route to the capability whose handler it registers", () => {
-    const index = buildCapabilityRouteIndex({
-      routes: [
-        { method: "POST", path: "/things", handler: createThing.handler },
-        { method: "PATCH", path: "/things/:id", handler: updateThing.handler },
-        { method: "GET", path: "/health", handler: readHealth },
-      ],
-      endpoints: [createThing, updateThing],
-    });
+describe("capability index", () => {
+  test("maps each capability's route definition to its id", () => {
+    const index = buildCapabilityIndex([createThing, updateThing]);
 
-    expect([...index]).toEqual([
-      ["POST /things", "things.create"],
-      ["PATCH /things/:id", "things.update"],
-    ]);
+    expect(index.get(createThing.definition)).toBe("things.create");
+    expect(index.get(updateThing.definition)).toBe("things.update");
+    expect(index.get(readHealth)).toBeUndefined();
+    expect(index.size).toBe(2);
   });
 
-  test("refuses two capabilities that share one handler", () => {
+  test("refuses two capabilities that share one definition", () => {
     expect(() =>
-      buildCapabilityRouteIndex({
-        routes: [],
-        endpoints: [
-          createThing,
-          { id: "things.copy", handler: createThing.handler },
-        ],
-      }),
-    ).toThrow("share one handler");
+      buildCapabilityIndex([
+        createThing,
+        { id: "things.copy", definition: createThing.definition },
+      ]),
+    ).toThrow("share one definition");
   });
 
-  test("classifies undeclared, matched and mismatched requests", () => {
-    const index = new Map([["POST /things", "things.create"]]);
-    const resolve = (declared: string | null, route: string) =>
-      resolveCapabilityRequest({ declared, method: "POST", route, index });
-
-    expect(resolve(null, "/things")).toEqual({ type: "undeclared" });
-    expect(resolve("things.create", "/things")).toEqual({
-      type: "matched",
-      capability: "things.create",
-    });
-    expect(resolve("things.update", "/things")).toEqual({
-      type: "mismatched",
-      declared: "things.update",
-      routeCapability: "things.create",
-    });
-    expect(resolve("things.create", "/health")).toEqual({
-      type: "mismatched",
-      declared: "things.create",
-      routeCapability: null,
-    });
+  test("admits the same capability listed twice", () => {
+    expect(buildCapabilityIndex([createThing, createThing]).size).toBe(1);
   });
 });
 
 describe("capability request guard", () => {
-  test("leaves requests without a declaration untouched", async () => {
+  test("leaves requests without a declaration untouched and loads nothing", async () => {
+    loads.length = 0;
     const response = await send({ method: "POST", path: "/things" });
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("created");
+    expect(loads).toEqual([]);
   });
 
   test("runs a request whose declaration owns the route", async () => {
@@ -129,5 +118,43 @@ describe("capability request guard", () => {
     expect(await response.json()).toMatchObject({
       code: CAPABILITY_REQUEST_ERROR_CODE,
     });
+  });
+
+  test("refuses a declaration on a path no route serves", async () => {
+    const response = await send({
+      method: "POST",
+      path: "/nowhere",
+      declared: "things.create",
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      code: CAPABILITY_REQUEST_ERROR_CODE,
+    });
+  });
+
+  test("builds the index once across declaring requests", async () => {
+    let fresh = 0;
+    await using guarded = serveForTest(
+      createHttpApp({
+        middleware: [
+          capabilityRequestGuard(async () => {
+            fresh += 1;
+            return await Promise.resolve([createThing]);
+          }),
+        ],
+        routes: routes({ "/things": { POST: createThing.definition } }),
+      }),
+    );
+    for (const declared of ["things.create", "things.create", "other"]) {
+      await guarded.fetch(
+        new Request("http://localhost/things", {
+          method: "POST",
+          headers: { [CAPABILITY_REQUEST_HEADER]: declared },
+        }),
+      );
+    }
+
+    expect(fresh).toBe(1);
   });
 });

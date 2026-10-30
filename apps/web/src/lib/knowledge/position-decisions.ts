@@ -7,7 +7,7 @@
  * rather than in JSX.
  */
 
-import type { PositionDecisionSummary } from "@/lib/eden-client";
+import type { PositionDecisionSummary } from "@/lib/api";
 import type {
   PlaybookPositionDecisions,
   PositionStandard,

@@ -12,7 +12,7 @@
  * not evidence of how much later case law leans on the decision.
  *
  * A decision that already holds a current analysis is left out: current
- * means version 3 over the fingerprint the row's own text digests to today,
+ * means version 4 over the fingerprint the row's own text digests to today,
  * so a re-parse since the analysis was written puts the decision back on the
  * list. So does a source that withholds derived AI use, a redacted row, and
  * a decision with no parse at all, in the row or in object storage.
@@ -40,11 +40,11 @@ import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
 import {
-  candidateAsRow,
-  listCandidateRows,
   analysisTombstoneReader,
-  openAnalysisDatabase,
+  candidateAsRow,
   type CandidateCursor,
+  listCandidateRows,
+  openAnalysisDatabase,
 } from "./decision-analysis.db";
 import {
   courtFilter,
@@ -160,7 +160,7 @@ await runScriptWithErrorOutput(async () => {
       const isCurrent =
         stored !== null &&
         !("status" in stored) &&
-        stored.version === 3 &&
+        stored.version === 4 &&
         stored.inputFingerprint === resolved.input.fingerprint;
       if (isCurrent) {
         outcomes.push("skipped:already-current");

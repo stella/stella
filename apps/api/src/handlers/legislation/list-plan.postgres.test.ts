@@ -12,8 +12,8 @@ import { actYearCondition } from "@/api/lib/legal-search/legislation-act-number"
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";
@@ -24,7 +24,7 @@ const SOURCES = 8;
 const VERSIONS = 8;
 const PAGE_SIZE = 100;
 const ELI_TRIGRAM_INDEX = "legislation_documents_eli_trgm_idx";
-const WORK_INDEX = "legislation_documents_eli_version_lang_idx";
+const WORK_INDEX = "legislation_documents_work_version_lang_idx";
 const TABLES = [
   "legislation_sources",
   "legislation_documents",
@@ -148,11 +148,12 @@ describe.skipIf(!enabled)(
           // LIKE copies the production index definition but assigns a fixture name.
           const indexes = await db.execute(sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'legislation_documents'
-            AND indexdef LIKE '%(source_id, eli, version_valid_from, language)%'`);
+            AND indexdef LIKE '%(source_id, eli, version_valid_from, language)%'
+            AND indexdef NOT LIKE 'CREATE UNIQUE%'`);
           expect(indexes).toHaveLength(1);
           const indexName = indexes.at(0)?.["indexname"];
           if (typeof indexName !== "string") {
-            panic("The canonical unique work index was not cloned");
+            panic("The canonical work access index was not cloned");
           }
           if (indexName !== WORK_INDEX) {
             await db.execute(sql`ALTER INDEX ${schema}.${sql.identifier(indexName)}

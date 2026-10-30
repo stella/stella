@@ -10,10 +10,10 @@ import { CLEARED_FIELD_SOURCE } from "@/api/lib/docx/types";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import {
+  type ConfigurationEntry,
   mergeFieldConfiguration,
   partitionFieldConfiguration,
   validateFieldConfiguration,
-  type ConfigurationEntry,
 } from "./configure-field-input";
 import { configureTemplateDocument } from "./configure-template-document";
 

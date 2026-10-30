@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  WORK_OBLIGATION_SOURCE,
   entities,
   flowRuns,
   flowRunSteps,
-  workspaces,
-  workspaceMembers,
+  WORK_OBLIGATION_SOURCE,
   workObligations,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
@@ -19,6 +19,7 @@ import {
   resolveFlowReviewGate,
 } from "@/api/lib/flows/flow-executor";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -66,6 +67,10 @@ export const flowReviewGateFixture = async (
       name: "Review fixture",
       slug: organizationId,
       createdAt: new Date(),
+    });
+    await recordNewOrganizationAccessState(db, {
+      organizationId,
+      now: new Date(),
     });
     await db.insert(user).values({
       id: userId,

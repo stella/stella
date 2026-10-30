@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
-import { softLawIdentityKey, softLawContentHash } from "./soft-law-fingerprint";
+import { softLawContentHash, softLawIdentityKey } from "./soft-law-fingerprint";
 import { SoftLawItemError } from "./soft-law-types";
-import type { SoftLawMetadata, SoftLawDocumentInput } from "./soft-law-types";
+import type { SoftLawDocumentInput, SoftLawMetadata } from "./soft-law-types";
 
 const metadata: SoftLawMetadata = {
   title: "Guidance",

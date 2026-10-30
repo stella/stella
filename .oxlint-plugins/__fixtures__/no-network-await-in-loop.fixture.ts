@@ -4,7 +4,7 @@
 // Each `oxlint-disable-next-line` below intentionally suppresses a case the
 // rule MUST flag (a network call awaited inside a loop body, through a
 // fetch-owning module, a global `fetch`, an AWS SDK command dispatch, an
-// Eden client method, or a delegated `Result.await(...)`). If the rule
+// API client method, or a delegated `Result.await(...)`). If the rule
 // regresses, the matching disable goes unused and
 // `--report-unused-disable-directives-severity=error` fails CI. The cases
 // WITHOUT a disable must NOT be flagged; a false positive there fails the
@@ -21,7 +21,7 @@ import {
   fetchWithTimeout as aliasedFetch,
 } from "@stll/fetch";
 
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { api } from "@/lib/api";
 
 declare const ids: string[];
@@ -78,9 +78,9 @@ export const awsCommandSendInForOf = async (s3: S3Client) => {
   }
 };
 
-export const edenClientInForOf = async () => {
+export const apiClientInForOf = async () => {
   for (const id of ids) {
-    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: a method on the Eden client is a round-trip
+    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: a method on the API client is a round-trip
     collect(await api.documents({ id }).get());
   }
 };
@@ -149,7 +149,7 @@ export const resultTryPromiseObjectFormInForOf = async () => {
 
 // A generated route name that is not a valid identifier is reached through
 // computed access; its root is still the imported client.
-export const computedEdenRouteInForOf = async () => {
+export const computedApiClientRouteInForOf = async () => {
   for (const id of ids) {
     // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: computed access resolves to the imported client root
     collect(await api.workspaces["copy-to-workspace"].post({ id }));
