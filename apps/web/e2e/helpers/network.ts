@@ -409,9 +409,7 @@ export const createNetworkCollector = (
             Object.entries(response.headers).some(
               ([name, value]) =>
                 name.toLowerCase() === "content-type" &&
-                String(value)
-                  .toLowerCase()
-                  .includes(STREAMED_RESPONSE_CONTENT_TYPE),
+                value.toLowerCase().includes(STREAMED_RESPONSE_CONTENT_TYPE),
             )
           ) {
             record.responseSize.stream();
@@ -454,11 +452,13 @@ export const createNetworkCollector = (
           }
         },
       );
-      const enabled = await Result.tryPromise(() =>
-        session.send("Network.enable"),
+      const enabled = await Result.tryPromise(
+        async () => await session.send("Network.enable"),
       );
       if (enabled.isErr()) {
-        const detached = await Result.tryPromise(() => session.detach());
+        const detached = await Result.tryPromise(
+          async () => await session.detach(),
+        );
         if (detached.isErr()) {
           throw new AggregateError(
             [enabled.error.cause, detached.error.cause],
@@ -547,7 +547,7 @@ export const createNetworkCollector = (
                 .filter((record) =>
                   responseSizeBudgetKeys.has(requestKey(record)),
                 )
-                .map(({ responseSize }) => responseSize.completion),
+                .map(async ({ responseSize }) => await responseSize.completion),
             ).then(() => "complete" as const),
             timeout,
           ]);

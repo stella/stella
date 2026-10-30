@@ -54,7 +54,7 @@ const startBodyServer = async ({
     if (request.url === "/iframe") {
       const address = server.address();
       if (address === null || typeof address === "string") {
-        return panic("Iframe fixture server did not bind a TCP port");
+        panic("Iframe fixture server did not bind a TCP port");
       }
       response.setHeader("content-type", "text/html");
       response.end(
@@ -255,7 +255,7 @@ test("API requests in an out-of-process iframe remain explicitly unmeasured", as
       .frames()
       .find((entry) => entry.url() === `${iframeOrigin}/frame`);
     if (frame === undefined) {
-      return panic("OOPIF fixture did not load its child frame");
+      panic("OOPIF fixture did not load its child frame");
     }
     const iframeSession = await page.context().newCDPSession(frame);
     try {
