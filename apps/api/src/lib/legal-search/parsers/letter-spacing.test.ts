@@ -266,7 +266,7 @@ describe("withAttestedLetterSpacing", () => {
 
   test("never changes a character that is not whitespace, and is idempotent", () => {
     assertProperty(
-      "attested letter spacing never changes a character that is not whitespace",
+      "never changes a character that is not whitespace, and is idempotent",
       fc.property(
         fc.constantFrom("m ů že", "m ůže", "m ů ž e", "mů ž e", "může"),
         fc.array(czechWord, { minLength: 0, maxLength: 4 }),

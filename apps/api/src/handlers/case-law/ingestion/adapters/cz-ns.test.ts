@@ -383,8 +383,6 @@ describe("the judge a decision is signed by", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(String(built.decision.metadata["judge"])).toBe(
-      "JUDr. Zdeněk Krčmář",
-    );
+    expect(built.decision.metadata["judge"]).toBe("JUDr. Zdeněk Krčmář");
   });
 });
