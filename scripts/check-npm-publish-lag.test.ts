@@ -280,8 +280,9 @@ describe("promoted reference release resolution", () => {
       }
       if (verb === "show" && target !== undefined) {
         const [ref, file] = target.split(":");
-        if (file === "VERSION" && ref !== undefined && ref in versions) {
-          return ok(`${versions[ref]}\n`);
+        const version = ref === undefined ? undefined : versions[ref];
+        if (file === "VERSION" && version !== undefined) {
+          return ok(`${version}\n`);
         }
         if (file === DATES && manifest !== undefined) {
           return ok(manifest);
@@ -290,7 +291,7 @@ describe("promoted reference release resolution", () => {
       return { ok: false, stdout: "", stderr: "missing" };
     };
   };
-  const manifestOf = (entries: Record<string, string | null>) =>
+  const manifestOf = (entries: Record<string, unknown>) =>
     JSON.stringify({ _note: "n", ...entries });
   const previous = (runGit: RunGit) =>
     resolveRef(parseArgs(["--previous-release-of", "HEAD"]), runGit);
@@ -342,10 +343,7 @@ describe("promoted reference release resolution", () => {
       ["not json", /not valid JSON/u],
       ["[]", /must be an object/u],
       [manifestOf({ "v0.9.70": "yesterday" }), /invalid publication time/u],
-      [
-        manifestOf({ "v0.9.70": 5 as unknown as string }),
-        /invalid publication time/u,
-      ],
+      [manifestOf({ "v0.9.70": 5 }), /invalid publication time/u],
       [manifestOf({ "not-a-tag": T }), /invalid stable release ref/u],
       [undefined, /cannot read/u],
     ] as const) {
@@ -408,6 +406,7 @@ describe("parseArgs", () => {
       intervalSeconds: 30,
       packages: ["cli", "ui"],
       previousReleaseOf: undefined,
+      promotedReleaseBelow: undefined,
       ref: "abc",
     });
   });
