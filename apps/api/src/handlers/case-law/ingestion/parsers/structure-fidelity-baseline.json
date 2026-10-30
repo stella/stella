@@ -417,11 +417,11 @@
           "excerpt": "ústavnej sťažnosti sťažovateľa. Je tomu tak preto, že hoci 4 ⏎ fakulta univerzity nemá na rozdiel od univerzity právnu s"
         }
       ],
-      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-15-98.content.json.gz (recorded document; census metadata)": [
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-10-2014.content.json.gz (recorded document; census metadata)": [
         {
           "rule": "ast-missing",
           "anchorId": "document",
-          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 15/98\n\nÚstavný súd "
+          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 10/2014-78\n\nÚstavný"
         }
       ],
       "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-24-2014.content.json.gz (recorded document; census metadata)": [
@@ -431,11 +431,11 @@
           "excerpt": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nPL. ÚS 24/2014-22\n\nÚstavný súd Slovenskej republiky"
         }
       ],
-      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-10-2014.content.json.gz (recorded document; census metadata)": [
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-15-98.content.json.gz (recorded document; census metadata)": [
         {
           "rule": "ast-missing",
           "anchorId": "document",
-          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 10/2014-78\n\nÚstavný"
+          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 15/98\n\nÚstavný súd "
         }
       ]
     },
@@ -1261,20 +1261,6 @@
           "excerpt": "ie społeczne wnioskodawcy – w najkorzystniejszym wariancie - ⏎ z przyjęciem do rozważań - wynagrodzeń :"
         }
       ],
-      "pl-courts-dump-day.json.gz:40": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "zpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym, ⏎ sprawy z odwołania A. N."
-        }
-      ],
-      "pl-courts-dump-day.json.gz:41": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-8",
-          "excerpt": "zpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym, ⏎ sprawy z odwołania (...) DRUKARNIA spółki z ograniczoną o"
-        }
-      ],
       "pl-courts-dump-day.json.gz:50": [
         {
           "rule": "sentence-cut",
@@ -1327,20 +1313,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-45",
           "excerpt": "enie biegłego A. M. (1) ma uwiarygodnić wniosek końcowy jego ⏎ opinii?;"
-        }
-      ],
-      "pl-courts-dump-day.json.gz:58": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-9",
-          "excerpt": "Sekurytyzacyjnego Funduszu Inwestycyjnego Zamkniętego we W., ⏎ przeciwko E. W."
-        }
-      ],
-      "pl-courts-dump-day.json.gz:59": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-9",
-          "excerpt": "Sekurytyzacyjnego Funduszu Inwestycyjnego Zamkniętego we W., ⏎ przeciwko A. M.,"
         }
       ],
       "pl-courts-dump-day.json.gz:67": [
@@ -2257,23 +2229,6 @@
           "rule": "page-number-block",
           "anchorId": "p-20",
           "excerpt": "5"
-        }
-      ],
-      "pl-kis-listing-06-wis.json:0": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-35",
-          "excerpt": "blicznej, są klasyfikowane według Nomenklatury scalonej (CN) ⏎ lub klasyfikacji wydanych na podstawie przepisów o statys"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-59",
-          "excerpt": "ą tych produktów jest to, że powracają one do stanu ciekłego ⏎ lub półciekłego, w temperaturze otoczenia zbliżonej do 0 "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-78",
-          "excerpt": "ręczenia decyzji o zmianie WIS albo decyzji o uchyleniu WIS, ⏎ albo"
         }
       ],
       "pl-kis-listing-09-wis-uch.json:0": [
