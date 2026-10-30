@@ -292,7 +292,7 @@ describe("day calendar segment merging", () => {
         { endMs: 37 * minute, id: "terminal", startMs: 35 * minute },
         { endMs: 38 * minute, id: "browser", startMs: 37 * minute },
         { endMs: 40 * minute, id: "mail", startMs: 38 * minute },
-        { endMs: 41 * minute, id: "lone", startMs: 50 * minute },
+        { endMs: 52 * minute, id: "lone", startMs: 50 * minute },
       ],
       { thresholdMs: 5 * minute },
     );
@@ -314,7 +314,7 @@ describe("day calendar segment merging", () => {
         type: "mixed",
       },
       {
-        segment: { endMs: 41 * minute, id: "lone", startMs: 50 * minute },
+        segment: { endMs: 52 * minute, id: "lone", startMs: 50 * minute },
         type: "single",
       },
     ]);
