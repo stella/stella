@@ -13,6 +13,10 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
 
+import {
+  CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
+  caseLawSourceLanguagesOf,
+} from "@stll/api-contract/case-law-source-languages";
 import { writeZipEntry } from "@stll/docx-utils";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
@@ -1165,6 +1169,83 @@ describe("what the notice adds to a stored row", () => {
     expect(decision.judges).toBeUndefined();
     expect(decision.publisherCitedCases).toBeUndefined();
     expect(decision.fulltext?.length).toBeGreaterThan(100);
+  });
+});
+
+describe("the work's language manifest", () => {
+  test("a stored row states every language expression of its work", async () => {
+    // A row is one expression; the list of the others is what makes a
+    // missing translation checkable, and a replay of the stored notice is
+    // how rows written before it was kept come to state it.
+    const decision = await decisionFrom(noticeEn);
+    const expressions =
+      decision.metadata[CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY];
+
+    expect(Array.isArray(expressions)).toBe(true);
+    const languages = Array.isArray(expressions)
+      ? expressions.map((expression: unknown) =>
+          isRecord(expression) ? expression["authorityCode"] : undefined,
+        )
+      : [];
+    const stated: unknown[] = Array.isArray(expressions) ? expressions : [];
+    expect(stated).toContainEqual({
+      authorityCode: "GLE",
+      language: "ga",
+      formats: ["fmx4", "pdfa2a", "xhtml", "xml"],
+    });
+    // What the decision read serves: the tags rows of this corpus carry, so
+    // the held versions compare against the publisher's list directly.
+    const served = caseLawSourceLanguagesOf(decision.metadata);
+    expect(served).toHaveLength(24);
+    expect(served).toContain("en");
+    expect(served).toContain("cs");
+    expect(languages).toHaveLength(24);
+    expect(new Set(languages).size).toBe(24);
+    expect(languages).toEqual(
+      // Authority codes, compared by code unit as the parser orders them.
+      languages.toSorted((left, right) =>
+        String(left) < String(right) ? -1 : 1,
+      ),
+    );
+    expect(languages).toContain("ENG");
+    expect(languages).toContain("GLE");
+    // Stated alike in every row of the work, whatever language it holds.
+    expect(parseEcjNotice(noticeEl).workExpressions).toEqual(
+      parseEcjNotice(noticeEn).workExpressions,
+    );
+  });
+
+  test("states translations published only as the Court's HTML", async () => {
+    const notice = await gunzipText(
+      new URL(
+        "__fixtures__/eu-ecj-notice-62026CO0122-cs.xml.gz",
+        import.meta.url,
+      ),
+    );
+    const expressions = parseEcjNotice(notice).workExpressions;
+    const htmlOnly = expressions.filter(
+      ({ formats }) => formats.includes("html") && !formats.includes("xhtml"),
+    );
+
+    expect(expressions).toHaveLength(20);
+    // The languages a listing limited to XHTML could not see: everything but
+    // the four the Office had converted when this notice was recorded.
+    expect(htmlOnly.map(({ language }) => language)).toContain("CES");
+    expect(htmlOnly.length).toBe(16);
+    expect(
+      expressions
+        .filter(({ formats }) => formats.includes("xhtml"))
+        .map(({ language }) => language),
+    ).toEqual(["DAN", "ENG", "FRA", "RON"]);
+  });
+
+  test("a row stored without a notice states no manifest rather than an empty one", async () => {
+    const decision = await decisionFrom(undefined);
+
+    expect(
+      Object.hasOwn(decision.metadata, CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY),
+    ).toBe(false);
+    expect(caseLawSourceLanguagesOf(decision.metadata)).toBeNull();
   });
 });
 

@@ -2394,6 +2394,9 @@ const createHarness = ({
           if (query.includes("database_backfill_states")) {
             return queryBackfillCheckpoint(query, params);
           }
+          if (query.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
+          }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);
             if (typeof constraintName !== "string") {
@@ -2449,6 +2452,10 @@ const createHarness = ({
           // The finding decision backfill's probe: no decided finding is
           // without history, so its completion holds.
           if (query.includes("document_review_finding_decisions event")) {
+            return [];
+          }
+          // The list source decision backfill's probe, likewise.
+          if (query.includes("legal_list_item_source_decisions event")) {
             return [];
           }
           if (

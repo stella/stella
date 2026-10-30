@@ -73,6 +73,7 @@ const {
 const { IntlProvider } = await import("use-intl");
 const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { noopAnalytics } = await import("@/lib/analytics/noop");
+const { rootKeys } = await import("@/lib/auth-query-options");
 const { MatterItem } = await import("@/components/app-sidebar");
 const { SidebarProvider } = await import("@/components/sidebar");
 const { RouteProviderScopeBoundary } =
@@ -93,6 +94,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
+  queryClient.setQueryData(rootKeys.role, "owner");
   const root = createRootRoute();
   const protectedRoute = createRoute({
     getParentRoute: () => root,

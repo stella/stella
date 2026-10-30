@@ -168,6 +168,7 @@ export type SafeIdType =
   | "legalListItemComment"
   | "legalListItemReview"
   | "legalListItemSource"
+  | "legalListItemSourceDecision"
   | "legalListSection"
   | "legalReaderAnnotation"
   | "legalReaderAnswer"

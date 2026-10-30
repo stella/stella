@@ -345,6 +345,7 @@ export const FAILURE_TAGS = [
   "RawSourceObjectCopyError",
   "RawSourceObjectUnhomeableError",
   "RawSourceWriteWindowClosedError",
+  "ReadCommittedUnitError",
   "ReaderAnswerCorpusError",
   "ReaderProvisionSpanMismatchError",
   "ReaderTextScaleStorageError",
