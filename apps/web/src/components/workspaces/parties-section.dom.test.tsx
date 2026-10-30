@@ -286,7 +286,7 @@ test.each(["client", "personal"])(
   },
 );
 
-test("creating a client from a personal matter succeeds without replay headers", async () => {
+test("creating a client from a personal matter sends a replay key and no contact id", async () => {
   const contactId = "00000000-0000-4000-9000-000000000010";
   const createRequests: {
     body: Record<string, unknown>;
@@ -377,12 +377,13 @@ test("creating a client from a personal matter succeeds without replay headers",
   if (!createRequest) {
     throw new Error("expected a contact creation request");
   }
-  expect(createRequest.replayKey).toBeNull();
+  // The server mints the contact id; the replay key makes a retry safe.
+  expect(typeof createRequest.replayKey).toBe("string");
   expect(createRequest.body).toMatchObject({
     displayName: "Avery Counsel",
     type: "person",
   });
-  expect(typeof createRequest.body["id"]).toBe("string");
+  expect(createRequest.body["id"]).toBeUndefined();
   expect(screen.getByText("Avery Counsel")).toBeDefined();
 
   const promoteButton = screen
