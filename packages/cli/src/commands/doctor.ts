@@ -255,7 +255,7 @@ export const doctorCommand: Command<Context> = buildCommand<
           if (info.isSymbolicLink()) {
             const backup = `${first.path}.stella-disabled`;
             const exists = await Result.tryPromise({
-              try: () => access(backup),
+              try: () => lstat(backup),
               catch: (cause) => cause,
             });
             if (Result.isOk(exists)) {

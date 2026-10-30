@@ -215,7 +215,7 @@ test("doctor returns tagged failures for invalid records and cyclic PATH entries
   }
 });
 
-test("doctor fix refuses backup read failures and remains reversible on success", async () => {
+test("doctor fix preserves existing backup links and remains reversible on success", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "stella-doctor-fix-"));
   try {
     const configHome = path.join(root, "config");
@@ -266,9 +266,13 @@ test("doctor fix refuses backup read failures and remains reversible on success"
     await symlink(path.basename(backup), backup);
     const refused = await run(["--fix"]);
     expect(refused.exitCode).toBe(2);
-    expect(refused.stderr).toContain(
-      "Could not inspect the shadowing executable backup",
-    );
+    expect(refused.stderr).toMatch(/backup/iu);
+    expect(await readlink(shadowPath)).toBe(npmTarget);
+    await rm(backup);
+    await symlink("absent-backup-target", backup);
+    const danglingBackup = await run(["--fix"]);
+    expect(danglingBackup.exitCode).toBe(2);
+    expect(await readlink(backup)).toBe("absent-backup-target");
     expect(await readlink(shadowPath)).toBe(npmTarget);
     await rm(backup);
     const fixed = await run(["--fix"]);
