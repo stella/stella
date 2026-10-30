@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
@@ -57,6 +57,7 @@ describe("decision language identity", () => {
       "AUT",
       "CZE",
       "EU",
+      "GBR",
       "HUN",
       "POL",
       "SVK",
@@ -101,17 +102,17 @@ describe("decision language identity", () => {
       documentAst: {},
     });
     expect(
-      sanitizeResult({ ...decision, sourceDocumentId: "cluster-1" })
+      sanitizeResult({ ...decision, sourceDocumentId: "cluster-1" }).unwrap()
         .sourceDocumentId,
     ).toBe("cluster-1");
-    const error = refusal(() => sanitizeResult(decision));
+    const error = refusal(() => sanitizeResult(decision).unwrap());
     expect(error).toBeInstanceOf(UnpersistableDecisionFieldError);
     expect(error).toMatchObject({
       field: UNPERSISTABLE_DECISION_FIELDS.SOURCE_DOCUMENT_ID,
     });
     // A docket-keyed jurisdiction still takes a result without one.
     expect(
-      sanitizeResult({ ...decision, country: "CZE" }).sourceDocumentId,
+      sanitizeResult({ ...decision, country: "CZE" }).unwrap().sourceDocumentId,
     ).toBeUndefined();
   });
 });

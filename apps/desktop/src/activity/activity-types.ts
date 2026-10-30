@@ -44,6 +44,8 @@ export type ActivitySegment = {
   matterId?: string | null;
   windowTitle?: string | null;
   document?: string | null;
+  /** Time on a call in this app, whatever was in front. */
+  call?: boolean;
   /** RFC 3339 instants. */
   end: string;
   start: string;
@@ -72,11 +74,11 @@ export type ActivityDaySnapshot = {
   } | null;
   manualAssignments: ActivityManualAssignment[];
   draftedEntries: { start: string; end: string; entryId: string }[];
-  timeBillingEnabled: boolean;
   earliestDate: string;
   latestDate: string;
   excludedApps: ActivityAppExclusion[];
   captureDetails: boolean;
+  detectCalls: boolean;
   appNameOnlyApps: ActivityAppExclusion[];
   detailsAccess: ActivityDetailsAccess;
   browserApps: ActivityAppExclusion[];
@@ -205,6 +207,7 @@ const isSegment = (value: unknown): value is ActivitySegment => {
     windowTitle,
     document,
     matterId,
+    call,
   } = value;
   return (
     typeof appIdentifier === "string" &&
@@ -215,7 +218,8 @@ const isSegment = (value: unknown): value is ActivitySegment => {
       matterId === null ||
       typeof matterId === "string") &&
     isOptionalMetadata(windowTitle) &&
-    isOptionalMetadata(document)
+    isOptionalMetadata(document) &&
+    (call === undefined || typeof call === "boolean")
   );
 };
 
@@ -249,6 +253,24 @@ const isReviewState = ({
   Array.isArray(draftedEntries) &&
   draftedEntries.every(isDraftedEntry);
 
+const isCaptureSettings = ({
+  captureDetails,
+  detectCalls,
+  detailsAccess,
+  appNameOnlyApps,
+  browserApps,
+  browserTitleApps,
+}: Record<string, unknown>) =>
+  typeof captureDetails === "boolean" &&
+  typeof detectCalls === "boolean" &&
+  isOneOf(ACTIVITY_DETAILS_ACCESS, detailsAccess) &&
+  Array.isArray(appNameOnlyApps) &&
+  appNameOnlyApps.every(isExclusion) &&
+  Array.isArray(browserApps) &&
+  browserApps.every(isExclusion) &&
+  Array.isArray(browserTitleApps) &&
+  browserTitleApps.every(isExclusion);
+
 export const isActivityDaySnapshot = (
   value: unknown,
 ): value is ActivityDaySnapshot => {
@@ -261,14 +283,8 @@ export const isActivityDaySnapshot = (
     earliestDate,
     latestDate,
     unreadable,
-    timeBillingEnabled,
     deletionStatus,
     sourceAppVisuals,
-    captureDetails,
-    detailsAccess,
-    appNameOnlyApps,
-    browserApps,
-    browserTitleApps,
     otherAccountHistoryDays,
     persistence,
     recordingStatus,
@@ -282,20 +298,12 @@ export const isActivityDaySnapshot = (
     typeof earliestDate === "string" &&
     typeof latestDate === "string" &&
     typeof unreadable === "boolean" &&
-    typeof timeBillingEnabled === "boolean" &&
     typeof deletionStatus === "string" &&
     Object.hasOwn(activityContract.deletionStatuses, deletionStatus) &&
     isReviewState(value) &&
     Array.isArray(sourceAppVisuals) &&
     sourceAppVisuals.every(isClipboardSourceAppVisual) &&
-    typeof captureDetails === "boolean" &&
-    isOneOf(ACTIVITY_DETAILS_ACCESS, detailsAccess) &&
-    Array.isArray(appNameOnlyApps) &&
-    appNameOnlyApps.every(isExclusion) &&
-    Array.isArray(browserApps) &&
-    browserApps.every(isExclusion) &&
-    Array.isArray(browserTitleApps) &&
-    browserTitleApps.every(isExclusion) &&
+    isCaptureSettings(value) &&
     typeof otherAccountHistoryDays === "number" &&
     Number.isSafeInteger(otherAccountHistoryDays) &&
     otherAccountHistoryDays >= 0 &&

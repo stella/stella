@@ -23,8 +23,11 @@ const { createCaseDecisionDetailsTab } =
   await import("@/components/inspector/case-decision-details-view");
 const { INSPECTOR_PANE_INTENT } =
   await import("@/components/inspector/inspector-store-types");
-const { inspectorRestorePendingStorageKey } =
-  await import("@/components/inspector/inspector-storage-keys");
+const {
+  inspectorMinimizedEntry,
+  inspectorRestorePendingEntry,
+  inspectorStateEntry,
+} = await import("@/components/inspector/inspector-storage-keys");
 const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
 const { SidebarProvider } = await import("@/components/sidebar");
@@ -35,12 +38,14 @@ const { useLegalDocumentChatThreads } =
 const en = (await import("@/i18n/langs/en.json")).default;
 const { installUserScopedStorage } =
   await import("@/lib/account/install-user-scoped-storage");
-const { releaseUserStorage, userStorageKey } =
+const { releaseUserStorage } =
   await import("@/lib/account/user-scoped-storage");
 const { rootKeys } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
+const { readPersistedState, writePersistedState } =
+  await import("@/lib/persisted-state/registry");
 const { toSafeId } = await import("@/lib/safe-id");
 const { PublicLawInspector } =
   await import("@/routes/law/-components/public-law-inspector");
@@ -72,11 +77,10 @@ const DETAILS_TAB = createCaseDecisionDetailsTab({
   slug: "27-cdo-59-2022",
 });
 
-const ownerKey = (prefix: string) =>
-  userStorageKey(`${prefix}:${MEMBER.activeOrganizationId}:`, {
-    kind: "user",
-    userId: MEMBER.id,
-  });
+const inspectorScope = {
+  organizationId: MEMBER.activeOrganizationId,
+  userId: MEMBER.id,
+};
 
 let uninstallStorage: (() => void) | undefined;
 
@@ -104,26 +108,23 @@ afterAll(async () => {
 
 /** What a member left behind: the decision's chat tab, with the pane folded. */
 const persistDecisionChat = () => {
-  localArea().setItem(
-    ownerKey("stella:inspector-state:v1"),
-    JSON.stringify({
-      activeId: SAVED_THREAD_ID,
-      collapsedGroupIds: [],
-      groupAssignments: {},
-      groups: [],
-      tabs: [
-        {
-          activeLegalKey: decisionChatKey(DECISION_ID),
-          contextMatterIds: [],
-          id: SAVED_THREAD_ID,
-          label: "Decision chat",
-          started: true,
-          type: "chat",
-        },
-      ],
-    }),
-  );
-  localArea().setItem(ownerKey("stella:inspector-minimized:v1"), "1");
+  writePersistedState(inspectorStateEntry, inspectorScope, {
+    activeId: SAVED_THREAD_ID,
+    collapsedGroupIds: [],
+    groupAssignments: {},
+    groups: [],
+    tabs: [
+      {
+        activeLegalKey: decisionChatKey(DECISION_ID),
+        contextMatterIds: [],
+        id: SAVED_THREAD_ID,
+        label: "Decision chat",
+        started: true,
+        type: "chat",
+      },
+    ],
+  }).unwrap();
+  writePersistedState(inspectorMinimizedEntry, inspectorScope, true).unwrap();
 };
 
 const rootRoute = createRootRoute();
@@ -181,20 +182,17 @@ describe("a member returning to a decision on the public law surface", () => {
       client.setQueryData(rootKeys.session, { user: { id: MEMBER.id } });
     });
     persistDecisionChat();
-    localArea().setItem(ownerKey("stella:inspector-minimized:v1"), "0");
+    writePersistedState(
+      inspectorMinimizedEntry,
+      inspectorScope,
+      false,
+    ).unwrap();
 
     const firstShell = renderMemberInspector(client);
     expect(useInspectorTabsStore.getState().minimized).toBe(false);
-    const session =
-      browserStorage("session") ?? panic("Test requires session storage");
     expect(
-      session.getItem(
-        inspectorRestorePendingStorageKey({
-          organizationId: MEMBER.activeOrganizationId,
-          userId: MEMBER.id,
-        }),
-      ),
-    ).not.toBeNull();
+      readPersistedState(inspectorRestorePendingEntry, inspectorScope),
+    ).not.toBe("");
     firstShell.unmount();
     renderMemberInspector(client);
 

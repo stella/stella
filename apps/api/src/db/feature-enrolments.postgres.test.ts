@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { SETTING_ORGANIZATION_ID, SETTING_USER_ID } from "@/api/db/rls";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -20,16 +21,16 @@ import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolme
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
-  NO_DB,
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -59,6 +60,10 @@ describe.skipIf(!runPostgresTests)(
           const { sql: client, db } = openClient();
           try {
             await client`INSERT INTO organization (id, name, slug, created_at) VALUES (${organizationId}, 'Enrolment organization', ${organizationId}, now())`;
+            await recordNewOrganizationAccessState(db, {
+              organizationId,
+              now: new Date(),
+            });
             await client`INSERT INTO "user" (id, name, email, email_verified) VALUES (${userId}, 'Enrolment user', ${`${userId}@example.test`}, true)`;
             await client`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES (${Bun.randomUUIDv7()}, ${organizationId}, ${userId}, 'member', now())`;
             await client`INSERT INTO feature_enrolments (user_id, organization_id, feature_id) VALUES (${userId}, ${organizationId}, 'time-billing')`;
@@ -117,6 +122,10 @@ describe.skipIf(!runPostgresTests)(
         try {
           for (const orgId of [orgA, orgB]) {
             await client`INSERT INTO organization (id, name, slug, created_at) VALUES (${orgId}, 'Enrolment organization', ${orgId}, now())`;
+            await recordNewOrganizationAccessState(db, {
+              organizationId: orgId,
+              now: new Date(),
+            });
           }
           for (const userId of [userA, userB]) {
             await client`INSERT INTO "user" (id, name, email, email_verified) VALUES (${userId}, 'Enrolment user', ${`${userId}@example.test`}, true)`;

@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { transactionAbortError } from "@/api/db/safe-db";
@@ -19,12 +18,12 @@ import {
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,6 +32,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
@@ -40,12 +40,12 @@ import {
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-const duplicateEntityBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  name: t.Optional(
-    t.String({ minLength: 1, maxLength: LIMITS.entityNameMaxLength }),
+const duplicateEntityBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  name: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(LIMITS.entityNameMaxLength)),
   ),
-  targetEntityId: t.Optional(tSafeId("entity", { usage: "creation" })),
+  targetEntityId: v.optional(resourceIdSchema("entity", { usage: "creation" })),
 });
 
 type DuplicateEntityHandlerProps = {
@@ -54,7 +54,7 @@ type DuplicateEntityHandlerProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof duplicateEntityBodySchema>;
+  body: v.InferOutput<typeof duplicateEntityBodySchema>;
   dependencies: DuplicateEntityDependencies;
 };
 
@@ -89,6 +89,19 @@ const defaultDuplicateEntityDependencies = {
   flushEntitySearchRepairs,
   requestNativeExtractionRuns,
 } satisfies DuplicateEntityDependencies;
+
+const DUPLICATE_CAPTURE_CONTEXT = {
+  searchRepair: handlerErrorContext("duplicateEntityHandler.rejection"),
+  documentProcessing: handlerErrorContext(
+    "duplicateEntityHandler.handoffCommittedDocumentProcessingRuns",
+  ),
+  pdfDerivative: handlerErrorContext(
+    "duplicateEntityHandler.enqueuePdfDerivativeOrMarkFailed",
+  ),
+  imageThumbnail: handlerErrorContext(
+    "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
+  ),
+} as const;
 
 const duplicateEntityHandler = async function* ({
   safeDb,
@@ -187,7 +200,13 @@ const duplicateEntityHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, { workspaceId, sourceEntityId });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.duplicateEntityHandler.fileMappings_error",
+        { workspaceId, sourceEntityId },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -243,15 +262,18 @@ const duplicateEntityHandler = async function* ({
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
   dependencies
-    .flushEntitySearchRepairs(
-      txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-    )
-    .catch(captureError);
+    .flushEntitySearchRepairs([
+      ...txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+      ...txResult.entityIdsBySearchIndexOwner[
+        SEARCH_INDEX_OWNER.durableExtraction
+      ],
+    ])
+    .catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.searchRepair));
 
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.documentProcessing));
 
   // The copies reference fresh file IDs, so each needs its own
   // PDF/thumbnail derivatives.
@@ -264,7 +286,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative));
     enqueueImageThumbnailOrMarkFailed({
       entityId: fileField.entityId,
       fieldId: fileField.fieldId,
@@ -273,7 +295,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail));
   }
 
   return Result.ok({

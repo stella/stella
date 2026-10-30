@@ -285,6 +285,80 @@ fn open_append(path: &Path) -> io::Result<File> {
   options.open(path)
 }
 
+/// Logs `cause` as the reason for `what`. Only for causes whose text carries
+/// no credentials or personal data; see [`log_json_error`] and
+/// [`log_request_error`] for the ones that can.
+pub fn log_cause(cause: &impl std::fmt::Display, what: &'static str) {
+  tracing::warn!(cause = %cause, "{what}");
+}
+
+/// Replaces an error with a fixed message for the caller and keeps the cause
+/// in the local log, under the same rule as [`log_cause`].
+pub fn with_cause_logged<E: std::fmt::Display>(
+  message: &'static str,
+) -> impl FnOnce(E) -> String {
+  move |cause| {
+    log_cause(&cause, message);
+    message.to_string()
+  }
+}
+
+/// Replaces an error with `replacement`, such as a failure kind the caller
+/// matches on, and keeps the cause in the local log as [`log_cause`] does.
+pub fn replaced_logged<E: std::fmt::Display, T>(
+  what: &'static str,
+  replacement: T,
+) -> impl FnOnce(E) -> T {
+  move |cause| {
+    log_cause(&cause, what);
+    replacement
+  }
+}
+
+/// serde repeats input values in its messages, and the inputs here include
+/// credentials and client data: only the category and position are logged.
+pub fn log_json_error(error: &serde_json::Error, what: &'static str) {
+  tracing::warn!(
+    category = ?error.classify(),
+    line = error.line(),
+    column = error.column(),
+    "{what}"
+  );
+}
+
+/// reqwest names the URL in its messages, which can carry search terms and
+/// identifiers: only the kind of failure and the status are logged.
+pub fn log_request_error(error: &reqwest::Error, what: &'static str) {
+  tracing::warn!(
+    timeout = error.is_timeout(),
+    connect = error.is_connect(),
+    decode = error.is_decode(),
+    status = error.status().map(|status| status.as_u16()),
+    "{what}"
+  );
+}
+
+/// [`with_cause_logged`] for a JSON error, logged as [`log_json_error`] does.
+pub fn json_cause_logged(
+  message: &'static str,
+) -> impl FnOnce(serde_json::Error) -> String {
+  move |error| {
+    log_json_error(&error, message);
+    message.to_string()
+  }
+}
+
+/// [`with_cause_logged`] for an HTTP error, logged as [`log_request_error`]
+/// does.
+pub fn request_cause_logged(
+  message: &'static str,
+) -> impl FnOnce(reqwest::Error) -> String {
+  move |error| {
+    log_request_error(&error, message);
+    message.to_string()
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

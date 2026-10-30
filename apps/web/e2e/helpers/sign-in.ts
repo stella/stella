@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { type APIRequestContext, expect } from "@playwright/test";
 
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
@@ -14,7 +14,31 @@ import { E2E_API_ORIGIN } from "./api";
 export const signInWithEmailOtp = async (
   api: APIRequestContext,
   email: string,
-): Promise<void> => {
+): Promise<void> =>
+  await signInWithEmailOtpState({ api, email, professionalUse: "confirmed" });
+
+/** Signs in without claiming that the professional-use statement was shown. */
+export const signInWithEmailOtpWithoutProfessionalUse = async (
+  api: APIRequestContext,
+  email: string,
+): Promise<void> =>
+  await signInWithEmailOtpState({
+    api,
+    email,
+    professionalUse: "unconfirmed",
+  });
+
+type SignInWithEmailOtpStateOptions = {
+  api: APIRequestContext;
+  email: string;
+  professionalUse: "confirmed" | "unconfirmed";
+};
+
+const signInWithEmailOtpState = async ({
+  api,
+  email,
+  professionalUse,
+}: SignInWithEmailOtpStateOptions): Promise<void> => {
   const sendResponse = await api.post(
     `${E2E_API_ORIGIN}/api/auth/email-otp/send-verification-otp`,
     { data: { email, type: "sign-in" } },
@@ -41,8 +65,12 @@ export const signInWithEmailOtp = async (
       data: {
         email,
         otp: otpPayload.otp,
-        [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
-          PROFESSIONAL_USE_STATEMENT_VERSION,
+        ...(professionalUse === "confirmed"
+          ? {
+              [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+                PROFESSIONAL_USE_STATEMENT_VERSION,
+            }
+          : {}),
       },
     },
   );

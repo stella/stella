@@ -24,8 +24,8 @@
 
 import { PRUNABLE_BASELINES } from "./autofix-baseline-prune";
 import {
-  GENERATORS,
   type Generator,
+  GENERATORS,
   generatorsForFiles,
   orderGenerators,
 } from "./generated-files";
@@ -34,6 +34,13 @@ export const AUTOFIX_BOT = "autofix-ci[bot]";
 export const AUTOFIX_COMMIT_SUBJECT = "chore: autofix files";
 
 const PRUNE_SOURCE = /\.(?:[cm]?[jt]sx?|sql)$/u;
+// Oxfmt's supported text formats, plus source files handled by oxlint. Paths
+// outside this set can still select a generator or baseline pruner, but are not
+// themselves passed to a fixer.
+const FIXABLE_SOURCE =
+  /\.(?:[cm]?[jt]sx?|jsonc?|ya?ml|mdx?|html?|vue|svelte|astro|css|scss|less|graphql|gql)$/u;
+
+export const isAutofixablePath = (file: string) => FIXABLE_SOURCE.test(file);
 const PRUNABLE_PATHS = new Set<string>(
   PRUNABLE_BASELINES.map(({ path }) => path),
 );
@@ -41,21 +48,19 @@ const PRUNABLE_PATHS = new Set<string>(
 // What the format and lint fixers read besides the files they fix. Generator
 // sources need no entry: each generator declares them as inputs.
 const FIXER_INPUTS = [
-  ".oxfmtrc.json",
+  "bunfig.toml",
   "oxlint.config.ts",
   ".oxlint-plugins/**",
   "scripts/oxlint-presets/**",
   "**/tsconfig*.json",
   "**/package.json",
   "bun.lock",
-  "bunfig.toml",
   "patches/**",
   "types/**",
   ".github/workflows/autofix.yml",
   "scripts/autofix-*.ts",
   "scripts/ci-generated-sources.ts",
   "scripts/typecheck-coverage.ts",
-  "scripts/check-format-environment.ts",
 ] as const;
 
 /** Whether a change among `files` can alter what format or lint produce. */
@@ -104,16 +109,20 @@ export const planAutofix = ({
   }
   const refix = push !== null && fixerInputChanged(push);
   const pushed = push === null || refix ? null : new Set(push);
-  const scoped =
+  const candidates =
     pushed === null
       ? [...pullRequestFiles]
       : pullRequestFiles.filter((file) => pushed.has(file));
+  const scoped = candidates.filter(isAutofixablePath);
   return {
     generators: orderGenerators(generators),
     scoped,
     refix,
-    prune: pruneInputChanged(scoped),
-    needed: generators.length > 0 || scoped.length > 0,
+    prune: pruneInputChanged(candidates),
+    needed:
+      generators.length > 0 ||
+      scoped.length > 0 ||
+      pruneInputChanged(candidates),
   };
 };
 

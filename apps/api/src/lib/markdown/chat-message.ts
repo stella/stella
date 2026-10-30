@@ -2,16 +2,16 @@ import * as cheerio from "cheerio";
 
 import {
   chatSourceScopeKey,
+  isChatMentionCategory,
+  isChatReferenceCategory,
   isChatSourceScopeKind,
   parseChatSourceScopeId,
+  RESOURCE_TYPE,
   resourceRef,
   SKILL_REF_HREF_PREFIX,
-  RESOURCE_TYPE,
   toChatMentionResourceHref,
   toChatResourceHref,
   toChatSourceScopeHref,
-  isChatMentionCategory,
-  isChatReferenceCategory,
 } from "@stll/api-contract";
 import type { ChatSourceScope } from "@stll/api-contract";
 

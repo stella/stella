@@ -13,7 +13,6 @@ import type { ReactNode } from "react";
 
 import { cn } from "@stll/ui/utils";
 
-import { REVIEW_CLAUSE_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
 import type { ReferenceStandard } from "@/lib/knowledge/playbook-types";
 
 /**
@@ -33,8 +32,6 @@ export const POSITION_HEADER_META_CLASS =
 export type PositionHeaderProps = {
   /** Sits before the ordinal: the drag grip, where a surface has one. */
   leading?: ReactNode;
-  /** The position's place in the list, when the surface numbers its rows. */
-  index?: number | undefined;
   /** The issue: read-only text in the results, an input in the editors. */
   title: ReactNode;
   /** The right-aligned muted slot: the finding's judgment in the results, the
@@ -48,7 +45,6 @@ export type PositionHeaderProps = {
 
 export const PositionHeader = ({
   leading,
-  index,
   title,
   label,
   actions,
@@ -62,11 +58,6 @@ export const PositionHeader = ({
     )}
   >
     {leading}
-    {index !== undefined && (
-      <span className={cn(REVIEW_CLAUSE_LABEL_CLASS, "shrink-0")}>
-        {String(index + 1).padStart(2, "0")}
-      </span>
-    )}
     <span className={cn("min-w-0 flex-1 text-sm leading-6", titleClassName)}>
       {title}
     </span>

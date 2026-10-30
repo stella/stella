@@ -58,9 +58,11 @@ export type GenerateBatchProps = {
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
   onPartialAnswer?:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
 };
+
+export type BatchSettlement =
+  "answered" | "notStated" | "unsupported" | "refused";
 
 export type GenerateBatchResult = Result<
   {
@@ -68,6 +70,8 @@ export type GenerateBatchResult = Result<
     aiJustifications: AIJustification[];
     skippedPropertyIds: SafeId<"property">[];
     unsupportedPropertyIds: SafeId<"property">[];
+    /** One terminal disposition for every property claimed by this batch. */
+    settlements: ReadonlyMap<SafeId<"property">, BatchSettlement>;
   },
   WorkflowValidationError | WorkflowIntegrationError
 >;

@@ -2,11 +2,16 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+
+import "@/api/tests/setup-env";
+
 import { AI_PROVIDERS } from "@stll/ai-catalog";
 import { compareCodeUnit } from "@stll/collation";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
+import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 import { VERIFICATION_RUN_ERROR_CODES } from "@/api/lib/lists/verification/contract";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 import {
@@ -20,6 +25,7 @@ import {
   emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
+  emitRawSourceStoredMetric,
   emitReasoningReplayDroppedMetric,
   emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
@@ -33,10 +39,56 @@ import {
   observeMcpRequest,
 } from "@/api/mcp/request-metrics";
 
+test("new raw object metrics count stored bytes and objects by source without document identifiers", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    for (const family of Object.values(RAW_SOURCE_FAMILY)) {
+      for (const kind of ["document", "payload"] as const) {
+        emitRawSourceStoredMetric({
+          family,
+          sourceId: "fixture-source",
+          kind,
+          bytes: 12_345,
+        });
+      }
+    }
+    expect(lines).toHaveLength(Object.values(RAW_SOURCE_FAMILY).length * 2);
+    expect(lines.map((line) => JSON.parse(line))).toEqual(
+      Object.values(RAW_SOURCE_FAMILY).flatMap((family) =>
+        ["document", "payload"].map((kind) => ({
+          family,
+          source: "fixture-source",
+          kind,
+          RawSourceStoredBytes: 12_345,
+          RawSourceStoredObjects: 1,
+          _aws: {
+            Timestamp: expect.any(Number),
+            CloudWatchMetrics: [
+              {
+                Namespace: "Stella/Api",
+                Dimensions: [["family", "source", "kind"]],
+                Metrics: [
+                  { Name: "RawSourceStoredBytes", Unit: "Bytes" },
+                  { Name: "RawSourceStoredObjects", Unit: "Count" },
+                ],
+              },
+            ],
+          },
+        })),
+      ),
+    );
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
 test("request stages are integral log fields without metric dimensions", () => {
   expect(
     buildRequestStageRecord({
-      route: "/v1/law/statutes/search",
+      route: "/v1/law/statutes/search" satisfies ApiRoutePath,
       tool: "search_legislation",
       stage: "candidate_hydration",
       durationMs: 12.6,
@@ -227,7 +279,7 @@ describe("buildRequestDurationRecord", () => {
     durationMs: 1234.7,
     requestClass: "ai" as const,
     statusCode: 200,
-    route: "/v1/templates/suggest-fields",
+    route: "/v1/templates/suggest-fields" satisfies ApiRoutePath,
     timestamp: 1_700_000_000_000,
   };
 

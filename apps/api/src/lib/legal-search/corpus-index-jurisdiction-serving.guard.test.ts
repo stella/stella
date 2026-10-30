@@ -60,6 +60,12 @@ test("the modules that resolve an index for a read are the pointer's and the dec
     "lib/legal-search/corpus-index-group-enrollment-store.ts",
     "scripts/corpus-snippet-compare.ts",
   ]);
+  // The generations readers are served from, pointer applied: the read path's
+  // store and what measures those readers' freshness.
+  expect(modulesMatching(/\breadServedCorpusIndexGenerationsTx\b/u)).toEqual([
+    "lib/legal-search/corpus-index-group-enrollment-store.ts",
+    "lib/observability/case-law-freshness-metrics.ts",
+  ]);
 });
 
 test("the routing primitives are called by the declaration, the write side, the pointer and operator tools only", () => {

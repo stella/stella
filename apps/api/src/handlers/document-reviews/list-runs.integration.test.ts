@@ -24,6 +24,7 @@ import {
   fields,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
@@ -146,6 +147,9 @@ describe("document review run history across versions", () => {
 
     const result = await listDocumentReviewRuns.handler(
       asTestRaw<Parameters<typeof listDocumentReviewRuns.handler>[0]>({
+        request: new Request("https://api.example.test/handler"),
+        route:
+          "/v1/workspaces/:workspaceId/document-reviews/runs" satisfies ApiRoutePath,
         memberRole: sessionMemberRole("owner"),
         params: { workspaceId: ids.wsA1 },
         query: { entityId: ids.entityA1, fileFieldId: laterFieldId },

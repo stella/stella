@@ -1,9 +1,7 @@
-import { Type } from "@sinclair/typebox";
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { desktopMattersResponseSchema } from "@stll/api-contract/desktop-time-entries";
-import type { DesktopMattersResponse } from "@stll/api-contract/desktop-time-entries";
 
 import {
   ACCOUNT_ACCESS,
@@ -11,15 +9,9 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
-
-const mattersResponseSchema = Type.Unsafe<DesktopMattersResponse>(
-  jsonSchemaToTypeBox(toJsonSchema(desktopMattersResponseSchema)),
-);
 
 export const createDesktopMattersEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -30,12 +22,11 @@ export const createDesktopMattersEndpoint = (
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
-      query: t.Object(
-        { query: t.Optional(t.String({ maxLength: 200 })) },
-        { additionalProperties: false },
-      ),
+      query: v.strictObject({
+        query: v.optional(v.pipe(v.string(), v.maxLength(200))),
+      }),
       response: safePublicHandlerResponseSchemasWithStatusText(
-        mattersResponseSchema,
+        desktopMattersResponseSchema,
       ),
     },
     async function* ({ request, query }) {

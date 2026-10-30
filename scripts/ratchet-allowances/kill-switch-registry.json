@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The kill-switch directory owns the switch registry, its environment schema and the admission check; admission and model dispatch import the check, so no existing lib owner holds both sides."
+}

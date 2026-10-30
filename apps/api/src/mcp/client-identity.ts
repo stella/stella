@@ -8,6 +8,9 @@ import {
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type { McpSessionInitializedProperties } from "@/api/lib/analytics/server-analytics";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
+import { productUsagePrincipal } from "@/api/lib/auth/principal-audience";
+import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
+import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
 import type { McpSession } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
 
@@ -92,29 +95,37 @@ export type RecordMcpSessionInitialized = (args: {
  * credential kind and endpoint mode. The endpoint keeps no session state, so
  * this handshake is the only point at which a client identifies itself on the
  * 2025-era protocol; later requests carry no identity to attribute.
+ *
+ * Only a customer's handshake is product usage: the service's own principals
+ * (`principal-audience.ts`) are left out by their audience.
  */
-export const recordMcpSessionInitialized: RecordMcpSessionInitialized = ({
-  clientInfo,
-  capabilities,
-  mode,
-  session,
-}) => {
-  const { clientName, clientVersion } = sanitizeMcpClientIdentity(clientInfo);
-  const { uiAppsSupported, uiAppsMimeTypes } =
-    sanitizeMcpUiCapabilities(capabilities);
-  const properties: McpSessionInitializedProperties = {
-    client_name: clientName,
-    ui_apps_supported: uiAppsSupported,
-    ui_apps_mime_types: uiAppsMimeTypes,
-    ...(clientVersion === undefined ? {} : { client_version: clientVersion }),
-    credential_type: session.credential?.type ?? UNSPECIFIED_CLIENT_FIELD,
-    mode,
+export const createRecordMcpSessionInitialized =
+  (readReviewAccount: () => ReviewAccountConfig): RecordMcpSessionInitialized =>
+  ({ clientInfo, capabilities, mode, session }) => {
+    const principal = productUsagePrincipal(session, readReviewAccount());
+    if (principal === null) {
+      return;
+    }
+    const { clientName, clientVersion } = sanitizeMcpClientIdentity(clientInfo);
+    const { uiAppsSupported, uiAppsMimeTypes } =
+      sanitizeMcpUiCapabilities(capabilities);
+    const properties: McpSessionInitializedProperties = {
+      client_name: clientName,
+      ui_apps_supported: uiAppsSupported,
+      ui_apps_mime_types: uiAppsMimeTypes,
+      ...(clientVersion === undefined ? {} : { client_version: clientVersion }),
+      credential_type: session.credential?.type ?? UNSPECIFIED_CLIENT_FIELD,
+      mode,
+    };
+
+    getServerAnalytics().capture({
+      distinctId: principal.distinctId,
+      event: SERVER_ANALYTICS_EVENTS.mcpSessionInitialized,
+      groups: { organization: principal.organizationId },
+      properties,
+    });
   };
 
-  getServerAnalytics().capture({
-    distinctId: session.userId,
-    event: SERVER_ANALYTICS_EVENTS.mcpSessionInitialized,
-    groups: { organization: session.organizationId },
-    properties,
-  });
-};
+export const recordMcpSessionInitialized = createRecordMcpSessionInitialized(
+  getReviewAccountConfig,
+);

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -9,7 +9,6 @@ import {
   usesGeneratedApiConfig,
 } from "./api-typecheck-config";
 import { apiTestPartitionIssues } from "./api-typecheck-partition";
-import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
 type ProjectMembership = {
   project: string;
@@ -73,7 +72,7 @@ export const missingPreparedApiTypecheckConfigs = (rootDir: string) => {
 // includes/excludes. Imported dependencies do not become a second file owner.
 // Without prepared configs the check is skipped unless `requirePrepared` is
 // set; CI sets it after generating the configs, so ownership stays enforced.
-export const validateApiTypecheckProjects = (
+export const validateApiTypecheckProjects = async (
   rootDir: string,
   { requirePrepared = false }: { requirePrepared?: boolean } = {},
 ) => {
@@ -97,51 +96,49 @@ export const validateApiTypecheckProjects = (
   );
   const memberships: ProjectMembership[] = [];
   const issues: { path: string; message: string }[] = [];
-  for (const [name, command] of Object.entries(manifest.scripts)) {
-    if (!name.startsWith("typecheck:") || typeof command !== "string") {
-      continue;
+  const compiler = new API({ cwd: apiDir });
+  try {
+    for (const [name, command] of Object.entries(manifest.scripts)) {
+      if (!name.startsWith("typecheck:") || typeof command !== "string") {
+        continue;
+      }
+      if (!command.includes("bun check ")) {
+        continue;
+      }
+      const project = /--project=([^\s]+)/u.exec(command)?.[1];
+      if (!project) {
+        issues.push({
+          path: "apps/api/package.json",
+          message: `${name} must name its project`,
+        });
+        continue;
+      }
+      const configPath = path.join(apiDir, project);
+      const parsed = await compiler.parseConfigFile(configPath);
+      const diagnostics = parsed.errors;
+      for (const diagnostic of diagnostics) {
+        issues.push({
+          path: configPath,
+          message: diagnostic.text,
+        });
+      }
+      memberships.push({ project, files: parsed.fileNames });
     }
-    if (!command.includes("bun check ")) {
-      continue;
-    }
-    const project = /--project=([^\s]+)/u.exec(command)?.[1];
-    if (!project) {
-      issues.push({
-        path: "apps/api/package.json",
-        message: `${name} must name its project`,
-      });
-      continue;
-    }
-    const configPath = path.join(apiDir, project);
-    const read = ts.readConfigFile(configPath, (filename) =>
-      ts.sys.readFile(filename),
-    );
-    const parsed = ts.parseJsonConfigFileContent(
-      read.config,
-      ts.sys,
-      apiDir,
-      undefined,
-      configPath,
-    );
-    const diagnostics = withoutTsgoOnlyOptionDiagnostics(
-      read.error ? [read.error, ...parsed.errors] : parsed.errors,
-    );
-    for (const diagnostic of diagnostics) {
-      issues.push({
-        path: configPath,
-        message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-      });
-    }
-    memberships.push({ project, files: parsed.fileNames });
+  } finally {
+    await compiler.close();
   }
-  const sources = ts.sys.readDirectory(
-    apiDir,
-    [".ts", ".tsx", ".mts", ".cts"],
-    ["**/node_modules/**", "**/.cache/**", "**/.turbo/**", "**/dist/**"],
-  );
+  const sources = [
+    ...new Bun.Glob("**/*.{ts,tsx,mts,cts}").scanSync({ cwd: apiDir }),
+  ]
+    .filter(
+      (file) =>
+        !/(?:^|\/)(?:node_modules|\.cache|\.turbo|dist)(?:\/|$)/u.test(file),
+    )
+    .map((file) => path.join(apiDir, file))
+    .toSorted();
   issues.push(...typecheckOwnershipIssues(sources, memberships));
   if (existsSync(path.join(apiDir, "tsconfig.declarations.json"))) {
-    issues.push(...apiTestPartitionIssues(rootDir));
+    issues.push(...(await apiTestPartitionIssues(rootDir)));
   }
   return issues;
 };

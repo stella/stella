@@ -69,12 +69,17 @@ load_recording() {
 selection_source=$base
 load_recording "$base"
 if [[ "$recorded" == false ]]; then
-  runs=$(selection_api --method GET "repos/$REPOSITORY/actions/workflows/network-baseline-record.yml/runs" -f branch=main -f status=success -f per_page=100)
-  if ! jq -es 'length == 1 and (.[0] | type == "object" and (.workflow_runs | type == "array") and all(.workflow_runs[];
-    (.event | type == "string") and (.head_sha | type == "string" and test("^[a-f0-9]{40}$"))))' <<< "$runs" >/dev/null; then
+  # Success is selected here, not with the API's status filter: that filter
+  # can return no runs for this workflow while successful runs exist, which
+  # silently reverts every check to the committed bootstrap. Every page is
+  # read, so newer unsuccessful runs cannot hide an older successful one.
+  runs=$(selection_api --method GET --paginate --slurp "repos/$REPOSITORY/actions/workflows/network-baseline-record.yml/runs" -f branch=main -f per_page=100)
+  if ! jq -es 'length == 1 and (.[0] | type == "array" and all(.[]; type == "object" and (.workflow_runs | type == "array")) and all(.[].workflow_runs[];
+    (.event | type == "string") and (.head_sha | type == "string" and test("^[a-f0-9]{40}$")) and
+    (.conclusion == null or (.conclusion | type == "string"))))' <<< "$runs" >/dev/null; then
     selection_error "candidate=$base unparsable recording runs response"
   fi
-  candidates=$(jq -r '.workflow_runs[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch") | .head_sha' <<< "$runs")
+  candidates=$(jq -r '.[].workflow_runs[] | select(.conclusion == "success") | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch") | .head_sha' <<< "$runs")
   # Materialize the walk so git failure cannot disappear in process substitution.
   walk=$(git rev-list --topo-order "$base")
   while read -r source; do

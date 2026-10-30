@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { TextDirection } from "@stll/locales";
 import {
@@ -9,7 +9,11 @@ import {
 import type { FoldedSearchText, SearchMatchRange } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
-import type { ClipboardItem, ClipboardSourceApp } from "./clipboard-types";
+import type {
+  ClipboardCopyFormat,
+  ClipboardItem,
+  ClipboardSourceApp,
+} from "./clipboard-types";
 
 const CLIPBOARD_SOURCE_TINT_COUNT = 6;
 
@@ -74,6 +78,39 @@ export const clipboardItemLink = (
     return null;
   }
   return { host: url.hostname.replace(/^www\./u, "") };
+};
+
+/** The cap the native side holds a clip name to. */
+export const MAX_CLIPBOARD_ITEM_NAME_CHARACTERS = 80;
+
+export type ClipboardEditorNameDraft =
+  { type: "unchanged"; value: string } | { type: "edited"; value: string };
+
+/** External history updates own the name until the user edits this field. */
+export const refreshClipboardEditorName = (
+  draft: ClipboardEditorNameDraft,
+  name: string | null,
+): ClipboardEditorNameDraft =>
+  draft.type === "edited" ? draft : { type: "unchanged", value: name ?? "" };
+
+/**
+ * What an unnamed clip is called: the page a browser copy came from, else the
+ * host a link points to, else its kind.
+ */
+export const clipboardUntitledName = (
+  item: ClipboardItem,
+  kindLabels: { image: string; text: string },
+) => {
+  const pageLabel = item.sourceApp?.page
+    ? clipboardSourceLabel(item.sourceApp)
+    : "";
+  if (pageLabel) {
+    return pageLabel;
+  }
+  if (item.type === "image") {
+    return kindLabels.image;
+  }
+  return clipboardItemLink(item)?.host ?? kindLabels.text;
 };
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =
@@ -367,6 +404,65 @@ const SEARCH_PREVIEW_LEAD_CHARACTERS = 24;
  * (one highlight span per match) made search repaints crawl.
  */
 export const CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS = 1000;
+
+/**
+ * What a clip's card shows while a paste format control is highlighted. Only a
+ * formatted clip looks different pasted as plain text, so only it previews.
+ */
+export type ClipboardPastePreview =
+  { type: "none" } | { itemId: string; type: "plainText" };
+
+export const NO_CLIPBOARD_PASTE_PREVIEW = {
+  type: "none",
+} as const satisfies ClipboardPastePreview;
+
+/** The preview that highlighting `format` for `item` asks its card for. */
+export const clipboardPastePreview = (
+  item: ClipboardItem,
+  format: ClipboardCopyFormat,
+): ClipboardPastePreview => {
+  switch (format) {
+    case "original":
+      return NO_CLIPBOARD_PASTE_PREVIEW;
+    case "plainText":
+      return item.type === "formattedText"
+        ? { itemId: item.id, type: "plainText" }
+        : NO_CLIPBOARD_PASTE_PREVIEW;
+    default: {
+      format satisfies never;
+      return panic(`Unknown clipboard copy format: ${String(format)}`);
+    }
+  }
+};
+
+const previewsAsPlainText = (
+  preview: ClipboardPastePreview,
+  itemId: string,
+) => {
+  switch (preview.type) {
+    case "none":
+      return false;
+    case "plainText":
+      return preview.itemId === itemId;
+    default: {
+      preview satisfies never;
+      return panic("Unknown clipboard paste preview.");
+    }
+  }
+};
+
+/**
+ * The format a card renders `item` in, given the previews its controls hold.
+ * A preview for another clip, or for a clip without formatting, changes nothing.
+ */
+export const clipboardCardRenderFormat = (
+  item: ClipboardItem,
+  previews: readonly ClipboardPastePreview[],
+): ClipboardCopyFormat =>
+  item.type === "formattedText" &&
+  previews.some((preview) => previewsAsPlainText(preview, item.id))
+    ? "plainText"
+    : "original";
 
 export type ClipboardSearchPreview = { text: string; truncated: boolean };
 

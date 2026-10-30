@@ -7,10 +7,47 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import type { OrganizationFileLedgerCursor } from "@/api/lib/files/organization-file-usage-queries";
 import { organizationFileLedgerPageQuery } from "@/api/lib/files/organization-file-usage-queries";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 
 const PAGE_SIZE = 200;
+
+type UserFileUsageRow = {
+  id: SafeId<"userFile">;
+  organizationId: string;
+  s3Key: string;
+  thumbnailFileId: string | null;
+  userId: string;
+};
+
+export const userFileUsageObjects = (files: UserFileUsageRow[]) => {
+  const objects: {
+    organizationId: SafeId<"organization">;
+    objectKey: string;
+  }[] = [];
+  for (const file of files) {
+    const organizationId = brandPersistedOrganizationId(file.organizationId);
+    objects.push({ organizationId, objectKey: file.s3Key });
+    if (!file.thumbnailFileId) {
+      continue;
+    }
+    const objectKey = createUserFileThumbnailKey({
+      sourceKey: file.s3Key,
+      thumbnailFileId: file.thumbnailFileId,
+      organizationId,
+      uploaderUserId: brandPersistedUserId(file.userId),
+    });
+    if (objectKey !== null) {
+      objects.push({ organizationId, objectKey });
+    }
+  }
+  return objects;
+};
 
 /** Temporary objects may use the legacy root prefix or an organization scope. */
 export const isTemporaryOrganizationObjectKey = (

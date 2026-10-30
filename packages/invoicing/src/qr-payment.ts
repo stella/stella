@@ -7,7 +7,7 @@ import type { InvoicingResult } from "./errors";
 import {
   compactPaymentDate,
   parsePaymentAccount,
-  validateVariableSymbol,
+  validatePaymentSymbol,
 } from "./payment-fields";
 import type { InvoiceDocumentType } from "./types";
 
@@ -17,6 +17,8 @@ export type CzechQrPaymentInput = {
   amountMinor: CentsAmount;
   currency: string;
   variableSymbol?: string;
+  constantSymbol?: string;
+  specificSymbol?: string;
   dueDate?: string;
   message?: string;
 };
@@ -34,6 +36,8 @@ export const buildCzechQrPaymentPayload = ({
   amountMinor,
   currency,
   variableSymbol,
+  constantSymbol,
+  specificSymbol,
   dueDate,
   message,
 }: CzechQrPaymentInput): InvoicingResult<CzechQrPaymentResult> => {
@@ -53,12 +57,19 @@ export const buildCzechQrPaymentPayload = ({
     `CC:${account.value.currency}`,
   ];
 
-  if (variableSymbol !== undefined) {
-    const symbol = validateVariableSymbol(variableSymbol);
+  for (const [value, kind, field] of [
+    [variableSymbol, "Variable", "X-VS"],
+    [constantSymbol, "Constant", "X-KS"],
+    [specificSymbol, "Specific", "X-SS"],
+  ] as const) {
+    if (value === undefined) {
+      continue;
+    }
+    const symbol = validatePaymentSymbol(value, kind);
     if (symbol.isErr()) {
       return Result.err(symbol.error);
     }
-    fields.push(`X-VS:${symbol.value}`);
+    fields.push(`${field}:${symbol.value}`);
   }
   if (dueDate !== undefined) {
     const date = compactPaymentDate(dueDate);

@@ -1,6 +1,6 @@
 import {
-  isBusinessRegistrySlug,
   type BusinessRegistrySlug,
+  isBusinessRegistrySlug,
 } from "@stll/api-contract";
 
 export type LookupRegistry = BusinessRegistrySlug;

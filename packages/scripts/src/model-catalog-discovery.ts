@@ -84,7 +84,7 @@ const KNOWN_NON_FAMILY_MODEL_PATTERNS = {
   anthropic: [] as const,
   google: [
     /^(?:deep-research|gemma|lyria|veo)-/u,
-    /^gemini-(?:embedding|flash-latest|flash-lite-latest|omni-)/u,
+    /^gemini-(?:embedding|flash-latest|flash-lite-latest|pro-latest|omni-)/u,
     /^gemini-\d+(?:\.\d+)?-(?:computer-use|flash-image|flash-live|flash-tts|live-translate|pro-image)/u,
     /^gemini-\d+(?:\.\d+)?-(?:flash|pro)-preview-(?:customtools|tts)$/u,
     /^gemini-\d+(?:\.\d+)?-flash-lite-image$/u,
@@ -237,9 +237,7 @@ export const findNewerGenerationModels = ({
  *   it.
  */
 type ReviewedExclusionCategory =
-  | "floating alias"
-  | "duplicate alias"
-  | "third-party relay";
+  "floating alias" | "duplicate alias" | "third-party relay";
 type DatedReviewReason =
   `${number}-${number}-${number}: ${ReviewedExclusionCategory}; ${string}`;
 
@@ -257,6 +255,8 @@ const REVIEWED_MODEL_EXCLUSIONS = {
     "2026-08-28: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "mistral:zai-glm-5-3":
     "2026-09-18: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
+  "mistral:zai-glm-5-3-flash":
+    "2026-10-23: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "openai:gpt-5.6-sol":
     "2026-08-28: duplicate alias; OpenAI's gpt-5.6 alias routes to Sol and is the offered picker ID",
   "openai:gpt-daybreak-blue-latest":

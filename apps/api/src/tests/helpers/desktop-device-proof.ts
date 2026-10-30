@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import {
   calculateJwkThumbprint,
   exportJWK,
@@ -11,11 +10,12 @@ import {
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { env } from "@/api/env";
 import {
   DESKTOP_PROOF_HEADER,
-  VerifiedDesktopDeviceProof,
   desktopProofRequestUrl,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -50,7 +50,14 @@ export const createDesktopDeviceSigner = async () => {
       .setIssuedAt()
       .setJti(Bun.randomUUIDv7())
       .sign(privateKey);
-    const signed = new Request(request);
+    // A request the HTTP core already read has no body left to copy; the proof
+    // covers only its method, URL and headers.
+    const signed = request.bodyUsed
+      ? new Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+        })
+      : new Request(request);
     signed.headers.set(DESKTOP_PROOF_HEADER, proof);
     return signed;
   };
@@ -84,8 +91,7 @@ export const claimFixtureDeviceProof = async ({
   if (verified.isErr()) {
     panic("Fixture device proof must verify");
   }
-  const selectQuery = drizzle
-    .mock()
+  const selectQuery = createMockDatabase()
     .select()
     .from(desktopDeviceProofReplays)
     .where(sql`true`);

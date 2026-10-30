@@ -15,8 +15,8 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD,
 } from "@stll/api-contract/case-law-text-field";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
@@ -52,8 +52,8 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -139,14 +139,16 @@ const ingest = async (
   input: IngestionResult,
 ) => {
   order += 1n;
-  const outcome = await processDecision({
-    input,
-    observationOrder: order,
-    sourceId,
-    scopedDb,
-    observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
-    corpus: postgresOnly,
-  });
+  const outcome = (
+    await processDecision({
+      input,
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
+      corpus: postgresOnly,
+    })
+  ).unwrap();
   expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 

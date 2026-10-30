@@ -58,9 +58,7 @@ type RefreshRow = Pick<
 type RefreshOutcome = Awaited<ReturnType<typeof refreshEcjStoredFormex>>;
 type TerminalRefreshOutcome = Exclude<RefreshOutcome["type"], "rate-limited">;
 type ResultOutcome =
-  | TerminalRefreshOutcome
-  | "skipped-resume"
-  | `would-${TerminalRefreshOutcome}`;
+  TerminalRefreshOutcome | "skipped-resume" | `would-${TerminalRefreshOutcome}`;
 export type EcjFormexRefreshResult = {
   id: string;
   sourceDocumentId: string;
@@ -99,8 +97,7 @@ type RunEcjFormexRefreshOptions = {
 };
 
 type RequestedIdentity =
-  | { type: "row"; value: string }
-  | { type: "document"; value: string };
+  { type: "row"; value: string } | { type: "document"; value: string };
 
 const inputError = (message: string): never => {
   throw new EcjFormexRefreshInputError({ message });
@@ -528,10 +525,14 @@ const refreshStoredRow = async ({
     observationOrder,
     refresh: DECISION_REFRESH.ALWAYS,
   });
+  if (written.isErr()) {
+    return { type: "terminal", outcome: "write-rejected", ...extra };
+  }
   return {
     type: "terminal",
     outcome:
-      written.status === PROCESS_DECISION_STATUS.RETRYABLE || !written.inserted
+      written.value.status === PROCESS_DECISION_STATUS.RETRYABLE ||
+      !written.value.inserted
         ? "write-rejected"
         : "refreshed",
     ...extra,

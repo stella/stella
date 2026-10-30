@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  S3_DELETION_EFFECT_CHUNK_SIZE,
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
   createS3DeletionEffectChunks,
+  S3_DELETION_EFFECT_CHUNK_SIZE,
 } from "@/api/lib/destructive-effect-chunks";
 
 describe("destructive external-effect chunks", () => {

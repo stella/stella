@@ -5,8 +5,8 @@ import type { RlsDatabase } from "@/api/db/scoped";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import {
-  REVIEW_RESET_REFUSAL,
   resetReviewOrganization,
+  REVIEW_RESET_REFUSAL,
 } from "@/api/lib/review-organization/reset";
 import type {
   ReviewResetDependencies,
@@ -22,6 +22,15 @@ export const RESET_REVIEW_ORGANIZATION_TASK =
 
 const REPORTED_FAILURES_MAX = 20;
 
+/** Rows removed by table, before the matters and in the closing sweep. */
+const sweptRowTotal = (report: ReviewResetReport): number => {
+  let total = 0;
+  for (const rows of [...report.billing.values(), ...report.swept.values()]) {
+    total += rows;
+  }
+  return total;
+};
+
 /** What one reset run did, as the counts its system audit row records. */
 const reviewResetAuditCounts = (
   report: ReviewResetReport,
@@ -33,10 +42,7 @@ const reviewResetAuditCounts = (
     deletedClauses: report.deleted.clauses,
     deletedTemplates: report.deleted.templates,
     deletedPlaybooks: report.deleted.playbooks,
-    sweptRows: [...report.swept.values()].reduce(
-      (total, rows) => total + rows,
-      0,
-    ),
+    sweptRows: sweptRowTotal(report),
     failedDeletes: report.failures.length,
     seededContacts: seeded?.contacts.created ?? 0,
     seededMatters: seeded?.matters.created ?? 0,

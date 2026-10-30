@@ -9,8 +9,8 @@ import {
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
-  toPlainTextIngestionResult,
   type RawIngestionResult,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 
 const persistableIdentity = (value: string) =>
@@ -62,6 +62,7 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     sheetNumber: undefined,
     ecli: undefined,
     legacyEcli: undefined,
+    legacyCaseNumber: undefined,
     decisionType: undefined,
     identifiers: undefined,
     publisherCitedCases: undefined,

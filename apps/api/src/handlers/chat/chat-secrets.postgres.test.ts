@@ -15,10 +15,10 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 import { organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
-  chatSecrets,
   chatMessages,
-  chatTurns,
+  chatSecrets,
   chatThreads,
+  chatTurns,
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
@@ -44,8 +44,8 @@ import { validatePrivateReceipts } from "./chat-secret-validation";
 import {
   consumeChatSecret,
   getChatSecretReceipt,
-  storeChatSecret,
   saveChatSecretForFuture,
+  storeChatSecret,
 } from "./chat-secrets";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -346,6 +346,7 @@ if (!databaseUrl || !runPostgres) {
           const continuation = await Result.tryPromise(async () => {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Continuation unavailable",
             });
           });
@@ -720,11 +721,18 @@ if (!databaseUrl || !runPostgres) {
           const safeDb = safeDbFromScoped(
             async (run) => await db.transaction(run),
           );
+          const recordAuditEvent = auditRecorderDouble();
           for (let count = 0; count < 8; count += 1) {
             const result = await consumeChatSecret({
               safeDb,
               ...scope,
               secretRef: receipt.secretRef,
+              recordAuditEvent,
+              operation: {
+                connectorSlug: scope.targetSlug,
+                id: `operation-${String(count)}`,
+                toolName: "list_items",
+              },
             });
             expect(result.isOk()).toBe(true);
           }
@@ -751,6 +759,12 @@ if (!databaseUrl || !runPostgres) {
             safeDb,
             ...scope,
             secretRef: receipt.secretRef,
+            recordAuditEvent,
+            operation: {
+              connectorSlug: scope.targetSlug,
+              id: "operation-exhausted",
+              toolName: "list_items",
+            },
           });
           expect(final.isErr()).toBe(true);
           if (final.isErr()) {

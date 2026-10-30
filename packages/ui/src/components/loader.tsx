@@ -1,17 +1,22 @@
 import type { ComponentProps } from "react";
 
+import { LoaderCircleIcon } from "../icons";
 import { cn } from "../lib/utils";
+import type { LoaderSize } from "./loader.shared";
 import { StellaMark } from "./stella-mark";
 
 /**
- * The one indeterminate loading indicator: the Stella mark breathing. Inline
- * (`sm`) next to a control that is busy, `md` in a row, `lg` for a region.
- * Content with a known shape gets a `Skeleton` instead, never a loader.
+ * The indeterminate loading indicator for a control or a row: a plain
+ * spinner. Inline (`sm`) next to a control that is busy, `md` in a row or a
+ * small panel. A whole region with no content yet is `LoaderState` (the only
+ * place the Stella mark breathes). Content with a known shape gets a
+ * `Skeleton` instead, never a loader.
  */
 const Loader = ({
   label,
   variant = "status",
   size = "md",
+  animation = "spin",
   className,
   ...props
 }: LoaderProps) => (
@@ -28,13 +33,19 @@ const Loader = ({
     aria-label={label}
     role={variant === "status" ? "status" : undefined}
   >
-    <LoaderMark />
+    <LoaderCircleIcon
+      className={cn(
+        "text-muted-foreground size-full",
+        animation === "spin" && "animate-spin motion-reduce:animate-none",
+      )}
+    />
   </span>
 );
 
 /**
- * A region whose content has no shape yet (a job running, a first fetch): the
- * mark, one line saying what is happening, and at most one line of detail.
+ * A region whose content has no shape yet (an empty screen while a job runs or
+ * a first fetch lands): the Stella mark breathing, one line saying what is
+ * happening, and at most one line of detail.
  * Progress is stated in the detail text, never drawn as a bar that guesses.
  */
 const LoaderState = ({ label, detail, hint, className }: LoaderStateProps) => (
@@ -68,9 +79,7 @@ const LOADER_SIZE = {
   sm: "size-4",
   md: "size-6",
   lg: "size-8",
-} as const;
-
-type LoaderSize = keyof typeof LOADER_SIZE;
+} as const satisfies Record<LoaderSize, string>;
 
 const LoaderMark = () => (
   <StellaMark className="animate-loader text-muted-foreground size-full motion-reduce:animate-none motion-reduce:opacity-70" />
@@ -81,6 +90,7 @@ type LoaderProps = Omit<
   "children" | "role" | "aria-label" | "aria-hidden" | "aria-busy"
 > & {
   size?: LoaderSize;
+  animation?: "none" | "spin";
 } & (
     | {
         variant?: "status";

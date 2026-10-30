@@ -7,16 +7,17 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
+  featureEnrolments,
   timeEntries,
   timeTimers,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -100,7 +101,7 @@ const runBatch = async (
       request: new Request("https://example.test/time-entries/batch", {
         method: "PATCH",
       }),
-      route: "/time-entries/batch",
+      route: "/v1/time-entries/:workspaceId/batch" satisfies ApiRoutePath,
       body,
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
@@ -163,6 +164,29 @@ test("approval records its actor and time, clears return provenance, and revert 
   });
 });
 
+test("approval audits each entry's own previous status: submitted, or the caller's draft", async () => {
+  const submittedId = await createEntry();
+  await db
+    .update(timeEntries)
+    .set({ status: BILLING_STATUS.SUBMITTED })
+    .where(eq(timeEntries.id, submittedId));
+  const draftId = await createEntry();
+  const events: AuditEvent[] = [];
+  expect(
+    await runBatch({ ids: [submittedId, draftId], action: "approve" }, events),
+  ).toEqual({ updated: 2 });
+  const statusChange = (id: string) =>
+    events.find((event) => event.resourceId === id)?.changes;
+  expect(statusChange(submittedId)).toHaveProperty("status", {
+    old: BILLING_STATUS.SUBMITTED,
+    new: BILLING_STATUS.APPROVED,
+  });
+  expect(statusChange(draftId)).toHaveProperty("status", {
+    old: BILLING_STATUS.DRAFT,
+    new: BILLING_STATUS.APPROVED,
+  });
+});
+
 test("approval accepts stopped legacy timers and paused linked timers despite a persisted start timestamp", async () => {
   const stoppedId = await createEntry("stopped");
   expect((await readEntry(stoppedId))?.timerStartedAt).toEqual(
@@ -216,8 +240,8 @@ test("approval refuses its actor's direct and projected running timers without a
       { ids: [readyId, runningId], action: "approve" },
       events,
     );
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
+    expect(result).toBeInstanceOf(HttpStatusResponse);
+    if (result instanceof HttpStatusResponse) {
       expect(result.code).toBe(400);
       expect(result.response).toMatchObject({
         message: "Stop running timers before approval",

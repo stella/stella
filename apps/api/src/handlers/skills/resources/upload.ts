@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -9,13 +9,13 @@ import {
   refreshSkillContentHash,
 } from "@/api/lib/agent-skills/content-hash";
 import {
-  RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
+  RESOURCE_PATH_PATTERN,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
@@ -23,7 +23,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-const UPLOAD_MAX_SIZE = "5m" as const;
+const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
 const inferBinaryUploadMimeType = ({
   file,
@@ -48,13 +48,17 @@ const inferBinaryUploadMimeType = ({
   return null;
 };
 
-const uploadSkillResourceParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const uploadSkillResourceParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const uploadSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
-  file: t.File({ maxSize: UPLOAD_MAX_SIZE }),
+const uploadSkillResourceBodySchema = v.object({
+  path: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(RESOURCE_PATH_MAX_CHARS),
+  ),
+  file: fileSchema({ maxBytes: UPLOAD_MAX_BYTES }),
 });
 
 const config = {

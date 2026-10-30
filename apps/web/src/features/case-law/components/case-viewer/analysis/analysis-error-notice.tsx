@@ -1,14 +1,15 @@
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { SparklesIcon } from "@stll/ui/icons";
 
 import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import {
+  type AnalysisErrorMessage,
   analysisErrorMessage,
   analysisRetryAt,
-  type AnalysisErrorMessage,
 } from "@/features/case-law/components/case-viewer/analysis/analysis-error.logic";
 import { analysisRetryOf } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
 import type { AnalysisError } from "@/features/case-law/queries/decision-analysis";
@@ -24,7 +25,7 @@ const useAnalysisErrorText = (message: AnalysisErrorMessage): string => {
     case "generic":
       return t("errors.api.server");
     case "unavailable":
-      return t("caseLaw.analysis.errors.unavailable");
+      return t(message.key);
     default:
       message satisfies never;
       return panic("Unhandled analysis error message");
@@ -41,13 +42,16 @@ const useAnalysisErrorText = (message: AnalysisErrorMessage): string => {
 export const AnalysisErrorNotice = ({
   error,
   onRetry,
+  sourceUrl,
 }: {
   error: AnalysisError;
   onRetry: () => void;
+  sourceUrl?: string | null;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
   const text = useAnalysisErrorText(analysisErrorMessage(error));
+  const sourceHref = sourceUrl ? sanitizeHref(sourceUrl) : undefined;
   const retryAt = analysisRetryAt(error);
   const retryTimePassed = useTimePassed(retryAt);
   return (
@@ -66,6 +70,21 @@ export const AnalysisErrorNotice = ({
             time: format.dateTime(retryAt, MEDIUM_DATE_SHORT_TIME_FORMAT),
           })}
         </p>
+      )}
+      {error.kind === "unavailable" && sourceHref !== undefined && (
+        <Button
+          render={
+            <a
+              href={sanitizeHref(sourceHref)}
+              target="_blank"
+              rel="noopener noreferrer"
+            />
+          }
+          size="sm"
+          variant="muted"
+        >
+          {t("common.viewSource")}
+        </Button>
       )}
       {analysisRetryOf(error, retryTimePassed) !== "none" && (
         <Button onClick={onRetry} size="sm" variant="muted">

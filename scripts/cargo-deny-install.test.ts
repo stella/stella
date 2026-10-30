@@ -83,7 +83,9 @@ const runInstall = ({
     mkdirSync(commands);
     mkdirSync(path.join(staging, name), { recursive: true });
     writeFileSync(path.join(staging, name, "cargo-deny"), binary(reported));
-    const tar = spawnSync("tar", ["-czf", archive, "-C", staging, name]);
+    const tar = spawnSync("tar", ["-czf", archive, "-C", staging, name], {
+      maxBuffer: 2 ** 30,
+    });
     if (tar.status !== 0) {
       throw new Error(`tar failed: ${String(tar.stderr)}`);
     }
@@ -99,6 +101,7 @@ const runInstall = ({
     writeFileSync(cargoCalls, "");
     writeFileSync(githubPath, "");
     const result = spawnSync("bash", [script], {
+      maxBuffer: 2 ** 30,
       encoding: "utf-8",
       env: {
         ...process.env,

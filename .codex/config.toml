@@ -3,7 +3,10 @@ mcp_optional_startup_grace_ms = 5000
 
 [mcp_servers.stella-docs]
 # Codex launches MCP servers with the active thread cwd, which may be apps/*.
-args = ["-c", "repo=$(git rev-parse --show-toplevel) || exit 1; cd \"$repo\" || exit 1; exec bun run .claude/mcp/stella-docs.ts"]
+args = [
+  "-c",
+  "repo=$(git rev-parse --show-toplevel) || exit 1; cd \"$repo\" || exit 1; exec bun run .claude/mcp/stella-docs.ts",
+]
 command = "sh"
 startup_timeout_sec = 30
 

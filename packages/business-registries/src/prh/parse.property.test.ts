@@ -8,12 +8,12 @@ import {
 } from "@stll/property-testing";
 
 import {
-  registryString,
-  registryExtras,
+  expectNullableString,
+  expectRegistryOutcome,
   expectRegistryResponse,
   forEachRegistryMutation,
-  expectRegistryOutcome,
-  expectNullableString,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupByBusinessId } from "./client.js";
 import { parseAddress, parseCompany, parseSearchEntry } from "./parse.js";

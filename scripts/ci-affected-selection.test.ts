@@ -5,10 +5,10 @@ import * as v from "valibot";
 
 import {
   affectedPackages,
+  type CheckInputs,
   readCheckInputs,
   readSelectionGraph,
   selectChecks,
-  type CheckInputs,
 } from "./ci-affected-selection";
 import { GENERATORS } from "./generated-files";
 import { shardPackages, TEST_JOB_SHARDS } from "./test-shards";

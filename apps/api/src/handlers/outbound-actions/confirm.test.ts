@@ -64,12 +64,14 @@ const setup = ({
   executor,
   confirmHash = previewHash,
   claimSucceeds = true,
+  settlementFails = false,
 }: {
   action: StoredAction | undefined;
   executor?: OutboundActionExecutor;
   confirmHash?: string;
   /** Whether the conditional `pending -> sending` update matches a row. */
   claimSucceeds?: boolean;
+  settlementFails?: boolean;
 }) => {
   const updates: unknown[] = [];
   const audits: unknown[] = [];
@@ -125,8 +127,12 @@ const setup = ({
   const context = asTestRaw<Context>({
     params: { actionId },
     body: { previewHash: confirmHash },
-    safeDb: async (operation: (tx: unknown) => unknown) =>
-      Result.ok(await operation(chain)),
+    safeDb: async (operation: (tx: unknown) => unknown) => {
+      if (settlementFails && executed.length > 0) {
+        return Result.err(new TypeError("settlement unavailable"));
+      }
+      return Result.ok(await operation(chain));
+    },
     session: { activeOrganizationId: organizationId },
     user: { id: toSafeId<"user">("user_1") },
     memberRole: sessionMemberRole("member"),
@@ -191,6 +197,37 @@ test("a confirm of the exact preview sends it once with the stored content", asy
       metadata: expect.objectContaining({ operation: "sent" }),
     }),
   ]);
+});
+
+test("a settlement failure preserves the provider outcome without sending again", async () => {
+  for (const executor of [
+    sends,
+    async () => Result.err({ failureCode: "recipient_rejected" }),
+  ]) {
+    const fixture = setup({
+      action: await storedAction(),
+      executor,
+      settlementFails: true,
+    });
+    const result = await fixture.handler.handler(fixture.context);
+    expect(result).toEqual(
+      executor === sends
+        ? {
+            status: "sent",
+            providerMessageId: "provider-message-1",
+            failureCode: null,
+          }
+        : {
+            status: "failed",
+            providerMessageId: null,
+            failureCode: "recipient_rejected",
+          },
+    );
+    expect(fixture.executed).toEqual([preview]);
+    expect(fixture.updates).toEqual([
+      expect.objectContaining({ status: "sending" }),
+    ]);
+  }
 });
 
 test("an interrupted provider call stays sending with an unknown outcome, never failed", async () => {

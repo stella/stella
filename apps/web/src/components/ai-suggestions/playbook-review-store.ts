@@ -57,11 +57,7 @@ export const reviewSessionKey = (
  * only source of progress, findings and failure.
  */
 type ReviewStatus =
-  | "idle"
-  | "proposing-positions"
-  | "editing-positions"
-  | "starting"
-  | "error";
+  "idle" | "proposing-positions" | "editing-positions" | "starting" | "error";
 
 /**
  * Whether the facet may still adopt the document's latest server run. A
@@ -78,8 +74,7 @@ type ReviewRestoreMode = "allowed" | "dismissed";
  * facet renders it read-only and offers the way back.
  */
 export type ReviewRunSelection =
-  | { type: "tracked" }
-  | { type: "history"; runId: string };
+  { type: "tracked" } | { type: "history"; runId: string };
 
 export const TRACKED_RUN_SELECTION: ReviewRunSelection = { type: "tracked" };
 

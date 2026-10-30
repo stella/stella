@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import ts from "typescript6";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { API } from "tsrs/unstable/async";
 
 import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
@@ -26,7 +29,7 @@ const upstreamWithToolCall = (
         releaseDate: null,
         reasoning: false,
         effortValues: null,
-        inputModalities: ["text"],
+        inputModalities: provider === "mistral" ? ["text", "pdf"] : ["text"],
         outputTokens: 8192,
         temperature: false,
         toolCall: toolCallFor(modelId),
@@ -287,7 +290,7 @@ describe("image-input evidence", () => {
     );
   });
 
-  test("the generated type guard rejects an offered ID without image evidence", () => {
+  test("the generated type guard rejects an offered ID without image evidence", async () => {
     const rows = buildCapabilityRows({
       openRouterDefaults: new Map(),
       upstream: upstreamWithToolCall(() => true),
@@ -301,58 +304,42 @@ describe("image-input evidence", () => {
       export type ReasoningEffort = string;
       export type TemperaturePolicy = "emit" | "omit";
     `;
-    const diagnostics = (extraId: string) => {
-      const options = {
-        strict: true,
-        noEmit: true,
-        skipLibCheck: true,
-        module: ts.ModuleKind.Preserve,
-        moduleResolution: ts.ModuleResolutionKind.Bundler,
-      };
-      const host = ts.createCompilerHost(options);
-      const getSourceFile = host.getSourceFile.bind(host);
-      host.getSourceFile = (
-        fileName,
-        languageVersion,
-        onError,
-        shouldCreateNewSourceFile,
-      ) => {
-        if (fileName === "/catalog/capabilities.gen.ts") {
-          return ts.createSourceFile(fileName, source, languageVersion);
-        }
-        if (fileName === "/catalog/index.ts") {
-          return ts.createSourceFile(
-            fileName,
-            declarations(extraId),
-            languageVersion,
-          );
-        }
-        return getSourceFile(
-          fileName,
-          languageVersion,
-          onError,
-          shouldCreateNewSourceFile,
+    const diagnostics = async (extraId: string) => {
+      const directory = mkdtempSync(
+        path.join(tmpdir(), "catalog-capabilities-"),
+      );
+      const config = path.join(directory, "tsconfig.json");
+      const api = new API({ cwd: directory });
+      try {
+        writeFileSync(path.join(directory, "capabilities.gen.ts"), source);
+        writeFileSync(path.join(directory, "index.ts"), declarations(extraId));
+        writeFileSync(
+          config,
+          JSON.stringify({
+            files: ["capabilities.gen.ts"],
+            compilerOptions: {
+              strict: true,
+              noEmit: true,
+              skipLibCheck: true,
+              module: "Preserve",
+              moduleResolution: "Bundler",
+            },
+          }),
         );
-      };
-      const fileExists = host.fileExists.bind(host);
-      host.fileExists = (fileName) =>
-        fileName === "/catalog/index.ts" || fileExists(fileName);
-      const directoryExists = host.directoryExists?.bind(host);
-      host.directoryExists = (directory) =>
-        directory === "/catalog" || directoryExists?.(directory) === true;
-      const program = ts.createProgram({
-        rootNames: ["/catalog/capabilities.gen.ts"],
-        options,
-        host,
-      });
-      return program.getSemanticDiagnostics();
+        const snapshot = await api.createSnapshot({ openProjects: [config] });
+        const project =
+          snapshot.getConfiguredProject(config) ??
+          panic("The generated capability fixture was not loaded");
+        return await project.program.getSemanticDiagnostics();
+      } finally {
+        await api.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
     };
-    expect(diagnostics("")).toEqual([]);
-    const missing = diagnostics(' | "additional-model"');
+    expect(await diagnostics("")).toEqual([]);
+    const missing = await diagnostics(' | "additional-model"');
     expect(missing).toHaveLength(1);
-    expect(
-      ts.flattenDiagnosticMessageText(missing.at(0)?.messageText ?? "", "\n"),
-    ).toContain("additional-model");
+    expect(missing.at(0)?.text ?? "").toContain("additional-model");
   });
 });
 

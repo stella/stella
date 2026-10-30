@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import path from "node:path";
 
 import type { BYOKProvider } from "@stll/ai-catalog";

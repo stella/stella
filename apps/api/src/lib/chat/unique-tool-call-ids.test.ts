@@ -208,8 +208,7 @@ describe("tool call ids from a provider", () => {
     type TopLevel = `${Extract<StreamChunk, { toolCallId: string }>["type"]}`;
     type Covered = {
       [K in keyof typeof CALL_ID_CARRIER]: (typeof CALL_ID_CARRIER)[K] extends
-        | "names"
-        | "starts"
+        "names" | "starts"
         ? K
         : never;
     }[keyof typeof CALL_ID_CARRIER];
@@ -344,5 +343,18 @@ describe("tool call ids through the engine", () => {
       "call_0",
       "call_0_2",
     ]);
+  });
+});
+
+describe("chunk types the installed SDK does not name", () => {
+  test("an unknown or inherited event type passes through unchanged", async () => {
+    const chunks = [
+      ...Object.getOwnPropertyNames(Object.prototype),
+      "__proto__",
+      "FUTURE_EVENT",
+    ].map((type) => asTestRaw<StreamChunk>({ type, toolCallId: "call_0" }));
+    expect(await collect(chunks, [], new ToolCallIdLedger(["call_0"]))).toEqual(
+      chunks,
+    );
   });
 });

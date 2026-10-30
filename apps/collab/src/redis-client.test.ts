@@ -4,8 +4,8 @@ import { expect, spyOn, test } from "bun:test";
 import RedisClient, { Command } from "ioredis";
 
 import {
-  StoreUnavailableError,
   type StorePolicyStatus,
+  StoreUnavailableError,
 } from "@stll/redis-config/store-policy";
 
 import { createCollabRedisClient } from "./redis-client";

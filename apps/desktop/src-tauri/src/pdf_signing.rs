@@ -532,8 +532,9 @@ pub async fn redeem_and_sign(
   // The API names the origin the session lives on; it only counts if the user
   // already trusts it, exactly as the deep link's own origin had to.
   let session_api_base_url =
-    config::normalize_self_host_api_base_url(&redeemed.api_base_url)
-      .map_err(|_| "Invalid PDF signing API URL.".to_string())?;
+    config::normalize_self_host_api_base_url(&redeemed.api_base_url).map_err(
+      crate::logging::with_cause_logged("Invalid PDF signing API URL."),
+    )?;
   if session_api_base_url != api_base_url {
     return Err(crate::handoff::Failure::AccountMismatch.into());
   }

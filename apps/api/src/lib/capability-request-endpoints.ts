@@ -6,7 +6,7 @@ import {
   loadCapabilityEndpoint,
 } from "@/api/mcp/capability-tools";
 
-/** Every catalog capability with the handler function its routes register. */
+/** Every catalog capability with the route definition that serves it. */
 export const loadCapabilityEndpoints = async (): Promise<
   readonly CapabilityEndpoint[]
 > =>
@@ -16,6 +16,6 @@ export const loadCapabilityEndpoints = async (): Promise<
       if (endpoint === null) {
         return panic(`capability ${id} has no endpoint definition`);
       }
-      return { id, handler: endpoint.handler };
+      return { id, definition: endpoint };
     }),
   );

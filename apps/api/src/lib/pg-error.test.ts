@@ -2,6 +2,8 @@ import { SQL } from "bun";
 import { describe, expect, it } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
+import { createSqlClient } from "@/api/db/sql-client";
+
 import { DatabaseError } from "./errors/tagged-errors";
 import {
   getPgErrorCode,
@@ -481,7 +483,7 @@ describe("isTransientPgConnectionError", () => {
       },
     });
     // oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client -- dials the local stub server above, never the test database, and is ended below
-    const sql = new SQL({
+    const sql = createSqlClient({
       url: `postgres://user:pass@127.0.0.1:${server.port}/db`,
       max: 1,
       connectionTimeout: 1,

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { ClipboardSelectionState } from "../src/clipboard/clipboard-selection";
@@ -70,6 +71,7 @@ describe("ordered clipboard selection", () => {
 
 test("every history replacement prunes missing IDs atomically without changing selection order", () => {
   const snapshot = {
+    revision: 0,
     captureStatus: "active",
     groupLimit: 24,
     groups: [],
@@ -123,4 +125,56 @@ test("every history replacement prunes missing IDs atomically without changing s
       snapshot: replacement,
     }),
   ).toEqual(updated);
+  const current = clipboardHistory(updated, {
+    type: "snapshotReceived",
+    snapshot: { ...replacement, revision: 2, items: [] },
+  });
+  expect(
+    clipboardHistory(current, {
+      type: "snapshotReceived",
+      snapshot: replacement,
+    }),
+  ).toBe(current);
+  const item = snapshot.items.at(0);
+  if (item === undefined) {
+    panic("capture fixture requires an item");
+  }
+  expect(
+    clipboardHistory(current, {
+      type: "captureReceived",
+      update: { revision: 1, item, removedItemIds: [], sourceAppVisuals: [] },
+    }),
+  ).toBe(current);
+  expect(
+    clipboardHistory(current, {
+      type: "captureReceived",
+      update: { revision: 4, item, removedItemIds: [], sourceAppVisuals: [] },
+    }),
+  ).toBe(current);
+  const captured = clipboardHistory(current, {
+    type: "captureReceived",
+    update: { revision: 3, item, removedItemIds: [], sourceAppVisuals: [] },
+  });
+  expect(captured.snapshot.items).toEqual([item]);
+  expect(captured.snapshot.revision).toBe(3);
+
+  const afterInitialSnapshot = clipboardHistory(state, {
+    type: "snapshotReceived",
+    snapshot,
+  });
+  const afterBufferedCapture = clipboardHistory(afterInitialSnapshot, {
+    type: "captureReceived",
+    update: {
+      revision: 1,
+      item: { ...item, id: "buffered-capture" },
+      removedItemIds: [],
+      sourceAppVisuals: [],
+    },
+  });
+  expect(afterBufferedCapture.snapshot.items.map((entry) => entry.id)).toEqual([
+    "buffered-capture",
+    "first",
+    "second",
+    "third",
+  ]);
 });

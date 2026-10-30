@@ -3,6 +3,7 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
+  clusterExclusivePostgresTests,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
   isolateSharedTableDdlTests,
@@ -10,6 +11,51 @@ import {
 import { discoverGatedTestFiles } from "./run-gated-tests";
 
 const SHARED_TABLES = new Set(["contacts", "organization_settings"]);
+
+describe("PostgreSQL cluster-wide migration isolation", () => {
+  test.each([
+    'import { runMigrations } from "./migration-runner";',
+    'import { runMigrations as migrate } from "./migration-runner.js";',
+    'import * as runner from "@/api/db/migration-runner";',
+    'import runner = require("./migration-runner");',
+    'const runner = await import("./migration-runner");',
+    'const runner = require("./migration-runner");',
+    'import "./migration-runner";',
+  ])("isolates canonical migration runner access: %s", (source) => {
+    const testPath = "src/db/replay.db.test.ts";
+    expect(
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
+    ).toEqual(new Set([testPath]));
+  });
+
+  test.each([
+    'import type { MigrationTiming } from "./migration-runner";',
+    'import { type MigrationTiming } from "./migration-runner";',
+    'import { runMigrations } from "unrelated/migration-runner";',
+    'import { runMigrations } from "../other/migration-runner";',
+    '// import { runMigrations } from "./migration-runner";',
+    "const fixture = 'import { runMigrations } from \"./migration-runner\"';",
+  ])("retains parallelism for non-owning source: %s", (source) => {
+    expect(
+      clusterExclusivePostgresTests(
+        new Map([["src/db/example.db.test.ts", source]]),
+      ),
+    ).toEqual(new Set());
+  });
+
+  test.each([
+    "src/db/migration-runner.db.test.ts",
+    "src/db/skill-resource-folders-migration.db.test.ts",
+    "src/db/public-sanctions-reader.postgres.test.ts",
+  ])("isolates the actual committed-bundle replay in %s", async (testPath) => {
+    const source = await Bun.file(
+      path.join(import.meta.dirname, "..", testPath),
+    ).text();
+    expect(
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
+    ).toEqual(new Set([testPath]));
+  });
+});
 
 describe("PostgreSQL shared-table DDL isolation", () => {
   test("rejects a non-isolated PostgreSQL DDL test and names every target", () => {
@@ -140,3 +186,20 @@ describe("PostgreSQL shared batch", () => {
     ).toEqual([]);
   });
 });
+
+test.each([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+])(
+  "snapshot visibility proof %s runs after all cluster workers finish",
+  (testPath) => {
+    expect(
+      clusterExclusivePostgresTests(
+        new Map([[testPath, "test('visibility', () => {})"]]),
+      ),
+    ).toEqual(new Set([testPath]));
+  },
+);

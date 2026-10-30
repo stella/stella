@@ -27,8 +27,8 @@ import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
+  asc,
   eq,
-  or,
   gte,
   inArray,
   isNotNull,
@@ -36,8 +36,8 @@ import {
   lt,
   min,
   notInArray,
+  or,
   sql,
-  asc,
 } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -48,8 +48,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
@@ -75,17 +75,19 @@ import type {
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  floorSliceWalk,
+  partitionShortSliceCandidates,
   RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
-  floorSliceWalk,
-  partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
+  SLICE_LISTING_PASSES,
+  SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
@@ -119,11 +121,11 @@ import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
   pruneUnlistedReconciliationItems,
+  refreshTrackedReconciliationItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
-  refreshTrackedReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -203,14 +205,18 @@ const ITEM_FETCH_TIMEOUT_MS = 5 * 60_000;
  */
 export const RECONCILIATION_INGEST_BUDGET_MS = 30 * 60_000;
 /**
- * The longest a lawful listing can take: every page may spend its timeout, and
- * the politeness pause separates them. Exported because the caller's hard
+ * The longest a lawful listing can take: both passes of the identity proof,
+ * every page of each spending its timeout, the politeness pause separating
+ * pages and the two passes. Exported because the caller's hard
  * deadline has to clear it -- a backstop for a wedged await must sit above
  * everything a healthy unit can do, and a complete listing of a large slice is
  * the slowest of those things.
  */
 export const RECONCILIATION_LISTING_WORST_CASE_MS =
-  MAX_SLICE_PAGES * (LIST_DELAY_MS + LIST_TIMEOUT_MS);
+  SLICE_LISTING_PASSES.identities *
+    MAX_SLICE_PAGES *
+    (LIST_DELAY_MS + LIST_TIMEOUT_MS) +
+  LIST_DELAY_MS;
 /**
  * Headroom on top of the phases above: the request already in flight when the
  * ingest budget runs out, plus the ledger writes that close the unit.
@@ -1203,7 +1209,8 @@ const writeInOrder = async (
     return panic("writeInOrder needs a row to write");
   }
   const processed = await write(first);
-  return processed.status === PROCESS_DECISION_STATUS.RETRYABLE ||
+  return processed.isErr() ||
+    processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE ||
     rest.length === 0
     ? processed
     : await writeInOrder(rest, write);
@@ -1224,6 +1231,31 @@ type IngestItemOptions = {
   summary: ReconciliationUnitSummary;
   failureDisposition?: "park" | "hold";
   signal?: AbortSignal | undefined;
+};
+
+type WriteListedDecisionOptions = Pick<
+  IngestItemOptions,
+  "lease" | "scopedDb" | "sourceId" | "now" | "resolveSourceContract"
+> & { input: IngestionResult };
+
+const writeListedDecision = async ({
+  input,
+  lease,
+  scopedDb,
+  sourceId,
+  now,
+  resolveSourceContract,
+}: WriteListedDecisionOptions): Promise<Processed> => {
+  await lease.beforeDatabaseMark();
+  const observationOrder = await allocateSourceObservationOrder({
+    leaseToken: lease.leaseToken,
+    scopedDb,
+    sourceId,
+  });
+  return await processDecision(
+    { input, sourceId, scopedDb, observedAt: now, observationOrder },
+    resolveSourceContract,
+  );
 };
 
 /**
@@ -1277,6 +1309,40 @@ const ingestListedItem = async ({
     }
   };
 
+  const failed = async (error: unknown) => {
+    if (signal?.aborted === true) {
+      throw error;
+    }
+    summary.failed += 1;
+    logger.warn("case_law.reconciliation.item_failed", {
+      adapterKey,
+      slice,
+      identityKey: item.identityKey,
+      // The park below keeps only the tag, which cannot separate a publisher
+      // refusing one document from the corpus refusing to store it. These
+      // carry that distinction as fixed vocabulary (driver and system codes,
+      // the SQLSTATE, the schema identifiers Postgres names) rather than as
+      // message text, which quotes the statement and can quote the row that
+      // failed; the logger's sanitizer is a key denylist, so text this sink
+      // emitted would reach telemetry verbatim.
+      //
+      // `errorFingerprint` is first so the two below keep the last word on
+      // every key they state. It adds what the vocabulary above cannot
+      // supply for a throw that carries no code at all — a bare `TypeError`
+      // from a helper reports its tag and nothing else, which names the
+      // class of defect but not the site. `error.frame` is the top stack
+      // frame as `file:line:col`: code identity, not row data, and so inside
+      // the same policy as the codes.
+      ...errorFingerprint(error),
+      ...errorSystemFields(error),
+      ...pgErrorFields(error),
+    });
+    if (failureDisposition === "hold") {
+      return;
+    }
+    await park(errorTag(error));
+  };
+
   try {
     const timeoutSignal = AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS);
     const built = await buildDecision(
@@ -1320,24 +1386,15 @@ const ingestListedItem = async ({
         return;
       }
       case "built": {
-        const write = async (input: IngestionResult): Promise<Processed> => {
-          await lease.beforeDatabaseMark();
-          const observationOrder = await allocateSourceObservationOrder({
-            leaseToken: lease.leaseToken,
+        const write = async (input: IngestionResult) =>
+          await writeListedDecision({
+            input,
+            lease,
             scopedDb,
             sourceId,
-          });
-          return await processDecision(
-            {
-              input,
-              sourceId,
-              scopedDb,
-              observedAt: now,
-              observationOrder,
-            },
+            now,
             resolveSourceContract,
-          );
-        };
+          });
         // The decision first, then what its page states beside it. A
         // companion that cannot be written parks the item: a rebuild writes
         // both again under the same identities.
@@ -1347,8 +1404,12 @@ const ingestListedItem = async ({
             : [built.decision, ...built.companions],
           write,
         );
-        if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${processed.reason}`);
+        if (processed.isErr()) {
+          await failed(processed.error);
+          return;
+        }
+        if (processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${processed.value.reason}`);
           return;
         }
         summary.written += 1;
@@ -1387,8 +1448,12 @@ const ingestListedItem = async ({
           },
           resolveSourceContract,
         );
-        if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${placed.reason}`);
+        if (placed.isErr()) {
+          await failed(placed.error);
+          return;
+        }
+        if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${placed.value.reason}`);
           return;
         }
         // A judgment can be unreadable and return COMPLETE without writing
@@ -1425,37 +1490,7 @@ const ingestListedItem = async ({
       }
     }
   } catch (error) {
-    if (signal?.aborted === true) {
-      throw error;
-    }
-    summary.failed += 1;
-    logger.warn("case_law.reconciliation.item_failed", {
-      adapterKey,
-      slice,
-      identityKey: item.identityKey,
-      // The park below keeps only the tag, which cannot separate a publisher
-      // refusing one document from the corpus refusing to store it. These
-      // carry that distinction as fixed vocabulary (driver and system codes,
-      // the SQLSTATE, the schema identifiers Postgres names) rather than as
-      // message text, which quotes the statement and can quote the row that
-      // failed; the logger's sanitizer is a key denylist, so text this sink
-      // emitted would reach telemetry verbatim.
-      //
-      // `errorFingerprint` is first so the two below keep the last word on
-      // every key they state. It adds what the vocabulary above cannot
-      // supply for a throw that carries no code at all — a bare `TypeError`
-      // from a helper reports its tag and nothing else, which names the
-      // class of defect but not the site. `error.frame` is the top stack
-      // frame as `file:line:col`: code identity, not row data, and so inside
-      // the same policy as the codes.
-      ...errorFingerprint(error),
-      ...errorSystemFields(error),
-      ...pgErrorFields(error),
-    });
-    if (failureDisposition === "hold") {
-      return;
-    }
-    await park(errorTag(error));
+    await failed(error);
   }
 };
 
@@ -1508,6 +1543,7 @@ const walkSlice = async ({
   // the failure surfaces in the loop's tally.
   const listing = await listReconciliationSlice({
     adapterKey,
+    proof: SLICE_LISTING_PROOF.IDENTITIES,
     listSlicePage: reconciliation.listSlicePage,
     pageDelayMs: LIST_DELAY_MS,
     pageTimeoutMs: LIST_TIMEOUT_MS,

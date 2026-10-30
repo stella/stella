@@ -1,7 +1,7 @@
 /**
  * Context-fidelity waiver table for the generic capability path.
  *
- * A capability whose handler reaches for an Elysia-context feature the
+ * A capability whose handler reaches for an HTTP-context feature the
  * synthesized capability-executor context cannot honor (response `set.status` /
  * `set.headers`, cookies, redirects, raw parsed `headers`) is listed here, keyed
  * by capability id, with a justification. The capability executors refuse a waived

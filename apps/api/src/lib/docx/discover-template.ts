@@ -16,15 +16,15 @@ import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
 import {
+  type ConditionNode,
+  type FilterCall,
   parseCondition,
   qualifyLoopPath,
   qualifyRowScopedPlaceholder,
+  type RowScope,
   rowScopePaths,
   scanMarkers,
   substitutionKey,
-  type ConditionNode,
-  type FilterCall,
-  type RowScope,
 } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";

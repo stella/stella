@@ -201,7 +201,7 @@ describe("Playwright child reports", () => {
     const run = spawnSync(
       path.join(tmpdir(), "stella-missing-playwright-binary"),
       [],
-      { encoding: "utf-8" },
+      { maxBuffer: 2 ** 30, encoding: "utf-8" },
     );
     expect(listRunProblems({ config: CONFIG, packageRoot: WEB, run })).toEqual([
       expect.stringContaining(`${CONFIG}: could not launch playwright:`),

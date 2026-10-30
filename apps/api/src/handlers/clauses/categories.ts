@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauseCategories } from "@/api/db/schema";
@@ -9,7 +8,10 @@ import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import {
   isTreeParentGuardError,
   lockTree,
@@ -25,21 +27,21 @@ import type {
 
 // ── Schemas ─────────────────────────────────────────
 
-export const createCategoryBodySchema = t.Object({
-  name: tDefaultVarchar,
-  description: t.Optional(t.String({ maxLength: 2000 })),
-  parentId: t.Optional(tSafeId("clauseCategory")),
+export const createCategoryBodySchema = v.object({
+  name: defaultVarcharSchema,
+  description: v.optional(v.pipe(v.string(), v.maxLength(2000))),
+  parentId: v.optional(resourceIdSchema("clauseCategory")),
 });
 
-export const updateCategoryBodySchema = t.Object({
-  name: t.Optional(tDefaultVarchar),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  parentId: t.Optional(t.Nullable(tSafeId("clauseCategory"))),
-  sortOrder: t.Optional(t.Integer({ minimum: 0 })),
+export const updateCategoryBodySchema = v.object({
+  name: v.optional(defaultVarcharSchema),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
+  parentId: v.optional(v.nullable(resourceIdSchema("clauseCategory"))),
+  sortOrder: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
-type CreateCategoryBody = Static<typeof createCategoryBodySchema>;
-type UpdateCategoryBody = Static<typeof updateCategoryBodySchema>;
+type CreateCategoryBody = v.InferOutput<typeof createCategoryBodySchema>;
+type UpdateCategoryBody = v.InferOutput<typeof updateCategoryBodySchema>;
 
 // ── List ────────────────────────────────────────────
 

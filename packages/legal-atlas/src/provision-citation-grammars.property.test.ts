@@ -8,8 +8,8 @@ import {
 } from "@stll/property-testing";
 
 import {
-  locateGazetteCitations,
   type LocatedGazetteCitation,
+  locateGazetteCitations,
   PROVISION_CITATION_GRAMMARS,
 } from "./provision-citation-grammars";
 

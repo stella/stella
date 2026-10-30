@@ -1,28 +1,28 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
-  isDecisionIdentifier,
   type DecisionIdentifier,
   type DecisionIdentifiers,
+  isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import {
-  isDocumentAst,
+  type DocumentAst,
   withProjectedPlainText,
 } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  DECISION_TEXT_FIELD,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
   absentTextField,
+  DECISION_TEXT_FIELD,
+  type DecisionTextFields,
   presentTextField,
   storeDecisionTextFields,
-  type DecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
@@ -31,6 +31,9 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
+import type { PreparedCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
@@ -47,8 +50,8 @@ import {
 } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   EMPTY_AST,
-  isPersistableSourceDocumentId,
   type IngestionResult,
+  isPersistableSourceDocumentId,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -263,6 +266,10 @@ export const storedCaseNumberOf = (
     : result.caseNumber.replace(DANGEROUS_CHARS, "");
 };
 
+const isPreparedDocumentAst = (
+  ast: PreparedCorpusAst["ast"],
+): ast is DocumentAst => ast !== null && Array.isArray(ast.blocks);
+
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
@@ -280,7 +287,7 @@ export const storedCaseNumberOf = (
 export const sanitizeResult = (
   result: RawIngestionResult,
   metadataUrlSchema?: unknown,
-): IngestionResult => {
+): Result<IngestionResult, StoredCorpusValidationError> => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
@@ -319,8 +326,18 @@ export const sanitizeResult = (
   // rewrites inline text (no-break spaces become spaces), which can turn a
   // run into a collapsible one.
   const sanitizedDocumentAst = deepSanitize(result.documentAst);
-  const documentAst = isDocumentAst(sanitizedDocumentAst)
-    ? withProjectedPlainText(sanitizedDocumentAst)
+  const preparedAstResult = prepareCorpusAst({
+    ast: sanitizedDocumentAst,
+    fallbackText: result.fulltext,
+    parserVersion: result.parserVersion,
+  });
+  if (preparedAstResult.isErr()) {
+    return preparedAstResult;
+  }
+  const preparedAst = preparedAstResult.value;
+  const readableAst = preparedAst.ast;
+  const documentAst = isPreparedDocumentAst(readableAst)
+    ? withProjectedPlainText(readableAst)
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);
@@ -427,53 +444,58 @@ export const sanitizeResult = (
   const ecli = strip(result.ecli);
   // The write planner checks aggregate index bytes against its actual language group key.
 
-  return plainTextIngestionResult(
-    {
-      ...result,
-      observationDetail,
-      caseNumber,
-      court,
-      caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
-      identifiers,
-      sourceDocumentId,
-      sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
-        (identity): identity is string =>
-          strip(identity) === identity &&
-          isPersistableSourceDocumentId(identity),
-      ),
-      sourceDocumentIdRepairAliases:
-        result.sourceDocumentIdRepairAliases?.filter(
+  return Result.ok(
+    plainTextIngestionResult(
+      {
+        ...result,
+        observationDetail,
+        caseNumber,
+        court,
+        caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
+        identifiers,
+        sourceDocumentId,
+        sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
           (identity): identity is string =>
             strip(identity) === identity &&
             isPersistableSourceDocumentId(identity),
         ),
-      legacySourceUrls: result.legacySourceUrls
-        ?.map((url) => strip(url))
-        .filter((url): url is string => url !== undefined),
-      legacyEcli: strip(result.legacyEcli),
-      sheetNumber: strip(result.sheetNumber),
-      fulltext: result.fulltext
-        ? collapseSpacedLetters(strip(result.fulltext) ?? "")
-        : undefined,
-      ecli,
-      decisionDate: boundDecisionDate(result.decisionDate),
-      decisionType,
-      sourceUrl: strip(result.sourceUrl),
-      documentUrl: strip(result.documentUrl),
-      metadata,
-      textFields,
-      publisherCitedCases: result.publisherCitedCases?.map((cited) =>
-        stripDangerousChars(cited),
-      ),
-      sections: result.sections?.map((section) => ({
-        ...section,
-        title:
-          section.title === null ? null : stripDangerousChars(section.title),
-        text: collapseSpacedLetters(strip(section.text) ?? ""),
-      })),
-      documentAst,
-      sourceRaw: strip(result.sourceRaw),
-    },
-    metadataUrlSchema,
+        sourceDocumentIdRepairAliases:
+          result.sourceDocumentIdRepairAliases?.filter(
+            (identity): identity is string =>
+              strip(identity) === identity &&
+              isPersistableSourceDocumentId(identity),
+          ),
+        legacySourceUrls: result.legacySourceUrls
+          ?.map((url) => strip(url))
+          .filter((url): url is string => url !== undefined),
+        legacyEcli: strip(result.legacyEcli),
+        legacyCaseNumber: strip(result.legacyCaseNumber),
+        sheetNumber: strip(result.sheetNumber),
+        fulltext: result.fulltext
+          ? collapseSpacedLetters(strip(result.fulltext) ?? "")
+          : undefined,
+        ecli,
+        decisionDate: boundDecisionDate(result.decisionDate),
+        decisionType,
+        sourceUrl: strip(result.sourceUrl),
+        documentUrl: strip(result.documentUrl),
+        metadata,
+        textFields,
+        publisherCitedCases: result.publisherCitedCases?.map((cited) =>
+          stripDangerousChars(cited),
+        ),
+        sections: result.sections?.map((section) => ({
+          ...section,
+          title:
+            section.title === null ? null : stripDangerousChars(section.title),
+          text: collapseSpacedLetters(strip(section.text) ?? ""),
+        })),
+        documentAst,
+        citationScopes:
+          preparedAst.type === "text-only" ? undefined : result.citationScopes,
+        sourceRaw: strip(result.sourceRaw),
+      },
+      metadataUrlSchema,
+    ),
   );
 };

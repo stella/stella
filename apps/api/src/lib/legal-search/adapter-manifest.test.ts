@@ -4,7 +4,7 @@ import {
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
 } from "@stll/api-contract/decision-docket-grammar";
-import { Temporal, parsePlainDate } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
   CZ_ECLI_COURTS,

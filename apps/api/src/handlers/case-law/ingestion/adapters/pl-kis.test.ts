@@ -6,6 +6,7 @@ import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 /**
@@ -15,13 +16,18 @@ import {
  * with provenance sidecars. Paging, resuming and the tip are driven through a
  * stubbed transport, because the behaviour under test is the cursor's.
  */
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlKisDecision,
   encodePlKisCursor,
   parsePlKisCursor,
   parsePlKisProvision,
   parsePlKisSlice,
+  PL_KIS_INCLUDED_CATEGORIES,
+  PL_KIS_UNDATED_SLICE,
   plKisAdapter,
   plKisCategoryById,
   plKisCategoryLabel,
@@ -36,8 +42,6 @@ import {
   plKisQuarantineId,
   plKisRawPartsOf,
   plKisSlice,
-  PL_KIS_INCLUDED_CATEGORIES,
-  PL_KIS_UNDATED_SLICE,
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
@@ -470,7 +474,105 @@ describe("every ingested category, as the service served it", () => {
       expect(built.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
         pdfBytes,
       );
+      const decision = built.decision;
+      const part = "document-pdf";
+      const input = {
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope(
+            decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
+              panic("Missing envelope"),
+            {
+              [part]: {
+                location: part,
+                sha256: legacySha256Hex(pdfBytes),
+                byteLength: pdfBytes.byteLength,
+                contentType: "application/pdf",
+              },
+            },
+          ),
+        ),
+        readObject: async () => Result.ok(pdfBytes),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId ?? null,
+        language: decision.language,
+        court: decision.court,
+        ecli: decision.ecli ?? null,
+        decisionDate: decision.decisionDate ?? null,
+        decisionType: decision.decisionType ?? null,
+        sourceUrl: decision.sourceUrl ?? null,
+        documentUrl: decision.documentUrl ?? null,
+        metadata: decision.metadata,
+      } as const satisfies StoredRawReparseInput;
+      const reparse =
+        plKisAdapter.reparseStoredRaw ?? panic("Missing KIS replay");
+      globalThis.fetch = asFetchMock(async () =>
+        panic("Replay must not fetch"),
+      );
+      const replay = await reparse(input);
+      expect(replay).toEqual({ type: "parsed", result: decision });
+      expect(await reparse(input)).toEqual(replay);
+      // Without its PDF object the row replays from the stored listing and
+      // detail, as it did before document objects were captured.
+      expect(
+        await reparse({
+          ...input,
+          raw: new TextEncoder().encode(decision.sourceRaw),
+        }),
+      ).toMatchObject({
+        type: "parsed",
+        result: { caseNumber: decision.caseNumber },
+      });
+      expect(
+        await reparse({ ...input, readObject: async () => Result.ok(null) }),
+      ).toMatchObject({
+        type: "parsed",
+        result: { caseNumber: decision.caseNumber },
+      });
     }
+  });
+
+  test("unreadable fetched PDFs retain their bytes and participate in the source hash", async () => {
+    const row = rowFor(700_041);
+    const rawParts = plKisRawPartsOf(
+      row,
+      JSON.stringify(detailFor("700041", undefined)),
+    );
+    const firstPdf = new TextEncoder().encode("%PDF-unreadable-first");
+    const secondPdf = new TextEncoder().encode("%PDF-unreadable-second");
+    const first = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: firstPdf,
+    });
+    const again = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: firstPdf,
+    });
+    const second = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: secondPdf,
+    });
+
+    expect(first.type).toBe("detail-unavailable");
+    expect(second.type).toBe("detail-unavailable");
+    expect(first.decision.fulltext).toBeUndefined();
+    expect(first.decision.sourceRawObjects?.["document-pdf"]).toEqual({
+      bytes: firstPdf,
+      contentType: "application/pdf",
+    });
+    expect(second.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
+      secondPdf,
+    );
+    expect(first.decision.rawHash).toBe(again.decision.rawHash);
+    expect(first.decision.rawHash).not.toBe(second.decision.rawHash);
+    const firstRaw =
+      first.decision.sourceRaw ?? panic("first source envelope missing");
+    expect(first.decision.rawHash).toBe(
+      legacySha256Hex(`${firstRaw}\n${legacySha256Hex(firstPdf)}`),
+    );
   });
 
   test("a corrected PDF under an unchanged detail changes the hash", async () => {
@@ -1176,6 +1278,10 @@ describe("the crawl", () => {
         "https://eureka.mf.gov.pl/api/public/v1/informacje/600000/eksport/PDF",
       );
       const [decision] = Result.isOk(page) ? page.value.decisions : [];
+      expect(decision?.sourceRawObjects?.["document-pdf"]).toEqual({
+        bytes: new TextEncoder().encode("not a pdf"),
+        contentType: "application/pdf",
+      });
       // The listing proves the document exists (rule 20).
       expect(decision?.sourceDocumentId).toBe("600000");
       expect(decision?.isListingOnly).toBe(true);

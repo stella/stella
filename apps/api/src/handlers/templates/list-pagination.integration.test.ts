@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/templates/list";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -98,7 +99,7 @@ const seedTemplate = async ({
       ${organizationId},
       ${name},
       'template.docx',
-      ${`templates/${id}.docx`},
+      ${buildTemplateS3Key(organizationId, id)},
       1024,
       ${userId},
       ${createdAt}::timestamptz,

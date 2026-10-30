@@ -1,4 +1,8 @@
 export const AUDIT_ACTION = {
+  MCP_WEB_HANDOFF_CONFIRMATION_SHOWN: "mcp_web_handoff.confirmation_shown",
+  MCP_WEB_HANDOFF_ISSUED: "mcp_web_handoff.issued",
+  MCP_WEB_HANDOFF_REDEEMED: "mcp_web_handoff.redeemed",
+  MCP_WEB_HANDOFF_REFUSED: "mcp_web_handoff.refused",
   CREATE: "create",
   UPDATE: "update",
   DELETE: "delete",
@@ -13,6 +17,7 @@ export const AUDIT_ACTION = {
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  MCP_WEB_HANDOFF: "mcp_web_handoff",
   SERVICE_OAUTH_CLIENT: "service_oauth_client",
   LEGAL_RESOLVE: "legal_resolve",
   AUDIT_LOG: "audit_log",
@@ -38,6 +43,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CONTACT: "contact",
   CONTACT_DIRECTORY: "contact_directory",
   CORRESPONDENCE: "correspondence",
+  DOCUMENT_ANNOTATION: "document_annotation",
   DOCUMENT_TYPE: "document_type",
   USAGE_ALLOCATION: "usage_allocation",
   USAGE_ENTITLEMENT: "usage_entitlement",
@@ -66,6 +72,7 @@ export const AUDIT_RESOURCE_TYPE = {
   LEGAL_LIST_VERIFICATION: "legal_list_verification",
   MCP_CONNECTION: "mcp_connection",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
+  ORGANIZATION_ACCESS_STATE: "organization_access_state",
   ORGANIZATION_SETTINGS: "organization_settings",
   OUTBOUND_ACTION: "outbound_action",
   PDF_SIGNING_SESSION: "pdf_signing_session",
@@ -99,12 +106,13 @@ export const AUDIT_RESOURCE_TYPE = {
 export type AuditResourceType =
   (typeof AUDIT_RESOURCE_TYPE)[keyof typeof AUDIT_RESOURCE_TYPE];
 
-/** Account events describe the export lifecycle without carrying export contents. */
+/** Account events record lifecycle changes without carrying private contents. */
 export const ACCOUNT_AUDIT_EVENT_TYPES = [
   "account.data_export.requested",
   "account.data_export.ready",
   "account.data_export.downloaded",
   "account.data_export.expired",
+  "account.sign_in_method.disconnected",
 ] as const;
 
 export type AccountAuditEventType = (typeof ACCOUNT_AUDIT_EVENT_TYPES)[number];

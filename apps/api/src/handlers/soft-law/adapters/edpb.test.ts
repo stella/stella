@@ -404,14 +404,12 @@ test("EDPB malformed PDFs retain raw bytes with an explicit extraction failure",
       sourceRaw: [
         {
           role: "index",
-          contentBase64: Buffer.from(await fixture("listing")).toString(
-            "base64",
-          ),
+          contentBase64: Buffer.from(await fixture("listing")).toBase64(),
           contentType: "text/html",
         },
         {
           role: "detail",
-          contentBase64: Buffer.from(html).toString("base64"),
+          contentBase64: Buffer.from(html).toBase64(),
           contentType: "text/html",
         },
       ],

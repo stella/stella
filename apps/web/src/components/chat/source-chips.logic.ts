@@ -14,9 +14,9 @@ import { Temporal } from "@stll/time";
 
 import {
   chatAnswerCitationHrefs,
-  citationUrlKey,
   chatAnswerDecisionTargets,
   chatAnswerMarkdownDocuments,
+  citationUrlKey,
 } from "@/components/chat/chat-decision-citations.logic";
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import type {

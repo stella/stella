@@ -24,10 +24,10 @@ test(PROPERTY_ID, async () => {
         const expected = node.sha256Bytes(bytes);
         for (const owner of [bun, node]) {
           expect(owner.sha256Bytes(view)).toEqual(expected);
-          expect(owner.sha256Hex(view)).toBe(expected.toString("hex"));
-          expect(owner.sha256Base64(view)).toBe(expected.toString("base64"));
+          expect(owner.sha256Hex(view)).toBe(expected.toHex());
+          expect(owner.sha256Base64(view)).toBe(expected.toBase64());
           expect(owner.sha256Base64Url(view)).toBe(
-            expected.toString("base64url"),
+            expected.toBase64({ alphabet: "base64url", omitPadding: true }),
           );
           const hasher = owner.createSha256();
           for (let offset = 0; offset < view.length; offset += chunkSize) {
@@ -35,7 +35,7 @@ test(PROPERTY_ID, async () => {
           }
           expect(hasher.digest()).toEqual(expected);
         }
-        expect(await browser.sha256Hex(view)).toBe(expected.toString("hex"));
+        expect(await browser.sha256Hex(view)).toBe(expected.toHex());
         expect(new Uint8Array(await browser.sha256Bytes(view))).toEqual(
           new Uint8Array(expected),
         );
@@ -64,13 +64,13 @@ test(TEXT_PROPERTY_ID, async () => {
         const expected = node.sha256Bytes(text);
         for (const owner of [bun, node]) {
           expect(owner.sha256Bytes(text)).toEqual(expected);
-          expect(owner.sha256Hex(text)).toBe(expected.toString("hex"));
-          expect(owner.sha256Base64(text)).toBe(expected.toString("base64"));
+          expect(owner.sha256Hex(text)).toBe(expected.toHex());
+          expect(owner.sha256Base64(text)).toBe(expected.toBase64());
           expect(owner.sha256Base64Url(text)).toBe(
-            expected.toString("base64url"),
+            expected.toBase64({ alphabet: "base64url", omitPadding: true }),
           );
         }
-        expect(await browser.sha256Hex(text)).toBe(expected.toString("hex"));
+        expect(await browser.sha256Hex(text)).toBe(expected.toHex());
         expect(new Uint8Array(await browser.sha256Bytes(text))).toEqual(
           new Uint8Array(expected),
         );

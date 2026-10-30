@@ -17,8 +17,8 @@ import {
   validatedCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -196,7 +196,7 @@ describe("persisted citation scopes", () => {
       documentAst: ast(rawText),
       citationScopes: opinions,
     });
-    const sanitized = sanitizeResult(input);
+    const sanitized = sanitizeResult(input).unwrap();
     const documentAst = sanitized.documentAst;
     if (!isDocumentAst(documentAst)) {
       throw new Error("Sanitized fixture must retain its AST");

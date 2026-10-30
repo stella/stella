@@ -17,6 +17,7 @@ use std::{
 };
 
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
+use crate::logging::log_json_error;
 
 const ENVELOPE_VERSION: u8 = 1;
 const NONCE_BYTES: usize = 12;
@@ -45,7 +46,8 @@ fn read_envelope(
     }
   };
   let metadata: serde_json::Value = serde_json::from_slice(&raw).map_err(|error| {
-    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+    log_json_error(&error, "encrypted store envelope is invalid");
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid"))
   })?;
   let object = metadata.as_object().ok_or_else(|| {
     EncryptedReadError::Unreadable(format!("{label} envelope is not an object"))
@@ -58,7 +60,8 @@ fn read_envelope(
     )));
   }
   serde_json::from_slice(&raw).map(Some).map_err(|error| {
-    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+    log_json_error(&error, "encrypted store envelope is invalid");
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid"))
   })
 }
 
@@ -119,7 +122,7 @@ impl EncryptedJsonFile {
 
   fn cipher(&self) -> Result<Aes256Gcm, String> {
     Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| format!("{} encryption key is invalid", self.label))
+      .map_err(|error| format!("{} encryption key is invalid: {error}", self.label))
   }
 
   pub fn load<T: DeserializeOwned>(&self) -> Result<Option<T>, String> {
@@ -141,8 +144,8 @@ impl EncryptedJsonFile {
         "{label} nonce has an invalid length"
       )));
     }
-    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| {
-      EncryptedReadError::Unreadable(format!("{label} nonce has an invalid length"))
+    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|error| {
+      EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
     })?;
     let ciphertext = hex::decode(envelope.ciphertext).map_err(|error| {
       EncryptedReadError::Unreadable(format!("{label} ciphertext is invalid: {error}"))
@@ -157,13 +160,17 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| {
-        EncryptedReadError::Unreadable(format!("{label} store could not be decrypted"))
+      .map_err(|error| {
+        EncryptedReadError::Unreadable(format!(
+          "{label} store could not be decrypted: {error}"
+        ))
       })?;
     serde_json::from_slice(&plaintext)
       .map(Some)
       .map_err(|error| {
-        EncryptedReadError::Incompatible(format!("{label} store is invalid: {error}"))
+        // serde would quote the decrypted contents it failed on.
+        log_json_error(&error, "encrypted store contents are invalid");
+        EncryptedReadError::Incompatible(format!("{label} store is invalid"))
       })
   }
 
@@ -185,7 +192,7 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| format!("{label} encryption failed"))?;
+      .map_err(|error| format!("{label} encryption failed: {error}"))?;
     let envelope = EncryptedEnvelope {
       ciphertext: hex::encode(ciphertext),
       nonce: hex::encode(nonce),
@@ -223,7 +230,17 @@ pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
 /// Replaces `path` with `bytes` through a uniquely named sibling, so a reader
 /// sees the old or the new file and never a partial one. The file is
 /// readable by the owner only; a failed write leaves no temporary behind.
+/// The new contents reach the disk before the rename, and the rename itself
+/// before this returns, so a crash keeps the old file or the new one whole.
 pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+  write_private_atomic_with(path, bytes, fs::File::sync_all)
+}
+
+fn write_private_atomic_with(
+  path: &Path,
+  bytes: &[u8],
+  sync: impl Fn(&fs::File) -> std::io::Result<()>,
+) -> Result<(), String> {
   let temp_path = path.with_extension(format!(
     "{}.{}.tmp",
     std::process::id(),
@@ -239,7 +256,7 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
   let mut temporary = options
     .open(&temp_path)
     .map_err(|error| error.to_string())?;
-  let written = temporary.write_all(bytes);
+  let written = temporary.write_all(bytes).and_then(|()| sync(&temporary));
   drop(temporary);
   if let Err(error) = written {
     return match fs::remove_file(&temp_path) {
@@ -261,6 +278,32 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
       )),
     };
   }
+  sync_parent(path, &sync).map_err(|error| format!("directory sync failed: {error}"))
+}
+
+/// Makes a rename inside `path`'s directory durable. Windows has no handle
+/// for a directory sync; its rename is already written through.
+#[cfg(unix)]
+fn sync_parent(
+  path: &Path,
+  sync: &impl Fn(&fs::File) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+  let parent = match path.parent() {
+    Some(parent) if !parent.as_os_str().is_empty() => parent,
+    _ => Path::new("."),
+  };
+  sync(&fs::File::open(parent)?)
+}
+
+#[cfg(not(unix))]
+#[allow(
+  clippy::unnecessary_wraps,
+  reason = "the Unix directory sync's signature"
+)]
+fn sync_parent(
+  _path: &Path,
+  _sync: &impl Fn(&fs::File) -> std::io::Result<()>,
+) -> std::io::Result<()> {
   Ok(())
 }
 
@@ -520,6 +563,46 @@ mod tests {
       0o600
     );
     fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn atomic_writes_reach_the_disk_before_they_replace_the_file() {
+    let path = unique_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"old").unwrap();
+    let synced = std::cell::RefCell::new(Vec::new());
+    write_private_atomic_with(&path, b"new", |file| {
+      // The temporary is synced holding the new bytes while the old file is
+      // still in place; then the directory holding the rename.
+      let metadata = file.metadata()?;
+      let size = if metadata.is_dir() { 0 } else { metadata.len() };
+      synced
+        .borrow_mut()
+        .push((metadata.is_dir(), size, fs::read_to_string(&path)?));
+      Ok(())
+    })
+    .unwrap();
+    let mut expected = vec![(false, 3, "old".to_owned())];
+    if cfg!(unix) {
+      expected.push((true, 0, "new".to_owned()));
+    }
+    assert_eq!(synced.into_inner(), expected);
+    remove_store(&path);
+  }
+
+  #[test]
+  fn a_failed_sync_keeps_the_old_file_and_no_temporary() {
+    let path = unique_path();
+    let directory = path.parent().unwrap().to_owned();
+    fs::create_dir_all(&directory).unwrap();
+    write_private_atomic(&path, b"old").unwrap();
+    let failed = write_private_atomic_with(&path, b"new", |_| {
+      Err(std::io::Error::other("disk full"))
+    });
+    assert!(failed.is_err());
+    assert_eq!(fs::read_to_string(&path).unwrap(), "old");
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+    remove_store(&path);
   }
 
   #[test]

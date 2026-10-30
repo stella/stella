@@ -6,6 +6,7 @@ use std::sync::{Arc, OnceLock};
 use tauri::{Emitter, State, WebviewWindow};
 use tokio::sync::Mutex;
 
+use crate::logging::with_cause_logged;
 use crate::types::{
   DesktopAccountCredential, DesktopAccountIdentity, DesktopAccountSnapshot,
   LinkAccountRequest, LinkedAccountSnapshot, is_valid_linked_account,
@@ -107,6 +108,16 @@ fn credential_fingerprint(key: &str) -> [u8; 32] {
   fingerprint
 }
 
+/// A rejected account whose saved link could not be removed: its key is never
+/// presented again, and the windows get the code they recognize.
+fn rejected_but_kept(key: &str) -> impl FnOnce(String) -> String + '_ {
+  move |cause| {
+    tracing::warn!(cause = %cause, "rejected account could not be cleared");
+    mark_rejected(key);
+    keychain_clear_failed()
+  }
+}
+
 fn mark_rejected(key: &str) {
   let fingerprint = credential_fingerprint(key);
   let mut rejected = REJECTED_CREDENTIALS
@@ -204,8 +215,9 @@ impl PendingLinkedAccount {
       .cloned()
       .ok_or_else(|| "Invalid registry account".to_string())
       .and_then(|account| {
-        serde_json::from_value(account)
-          .map_err(|_| "Invalid registry account".to_string())
+        serde_json::from_value(account).map_err(crate::logging::json_cause_logged(
+          "Invalid registry account",
+        ))
       })?;
     if !is_valid_linked_account(&account) {
       return Err("Invalid registry account".into());
@@ -215,8 +227,9 @@ impl PendingLinkedAccount {
       .cloned()
       .ok_or_else(|| "Invalid registry identity".to_string())
       .and_then(|identity| {
-        serde_json::from_value(identity)
-          .map_err(|_| "Invalid registry identity".to_string())
+        serde_json::from_value(identity).map_err(crate::logging::json_cause_logged(
+          "Invalid registry identity",
+        ))
       })?;
     if identity.user_id.trim().is_empty() || identity.organization_id.trim().is_empty()
     {
@@ -283,8 +296,9 @@ impl AccountStore {
         let Some(value) = crate::keychain::get_account_connection().await? else {
           return Ok(None);
         };
-        let mut account: LinkedAccount = serde_json::from_str(&value)
-          .map_err(|_| "Desktop account connection is unreadable")?;
+        let mut account: LinkedAccount = serde_json::from_str(&value).map_err(
+          crate::logging::json_cause_logged("Desktop account connection is unreadable"),
+        )?;
         account.device_key = crate::device_proof::required().await?;
         Ok(Some(account))
       }
@@ -303,7 +317,7 @@ impl AccountStore {
     {
       // Retried on every read until the Keychain lets go; the first failure
       // already reached the caller of `invalidate`.
-      if self.clear().await.is_err() {
+      if self.clear_ended_link().await.is_err() {
         tracing::warn!(
           target: crate::logging::TRAIL_TARGET,
           event = "account.keychain_clear_failed",
@@ -322,8 +336,9 @@ impl AccountStore {
   async fn save(&mut self, account: LinkedAccount) -> Result<(), String> {
     match self {
       Self::Keychain => {
-        let value = serde_json::to_string(&account)
-          .map_err(|_| "Could not save desktop account")?;
+        let value = serde_json::to_string(&account).map_err(
+          crate::logging::json_cause_logged("Could not save desktop account"),
+        )?;
         crate::keychain::store_account_connection(value).await?;
         crate::keychain::clear_account_expired().await
       }
@@ -368,13 +383,22 @@ impl AccountStore {
     }
   }
 
+  async fn clear_ended_link(&mut self) -> Result<(), String> {
+    if matches!(self, Self::Keychain) {
+      crate::device_proof::unlink(self.clear()).await
+    } else {
+      self.clear().await
+    }
+  }
+
   async fn pending(&self) -> Result<Option<PendingRotation>, String> {
     match self {
       Self::Keychain => crate::keychain::get_account_rotation()
         .await?
         .map(|value| {
-          serde_json::from_str(&value)
-            .map_err(|_| "Account rotation is unreadable".to_string())
+          serde_json::from_str(&value).map_err(crate::logging::json_cause_logged(
+            "Account rotation is unreadable",
+          ))
         })
         .transpose(),
       #[cfg(test)]
@@ -397,8 +421,9 @@ impl AccountStore {
         crate::keychain::set_account_rotation(
           pending
             .map(|value| {
-              serde_json::to_string(&value)
-                .map_err(|_| "Could not stage account rotation".to_string())
+              serde_json::to_string(&value).map_err(crate::logging::json_cause_logged(
+                "Could not stage account rotation",
+              ))
             })
             .transpose()?,
         )
@@ -526,8 +551,10 @@ impl RenewalTransport for HttpRenewal {
     )
     .await
     {
-      Ok(value) => serde_json::from_value(value).map_err(|_| {
-        RenewalFailure::Unavailable("Account renewal response is invalid".into())
+      Ok(value) => serde_json::from_value(value).map_err(|error| {
+        RenewalFailure::Unavailable(crate::logging::json_cause_logged(
+          "Account renewal response is invalid",
+        )(error))
       }),
       Err(message) if message == crate::registry::not_connected() => {
         Err(RenewalFailure::Rejected)
@@ -619,10 +646,10 @@ async fn recover_rotation(
             Err(RenewalFailure::Unavailable(message)) => Err(message),
             Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
             Err(RenewalFailure::Rejected) => {
-              store.clear().await.map_err(|_| {
-                mark_rejected(&account.credential.key);
-                keychain_clear_failed()
-              })?;
+              store
+                .clear()
+                .await
+                .map_err(rejected_but_kept(&account.credential.key))?;
               Err(crate::registry::not_connected())
             }
           },
@@ -640,10 +667,10 @@ async fn recover_rotation(
           Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
           Err(RenewalFailure::Rejected) => {
             if is_live_expiry(&account.credential.expires_at) {
-              store.clear().await.map_err(|_| {
-                mark_rejected(&account.credential.key);
-                keychain_clear_failed()
-              })?;
+              store
+                .clear()
+                .await
+                .map_err(rejected_but_kept(&account.credential.key))?;
             } else {
               store.expire().await?;
             }
@@ -672,10 +699,10 @@ async fn rotate_account(
       Ok(account)
     }
     Err(RenewalFailure::Rejected) => {
-      store.clear().await.map_err(|_| {
-        mark_rejected(&account.credential.key);
-        keychain_clear_failed()
-      })?;
+      store
+        .clear()
+        .await
+        .map_err(rejected_but_kept(&account.credential.key))?;
       Err(crate::registry::not_connected())
     }
   }
@@ -886,11 +913,12 @@ pub async fn invalidate(
     .await?
     .is_some_and(|current| current.credential.key == account.credential.key)
   {
-    store.clear().await.map_err(|_| {
+    store.clear_ended_link().await.map_err(|cause| {
       tracing::warn!(
         target: crate::logging::TRAIL_TARGET,
         event = "account.keychain_clear_failed",
-        code = "invalidate"
+        code = "invalidate",
+        cause = %cause
       );
       keychain_clear_failed()
     })?;
@@ -995,15 +1023,11 @@ pub async fn account_disconnect(
     .await?;
   }
   let mut store = state.lock().await;
-  if matches!(*store, AccountStore::Keychain) {
-    crate::device_proof::unlink(store.clear()).await?;
-  } else {
-    store.clear().await?;
-  }
+  store.clear_ended_link().await?;
   drop(store);
   *BROWSER_CONNECTION
     .lock()
-    .map_err(|_| "Desktop connection is unavailable")? = None;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;
   notify(&app);
   Ok(())
 }
@@ -1035,6 +1059,10 @@ struct BrowserConnection {
   api_base_url: String,
   web_origin: String,
   port_secret: String,
+  // The challenge the approval page received, kept so a signed status names
+  // the whole challenge and a page holding a different one cannot match it.
+  verifier_hash: String,
+  device_jkt: String,
   device_key: crate::device_proof::DeviceKey,
   expires_at: std::time::Instant,
   redemption: LinkRedemption,
@@ -1062,7 +1090,7 @@ fn random_secret() -> Result<String, String> {
   let mut bytes = [0_u8; 32];
   ring::rand::SystemRandom::new()
     .fill(&mut bytes)
-    .map_err(|_| "Could not start desktop connection".to_string())?;
+    .map_err(with_cause_logged("Could not start desktop connection"))?;
   Ok(hex::encode(bytes))
 }
 
@@ -1079,7 +1107,7 @@ fn new_browser_connection_with_key(
   let correlation_id = uuid::Uuid::new_v4().to_string();
   let verifier_hash = hex::encode(Sha256::digest(verifier.as_bytes()));
   let mut url = reqwest::Url::parse(&format!("{web_origin}/settings/account/desktop"))
-    .map_err(|_| "Could not start desktop connection".to_string())?;
+    .map_err(with_cause_logged("Could not start desktop connection"))?;
   let protocol = policy().link_protocol.to_string();
   let device_jkt = device_key.thumbprint()?;
   let params = reqwest::Url::parse_with_params(
@@ -1092,7 +1120,7 @@ fn new_browser_connection_with_key(
       ("deviceJkt", device_jkt.as_str()),
     ],
   )
-  .map_err(|_| "Could not start desktop connection".to_string())?;
+  .map_err(with_cause_logged("Could not start desktop connection"))?;
   url.set_fragment(Some(&format!(
     "desktop-account?{}",
     params.query().unwrap_or_default()
@@ -1103,6 +1131,8 @@ fn new_browser_connection_with_key(
       api_base_url,
       web_origin,
       port_secret,
+      verifier_hash,
+      device_jkt,
       device_key,
       expires_at: std::time::Instant::now() + LINK_APPROVAL_TIMEOUT,
       redemption: LinkRedemption::Waiting { verifier },
@@ -1173,7 +1203,7 @@ impl PreparedBrowserConnection {
     use tauri_plugin_opener::OpenerExt;
     let mut pending = BROWSER_CONNECTION
       .lock()
-      .map_err(|_| "Desktop connection is unavailable")?;
+      .map_err(with_cause_logged("Desktop connection is unavailable"))?;
     match reserve_browser_connection(
       &mut pending,
       self.connection,
@@ -1189,7 +1219,8 @@ impl PreparedBrowserConnection {
         app
           .opener()
           .open_url(url, None::<&str>)
-          .map_err(|_| "Could not open desktop connection")?;
+          // The opener's message can repeat the URL, which carries the port secret.
+          .map_err(|_url_bearing| "Could not open desktop connection")?;
         return Ok(ConnectionStart::Resumed);
       }
       outcome @ (ConnectionStart::SameOriginPending
@@ -1382,31 +1413,40 @@ pub struct SignedConnectionStatus {
   proof: String,
 }
 
+/// Signs `correlationId\nverifierHash\ndeviceJkt\nstatus\ntimestamp` with
+/// the port secret. The page may approve on its own only after a fresh
+/// `pending` status verifies against the challenge it holds, so the signature
+/// covers every challenge field a grant binds, not only the correlation.
+fn connection_status_proof(
+  connection: &BrowserConnection,
+  status: &str,
+  timestamp: &str,
+) -> String {
+  let key =
+    ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+  let message = format!(
+    "{}\n{}\n{}\n{status}\n{timestamp}",
+    connection.correlation_id, connection.verifier_hash, connection.device_jkt
+  );
+  hex::encode(ring::hmac::sign(&key, message.as_bytes()).as_ref())
+}
+
 pub async fn signed_browser_connection_status(
   state: &AccountState,
   correlation_id: &str,
 ) -> Result<SignedConnectionStatus, String> {
   let status = browser_connection_status(state, correlation_id).await;
   let now = std::time::Instant::now();
-  let key = BROWSER_CONNECTION
+  let timestamp = chrono::Utc::now().timestamp().to_string();
+  let proof = BROWSER_CONNECTION
     .lock()
-    .map_err(|_| "Desktop connection is unavailable")?
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?
     .as_ref()
     .filter(|connection| {
       connection.correlation_id == correlation_id && now < connection.expires_at
     })
-    .map(|connection| {
-      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes())
-    })
+    .map(|connection| connection_status_proof(connection, status, &timestamp))
     .ok_or("Desktop connection is unavailable")?;
-  let timestamp = chrono::Utc::now().timestamp().to_string();
-  let proof = hex::encode(
-    ring::hmac::sign(
-      &key,
-      format!("{correlation_id}\n{status}\n{timestamp}").as_bytes(),
-    )
-    .as_ref(),
-  );
   Ok(SignedConnectionStatus {
     correlation_id: correlation_id.to_string(),
     status,
@@ -1419,6 +1459,8 @@ pub async fn signed_browser_connection_status(
 pub(crate) struct BridgeProofFixture {
   pub correlation_id: String,
   pub port_secret: String,
+  pub verifier_hash: String,
+  pub device_jkt: String,
   previous: Option<BrowserConnection>,
 }
 
@@ -1428,10 +1470,14 @@ pub(crate) fn bridge_proof_fixture() -> BridgeProofFixture {
     new_browser_connection("https://api.stll.app", "http://localhost:3000").unwrap();
   let correlation_id = connection.correlation_id.clone();
   let port_secret = connection.port_secret.clone();
+  let verifier_hash = connection.verifier_hash.clone();
+  let device_jkt = connection.device_jkt.clone();
   let previous = BROWSER_CONNECTION.lock().unwrap().replace(connection);
   BridgeProofFixture {
     correlation_id,
     port_secret,
+    verifier_hash,
+    device_jkt,
     previous,
   }
 }
@@ -1486,7 +1532,7 @@ pub async fn complete_browser_connection(
   let pending = {
     let mut connection = BROWSER_CONNECTION
       .lock()
-      .map_err(|_| "Desktop connection is unavailable")?;
+      .map_err(with_cause_logged("Desktop connection is unavailable"))?;
     connection
       .as_mut()
       .ok_or("Desktop connection is unavailable")?
@@ -1537,7 +1583,7 @@ async fn redeem_browser_connection(
       redirect: reqwest::redirect::Policy::none(),
       timeout: None,
     })
-    .map_err(|_| "Desktop connection is unavailable")?;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
   let device_jkt = device_key.thumbprint()?;
   let redeem_request = redemption_request(RedeemRequestOptions {
     client: &client,
@@ -1557,7 +1603,7 @@ async fn redeem_browser_connection(
   let response = redeem_request
     .send()
     .await
-    .map_err(|_| "Desktop connection is unavailable")?;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
   drop(verifier);
   if response.status() == reqwest::StatusCode::UPGRADE_REQUIRED {
     return Err("Update stella desktop".into());
@@ -1568,7 +1614,7 @@ async fn redeem_browser_connection(
   let redeemed = response
     .json::<RedeemedLink>()
     .await
-    .map_err(|_| "Desktop connection is unavailable")?;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
   let request = match redeemed {
     RedeemedLink::Connected { identity } => {
       let Some(current) = current(&state).await? else {
@@ -1823,6 +1869,8 @@ mod tests {
       fields.get("deviceJkt"),
       Some(&connection.device_key.thumbprint().unwrap())
     );
+    assert_eq!(fields.get("verifierHash"), Some(&connection.verifier_hash));
+    assert_eq!(fields.get("deviceJkt"), Some(&connection.device_jkt));
     assert!(!url.contains(verifier.as_str()));
     assert_ne!(verifier.as_str(), connection.port_secret.as_str());
   }
@@ -1903,6 +1951,54 @@ mod tests {
     assert!(!valid_bridge_proof(
       &another, timestamp, &proof, "GET", path, now
     ));
+  }
+
+  #[test]
+  fn connection_status_proofs_bind_the_whole_challenge() {
+    let (connection, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let timestamp = "1790851200";
+    let key =
+      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+    let proof = connection_status_proof(&connection, "pending", timestamp);
+    let signature = hex::decode(&proof).unwrap();
+    let message = |correlation: &str, hash: &str, jkt: &str, status: &str, at: &str| {
+      format!("{correlation}\n{hash}\n{jkt}\n{status}\n{at}")
+    };
+    let (id, hash, jkt) = (
+      connection.correlation_id.as_str(),
+      connection.verifier_hash.as_str(),
+      connection.device_jkt.as_str(),
+    );
+    assert!(
+      ring::hmac::verify(
+        &key,
+        message(id, hash, jkt, "pending", timestamp).as_bytes(),
+        &signature
+      )
+      .is_ok()
+    );
+    let other_hash = "0".repeat(64);
+    let other_jkt = "A".repeat(43);
+    let other_id = "11111111-1111-4111-8111-111111111111";
+    for changed in [
+      message(other_id, hash, jkt, "pending", timestamp),
+      message(id, &other_hash, jkt, "pending", timestamp),
+      message(id, hash, &other_jkt, "pending", timestamp),
+      message(id, hash, jkt, "connected", timestamp),
+      message(id, hash, jkt, "pending", "1790851201"),
+      // The format before the challenge was bound.
+      format!("{id}\npending\n{timestamp}"),
+    ] {
+      assert!(ring::hmac::verify(&key, changed.as_bytes(), &signature).is_err());
+    }
+    let (another, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    assert_ne!(another.verifier_hash, connection.verifier_hash);
+    assert_ne!(
+      connection_status_proof(&another, "pending", timestamp),
+      proof
+    );
   }
 
   fn fixture(key: &str, expires_in: i64) -> LinkedAccount {

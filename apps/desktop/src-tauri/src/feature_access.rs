@@ -17,6 +17,7 @@ use tauri::{AppHandle, Manager};
 use crate::account::{self, AccountRequest, AccountState};
 use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
+use crate::logging::{json_cause_logged, request_cause_logged};
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(15 * 60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -51,7 +52,7 @@ struct Decision {
 /// ignored, so they stay off.
 fn enabled_features(body: &[u8]) -> Result<HashSet<DesktopFeature>, String> {
   let response: Response = serde_json::from_slice(body)
-    .map_err(|_| "feature access response is invalid".to_string())?;
+    .map_err(json_cause_logged("feature access response is invalid"))?;
   Ok(
     response
       .features
@@ -71,7 +72,7 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
     redirect: reqwest::redirect::Policy::none(),
     timeout: Some(REQUEST_TIMEOUT),
   })
-  .map_err(|_| "feature access client is unavailable".to_string())?;
+  .map_err(request_cause_logged("feature access client is unavailable"))?;
   Ok(CLIENT.get_or_init(|| client))
 }
 
@@ -91,7 +92,7 @@ async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, Stri
   let mut response = signed_request(client()?, request)?
     .send()
     .await
-    .map_err(|_| "feature access request failed".to_string())?;
+    .map_err(request_cause_logged("feature access request failed"))?;
   if !response.status().is_success() {
     return Err(format!(
       "feature access request was refused: {}",
@@ -102,7 +103,7 @@ async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, Stri
   while let Some(chunk) = response
     .chunk()
     .await
-    .map_err(|_| "feature access response failed".to_string())?
+    .map_err(request_cause_logged("feature access response failed"))?
   {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
       return Err("feature access response is too large".to_string());

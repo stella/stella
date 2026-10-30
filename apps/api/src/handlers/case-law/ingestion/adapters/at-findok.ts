@@ -5,7 +5,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { classifyFailure } from "@stll/errors";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
-import { Temporal, parsePlainDate } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import {
@@ -53,11 +53,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
@@ -65,8 +65,10 @@ import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -920,6 +922,19 @@ export const assembleAtFindokDecision = (
     return buildListingOnly(payload, "detail-xml-unparseable", documentXml);
   }
   const parsed = parseResult.value;
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: ADAPTER_KEYS.AT_FINDOK,
+      caseNumber: item.gz,
+      language: LANGUAGE,
+      url: artifactUrl(item.pathPdf),
+      codes: "TEXT_FIDELITY_MISMATCH",
+      fidelity: parsed.textFidelity.status,
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
+      firstDifferenceAt: parsed.textFidelity.firstDifferenceAt,
+    });
+  }
   const headnotes =
     headnoteXml === undefined ? undefined : parseFindokHeadnoteXml(headnoteXml);
   return plainTextIngestionResult({
@@ -963,6 +978,7 @@ export const assembleAtFindokDecision = (
       headnoteNumbers: headnotes?.headnoteNumbers,
       headnoteStatutes: headnotes?.statutes,
       sourceAttribution: "Findok, Austrian Federal Ministry of Finance, CC0",
+      textFidelity: parsed.textFidelity,
     },
     rawHash: hashContent(raw.sourceRaw),
     documentAst: parsed.documentAst,

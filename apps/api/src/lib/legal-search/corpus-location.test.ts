@@ -9,8 +9,8 @@ import {
 } from "@/api/lib/legal-search/corpus-location";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
-  packKeyForMembers,
   corpusMemberDigest,
+  packKeyForMembers,
 } from "@/api/lib/legal-search/corpus-pack";
 
 // The row's key column is varchar(512); an address that does not fit is

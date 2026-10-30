@@ -17,8 +17,8 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
@@ -79,13 +79,15 @@ const recordingDb = (
 const newLog = (): TransactionLog => ({ started: 0, failures: [] });
 
 const ingest = async (input: IngestionResult, scoped: ScopedDb = scopedDb) =>
-  await processDecision({
-    input,
-    observationOrder: 1n,
-    sourceId,
-    scopedDb: scoped,
-    observedAt: new Date("2026-07-31T12:00:00.000Z"),
-  });
+  (
+    await processDecision({
+      input,
+      observationOrder: 1n,
+      sourceId,
+      scopedDb: scoped,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    })
+  ).unwrap();
 
 const storedSlug = async (
   where: SQL | undefined,

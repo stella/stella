@@ -1,7 +1,7 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ResourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -11,15 +11,15 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { includes } from "@/api/lib/type-guards";
 
-const createEntityLinkBodySchema = t.Object({
-  sourceEntityId: tSafeId("entity"),
-  targetEntityId: tSafeId("entity"),
-  linkType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
+const createEntityLinkBodySchema = v.object({
+  sourceEntityId: resourceIdSchema("entity"),
+  targetEntityId: resourceIdSchema("entity"),
+  linkType: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
 });
 
 export type CreateEntityLinkHandlerProps = {
@@ -177,6 +177,7 @@ export const createEntityLinkHandler = async function* ({
 const createEntityLink = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Link a task to another document, folder, or task, with a link type " +
       "that defaults to related. Both ends must be in this matter, an entity " +

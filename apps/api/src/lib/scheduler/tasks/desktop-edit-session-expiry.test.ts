@@ -11,9 +11,9 @@ import {
   selectTransitionedExpirableSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
 import {
+  type ExpiredDesktopEditSessionNotification,
   publishDesktopEditSessionExpiryNotifications,
   publishDesktopEditSessionExpiryNotificationsWithRetry,
-  type ExpiredDesktopEditSessionNotification,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
 
 const session = (id: string, createdBy: string) => ({

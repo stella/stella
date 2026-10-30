@@ -5,12 +5,13 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { getStorageKey } from "../../src/consts";
 import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
+import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiGet } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const HELP_BUTTON_NAME = "Help and feedback";
@@ -475,9 +476,10 @@ for (const availability of [
       });
       await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
       const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
-      await expect(drawer.getByRole("alert")).toContainText("Action failed", {
-        timeout: 30_000,
-      });
+      await expect(drawer.getByRole("alert")).toContainText(
+        messages.errors.actionFailed,
+        { timeout: 30_000 },
+      );
       await expect(
         drawer.locator("li").filter({ hasText: availability.title }),
       ).toHaveCount(0);

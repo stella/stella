@@ -42,8 +42,8 @@ import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
@@ -243,24 +243,26 @@ const seedTextlessListing = async (
   if (crawled === undefined) {
     throw new Error("expected the listing to build the judgment");
   }
-  await processDecision({
-    input: plainTextIngestionResult({
-      ...crawled,
-      fulltext: undefined,
-      sections: undefined,
-      documentAst: EMPTY_AST,
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      isListingOnly: true,
-      metadata: {
-        ...crawled.metadata,
-        detailReadState: "read",
-      },
-    }),
-    sourceId,
-    scopedDb,
-    observedAt: updatedAt,
-    observationOrder: 1n,
-  });
+  (
+    await processDecision({
+      input: plainTextIngestionResult({
+        ...crawled,
+        fulltext: undefined,
+        sections: undefined,
+        documentAst: EMPTY_AST,
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        isListingOnly: true,
+        metadata: {
+          ...crawled.metadata,
+          detailReadState: "read",
+        },
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: updatedAt,
+      observationOrder: 1n,
+    })
+  ).unwrap();
   await db
     .update(caseLawDecisions)
     .set({ updatedAt })
@@ -349,13 +351,15 @@ test("a judgment whose detail read failed is read again by the reconciliation an
   if (crawled === undefined) {
     throw new Error("expected the crawl to build the judgment");
   }
-  const stored = await processDecision({
-    input: crawled,
-    sourceId,
-    scopedDb,
-    observedAt: NOW,
-    observationOrder: 1n,
-  });
+  const stored = (
+    await processDecision({
+      input: crawled,
+      sourceId,
+      scopedDb,
+      observedAt: NOW,
+      observationOrder: 1n,
+    })
+  ).unwrap();
   expect(stored.status).toBe("complete");
   const before = await storedRow(sourceId);
   expect(before.fulltext).toContain("oddalić wniosek");

@@ -1,12 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
   estimateWorkflowTargetCount,
   performWorkflowStart,
-  resolveWorkflowStartDecision,
   resolveWorkflowServiceTier,
+  resolveWorkflowStartDecision,
   WORKFLOW_START_AI_UNAVAILABLE,
   WORKFLOW_START_FAILED,
 } from "@/components/workspaces/hooks/use-start-workflow.logic";
@@ -15,11 +14,13 @@ import { useWorkflowServiceTierPrompt } from "@/components/workspaces/workflow-s
 import { useWorkflowStartConfirmationPrompt } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 
 /**
@@ -33,16 +34,13 @@ export const useStartWorkflow = (workspaceId: string) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const aiAvailabilityQueryOptions = aiAvailabilityOptions({
     organizationId: activeOrganizationId,
   });
   const aiAvailabilityQuery = useQuery(aiAvailabilityQueryOptions);
-  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
-  useQueryViewError(aiAvailabilityView);
+  const aiAvailabilityView = queryView(aiAvailabilityQuery);
+  useQueryViewError(aiAvailabilityView, "useStartWorkflow:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&
     aiAvailabilityView.refetchError === undefined
@@ -85,7 +83,10 @@ export const useStartWorkflow = (workspaceId: string) => {
 
       return await performWorkflowStart({
         captureError: (error) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "useStartWorkflow:failure",
+            scope: { type: "handler", handlerId: "useStartWorkflow:failure" },
+          });
         },
         notifyFailure: notifyStartFailed,
         // Invalidate workflow status so UI shows "running"
@@ -95,7 +96,7 @@ export const useStartWorkflow = (workspaceId: string) => {
           });
         },
         request: async () =>
-          unwrapEden(
+          unwrapApiResponse(
             await api
               .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .workflow.start.post({
@@ -124,7 +125,10 @@ export const useStartWorkflow = (workspaceId: string) => {
     } catch (error) {
       // The prompts and the target-count estimate run before the request; a
       // failure here means nothing was started either.
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useStartWorkflow:failure-2",
+        scope: { type: "handler", handlerId: "useStartWorkflow:failure-2" },
+      });
       notifyStartFailed(error);
       return WORKFLOW_START_FAILED;
     }

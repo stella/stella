@@ -131,6 +131,7 @@ type Child = {
 };
 
 type RunPostgresWorkersOptions = PlanPostgresWorkersOptions & {
+  clusterExclusivePaths?: ReadonlySet<string>;
   databaseUrl: string;
   poolMaxPerWorker?: number;
   reserve?: number;
@@ -158,6 +159,7 @@ export const runPostgresWorkers = async ({
   files,
   durations,
   exclusivePaths,
+  clusterExclusivePaths = new Set(),
   workers,
   databaseUrl,
   poolMaxPerWorker = POSTGRES_TEST_POOL_MAX_PER_WORKER,
@@ -239,8 +241,9 @@ export const runPostgresWorkers = async ({
     });
   }
 
+  const clusterFiles = files.filter((file) => clusterExclusivePaths.has(file));
   const plan = planPostgresWorkers({
-    files,
+    files: files.filter((file) => !clusterExclusivePaths.has(file)),
     durations,
     exclusivePaths,
     workers,
@@ -257,30 +260,60 @@ export const runPostgresWorkers = async ({
       child.kill(received);
     }
   });
+  const cloneTemplate = async (databaseName: string) => {
+    await admin.query(
+      `CREATE DATABASE ${quoteIdentifier(databaseName)} TEMPLATE ${quoteIdentifier(template)}`,
+    );
+  };
+  const dropClone = async (databaseName: string) => {
+    // Only client sessions: an owner role may not terminate autovacuum
+    // workers, and DROP DATABASE already stops those on its own.
+    await admin.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
+      [databaseName],
+    );
+    await admin.query(
+      `DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`,
+    );
+  };
   try {
     for (const databaseName of databaseNames) {
-      await admin.query(
-        `CREATE DATABASE ${quoteIdentifier(databaseName)} TEMPLATE ${quoteIdentifier(template)}`,
-      );
+      await cloneTemplate(databaseName);
     }
     const started = plan.map(() => now());
+    const runBatch = async (batch: readonly string[], index: number) => {
+      const child = runWorker({
+        files: batch,
+        databaseUrl: databaseUrlWithName(
+          templateUrl,
+          databaseNames.at(index) ?? "",
+        ),
+        worker: index + 1,
+      });
+      children.push(child);
+      return await child.exited;
+    };
     const statuses = await Promise.all(
       plan.map(async (workerPlan, index) => {
         let firstFailure = 0;
-        for (const batch of workerPlan.batches) {
+        for (const [position, batch] of workerPlan.batches.entries()) {
+          // An exclusive suite starts from the template, not from the rows the
+          // suites before it on this worker left behind: its assertions over
+          // shared tables then depend on nothing but its own writes.
+          const databaseName = databaseNames.at(index);
+          if (
+            signal === undefined &&
+            position > 0 &&
+            databaseName !== undefined &&
+            batch.every((file) => exclusivePaths.has(file))
+          ) {
+            await dropClone(databaseName);
+            await cloneTemplate(databaseName);
+          }
           if (signal !== undefined) {
             break;
           }
-          const child = runWorker({
-            files: batch,
-            databaseUrl: databaseUrlWithName(
-              templateUrl,
-              databaseNames.at(index) ?? "",
-            ),
-            worker: index + 1,
-          });
-          children.push(child);
-          const status = await child.exited;
+          const status = await runBatch(batch, index);
           if (firstFailure === 0 && status !== 0) {
             firstFailure = status;
           }
@@ -298,6 +331,18 @@ export const runPostgresWorkers = async ({
         `Postgres worker ${index + 1}: ${wallSeconds.toFixed(1)}s (${fileCount} files, projected ${workerPlan.seconds.toFixed(1)}s)`,
       );
     }
+    // Role grants are cluster-wide even when each worker has its own database.
+    // Drain every worker before replaying bundles, one complete suite at a time.
+    for (const file of clusterFiles) {
+      if (signal !== undefined) {
+        break;
+      }
+      const clusterStarted = now();
+      statuses.push(await runBatch([file], 0));
+      log(
+        `Postgres cluster-exclusive ${file}: ${((now() - clusterStarted) / 1000).toFixed(1)}s`,
+      );
+    }
     const slowest = [...files]
       .toSorted(
         (left, right) => (durations[right] ?? 5) - (durations[left] ?? 5),
@@ -313,13 +358,7 @@ export const runPostgresWorkers = async ({
   } finally {
     unregister();
     for (const databaseName of databaseNames.toReversed()) {
-      await admin.query(
-        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1",
-        [databaseName],
-      );
-      await admin.query(
-        `DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`,
-      );
+      await dropClone(databaseName);
     }
     await admin.close();
   }

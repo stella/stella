@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { createTranslator } from "use-intl/core";
 
-import { defaultLocale, locales, localeCodes, type Locale } from "./config";
+import { defaultLocale, type Locale, localeCodes, locales } from "./config";
 import ar from "./messages/ar.json";
 import cs from "./messages/cs.json";
 import de from "./messages/de.json";

@@ -19,8 +19,8 @@ import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tan
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
-  chatToolMapToArray,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,

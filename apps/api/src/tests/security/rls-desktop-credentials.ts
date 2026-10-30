@@ -2,7 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
-import type { rootDb, rlsDb } from "@/api/db/root";
+import type { rlsDb, rootDb } from "@/api/db/root";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { createDesktopCredentialAuthorizers } from "@/api/lib/business-registries/desktop/auth";

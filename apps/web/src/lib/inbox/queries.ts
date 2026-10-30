@@ -5,7 +5,7 @@ import type { SignalView } from "@stll/api-contract/signals";
 
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { localISODate } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
@@ -37,7 +37,7 @@ export const inboxCountOptions = (organizationId: string, userId: string) => {
   return queryOptions({
     queryKey: inboxKeys.count(organizationId, userId, asOf),
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.signals.count.get({ query: { asOf }, fetch: { signal } }),
       ),
     staleTime: INBOX_STALE_TIME_MS,
@@ -53,7 +53,7 @@ export const inboxSignalOptions = (
   queryOptions({
     queryKey: inboxKeys.detail(organizationId, userId, signalId),
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .signals({ signalId: toSafeId<"signal">(signalId) })
           .get({ fetch: { signal } }),
@@ -61,7 +61,7 @@ export const inboxSignalOptions = (
     staleTime: INBOX_STALE_TIME_MS,
   });
 
-/** Derived from the Eden response type. */
+/** Derived from the API client's response type. */
 type DetailQueryFn = NonNullable<
   ReturnType<typeof inboxSignalOptions>["queryFn"]
 >;

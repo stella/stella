@@ -56,8 +56,9 @@ fn is_safe_handoff_token(value: &str) -> bool {
 }
 
 fn normalize_and_validate_api_base_url(value: &str) -> Result<String, String> {
-  config::normalize_self_host_api_base_url(value)
-    .map_err(|_| "Invalid desktop edit API URL.".to_string())
+  config::normalize_self_host_api_base_url(value).map_err(
+    crate::logging::with_cause_logged("Invalid desktop edit API URL."),
+  )
 }
 
 /// Reserves the approval channel for a single in-flight prompt. Returns the
@@ -312,6 +313,9 @@ pub fn handle_url(
           }
           updater::CheckOutcome::Failed(error) => {
             tracing::warn!(error = %error, "deep link updater check failed");
+          }
+          updater::CheckOutcome::Disabled => {
+            tracing::debug!("deep link updater check skipped: updates are managed");
           }
         }
       });
@@ -876,8 +880,12 @@ pub(crate) async fn show_connection_confirmation(
       let _ = window.close();
       tokio::time::timeout(ACKNOWLEDGE_TIMEOUT, closed_receiver)
         .await
-        .map_err(|_| "A self-host connection dialog is already open.".to_string())?
-        .map_err(|_| "A self-host connection dialog is already open.".to_string())?;
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?;
       Ok(outcome)
     }
     Err(error) => {
@@ -1058,7 +1066,7 @@ async fn redeem_and_open_desktop_edit(
   let result = {
     let mut mgr = manager.lock().await;
     recheck_handoff_account(&app_handle, &account).await?;
-    mgr.open_file(request, Some(prefetched_buffer)).await
+    mgr.open_file(request, prefetched_buffer).await
   }?;
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;

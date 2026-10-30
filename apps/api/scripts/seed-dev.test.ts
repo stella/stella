@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   createMockDocx,
   createSeedEmail,
   SEED_EMAIL_FILE_NAMES,
+  seedRequiredCaseLaw,
+  userFileCleanupKeys,
 } from "./seed-dev";
 import {
   buildExportReviewCitationSeeds,
@@ -86,4 +90,49 @@ describe("email viewer seeds", () => {
       expect(inner.startsWith(outer)).toBe(false);
     }
   });
+});
+
+describe("chat attachment seed cleanup", () => {
+  test("deletes sources and thumbnails for both persisted key forms", () => {
+    const organizationId = "org_1";
+    const userId = "user_1";
+    const deleted = [
+      {
+        organizationId,
+        userId,
+        s3Key: `${organizationId}/organization-source.png`,
+        thumbnailFileId: "organization-thumbnail",
+      },
+      {
+        organizationId,
+        userId,
+        s3Key: `${userId}/uploader-source.png`,
+        thumbnailFileId: "uploader-thumbnail",
+      },
+    ].flatMap(userFileCleanupKeys);
+
+    expect(deleted).toEqual([
+      "org_1/organization-source.png",
+      "org_1/organization-thumbnail.webp",
+      "user_1/uploader-source.png",
+      "user_1/uploader-thumbnail.webp",
+    ]);
+  });
+});
+
+test("a case-law backfill failure rejects the dev seed phase", async () => {
+  const unitFailure = new Error("Provision backfill unit state-seed failed");
+  let marketingStarted = false;
+
+  const outcome = seedRequiredCaseLaw(
+    async () => {
+      throw unitFailure;
+    },
+    async () => {
+      marketingStarted = true;
+    },
+  );
+
+  expect(await rejectionOf(outcome)).toBe(unitFailure);
+  expect(marketingStarted).toBe(false);
 });

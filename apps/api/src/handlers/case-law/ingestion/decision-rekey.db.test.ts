@@ -13,8 +13,8 @@ import { asc, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawSources,
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
@@ -29,15 +29,15 @@ import {
   resolveDecisionIdentityTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
-  sourceContractForAdapter,
   type SourceContract,
+  sourceContractForAdapter,
 } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -146,18 +146,20 @@ if (!databaseUrl || !runPostgresTests) {
       contract: SourceContract,
     ): Promise<void> => {
       observedSecond += 1;
-      await processDecision(
-        {
-          input,
-          observationOrder: BigInt(observedSecond),
-          sourceId,
-          scopedDb,
-          observedAt: new Date(
-            Date.UTC(2026, 9, 5, 12, 0, 0) + observedSecond * 1000,
-          ),
-        },
-        async () => await Promise.resolve(contract),
-      );
+      (
+        await processDecision(
+          {
+            input,
+            observationOrder: BigInt(observedSecond),
+            sourceId,
+            scopedDb,
+            observedAt: new Date(
+              Date.UTC(2026, 9, 5, 12, 0, 0) + observedSecond * 1000,
+            ),
+          },
+          async () => await Promise.resolve(contract),
+        )
+      ).unwrap();
     };
 
     const storedRows = async (sourceId: SafeId<"caseLawSource">) =>
@@ -283,7 +285,7 @@ if (!databaseUrl || !runPostgresTests) {
           input: observation({ registration, sourceDocumentId: "doc-c", ecli }),
           sourceId,
           metadataUrlSchema: contract.metadataUrlSchema,
-        });
+        }).unwrap();
         const identity = await scopedDb(
           async (tx) =>
             await resolveDecisionIdentityTx(tx, {
@@ -391,17 +393,19 @@ if (!databaseUrl || !runPostgresTests) {
       const ecli = "ECLI:XX:NONE:2024:1";
       // The default resolver reads the persisted source, whose key no
       // manifest declares: the path a seeded source takes.
-      await processDecision({
-        input: observation({
-          registration: noneSource,
-          sourceDocumentId: "doc-a",
-          ecli,
-        }),
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date(Date.UTC(2026, 9, 5, 12, 0, 0)),
-      });
+      (
+        await processDecision({
+          input: observation({
+            registration: noneSource,
+            sourceDocumentId: "doc-a",
+            ecli,
+          }),
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date(Date.UTC(2026, 9, 5, 12, 0, 0)),
+        })
+      ).unwrap();
       await store(
         sourceId,
         observation({

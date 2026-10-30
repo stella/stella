@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { sql, TransactionRollbackError, type SQLChunk } from "drizzle-orm";
+import { sql, type SQLChunk, TransactionRollbackError } from "drizzle-orm";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -13,6 +13,7 @@ import {
   type TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
+import { READ_COMMITTED_BEGIN } from "../lib/db/read-committed-unit";
 import { createBackfillRuntime } from "./backfill-runtime";
 import {
   backfillChatContentV3Batch,
@@ -50,6 +51,7 @@ const NORMAL = { kind: "normal", signals: [] } satisfies Verdict;
 const translateTransactionControl = (query: string) => {
   switch (query) {
     case "BEGIN":
+    case READ_COMMITTED_BEGIN:
       return "SAVEPOINT chat_content_repair";
     case "COMMIT":
       return "RELEASE SAVEPOINT chat_content_repair";

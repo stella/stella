@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { outboundActions } from "@/api/db/schema";
 import { readStoredOutboundPreview } from "@/api/handlers/outbound-actions/store";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnbackedProjectionKeys,
@@ -36,7 +36,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "human_confirmation" },
   access: "read",
-  params: t.Object({ actionId: tSafeId("outboundAction") }),
+  params: v.object({ actionId: resourceIdSchema("outboundAction") }),
 } satisfies HandlerConfig;
 
 /**

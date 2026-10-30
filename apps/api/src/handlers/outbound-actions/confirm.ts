@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, gt, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
@@ -17,7 +17,7 @@ import { readStoredOutboundPreview } from "@/api/handlers/outbound-actions/store
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
@@ -38,13 +38,14 @@ const config = {
   // Only the signed-in user's own click may run an outbound action: no tool,
   // capability, CLI or connected app reaches this endpoint.
   mcp: { type: "internal", reason: "human_confirmation" },
-  params: t.Object({ actionId: tSafeId("outboundAction") }),
-  body: t.Object({
+  params: v.object({ actionId: resourceIdSchema("outboundAction") }),
+  body: v.object({
     /** Hash of the preview the user was shown and confirmed. */
-    previewHash: t.String({
-      maxLength: 64,
-      pattern: OUTBOUND_PREVIEW_HASH_PATTERN,
-    }),
+    previewHash: v.pipe(
+      v.string(),
+      v.maxLength(64),
+      v.regex(new RegExp(OUTBOUND_PREVIEW_HASH_PATTERN, "u")),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -248,37 +249,39 @@ export const createConfirmOutboundActionHandler = (
         Result.isError(executed) ? executed.error : executed.value,
       );
 
-      yield* Result.await(
-        safeDb(async (tx) => {
-          const { status, ...metadata } = settledValues;
-          await transitionScopedCount({
-            tx,
-            spec: TRANSITIONS.outboundActions,
-            where: sql`${and(
-              eq(outboundActions.id, actionId),
-              eq(outboundActions.organizationId, organizationId),
-              eq(outboundActions.userId, user.id),
-            )}`,
-            options: {
-              from: ["sending"],
-              to: status,
-              set: { ...metadata, updatedAt: new Date() },
-            },
-            recordTransitionAuditEvent: async (auditTx) =>
-              await recordAuditEvent(auditTx, {
-                action: AUDIT_ACTION.EXECUTE,
-                resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
-                resourceId: actionId,
-                workspaceId: null,
-                metadata: {
-                  kind,
-                  operation: status,
-                  failureCode: settledValues.failureCode,
-                },
-              }),
-          });
-        }),
-      );
+      const settled = await safeDb(async (tx) => {
+        const { status, ...metadata } = settledValues;
+        await transitionScopedCount({
+          tx,
+          spec: TRANSITIONS.outboundActions,
+          where: sql`${and(
+            eq(outboundActions.id, actionId),
+            eq(outboundActions.organizationId, organizationId),
+            eq(outboundActions.userId, user.id),
+          )}`,
+          options: {
+            from: ["sending"],
+            to: status,
+            set: { ...metadata, updatedAt: new Date() },
+          },
+          recordTransitionAuditEvent: async (auditTx) =>
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.EXECUTE,
+              resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
+              resourceId: actionId,
+              workspaceId: null,
+              metadata: {
+                kind,
+                operation: status,
+                failureCode: settledValues.failureCode,
+              },
+            }),
+        });
+      });
+      if (Result.isError(settled)) {
+        // The provider outcome is known even when its receipt cannot be stored.
+        observeFailure(settled.error, { sink: EXECUTION_FAILED_SINK });
+      }
 
       return Result.ok({
         status: settledValues.status,

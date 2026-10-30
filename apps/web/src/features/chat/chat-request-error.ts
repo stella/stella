@@ -2,10 +2,7 @@ import { TaggedError } from "better-result";
 
 export class ChatRequestError extends TaggedError("ChatRequestError")<{
   kind:
-    | "preparation_failed"
-    | "connection_failed"
-    | "timed_out"
-    | "not_started";
+    "preparation_failed" | "connection_failed" | "timed_out" | "not_started";
   message: string;
   cause?: unknown;
 }> {}

@@ -22,7 +22,10 @@ import {
 } from "@stll/ai-catalog";
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
-import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
+import type {
+  AnalysisGenerating,
+  DecisionAnalysis,
+} from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import {
@@ -38,8 +41,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_FAILURE_HOLD_MS,
   analysisFailureKeyTag,
-  failureClaimGuard,
   analysisFailureRecord,
+  failureClaimGuard,
 } from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
@@ -116,18 +119,14 @@ const anthropicKey = {
 
 const VALID_ANSWER = {
   headings: [],
-  holding: { text: "Dovolání se zamítá.", anchors: [] },
-  abstract: "Soud dovolání zamítl.",
+  holding: [{ text: "Dovolání se zamítá.", anchors: [] }],
+  abstract: [{ text: "Soud dovolání zamítl.", anchors: [] }],
   topics: [],
 };
 
 /** How the faked provider answers one run. */
 type ProviderAnswer =
-  | "cut-off"
-  | "valid"
-  | "never"
-  | "refused"
-  | "rate-limited";
+  "cut-off" | "valid" | "never" | "refused" | "rate-limited";
 
 /** The retry delay the rate-limited answer names: far past the wait cap. */
 const RATE_LIMIT_DELAY_MS = 41_400_000;
@@ -445,7 +444,7 @@ describe("a failed analysis run", () => {
       });
       expect(response).toMatchObject({
         status: "error",
-        code: "analysis_unavailable",
+        code: "analysis_disabled",
       });
       expect(starts).toBe(0);
     }
@@ -474,7 +473,7 @@ describe("a failed analysis run", () => {
       });
       expect(response).toMatchObject({
         status: "error",
-        code: "analysis_unavailable",
+        code: "analysis_disabled",
       });
       expect(starts).toBe(0);
     }
@@ -780,6 +779,85 @@ describe("a failed analysis run", () => {
     expect(poll.starts).toBe(0);
   });
 
+  test("a superseded run with the same timestamp and fingerprint cannot mutate its replacement", async () => {
+    const decisionId = await insertDecision();
+    const store = createDbAnalysisStore(db);
+    const now = new Date("2026-10-19T00:00:00.000Z");
+    const superseded = analysisSentinel(FINGERPRINT, now);
+    const replacement = analysisSentinel(FINGERPRINT, now);
+    expect(replacement.runId).not.toBe(superseded.runId);
+    await holdRow(decisionId, replacement);
+
+    expect(
+      await store.savePartial({
+        decisionId,
+        partialTree: [],
+        sentinel: superseded,
+      }),
+    ).toBe(false);
+    expect(await storedValue(decisionId)).toEqual(replacement);
+    const finished = {
+      version: 2,
+      generatedAt: now.toISOString(),
+      model: "fixture",
+      inputFingerprint: FINGERPRINT,
+      tree: [],
+    } satisfies DecisionAnalysis;
+    expect(
+      await store.save({
+        analysis: finished,
+        contentHash: null,
+        decisionId,
+        ownership: { type: "generation", sentinel: superseded },
+      }),
+    ).toBe(false);
+    expect(await storedValue(decisionId)).toEqual(replacement);
+
+    await store.clear({ decisionId, sentinel: superseded });
+    expect(await storedValue(decisionId)).toEqual(replacement);
+
+    await store.fail({
+      decisionId,
+      keyTag: "platform",
+      sentinel: superseded,
+      failure: analysisFailureRecord({
+        code: "failed",
+        fingerprint: FINGERPRINT,
+        now,
+        reader: { source: "platform" },
+      }),
+    });
+    expect(await storedValue(decisionId)).toEqual(replacement);
+    expect(await failureRows(decisionId)).toEqual([]);
+    expect(
+      await store.save({
+        analysis: finished,
+        contentHash: null,
+        decisionId,
+        ownership: { type: "generation", sentinel: replacement },
+      }),
+    ).toBe(true);
+    expect(await storedValue(decisionId)).toEqual(finished);
+    const revision = { ...finished, model: "revised" };
+    expect(
+      await store.save({
+        analysis: revision,
+        contentHash: null,
+        decisionId,
+        ownership: { type: "revision", expected: structuredClone(finished) },
+      }),
+    ).toBe(true);
+    expect(
+      await store.save({
+        analysis: finished,
+        contentHash: null,
+        decisionId,
+        ownership: { type: "revision", expected: finished },
+      }),
+    ).toBe(false);
+    expect(await storedValue(decisionId)).toEqual(revision);
+  });
+
   test("an organization that switched its provider after a failed run runs on the new one", async () => {
     const decisionId = await insertDecision();
     await read({ decisionId, model: fakeGoogle(["cut-off"]).model });
@@ -916,7 +994,7 @@ describe("a failed analysis run", () => {
         starts: 1,
       });
       expect(google.remaining()).toBe(0);
-      expect(await storedValue(decisionId)).toMatchObject({ version: 3 });
+      expect(await storedValue(decisionId)).toMatchObject({ version: 4 });
     });
 
     test("refuses the claim itself, in its transaction, while the time is ahead", async () => {
@@ -1016,7 +1094,7 @@ describe("a failed analysis run", () => {
         ),
       }),
     ]);
-    expect(await storedValue(decisionId)).toMatchObject({ version: 3 });
+    expect(await storedValue(decisionId)).toMatchObject({ version: 4 });
   });
 
   test("a retry runs again and its answer is stored", async () => {
@@ -1035,7 +1113,10 @@ describe("a failed analysis run", () => {
     expect(done.starts).toBe(0);
     expect(done.response).toMatchObject({
       status: "done",
-      analysis: { version: 3, holding: { text: "Dovolání se zamítá." } },
+      analysis: {
+        version: 4,
+        holding: { spans: [{ text: "Dovolání se zamítá." }] },
+      },
       // The finished analysis reaches the agent with what to tell the reader.
       aiDisclosure: { context: "caseLaw", text: AI_DISCLOSURES.caseLaw.text },
     });

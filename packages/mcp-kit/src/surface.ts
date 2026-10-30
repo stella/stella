@@ -19,10 +19,10 @@ import {
   closestNames,
   didYouMean,
   failure,
+  jsonSuccess,
   KIT_ERROR_CODES,
   KIT_INTERNAL_MESSAGE,
   MAX_TOOL_NAME_CHARS,
-  jsonSuccess,
   success,
   toCallResult,
   validationError,
@@ -30,8 +30,8 @@ import {
 import { assertToolInputSchema, readToolInput } from "./input";
 import { compactSchema } from "./schema";
 import type {
-  McpJsonSchema,
   ListedTool,
+  McpJsonSchema,
   ToolCallResult,
   ToolDefinition,
   ToolOutcome,

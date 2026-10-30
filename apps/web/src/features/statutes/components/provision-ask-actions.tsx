@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { ArrowUpIcon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon, ArrowUpIcon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";

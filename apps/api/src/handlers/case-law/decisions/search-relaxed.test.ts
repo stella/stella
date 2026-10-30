@@ -10,9 +10,9 @@ import { LIMITS } from "@/api/lib/limits";
 
 import {
   rankByTermCoverage,
+  readTermCoverage,
   relaxedFetchLimit,
   shouldRelaxCaseLawSearch,
-  readTermCoverage,
 } from "./search-relaxed";
 
 const ELIGIBLE = {

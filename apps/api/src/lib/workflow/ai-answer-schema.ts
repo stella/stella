@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 
 /**
@@ -15,10 +17,7 @@ import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 
 /** `null` is an explicit "the source does not state this", valid for every kind. */
 export type Answer =
-  | string
-  | string[]
-  | null
-  | { amount: number; currency: string | null };
+  string | string[] | null | { amount: number; currency: string | null };
 
 type AnswerKind = AiExtractablePropertyContent["type"];
 
@@ -135,7 +134,7 @@ export const answerSchemaForContent = (
           );
     case "date":
       return v.pipe(
-        v.nullable(v.pipe(v.string(), v.isoDate())),
+        v.nullable(apiDateSchema),
         v.description(ANSWER_CONTEXT.date.description),
         v.examples([...ANSWER_CONTEXT.date.examples]),
       );

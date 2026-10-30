@@ -7,6 +7,7 @@ import {
   DECISION_DATE_VERSION_BASIS,
   provisionVersionAsOf,
 } from "@stll/api-contract/provision-version-basis";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -15,18 +16,21 @@ import {
 import { locateAbbreviatedProvisionCitations } from "@stll/decision-reader/fallback-legal-anchors";
 import { provisionOccurrenceContexts } from "@stll/decision-reader/provision-anchors";
 import type {
-  ExternalDecisionProvisionAnchor,
   DecisionProvisionAnchor,
+  ExternalDecisionProvisionAnchor,
 } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
-import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
+import {
+  PROVISION_CITATION_GRAMMARS,
+  provisionAnchorSeparatorFor,
+} from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
 import type { ProvisionRow } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
-import { formatProvisionReference } from "@/features/case-law/provision-label";
+import { formatProvisionLabel } from "@/features/case-law/provision-label";
 import { resolveProvisionDocument } from "@/features/case-law/provision-placement";
 import {
   allowsLegacyProvisionFallback,
@@ -47,11 +51,7 @@ import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import {
-  useQueryView,
-  useQueryViewError,
-  useQueryViewErrors,
-} from "@/lib/use-query-view";
+import { useQueryViewError, useQueryViewErrors } from "@/lib/use-query-view";
 
 // The items a read settled with, or undefined while it has none to show.
 const itemsOf = <TData, TError>(
@@ -90,6 +90,14 @@ const useCitingProvisionCitationGrammar = (
         area: "case-law-provision-grammar",
         message: `[Case-law provision grammar] Undeclared jurisdiction ${undeclared}`,
       }),
+      {
+        fingerprintKey:
+          "useCitingProvisionCitationGrammar:ClientTelemetryError",
+        scope: {
+          type: "handler",
+          handlerId: "useCitingProvisionCitationGrammar:ClientTelemetryError",
+        },
+      },
     );
   }, [undeclared]);
   if (declared === null) {
@@ -173,8 +181,8 @@ export const useDecisionProvisionAnchors = ({
 }: UseDecisionProvisionAnchorsOptions) => {
   const renderPart = useProvisionPartRenderer();
   const dataQuery = useQuery(decisionProvisionsForLinkingOptions(decisionId));
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useDecisionProvisionAnchors:query");
   const data = itemsOf(dataView);
   const rows = optionalArray(data?.items);
   // The list carries the wording of the provisions it could read, keyed by
@@ -229,8 +237,8 @@ export const useDecisionProvisionAnchors = ({
     eli: work.eli,
   }));
   const resolvedQuery = useQuery(statutesResolveOptions(citedWorks));
-  const resolvedView = useQueryView(resolvedQuery);
-  useQueryViewError(resolvedView);
+  const resolvedView = queryView(resolvedQuery);
+  useQueryViewError(resolvedView, "useDecisionProvisionAnchors:query-2");
   const resolved = itemsOf(resolvedView);
   const statutesPending = resolvedQuery.isPending;
   const resolvedByCitedWork = statuteByCitedWork(resolved);
@@ -273,7 +281,7 @@ export const useDecisionProvisionAnchors = ({
     NonNullable<(typeof versions)[number]["data"]>
   >();
   const versionViews = versions.map((query) => queryView(query));
-  useQueryViewErrors(versionViews);
+  useQueryViewErrors(versionViews, "useDecisionProvisionAnchors:query-3");
   for (const [index, { key }] of versionedWorks.entries()) {
     const view = versionViews.at(index);
     if (view === undefined) {
@@ -373,13 +381,20 @@ export const useDecisionProvisionAnchors = ({
             court === null || caseNumber === null
               ? undefined
               : { court, caseNumber, appliedDocumentId: document.id },
-          anchorId: provisionHeadingAnchor(row.anchor),
+          anchorId: provisionHeadingAnchor(
+            row.anchor,
+            provisionAnchorSeparatorFor(row.jurisdiction),
+          ),
           highlightAnchorId: row.anchor,
           documentId: document.id,
           eli: row.workEli ?? panic("Placed provision has no work ELI"),
           jurisdiction: row.jurisdiction,
-          provisionLabel: formatProvisionReference(row, renderPart),
-          statuteTitle: document.title,
+          provisionLabel: formatProvisionLabel(
+            row.jurisdiction,
+            row,
+            renderPart,
+          ),
+          statuteTitle: statuteDisplayLabel(document).text,
           versionCount,
           versionValidFrom: document.versionValidFrom,
         },
@@ -426,16 +441,20 @@ export const useDecisionProvisionAnchors = ({
             court === null || caseNumber === null
               ? undefined
               : { court, caseNumber, appliedDocumentId: document.id },
-          anchorId: provisionHeadingAnchor(reference.anchor),
+          anchorId: provisionHeadingAnchor(
+            reference.anchor,
+            provisionAnchorSeparatorFor(reference.jurisdiction),
+          ),
           highlightAnchorId: reference.anchor,
           documentId: document.id,
           eli,
           jurisdiction: reference.jurisdiction,
-          provisionLabel: formatProvisionReference(
+          provisionLabel: formatProvisionLabel(
+            reference.jurisdiction,
             reference.reference,
             renderPart,
           ),
-          statuteTitle: document.title,
+          statuteTitle: statuteDisplayLabel(document).text,
           versionCount: versionsByWork.get(key)?.length ?? 1,
           versionValidFrom: document.versionValidFrom,
         },

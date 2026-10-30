@@ -6,16 +6,20 @@ import * as v from "valibot";
 import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
+import {
+  checkStructuredOutputBudget,
+  splitPropertiesForBudget,
+} from "@/api/lib/structured-output-budget";
 import {
   generateTanStackObjectForTask,
   resolveTanStackTextModel,
@@ -471,7 +475,9 @@ const generateDecisionChunk = async ({
     analytics: TanStackAIAnalyticsCallbacks | undefined,
   ): TanStackAIAnalyticsCallbacks => ({
     usageMetering: analytics?.usageMetering,
-    captureError: analytics?.captureError ?? captureError,
+    captureError:
+      analytics?.captureError ??
+      createErrorCapture(handlerErrorContext("workflow.generateDecisionChunk")),
     forModel: (requestModel) => withUsage(analytics?.forModel(requestModel)),
     middleware: {
       ...analytics?.middleware,
@@ -524,16 +530,33 @@ const generateDecisions = async ({
       }),
   );
   abortSignal.throwIfAborted();
+  const buildSchema = (entries: readonly [string, SystemOneQuestion][]) =>
+    structuredOutputWireJsonSchema({
+      mock: isMockTextAdapter(model.adapter),
+      provider: model.provider,
+      outputSchema: generativeDecisionsSchema(Object.fromEntries(entries)),
+    });
+  // A question over the budget on its own fits no chunk. It fails alone, so
+  // the questions that do fit are still asked.
+  const fitting: [string, SystemOneQuestion][] = [];
+  const failedQuestionIds: string[] = [];
+  for (const entry of Object.entries(questions)) {
+    const alone = checkStructuredOutputBudget({
+      provider: model.provider,
+      modelId: model.modelId,
+      schema: buildSchema([entry]),
+    });
+    if (Result.isError(alone)) {
+      failedQuestionIds.push(entry[0]);
+      continue;
+    }
+    fitting.push(entry);
+  }
   const planned = splitPropertiesForBudget({
     provider: model.provider,
     modelId: model.modelId,
-    properties: Object.entries(questions),
-    buildSchema: (entries) =>
-      structuredOutputWireJsonSchema({
-        mock: isMockTextAdapter(model.adapter),
-        provider: model.provider,
-        outputSchema: generativeDecisionsSchema(Object.fromEntries(entries)),
-      }),
+    properties: fitting,
+    buildSchema,
   });
   if (Result.isError(planned)) {
     return Result.err(planned.error);
@@ -541,7 +564,6 @@ const generateDecisions = async ({
   const answers: v.InferOutput<
     ReturnType<typeof generativeDecisionsSchema>
   >["answers"] = [];
-  const failedQuestionIds: string[] = [];
   const calls: DecisionGenerationCall[] = [];
   let usage: { inputTokens: number; outputTokens: number } | undefined;
   for (const chunk of planned.value) {

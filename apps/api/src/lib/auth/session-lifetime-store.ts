@@ -6,11 +6,13 @@ import { randomBytes } from "node:crypto";
 import { session } from "@/api/db/auth-schema";
 import { revokeUserSessionById } from "@/api/lib/auth-artifacts";
 import {
+  isPendingRotation,
   SESSION_ABSOLUTE_AGE_MS,
-  SESSION_IDLE_AGE_MS,
-  SESSION_PRIOR_TOKEN_GRACE_MS,
+  SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS,
+  SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
 import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 
 const SESSION_ACTIVITY_WRITE_INTERVAL_MS = 5 * 60 * 1000;
@@ -38,18 +40,11 @@ type SessionLifetimeDatabase = {
 type DatabaseSessionLifetimeOptions = {
   expiresIn: number;
   updateAge: number;
-  rotationEnabled?: boolean;
-  capEnabled?: boolean;
 };
 
 export const createDatabaseSessionLifetimeStore = (
   db: SessionLifetimeDatabase,
-  {
-    expiresIn,
-    updateAge,
-    rotationEnabled = false,
-    capEnabled = false,
-  }: DatabaseSessionLifetimeOptions,
+  { expiresIn, updateAge }: DatabaseSessionLifetimeOptions,
 ): SessionLifetimeStore => {
   type CredentialPredicateOptions = {
     token: string;
@@ -69,16 +64,6 @@ export const createDatabaseSessionLifetimeStore = (
       ),
     );
 
-  // A startup expiration ends at lastSeenAt; earlier requests cannot reopen it.
-  const liveSessionPredicate = (now: Date, table = session) =>
-    and(
-      sql`${table.expiresAt} > ${now}::timestamptz`,
-      or(
-        isNull(table.lastSeenAt),
-        sql`${table.expiresAt} > ${table.lastSeenAt}::timestamptz`,
-      ),
-    );
-
   const findCurrentSession = async (token: string, now: Date) =>
     (await db.query.session.findFirst({
       where: {
@@ -88,7 +73,7 @@ export const createDatabaseSessionLifetimeStore = (
     })) ?? null;
 
   return {
-    observe: async ({ token, now, boundary }) => {
+    observe: async ({ token, now, presentedToken }) => {
       const current = await findCurrentSession(token, now);
       if (!current) {
         return null;
@@ -96,31 +81,46 @@ export const createDatabaseSessionLifetimeStore = (
       const staleBefore = new Date(
         now.getTime() - SESSION_ACTIVITY_WRITE_INTERVAL_MS,
       );
-      if (current.lastSeenAt !== null && current.lastSeenAt > staleBefore) {
+      // Internal SDK calls can use the resolved token before the client has it.
+      const confirmsRotation =
+        current.token === presentedToken &&
+        isPendingRotation(current.priorTokenExpiresAt, now);
+      const confirmedGraceEnd = new Date(
+        now.getTime() + SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS,
+      );
+      if (
+        !confirmsRotation &&
+        current.lastSeenAt !== null &&
+        current.lastSeenAt > staleBefore
+      ) {
         return current;
       }
       const staleActivity = or(
         isNull(session.lastSeenAt),
         sql`${session.lastSeenAt} <= ${staleBefore}::timestamptz`,
       );
-      const expiredAtBoundary =
-        capEnabled && boundary === "startup"
-          ? sql<boolean>`${session.createdAt} <= ${new Date(now.getTime() - SESSION_ABSOLUTE_AGE_MS)}::timestamptz
-              AND ${session.lastSeenAt} <= ${new Date(now.getTime() - SESSION_IDLE_AGE_MS)}::timestamptz`
-          : sql<boolean>`false`;
       // Recheck activity under the row lock so concurrent requests write once.
       const rows = await db
         .update(session)
         .set({
+          ...(confirmsRotation
+            ? {
+                priorTokenExpiresAt: sql`LEAST(${session.priorTokenExpiresAt}, ${confirmedGraceEnd}::timestamptz)`,
+              }
+            : {}),
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
-          expiresAt: sql`CASE WHEN ${expiredAtBoundary} THEN ${now}::timestamptz ELSE ${session.expiresAt} END`,
           updatedAt: session.updatedAt,
         })
         .where(
           and(
             credentialPredicate({ token, now }),
             liveSessionPredicate(now),
-            staleActivity,
+            confirmsRotation
+              ? and(
+                  eq(session.token, token),
+                  sql`${session.priorTokenExpiresAt} > ${confirmedGraceEnd}::timestamptz`,
+                )
+              : staleActivity,
           ),
         )
         .returning();
@@ -130,28 +130,29 @@ export const createDatabaseSessionLifetimeStore = (
       }
       return await findCurrentSession(token, now);
     },
-    refresh: async ({ token, now, expiresAt, credentialMode }) => {
+    refresh: async ({ token, now, expiresAt }) => {
+      const rotationDueAt = new Date(now.getTime() - updateAge * 1000);
+      const rotatedToken = randomBytes(32).toHex();
       const rows = await db
         .update(session)
         .set({
-          ...(rotationEnabled && credentialMode === "cookie"
-            ? {
-                token: randomBytes(32).toString("hex"),
-                priorTokenHash: hashSessionToken(token),
-                priorTokenExpiresAt: new Date(
-                  now.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS,
-                ),
-              }
-            : {}),
-          expiresAt,
-          updatedAt: now,
+          token: sql`CASE WHEN ${session.updatedAt} <= ${rotationDueAt}::timestamptz THEN ${rotatedToken} ELSE ${session.token} END`,
+          priorTokenHash: sql`CASE WHEN ${session.updatedAt} <= ${rotationDueAt}::timestamptz THEN ${hashSessionToken(token)} ELSE ${session.priorTokenHash} END`,
+          priorTokenExpiresAt: sql`CASE WHEN ${session.updatedAt} <= ${rotationDueAt}::timestamptz THEN ${new Date(now.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS)}::timestamptz ELSE ${session.priorTokenExpiresAt} END`,
+          // A refresh never reaches past the absolute lifetime or a text
+          // handoff's absolute deadline (LEAST ignores a null deadline).
+          expiresAt: sql`LEAST(${expiresAt}::timestamptz, ${session.createdAt} + ${`${SESSION_ABSOLUTE_AGE_MS} milliseconds`}::interval, ${session.handoffAbsoluteExpiresAt})`,
+          updatedAt: sql`CASE WHEN ${session.updatedAt} <= ${rotationDueAt}::timestamptz THEN ${now}::timestamptz ELSE ${session.updatedAt} END`,
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
         })
         .where(
           and(
             eq(session.token, token),
             eq(session.refreshMode, "automatic"),
+            sql`${session.expiresAt} < ${session.createdAt}::timestamptz + ${`${SESSION_ABSOLUTE_AGE_MS} milliseconds`}::interval`,
             liveSessionPredicate(now),
+            // Due inside the refresh window. Rotation remains limited to once per
+            // update interval, but expiry extension cannot wait for that throttle.
             sql`${session.expiresAt} <= ${new Date(now.getTime() + (expiresIn - updateAge) * 1000)}::timestamptz`,
           ),
         )

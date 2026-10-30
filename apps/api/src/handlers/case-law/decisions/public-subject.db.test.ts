@@ -2,7 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -18,6 +18,8 @@ import {
 } from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -32,11 +34,14 @@ import {
 } from "@/api/lib/case-law/decision-absorption";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -160,7 +165,11 @@ beforeAll(
   { timeout: 120_000 },
 );
 
+/** One server for the file, started on the first request once the database is up. */
+let server: TestServer | undefined;
+
 afterAll(async () => {
+  await server?.stop();
   await client.close();
 });
 
@@ -172,7 +181,7 @@ const app = () => {
       cache: { kind: "none" },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
-      params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+      params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
     } satisfies PublicHandlerConfig,
     caseLawDb,
     locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
@@ -184,10 +193,10 @@ const app = () => {
       cache: { kind: "none" },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
-      params: t.Object({ slug: t.String() }),
-      query: t.Object({
-        country: t.String(),
-        language: t.Optional(t.String()),
+      params: v.object({ slug: v.string() }),
+      query: v.object({
+        country: v.string(),
+        language: v.optional(v.string()),
       }),
     } satisfies PublicHandlerConfig,
     caseLawDb,
@@ -199,18 +208,20 @@ const app = () => {
     }),
     read: async (subject) => await echoSubject(subject),
   });
-  return new Elysia()
-    .get("/d/:decisionId", byId.handler, { params: byId.config.params })
-    .get("/s/:slug", bySlug.handler, {
-      params: bySlug.config.params,
-      query: bySlug.config.query,
-    });
+  return createHttpApp({
+    routes: routes({
+      "/d/:decisionId": { GET: byId },
+      "/s/:slug": { GET: bySlug },
+    }),
+    middleware: [errorBoundary],
+  });
 };
 
 const get = async (path: string) => {
   opened = [];
   handles = [];
-  return await app().handle(new Request(`http://localhost${path}`));
+  server ??= serveForTest(app());
+  return await server.fetch(new Request(`http://localhost${path}`));
 };
 
 test(

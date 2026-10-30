@@ -5,18 +5,18 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
 import {
-  SEARCH_TOTAL_NOT_COUNTED,
-  FACET_COUNT_TYPE,
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
+  FACET_COUNT_TYPE,
+  SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   caseLawDecisions,
-  caseLawSources,
   caseLawSearchDocuments,
+  caseLawSources,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { caseLawSearchPlan } from "@/api/handlers/case-law/decisions/search";

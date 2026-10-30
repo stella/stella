@@ -11,9 +11,9 @@ import {
   caseLawIndexGroupAt,
 } from "@/api/lib/legal-search/case-law-index-groups";
 import {
+  caseLawCorpusGenerationOrder,
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_ID_MAX_LENGTH,
-  caseLawCorpusGenerationOrder,
   corpusIndexGeneration,
   corpusIndexId,
   corpusIndexIdsFor,

@@ -53,14 +53,17 @@
  */
 
 import { panic, Result } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { linkOwnNativeClientResources } from "../lib/auth/oauth-own-client-links";
 import { assertBetterAuthOAuthPolicyCensus } from "../lib/db/better-auth-oauth-policy-census";
 import { executedRows } from "../lib/db/executed-rows";
 import { isRecord } from "../lib/type-guards";
 import {
   buildBetterAuthOAuthResources,
+  buildEveryClientOAuthResources,
+  isEveryClientOAuthResource,
   releasedOAuthResourceNames,
 } from "../mcp/resource-policy-contract";
 import {
@@ -70,6 +73,7 @@ import {
 import type { BetterAuthExpectedOAuthResource } from "../scripts/better-auth-migration-audit.logic";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
+  CodeOwnedOnlineStep,
   OnlineMigrationConnection,
   OnlineRepair,
   OnlineRepairCompletion,
@@ -297,9 +301,13 @@ const reconcileStoredResources = async (
   const moves = changes.flatMap(({ identifier: from, removed }) =>
     removed.flatMap((scope) =>
       expectedResources
+        // A consent only ever gains an MCP audience: the API resource belongs
+        // to stella's own apps alone, whatever scopes it shares.
         .filter(
-          ({ allowedScopes, identifier }) =>
-            identifier !== from && allowedScopes.includes(scope),
+          (resource) =>
+            resource.identifier !== from &&
+            isEveryClientOAuthResource(resource) &&
+            resource.allowedScopes.includes(scope),
         )
         .map(({ identifier: to }) => ({ from, scope, to })),
     ),
@@ -372,11 +380,13 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
     const linked = await backfillOAuthClients(
       transaction,
       CLIENT_PAGE_SIZE,
-      expectedResources,
+      buildEveryClientOAuthResources(origin),
     );
     if (Result.isError(linked)) {
       throw linked.error;
     }
+
+    await linkOwnNativeClientResources(transaction, origin);
 
     await connection.execute("COMMIT");
   } catch (error: unknown) {
@@ -417,10 +427,14 @@ const readCompletion = async (
 // Row work in one transaction under its own LOCAL budgets: no table lock to
 // gate, so it never defers.
 export const BETTER_AUTH_OAUTH_RESOURCE_REPAIR = {
+  introducedBy: {
+    type: "code",
+    owner: "src/db/better-auth-oauth-resource-repair.ts",
+  },
   name: REPAIR_NAME,
   readCompletion,
   repair: async (connection: OnlineMigrationConnection) => {
     await repair(connection);
     return { type: "complete" } as const;
   },
-} satisfies OnlineRepair;
+} satisfies OnlineRepair & { introducedBy: CodeOwnedOnlineStep };

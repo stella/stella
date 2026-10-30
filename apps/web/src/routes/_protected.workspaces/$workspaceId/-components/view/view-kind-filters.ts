@@ -68,8 +68,7 @@ export const admitsOnlyTaskKind = (
  * by the fold itself before `group` below is called.
  */
 type AdmittedKinds =
-  | { type: "unrestricted" }
-  | { type: "kinds"; kinds: ReadonlySet<EntityKind> };
+  { type: "unrestricted" } | { type: "kinds"; kinds: ReadonlySet<EntityKind> };
 
 const UNRESTRICTED = {
   type: "unrestricted",

@@ -1,11 +1,5 @@
 type Severity =
-  | "info"
-  | "low"
-  | "medium"
-  | "high"
-  | "critical"
-  | "suspicious"
-  | "malicious";
+  "info" | "low" | "medium" | "high" | "critical" | "suspicious" | "malicious";
 
 export type Match = {
   rule: string;

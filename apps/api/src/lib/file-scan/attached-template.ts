@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
 import {
@@ -8,7 +8,11 @@ import {
 } from "@stll/docx-utils";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
-import type { Match, Scanner, ScanContext } from "@/api/lib/file-scan/scanner";
+import {
+  scanMediaType,
+  scanMediaTypeSet,
+} from "@/api/lib/file-scan/media-type";
+import type { Match, ScanContext, Scanner } from "@/api/lib/file-scan/scanner";
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
 
 const MAX_ARCHIVE_ENTRIES = 1000;
@@ -17,8 +21,8 @@ const MAX_RELATIONSHIPS_TOTAL_BYTES = 8 * 1024 * 1024;
 const WORD_OPENXML_FORMATS = Object.entries(OFFICE_ARCHIVE_FORMATS).filter(
   ([, format]) => format.family === "word",
 );
-const WORD_OPENXML_MIME_TYPES = new Set(
-  WORD_OPENXML_FORMATS.map(([, format]) => format.mimeType.toLowerCase()),
+const WORD_OPENXML_MIME_TYPES = scanMediaTypeSet(
+  WORD_OPENXML_FORMATS.map(([, format]) => format.mimeType),
 );
 const WORD_OPENXML_EXTENSIONS = WORD_OPENXML_FORMATS.map(
   ([extension]) => `.${extension}`,
@@ -44,16 +48,13 @@ const RELATIONSHIPS_INSPECTION_FAILED: Match = {
 };
 
 type RelationshipEntryRead =
-  | { type: "ok"; xml: string }
-  | { type: "too-large" }
-  | { type: "unreadable" };
+  { type: "ok"; xml: string } | { type: "too-large" } | { type: "unreadable" };
 
 const isWordOpenXmlUpload = (context: ScanContext | undefined): boolean => {
   if (context === undefined) {
     return false;
   }
-  const mimeType = context.mimeType.split(";", 1).at(0)?.trim().toLowerCase();
-  if (mimeType !== undefined && WORD_OPENXML_MIME_TYPES.has(mimeType)) {
+  if (WORD_OPENXML_MIME_TYPES.has(scanMediaType(context.mimeType))) {
     return true;
   }
   const fileName = context.filename.toLowerCase();

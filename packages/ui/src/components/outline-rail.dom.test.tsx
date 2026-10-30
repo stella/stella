@@ -4,7 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 
-import { OutlineRail, type OutlineItem } from "./outline-rail";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
+import { type OutlineItem, OutlineRail } from "./outline-rail";
 
 const items = [
   { id: "introduction", label: "Introduction", level: 1 },
@@ -187,6 +189,47 @@ test("leaving the rail from inside the panel closes the popover", async () => {
   }
 });
 
+test("the tick strip opens the panel only when the pointer rests on it", async () => {
+  const rendered = await renderOutline();
+  const outside = document.createElement("div");
+  document.body.append(outside);
+  jest.useFakeTimers();
+  try {
+    const strip = rendered.container.querySelector<HTMLElement>(
+      "[data-outline-ticks]",
+    );
+    const tick = strip?.querySelector<HTMLButtonElement>("button");
+    const leave = () =>
+      strip?.dispatchEvent(
+        new MouseEvent("mouseout", { bubbles: true, relatedTarget: outside }),
+      );
+
+    // Crossing the strip on the way elsewhere opens nothing, then or later.
+    await hover(strip);
+    await act(async () => {
+      jest.advanceTimersByTime(60);
+      leave();
+      jest.advanceTimersByTime(500);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
+
+    // Resting on it does.
+    await hover(strip);
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("true");
+  } finally {
+    restoreRealTimers();
+    outside.remove();
+    await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
 test("focus inside a hover-opened panel holds it open after the pointer leaves", async () => {
   const rendered = await renderOutline();
   const outside = document.createElement("div");
@@ -210,7 +253,7 @@ test("focus inside a hover-opened panel holds it open after the pointer leaves",
         jest.advanceTimersByTime(200);
       });
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
     expect(panel?.hasAttribute("inert")).toBe(false);
@@ -242,5 +285,49 @@ test("Escape from a panel opened without a focused tick lands on a tick", async 
     expect(ticks[0]?.getAttribute("aria-expanded")).toBe("false");
   } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
+test("a branch the reader closed stays closed when the items are rebuilt", async () => {
+  const nested = [
+    { id: "terms", label: "Terms", level: 0, meta: "1" },
+    { id: "waiver", label: "Waiver", level: 1, meta: "2" },
+    { id: "notices", label: "Notices", level: 0, meta: "3" },
+  ] satisfies OutlineItem[];
+  const container = document.createElement("div");
+  const scrollContainer = document.createElement("div");
+  document.body.append(container, scrollContainer);
+  const root = createRoot(container);
+  const renderItems = async (next: OutlineItem[]) =>
+    await act(async () => {
+      root.render(
+        <OutlineRail
+          items={next}
+          onJump={() => undefined}
+          presentation="panel"
+          resolvePct={() => 50}
+          scrollContainerRef={{ current: scrollContainer }}
+        />,
+      );
+    });
+  try {
+    await renderItems(nested);
+    const collapse = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse"]',
+    );
+    await act(async () => collapse?.click());
+    expect(container.textContent).not.toContain("Waiver");
+
+    // A relayout moves a later heading to another page.
+    await renderItems(
+      nested.map((item) =>
+        item.id === "notices" ? { ...item, meta: "4" } : { ...item },
+      ),
+    );
+
+    expect(container.textContent).not.toContain("Waiver");
+    expect(container.textContent).toContain("4");
+  } finally {
+    await cleanup(root, container, scrollContainer);
   }
 });

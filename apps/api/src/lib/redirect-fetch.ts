@@ -5,7 +5,7 @@
  * instead of trusting the chain blindly.
  */
 
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 export class RedirectChainError extends TaggedError("RedirectChainError")<{
   code:

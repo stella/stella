@@ -3,8 +3,8 @@ import { panic, Result } from "better-result";
 
 import {
   compactChatMessagesForModel,
-  compactModelMessagesForModel,
   COMPACTION_SUMMARY_MESSAGE_ID,
+  compactModelMessagesForModel,
   planChatCompaction,
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
@@ -90,7 +90,6 @@ const seamDriver = (
 export const SEAM_DRIVERS = {
   "require-complete": seamDriver("require-complete"),
   "allow-output-ceiling": seamDriver("allow-output-ceiling"),
-  "allow-incomplete": seamDriver("allow-incomplete"),
 } as const satisfies Record<TanStackTextFinishPolicy, TextCallSiteDriver>;
 
 // --- Chat compaction --------------------------------------------------------

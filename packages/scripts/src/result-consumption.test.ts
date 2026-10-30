@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { CODE_CHECK_LEGS } from "./code-quality-partition";
 import {
@@ -10,6 +9,7 @@ import {
   partitionResultProjects,
   scanResultConsumption,
 } from "./result-consumption";
+import { createProgram } from "./typescript-program";
 
 const createFixtureDirectory = (prefix: string) => {
   const root = path.join(import.meta.dir, "../.cache/result-consumption");
@@ -17,38 +17,39 @@ const createFixtureDirectory = (prefix: string) => {
   return mkdtempSync(path.join(root, prefix));
 };
 
-const createFixtureProgram = (
+const createFixtureProgram = async (
   source: string,
   relativeFile = "packages/example/src/fixture.ts",
-): {
-  readonly directory: string;
-  readonly program: ts.Program;
-} => {
+) => {
   const directory = createFixtureDirectory("result-test-");
   const file = path.join(directory, relativeFile);
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, source);
-
-  return {
-    directory,
-    program: ts.createProgram({
-      rootNames: [file],
-      options: {
-        module: ts.ModuleKind.Preserve,
-        moduleResolution: ts.ModuleResolutionKind.Bundler,
-        skipLibCheck: true,
-        strict: true,
-        target: ts.ScriptTarget.ESNext,
-      },
-    }),
-  };
+  const opened = await createProgram({
+    rootNames: [file],
+    compilerOptions: {
+      module: "preserve",
+      moduleResolution: "bundler",
+      skipLibCheck: true,
+      strict: true,
+      target: "esnext",
+    },
+  });
+  return { directory, opened };
 };
 
-const scanFixture = (source: string, relativeFile?: string) => {
-  const { directory, program } = createFixtureProgram(source, relativeFile);
+const scanFixture = async (source: string, relativeFile?: string) => {
+  const { directory, opened } = await createFixtureProgram(
+    source,
+    relativeFile,
+  );
   try {
-    return scanResultConsumption({ program, repositoryRoot: directory });
+    return await scanResultConsumption({
+      ...opened,
+      repositoryRoot: directory,
+    });
   } finally {
+    await opened.close();
     rmSync(directory, { force: true, recursive: true });
   }
 };
@@ -152,7 +153,7 @@ describe("Result consumption guard", () => {
     expect(Object.hasOwn(parseResultConsumptionArgs([]), "leg")).toBe(false);
   });
 
-  test("partition legs preserve all changed-file diagnostics exactly once", () => {
+  test("partition legs preserve all changed-file diagnostics exactly once", async () => {
     const directory = createFixtureDirectory("result-test-");
     const relativeFiles = [
       "apps/api/src/changed.ts",
@@ -161,6 +162,7 @@ describe("Result consumption guard", () => {
       "packages/new-workspace/src/unchanged.ts",
     ];
     const files = relativeFiles.map((file) => path.join(directory, file));
+    let opened: Awaited<ReturnType<typeof createProgram>> | undefined;
     try {
       for (const file of files) {
         mkdirSync(path.dirname(file), { recursive: true });
@@ -173,14 +175,14 @@ describe("Result consumption guard", () => {
         path.join(directory, "apps/api/src/changed.ts"),
         'import "../../../packages/new-workspace/src/unchanged";\nimport { Result } from "better-result";\nResult.ok(1);\n',
       );
-      const program = ts.createProgram({
+      opened = await createProgram({
         rootNames: files.slice(0, 3),
-        options: {
-          module: ts.ModuleKind.Preserve,
-          moduleResolution: ts.ModuleResolutionKind.Bundler,
+        compilerOptions: {
+          module: "preserve",
+          moduleResolution: "bundler",
           skipLibCheck: true,
           strict: true,
-          target: ts.ScriptTarget.ESNext,
+          target: "esnext",
         },
       });
       const projects = new Map(
@@ -196,30 +198,33 @@ describe("Result consumption guard", () => {
             [file],
           ]),
       );
-      const scan = (sourceFiles: ReadonlySet<string>) =>
-        scanResultConsumption({
-          program,
+      const activeProgram = opened;
+      const scan = async (sourceFiles: ReadonlySet<string>) =>
+        await scanResultConsumption({
+          ...activeProgram,
           repositoryRoot: directory,
           sourceFiles,
         });
-      const unsplit = scan(new Set(files.slice(0, 3)));
+      const unsplit = await scan(new Set(files.slice(0, 3)));
       expect(unsplit.length).toBe(3);
-      expect(scan(new Set(files)).length).toBe(4);
-      const partitioned = CODE_CHECK_LEGS.flatMap((leg) =>
-        [
-          ...partitionResultProjects({
-            projects,
-            repositoryRoot: directory,
-            leg,
-          }).values(),
-        ].flatMap((rootNames) => scan(new Set(rootNames))),
-      );
+      expect((await scan(new Set(files))).length).toBe(4);
+      const partitioned = [];
+      for (const leg of CODE_CHECK_LEGS) {
+        for (const rootNames of partitionResultProjects({
+          projects,
+          repositoryRoot: directory,
+          leg,
+        }).values()) {
+          partitioned.push(...(await scan(new Set(rootNames))));
+        }
+      }
       const byFile = (
         left: (typeof unsplit)[number],
         right: (typeof unsplit)[number],
       ) => left.file.localeCompare(right.file);
       expect(partitioned.toSorted(byFile)).toEqual(unsplit.toSorted(byFile));
     } finally {
+      await opened?.close();
       rmSync(directory, { force: true, recursive: true });
     }
   });
@@ -297,7 +302,7 @@ describe("Result consumption guard", () => {
     }
   });
 
-  test("detects discarded Results through aliases, wrappers, and chains", () => {
+  test("detects discarded Results through aliases, wrappers, and chains", async () => {
     const source = `
       import { Result, type Result as BetterResult } from "better-result";
 
@@ -319,7 +324,7 @@ describe("Result consumption guard", () => {
       await Promise.all([asyncWrapper(), Promise.resolve(parse())]);
       await Promise.allSettled([asyncWrapper(), Promise.resolve(parse())]);
     `;
-    const diagnostics = scanFixture(source);
+    const diagnostics = await scanFixture(source);
 
     const expectedProducers = [
       "parseAlias(); // discarded alias invocation",
@@ -337,7 +342,7 @@ describe("Result consumption guard", () => {
     );
   });
 
-  test("detects Results nested in discarded statement containers", () => {
+  test("detects Results nested in discarded statement containers", async () => {
     const source = `
       import { Result, type Result as BetterResult } from "better-result";
 
@@ -386,7 +391,7 @@ describe("Result consumption guard", () => {
       consume(retainedStringSelection);
       consume(dynamicAtSelection);
     `;
-    const diagnostics = scanFixture(source);
+    const diagnostics = await scanFixture(source);
 
     const expectedProducers = [
       "parse(), nested: { result: asyncWrapper() }, list: [parse()] });",
@@ -426,8 +431,8 @@ describe("Result consumption guard", () => {
     "packages/example/scripts/fixture.ts",
     "apps/example/src/fixture.ts",
     "packages/example/src/fixture.ts",
-  ])("scans production path %s", (relativeFile) => {
-    const diagnostics = scanFixture(
+  ])("scans production path %s", async (relativeFile) => {
+    const diagnostics = await scanFixture(
       `
         import { Result, type Result as BetterResult } from "better-result";
         declare const parse: () => BetterResult<number, string>;
@@ -446,8 +451,8 @@ describe("Result consumption guard", () => {
     "apps/example/scripts/fixture.gen.ts",
     "apps/example/scripts/node_modules/library/fixture.ts",
     "apps/example/src/__tests__/fixture.ts",
-  ])("excludes non-production path %s", (relativeFile) => {
-    const diagnostics = scanFixture(
+  ])("excludes non-production path %s", async (relativeFile) => {
+    const diagnostics = await scanFixture(
       `
         import { Result, type Result as BetterResult } from "better-result";
         declare const parse: () => BetterResult<number, string>;
@@ -460,8 +465,8 @@ describe("Result consumption guard", () => {
     expect(diagnostics).toEqual([]);
   });
 
-  test("ignores callee-name and structural Result lookalikes", () => {
-    const diagnostics = scanFixture(`
+  test("ignores callee-name and structural Result lookalikes", async () => {
+    const diagnostics = await scanFixture(`
       const Result = {
         gen: (operation: () => unknown): unknown => operation(),
       };
@@ -511,8 +516,8 @@ describe("Result consumption guard", () => {
     expect(diagnostics).toEqual([]);
   });
 
-  test("requires Better Result provenance and discriminants together", () => {
-    const diagnostics = scanFixture(`
+  test("requires Better Result provenance and discriminants together", async () => {
+    const diagnostics = await scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";
 
       type StatusOnly = Pick<BetterResult<number, string>, "status">;
@@ -527,8 +532,8 @@ describe("Result consumption guard", () => {
     expect(diagnostics.map(({ rule }) => rule)).toEqual(["unused-result"]);
   });
 
-  test("detects discarded awaited and nullable Results", () => {
-    const diagnostics = scanFixture(`
+  test("detects discarded awaited and nullable Results", async () => {
+    const diagnostics = await scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";
 
       const load = async (): Promise<BetterResult<number, string>> => Result.ok(1);
@@ -547,8 +552,8 @@ describe("Result consumption guard", () => {
     ]);
   });
 
-  test("accepts Results that are returned, assigned, or matched", () => {
-    const diagnostics = scanFixture(`
+  test("accepts Results that are returned, assigned, or matched", async () => {
+    const diagnostics = await scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";
 
       const parse = (): BetterResult<number, string> => Result.ok(1);
@@ -575,8 +580,8 @@ describe("Result consumption guard", () => {
     expect(diagnostics).toEqual([]);
   });
 
-  test("requires collection callbacks to consume their Result element", () => {
-    const diagnostics = scanFixture(`
+  test("requires collection callbacks to consume their Result element", async () => {
+    const diagnostics = await scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";
 
       const parse = (): BetterResult<number, string> => Result.ok(1);
@@ -604,7 +609,7 @@ describe("Result consumption guard", () => {
     ]);
   });
 
-  test("does not treat reducers as proof that every Result is consumed", () => {
+  test("does not treat reducers as proof that every Result is consumed", async () => {
     const source = `
       import { Result, type Result as BetterResult } from "better-result";
 
@@ -619,7 +624,7 @@ describe("Result consumption guard", () => {
       held.match({ ok: () => undefined, err: () => undefined });
     `;
 
-    const diagnostics = scanFixture(source);
+    const diagnostics = await scanFixture(source);
 
     expect(diagnosticLocations(diagnostics)).toEqual(
       sourceLocations(source, [
@@ -629,7 +634,7 @@ describe("Result consumption guard", () => {
     );
   });
 
-  test("preserves Results selected through static object spreads", () => {
+  test("preserves Results selected through static object spreads", async () => {
     const source = `
       import { Result, type Result as BetterResult } from "better-result";
 
@@ -641,15 +646,15 @@ describe("Result consumption guard", () => {
       held.match({ ok: () => undefined, err: () => undefined });
     `;
 
-    const diagnostics = scanFixture(source);
+    const diagnostics = await scanFixture(source);
 
     expect(diagnosticLocations(diagnostics)).toEqual(
       sourceLocations(source, ["parseDiscarded()"]),
     );
   });
 
-  test("requires invariant messages only on better-result unwrap calls", () => {
-    const diagnostics = scanFixture(`
+  test("requires invariant messages only on better-result unwrap calls", async () => {
+    const diagnostics = await scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";
 
       const parse = (): BetterResult<number, string> => Result.ok(1);

@@ -90,7 +90,10 @@ describe("migration alias inventory", () => {
       );
       if (typeof repair !== "string") {
         for (const index of repair.indexes) {
-          expect(REWRITTEN_MIGRATION_INDEXES).toContainEqual(index);
+          expect(REWRITTEN_MIGRATION_INDEXES).toContainEqual({
+            ...index,
+            introducedBy: fileName,
+          });
         }
       }
     }
@@ -123,7 +126,9 @@ describe("migration alias inventory", () => {
         ]),
       ).toThrow("Conflicting migration alias index records_record_id_idx");
     }
-    expect(deriveMigrationAliasHistory([first, next]).indexes).toEqual([index]);
+    expect(deriveMigrationAliasHistory([first, next]).indexes).toEqual([
+      { ...index, introducedBy: first.fileName },
+    ]);
   });
 
   test("all bundled SQL files are UTF-8 without a byte-order mark", async () => {

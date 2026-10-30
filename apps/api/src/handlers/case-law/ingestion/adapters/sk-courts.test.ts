@@ -20,6 +20,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
  */
 import {
   decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -28,8 +29,9 @@ import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/p
 import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   assembleSkCourtsDecision,
-  skCourtsAdapter,
+  reparseSkCourtsStoredMetadata,
   SK_COURTS_SOURCE_FIELD_PATHS,
+  skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
@@ -53,6 +55,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { deferredSkDocumentRawFixture } from "@/api/tests/helpers/sk-document-raw-storage";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
@@ -438,7 +441,7 @@ const reparse = (
   stored: StoredDecision,
   caseNumber: string,
 ): StoredRawReparseOutcome => {
-  const outcome = skCourtsAdapter.reparseStoredRaw?.({
+  const outcome = reparseSkCourtsStoredMetadata({
     raw: new TextEncoder().encode(stored.sourceRaw),
     contentType: stored.sourceRawContentType,
     caseNumber,
@@ -452,12 +455,7 @@ const reparse = (
     documentUrl: null,
     metadata: {},
   });
-  if (outcome === undefined) {
-    return panic("sk-courts declares no reparseStoredRaw");
-  }
-  return outcome instanceof Promise
-    ? panic("sk-courts reparseStoredRaw must answer without I/O")
-    : outcome;
+  return outcome;
 };
 
 describe("a stored record reaches the targets the inventory declares", () => {
@@ -472,6 +470,39 @@ describe("a stored record reaches the targets the inventory declares", () => {
     const outcome = reparse(stored, TRANSFERRED_FILE_DOCKET);
 
     expect(outcome.type).toBe("parsed");
+  });
+
+  test("capturing a legacy wrapper preserves its metadata replay fixed point", async () => {
+    const original = await storedDecision(TRANSFERRED_FILE_ID);
+    expect(original.sourceRawContentType).toBe("application/json");
+    expect(decodeSourceRawEnvelope(original.sourceRaw)).toBeNull();
+    const expected = reparse(original, TRANSFERRED_FILE_DOCKET);
+    expect(expected.type).toBe("parsed");
+    const captured = await deferredSkDocumentRawFixture(original.sourceRaw);
+    expect(decodeSourceRawEnvelope(captured.raw)?.["legacy"]).toBe(
+      original.sourceRaw,
+    );
+    expect(Object.keys(decodeSourceRawEnvelopeObjects(captured.raw))).toEqual([
+      "document-pdf",
+    ]);
+    const publisherRead = spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(async () =>
+        panic("Stored metadata replay must not fetch the publisher"),
+      ),
+    );
+    try {
+      expect(
+        reparse(
+          {
+            sourceRaw: captured.raw,
+            sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          },
+          TRANSFERRED_FILE_DOCKET,
+        ),
+      ).toEqual(expected);
+    } finally {
+      publisherRead.mockRestore();
+    }
   });
 
   test("the three fields the adapter used to discard land in metadata", async () => {
@@ -576,7 +607,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
 });
 
 describe("the census and the registry agree about this adapter", () => {
-  test("its recorded surfaces match a complete decision envelope", () => {
+  test("its recorded surfaces match a complete decision envelope", async () => {
     const { surfaces } = skCourtsAdapter.sourceSurfaces;
     const recorded = Object.entries(surfaces).flatMap(([, disposition]) =>
       disposition.disposition === "stored" ? [disposition.part] : [],
@@ -603,9 +634,17 @@ describe("the census and the registry agree about this adapter", () => {
     if (decision === null) {
       panic("Complete surface fixture must build a decision");
     }
-    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    const { raw } = await deferredSkDocumentRawFixture(
+      decision.sourceRaw ?? panic("Missing source envelope"),
+    );
+    const parts = decodeSourceRawEnvelope(raw);
     expect(parts).not.toBeNull();
-    expect(recorded.toSorted()).toEqual(Object.keys(parts ?? {}).toSorted());
+    expect(recorded.toSorted()).toEqual(
+      [
+        ...Object.keys(parts ?? {}),
+        ...Object.keys(decodeSourceRawEnvelopeObjects(raw)),
+      ].toSorted(),
+    );
   });
 
   test("the surfaces still on the backlog name why", () => {
@@ -615,7 +654,7 @@ describe("the census and the registry agree about this adapter", () => {
         disposition.disposition === "backlog" ? [surface] : [],
     );
 
-    expect(backlog.toSorted()).toEqual(["bulk-dump", "document"]);
+    expect(backlog.toSorted()).toEqual(["bulk-dump"]);
     expect(skCourtsAdapter.key).toBe(ADAPTER_KEYS.SK_COURTS);
   });
 });

@@ -1,0 +1,1 @@
+{"dark:not-has-disabled:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"w-[calc(var(--thumb-size)*2-2px)]":{"valid":true,"declarations":[["","width","calc(var(--thumb-size) * 2 - 2px)"]],"values":{"calc(var(--thumb-size) * 2 - 2px)":{"p":["--thumb-size"],"f":[],"u":false}}}}

@@ -11,8 +11,8 @@ import {
   lte,
   min,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -47,8 +47,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
-  entityIdsForCorpusProjectionWorkScope,
   type CorpusProjectionScopedWorkOptions,
+  entityIdsForCorpusProjectionWorkScope,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   type CorpusProjectionCleanupJudgement,

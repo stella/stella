@@ -1,4 +1,8 @@
 import { panic, Result } from "better-result";
+
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { handlerErrorContext } from "@stll/errors/exception-context";
+import { withExceptionScope } from "@stll/errors/exception-scope-context";
 /**
  * Continuous case law ingestion daemon.
  *
@@ -17,8 +21,6 @@ import { panic, Result } from "better-result";
  * Without arguments, runs all sources in independent loops.
  * With an adapter key, runs only that source once and exits.
  */
-
-import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   DOCUMENT_FETCH_EVENT,
   documentFetchErrorOutcome,
@@ -27,7 +29,7 @@ import {
 import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
 import { Temporal } from "@stll/time";
 
-import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
+import { caseLawIngestionEvents, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
   hasResolvedCitations,
@@ -106,14 +108,14 @@ import {
 } from "./citation-resolution-drain";
 import { executeIngestionCycle } from "./cycle-execution";
 import {
+  type CadenceStreaks,
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
   CYCLE_OUTCOME,
-  type CadenceStreaks,
   type CycleCadence,
+  cycleMadeProgress,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
-  cycleMadeProgress,
   stepCadence,
 } from "./cycle-progress";
 import {
@@ -123,9 +125,9 @@ import {
 import { createIngestionHealthRefresh } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
+  nextRecomputeDelayMs,
   RECOMPUTE_OUTCOME,
   type RecomputeOutcome,
-  nextRecomputeDelayMs,
 } from "./recompute-schedule";
 import { createSettlingDeadlineSignal } from "./settling-deadline";
 import {
@@ -133,8 +135,8 @@ import {
   runDeferredDocumentDrain,
 } from "./sk-document-drain";
 import {
-  SOURCE_TOTAL_POLL_TIMING,
   runSourceTotalPoll,
+  SOURCE_TOTAL_POLL_TIMING,
 } from "./source-total-poll";
 import { isTransientConnectionError } from "./transient-connection-error";
 
@@ -407,8 +409,7 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
 let storedTotalMaintenance:
-  | ReturnType<typeof createSourceStoredTotalMaintenanceRuntime>
-  | undefined;
+  ReturnType<typeof createSourceStoredTotalMaintenanceRuntime> | undefined;
 const getStoredTotalMaintenance = () => {
   storedTotalMaintenance ??=
     createSourceStoredTotalMaintenanceRuntime(ingestionDb);
@@ -792,160 +793,161 @@ const runOneCycle = async (
  * catching all errors so it never crashes.
  */
 
-const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
-  /** Separate counter for backoff; not reset by the alert threshold. */
-  let backoffFailures = 0;
-  /** Quiet and unproductive streaks; drive the inter-cycle delay. */
-  let streaks: CadenceStreaks = INITIAL_CADENCE_STREAKS;
-  let cadence: CycleCadence = CYCLE_CADENCE.FAST;
+const runAdapterLoop = async ({ adapterKey, name }: SourceDef) =>
+  await withExceptionScope({ type: "ingestion", adapterKey }, async () => {
+    /** Separate counter for backoff; not reset by the alert threshold. */
+    let backoffFailures = 0;
+    /** Quiet and unproductive streaks; drive the inter-cycle delay. */
+    let streaks: CadenceStreaks = INITIAL_CADENCE_STREAKS;
+    let cadence: CycleCadence = CYCLE_CADENCE.FAST;
 
-  while (true) {
-    if (isDraining()) {
-      return;
-    }
-    let leaseBusy = false;
-    /** Null when the cycle never ran (lease busy), so it folds no evidence. */
-    let finishedCycle: CycleResult | null = null;
-    try {
-      // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
-      // the DB-write slot, so without this every source crawls its backlog
-      // at once and saturates the worker. Held only for the cycle and
-      // released before the inter-cycle delay, so idle adapters free the slot.
-      await cycleSemaphore.acquire();
-      // A loop that queued on acquire() passed the drain check before the
-      // signal arrived; hand the slot back instead of starting a new cycle.
+    while (true) {
       if (isDraining()) {
-        cycleSemaphore.release();
         return;
       }
-      let attempt: CycleAttempt;
-      // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
-      // ignore the per-cycle abort signal (the source lookup before it is
-      // created, the event write after the pipeline); if one wedges on a
-      // broken connection the cycle never returns and the slot parks every
-      // other adapter. The lag watchdog can't see an I/O-wait hang (the loop
-      // stays responsive), so bound it here: if a cycle outlives the ceiling,
-      // exit so ECS relaunches a healthy task.
-      inFlightCycles.add(adapterKey);
-      cyclesSinceWatchdogTick.add(adapterKey);
+      let leaseBusy = false;
+      /** Null when the cycle never ran (lease busy), so it folds no evidence. */
+      let finishedCycle: CycleResult | null = null;
       try {
-        attempt = await runWithHardDeadline(
-          adapterKey,
-          CYCLE_HARD_DEADLINE_MS,
-          async () => await runOneCycle(adapterKey, name),
-        );
-      } finally {
-        inFlightCycles.delete(adapterKey);
-        cycleSemaphore.release();
-      }
-      if (attempt.type === "lease_busy") {
-        // Another healthy task owns this source during a rolling handoff.
-        // This is neither source progress nor a failure; retry promptly without
-        // mutating the source's accumulated health or cadence evidence.
-        leaseBusy = true;
-      } else if (attempt.type === "drained") {
-        return;
-      } else {
-        const { cycle } = attempt;
-        const { outcome } = cycle;
-
-        // A stall is a cycle that advanced no page, whatever its outcome; a halt
-        // or a timeout that still walked pages moved the cursor.
-        const madeProgress = cycleMadeProgress(cycle);
-        finishedCycle = cycle;
-
-        if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
-          backoffFailures++;
+        // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
+        // the DB-write slot, so without this every source crawls its backlog
+        // at once and saturates the worker. Held only for the cycle and
+        // released before the inter-cycle delay, so idle adapters free the slot.
+        await cycleSemaphore.acquire();
+        // A loop that queued on acquire() passed the drain check before the
+        // signal arrived; hand the slot back instead of starting a new cycle.
+        if (isDraining()) {
+          cycleSemaphore.release();
+          return;
+        }
+        let attempt: CycleAttempt;
+        // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
+        // ignore the per-cycle abort signal (the source lookup before it is
+        // created, the event write after the pipeline); if one wedges on a
+        // broken connection the cycle never returns and the slot parks every
+        // other adapter. The lag watchdog can't see an I/O-wait hang (the loop
+        // stays responsive), so bound it here: if a cycle outlives the ceiling,
+        // exit so ECS relaunches a healthy task.
+        inFlightCycles.add(adapterKey);
+        cyclesSinceWatchdogTick.add(adapterKey);
+        try {
+          attempt = await runWithHardDeadline(
+            adapterKey,
+            CYCLE_HARD_DEADLINE_MS,
+            async () => await runOneCycle(adapterKey, name),
+          );
+        } finally {
+          inFlightCycles.delete(adapterKey);
+          cycleSemaphore.release();
+        }
+        if (attempt.type === "lease_busy") {
+          // Another healthy task owns this source during a rolling handoff.
+          // This is neither source progress nor a failure; retry promptly without
+          // mutating the source's accumulated health or cadence evidence.
+          leaseBusy = true;
+        } else if (attempt.type === "drained") {
+          return;
         } else {
-          backoffFailures = 0;
-          // How the cycle ended does not decide the cadence; what it wrote
-          // does. An adapter whose page budget outlasts its cycle deadline
-          // times out every cycle, so keying the cadence on a clean outcome
-          // pinned a source re-fetching its stored corpus to the fast cadence
-          // forever, holding a cycle slot against sources with work.
-          const step = stepCadence(streaks, cycle);
-          streaks = step.streaks;
-          if (step.cadence !== cadence) {
-            cadence = step.cadence;
-            logInfo(`[${adapterKey}] ${CADENCE_ENTRY_MESSAGE[cadence]}`);
-          }
-          if (step.unproductiveRescan) {
-            logger.error("case_law.ingestion.unproductive_rescan", {
-              adapterKey,
-              ...step.unproductiveRescan,
-            });
+          const { cycle } = attempt;
+          const { outcome } = cycle;
+
+          // A stall is a cycle that advanced no page, whatever its outcome; a halt
+          // or a timeout that still walked pages moved the cursor.
+          const madeProgress = cycleMadeProgress(cycle);
+          finishedCycle = cycle;
+
+          if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
+            backoffFailures++;
+          } else {
+            backoffFailures = 0;
+            // How the cycle ended does not decide the cadence; what it wrote
+            // does. An adapter whose page budget outlasts its cycle deadline
+            // times out every cycle, so keying the cadence on a clean outcome
+            // pinned a source re-fetching its stored corpus to the fast cadence
+            // forever, holding a cycle slot against sources with work.
+            const step = stepCadence(streaks, cycle);
+            streaks = step.streaks;
+            if (step.cadence !== cadence) {
+              cadence = step.cadence;
+              logInfo(`[${adapterKey}] ${CADENCE_ENTRY_MESSAGE[cadence]}`);
+            }
+            if (step.unproductiveRescan) {
+              logger.error("case_law.ingestion.unproductive_rescan", {
+                adapterKey,
+                ...step.unproductiveRescan,
+              });
+            }
           }
         }
-      }
-    } catch (error) {
-      // A thrown cycle made no forward progress either.
-      finishedCycle = {
-        outcome: CYCLE_OUTCOME.FAILED,
-        stopKind: ingestionStopKindOf(error),
-        inserted: 0,
-        skipped: 0,
-        pagesProcessed: 0,
-        cursorAdvanced: false,
-      };
-      backoffFailures++;
-      const msg = error instanceof Error ? error.message : String(error);
-      if (isTransientConnectionError(error)) {
-        logError(`[${adapterKey}] DB connection error (will retry): ${msg}`);
-      } else {
-        logError(`[${adapterKey}] Unexpected error:`, error);
-      }
-    }
-
-    if (finishedCycle !== null) {
-      const { stall, stopKind, disposition } = alertHealth.step(
-        adapterKey,
-        finishedCycle,
-      );
-      if (stall.sustained !== null) {
-        const fields = {
-          adapterKey,
-          noProgressStreak: stall.sustained,
-          stopKind,
+      } catch (error) {
+        // A thrown cycle made no forward progress either.
+        finishedCycle = {
+          outcome: CYCLE_OUTCOME.FAILED,
+          stopKind: ingestionStopKindOf(error),
+          inserted: 0,
+          skipped: 0,
+          pagesProcessed: 0,
+          cursorAdvanced: false,
         };
-        if (disposition === "source_unavailable") {
-          logInfo(
-            JSON.stringify({
-              message: "case_law.ingestion.source_unavailable",
-              ...fields,
-            }),
-          );
+        backoffFailures++;
+        const msg = error instanceof Error ? error.message : String(error);
+        if (isTransientConnectionError(error)) {
+          logError(`[${adapterKey}] DB connection error (will retry): ${msg}`);
         } else {
-          logger.error("case_law.ingestion.sustained_failure", fields);
-        }
-        if (stall.capture) {
-          captureError(
-            new IngestionStallError({
-              message: `Source made no progress for ${stall.sustained} consecutive cycles`,
-              adapterKey,
-              code: adapterKey,
-              noProgressCycles: stall.sustained,
-            }),
-            { adapterKey },
-          );
+          logError(`[${adapterKey}] Unexpected error:`, error);
         }
       }
-    }
 
-    writeHeartbeat();
-    // Failure backoff wins when active (5s, 10s, 20s, 40s, cap 60s).
-    // Otherwise the cadence the last returned cycle earned.
-    let delayMs = CYCLE_CADENCE_DELAY_MS[cadence];
-    if (leaseBusy) {
-      delayMs = CYCLE_DELAY_MS;
-    } else if (backoffFailures > 0) {
-      delayMs = backoffDelay(backoffFailures, {
-        baseMs: CYCLE_DELAY_MS,
-        maxMs: 60_000,
-      });
+      if (finishedCycle !== null) {
+        const { stall, stopKind, disposition } = alertHealth.step(
+          adapterKey,
+          finishedCycle,
+        );
+        if (stall.sustained !== null) {
+          const fields = {
+            adapterKey,
+            noProgressStreak: stall.sustained,
+            stopKind,
+          };
+          if (disposition === "source_unavailable") {
+            logInfo(
+              JSON.stringify({
+                message: "case_law.ingestion.source_unavailable",
+                ...fields,
+              }),
+            );
+          } else {
+            logger.error("case_law.ingestion.sustained_failure", fields);
+          }
+          if (stall.capture) {
+            captureError(
+              new IngestionStallError({
+                message: `Source made no progress for ${stall.sustained} consecutive cycles`,
+                adapterKey,
+                code: adapterKey,
+                noProgressCycles: stall.sustained,
+              }),
+              handlerErrorContext("runners.runAdapterLoop", { adapterKey }),
+            );
+          }
+        }
+      }
+
+      writeHeartbeat();
+      // Failure backoff wins when active (5s, 10s, 20s, 40s, cap 60s).
+      // Otherwise the cadence the last returned cycle earned.
+      let delayMs = CYCLE_CADENCE_DELAY_MS[cadence];
+      if (leaseBusy) {
+        delayMs = CYCLE_DELAY_MS;
+      } else if (backoffFailures > 0) {
+        delayMs = backoffDelay(backoffFailures, {
+          baseMs: CYCLE_DELAY_MS,
+          maxMs: 60_000,
+        });
+      }
+      await Bun.sleep(delayMs);
     }
-    await Bun.sleep(delayMs);
-  }
-};
+  });
 
 type IngestCliArgs = {
   filterKey: string | undefined;

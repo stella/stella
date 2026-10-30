@@ -15,9 +15,9 @@ import en from "@/i18n/langs/en.json";
 import {
   groupOAuthScopeDisplayEntries,
   groupOAuthScopeSummaryEntries,
+  type OAuthScopeDisplayEntry,
   toOAuthScopeDisplayEntries,
   translateOAuthScopeSummary,
-  type OAuthScopeDisplayEntry,
 } from "@/lib/oauth-scopes";
 
 describe("OAuth scope display groups", () => {

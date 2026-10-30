@@ -22,8 +22,8 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawCitationReviews,
   caseLawCitationDoctrineReviews,
+  caseLawCitationReviews,
   caseLawCitations,
   caseLawDecisions,
   caseLawPolarityRules,
@@ -41,9 +41,9 @@ import {
   AI_CITATION_REVIEW_ORIGINS,
   CITATION_REVIEW_ORIGIN,
   CITATION_REVIEW_ORIGINS,
+  citationReviewMayReplace,
   POLARITY,
   RULE_SOURCE,
-  citationReviewMayReplace,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   CitationReviewOrigin,
@@ -60,20 +60,20 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { DOCTRINE_LABEL_DOMAIN } from "@/api/scripts/apply-reviewed-citation-labels-doctrine";
 import {
+  applyReviewedCitationLabels,
+  planReviewedCitationLabels,
   REVIEWED_LABEL_APPLY_FAILURE,
   REVIEWED_LABEL_INVALID_REASON,
   REVIEWED_LABEL_OUTCOME,
-  applyReviewedCitationLabels,
-  planReviewedCitationLabels,
-  reviewMayReplaceSql,
   reviewedCitationLabelEntrySchema,
   reviewedLabelResultLines,
+  reviewMayReplaceSql,
 } from "@/api/scripts/apply-reviewed-citation-labels-plan";
 import type { ReviewedCitationLabelEntry } from "@/api/scripts/apply-reviewed-citation-labels-plan";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -152,15 +152,17 @@ const ingest = async ({
     })),
     documentAst: EMPTY_AST,
   });
-  const result = await processDecision({
-    input,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-23T08:00:00.000Z"),
-    observationOrder,
-    refresh: DECISION_REFRESH.ALWAYS,
-    corpus,
-  });
+  const result = (
+    await processDecision({
+      input,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T08:00:00.000Z"),
+      observationOrder,
+      refresh: DECISION_REFRESH.ALWAYS,
+      corpus,
+    })
+  ).unwrap();
   expect(result.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 

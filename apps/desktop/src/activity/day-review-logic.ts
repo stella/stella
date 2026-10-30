@@ -3,24 +3,16 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import {
+  type AppTotal,
   appTotals,
   documentName,
   roundedTenthsOfHour,
-  totalDurationMs,
-  type AppTotal,
   type TimedSegment,
+  totalDurationMs,
 } from "./activity-logic";
 import type { ActivityManualAssignment } from "./activity-types";
 
 type ActivityRange = { start: string; end: string };
-type CanAssignOptions = {
-  editable: boolean;
-  timeBillingEnabled: boolean;
-};
-
-export const canAssign = ({ editable, timeBillingEnabled }: CanAssignOptions) =>
-  editable && timeBillingEnabled;
-
 export type MatchConfidence = "strong" | "likely" | "manual" | "unmatched";
 export type MatchedSegment = TimedSegment & {
   matter: DesktopTimeEntryMatterCandidate | null;
@@ -28,11 +20,17 @@ export type MatchedSegment = TimedSegment & {
   evidence: string[];
   drafted: boolean;
 };
+/** What an app's windows showed, the longest-used title first. */
+export type AppEvidence = {
+  identifier: string;
+  name: string;
+  details: string[];
+};
 export type DayReviewGroup = {
   id: string;
   matter: DesktopTimeEntryMatterCandidate | null;
   confidence: MatchConfidence;
-  evidence: string[];
+  evidence: AppEvidence[];
   apps: AppTotal[];
   segments: MatchedSegment[];
   ranges: ActivityRange[];
@@ -223,6 +221,101 @@ const groupConfidence = (
   return "unmatched";
 };
 
+// `host: name` from terminals and remote sessions; `page · site` and
+// `page - site` from web pages.
+const SHARED_CONTEXT = [
+  { pattern: /^([^\s:]+): (.+)$/u, context: 1, own: 2 },
+  // A site may contain hyphens (`my-site.com`); only a spaced hyphen separates.
+  {
+    pattern: /^(.+?) (?:·|\||-|–|—) ((?:(?! - )[^·|–—])+)$/u,
+    context: 2,
+    own: 1,
+  },
+] as const;
+
+/** Context that several titles share says nothing about any of them, so it is
+ * dropped and each title keeps only its own part. */
+export const withoutSharedContext = (evidence: readonly string[]) => {
+  let titles = [...evidence];
+  for (const { pattern, context, own } of SHARED_CONTEXT) {
+    const counts = new Map<string, number>();
+    for (const title of titles) {
+      const key = pattern.exec(title)?.at(context);
+      if (key) {
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    titles = [
+      ...new Set(
+        titles.map((title) => {
+          const match = pattern.exec(title);
+          const key = match?.at(context);
+          const rest = match?.at(own);
+          return key && rest && (counts.get(key) ?? 0) > 1 ? rest : title;
+        }),
+      ),
+    ];
+  }
+  return titles;
+};
+
+/** Titles a review row shows per app before it counts the rest. */
+export const EVIDENCE_DETAIL_LIMIT = 3;
+
+const TITLE_SEPARATORS = [" - ", " – ", " — "] as const;
+
+/** Browsers title a window `page - Browser - Profile`; the app icon already
+ * names the browser, so the title keeps only the page. */
+export const withoutAppSuffix = (title: string, appName: string) => {
+  let cut = title.length;
+  for (const separator of TITLE_SEPARATORS) {
+    const needle = `${separator}${appName}`;
+    for (
+      let index = title.indexOf(needle);
+      index > 0;
+      index = title.indexOf(needle, index + 1)
+    ) {
+      const rest = title.slice(index + needle.length);
+      if (
+        rest === "" ||
+        TITLE_SEPARATORS.some((next) => rest.startsWith(next))
+      ) {
+        cut = Math.min(cut, index);
+        break;
+      }
+    }
+  }
+  return title.slice(0, cut);
+};
+
+const appEvidence = (segments: readonly MatchedSegment[]): AppEvidence[] =>
+  appTotals(segments).flatMap(({ identifier, name }) => {
+    const durations = new Map<string, number>();
+    for (const segment of segments) {
+      if (segment.appIdentifier !== identifier) {
+        continue;
+      }
+      const titles = new Set(
+        segment.evidence.map((detail) => withoutAppSuffix(detail, name)),
+      );
+      for (const title of titles) {
+        durations.set(
+          title,
+          (durations.get(title) ?? 0) + segment.endMs - segment.startMs,
+        );
+      }
+    }
+    const details = withoutSharedContext(
+      [...durations]
+        .sort(
+          ([leftTitle, left], [rightTitle, right]) =>
+            right - left || leftTitle.localeCompare(rightTitle),
+        )
+        .map(([title]) => title),
+    ).filter((title) => title.toLowerCase() !== name.toLowerCase());
+    return details.length > 0 ? [{ identifier, name, details }] : [];
+  });
+
 /** Splitting at every review boundary prevents assignments or receipts from
  * claiming time beyond the exact range the user selected. */
 export const matchDay = ({
@@ -316,7 +409,7 @@ export const matchDay = ({
       continue;
     }
     const durationMs = totalDurationMs(group);
-    const evidence = [...new Set(group.flatMap((segment) => segment.evidence))];
+    const evidence = appEvidence(group);
     const confidence = groupConfidence(group);
     groups.push({
       id,

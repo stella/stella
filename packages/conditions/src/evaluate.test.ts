@@ -7,8 +7,8 @@ import {
   pruneIncomplete,
 } from "./evaluate";
 import {
-  type CompareOp,
   COMPARE_OPS,
+  type CompareOp,
   type ConditionNode,
   conditionNodeSchema,
   emptyCondition,

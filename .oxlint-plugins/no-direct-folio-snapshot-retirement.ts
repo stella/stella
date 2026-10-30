@@ -6,9 +6,9 @@ import {
   isIdentifierReference,
   isTestFile,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   unwrapExpression,
-  type ScopeContext,
 } from "./utils.ts";
 
 const RULE_NAME = "no-direct-folio-snapshot-retirement";

@@ -93,6 +93,7 @@ test("the declared cross-jurisdiction reach is exact", () => {
     AUT: { alsoResolvesTo: ["EU"] },
     CZE: { alsoResolvesTo: ["EU"] },
     EU: { alsoResolvesTo: [] },
+    GBR: { alsoResolvesTo: ["EU"] },
     HUN: { alsoResolvesTo: ["EU"] },
     POL: { alsoResolvesTo: ["EU"] },
     SVK: { alsoResolvesTo: ["EU"] },

@@ -9,8 +9,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withMatterAccess } from "@/api/lib/workspaces/matter-access-proof";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,

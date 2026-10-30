@@ -39,7 +39,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ssr-testkit",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ssr-testkit",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"
   },
   "dependencies": {
@@ -48,6 +47,7 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

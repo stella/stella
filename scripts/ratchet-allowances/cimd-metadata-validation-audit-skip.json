@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "cimd-stale-if-error.ts stamps oauth_client.metadata_validated_at after the OAuth provider has already rewritten the discovery-owned client row from a document it just validated. The stamp is freshness bookkeeping for that rewrite: it is not an organization-scoped action, changes no grant, scope or membership, and only bounds how long the stored registration keeps resolving while the document cannot be refetched."
+}

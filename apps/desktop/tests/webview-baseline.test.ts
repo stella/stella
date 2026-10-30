@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 // The desktop shell renders in the system WebView of its minimum macOS

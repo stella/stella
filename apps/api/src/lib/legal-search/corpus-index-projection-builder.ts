@@ -2,19 +2,20 @@ import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { normalizeNumericIndices } from "@stll/text-normalize";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { PROVISION_KEYS_MAX_COUNT } from "@/api/lib/case-law/provision-keys";
 import {
   publisherHeadnoteOf,
   publisherKeywordsOf,
-  publisherSummaryOf,
   type PublisherSummaryInput,
+  publisherSummaryOf,
 } from "@/api/lib/case-law/publisher-summary";
 import {
+  ChunkBudgetError,
   chunkDocument,
   chunkLegislationDocument,
-  ChunkBudgetError,
 } from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import {
@@ -23,20 +24,20 @@ import {
   UNDATED_DECISION_TIMESTAMP,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
-  COURT_PARTITION_FIELD,
   corpusIndexGroupContractForJurisdiction,
+  COURT_PARTITION_FIELD,
   requireCourtPartitionIdentity,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   corpusIndexGenerationField,
-  corpusIndexPublisherFields,
-  corpusIndexStemFields,
   type CorpusIndexManifest,
   type CorpusIndexPublisherFields,
+  corpusIndexPublisherFields,
+  corpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  caseLawProjectionTitle,
   type CaseLawProjectionInput,
+  caseLawProjectionTitle,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
@@ -286,8 +287,10 @@ export const buildCaseLawProjectionDocuments = ({
     );
   const documents: CaseLawProjectionDocument[] = [];
   for (const chunk of chunks) {
+    // Source-supplied plain text and fallback text can bypass inline projection.
+    const text = normalizeNumericIndices(chunk.text);
     const textStem =
-      stemmed === null ? null : stemCorpusText(chunk.text, stemmed.language);
+      stemmed === null ? null : stemCorpusText(text, stemmed.language);
     documents.push({
       ...shared,
       // The manifest owns whether passages can be addressed independently;
@@ -295,7 +298,7 @@ export const buildCaseLawProjectionDocuments = ({
       ...(passageIdentity
         ? { chunk_id: `${input.documentId}:${chunk.seq}` }
         : {}),
-      text: chunk.text,
+      text,
       is_opening: chunk.seq === 0,
       ...(chunk.seq === 0 ? { title } : {}),
       ...(chunk.seq === 0 && decisionYear !== null

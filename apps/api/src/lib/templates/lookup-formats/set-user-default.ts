@@ -3,8 +3,8 @@ import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  templateLookupFormatUserDefaults,
   templateLookupFormats,
+  templateLookupFormatUserDefaults,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { LookupRegistry } from "@/api/lib/docx/types";

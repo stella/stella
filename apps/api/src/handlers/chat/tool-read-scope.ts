@@ -25,6 +25,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type WorkspaceId = SafeId<"workspace">;
 
@@ -115,10 +116,13 @@ export const recordToolReadScope = ({
         const output: unknown = await execute(input, context);
         const recorded = await recorder.recordObservedReads();
         if (Result.isError(recorded) && committedBeforeScope) {
-          captureError(recorded.error, {
-            source: "chat-tool-read-scope",
-            tool: name,
-          });
+          captureError(
+            recorded.error,
+            handlerErrorContext("chat.recordingTool.recorded_error", {
+              source: "chat-tool-read-scope",
+              tool: name,
+            }),
+          );
           return output;
         }
         recorded.unwrap("Failed to record the thread's data scope.");

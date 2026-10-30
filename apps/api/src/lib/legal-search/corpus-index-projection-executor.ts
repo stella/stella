@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { type InferOk, panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
@@ -10,16 +10,21 @@ import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { settleBoth } from "@/api/lib/corpus-index/core";
+import {
+  MAX_TRANSPORT_WRAPPER_DEPTH,
+  TRANSPORT_WRAPPERS,
+} from "@/api/lib/errors/handler-error-resolution";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import {
   CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
   type CorpusIndexClient,
-  CorpusIndexError,
   corpusIndexCommittedIngestTimeoutMs,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
-  requireCorpusIndexManifest,
   type CorpusIndexManifest,
+  requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCorpusProjectionDocuments,
@@ -27,19 +32,19 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
   censusCorpusProjectionRevisions,
-  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
   corpusIndexCommitTimeoutSecs,
-  planCorpusProjectionAppendRequests,
   type CorpusProjectionAppendCommitMode,
   type CorpusProjectionAppendEntry,
+  planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
-  readReservedCorpusProjectionMaterialsTx,
   type CorpusProjectionMaterial,
+  readReservedCorpusProjectionMaterialsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import type { CorpusProjectionAppendScopedWorkSelection } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
@@ -47,25 +52,28 @@ import {
   cancelCorpusProjectionReservationTx,
   classifyCorpusProjectionReservationFailureTx,
   commitCorpusProjectionAppendTx,
-  CORPUS_PROJECTION_RETRY_MAX_MS,
+  continueCorpusProjectionAppendPartTx,
+  CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN,
+  CORPUS_PROJECTION_RETRY_MAX_MS,
   CORPUS_PROJECTION_RETRY_MIN_MS,
-  CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+  type CorpusProjectionAppendAbandonResult,
+  type CorpusProjectionIntentLease,
+  type CorpusProjectionReservationFailure,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
-  type CorpusProjectionAppendAbandonResult,
   startCorpusProjectionMultipartAppendTx,
-  continueCorpusProjectionAppendPartTx,
-  type CorpusProjectionReservationFailure,
-  type CorpusProjectionIntentLease,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
-import { readCorpusAtAuthoritativePointer } from "@/api/lib/legal-search/corpus-storage";
+import {
+  readCorpusAtAuthoritativePointer,
+  readCorpusForRecovery,
+} from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
@@ -385,49 +393,70 @@ const rereadMaterial = async (
   return current.ready.at(0) ?? null;
 };
 
+/** Indexing can recover structure only beside usable document text. */
+export const projectionAstOfResult = <T>(
+  astRead: Result<T, StoredCorpusValidationError>,
+  text: string,
+): Result<T | null, StoredCorpusValidationError> => {
+  if (astRead.isOk()) {
+    return Result.ok(astRead.value);
+  }
+  if (text.trim().length === 0) {
+    return astRead;
+  }
+  return Result.ok(null);
+};
+
 const loadCorpusProjectionPayload = async (
   runInTransaction: ProjectionTransactionRunner,
   material: CorpusProjectionMaterial,
-) => {
-  let currentPromise: Promise<CorpusProjectionMaterial | null> | undefined;
-  const current = async () => {
-    currentPromise ??= rereadMaterial(runInTransaction, material.lease);
-    return await currentPromise;
-  };
-  const textPromise = readCorpusAtAuthoritativePointer({
-    storedKey: material.textS3Key,
-    read: readCorpusText,
-    rereadStoredKey: async () => (await current())?.textS3Key ?? null,
-  });
-  if (material.astS3Key === null) {
-    return { text: await textPromise, ast: null };
-  }
-  const storedAstPointer = material.astS3Key;
-  const loadAst = async () =>
-    await readCorpusAtAuthoritativePointer({
-      storedKey: storedAstPointer,
-      read: readCorpusAst,
-      rereadStoredKey: async () => {
-        const replacement = await current();
-        return replacement?.astS3Key ?? null;
-      },
+) =>
+  await Result.gen(async function* () {
+    let currentPromise: Promise<CorpusProjectionMaterial | null> | undefined;
+    const current = async () => {
+      currentPromise ??= rereadMaterial(runInTransaction, material.lease);
+      return await currentPromise;
+    };
+    const textPromise = readCorpusAtAuthoritativePointer({
+      storedKey: material.textS3Key,
+      read: readCorpusText,
+      rereadStoredKey: async () => (await current())?.textS3Key ?? null,
     });
-  if (material.family === "case_law") {
-    const [text, ast] = await settleBoth(textPromise, loadAst());
-    return { text, ast };
-  }
-  const text = await textPromise;
-  if (
-    !legislationV2NeedsPassages({
-      input: material.input,
-      text,
-      revision: material.lease.intentId,
-    })
-  ) {
-    return { text, ast: null };
-  }
-  return { text, ast: await loadAst() };
-};
+    if (material.astS3Key === null) {
+      return Result.ok({ text: await textPromise, ast: null });
+    }
+    const storedAstPointer = material.astS3Key;
+    const loadAst = async () =>
+      await readCorpusForRecovery({
+        documentId: material.lease.entityId,
+        read: async () =>
+          await readCorpusAtAuthoritativePointer({
+            storedKey: storedAstPointer,
+            read: readCorpusAst,
+            rereadStoredKey: async () => {
+              const replacement = await current();
+              return replacement?.astS3Key ?? null;
+            },
+          }),
+      });
+    if (material.family === "case_law") {
+      const [text, astRead] = await settleBoth(textPromise, loadAst());
+      const ast = yield* projectionAstOfResult(astRead, text);
+      return Result.ok({ text, ast });
+    }
+    const text = await textPromise;
+    if (
+      !legislationV2NeedsPassages({
+        input: material.input,
+        text,
+        revision: material.lease.intentId,
+      })
+    ) {
+      return Result.ok({ text, ast: null });
+    }
+    const ast = yield* projectionAstOfResult(await loadAst(), text);
+    return Result.ok({ text, ast });
+  });
 
 type PreparedProjectionEntry = {
   material: CorpusProjectionMaterial;
@@ -440,6 +469,10 @@ type PreparedProjectionEntry = {
   appendMode: CorpusProjectionIntentLease["appendMode"];
 };
 
+type LoadedCorpusProjectionPayload = InferOk<
+  Awaited<ReturnType<typeof loadCorpusProjectionPayload>>
+>;
+
 type PreparedProjectionFailure = {
   kind: "payload_unavailable" | "revision_too_large";
   message: string;
@@ -447,16 +480,32 @@ type PreparedProjectionFailure = {
 
 export const classifyCorpusProjectionPayloadReadFailure = (
   error: unknown,
-): PreparedProjectionFailure =>
-  error instanceof PayloadBudgetError || error instanceof S3ObjectBudgetError
-    ? {
+): PreparedProjectionFailure => {
+  let cause = error;
+  for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    const candidate = cause;
+    if (
+      candidate instanceof PayloadBudgetError ||
+      candidate instanceof S3ObjectBudgetError
+    ) {
+      return {
         kind: "revision_too_large",
         message: "projection payload exceeds the transfer or decode ceiling",
-      }
-    : {
-        kind: "payload_unavailable",
-        message: "projection payload read failed before append",
       };
+    }
+    if (
+      !(candidate instanceof Error) ||
+      !TRANSPORT_WRAPPERS.some((wrapper) => wrapper.is(candidate))
+    ) {
+      break;
+    }
+    cause = candidate.cause;
+  }
+  return {
+    kind: "payload_unavailable",
+    message: "projection payload read failed before append",
+  };
+};
 
 type PreparedProjectionRequest = {
   indexId: string;
@@ -610,7 +659,7 @@ export const advanceCorpusProjectionAppendTails = <
 /** The synchronous half of a prepared entry: payload in, append request out. */
 const prepareProjectionEntry = (
   material: CorpusProjectionMaterial,
-  payload: Awaited<ReturnType<typeof loadCorpusProjectionPayload>>,
+  payload: LoadedCorpusProjectionPayload,
 ): Result<PreparedProjectionEntry, PreparedProjectionFailure> => {
   const built = (() => {
     switch (material.family) {
@@ -699,10 +748,15 @@ const buildPreparedEntry = async ({
       classifyCorpusProjectionPayloadReadFailure(payload.error),
     );
   }
+  if (payload.value.isErr()) {
+    return Result.err(
+      classifyCorpusProjectionPayloadReadFailure(payload.value.error),
+    );
+  }
   // The build is synchronous, so one span covers all of it and the spans of
   // concurrent revisions cannot overlap.
   const buildStartedAt = Temporal.Now.instant().epochMilliseconds;
-  const prepared = prepareProjectionEntry(material, payload.value);
+  const prepared = prepareProjectionEntry(material, payload.value.value);
   recordBuildMs(Temporal.Now.instant().epochMilliseconds - buildStartedAt);
   return prepared;
 };

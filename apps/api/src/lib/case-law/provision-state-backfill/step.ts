@@ -5,6 +5,11 @@
 
 import { Result, TaggedError } from "better-result";
 
+import {
+  checkReadCommittedUnit,
+  READ_COMMITTED_BEGIN,
+} from "@/api/lib/db/read-committed-unit";
+
 /**
  * A bound parameter. Scalars only: the scheduler binds through Bun SQL's
  * `unsafe`, which sends a JavaScript array as comma-joined text rather than a
@@ -34,8 +39,7 @@ export type ProvisionBackfillSession = {
 };
 
 export type ProvisionBackfillCompletion =
-  | { reason: string; type: "incomplete" }
-  | { type: "complete" };
+  { reason: string; type: "incomplete" } | { type: "complete" };
 
 /**
  * How much of a run one unit may take: a keyset page (many per run, until the
@@ -88,7 +92,19 @@ export const inBackfillTransaction = async (
   if (session.runUnit !== undefined) {
     return await session.runUnit({ lockTimeout, statementTimeout }, work);
   }
-  await session.execute("BEGIN");
+  await session.execute(READ_COMMITTED_BEGIN);
+  const isolation = await checkReadCommittedUnit(
+    async (statement) => await session.query(statement),
+  );
+  if (Result.isError(isolation)) {
+    await session.execute("ROLLBACK");
+    return Result.err(
+      new ProvisionBackfillUnitError({
+        message: isolation.error.message,
+        cause: isolation.error,
+      }),
+    );
+  }
   const unit = await Result.tryPromise({
     try: async () => {
       await session.setTransactionBudget({

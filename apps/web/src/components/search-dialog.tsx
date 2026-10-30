@@ -11,16 +11,18 @@ import type {
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -36,8 +38,14 @@ import {
   CommandInput,
   CommandList,
 } from "@stll/ui/command";
+import { DIALOG_MOBILE_LAYOUT } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronRightIcon, PanelRightIcon, AiActionIcon } from "@stll/ui/icons";
+import {
+  AiActionIcon,
+  ChevronRightIcon,
+  PanelRightIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -49,18 +57,26 @@ import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
+import {
+  isLegalCitationSearch,
+  legalCitationSearchOptions,
+} from "@/components/legal-citation-search";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { SavedSearches } from "@/components/saved-searches";
 import {
-  toSearchFilters,
   type SavedSearchCriteria,
+  toSearchFilters,
 } from "@/components/saved-searches.logic";
 import { SearchCaseLawGroup } from "@/components/search-case-law-group";
+import {
+  citationCommandHits,
+  citationCommandRoute,
+  SearchCitationResults,
+} from "@/components/search-citation-results";
 import {
   SearchCompanyResult,
   useCompanyRegistrySearch,
 } from "@/components/search-company-result";
-import { filterCommandActions } from "@/components/search-dialog-actions.logic";
 import {
   SearchColumnResizeHandle,
   SearchFooterHint,
@@ -75,7 +91,6 @@ import {
   RecentFilePreviewPanel,
   SearchPreviewPanel,
 } from "@/components/search-dialog-preview";
-import type { CommandActionEntry } from "@/components/search-dialog-results";
 import {
   CommandActionItem,
   SearchRecents,
@@ -89,14 +104,16 @@ import {
   getCaseLawHitRoute,
   getChatHitRoute,
   getCompanySearchQuery,
-  isLazySearchGroupActive,
-  resolveRegistryResultsPane,
   getEntityHitLocation,
   getEntityLocation,
   getRecentFileLocation,
   getRecentFileRoute,
+  isLazySearchGroupActive,
+  isSearchTypeInScope,
   resolveEagerSearchTypes,
   resolveEntityDocumentRoute,
+  resolveRegistryResultsPane,
+  resolveSearchScope,
   toAskAIMessageHtml,
 } from "@/components/search-dialog.logic";
 import type { EntityLocation } from "@/components/search-dialog.logic";
@@ -138,7 +155,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
   useOwnerScopedState,
@@ -148,17 +165,19 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
 import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
   hasSearchQueryOrSelectiveFilter,
@@ -183,7 +202,12 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
+import {
+  getCurrentWorkspaceDocument,
+  useCurrentWorkspaceView,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchSummaryCitation = {
   id: string;
@@ -215,6 +239,23 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
  * separator's reported value until a drag pins an explicit width. */
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
+
+const observeSearchResultsRect: typeof observeElementRect = (
+  instance,
+  callback,
+) => {
+  const element = instance.scrollElement;
+  return observeElementRect(instance, (rect) => {
+    const offsetHeight =
+      element instanceof HTMLElement ? element.offsetHeight : 0;
+    const offsetWidth =
+      element instanceof HTMLElement ? element.offsetWidth : 0;
+    callback({
+      height: rect.height === 0 ? offsetHeight : rect.height,
+      width: rect.width === 0 ? offsetWidth : rect.width,
+    });
+  });
+};
 
 type SearchColumnsStyle = CSSProperties & {
   "--search-facets-w"?: string;
@@ -296,13 +337,13 @@ const filtersForMode = (
     : filters;
 
 type SearchFiltersUpdate =
-  | SearchFilters
-  | ((filters: SearchFilters) => SearchFilters);
+  SearchFilters | ((filters: SearchFilters) => SearchFilters);
 
 type SearchResultsStatus =
   | { type: "hidden" }
   | { type: "unavailable" }
   | { type: "error" }
+  | { type: "refine" }
   | { type: "loading" }
   | { query: string | null; type: "empty" }
   | { type: "results" };
@@ -338,6 +379,8 @@ const getSearchScopeVisibility = ({
     expanded: registryExpanded,
   });
   const registryVisible = scope === "registries" && open && mode === "browse";
+  // Recents and actions belong to matters; external scopes skip them.
+  const matterScope = scope === "all" || scope === "matters";
   return {
     activeSearch:
       hasSearchCriteria &&
@@ -349,10 +392,12 @@ const getSearchScopeVisibility = ({
     companyQuery: registryVisible || registryGroupActive ? companyQuery : null,
     registryVisible,
     companySearchVisible: registryVisible || registryGroupActive,
-    recents: !hasVisibleSearch && scope !== "registries",
+    recents: !hasVisibleSearch && matterScope,
+    caseLawPrompt: !hasVisibleSearch && scope === "case-law",
     showPrompt: query.length === 0 && mode === "browse",
     placeholder: mode === "pick" ? undefined : "",
-    actions: mode === "browse" && scope !== "registries",
+    // Actions belong to the blank screen and never sit above results.
+    actions: mode === "browse" && matterScope && !hasVisibleSearch,
     lazyGroups: isLazySearchGroupActive({
       open,
       mode,
@@ -497,6 +542,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError,
   isLoading,
   searchQuery,
+  searchError,
 }: {
   hasActiveSearch: boolean;
   hasQuery: boolean;
@@ -506,6 +552,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError: boolean;
   isLoading: boolean;
   searchQuery: string;
+  searchError: unknown;
 }): SearchResultsStatus => {
   if (!hasVisibleSearch) {
     return { type: "hidden" };
@@ -514,6 +561,12 @@ const resolveSearchResultsStatus = ({
     return { type: "unavailable" };
   }
   if (hasActiveSearch && isBlockingSearchError) {
+    if (
+      APIError.is(searchError) &&
+      searchError.code === GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE
+    ) {
+      return { type: "refine" };
+    }
     return { type: "error" };
   }
   if (
@@ -552,6 +605,49 @@ const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
     ? `${scope.organizationId}:${scope.userId}`
     : null;
 
+type CitationSearchOptions = {
+  open: boolean;
+  mode: SearchDialogMode;
+  publicLawPreviewEnabled: boolean;
+  searchScope: SearchScope;
+  query: string;
+  debouncedQuery: string;
+  locale: Parameters<typeof defaultCaseLawCountryForLocale>[0];
+};
+
+const useCitationSearch = ({
+  open,
+  mode,
+  publicLawPreviewEnabled,
+  searchScope,
+  query,
+  debouncedQuery,
+  locale,
+}: CitationSearchOptions) => {
+  const citationCountry = defaultCaseLawCountryForLocale(locale);
+  const citationEnabled =
+    open &&
+    mode.type === "browse" &&
+    publicLawPreviewEnabled &&
+    searchScope === "all" &&
+    citationCountry !== null &&
+    query === debouncedQuery &&
+    isLegalCitationSearch({ country: citationCountry, query: debouncedQuery });
+  const citationQuery = useQuery({
+    ...legalCitationSearchOptions({
+      country: citationCountry ?? "",
+      query: debouncedQuery,
+    }),
+    enabled: citationEnabled,
+  });
+  useQueryViewError(queryView(citationQuery), "SearchDialog:legalCitation");
+  const hits = citationCommandHits(
+    citationEnabled ? citationQuery.data : undefined,
+  );
+
+  return { hits, query: citationQuery, enabled: citationEnabled };
+};
+
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -559,12 +655,13 @@ export const SearchDialog = ({
   mode = BROWSE_MODE,
 }: SearchDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
   const router = useRouter();
+  const currentView = useCurrentWorkspaceView();
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
@@ -616,7 +713,11 @@ export const SearchDialog = ({
     };
   }, [open]);
   const [query, setQuery] = useState("");
-  const [searchScope, setSearchScope] = useState<SearchScope>("all");
+  const [selectedSearchScope, setSearchScope] = useState<SearchScope>("all");
+  const searchScope = resolveSearchScope(
+    selectedSearchScope,
+    publicLawPreviewEnabled,
+  );
   const [scopeFilterOpen, setScopeFilterOpen] = useState(false);
   const [registryExpanded, setRegistryExpanded] = useState(false);
   const [caseLawExpanded, setCaseLawExpanded] = useState(false);
@@ -688,8 +789,7 @@ export const SearchDialog = ({
   const availableSearchTypes = GLOBAL_SEARCH_RESULT_TYPES.filter(
     (type) =>
       isAvailableSearchKind(type, publicLawPreviewEnabled) &&
-      (searchScope !== "matters" ||
-        (type !== "case-law" && type !== "contact")),
+      isSearchTypeInScope(type, searchScope),
   );
   const selectedSearchTypes = filters.types.filter(isSearchKindOption);
   const hasUnavailableSelectedType = hasUnavailableSearchType({
@@ -782,6 +882,20 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
+  const {
+    hits: citationHits,
+    query: citationQuery,
+    enabled: citationEnabled,
+  } = useCitationSearch({
+    open,
+    mode,
+    publicLawPreviewEnabled,
+    searchScope,
+    query,
+    debouncedQuery,
+    locale: apiLocale,
+  });
+
   const isBlockingSearchError = isSearchError && !isFetchNextPageError;
 
   // Keyed by value: the caller rebuilds the mode object every render, and the
@@ -813,7 +927,9 @@ export const SearchDialog = ({
   });
   const showPreview = shouldShowSearchPreview({ isMobile, previewEnabled });
   const displayedPreviewHit = selectDisplayedSearchPreviewHit({
-    hit: previewHit,
+    hit: citationHits.some((hit) => hit.id === highlightedHitId)
+      ? null
+      : previewHit,
     showPreview,
   });
   const supplementalDisplay = resolveSupplementalPreview({
@@ -851,6 +967,7 @@ export const SearchDialog = ({
     estimateSize: () => VIRTUAL_HIT_ESTIMATE_PX,
     getItemKey: getHitVirtualKey,
     getScrollElement: () => resultsElement,
+    observeElementRect: observeSearchResultsRect,
     overscan: VIRTUAL_HIT_OVERSCAN,
     scrollMargin: hitsScrollMargin,
   });
@@ -900,7 +1017,10 @@ export const SearchDialog = ({
   const analytics = useAnalytics();
   useExternalSyncEffect(() => {
     if (searchError) {
-      analytics.captureError(searchError);
+      analytics.captureError(searchError, {
+        fingerprintKey: "SearchDialog:searchError",
+        scope: { type: "handler", handlerId: "SearchDialog:searchError" },
+      });
     }
   }, [analytics, searchError]);
 
@@ -921,21 +1041,6 @@ export const SearchDialog = ({
 
   const { resolvedActions, executeAction, uploadRequest, closeUpload } =
     useCommandActions(open);
-
-  const filteredActions = filterCommandActions({
-    actions: resolvedActions,
-    mode: mode.type,
-    query,
-  });
-
-  const actionEntries = filteredActions.map(
-    (action) =>
-      ({
-        type: "command-action",
-        title: action.title,
-        action,
-      }) as const satisfies CommandActionEntry,
-  );
 
   const handleActionSelect = (actionId: string) => {
     closeActionQueue.schedule(() => executeAction(actionId));
@@ -961,10 +1066,13 @@ export const SearchDialog = ({
         ...(params.limit !== undefined ? { limit: params.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure",
+        scope: { type: "handler", handlerId: "SearchDialog:failure" },
+      });
     },
   });
 
@@ -975,10 +1083,13 @@ export const SearchDialog = ({
         locale: vars.locale,
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-2",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-2" },
+      });
     },
   });
 
@@ -1003,10 +1114,13 @@ export const SearchDialog = ({
         ...(vars.limit !== undefined ? { limit: vars.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-3",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-3" },
+      });
     },
   });
 
@@ -1035,7 +1149,10 @@ export const SearchDialog = ({
       return threadRef.threadId;
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-4",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-4" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
   });
@@ -1055,6 +1172,16 @@ export const SearchDialog = ({
     setSupplementalPreview({ type: "internal" });
     setSearchScope("all");
     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
+  };
+
+  const escapeAction = hasVisibleSearch ? "clear" : "close";
+  const handleEscape = (event: ReactKeyboardEvent<HTMLElement>) => {
+    handleSearchDialogEscape({
+      action: escapeAction,
+      clearSearch,
+      event,
+      focusInput: () => searchInputRef.current?.focus(),
+    });
   };
 
   const handleSummarizeResults = () => {
@@ -1085,7 +1212,13 @@ export const SearchDialog = ({
       }
       detached(
         navigateToTarget().catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "SearchDialog.navigateAfterClose:failure",
+            scope: {
+              type: "handler",
+              handlerId: "SearchDialog.navigateAfterClose:failure",
+            },
+          });
           notifyUserError(error, t("common.somethingWentWrong"));
         }),
         "search-dialog.navigate-to-target",
@@ -1225,8 +1358,8 @@ export const SearchDialog = ({
         }
         await navigate(options);
       },
-      pathname: router.state.location.pathname,
       queryClient,
+      router,
       targetWorkspaceId: location.workspaceId,
     });
   };
@@ -1251,7 +1384,12 @@ export const SearchDialog = ({
     if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
       return;
     }
-    await openEntityInInspector(entityId, label, workspaceId);
+    await openEntityInInspector({
+      documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+      entityId,
+      label,
+      workspaceId,
+    });
   };
 
   const openRecentFile = (file: RecentFileWithIdentity) => {
@@ -1297,7 +1435,7 @@ export const SearchDialog = ({
         await openEntityLocation(location);
         return;
       }
-      await navigate(getRecentFileRoute({ ...file, fileFieldId }));
+      await navigate(getRecentFileRoute({ ...file, currentView, fileFieldId }));
     });
   };
 
@@ -1324,6 +1462,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1442,6 +1581,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId, route } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1504,9 +1644,7 @@ export const SearchDialog = ({
     !hasUnavailableSelectedType &&
     !isBlockingSearchError &&
     hasResults;
-  const commandHits = shouldShowResults ? allHits : [];
-  const commandActions = hasVisibleSearch ? actionEntries : [];
-  const commandItems = [...commandActions, ...commandHits];
+  const commandHits = [...citationHits, ...(shouldShowResults ? allHits : [])];
   const resultsStatus = resolveSearchResultsStatus({
     hasActiveSearch,
     hasQuery,
@@ -1516,6 +1654,7 @@ export const SearchDialog = ({
     isBlockingSearchError,
     isLoading,
     searchQuery,
+    searchError,
   });
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
@@ -1695,37 +1834,34 @@ export const SearchDialog = ({
         onOpenChangeComplete={(nextOpen) => {
           closeActionQueue.complete(nextOpen);
         }}
-        onOpenChange={(nextOpen, eventDetails) => {
+        onOpenChange={(nextOpen) => {
           if (nextOpen) {
             closeActionQueue.cancel();
-          }
-          if (
-            !nextOpen &&
-            eventDetails.reason === "escape-key" &&
-            hasVisibleSearch
-          ) {
-            eventDetails.cancel();
-            clearSearch();
-            return;
           }
           onOpenChange(nextOpen);
         }}
         open={open}
       >
+        {/* A phone gets the whole screen rather than the bottom sheet: search
+            needs the height for results, and a sheet starting below the top
+            edge left the page (and an open sidebar) showing above it while
+            its last rows ran under the browser toolbar. */}
         <CommandDialogPopup
+          mobileLayout={DIALOG_MOBILE_LAYOUT.fullscreen}
           className={cn(
-            "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
+            "flex h-full w-full max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
             showPreview
               ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
               : "sm:w-[min(960px,calc(100vw-32px))]",
           )}
           layer="search"
+          onKeyDownCapture={handleEscape}
           showCloseButton={false}
         >
           <RenderStormRegion name="search-dialog">
             <Command
               itemToStringValue={(hit) => hit.title}
-              items={commandItems}
+              items={commandHits}
               keepHighlight
               mode="none"
               onItemHighlighted={(_, eventDetails) => {
@@ -1733,16 +1869,19 @@ export const SearchDialog = ({
                   debouncedSetHighlightedHitId.cancel();
                   return;
                 }
-                const highlightedHit = commandItems.at(eventDetails.index);
-                if (highlightedHit?.type === "command-action") {
+                const highlightedHit = commandHits.at(eventDetails.index);
+                if (highlightedHit?.type === "legal-citation") {
+                  if (eventDetails.reason !== "none") {
+                    setSupplementalPreview((preview) =>
+                      preview.type === "internal"
+                        ? preview
+                        : { type: "internal" },
+                    );
+                  }
                   debouncedSetHighlightedHitId.cancel();
-                  setHighlightedHitId(null);
-                  if (eventDetails.reason === "keyboard") {
-                    resultsElement
-                      ?.querySelector<HTMLElement>(
-                        `[data-command-action-index="${String(eventDetails.index)}"]`,
-                      )
-                      ?.scrollIntoView({ block: "nearest" });
+                  setHighlightedHitId(highlightedHit.id);
+                  if (eventDetails.reason === "keyboard" && resultsElement) {
+                    resultsElement.scrollTop = 0;
                   }
                   return;
                 }
@@ -1757,7 +1896,7 @@ export const SearchDialog = ({
                 }
                 if (eventDetails.reason === "keyboard") {
                   hitVirtualizer.scrollToIndex(
-                    eventDetails.index - commandActions.length,
+                    eventDetails.index - citationHits.length,
                     {
                       align: "auto",
                     },
@@ -1863,6 +2002,7 @@ export const SearchDialog = ({
                   open={scopeFilterOpen}
                   onOpenChange={setScopeFilterOpen}
                   visible={mode.type === "browse"}
+                  caseLawEnabled={publicLawPreviewEnabled}
                   onChange={(scope) => {
                     setSearchScope(scope);
                     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
@@ -1874,7 +2014,9 @@ export const SearchDialog = ({
                 />
                 <SavedSearches
                   filters={filters}
-                  showTrigger={searchScope !== "registries"}
+                  showTrigger={
+                    searchScope === "all" || searchScope === "matters"
+                  }
                   isOpen={open}
                   onApply={applySavedSearch}
                   overlayLayer="search-child"
@@ -1891,6 +2033,17 @@ export const SearchDialog = ({
                     {t("common.reset")}
                   </Button>
                 )}
+                {/* Full screen on a phone leaves no backdrop to tap. */}
+                <Button
+                  aria-label={t("common.close")}
+                  className="shrink-0 sm:hidden"
+                  onClick={() => onOpenChange(false)}
+                  size="icon-lg"
+                  title={t("common.close")}
+                  variant="ghost"
+                >
+                  <XIcon className="size-4" />
+                </Button>
               </div>
 
               {/* Content area */}
@@ -1970,23 +2123,37 @@ export const SearchDialog = ({
                           />
                         </ScrollArea>
                       </div>
+                      {scopeVisibility.caseLawPrompt && (
+                        <div className="flex flex-1 items-center justify-center px-4 py-8">
+                          <p className="text-muted-foreground text-sm">
+                            {t("search.caseLawEmptyState")}
+                          </p>
+                        </div>
+                      )}
                       {scopeVisibility.actions &&
-                        filteredActions.length > 0 && (
+                        resolvedActions.length > 0 && (
                           <MenuSection title={t("common.actions")}>
-                            {actionEntries.map((entry, index) => (
+                            {resolvedActions.map((action) => (
                               <CommandActionItem
-                                entry={entry}
-                                navigation={
-                                  hasVisibleSearch
-                                    ? { type: "command", index }
-                                    : { type: "button" }
-                                }
-                                key={entry.action.id}
+                                action={action}
+                                key={action.id}
                                 onSelect={handleActionSelect}
                               />
                             ))}
                           </MenuSection>
                         )}
+                      <SearchCitationResults
+                        enabled={citationEnabled}
+                        query={citationQuery}
+                        hits={citationHits}
+                        onOpen={(hit) => {
+                          onOpenChange(false);
+                          detached(
+                            navigate(citationCommandRoute(hit, apiLocale)),
+                            "search-citation.open",
+                          );
+                        }}
+                      />
                       <SearchResultsContent
                         onRetry={() => {
                           detached(
@@ -1997,10 +2164,9 @@ export const SearchDialog = ({
                         status={resultsStatus}
                       >
                         <SearchHitResults
-                          commandIndexOffset={commandActions.length}
                           measureContainer={(element) => {
                             if (element && resultsElement) {
-                              // Actions and the result heading precede the virtual rows.
+                              // The result heading precedes the virtual rows.
                               setHitsScrollMargin(
                                 element.getBoundingClientRect().top -
                                   resultsElement.getBoundingClientRect().top +
@@ -2009,6 +2175,7 @@ export const SearchDialog = ({
                             }
                           }}
                           hits={allHits}
+                          indexOffset={citationHits.length}
                           onOpenResult={openSearchResult}
                           pagination={{
                             fetchNextPage,
@@ -2108,7 +2275,7 @@ export const SearchDialog = ({
                 here so the input row stays a plain input. */}
               <SearchDialogFooter
                 scope={searchScope}
-                escapeAction={hasVisibleSearch ? "clear" : "close"}
+                escapeAction={escapeAction}
                 canAskAI={canSummarizeSearch}
                 isAskingAI={askAIMutation.isPending}
                 mode={mode.type}
@@ -2368,10 +2535,34 @@ const ESCAPE_HINT_KEYS = {
   close: "search.hintClose",
 } as const;
 
+type SearchDialogEscapeAction = keyof typeof ESCAPE_HINT_KEYS;
+
+type HandleSearchDialogEscapeOptions = {
+  action: SearchDialogEscapeAction;
+  clearSearch: () => void;
+  event: ReactKeyboardEvent<HTMLElement>;
+  focusInput: () => void;
+};
+
+const handleSearchDialogEscape = ({
+  action,
+  clearSearch,
+  event,
+  focusInput,
+}: HandleSearchDialogEscapeOptions) => {
+  if (event.key !== "Escape" || action !== "clear") {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  clearSearch();
+  focusInput();
+};
+
 type SearchDialogFooterProps = {
   scope: SearchScope;
   /** What the next Esc does: it clears an active search before it closes. */
-  escapeAction: keyof typeof ESCAPE_HINT_KEYS;
+  escapeAction: SearchDialogEscapeAction;
   canAskAI: boolean;
   isAskingAI: boolean;
   mode: SearchDialogMode["type"];
@@ -2521,6 +2712,14 @@ const SearchResultsContent = ({
           </p>
         </div>
       );
+    case "refine":
+      return (
+        <div className="flex h-full items-center justify-center px-4 py-8">
+          <p className="text-muted-foreground text-sm">
+            {t("caseLaw.pagination.refineForMore")}
+          </p>
+        </div>
+      );
     case "error":
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
@@ -2564,8 +2763,8 @@ const SearchResultsContent = ({
 
 type SearchHitResultsProps = {
   measureContainer: (element: HTMLDivElement | null) => void;
-  commandIndexOffset: number;
   hits: readonly GlobalSearchHit[];
+  indexOffset: number;
   onOpenResult: ComponentProps<typeof SearchResultItem>["onClick"];
   pagination: {
     fetchNextPage: () => Promise<unknown>;
@@ -2594,8 +2793,8 @@ type SearchHitResultsProps = {
 
 const SearchHitResults = ({
   measureContainer,
-  commandIndexOffset,
   hits,
+  indexOffset,
   onOpenResult,
   pagination,
   summary,
@@ -2644,7 +2843,7 @@ const SearchHitResults = ({
             >
               <SearchResultItem
                 hit={hit}
-                index={virtualHit.index + commandIndexOffset}
+                index={indexOffset + virtualHit.index}
                 onClick={onOpenResult}
                 resultNumber={virtualHit.index + 1}
               />

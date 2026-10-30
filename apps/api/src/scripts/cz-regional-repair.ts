@@ -30,9 +30,9 @@ import type {
   CzRegionalRepairReport,
 } from "@/api/scripts/cz-regional-repair-plan";
 import {
+  checkRepairRange,
   CZ_REGIONAL_FEED_START,
   CZ_REGIONAL_LANGUAGE,
-  checkRepairRange,
   czRegionalListingKeys,
   diffCzRegionalListing,
   enumerateUtcDays,
@@ -373,13 +373,18 @@ const ingestItem = async (
       scopedDb: ingestionDb,
       sourceId,
     });
-    const processed = await processDecision({
+    const written = await processDecision({
       input: decision,
       sourceId,
       scopedDb: ingestionDb,
       observedAt: new Date(),
       observationOrder,
     });
+    if (written.isErr()) {
+      printError(`${docket}: failed`, written.error);
+      return INGEST_OUTCOMES.FAILED;
+    }
+    const processed = written.value;
     if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
       console.error(`${decision.caseNumber}: retryable — ${processed.reason}`);
       return INGEST_OUTCOMES.RETRYABLE;

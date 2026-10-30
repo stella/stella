@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, mock, test } from "bun:test";
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
-  createPublisherSlot,
   createPublisherGateSlot,
+  createPublisherSlot,
   deferPublisherGate,
+  PUBLISHER_GATES,
   publisherRequestIntervalMs,
   publisherRequestsPerDay,
-  PUBLISHER_GATES,
   readPublisherCooldown,
   withPublisherRequestRateLimit,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -132,7 +132,11 @@ describe("the shared publisher gate", () => {
     const rejection = await rejectionOf(reserve());
     expect(rejection).toBeInstanceOf(Error);
     expect(rejection).toMatchObject({
-      message: expect.stringContaining("invalid wait"),
+      code: "limiter_store_unavailable",
+      cause: {
+        message: expect.stringContaining("invalid wait"),
+        _tag: "PublisherGateReplyError",
+      },
     });
   });
 

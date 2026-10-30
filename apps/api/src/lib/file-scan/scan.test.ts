@@ -978,6 +978,23 @@ describe("scanFile integration", () => {
     expect(r.findings.some((f) => f.rule === "corrupt-zip")).toBe(true);
   });
 
+  test.each([
+    `${DOCX_MIME}; charset=binary`,
+    DOCX_MIME.toUpperCase(),
+    ` ${DOCX_MIME} `,
+  ])("corrupt ZIP declared as DOCX spelled %p → reject", async (declared) => {
+    expect(declared).not.toBe(DOCX_MIME);
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: encoder.encode("not a zip file at all"),
+        declaredMimeType: declared,
+        fileName: "corrupt.docx",
+      }),
+    );
+    expect(r.verdict).toBe("reject");
+    expect(r.findings.map((f) => f.rule)).toEqual(["corrupt-zip"]);
+  });
+
   test("performance: 1 MB buffer < 500 ms", async () => {
     const buffer = new Uint8Array(1024 * 1024);
     const start = performance.now();

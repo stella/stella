@@ -15,8 +15,8 @@ import {
   type TestRssEnvironment,
   type TestRssFile,
   type TestRssShard,
-  type TestRssTable,
   type TestRssSource,
+  type TestRssTable,
 } from "./test-batch-plan";
 
 class PeakRssRefreshError extends TaggedError("PeakRssRefreshError")<{

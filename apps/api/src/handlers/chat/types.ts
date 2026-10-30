@@ -8,9 +8,9 @@ import type {
 } from "@tanstack/ai/client";
 
 import type {
-  TanStackAIProvider,
   ReasoningEffort,
   ReasoningProvenance,
+  TanStackAIProvider,
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
@@ -42,11 +42,11 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type {
-  PersistedJsonObject,
-  PersistedToolProviderMetadata,
-  PersistedToolCallPart,
-  PersistedToolResultPart,
   persistedChatMessageContentV3Proof,
+  PersistedJsonObject,
+  PersistedToolCallPart,
+  PersistedToolProviderMetadata,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
@@ -106,8 +106,7 @@ export type ChatAttachmentMetadata = {
 };
 
 export type ChatAttachmentPart =
-  | ImagePart<ChatAttachmentMetadata>
-  | DocumentPart<ChatAttachmentMetadata>;
+  ImagePart<ChatAttachmentMetadata> | DocumentPart<ChatAttachmentMetadata>;
 
 type SdkChatPart = MessagePart<ChatClientTools>;
 export type ChatTanStackPart =
@@ -122,8 +121,13 @@ export type ChatTanStackPart =
         providerMetadata?: PersistedToolProviderMetadata;
       })
   | (ThinkingPart & {
-      /** Server-issued replay identity; historical parts may have none. */
-      provenance?: ReasoningProvenance;
+      /**
+       * Server-issued replay identity; historical parts may have none. One
+       * naming a provider or format this release does not list (a newer
+       * release's, or one since retired) is kept as stored but unverified:
+       * replay accepts only a provenance it can verify.
+       */
+      provenance?: ReasoningProvenance | PersistedJsonObject;
       /** Provider artefacts a writer stored with the reasoning, kept as stored. */
       providerMetadata?: PersistedJsonObject;
     });

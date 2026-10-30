@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { outboundActions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
@@ -17,7 +17,7 @@ const config = {
   permissions: { integration: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "human_confirmation" },
-  params: t.Object({ actionId: tSafeId("outboundAction") }),
+  params: v.object({ actionId: resourceIdSchema("outboundAction") }),
 } satisfies HandlerConfig;
 
 /** Drop a pending action so it can never be confirmed. Idempotent. */

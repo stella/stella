@@ -1,6 +1,7 @@
 import { captureError } from "@/api/lib/analytics/capture";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -19,8 +20,7 @@ import { logger } from "@/api/lib/observability/logger";
  * rather than leaving it to be inferred from a hole in a table.
  */
 export type SourceRegistryMembership =
-  | { type: "registered"; adapterKey: AdapterKey }
-  | { type: "unrecognized" };
+  { type: "registered"; adapterKey: AdapterKey } | { type: "unrecognized" };
 
 const isRegisteredAdapterKey = (key: string): key is AdapterKey =>
   Object.values(ADAPTER_KEYS).some((candidate) => candidate === key);
@@ -32,6 +32,15 @@ export const sourceRegistryMembership = (
     ? { type: "registered", adapterKey }
     : { type: "unrecognized" };
 
+export const SOURCE_REPORT_FEATURE = {
+  coverage: "case_law.coverage",
+  ingestionStatus: "case_law.ingestion_status",
+  adapterHealth: "case_law.adapter_health",
+} as const;
+
+type SourceReportFeature =
+  (typeof SOURCE_REPORT_FEATURE)[keyof typeof SOURCE_REPORT_FEATURE];
+
 /**
  * Reports unrecognized adapter keys once per key per run.
  *
@@ -41,7 +50,9 @@ export const sourceRegistryMembership = (
  * every caller. The caller builds one reporter and shares it across the rows of
  * a single read.
  */
-export const createUnrecognizedSourceReporter = (feature: string) => {
+export const createUnrecognizedSourceReporter = (
+  feature: SourceReportFeature,
+) => {
   const reported = new Set<string>();
 
   return (adapterKey: string): void => {
@@ -54,7 +65,10 @@ export const createUnrecognizedSourceReporter = (feature: string) => {
     // unrecognized. This is the telemetry that keeps that from being silent.
     captureError(
       new Error(`case-law source adapter key is not registered: ${adapterKey}`),
-      { feature, sourceAdapterKey: adapterKey },
+      handlerErrorContext(`sourceRegistry.${feature}`, {
+        feature,
+        sourceAdapterKey: adapterKey,
+      }),
     );
     logger.warn("case_law.source_adapter_key_unregistered", {
       feature,
