@@ -18,7 +18,6 @@ import {
 } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -29,6 +28,7 @@ import {
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
@@ -64,7 +64,7 @@ const decisionText = (
   if (content.textAccess === "readable") {
     // A published decision can be readable yet bodyless (redacted or not
     // yet fetched); that is missing text, not an empty decision.
-    const document = parseCaseLawDecisionAst(content.ast);
+    const document = parseCachedDecisionAst(content.ast);
     if (document === null || document.blocks.length === 0) {
       return { status: "unavailable" };
     }

@@ -895,6 +895,7 @@ const recoveryCases = {
   "dependency-audit": "later-green",
   "suppression-waiver": "changed-source",
   "quarantined-test": "changed-source",
+  "guard-rollout": "changed-source",
   "flaky-test-quarantine": "changed-source",
   "pending-contract-migration": "changed-source",
 } as const satisfies Record<
@@ -1178,7 +1179,7 @@ test("a removal proposal is retired when another change removes its waiver", asy
       key: waiverKey(lifecycleOwner),
     },
   ]);
-  expect(healingWriteNeeded(empty, orphans)).toBe(true);
+  expect(healingWriteNeeded(empty, { orphans, renewalOpen: false })).toBe(true);
   await applyHealing({
     report: empty,
     actions: healing.actions,
@@ -1192,9 +1193,12 @@ test("a removal proposal is retired when another change removes its waiver", asy
   );
   expect(healing.fake.tasks).toEqual([]);
   expect(await reconciliation.discover()).toEqual([]);
-  expect(healingWriteNeeded(empty, await reconciliation.discover())).toBe(
-    false,
-  );
+  expect(
+    healingWriteNeeded(empty, {
+      orphans: await reconciliation.discover(),
+      renewalOpen: false,
+    }),
+  ).toBe(false);
   await applyHealing({
     report: empty,
     actions: healing.actions,

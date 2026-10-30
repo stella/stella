@@ -1,5 +1,21 @@
 # @stll/cli
 
+## 6.2.0
+
+### Minor Changes
+
+- [#5582](https://github.com/stella/stella/pull/5582) [`26685b8`](https://github.com/stella/stella/commit/26685b8622393a3383c305c5cf5c1222b1f6d861) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add personal account export request, status, and authenticated download-link commands with explicit account-export OAuth consent.
+
+### Patch Changes
+
+- [#7148](https://github.com/stella/stella/pull/7148) [`2e7e0e7`](https://github.com/stella/stella/commit/2e7e0e700343a2cb1d8699972215690bb84d6507) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe disabled analysis generation and source restrictions with distinct availability codes.
+
+## 6.1.4
+
+### Patch Changes
+
+- [#7197](https://github.com/stella/stella/pull/7197) [`707df70`](https://github.com/stella/stella/commit/707df70b8b242cb3b77ede702c972ab5848c8f87) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Return publisher-withdrawal markers in matter-link results.
+
 ## 6.1.3
 
 ### Patch Changes

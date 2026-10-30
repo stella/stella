@@ -3,18 +3,21 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { apiApp } from "@/api/server";
 
 import {
   ledgerGitEnv,
-  ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
@@ -47,6 +50,8 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionFilterValidationScalingScenario,
+  accountExportDownloadScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   suggestionRangeScalingScenario,
@@ -63,7 +68,7 @@ const measuredApiReads = apiApp.routes
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
 test("previously measured scenarios retain their handler or tool identity", async () => {
-  const base = ledgerMergeBase({ repoRoot, baseRef: "origin/main" });
+  const base = treeBaseRevision({ repoRoot });
   const readBaseSource = (file: string) => {
     const result = Bun.spawnSync(["git", "show", `${base}:${file}`], {
       cwd: repoRoot,
@@ -231,10 +236,7 @@ for (const { kind, surface, ledger, measured } of [
           label: `${kind}-scaling`,
           remediation:
             "add an exercised scaling case instead of a ledger entry",
-          args: [
-            "--base",
-            ledgerMergeBase({ repoRoot, baseRef: "origin/main" }),
-          ],
+          args: ["--base", treeBaseRevision({ repoRoot })],
         }),
       ).toBe(0);
     });

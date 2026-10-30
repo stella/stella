@@ -60,7 +60,7 @@ describe("deployment setting contract", () => {
     expect(result.exitCode).toBe(1);
     expect(result.lines).toEqual([
       "production api DEPLOY_ENVIRONMENT expected environment",
-      "production api DATABASE_URL expected either",
+      "production api DATABASE_URL expected either, or all of DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME",
     ]);
   });
 
@@ -140,6 +140,38 @@ describe("deployment setting contract", () => {
     );
   });
 
+  test("a deployment may carry the database components instead of the URL", async () => {
+    const value = fixture();
+    const components = [
+      "DB_HOST",
+      "DB_PORT",
+      "DB_USER",
+      "DB_PASSWORD",
+      "DB_NAME",
+    ];
+    for (const environment of [
+      value.environments.staging,
+      value.environments.production,
+    ]) {
+      for (const names of Object.values(environment)) {
+        names.environment = names.environment.filter(
+          (name) => name !== "DATABASE_URL",
+        );
+        names.secrets.push(...components);
+      }
+    }
+    expect((await run(value)).exitCode).toBe(0);
+    // One component short of the set is not a database connection.
+    apiNames(value).secrets = apiNames(value).secrets.filter(
+      (name) => name !== "DB_PASSWORD",
+    );
+    const refused = await run(value);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.lines).toContain(
+      "production api DATABASE_URL expected either, or all of DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME",
+    );
+  });
+
   test("every required API catalog name is contracted and every contract name is catalogued", () => {
     const catalogNames = new Set(ENV_CATALOG.map(({ name }) => name));
     const contractNames = new Set(DEPLOY_ENV_CONTRACT.map(({ name }) => name));
@@ -152,8 +184,11 @@ describe("deployment setting contract", () => {
         expect(contractNames.has(entry.name), entry.name).toBe(true);
       }
     }
-    for (const { name } of DEPLOY_ENV_CONTRACT) {
+    for (const { name, alternatives = [] } of DEPLOY_ENV_CONTRACT) {
       expect(catalogNames.has(name), name).toBe(true);
+      for (const alternative of alternatives.flat()) {
+        expect(catalogNames.has(alternative), alternative).toBe(true);
+      }
     }
     expect(contractNames.size).toBe(DEPLOY_ENV_CONTRACT.length);
   });

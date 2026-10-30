@@ -40,6 +40,7 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import {
   chatMessageFromPersisted,
+  continueStoredChatPart,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
@@ -807,12 +808,12 @@ const applyValidatedContinuationTransitions = ({
     }
     const validatedCall = validatedCallsById.get(part.id);
     if (validatedCall === undefined) {
-      return canonicalizeToolCall(part);
+      return continueStoredChatPart(part, canonicalizeToolCall(part));
     }
     if (validatedCall.type === "transitioned") {
       transitionedCallIds.add(part.id);
     }
-    return validatedCall.call;
+    return continueStoredChatPart(part, validatedCall.call);
   });
   const resultCallIds = new Set(
     persistedParts.flatMap((part) =>

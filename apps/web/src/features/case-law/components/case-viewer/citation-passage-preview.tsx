@@ -4,7 +4,10 @@ import { useTranslations } from "use-intl";
 
 import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
-import { findCitationPassage } from "@stll/legal-ast/citation-passage";
+import {
+  classifiedCitationBlockIds,
+  findCitationPassage,
+} from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -62,12 +65,14 @@ export const useCitationPassage = ({
       decision.fulltext,
     ),
     citationText: citation.citationText,
-    sectionText:
+    classifiedBlockIds: classifiedCitationBlockIds(
+      ast,
       citation.sectionIndex === undefined || decision.sections === null
         ? undefined
         : decision.sections.find(
             (section) => section.index === citation.sectionIndex,
-          )?.text,
+          )?.blockIndices,
+    ),
   });
 
   return passage === null

@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { readStagingEcsReadiness } from "./staging-ecs-readiness";
+import {
+  readStagingEcsReadiness,
+  RECEIPT_NOT_PRODUCED,
+} from "./staging-ecs-readiness";
 
 const COMMIT = "a".repeat(40);
 const current = { startedBy: "ecs-svc/current", lastStatus: "RUNNING" };
@@ -35,7 +38,14 @@ test("every scoped service has running capacity from its current deployment", as
   expect(await readReceipt(receipt())).toEqual({ status: "ready" });
 });
 
-test("missing, mismatched and incomplete deployment evidence is unavailable", async () => {
+test("an absent receipt is unrecorded, never ready and never silent", async () => {
+  expect(await readReceipt(undefined)).toEqual({
+    status: "unrecorded",
+    reason: RECEIPT_NOT_PRODUCED,
+  });
+});
+
+test("mismatched and incomplete deployment evidence is unavailable", async () => {
   const missingService = receipt();
   missingService.services.pop();
   const oldTask = receipt();
@@ -47,7 +57,6 @@ test("missing, mismatched and incomplete deployment evidence is unavailable", as
     service.tasks = [{ ...current, lastStatus: "PENDING" }];
   }
   for (const fixture of [
-    undefined,
     null,
     {},
     { ...receipt(), commit: "b".repeat(40) },
