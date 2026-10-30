@@ -128,7 +128,8 @@ const CLAIMED_INPUT_TYPES = new Set(
 );
 
 const isInputRuleType = (type: string): boolean =>
-  !CLAIMED_INPUT_TYPES.has(type) && !(type in INPUT_TYPES_OUTSIDE_INPUT_RULE);
+  !CLAIMED_INPUT_TYPES.has(type) &&
+  !Object.hasOwn(INPUT_TYPES_OUTSIDE_INPUT_RULE, type);
 
 const MESSAGE =
   "{{found}} hand-rolls a control @stll/ui already ships. Render {{use}} instead.";

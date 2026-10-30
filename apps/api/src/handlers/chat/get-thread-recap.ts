@@ -158,6 +158,12 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
     return Result.ok<ThreadRecapResult>({ recap: null });
   }
 
+  if (messageWindow.withdrawnMarker !== null) {
+    return Result.ok<ThreadRecapResult>({
+      recap: messageWindow.withdrawnMarker,
+    });
+  }
+
   // Only recap a completed exchange the user is returning to after a
   // gap: the latest persisted turn must be an assistant message and
   // old enough to count as a revisit.

@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-import { Text } from "@/components/ui/text";
+import { Text } from "@stll/ui/text";
 
 /** What a list shows when it has nothing, centred in a quiet card. */
 export const EmptyCard = ({
