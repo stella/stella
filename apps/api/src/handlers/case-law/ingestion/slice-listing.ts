@@ -11,6 +11,7 @@ import { Result } from "better-result";
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
+  ListingIdentity,
   ListingObservation,
   ReconciliationListingItem,
   SourceReconciliation,
@@ -35,7 +36,7 @@ import { logger } from "@/api/lib/observability/logger";
  */
 export const MAX_SLICE_PAGES = 200;
 
-export type ListedSlice = {
+type SliceListing = {
   /** Durable source evidence kept outside canonical identity matching. */
   observations: Map<string, ListingObservation>;
   /** Distinct keyable identities, first listing of each. */
@@ -69,13 +70,42 @@ export type ListedSlice = {
   withoutStableFields: number;
 };
 
+/** Constructed only after this owner has listed the whole reconciliation scope. */
+class VerifiedReconciliationScope {
+  readonly type = "complete-scope";
+  readonly #listedIdentities: readonly Readonly<ListingIdentity>[];
+
+  constructor(listedIdentities: readonly ListingIdentity[]) {
+    this.#listedIdentities = Object.freeze(
+      listedIdentities.map((identity) => Object.freeze({ ...identity })),
+    );
+  }
+
+  get listedIdentities(): readonly Readonly<ListingIdentity>[] {
+    return this.#listedIdentities;
+  }
+}
+
+export type CompleteReconciliationScope = VerifiedReconciliationScope;
+
+export type ListedSlice = SliceListing & {
+  recoveryProof: CompleteReconciliationScope;
+};
+
+const completeListedSlice = (listing: SliceListing): ListedSlice => ({
+  ...listing,
+  recoveryProof: new VerifiedReconciliationScope(
+    [...listing.keyed.values()].map(({ identity }) => identity),
+  ),
+});
+
 const unstoredCollisionCount = ({
   quarantineCollisions,
-}: ListedSlice): number =>
+}: SliceListing): number =>
   [...quarantineCollisions.values()].reduce((sum, extra) => sum + extra, 0);
 
 /** Records a slice lists that cannot each have a row of their own. */
-export const unstoredRecordCount = (listing: ListedSlice): number =>
+export const unstoredRecordCount = (listing: SliceListing): number =>
   listing.withoutStableFields + unstoredCollisionCount(listing);
 
 /**
@@ -127,9 +157,9 @@ const listSlicePass = async ({
   sleep,
   signal,
 }: ListReconciliationSliceOptions): Promise<
-  Result<ListedSlice, AdapterFetchError>
+  Result<SliceListing, AdapterFetchError>
 > => {
-  const listing: ListedSlice = {
+  const listing: SliceListing = {
     keyed: new Map(),
     observations: new Map(),
     listed: 0,
@@ -147,7 +177,7 @@ const listSlicePass = async ({
     revision: string;
   }[] = [];
   let repeats = 0;
-  const finish = (): ListedSlice => {
+  const finish = (): SliceListing => {
     listing.quarantineCollisions = countQuarantineCollisions(
       quarantineObservations,
     );
@@ -235,7 +265,7 @@ const listSlicePass = async ({
  */
 const reportUnstoredRecords = (
   { adapterKey, slice }: ListReconciliationSliceOptions,
-  listing: ListedSlice,
+  listing: SliceListing,
 ): void => {
   for (const [sourceDocumentId, extra] of listing.quarantineCollisions) {
     logger.warn("case_law.reconciliation.quarantine_collision", {
@@ -261,7 +291,7 @@ const reportUnstoredRecords = (
   }
 };
 
-const sameIdentities = (first: ListedSlice, second: ListedSlice): boolean =>
+const sameIdentities = (first: SliceListing, second: SliceListing): boolean =>
   first.keyed.size === second.keyed.size &&
   [...first.keyed.keys()].every((identityKey) =>
     second.keyed.has(identityKey),
@@ -292,15 +322,15 @@ export const listReconciliationSlice = async (
   options: ListReconciliationSliceOptions,
 ): Promise<Result<ListedSlice, AdapterFetchError>> => {
   const first = await listSlicePass(options);
-  if (Result.isOk(first)) {
-    reportUnstoredRecords(options, first.value);
+  if (Result.isError(first)) {
+    return first;
   }
+  reportUnstoredRecords(options, first.value);
   if (
-    Result.isError(first) ||
     (first.value.listed === 0 && first.value.pages === 1) ||
     options.proof === SLICE_LISTING_PROOF.COUNT
   ) {
-    return first;
+    return Result.ok(completeListedSlice(first.value));
   }
   const { adapterKey, pageDelayMs, slice, sleep, signal } = options;
   await abortableSleep(sleep, pageDelayMs, signal);
@@ -309,7 +339,7 @@ export const listReconciliationSlice = async (
     return verification;
   }
   return sameIdentities(first.value, verification.value)
-    ? first
+    ? Result.ok(completeListedSlice(first.value))
     : Result.err(
         new AdapterFetchError({
           message: `Slice ${slice} changed while it was listed: ${String(first.value.keyed.size)} identities, then ${String(verification.value.keyed.size)}`,

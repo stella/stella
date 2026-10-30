@@ -780,16 +780,9 @@ const runScopedIngestionPipeline = async ({
         observations: page.observations,
       });
     }
+    // A crawl page cannot establish whether a matching record remains on a later page.
     const proof = {
-      type: "complete-listing",
-      listedIdentities: [
-        ...page.decisions,
-        ...(page.unreadItems?.map(({ listing }) => listing) ?? []),
-      ].flatMap(({ sourceDocumentId }) =>
-        sourceDocumentId === undefined
-          ? []
-          : [{ type: "document" as const, sourceDocumentId }],
-      ),
+      type: "no-listing-proof",
     } as const satisfies CollisionFilterProof;
     const s3FailuresBefore = s3UploadFailures;
     const decisions = reportPageQuarantineCollisions(page.decisions, proof);

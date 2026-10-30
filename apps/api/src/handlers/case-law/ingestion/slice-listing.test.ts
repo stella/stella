@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterEach, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, expect, expectTypeOf, mock, spyOn, test } from "bun:test";
 
 import {
   listReconciliationSlice,
@@ -7,6 +7,7 @@ import {
   SLICE_LISTING_PROOF,
   unstoredRecordCount,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
+import type { CompleteReconciliationScope } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
   ReconciliationListingItem,
@@ -77,6 +78,19 @@ test("keys each identity once and counts its repeats", async () => {
   ]);
   expect(listing.listed).toBe(4);
   expect(listing.duplicate).toBe(1);
+  expect(listing.recoveryProof.listedIdentities).toEqual([
+    { type: "document", sourceDocumentId: "a" },
+    { type: "document", sourceDocumentId: "b" },
+    { type: "document", sourceDocumentId: "c" },
+  ]);
+  expectTypeOf(listing.recoveryProof).toExtend<CompleteReconciliationScope>();
+  expectTypeOf<{
+    readonly type: "complete-scope";
+    readonly listedIdentities: CompleteReconciliationScope["listedIdentities"];
+  }>().not.toExtend<CompleteReconciliationScope>();
+  expectTypeOf({
+    ...listing.recoveryProof,
+  }).not.toExtend<CompleteReconciliationScope>();
   // Paced between pages, never before the first; the verification pass is
   // paced the same way, after a pause of its own.
   expect(sleeps).toEqual([1000, 1000, 1000]);

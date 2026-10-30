@@ -23,6 +23,7 @@ import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
+import type { CompleteReconciliationScope } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type {
   IngestionResult,
@@ -376,11 +377,7 @@ export const isQuarantineListingIdentity = (
   );
 
 export type CollisionFilterProof =
-  | {
-      readonly type: "complete-listing";
-      readonly listedIdentities: readonly ListingIdentity[];
-    }
-  | { readonly type: "no-listing-proof" };
+  CompleteReconciliationScope | { readonly type: "no-listing-proof" };
 
 const collisionFilteredDecisionsBrand = Symbol("CollisionFilteredDecisions");
 
@@ -402,7 +399,7 @@ export const filterQuarantinePeerCollisions = ({
   proof,
 }: FilterQuarantinePeerCollisionsOptions): CollisionFilteredDecisions => {
   switch (proof.type) {
-    case "complete-listing": {
+    case "complete-scope": {
       const collidingIds = quarantinePeerCollisions([
         ...proof.listedIdentities.flatMap((identity) =>
           identity.type === "document"

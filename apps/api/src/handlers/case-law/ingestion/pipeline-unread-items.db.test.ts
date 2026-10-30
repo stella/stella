@@ -477,3 +477,84 @@ test("a quarantined record followed by its keyed peer survives as two database r
     quarantine.sourceDocumentId,
   ]);
 });
+
+test("a keyed peer on page one stays separate when its quarantined peer appears on page two", async () => {
+  const sourceId = await crawlSource();
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 130/2024", court: BASE.court },
+  });
+  const quarantined = {
+    ...fullDecision("130"),
+    sourceDocumentId: quarantine.sourceDocumentId,
+  };
+  const keyed = {
+    ...fullDecision("130"),
+    sourceDocumentId: "publisher-document-130",
+    sourceDocumentIdRepairAliases: quarantine.repairAliases,
+  };
+
+  const originalRow = { id: createSafeId<"caseLawDecision">() };
+  await db.insert(caseLawDecisions).values({
+    id: originalRow.id,
+    sourceId,
+    sourceDocumentId: quarantine.sourceDocumentId,
+    caseNumber: quarantined.caseNumber,
+    court: quarantined.court,
+    country: quarantined.country,
+    language: quarantined.language,
+    fulltext: quarantined.fulltext,
+    sourceHash: quarantined.rawHash,
+    metadata: quarantined.metadata,
+  });
+
+  const firstPage = await cycle(sourceId, {
+    observations: [],
+    decisions: [keyed],
+  });
+  expect(firstPage.haltReason).toBeNull();
+  expect((await sourceState(sourceId)).cursor).toBe("page-2");
+  const afterFirstPage = await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(afterFirstPage).toHaveLength(2);
+  expect(afterFirstPage).toEqual(
+    expect.arrayContaining([
+      {
+        id: originalRow.id,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: keyed.sourceDocumentId }),
+    ]),
+  );
+
+  const secondPage = await cycle(sourceId, {
+    observations: [],
+    decisions: [quarantined],
+  });
+  expect(secondPage.haltReason).toBeNull();
+  const afterSecondPage = await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(afterSecondPage).toHaveLength(2);
+  expect(afterSecondPage).toEqual(
+    expect.arrayContaining([
+      {
+        id: originalRow.id,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: keyed.sourceDocumentId }),
+    ]),
+  );
+  expect(keyed.sourceDocumentIdRepairAliases).toEqual([
+    quarantine.sourceDocumentId,
+  ]);
+});

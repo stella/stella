@@ -1614,10 +1614,7 @@ const walkSlice = async ({
 
   const buildDecision =
     reconciliation.createSliceBuildDecision?.() ?? reconciliation.buildDecision;
-  const collisionProof = {
-    type: "complete-listing",
-    listedIdentities: items.map(({ identity }) => identity),
-  } as const satisfies CollisionFilterProof;
+  const collisionProof = listing.value.recoveryProof;
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
