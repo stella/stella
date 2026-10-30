@@ -5,7 +5,8 @@
 ## `fetchWithTimeout`
 
 ```ts
-import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 // Abort when no response headers arrive within 5 seconds.
 const response = await fetchWithTimeout(url, {

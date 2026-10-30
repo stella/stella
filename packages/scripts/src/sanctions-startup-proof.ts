@@ -1,12 +1,9 @@
 import { Result, TaggedError } from "better-result";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
-import {
-  createFetchWithTimeout,
-  fetchWithTimeout,
-  readBodyWithIdleDeadline,
-} from "@stll/fetch";
+import { createFetchWithTimeout, fetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 class SanctionsStartupProofError extends TaggedError(
   "SanctionsStartupProofError",

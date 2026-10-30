@@ -2,7 +2,7 @@ import { TaggedError } from "better-result";
 
 import { raceAbort } from "./race-abort";
 
-export class BodyByteLimitError extends TaggedError("body_byte_limit")<{
+export class BodyByteLimitError extends TaggedError("BodyByteLimitError")<{
   message: string;
   limit: number;
 }> {}

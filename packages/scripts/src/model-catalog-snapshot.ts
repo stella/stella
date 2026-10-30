@@ -3,7 +3,8 @@ import path from "node:path";
 
 import type { BYOKProvider } from "@stll/ai-catalog";
 import { MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER } from "@stll/ai-catalog";
-import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 export const MODELS_DEV_KEY_BY_PROVIDER = {
   ...MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,

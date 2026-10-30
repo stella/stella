@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
-import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import type {

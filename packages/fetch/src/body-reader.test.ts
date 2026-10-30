@@ -4,7 +4,7 @@ import {
   BodyByteLimitError,
   iterateBodyWithIdleDeadline,
   readBodyWithIdleDeadline,
-} from "./index";
+} from "./body-reader";
 import { raceAbort } from "./race-abort";
 
 const flush = async () => {

@@ -15,7 +15,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { classifyFailure } from "@stll/errors";
-import { readBodyWithIdleDeadline } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 

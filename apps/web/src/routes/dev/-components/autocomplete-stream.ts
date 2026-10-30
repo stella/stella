@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { iterateBodyWithIdleDeadline } from "@stll/fetch";
+import { iterateBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 type SSEEvent = { event: string; data: string };
 
