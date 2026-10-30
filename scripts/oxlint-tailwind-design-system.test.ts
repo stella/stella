@@ -1,5 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   cp,
   mkdir,
@@ -26,7 +27,7 @@ import {
   tailwindEntryPoints,
   tailwindFailureMessages,
 } from "./generate-tailwind-classes";
-import { generatorsForFiles } from "./generated-files";
+import { GENERATORS } from "./generated-files";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const pluginPath = path.join(repositoryRoot, "node_modules/oxlint-tailwindcss");
@@ -269,7 +270,7 @@ const lintFixture = async ({
   }
 };
 
-test("read-only lint uses the complete committed cache for all Tailwind rules", async () => {
+test("read-only lint uses the complete generated cache for all Tailwind rules", async () => {
   const result = await lintFixture({
     cache: generatedCache,
     source:
@@ -488,7 +489,7 @@ test("a crash inside the Tailwind plugin fails generation", () => {
   ]);
 });
 
-test("oxlint.config.ts makes every lint read the committed cache", () => {
+test("oxlint.config.ts makes every lint read the generated cache", () => {
   const cacheEnv = (overrides: Record<string, string>) => {
     const child = Bun.spawnSync(
       [
@@ -568,28 +569,32 @@ test("the repository lint refuses a missing cache without any env", async () => 
   }
 });
 
-test("the cache generator owns every Tailwind entry point", () => {
-  const selects = (file: string) =>
-    generatorsForFiles([file]).some(({ id }) => id === "tailwind-class-cache");
+test("the cache is a derived output with every Tailwind entry point as input", () => {
+  const generator = GENERATORS.find(({ id }) => id === "tailwind-class-cache");
+  expect(generator?.outputKind).toBe("derived");
   expect(tailwindEntryPoints.map(({ root }) => root)).toContain("apps/landing");
-  for (const { root, stylesheet } of tailwindEntryPoints) {
-    for (const file of [
-      stylesheet,
-      `${root}/src/example.tsx`,
-      `${root}/package.json`,
-    ]) {
-      expect({ file, selected: selects(file) }).toEqual({
-        file,
-        selected: true,
-      });
-    }
+  for (const { root } of tailwindEntryPoints) {
+    expect(
+      generator?.inputs.some((input) => input.startsWith(`${root}/`)),
+    ).toBe(true);
   }
-  for (const file of ["oxlint.config.ts", "packages/ui/src/styles/theme.css"]) {
-    expect({ file, selected: selects(file) }).toEqual({ file, selected: true });
-  }
+  expect(generator?.inputs).toContain("oxlint.config.ts");
+  const turbo = readFileSync(path.join(repositoryRoot, "turbo.json"), "utf-8");
+  expect(turbo).toContain('"//#generate:tailwind-cache"');
+  expect(turbo).toContain('"outputs": ["$TURBO_ROOT$/.tailwind-cache/**"]');
+  const autofix = readFileSync(
+    path.join(repositoryRoot, ".github/workflows/autofix.yml"),
+    "utf-8",
+  );
+  expect(autofix).toContain("bun run generate:tailwind-cache");
+  const tracked = Bun.spawnSync(["git", "ls-files", ".tailwind-cache"], {
+    cwd: repositoryRoot,
+  });
+  expect(tracked.exitCode).toBe(0);
+  expect(tracked.stdout.toString()).toBe("");
 });
 
-test("committed cache keeps the generator's compact form", async () => {
+test("generated cache keeps the generator's compact form", async () => {
   // The generator writes compact JSON; a formatter rewriting these files on
   // commit would make every --check report them stale.
   const names = await readdir(generatedCache);

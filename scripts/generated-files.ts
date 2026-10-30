@@ -918,7 +918,7 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "tailwind-class-cache",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: [".tailwind-cache/**"],
     inputs: [
       // Each Tailwind entry point in oxlint.config.ts: its stylesheets, linted
@@ -957,8 +957,9 @@ const GENERATOR_DECLARATIONS = [
       ...TRANSITIVE_GENERATOR_INPUTS["tailwind-class-cache"],
     ],
     write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
-    check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
-    autofix: true,
+    check: null,
+    unchecked: "Derived cache is generated before lint and is never committed",
+    autofix: false,
     after: [],
   },
   {

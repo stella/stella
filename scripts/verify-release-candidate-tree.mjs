@@ -24,11 +24,6 @@ const FIXED_DATA_PATHS = new Set([
 // the bot's latest commit wrote. Their bytes have their own, larger bound.
 const GENERATED_CLASSES = [
   {
-    name: "Tailwind class cache",
-    prefix: ".tailwind-cache/",
-    authorEmail: "114827586+autofix-ci[bot]@users.noreply.github.com",
-  },
-  {
     name: "landing product media",
     prefix: "apps/landing/public/media/products/",
     authorEmail:

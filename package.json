@@ -65,6 +65,7 @@
     "sync-ai:check": "bash .ai/shared/scripts/sync-ai-skills.sh --check . && bash scripts/check-local-skill-overrides.sh .",
     "link-codex": "bash scripts/link-codex-skills.sh",
     "lint": "bun run assets:check && bun run lint:css && bash scripts/lint-oxlint-fixtures.sh && turbo run lint",
+    "generate:tailwind-cache": "bun scripts/generate-tailwind-classes.ts --write",
     "lint:css": "bun test scripts/stylelint.test.ts && bun --bun stylelint --config .stylelintrc.json --ignore-path .gitignore --max-warnings 0 \"apps/**/*.css\" \"packages/**/*.css\"",
     "lint:changed": "bun run generate && bun scripts/lint-changed.ts",
     "lint:fix": "turbo run lint:fix",
