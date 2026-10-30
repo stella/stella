@@ -301,13 +301,14 @@ describe("classification", () => {
       if (result.eligible) {
         return;
       }
-      expect(result.refusals).toEqual([
-        {
+      expect(result.reasons).toHaveLength(1);
+      expect(result.refusals).toEqual(
+        result.reasons.map((message) => ({
           path: file,
           type,
-          message: result.reasons.at(0),
-        },
-      ]);
+          message,
+        })),
+      );
     });
   }
 
