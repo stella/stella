@@ -236,16 +236,18 @@ const SummaryBody = ({
           content={`${citation.title}\n${citation.reason}`}
           key={`${citation.id}-${start}`}
           render={
-            <button
-              className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"
+            <Button
+              className="mx-0.5"
               onClick={(event) => {
                 event.stopPropagation();
                 onCitationClick(citation.id);
               }}
-              type="button"
+              variant="plain"
             >
-              [{citation.number}]
-            </button>
+              <span className="text-foreground hover:bg-muted rounded px-1 font-medium">
+                [{citation.number}]
+              </span>
+            </Button>
           }
         />,
       );

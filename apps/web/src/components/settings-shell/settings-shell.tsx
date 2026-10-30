@@ -154,14 +154,16 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                   );
                 })}
                 {section.id === "account" && (
-                  <button
-                    className={NAV_ITEM_CLASS}
+                  <Button
+                    className="block w-full"
                     onClick={openShortcuts}
-                    type="button"
+                    variant="plain"
                   >
-                    <KeyboardIcon className="size-4" />
-                    <span>{t("navigation.shortcutsDialog.title")}</span>
-                  </button>
+                    <span className={NAV_ITEM_CLASS}>
+                      <KeyboardIcon className="size-4" />
+                      <span>{t("navigation.shortcutsDialog.title")}</span>
+                    </span>
+                  </Button>
                 )}
               </div>
             ))}

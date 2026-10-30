@@ -28,8 +28,11 @@ describe("concise consent permissions", () => {
           </FormattingProvider>
         </IntlProvider>,
       );
-      expect(markup).toContain("<details");
-      const summary = markup.slice(0, markup.indexOf("<details"));
+      expect(markup).toContain('data-slot="consent-permissions"');
+      const summary = markup.slice(
+        0,
+        markup.indexOf('data-slot="consent-permissions"'),
+      );
       expect(summary).not.toContain("Create and edit:");
       expect(summary).toContain(
         renderToStaticMarkup(

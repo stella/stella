@@ -201,14 +201,18 @@ export const VersionRow = ({
   let headerElement: React.ReactNode;
   if (onActivate) {
     headerElement = (
-      <button
-        className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
-        type="button"
+      <Button
+        className="block w-full"
         onClick={onActivate}
         onContextMenu={onContextMenu}
+        variant="plain"
       >
-        {header}
-      </button>
+        <span
+          className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
+        >
+          {header}
+        </span>
+      </Button>
     );
   } else {
     headerElement = (
