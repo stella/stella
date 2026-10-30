@@ -141,6 +141,7 @@
     "release-tag.yml/tag": "main",
     "release-tag.yml/finalize-eligibility": "main",
     "release-tag.yml/finalize": "main",
+    "release-tag.yml/land-release-pr": "main",
     "release-tag.yml/marketing-freshness": "main",
     "catalogue-upstream.yml/catalogue-upstream": "main",
     "audit-branch-protection.yml/audit-branch": "main",

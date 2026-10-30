@@ -35,6 +35,9 @@ import {
   MaintenanceReleaseError,
 } from "./prepare-maintenance-release";
 
+// Dynamic reads consume temporary Git fixtures, never repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = "scripts/check-cli-release-coupling.ts";
 /** The script's import closure, copied into checkouts without an install. */
@@ -854,7 +857,11 @@ for (const failure of [
 test("finalized release PRs cannot deadlock the next cut with pending CLI changesets", () => {
   const root = releasedTagFixture("release");
   const git = (...args: string[]) => {
-    const result = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+    const result = spawnSync("git", args, {
+      cwd: root,
+      encoding: "utf-8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
     expect(result.status, result.stderr).toBe(0);
     return result.stdout.trim();
   };
@@ -891,6 +898,9 @@ test("finalized release PRs cannot deadlock the next cut with pending CLI change
     expect(check.exitCode, check.stderr.toString()).toBe(0);
     expect(check.stdout.toString()).toContain("v0.9.48 is already tagged at");
     git("branch", "-f", "fixture-main", "HEAD");
+    // The cut's verdict depends on the checkout, not on the listing, so one
+    // run covers every sample.
+    expect(runBase(root, env).exitCode).toBe(0);
     assertProperty(
       "finalized release PRs cannot deadlock the next cut with pending CLI changesets",
       fc.property(fc.integer({ min: 1, max: 1_000_000 }), (number) => {
@@ -904,7 +914,6 @@ test("finalized release PRs cannot deadlock the next cut with pending CLI change
 
         // The merged PR disappears from the open listing used by the cut.
         assertNoOpenReleasePullRequests([]);
-        expect(runBase(root, env).exitCode).toBe(0);
       }),
       { numRuns: 3 },
     );

@@ -94,11 +94,21 @@ for (const pull of [
     expect(proof.landing?.stderr.toString()).toContain("::error::");
     expect(proof.landing?.stderr.toString()).toContain("release/v1.2.3");
     expect(proof.landing?.stderr.toString()).toContain(
-      pull === "none" ? "found: none" : "#123 chore: release v1.2.3",
+      pull === "none" || pull === "fork"
+        ? "found: none"
+        : "#123 chore: release v1.2.3",
     );
     expect(proof.merges).toBe("");
   });
 }
+
+test("a fork PR with the release head branch name is ignored beside the real one", () => {
+  const proof = finalize({ pull: "fork-alongside" });
+  expect(proof.landing?.exitCode, proof.landing?.stderr.toString()).toBe(0);
+  expect(proof.merges.trim()).toBe(
+    `pr merge 123 --repo stella/stella --auto --match-head-commit ${proof.sha}`,
+  );
+});
 
 for (const pull of ["merged", "armed", "queued"] as const) {
   test(`a rerun after the release PR is ${pull} performs no merge`, () => {

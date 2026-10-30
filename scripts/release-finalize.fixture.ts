@@ -63,9 +63,17 @@ type ProofFixture = {
     | "armed"
     | "queued"
     | "fork"
+    | "fork-alongside"
     | "closed";
   mergeFails?: boolean;
 };
+const pullState = (pull: ProofFixture["pull"]) => {
+  if (pull === "merged") {
+    return "MERGED";
+  }
+  return pull === "closed" ? "CLOSED" : "OPEN";
+};
+
 export const finalize = (fixture: ProofFixture = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-finalize-"));
   try {
@@ -102,17 +110,10 @@ export const finalize = (fixture: ProofFixture = {}) => {
       path.join(root, "verifier.sh"),
       "#!/usr/bin/env bash\nexit 0\n",
     );
-    let pullState = "OPEN";
-    if (fixture.pull === "merged") {
-      pullState = "MERGED";
-    }
-    if (fixture.pull === "closed") {
-      pullState = "CLOSED";
-    }
     const pull = {
       number: 123,
       title: "chore: release v1.2.3",
-      state: pullState,
+      state: pullState(fixture.pull),
       headRefName: "release/v1.2.3",
       headRefOid: fixture.pull === "mismatch" ? "f".repeat(40) : sha,
       isCrossRepository: fixture.pull === "fork",
@@ -123,6 +124,9 @@ export const finalize = (fixture: ProofFixture = {}) => {
     const pulls = fixture.pull === "none" ? [] : [pull];
     if (fixture.pull === "multiple") {
       pulls.push({ ...pull, number: 456 });
+    }
+    if (fixture.pull === "fork-alongside") {
+      pulls.unshift({ ...pull, number: 456, isCrossRepository: true });
     }
     writeFileSync(
       path.join(root, "pulls.json"),

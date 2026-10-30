@@ -271,7 +271,7 @@ jobs:
   land-release-pr:
     name: Land the finalized release pull request
     needs: finalize
-    if: needs.finalize.outputs.final_tag != ''
+    if: github.event_name == 'workflow_run' && needs.finalize.outputs.final_tag != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

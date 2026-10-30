@@ -33,6 +33,10 @@ listing=$(bash "$gh_retry_script" api graphql \
 jq -e '.pageInfo.hasNextPage == false' <<<"$listing" >/dev/null \
   || fail "Incomplete PR listing for $branch: $listing"
 pulls=$(jq '.nodes' <<<"$listing")
+jq -e 'type == "array" and length < 100 and all(.[]; .isCrossRepository | type == "boolean")' <<<"$pulls" >/dev/null \
+  || fail "Incomplete or invalid PR listing for $branch: $pulls"
+# A fork can name its head branch release/vX.Y.Z; it is never the release PR.
+pulls=$(jq 'map(select(.isCrossRepository | not))' <<<"$pulls")
 jq -e 'type == "array" and length < 100 and all(.[];
   (.number | type == "number") and (.title | type == "string") and
   (.headRefName | type == "string") and (.headRefOid | test("^[0-9a-f]{40}$")) and
