@@ -53,7 +53,7 @@ const NETWORK_ROUND_POLL_MS = 10;
 export type ResponseSizeOutcome =
   | { status: "measured"; bytes: number }
   | { status: "streamed" }
-  | { status: "failed"; error: string }
+  | { status: "failed"; error: string; canceled: boolean }
   | { status: "unreadable"; error: string };
 
 type ResponseSizeFailure = Extract<ResponseSizeOutcome, { error: string }>;
@@ -73,15 +73,14 @@ export type NetworkCapture = {
 };
 
 export type NetworkCollector = {
-  trackPage: (page: Page) => () => void;
+  trackPage: (page: Page) => Promise<() => Promise<void>>;
   measureRounds: (page: Page) => Promise<void>;
   finishRounds: () => void;
   // Waits until tracked API activity has been quiet for the requested window.
   // Long-lived SSE streams do not block this: only their request/response
   // events count as activity, not the open connection itself.
   waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
-  // Async: waits for in-flight protocol size measurements so sizes are
-  // populated before the caller summarizes the capture.
+  // Flushes each CDP session before snapshotting its decoded-byte outcomes.
   capture: () => Promise<NetworkCapture>;
 };
 
@@ -139,11 +138,10 @@ type NetworkRecord = {
   // From the API's dev/test-only `x-db-queries` response header (the
   // per-request Drizzle query counter); null when no response arrived.
   dbQueries: number | null;
-  // True only when Playwright saw a response and that response did not expose
+  // True only when CDP saw a response and that response did not expose
   // the dev/test query-count header.
   dbQueryHeaderMissing: boolean;
-  responseSize: ResponseSizeOutcome;
-  contentEncoding: string | undefined;
+  responseSize: ReturnType<typeof createResponseSizeSample>;
 };
 
 const BACKGROUND_POLL_PATHS = new Set(["/health"]);
@@ -172,47 +170,40 @@ const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
   return new URL(request.url()).origin === apiOrigin;
 };
 
-const isStreamedResponse = (response: Response): boolean =>
-  (response.headers()["content-type"] ?? "")
-    .toLowerCase()
-    .includes(STREAMED_RESPONSE_CONTENT_TYPE);
-
-/** Protocol sizes survive navigation; response bodies can already be discarded. */
-export const measureResponseSize = async (
-  request: Pick<Request, "sizes" | "failure">,
-  contentEncoding?: string,
-): Promise<ResponseSizeOutcome> => {
-  const failure = request.failure();
-  if (failure !== null) {
-    return { status: "failed", error: failure.errorText };
-  }
-  // sizes() reports encoded bytes, while the existing budgets measure decoded
-  // bytes. Measurement navigation requests identity encoding; reject a server
-  // that ignores it rather than silently making compressed payloads cheaper.
-  if (
-    contentEncoding !== undefined &&
-    contentEncoding.trim().toLowerCase() !== "identity"
-  ) {
-    return {
-      status: "unreadable",
-      error: `Cannot compare ${contentEncoding} protocol bytes with decoded-byte budgets`,
-    };
-  }
-  try {
-    const { responseBodySize } = await request.sizes();
-    if (!Number.isFinite(responseBodySize) || responseBodySize < 0) {
-      return {
-        status: "unreadable",
-        error: `Invalid protocol response size: ${responseBodySize}`,
-      };
-    }
-    return { status: "measured", bytes: responseBodySize };
-  } catch (error) {
-    return {
-      status: "unreadable",
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+/** Accumulate decoded bytes without retrieving or retaining the response body. */
+export const createResponseSizeSample = () => {
+  let decodedBytes = 0;
+  let outcome: ResponseSizeOutcome = {
+    status: "unreadable",
+    error: "CDP loadingFinished was not observed",
+  };
+  return {
+    receive: (dataLength: number) => {
+      if (outcome.status !== "streamed") {
+        decodedBytes += dataLength;
+      }
+    },
+    complete: () => {
+      if (outcome.status !== "streamed" && outcome.status !== "failed") {
+        outcome = { status: "measured", bytes: decodedBytes };
+      }
+    },
+    fail: ({
+      errorText,
+      canceled = false,
+    }: {
+      errorText: string;
+      canceled?: boolean;
+    }) => {
+      outcome = { status: "failed", error: errorText, canceled };
+    },
+    stream: () => {
+      outcome = { status: "streamed" };
+    },
+    get outcome(): ResponseSizeOutcome {
+      return outcome;
+    },
+  };
 };
 
 export const createNetworkCollector = (
@@ -221,9 +212,7 @@ export const createNetworkCollector = (
   const apiOrigin =
     collectorOptions.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
   const records: NetworkRecord[] = [];
-  const byRequest = new Map<Request, NetworkRecord>();
-  // Size metadata resolves asynchronously after requestfinished.
-  const pendingMeasurements: Promise<void>[] = [];
+  const flushSessions = new Set<() => Promise<void>>();
   let lastActivityAt = Date.now();
   const rounds = createNetworkRoundController<Request>();
   const released = new Set<Request>();
@@ -238,15 +227,12 @@ export const createNetworkCollector = (
         (url) => url.origin === apiOrigin,
         async (route) => {
           const request = route.request();
-          const headers = isTrackedApiRequest(request, apiOrigin)
-            ? { ...(await request.allHeaders()), "accept-encoding": "identity" }
-            : undefined;
           if (
             !isTrackedApiRequest(request, apiOrigin) ||
             !countsTowardsWaterfall(requestDetails(request)) ||
             rounds.loaded
           ) {
-            await route.continue({ headers });
+            await route.continue();
             return;
           }
           rounds.arrive({
@@ -274,111 +260,135 @@ export const createNetworkCollector = (
             }
             await ownerSleep(NETWORK_ROUND_POLL_MS);
           }
-          await route.continue({ headers });
+          await route.continue();
         },
       );
     },
     finishRounds: () => {
       rounds.finish();
     },
-    trackPage: (page) => {
-      const onRequest = (request: Request) => {
-        if (!isTrackedApiRequest(request, apiOrigin)) {
+    trackPage: async (page) => {
+      const session = await page.context().newCDPSession(page);
+      const byRequestId = new Map<string, NetworkRecord>();
+      session.on(
+        "Network.requestWillBeSent",
+        ({ requestId, request, type, wallTime, redirectResponse }) => {
+          if (redirectResponse !== undefined) {
+            byRequestId.get(requestId)?.responseSize.complete();
+            byRequestId.delete(requestId);
+          }
+          if (
+            type === undefined ||
+            !TRACKED_RESOURCE_TYPES.has(type.toLowerCase())
+          ) {
+            return;
+          }
+          const url = new URL(request.url);
+          if (url.origin !== apiOrigin) {
+            return;
+          }
+          const record: NetworkRecord = {
+            method: request.method,
+            pathname: url.pathname,
+            url: request.url,
+            startedAt: wallTime * 1000,
+            dbQueries: null,
+            dbQueryHeaderMissing: false,
+            responseSize: createResponseSizeSample(),
+          };
+          records.push(record);
+          byRequestId.set(requestId, record);
+          markActivity();
+        },
+      );
+      session.on("Network.responseReceived", ({ requestId, response }) => {
+        const record = byRequestId.get(requestId);
+        if (record === undefined) {
           return;
         }
-        const record: NetworkRecord = {
-          method: request.method(),
-          pathname: new URL(request.url()).pathname,
-          url: request.url(),
-          startedAt: Date.now(),
-          dbQueries: null,
-          dbQueryHeaderMissing: false,
-          responseSize: {
-            status: "unreadable",
-            error: "Request did not finish",
-          },
-          contentEncoding: undefined,
-        };
-        records.push(record);
-        byRequest.set(request, record);
+        const header = Object.entries(response.headers).find(
+          ([name]) => name.toLowerCase() === DB_QUERIES_HEADER,
+        )?.[1];
+        record.dbQueryHeaderMissing = header === undefined;
+        if (header !== undefined) {
+          record.dbQueries = Number(header);
+        }
+        if (
+          response.mimeType
+            .toLowerCase()
+            .includes(STREAMED_RESPONSE_CONTENT_TYPE)
+        ) {
+          record.responseSize.stream();
+        }
         markActivity();
+      });
+      session.on("Network.dataReceived", ({ requestId, dataLength }) => {
+        byRequestId.get(requestId)?.responseSize.receive(dataLength);
+      });
+      session.on("Network.loadingFinished", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.complete();
+        if (byRequestId.has(requestId)) {
+          markActivity();
+        }
+      });
+      session.on(
+        "Network.loadingFailed",
+        ({ requestId, errorText, canceled }) => {
+          byRequestId
+            .get(requestId)
+            ?.responseSize.fail({
+              errorText,
+              ...(canceled === undefined ? {} : { canceled }),
+            });
+          if (byRequestId.has(requestId)) {
+            markActivity();
+          }
+        },
+      );
+      await session.send("Network.enable");
+      const flush = async () => {
+        await session.send("Runtime.evaluate", { expression: "void 0" });
       };
+      flushSessions.add(flush);
 
+      // Playwright request tokens still own the existing release barrier.
+      const onRequest = (request: Request) => {
+        if (isTrackedApiRequest(request, apiOrigin)) {
+          markActivity();
+        }
+      };
       const onSettled = (request: Request) => {
         if (countsTowardsWaterfall(requestDetails(request))) {
           rounds.complete(request, Date.now());
         }
-        const record = byRequest.get(request);
-        if (record) {
+        if (isTrackedApiRequest(request, apiOrigin)) {
           markActivity();
         }
       };
-
-      const onFinished = (request: Request) => {
-        onSettled(request);
-        const record = byRequest.get(request);
-        if (record === undefined || record.responseSize.status === "streamed") {
-          return;
-        }
-        pendingMeasurements.push(
-          measureResponseSize(request, record.contentEncoding).then(
-            (outcome) => {
-              record.responseSize = outcome;
-              return undefined;
-            },
-          ),
-        );
-      };
-
-      const onFailed = (request: Request) => {
-        onSettled(request);
-        const record = byRequest.get(request);
-        if (record !== undefined) {
-          record.responseSize = {
-            status: "failed",
-            error:
-              request.failure()?.errorText ??
-              "requestfailed without an errorText",
-          };
-        }
-      };
-
       const onResponse = (response: Response) => {
-        const record = byRequest.get(response.request());
-        if (!record) {
-          return;
-        }
-        markActivity();
-        record.contentEncoding = response.headers()["content-encoding"];
-        const header = response.headers()[DB_QUERIES_HEADER];
-        if (header !== undefined) {
-          record.dbQueries = Number(header);
-        } else {
-          record.dbQueryHeaderMissing = true;
-        }
-
-        if (isStreamedResponse(response)) {
-          record.responseSize = { status: "streamed" };
-          // Streams never finish; headers establish that the channel opened.
-          if (countsTowardsWaterfall(requestDetails(response.request()))) {
-            rounds.complete(response.request(), Date.now());
-          }
-          return;
+        if (
+          isTrackedApiRequest(response.request(), apiOrigin) &&
+          (response.headers()["content-type"] ?? "")
+            .toLowerCase()
+            .includes(STREAMED_RESPONSE_CONTENT_TYPE) &&
+          countsTowardsWaterfall(requestDetails(response.request()))
+        ) {
+          rounds.complete(response.request(), Date.now());
         }
       };
-
       page.on("request", onRequest);
       page.on("response", onResponse);
-      page.on("requestfinished", onFinished);
-      page.on("requestfailed", onFailed);
-
-      return () => {
+      page.on("requestfinished", onSettled);
+      page.on("requestfailed", onSettled);
+      return async () => {
         rounds.finish();
         released.clear();
         page.off("request", onRequest);
         page.off("response", onResponse);
-        page.off("requestfinished", onFinished);
-        page.off("requestfailed", onFailed);
+        page.off("requestfinished", onSettled);
+        page.off("requestfailed", onSettled);
+        flushSessions.delete(flush);
+        await session.detach();
       };
     },
 
@@ -389,7 +399,7 @@ export const createNetworkCollector = (
       }),
 
     capture: async () => {
-      await Promise.all(pendingMeasurements);
+      await Promise.all([...flushSessions].map(async (flush) => await flush()));
       return {
         depthChain: rounds.rounds,
         duplicateGetCounts: countDuplicateGets(records),
@@ -398,7 +408,7 @@ export const createNetworkCollector = (
           pathname: record.pathname,
           dbQueries: record.dbQueries,
           dbQueryHeaderMissing: record.dbQueryHeaderMissing,
-          responseSize: record.responseSize,
+          responseSize: record.responseSize.outcome,
         })),
       };
     },

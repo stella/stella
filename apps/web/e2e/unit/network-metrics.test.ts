@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import { NETWORK_DEPTH_METHOD as SCOPE_NETWORK_DEPTH_METHOD } from "../../../../scripts/network-baseline-scope";
 import {
   countDuplicateGets,
+  createResponseSizeSample,
   diffNetworkBaseline,
-  measureResponseSize,
   mergeNetworkBaseline,
   NETWORK_DEPTH_METHOD,
   type NetworkBaseline,
@@ -94,78 +94,69 @@ describe("duplicate resource reads", () => {
   });
 });
 
-const completedRequest = (responseBodySize: number) => ({
-  failure: () => null,
-  sizes: async () => ({
-    requestBodySize: 0,
-    requestHeadersSize: 100,
-    responseHeadersSize: 200,
-    responseBodySize,
-  }),
-});
+describe("decoded protocol response sizes", () => {
+  test("sums decoded chunks only after loadingFinished", () => {
+    const sample = createResponseSizeSample();
+    sample.receive(1024);
+    sample.receive(2048);
+    expect(sample.outcome.status).toBe("unreadable");
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "measured", bytes: 3072 });
+  });
 
-describe("protocol response sizes", () => {
-  test.each([0, 1024, 8192])(
-    "measures completed identity responses from protocol metadata (%s)",
-    async (bytes) => {
-      expect(await measureResponseSize(completedRequest(bytes))).toEqual({
-        status: "measured",
-        bytes,
+  test("empty completed responses have a measured zero-byte body", () => {
+    const sample = createResponseSizeSample();
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "measured", bytes: 0 });
+  });
+
+  test.each([true, false])(
+    "retains the error and cancellation flag on loadingFailed (%s)",
+    (canceled) => {
+      const sample = createResponseSizeSample();
+      sample.receive(1024);
+      sample.fail({ errorText: "net::ERR_ABORTED", canceled });
+      sample.complete();
+      expect(sample.outcome).toEqual({
+        status: "failed",
+        error: "net::ERR_ABORTED",
+        canceled,
       });
     },
   );
 
-  test.each(["net::ERR_ABORTED", "net::ERR_CONNECTION_RESET"])(
-    "retains genuine request failures (%s)",
-    async (errorText) => {
-      expect(
-        await measureResponseSize({
-          ...completedRequest(1024),
-          failure: () => ({ errorText }),
-        }),
-      ).toEqual({ status: "failed", error: errorText });
-    },
-  );
-
-  test("retains protocol measurement errors", async () => {
-    expect(
-      await measureResponseSize({
-        ...completedRequest(1024),
-        sizes: async () => {
-          throw new Error("Protocol session closed");
-        },
-      }),
-    ).toEqual({ status: "unreadable", error: "Protocol session closed" });
+  test("omitted cancellation means a transport failure", () => {
+    const sample = createResponseSizeSample();
+    sample.fail({ errorText: "net::ERR_CONNECTION_RESET" });
+    expect(sample.outcome).toEqual({
+      status: "failed",
+      error: "net::ERR_CONNECTION_RESET",
+      canceled: false,
+    });
   });
 
-  test.each(["gzip", "br", "deflate"])(
-    "rejects encoded bytes rather than undercounting decoded budgets (%s)",
-    async (encoding) => {
-      expect(await measureResponseSize(completedRequest(32), encoding)).toEqual(
-        {
-          status: "unreadable",
-          error: `Cannot compare ${encoding} protocol bytes with decoded-byte budgets`,
-        },
-      );
-    },
-  );
-
-  test("accepts explicit identity encoding", async () => {
-    expect(
-      await measureResponseSize(completedRequest(1024), "identity"),
-    ).toEqual({ status: "measured", bytes: 1024 });
+  test("unfinished responses remain unreadable with their reason", () => {
+    const sample = createResponseSizeSample();
+    sample.receive(1024);
+    expect(sample.outcome).toEqual({
+      status: "unreadable",
+      error: "CDP loadingFinished was not observed",
+    });
   });
 
-  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
-    "rejects unavailable protocol sizes (%s)",
-    async (bytes) => {
-      expect(await measureResponseSize(completedRequest(bytes))).toEqual({
-        status: "unreadable",
-        error: `Invalid protocol response size: ${bytes}`,
-      });
-    },
-  );
+  test("streams stay excluded even if they later finish", () => {
+    const sample = createResponseSizeSample();
+    sample.stream();
+    sample.receive(1024);
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "streamed" });
+  });
 });
+
+const failureSamples = [
+  { status: "failed", error: "diagnostic reason", canceled: true },
+  { status: "unreadable", error: "diagnostic reason" },
+] as const satisfies readonly ResponseSizeOutcome[];
 
 describe("response size outcomes", () => {
   const key = "GET /v1/contacts";
@@ -205,25 +196,23 @@ describe("response size outcomes", () => {
     expect(result.requestCounts[key]).toBe(3);
   });
 
-  test.each(["failed", "unreadable"] as const)(
-    "retains %s samples even beside a measured response",
-    (status) => {
+  test.each(failureSamples)(
+    "retains $status samples even beside a measured response",
+    (failure) => {
       const failures = problemsFor([
         { status: "measured", bytes: 512 },
-        { status, error: "diagnostic reason" },
+        failure,
       ]);
       expect(failures).toHaveLength(1);
       expect(failures[0]).toContain("Response size missing");
-      expect(failures[0]).toContain(`${status}: diagnostic reason`);
+      expect(failures[0]).toContain(`${failure.status}: diagnostic reason`);
     },
   );
 
-  test.each(["failed", "unreadable"] as const)(
-    "a key with only %s samples fails",
-    (status) => {
-      expect(
-        problemsFor([{ status, error: "diagnostic reason" }]),
-      ).toHaveLength(1);
+  test.each(failureSamples)(
+    "a key with only $status samples fails",
+    (failure) => {
+      expect(problemsFor([failure])).toHaveLength(1);
     },
   );
 

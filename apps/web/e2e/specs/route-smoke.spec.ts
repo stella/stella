@@ -515,7 +515,7 @@ const measureRouteTarget = async ({
   });
   const detachPage = browserErrors.trackPage(page);
   const network = createNetworkCollector();
-  const detachNetwork = network.trackPage(page);
+  const detachNetwork = await network.trackPage(page);
 
   try {
     await network.measureRounds(page);
@@ -541,7 +541,7 @@ const measureRouteTarget = async ({
     // manifest reflects the fully-rendered route.
     return summarizeCapture(await network.capture());
   } finally {
-    detachNetwork();
+    await detachNetwork();
     detachPage();
     await context.close();
   }

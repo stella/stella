@@ -169,7 +169,7 @@ export const declarePublicKnowledgeSmoke = ({
           }
         });
         const network = createNetworkCollector();
-        const detach = network.trackPage(page);
+        const detach = await network.trackPage(page);
         try {
           const response = await page.goto(route.path, {
             waitUntil: "domcontentloaded",
@@ -203,7 +203,7 @@ export const declarePublicKnowledgeSmoke = ({
           expect(forbidden, "member-only requests").toEqual([]);
           expect(unauthorized, "unauthorized responses").toEqual([]);
         } finally {
-          detach();
+          await detach();
           page.off("requestfinished", settleRequest);
           page.off("requestfailed", settleRequest);
           await testInfo.attach("public-network", {
