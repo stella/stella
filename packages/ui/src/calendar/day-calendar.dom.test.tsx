@@ -375,6 +375,60 @@ describe("DayCalendar", () => {
     await cleanup();
   });
 
+  test("a suggestion is a dashed button that acts without starting a range selection", async () => {
+    const activated: string[] = [];
+    const { cleanup, container, selected } = await renderCalendar({
+      columns: [
+        activityColumn,
+        {
+          ...entriesColumn,
+          blocks: [
+            ...entriesColumn.blocks,
+            {
+              accessibleLabel: "Suggested: Service agreement, 1.0 h",
+              endMs: at(9, 5),
+              id: "suggestion-service-agreement",
+              kind: "entry",
+              onActivate: () => {
+                activated.push("suggestion-service-agreement");
+              },
+              startMs: at(8, 5),
+              state: "suggestion",
+              title: "Service agreement",
+              tone: { type: "neutral" },
+            },
+          ],
+          rangeSelection: { label: "Select a range", type: "enabled" },
+        },
+      ],
+    });
+    const suggestion = container.querySelector<HTMLButtonElement>(
+      '[data-block-id="suggestion-service-agreement"]',
+    );
+    const draft = container.querySelector<HTMLElement>(
+      '[data-block-id="entry-lease"]',
+    );
+    expect(suggestion?.tagName).toBe("BUTTON");
+    expect(suggestion?.dataset["state"]).toBe("suggestion");
+    expect(suggestion?.className).toContain("border-dashed");
+    expect(draft?.tagName).toBe("ARTICLE");
+    expect(draft?.dataset["state"]).toBe("draft");
+    if (suggestion === null) {
+      throw new Error("The suggestion did not render");
+    }
+    surfaceOf(container, "entries");
+    await pointer(suggestion, "pointerdown", pixelsAt(10, 15));
+    await pointer(suggestion, "pointerup", pixelsAt(10, 15));
+    await act(async () => suggestion.click());
+
+    expect(activated).toEqual(["suggestion-service-agreement"]);
+    expect(selected).toEqual([]);
+    expect(
+      container.querySelector('[data-slot="day-calendar-selection"]'),
+    ).toBeNull();
+    await cleanup();
+  });
+
   test("a committed selection anchors the caller's panel in another column", async () => {
     const { cleanup, container } = await renderCalendar({
       selection: {

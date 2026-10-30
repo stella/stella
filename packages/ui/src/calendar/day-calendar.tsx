@@ -10,6 +10,7 @@ import type {
 import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
 import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
@@ -37,8 +38,12 @@ export type DayCalendarTone =
   | { color: string | null; matterId: string; type: "matter" }
   | { type: "neutral" };
 
-/** Whether an entry is still provisional (drawn dashed) or final. */
-export type DayCalendarEntryState = "draft" | "final";
+/**
+ * Whether an entry is final, still provisional (dashed), or only proposed:
+ * a suggestion is not an entry yet, so it is drawn lighter, dashed, and is a
+ * button the caller acts on.
+ */
+export type DayCalendarEntryState = "draft" | "final" | "suggestion";
 
 type DayCalendarBlockFields = DayCalendarRange & {
   accessibleLabel: string;
@@ -46,10 +51,20 @@ type DayCalendarBlockFields = DayCalendarRange & {
   id: string;
   title: ReactNode;
   tone: DayCalendarTone;
+  /** Shown on hover, for example the apps a `mixed` block merged. */
+  tooltip?: ReactNode;
 };
 
 export type DayCalendarBlock =
-  | (DayCalendarBlockFields & { kind: "entry"; state: DayCalendarEntryState })
+  | (DayCalendarBlockFields & {
+      kind: "entry";
+      state: Exclude<DayCalendarEntryState, "suggestion">;
+    })
+  | (DayCalendarBlockFields & {
+      kind: "entry";
+      onActivate: () => void;
+      state: "suggestion";
+    })
   | (DayCalendarBlockFields & { kind: "mixed" })
   | (DayCalendarBlockFields & { kind: "segment" });
 
@@ -562,6 +577,8 @@ const BLOCK_KIND_CLASSES = {
 const ENTRY_STATE_CLASSES = {
   draft: "border border-dashed border-current/40",
   final: "",
+  suggestion:
+    "border border-dashed border-current/45 outline-none hover:ring-1 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring",
 } as const satisfies Record<DayCalendarEntryState, string>;
 
 const DayCalendarBlockView = ({
@@ -586,37 +603,76 @@ const DayCalendarBlockView = ({
     insetBlockStart: top,
     insetInlineStart: `${String((lane.lane * 100) / lane.laneCount)}%`,
   } satisfies CSSProperties;
+  const className = cn(
+    "text-foreground flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
+    blockSize < TWO_LINE_BLOCK_MIN_PX
+      ? "flex-row items-center gap-2"
+      : "flex-col gap-0.5 py-1",
+    BLOCK_KIND_CLASSES[block.kind],
+    block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],
+    block.tone.type === "matter" && "border-s-[3px]",
+    block.tone.type === "neutral" && "bg-muted",
+  );
+  const content = (
+    <>
+      <span className="min-w-0 shrink-0 truncate font-medium">
+        {block.title}
+      </span>
+      {block.detail === undefined ? null : (
+        <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+          {block.detail}
+        </span>
+      )}
+    </>
+  );
+  const shared = {
+    "aria-label": block.accessibleLabel,
+    className,
+    "data-block-id": block.id,
+    "data-kind": block.kind,
+    "data-slot": "day-calendar-block",
+    style: blockSurfaceStyle(block),
+  };
+  const surface =
+    block.kind === "entry" && block.state === "suggestion" ? (
+      <button
+        {...shared}
+        data-state={block.state}
+        onClick={block.onActivate}
+        // A suggestion is acted on, not dragged across: the column's range
+        // selection must not start under it.
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      >
+        {content}
+      </button>
+    ) : (
+      <article
+        {...shared}
+        data-state={block.kind === "entry" ? block.state : undefined}
+      >
+        {content}
+      </article>
+    );
 
   return (
     <div
-      className="pointer-events-none absolute px-1.5 py-px"
+      className={cn(
+        "absolute px-1.5 py-px",
+        block.tooltip === undefined &&
+          !(block.kind === "entry" && block.state === "suggestion") &&
+          "pointer-events-none",
+      )}
       style={placement}
     >
-      <article
-        aria-label={block.accessibleLabel}
-        className={cn(
-          "text-foreground flex h-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
-          blockSize < TWO_LINE_BLOCK_MIN_PX
-            ? "flex-row items-center gap-2"
-            : "flex-col gap-0.5 py-1",
-          BLOCK_KIND_CLASSES[block.kind],
-          block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],
-          block.tone.type === "matter" && "border-s-[3px]",
-          block.tone.type === "neutral" && "bg-muted",
-        )}
-        data-kind={block.kind}
-        data-slot="day-calendar-block"
-        style={blockSurfaceStyle(block)}
-      >
-        <span className="min-w-0 shrink-0 truncate font-medium">
-          {block.title}
-        </span>
-        {block.detail === undefined ? null : (
-          <span className="text-muted-foreground min-w-0 truncate tabular-nums">
-            {block.detail}
-          </span>
-        )}
-      </article>
+      {block.tooltip === undefined ? (
+        surface
+      ) : (
+        <Tooltip>
+          <TooltipTrigger render={surface} />
+          <TooltipPopup className="max-w-72">{block.tooltip}</TooltipPopup>
+        </Tooltip>
+      )}
     </div>
   );
 };
@@ -624,18 +680,32 @@ const DayCalendarBlockView = ({
 const MIXED_STRIPES =
   "repeating-linear-gradient(135deg, var(--muted) 0 6px, transparent 6px 12px)";
 
+/** A suggestion's tint is half an entry's, so proposed time reads lighter. */
+const TONE_TINT_PERCENT = {
+  entry: 16,
+  suggestion: 8,
+} as const;
+
 function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
   const tone = block.tone;
   const stripes = block.kind === "mixed" ? MIXED_STRIPES : undefined;
+  const suggestion = block.kind === "entry" && block.state === "suggestion";
   switch (tone.type) {
     case "neutral": {
-      return { backgroundImage: stripes };
+      return {
+        backgroundColor: suggestion ? "transparent" : undefined,
+        backgroundImage: stripes,
+      };
     }
     case "matter": {
       const color = resolveMatterColor(tone.matterId, tone.color);
+      const tint = suggestion
+        ? TONE_TINT_PERCENT.suggestion
+        : TONE_TINT_PERCENT.entry;
       return {
-        backgroundColor: `color-mix(in srgb, ${color} 16%, var(--card))`,
+        backgroundColor: `color-mix(in srgb, ${color} ${String(tint)}%, var(--card))`,
         backgroundImage: stripes,
+        borderColor: suggestion ? color : undefined,
         borderInlineStartColor: color,
       };
     }
