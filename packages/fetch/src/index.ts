@@ -103,92 +103,12 @@ const executeFetchWithTimeout = async (
   if (policy.type === "headers" || response.body === null) {
     return response;
   }
-
-  const reader = response.body.getReader();
-  let stopped = false;
-  let cancellation: Promise<void> | undefined;
-  let abort: () => void;
-  const finish = () => {
-    stopped = true;
-    clear();
-    combined.removeEventListener("abort", abort);
-  };
-  const body = new ReadableStream<Uint8Array>({
-    start(stream) {
-      abort = () => {
-        if (stopped) {
-          return;
-        }
-        finish();
-        stream.error(combined.reason);
-        // The fetch signal aborts the transport; cancellation drains the reader
-        // even when an injected fetcher does not implement signal handling.
-        cancellation = reader.cancel(combined.reason).then(
-          () => reader.releaseLock(),
-          () => reader.releaseLock(),
-        );
-      };
-      combined.addEventListener("abort", abort, { once: true });
-      if (combined.aborted) {
-        abort();
-        return;
-      }
-    },
-    async pull(stream) {
-      if (stopped) {
-        await cancellation;
-        return;
-      }
-      reset();
-      await reader
-        .read()
-        .finally(clear)
-        .then(
-          ({ done, value }) => {
-            if (stopped) {
-              return undefined;
-            }
-            if (done) {
-              finish();
-              reader.releaseLock();
-              stream.close();
-              return undefined;
-            }
-            stream.enqueue(value);
-            return undefined;
-          },
-          (error: unknown) => {
-            if (stopped) {
-              return;
-            }
-            finish();
-            reader.releaseLock();
-            stream.error(error);
-          },
-        );
-      await cancellation;
-    },
-    async cancel(reason: unknown) {
-      if (stopped) {
-        await cancellation;
-        return;
-      }
-      finish();
-      await reader.cancel(reason).finally(() => reader.releaseLock());
-    },
-  });
-  const wrapped = new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-  // Response's constructor does not carry transport metadata across a stream.
-  Object.defineProperties(wrapped, {
-    url: { value: response.url },
-    redirected: { value: response.redirected },
-    type: { value: response.type },
-  });
-  return wrapped;
+  // There is no portable notification when a caller finishes reading a
+  // Response body. Keep the transport signal armed for the full idle budget;
+  // it can only abort a body that is still in flight. Replacing or cloning the
+  // body would break consumers whose Response implementation is not native.
+  reset();
+  return response;
 };
 
 /** Creates a wrapper with the supplied transport and an explicit timeout policy. */
