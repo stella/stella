@@ -111,11 +111,6 @@
       "cz-nss-57-af-17-2023.html.gz (recorded document; census metadata)": [
         {
           "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "í Hrůšovou, advokátkou sídlem Veverkova 2707/1, 301 00 Plzeň ⏎ proti"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-6",
           "excerpt": " úřad pro Plzeňský kraj sídlem Antonína Uxy 11, 301 00 Plzeň ⏎ o žalobě proti rozhodnutí žalovaného ze dne 5. 10. 2023, "
         }
@@ -334,21 +329,11 @@
       "cz-regional-finaldoc-district.json.gz": [
         {
           "rule": "sentence-cut",
-          "anchorId": "p-3",
-          "excerpt": "stoupený advokátem Jméno advokáta A sídlem Adresa advokáta A ⏎ proti"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-5",
           "excerpt": "stoupená advokátem Jméno advokáta B sídlem Adresa advokáta B ⏎ o zaplacení částky 32 600 Kč s příslušenstvím"
         }
       ],
       "cz-regional-finaldoc-appellate.json.gz": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-3",
-          "excerpt": "stoupený advokátem Jméno advokáta A sídlem Adresa advokáta A ⏎ proti"
-        },
         {
           "rule": "sentence-cut",
           "anchorId": "p-5",
@@ -360,13 +345,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-3",
           "excerpt": "obní údaje manželky zastoupená advokátem Mgr. jméno příjmení ⏎ sídlem adresa"
-        }
-      ],
-      "cz-regional-26-c-151-2021.finaldoc.json.gz (recorded document; census metadata)": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-3",
-          "excerpt": "sobní údaje žalobkyně zastoupená advokátkou údaje o zástupci ⏎ proti"
         }
       ],
       "cz-regional-3-t-96-2026.finaldoc.json.gz (recorded document; census metadata)": [
