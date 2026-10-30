@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -18,7 +16,7 @@ const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 
 const readSearchPreview = async (
   input: Parameters<typeof readSearchPreviewWithDatabase>[0],
-) => await readSearchPreviewWithDatabase(input, scopedDb);
+) => (await readSearchPreviewWithDatabase(input, scopedDb)).unwrap();
 
 const previewQuery = {
   query: "",
@@ -495,8 +493,13 @@ test.each([{}, { version: 2, slots: {} }])(
     rootDbExecuteMock.mockResolvedValueOnce([
       { generation_provenance: metadata, messages: [] },
     ]);
-    expect(
-      await rejectionOf(readSearchPreview({ ...previewQuery, type: "chat" })),
-    ).toBeInstanceOf(ArtefactProvenanceDecodeError);
+    const result = await readSearchPreviewWithDatabase(
+      { ...previewQuery, type: "chat" },
+      scopedDb,
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+    }
   },
 );

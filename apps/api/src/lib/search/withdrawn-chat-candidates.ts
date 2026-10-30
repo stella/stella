@@ -4,15 +4,10 @@ import { sql } from "drizzle-orm";
 import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 
 import type { Transaction } from "@/api/db/root";
-import {
-  decodeRawThreadArtefactProvenance,
-  projectThreadArtefactProvenance,
-} from "@/api/lib/ai-generation/provenance";
-import { captureError } from "@/api/lib/analytics/capture";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/ai-generation/provenance";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 import {
@@ -100,21 +95,18 @@ export const projectChatSearchCandidates = async ({
   limit,
 }: ProjectChatCandidatesOptions) => {
   if (candidates.length === 0) {
-    return [];
+    return Result.ok([]);
   }
-  const rows = candidates.map((row) => {
+  const rows = [];
+  for (const row of candidates) {
     const provenance = decodeRawThreadArtefactProvenance(row);
     if (provenance.isErr()) {
-      captureError(
-        provenance.error,
-        handlerErrorContext("search.candidates.provenance_decode"),
-      );
-      throw provenance.error;
+      return Result.err(provenance.error);
     }
-    return { ...row, ...provenance.value };
-  });
-  const projection = await readWithdrawnCopyProjection({ values: rows });
-  const admitted = rows.map((row) => {
+    rows.push({ row, provenance: provenance.value });
+  }
+  const projection = await readWithdrawnCopyProjection({ values: candidates });
+  const admitted = rows.map(({ row, provenance }) => {
     const subject =
       typeof row["subject_decision_id"] === "string"
         ? row["subject_decision_id"]
@@ -123,7 +115,7 @@ export const projectChatSearchCandidates = async ({
       title: row["title"],
       titleSource: row["title_source"],
       subjectDecisionId: subject?.toLowerCase() ?? null,
-      ...projectThreadArtefactProvenance(row),
+      ...provenance,
       source_messages: row["source_messages"],
     });
     const title = titleMarker === null ? String(row["title"]) : "";
@@ -181,30 +173,32 @@ export const projectChatSearchCandidates = async ({
     LIMIT ${limit}
   `);
   const byId = new Map(ranked.map((row) => [row.id, row]));
-  return rows.flatMap((row) => {
-    const safe = byId.get(row.id);
-    if (safe === undefined) {
-      return [];
-    }
-    const subject =
-      typeof row["subject_decision_id"] === "string"
-        ? row["subject_decision_id"]
-        : null;
-    const titleMarker = projection.threadTitleMarker({
-      title: row["title"],
-      titleSource: row["title_source"],
-      subjectDecisionId: subject?.toLowerCase() ?? null,
-      ...projectThreadArtefactProvenance(row),
-      source_messages: row["source_messages"],
-    });
-    return [
-      {
-        ...row,
-        title: titleMarker ?? row["title"],
-        score: safe.score,
-        tier: safe.tier,
-        headline: safe.headline,
-      },
-    ];
-  });
+  return Result.ok(
+    rows.flatMap(({ row, provenance }) => {
+      const safe = byId.get(row.id);
+      if (safe === undefined) {
+        return [];
+      }
+      const subject =
+        typeof row["subject_decision_id"] === "string"
+          ? row["subject_decision_id"]
+          : null;
+      const titleMarker = projection.threadTitleMarker({
+        title: row["title"],
+        titleSource: row["title_source"],
+        subjectDecisionId: subject?.toLowerCase() ?? null,
+        ...provenance,
+        source_messages: row["source_messages"],
+      });
+      return [
+        {
+          ...row,
+          title: titleMarker ?? row["title"],
+          score: safe.score,
+          tier: safe.tier,
+          headline: safe.headline,
+        },
+      ];
+    }),
+  );
 };

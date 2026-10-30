@@ -5,8 +5,8 @@ import * as v from "valibot";
 import type { Transaction } from "@/api/db/root";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
-import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import type { ModelOperationId } from "@/api/lib/ai-generation/model-operation-registry";
+import { aiTitlingMayReplace } from "@/api/lib/ai-generation/thread-title";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,7 +16,9 @@ import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-
 export const ARTEFACT_SOURCE_DECISION_LIMIT = 1024;
 export class ArtefactSourceLimitError extends TaggedError(
   "ArtefactSourceLimitError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 const generatedOrigin = v.strictObject({
   type: v.literal("generated"),
@@ -314,7 +316,9 @@ export const THREAD_ARTEFACT_PROVENANCE_COLUMNS = Object.freeze({
 
 export class ArtefactProvenanceDecodeError extends TaggedError(
   "ArtefactProvenanceDecodeError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /** Raw SQL records must satisfy the same persisted contract as typed rows. */
 export const decodeRawThreadArtefactProvenance = (row: {

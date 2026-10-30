@@ -583,10 +583,12 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
         limit: 10,
       };
       const search = async (queryText: string) =>
-        await searchGlobal(
-          { ...query, types: [...query.types], query: queryText },
-          { scopedDb },
-        );
+        (
+          await searchGlobal(
+            { ...query, types: [...query.types], query: queryText },
+            { scopedDb },
+          )
+        ).unwrap();
       expect(
         (await search("pilotquartz")).hits.some(
           (hit) => hit.id === `chat:${threadId}`,
@@ -613,17 +615,19 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       expect(retainedHit).toBeDefined();
       expect(retainedHit?.title).toBe(exportSource?.title);
       expect(JSON.stringify(retained)).not.toContain(row.title);
-      const preview = await readSearchPreview(
-        {
-          organizationId,
-          userId,
-          accessibleWorkspaceIds: [],
-          resultId: threadId,
-          type: "chat",
-          query: "pilotquartz",
-        },
-        scopedDb,
-      );
+      const preview = (
+        await readSearchPreview(
+          {
+            organizationId,
+            userId,
+            accessibleWorkspaceIds: [],
+            resultId: threadId,
+            type: "chat",
+            query: "pilotquartz",
+          },
+          scopedDb,
+        )
+      ).unwrap();
       expect(preview).toEqual({
         type: "plain-text",
         content: exportSource?.title,

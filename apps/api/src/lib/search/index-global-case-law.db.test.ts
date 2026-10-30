@@ -120,27 +120,29 @@ afterAll(async () => {
 // The type filter alone selects case law: a text query would need the
 // unaccent search configuration the test database does not install.
 const searchCaseLaw = async () =>
-  await searchGlobal(
-    {
-      query: "",
-      organizationId: toSafeId<"organization">("org_1"),
-      userId: toSafeId<"user">("user_1"),
-      accessibleWorkspaceIds: [],
-      selectedWorkspaceIds: [],
-      types: ["case-law"],
-      editedByUserIds: [],
-      mimeTypes: [],
-      limit: 10,
-    },
-    {
-      scopedDb,
-      readLanguageAlternates: async (languageGroupKeys) =>
-        await readPublicDecisionLanguageAlternatesByGroup({
-          caseLawDb,
-          languageGroupKeys,
-        }),
-    },
-  );
+  (
+    await searchGlobal(
+      {
+        query: "",
+        organizationId: toSafeId<"organization">("org_1"),
+        userId: toSafeId<"user">("user_1"),
+        accessibleWorkspaceIds: [],
+        selectedWorkspaceIds: [],
+        types: ["case-law"],
+        editedByUserIds: [],
+        mimeTypes: [],
+        limit: 10,
+      },
+      {
+        scopedDb,
+        readLanguageAlternates: async (languageGroupKeys) =>
+          await readPublicDecisionLanguageAlternatesByGroup({
+            caseLawDb,
+            languageGroupKeys,
+          }),
+      },
+    )
+  ).unwrap();
 
 const caseLawHit = async (decisionId: string) => {
   const hit = (await searchCaseLaw()).hits.find(

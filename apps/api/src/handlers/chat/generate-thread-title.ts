@@ -167,9 +167,13 @@ export const generateAdmittedThreadTitle = async ({
       }),
     catch: (cause) => cause,
   });
-  if (Result.isError(generated)) {
-    aiAnalytics.captureError(generated.error);
-    if (isUnanticipatedAIFailure(generated.error)) {
+  const outcome = Result.isError(generated) ? generated : generated.value;
+  if (Result.isError(outcome)) {
+    aiAnalytics.captureError(outcome.error);
+    if (
+      Result.isError(generated) &&
+      isUnanticipatedAIFailure(generated.error)
+    ) {
       captureError(
         generated.error,
         handlerErrorContext(
@@ -180,11 +184,7 @@ export const generateAdmittedThreadTitle = async ({
     }
     return;
   }
-  if (generated.value.isErr()) {
-    aiAnalytics.captureError(generated.value.error);
-    return;
-  }
-  const artefact = generated.value.value;
+  const artefact = outcome.value;
   const title = projectArtefactText({
     artefact,
     projection: titleInput.projection,

@@ -5656,7 +5656,7 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/chat/thread-title.test.ts": {
+    "src/lib/ai-generation/thread-title.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
       "source": {

@@ -11,11 +11,11 @@ import {
   loadWindowedThreadHistory,
 } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
-import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import type {
   ChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
+import { shouldRefreshEmptyThreadTitle } from "@/api/lib/ai-generation/thread-title";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
