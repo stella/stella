@@ -215,6 +215,20 @@ describe("classification", () => {
     );
   });
 
+  test("account export creation needs approval while account export reads stay open", () => {
+    expect(kindOf({ type: "capability", id: "account-exports.create" })).toBe(
+      AGENT_ACCESS_KIND.personApproves,
+    );
+    for (const id of [
+      "account-exports.get",
+      "account-exports.status.get",
+      "account-exports.download.get",
+      "matters.vocabulary.get",
+    ]) {
+      expect(kindOf({ type: "capability", id })).toBe(AGENT_ACCESS_KIND.open);
+    }
+  });
+
   test("organization-wide settings changes need a person's approval", () => {
     // The sender list is a read the catalog files under write (it needs the
     // settings grant); every other settings write changes the organization.

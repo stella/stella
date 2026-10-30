@@ -1,5 +1,41 @@
 # @stll/ui
 
+## 0.57.0
+
+### Minor Changes
+
+- [#7547](https://github.com/stella/stella/pull/7547) [`414be5f`](https://github.com/stella/stella/commit/414be5f89e3e8e8b8c2b53cc91e8417329418f4f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Import the calendar from `@stll/ui/calendar-primitives`, `@stll/ui/resource-calendar` or `@stll/ui/resource-calendar.logic`; the `@stll/ui/calendar` barrel is removed.
+
+## 0.56.0
+
+### Minor Changes
+
+- [#7419](https://github.com/stella/stella/pull/7419) [`5f8488b`](https://github.com/stella/stella/commit/5f8488bae2460f50d2be4f5023849d65bdb27f1e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/badge` (status and type labels in the list status tones plus `info`, `xs`/`sm`, optional dot) and `@stll/ui/truncated-text` (ellipsis text that shows its full content in a tooltip only when it is actually cut, with a tap popover on touch). `TooltipProvider` now opens tooltips after 300ms by default and keeps Base UI's warm window between adjacent triggers.
+
+- [#7429](https://github.com/stella/stella/pull/7429) [`cd9dee0`](https://github.com/stella/stella/commit/cd9dee042a40d9994f2a1bc909631f67b161935d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DialogPopup` takes `size` (`sm` | `default` | `lg` | `xl`) for its width (a caller's own `max-w-*` still wins; below `sm` the bottom-sheet and fullscreen layouts lift it). The unsaved-changes guard now holds back every user dismissal (a click outside, a close or cancel button, Escape) once with a hint before discarding, and the hint names the gesture: `DialogLabels` gains a required `unsavedChangesClose` for pointer dismissals.
+
+- [#7415](https://github.com/stella/stella/pull/7415) [`58dfdd9`](https://github.com/stella/stella/commit/58dfdd95556ac4cd2a8b4ea8fb7255f465077564) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add React Native renderers beside the web components a phone needs: `Button`, `Text` (new, a role-based text primitive on both platforms), `Loader`, `Input`, `Textarea`, `Switch`, `Sheet`, `Separator`, `MatterIcon` and `StellaWordmarkLatin`. Each export resolves to its native renderer under the `react-native` condition and to the web renderer everywhere else, and both read one shared contract (`<component>.shared.ts`: props, variant tokens, sizes). React Native, uniwind, react-native-svg and lucide-react-native are optional peer dependencies that only the native renderers import.
+
+- [#7451](https://github.com/stella/stella/pull/7451) [`d40c675`](https://github.com/stella/stella/commit/d40c675550c00678dd3763c2a0a6faf953276377) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `scroll-edge-fade`: a mask that fades a horizontal scroller's edges while content continues past them. `HorizontalScroller` uses it in place of its background-coloured gradient overlays, so its fade works over any background.
+
+- [#7426](https://github.com/stella/stella/pull/7426) [`43aa0c5`](https://github.com/stella/stella/commit/43aa0c584bf62fc2805627eb6ae8dfb39395051d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Table heads and cells take `align` (`start` | `center` | `end`) and `numeric` (tabular numerals, set to the end unless `align` says otherwise), plus `tone`, `truncate` and `flush` cells, a card `inset`, `scroll="parent"` and sticky or muted headers. `SortableHead` sorts through a muted `Button`, so it gets the design system's hover, focus ring and touch target; in a numeric column its arrow sits before the label.
+
+### Patch Changes
+
+- [#7414](https://github.com/stella/stella/pull/7414) [`5cd5fc7`](https://github.com/stella/stella/commit/5cd5fc79a4bd906e988f470b2ce47dd94f52e103) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ship the coss ui license notice with the package.
+
+- [#7443](https://github.com/stella/stella/pull/7443) [`ac83ccd`](https://github.com/stella/stella/commit/ac83ccdf2a88f07a256c125556577059e39a93a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Install lucide-react 1.61.0.
+
+- [#7196](https://github.com/stella/stella/pull/7196) [`de3dbc9`](https://github.com/stella/stella/commit/de3dbc9c40e2cd37da7a2fe7251009ad64340f20) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Show sidebar menu actions and inspector resize grips on coarse-pointer devices.
+
+## 0.55.1
+
+### Patch Changes
+
+- [#6894](https://github.com/stella/stella/pull/6894) [`32cafef`](https://github.com/stella/stella/commit/32cafefeeae7289d6757ed82a22727190a4b46a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh third-party dependencies to their latest minor and patch releases.
+
+- [#7409](https://github.com/stella/stella/pull/7409) [`3de86b1`](https://github.com/stella/stella/commit/3de86b150597e60512d88f053b2ee0c2a9969bbf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve source word breaks in quoted legal text while wrapping oversized tokens in narrow readers and citation cards.
+
 ## 0.55.0
 
 ### Minor Changes

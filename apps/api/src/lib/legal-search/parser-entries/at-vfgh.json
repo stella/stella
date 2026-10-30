@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "AT_VFGH",
+  "key": "at-vfgh",
+  "parserVersion": 10,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."
+  }
+}

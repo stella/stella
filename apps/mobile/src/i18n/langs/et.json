@@ -127,6 +127,22 @@
     "currentVersion": "Praegune versioon",
     "loadFailed": "Kirjet ei õnnestunud laadida."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dokumenti ei õnnestunud avada",
+    "failure": {
+      "offline": "Olete võrguühenduseta. Looge internetiühendus ja proovige uuesti.",
+      "noFile": "Sellel dokumendil pole veel faili.",
+      "failed": "Avamisel läks midagi valesti. Proovige hetke pärast uuesti.",
+      "unsupported": "Dokumentide avamiseks värskendage rakendust.",
+      "android": "Androidi rakenduses ei saa dokumente veel avada."
+    },
+    "retry": "Proovi uuesti",
+    "preview": "Ava eelvaade",
+    "previewDescription": "See fail avaneb süsteemi eelvaates.",
+    "unrendered": "Seda dokumenti ei saa siin kuvada, kuid süsteemi eelvaade võib selle avada.",
+    "details": "Üksikasjad"
+  },
   "signIn": {
     "beta": "Beeta",
     "headline": "Selgus igas asjas.",
@@ -151,7 +167,9 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Server",
-    "signOut": "Logi välja"
+    "signOut": "Logi välja",
+    "deleteAccount": "Kustuta konto",
+    "deleteAccountHint": "Avab teie konto veebis, kus saate selle koos kõigega, mis on teie oma, kustutada."
   },
   "header": {
     "search": "Otsing"
@@ -161,7 +179,6 @@
     "newest": "Uusimad lahendid",
     "noResults": "Miski ei vasta sõnadele, mida see otsing nõudis.",
     "noResultsHint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
-    "unavailable": "Otsing pole ajutiselt saadaval",
     "retry": "Proovi uuesti",
     "headnote": "Lühikokkuvõte",
     "textUnavailable": "Selle lahendi teksti ei ole saadaval",
@@ -177,6 +194,14 @@
   "writes": {
     "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",
     "signInAgain": "Logi uuesti sisse"
+  },
+  "loads": {
+    "offline": "stella ei saanud teie serveriga ühendust. Kontrollige ühendust ja proovige uuesti.",
+    "outdated": "Server vastas kujul, millest see rakenduse versioon aru ei saa. Uuendage rakendust või serverit, kui seda haldate.",
+    "consent": "See sisselogimine ei luba rakendusel seda lugeda. Logige uuesti sisse, et juurdepääs anda.",
+    "session": "Teie sisselogimine on aegunud. Logige uuesti sisse.",
+    "server": "Serveris tekkis viga (veakood {status}). Proovige hetke pärast uuesti.",
+    "refused": "Server keeldus päringust (veakood {status})."
   },
   "timers": {
     "title": "Taimerid",
@@ -199,7 +224,8 @@
     "retry": "Proovi uuesti",
     "unavailable": "Teie organisatsioonis pole ajaarvestus sisse lülitatud.",
     "startFailed": "Taimerit ei õnnestunud käivitada. Proovige uuesti.",
-    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti."
+    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti.",
+    "more": "{count, plural, one {veel # taimer} other {veel # taimerit}}"
   },
   "scan": {
     "title": "Skanni dokument",
@@ -210,7 +236,27 @@
     "matterTitle": "Asi",
     "uploadFailed": "Skanni ei õnnestunud üles laadida. Proovige uuesti.",
     "failedTitle": "Skannimine ebaõnnestus",
-    "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti."
+    "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti.",
+    "save": "Salvesta",
+    "saveTitle": "Salvesta asja juurde",
+    "share": "Jaga",
+    "addPages": "Lisa lehekülgi",
+    "page": "Lehekülg {number}",
+    "rotatePage": "Pööra lehekülge {number}",
+    "removePage": "Eemalda lehekülg {number}",
+    "deletePage": "Kustuta",
+    "movePage": "Liiguta lehekülge {number}",
+    "moveUp": "Liiguta üles",
+    "moveDown": "Liiguta alla",
+    "noPages": "Lehekülgi pole enam. Skannige juurde nupuga „Lisa lehekülgi“.",
+    "kilobytes": "{size} kB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "PDF-i ei õnnestunud luua. Proovige uuesti.",
+    "shareFailed": "PDF-i ei õnnestunud jagada. Proovige uuesti.",
+    "discardTitle": "Kas loobuda sellest skannist?",
+    "discardMessage": "Selle leheküljed pole asja juurde salvestatud ja kustutatakse sellest seadmest.",
+    "discard": "Loobu",
+    "keepEditing": "Jätka muutmist"
   },
   "shortcuts": {
     "search": "Otsi",

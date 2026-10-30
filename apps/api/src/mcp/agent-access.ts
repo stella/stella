@@ -160,6 +160,13 @@ type CatalogCapabilityId = keyof typeof CAPABILITY_DISPATCH;
  * agent-access suite pins that, and that no destructive capability is `open`.
  */
 const CAPABILITY_AGENT_ACCESS = {
+  "account-exports.create": {
+    kind: AGENT_ACCESS_KIND.personApproves,
+    reason: "writes-content",
+  },
+  "account-exports.download.get": OPEN,
+  "account-exports.get": OPEN,
+  "account-exports.status.get": OPEN,
   "tasks.list": OPEN,
   "client-invoices.create": OPEN,
   "client-invoices.prefill": OPEN,
@@ -377,6 +384,7 @@ const CAPABILITY_AGENT_ACCESS = {
   "matters.search-preview.get": OPEN,
   "matters.unarchive": OPEN,
   "matters.update": OPEN,
+  "matters.vocabulary.get": OPEN,
   "matters.workflow.get": OPEN,
   "matters.workflow.start": OPEN,
   "matters.workflow.targets.count": OPEN,

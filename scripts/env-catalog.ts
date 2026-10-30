@@ -1448,6 +1448,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Dated guard-rollout healing requests full scope before removing the temporary scope.
+  "STELLA_GUARD_SCOPE",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
@@ -1455,6 +1457,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "APPLE_TEAM_ID",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
+  "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
@@ -1472,9 +1475,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "BUN_INSTALL_GLOBAL_STORE",
   "CACHE_HIT",
   "CACHE_WRITE",
-  // Native cache action state is restored only for its own post hook.
-  "STATE_key",
-  "STATE_store",
   "STORE_KEY",
   "START_MS",
   "INSTALL_LOG",
@@ -1491,6 +1491,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI playground planning passes the selected and complete spec sets to the
+  // shard planner, together with the desktop scope decision.
+  "UI_PLAYGROUND_CHANGED_PATHS",
+  "UI_PLAYGROUND_SELECTED_SPECS",
+  "UI_PLAYGROUND_ALL_SPECS",
+  "DESKTOP_REQUIRED",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
@@ -1542,6 +1548,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "STAGING_WAKE_START_POLL_SECONDS",
   "STAGING_WAKE_READY_MINUTES",
   "STAGING_WAKE_READY_POLL_SECONDS",
+  // Run-artifact downloads: the bound of one attempt and the pause before the retry.
+  "ARTIFACT_DOWNLOAD_ATTEMPT_SECONDS",
+  "ARTIFACT_DOWNLOAD_RETRY_PAUSE_SECONDS",
   // The staging proof gate shares its monitor state across workflow steps.
   "STAGING_PROOF_STATE_PATH",
   "STAGING_PROOF_PREFLIGHT",
@@ -1637,6 +1646,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKY_TEST_QUARANTINE_REGISTRY",
   "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
+  // Served API journeys: the listening port and captured server log.
+  "SERVED_MCP_API_LOG",
+  "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1669,6 +1681,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
   "MCP_CANARY_REQUIRE_CREDENTIALS",
+  "MCP_CANARY_THIRD_PARTY_FETCHES",
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",

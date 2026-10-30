@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
  * Czech Regional Courts parser.
  *
@@ -36,10 +37,6 @@ import {
   isRunningHeaderLine,
   withoutSoftHyphens,
 } from "@/api/lib/legal-search/parsers/page-furniture";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 
@@ -268,18 +265,6 @@ export const parseRegionalDecision = (
   const fulltext = numbered
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
-
-  const validationHtml = buildValidationHtml([
-    ...input.header.map((para) => toInlines(para, styleMap).plainText),
-    ...verdict.map(({ plainText }) => plainText),
-    ...justification.map(({ plainText }) => plainText),
-    ...input.information.map((para) => toInlines(para, styleMap).plainText),
-  ]);
-  validateAndLog(
-    { parser: "cz-regional", caseNumber: input.caseNumber },
-    validationHtml,
-    numbered,
-  );
 
   const ast: DecisionDocumentAst = {
     version: 1,

@@ -39,8 +39,10 @@ import {
 import { envBase } from "@/api/env-base";
 import {
   EMPTY_AST,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -572,6 +574,15 @@ const noDocumentAdapter = stubAdapter(() => ({
   detail: "no fulltext parsed from the stored payload",
 }));
 
+// What an adapter answers when the envelope names a document object that
+// object storage does not hold.
+const metadataOnlyAdapter = stubAdapter(() => ({
+  type: "rejected",
+  rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+  status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+  detail: "the stored record has no document object for document",
+}));
+
 const STORED_PAGE_TEXT = "Site navigation, contact options and a footer.";
 
 type WithdrawFixture = {
@@ -658,6 +669,61 @@ const storedDocumentOf = async (id: SafeId<"caseLawDecision">) => {
     .where(eq(caseLawDecisions.id, id));
   return row;
 };
+
+test("missing stored document capture keeps existing text even when rejected-document withdrawal is enabled", async () => {
+  const { id, sourceId } = await insertRowHoldingAPage({
+    label: "metadata-only",
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    })
+    .where(eq(caseLawDecisions.id, id));
+  const before = await storedDocumentOf(id);
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (sourceLease === null) {
+    panic("Expected a source ingestion lease for metadata-only replay");
+  }
+  try {
+    const run = await replayCaseLawSource({
+      adapter: metadataOnlyAdapter,
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () =>
+        new TextEncoder().encode(
+          encodeSourceRawEnvelope({
+            listing: JSON.stringify({
+              documentId: "7964d54e-6708-48e9-92cc-5cc400aab1e3",
+              mkRSAPNumberOfFile: "PL. ÚS 4/2020",
+              mkDateOfDecision: "03/12/2020 00:00:00",
+              mkFormOfDecision: "Nález",
+            }),
+          }),
+        ),
+      sourceLease,
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+      rejectionPolicy: REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT,
+    });
+    if (run.type !== "ran") {
+      panic("Expected metadata-only replay to run");
+    }
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]).toBe(0);
+    expect(
+      run.report.rejections[STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA],
+    ).toBe(1);
+    expect(await storedDocumentOf(id)).toEqual(before);
+  } finally {
+    await sourceLease.release();
+  }
+});
 
 test("a row that re-parses to no document keeps its text unless asked", async () => {
   const { id, sourceId } = await insertRowHoldingAPage({ label: "rejected" });
@@ -955,8 +1021,8 @@ const replayConvergenceFixture = async (text: string) => {
     documentAst: astWithBlocks([paragraph("b1", text)]),
     parserVersion: 4,
   });
-  const sanitized = sanitizeResult(result);
-  const payload = caseLawCanonicalPayload(sanitized);
+  const sanitized = sanitizeResult(result).unwrap();
+  const payload = caseLawCanonicalPayload(sanitized).unwrap();
   await db.insert(caseLawDecisions).values({
     id,
     sourceId,
