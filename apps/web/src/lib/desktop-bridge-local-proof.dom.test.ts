@@ -142,8 +142,6 @@ const linkWithLocalProof = async () => {
   return { opened, outcome: outcome.value };
 };
 
-// Runs the unproven replies before the approval: happy-dom cannot navigate
-// back from the `stella:` scheme the approval opens.
 describe("approving a desktop challenge without a click", () => {
   // Each reply stands for a link crafted elsewhere: no app on this computer
   // holds its port secret, or the app holds a different challenge.
@@ -184,6 +182,9 @@ describe("approving a desktop challenge without a click", () => {
     async (_reason, reply) => {
       const network = scriptNetwork(reply);
       openChallenge();
+      // happy-dom cannot navigate back from the `stella:` scheme an approval
+      // opens, so whatever ran before, this attempt must not change it.
+      const protocol = window.location.protocol;
 
       const { opened, outcome } = await linkWithLocalProof();
 
@@ -191,7 +192,7 @@ describe("approving a desktop challenge without a click", () => {
       expect(network.grants).toEqual([]);
       expect(opened).toEqual([]);
       expect(network.loopbackRequests).toEqual(["/v1/connection"]);
-      expect(window.location.protocol).toBe("http:");
+      expect(window.location.protocol).toBe(protocol);
       expect(hasDesktopAccountChallenge()).toBe(true);
     },
   );

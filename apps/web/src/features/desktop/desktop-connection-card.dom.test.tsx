@@ -122,6 +122,8 @@ test.each(
     const link = spyOn(desktopBridge, "linkDesktopAccount").mockResolvedValue(
       started,
     );
+    // The bridge keeps a captured challenge per page; this case has none.
+    spyOn(desktopBridge, "hasDesktopAccountChallenge").mockReturnValue(false);
     const view = mountCard(PRESENCE_FIXTURES[presence]);
     const connect = view.getByRole("button", {
       name: messages.settings.account.desktopConnectInstalled,
@@ -214,14 +216,14 @@ describe("a challenge the desktop app just opened", () => {
     expect(open).toHaveBeenCalledWith(desktopUrl);
     expect(link).toHaveBeenCalledTimes(1);
 
+    // The connection store is shared by the module, so the attempt ends on an
+    // outcome that returns it to idle: shuffled tests must not inherit a link.
     await act(async () => {
-      settled.resolve(Result.ok({ status: "connected", email: user.email }));
+      settled.resolve(Result.ok({ status: "approval-required" }));
       await settled.promise;
     });
     expect(
-      await view.findByText(
-        messages.settings.account.desktopCardConnectedTitle,
-      ),
+      await view.findByRole("button", { name: messages.common.approve }),
     ).toBeDefined();
   });
 });
