@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   aggregateMutationBaseline,
@@ -13,6 +14,13 @@ const fixture = () =>
     [
       "apps/api/src/lib/db/aggregate-lock.ts",
       "export const AGGREGATE_LOCKS = {workspace: {rank: 1}} as const;",
+    ],
+    [
+      "apps/api/src/lib/api-handlers.ts",
+      readFileSync(
+        new URL("../apps/api/src/lib/api-handlers.ts", import.meta.url),
+        "utf-8",
+      ),
     ],
   ]);
 /** Verifies every declaration site in the fixture; returns how many it found. */
@@ -264,9 +272,41 @@ describe("aggregate declaration sites", () => {
   });
 
   test.each([
+    [
+      "createSafeRootHandler",
+      "{}, CALLBACK, { authorize: async () => undefined }",
+    ],
+    ["createSafeHandler", "{}, CALLBACK, { authorize: async () => undefined }"],
+    [
+      "createSafeSessionHandler",
+      "{}, CALLBACK, { checkAccountOperation: async () => undefined }",
+    ],
+    ["createSafeTokenHandler", "{}, async () => ({}), CALLBACK"],
+  ])(
+    "resolves %s implementations from the owning factory contract",
+    (factory, args) => {
+      const sources = fixture();
+      const declaration = `import { ${factory} as create } from "@/api/lib/api-handlers"; ${imports}`;
+      const body =
+        'async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
+      const endpoint = (callback: string) => `${declaration}
+      const existing = create(${args.replace("CALLBACK", () => callback)});
+      declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]});`;
+      sources.set(routes, endpoint(body));
+      expect(verify(sources)).toBe(1);
+      sources.set(routes, endpoint("async () => {}"));
+      expect(() => verify(sources)).toThrow("must await withAggregateLock");
+    },
+  );
+
+  test.each([
     {
       imported: "withInvoiceMatterLocks as acquire",
       body: "await acquire(tx, ids);",
+    },
+    {
+      imported: "lockInvoiceInStatus as acquire",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
     },
     {
       imported: "withAggregateParentBatch as acquire",
@@ -289,6 +329,41 @@ describe("aggregate declaration sites", () => {
   );
 
   test.each([
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquired'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: null, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, ...other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, [key]: other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "const acquire = async () => {}; await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/fake-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
     {
       module: "@/api/lib/db/aggregate-lock",
       body: "acquire(tx, ids);",

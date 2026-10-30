@@ -132,6 +132,7 @@
     "checkSpamHint": "Jeśli go nie widzisz, sprawdź folder spam.",
     "chooseOrganization": "Wybierz organizację, w której chcesz pracować",
     "codeSentAgain": "Wysłaliśmy nowy kod.",
+    "continueWithApple": "Kontynuuj przez Apple",
     "continueWithEmail": "Kontynuuj",
     "continueWithGoogle": "Kontynuuj przez Google",
     "continueWithMicrosoft": "Kontynuuj przez Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
+    "arrangement": {
+      "alertThreshold": "Próg powiadomienia (%)",
+      "amountCap": "Limit wynagrodzenia",
+      "flatFee": "Wynagrodzenie ryczałtowe",
+      "invalidCap": "Podaj dodatnie limity i próg powiadomienia od 0,01% do 100%.",
+      "minuteCap": "Limit czasu (minuty)",
+      "title": "Umowa o wynagrodzenie"
+    },
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
-      "markPaid": "Oznacz jako zapłaconą",
       "noEntries": "Brak wpisów powiązanych z tą fakturą",
       "noInvoices": "Brak faktur",
       "paidAt": "Zapłacono",
+      "payments": {
+        "amountTooHigh": "Kwota przekracza pozostałą do zapłaty kwotę {amount}.",
+        "confirmVoid": "Płatność pozostanie w ewidencji jako anulowana i nie będzie już zaliczana na poczet tej faktury.",
+        "empty": "Nie zarejestrowano jeszcze żadnych płatności",
+        "method": "Forma płatności",
+        "methods": {
+          "bank_transfer": "Przelew bankowy",
+          "card": "Karta",
+          "cash": "Gotówka",
+          "other": "Inna forma"
+        },
+        "outstandingAmount": "Pozostało do zapłaty {amount}",
+        "paidOn": "Data płatności",
+        "partiallyPaid": "Częściowo zapłacona",
+        "record": "Zarejestruj płatność",
+        "summary": "Zapłacono {paid}, pozostało {outstanding}",
+        "title": "Płatności",
+        "void": "Anuluj płatność",
+        "voided": "Anulowana"
+      },
       "removeEntries": "Usuń wpisy",
       "send": "Wyślij",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "AI nie jest skonfigurowana.",
     "availabilityUnknown": "Nie udało się potwierdzić dostępności.",
     "deeplMissing": "DeepL nie jest skonfigurowany.",
+    "deeplPdfRequired": "Tłumaczenie plików PDF wymaga DeepL.",
     "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
     "featureUnavailable": "Ta funkcja jest niedostępna.",
     "ocrUnavailable": "OCR jest niedostępne.",
@@ -912,12 +941,16 @@
         "reasoning": "Rozumowanie"
       },
       "errors": {
+        "analysisDisabled": "Generowanie analiz AI jest wyłączone na tym serwerze. Przeczytaj tekst orzeczenia lub spróbuj ponownie później.",
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "decisionNotFound": "Nie znaleziono tego orzeczenia. Otwórz je ponownie z wyników wyszukiwania.",
+        "documentUnparseable": "Tekst orzeczenia nie jest gotowy do analizy. Przeczytaj materiał źródłowy.",
+        "languageUnsupported": "Analiza AI nie obsługuje jeszcze języka tego orzeczenia. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
         "retryAfter": "Możesz spróbować ponownie po {time}.",
-        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
-        "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
+        "sourceRestricted": "Źródło nie zezwala na analizę AI. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}"
       },
       "generate": "Ułóż tezy w AI",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
@@ -1057,7 +1090,9 @@
     },
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
-      "remove": "Usuń filtr {filter}"
+      "countryMismatch": "Usunięto filtry, które nie dotyczą kraju {country}: {filters}.",
+      "remove": "Usuń filtr {filter}",
+      "showInCountry": "Pokaż {filter} dla kraju {country}"
     },
     "languages": {
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
@@ -1122,7 +1157,7 @@
     "reader": {
       "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
-      "headMatter": "Część wstępna",
+      "headMatter": "Informacje o sprawie",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1289,8 @@
       "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)",
       "versionBasisInferredCompact": "Data orzeczenia · wywnioskowane",
       "versionBasisInferredExplanation": "Wersję ustalono na podstawie daty orzeczenia. Orzeczenie nie wskazuje, które brzmienie ma zastosowanie."
-    }
+    },
+    "withdrawnByPublisher": "Wycofane przez wydawcę"
   },
   "catalogue": {
     "addCustom": "Dodaj własne",
@@ -1312,6 +1348,7 @@
       "toastTitle": "Pełny widok niedostępny"
     },
     "activity": {
+      "newerVersion": "Ta treść jest wyświetlana w nowszej wersji.",
       "review": "Aktualizacja przeglądu"
     },
     "aiPrompt": "Pole wiadomości AI",
@@ -1551,6 +1588,12 @@
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
+      "dismiss": "Ukryj powiadomienie o połączeniu",
+      "stoppedWorking": "Twoje połączenie z <name>{server}</name> przestało działać.",
+      "waitingApproval": "Twoje połączenie z <name>{server}</name> oczekuje na zatwierdzenie."
+    },
     "mention": {
       "category": {
         "entities": "W tej sprawie",
@@ -2044,8 +2087,6 @@
     "clearFilters": "Wyczyść filtry",
     "clearSearch": "Wyczyść wyszukiwanie",
     "close": "Zamknij",
-    "closeAll": "Zamknij wszystko",
-    "closeOthers": "Zamknij pozostałe",
     "columns": "Kolumny",
     "comfortable": "Komfortowy",
     "comingSoon": "Wkrótce",
@@ -2319,6 +2360,7 @@
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
     "unsavedChanges": "Niezapisane zmiany",
+    "unsavedChangesClose": "Niezapisane zmiany. Zamknij ponownie, aby je odrzucić",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
@@ -2360,6 +2402,8 @@
     "returnToAgent": "Wróć do swojego agenta, aby kontynuować.",
     "returnsLocally": "Wrócisz do {clientName} na tym komputerze",
     "returnsTo": "Wrócisz do {clientName}",
+    "scopeAccountExportRead": "Odczyt eksportów Twoich danych osobowych",
+    "scopeAccountExportWrite": "Zamawianie eksportów Twoich danych osobowych",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -2457,6 +2501,8 @@
       "aresNotFound": "Nie znaleziono firmy dla tego IČO.",
       "aresTitle": "Czeski rejestr (ARES)",
       "contactName": "Nazwa kontaktu",
+      "displayNameOrganizationHint": "Opcjonalne zastąpienie; w przeciwnym razie tworzone z nazwy organizacji.",
+      "displayNamePersonHint": "Opcjonalne zastąpienie; w przeciwnym razie tworzone z imienia i nazwiska.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Wpisz 8-cyfrowe IČO."
     },
@@ -2769,12 +2815,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
       "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
+      "configurationIncomplete": "Ta czynność nie jest w pełni skonfigurowana. Skontaktuj się z administratorem.",
       "contact": "Skontaktuj się z nami",
       "featureDisabled": "Ta funkcja jest tymczasowo wyłączona.",
+      "leaseLost": "Rezerwacja czynności wygasła. Spróbuj ponownie.",
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
-      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
+      "organizationStateUnreadable": "Nie udało się sprawdzić dostępu organizacji. Spróbuj ponownie za chwilę.",
+      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji.",
+      "storeUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie za chwilę."
     },
     "actionFailed": "Nie udało się. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "api": {
@@ -2825,6 +2874,8 @@
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
+      "idempotencyInProgress": "To żądanie jest nadal przetwarzane. Poczekaj chwilę i spróbuj ponownie.",
+      "idempotencyKeyReused": "Dane zmieniły się od poprzedniej próby. Zresetuj formularz i spróbuj ponownie.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -3627,6 +3678,9 @@
       "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
+    "closeAllTabs": "Zamknij {count, plural, one {# kartę} few {wszystkie # karty} many {wszystkie # kart} other {wszystkie # karty}}",
+    "closeOtherTabs": "Zamknij {count, plural, one {# inną kartę} few {# inne karty} many {# innych kart} other {# innej karty}}",
+    "closeTab": "Zamknij <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "To jest plik {format} w starszym formacie. Zapisz go ponownie jako {replacementExtension}, aby go przekonwertować.",
       "unsupportedEncoding": "Ten dokument używa nieobsługiwanego kodowania {encoding}, dlatego nie można go przekonwertować.",
@@ -4845,7 +4899,9 @@
     "viewOnGithub": "Zobacz na GitHubie"
   },
   "readerAnswers": {
+    "answerLanguage": "Język odpowiedzi",
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "documentLanguage": "Język dokumentu ({language})",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
     "followUp": "Zadaj dodatkowe pytanie",
@@ -4999,6 +5055,8 @@
       "desktopCardConnectedTitle": "stella desktop jest powiązany",
       "desktopCardMissingDetail": "Zainstaluj go lub połącz, jeśli jest już zainstalowany na tym komputerze.",
       "desktopCardMissingTitle": "stella desktop nie jest jeszcze połączony",
+      "desktopCardOpeningDetail": "Łączenie tego komputera z <bdi>{identity}</bdi> na {host}. Jeśli przeglądarka zapyta, zezwól na otwarcie stella desktop.",
+      "desktopCardOpeningTitle": "Otwieranie stella desktop...",
       "desktopCardOutdatedDetail": "Wersja {version} jest połączona z <bdi>{identity}</bdi>. Zainstaluj najnowszą wersję, aby dokumenty i aktywność nadal działały.",
       "desktopCardOutdatedTitle": "stella desktop wymaga aktualizacji",
       "desktopClipboardDescription": "Otwieraj, przeszukuj, porządkuj i ponownie wykorzystuj tekst skopiowany z dowolnej aplikacji.",
@@ -5018,6 +5076,7 @@
       "desktopInstallOpenStep": "Otwórz stella desktop jeden raz. Schowek pojawi się od razu i pozostanie dostępny z paska menu macOS lub zasobnika systemowego Windows.",
       "desktopInstallTitle": "Instalacja i otwarcie",
       "desktopInstallWindowsStep": "Uruchom instalator i postępuj zgodnie z instrukcjami.",
+      "desktopOpenApp": "Otwórz stella desktop",
       "desktopPrivacyDescription": "Historia schowka jest szyfrowana i przechowywana na tym urządzeniu.",
       "desktopPrivacyTitle": "Domyślnie prywatne",
       "desktopSelfHostDescription": "Zaufaj temu URL stella w podpisanej aplikacji desktop, aby dokumenty z tej instalacji mogły otwierać się lokalnie.",
@@ -5027,11 +5086,30 @@
       "displayNameSaved": "Zaktualizowano nazwę wyświetlaną",
       "enterOtp": "Kod weryfikacyjny",
       "otpSentSuccess": "Kod weryfikacyjny został wysłany na Twój adres e-mail.",
+      "personalDataExportDescription": "Poproś o kopię danych osobowych z konta do pobrania. Plik będzie dostępny przez godzinę.",
+      "personalDataExportExpired": "Ten eksport wygasł.",
+      "personalDataExportExpiresAt": "Dostępny do {expiresAt}.",
+      "personalDataExportFailed": "Nie udało się przygotować eksportu.",
+      "personalDataExportReady": "Eksport jest gotowy.",
+      "personalDataExportRequest": "Poproś o eksport",
+      "personalDataExportRequestNew": "Poproś o nowy eksport",
+      "personalDataExportTitle": "Eksportuj moje dane",
+      "personalDataExportWorking": "Przygotowywanie eksportu…",
       "preferredName": "Preferowane imię",
       "preferredNameDescription": "Używane jako autor śledzonych zmian i komentarzy w plikach DOCX.",
       "preferredNamePlaceholder": "Twoje imię",
       "profileDescription": "Zarządzaj swoimi preferencjami osobistymi",
       "sendOtpCode": "Wyślij kod weryfikacyjny",
+      "signInMethods": {
+        "confirmDescription": "Aby odłączyć tę metodę logowania, wpisz nowy kod wysłany na Twój adres e-mail.",
+        "confirmTitle": "Odłączyć {provider}?",
+        "description": "Połącz konta, które używają tego samego zweryfikowanego adresu e-mail.",
+        "emailCode": "Kod e-mail",
+        "emailCodeDescription": "Zawsze możesz zalogować się za pomocą kodu wysłanego na Twój adres e-mail.",
+        "lastMethod": "Połącz inne konto, zanim odłączysz to.",
+        "title": "Metody logowania",
+        "unavailable": "Aby odłączyć metody logowania, należy skonfigurować wysyłanie poczty e-mail."
+      },
       "timezone": "Strefa czasowa",
       "timezoneDescription": "Używana w datach i godzinach w powiadomieniach i e-mailach",
       "timezoneSaved": "Zaktualizowano strefę czasową",
@@ -5354,6 +5432,7 @@
     "showCitedPartOnly": "Pokaż tylko cytowaną część",
     "showFullProvision": "Pokaż cały przepis",
     "showInText": "Pokaż w tekście",
+    "sortNeedsYear": "Aby sortować według tej kolumny, wybierz rok w filtrach.",
     "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {
       "current": "Obowiązujący",

@@ -38,7 +38,11 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
-import { accessResetProviders, socialProviderName } from "./access-reset.logic";
+import {
+  accessResetProviders,
+  isSocialProvider,
+  socialProviderName,
+} from "./access-reset.logic";
 import type { SocialProvider } from "./access-reset.logic";
 
 const renderEmail = (chunks: ReactNode) => (
@@ -279,7 +283,7 @@ export const OTPPanel = ({
               identity: renderEmail,
               providers: resetConfirmation.providers
                 .map((provider) => {
-                  if (provider === "google" || provider === "microsoft") {
+                  if (isSocialProvider(provider)) {
                     return socialProviderName(provider);
                   }
                   if (provider === "credential") {

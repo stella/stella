@@ -1,11 +1,11 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 edición activa} other {{count} ediciones activas}}",
-    "clipboard": "Historial del portapapeles",
     "activity": "Actividad",
     "activityRecording": "Actividad: Registrando · {hours} h hoy",
     "activityPaused": "Actividad: En pausa · {hours} h hoy",
     "activityOff": "Actividad: Desactivada",
+    "openActivity": "Abrir actividad",
     "activityNow": "Ahora: {name}",
     "activityPause": "Pausar registro",
     "activityResume": "Reanudar registro",
@@ -149,6 +149,7 @@
     "handoffUnavailable": "No se pudo abrir el documento. Empieza de nuevo desde Stella.",
     "handoffRetry": "Reintentar",
     "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
+    "unsavedChangesClose": "Cambios sin guardar. Cierra de nuevo para descartarlos",
     "handoffConnectToSign": "Conecta stella desktop para firmar este documento",
     "handoffConnectToOpen": "Conecta stella desktop para abrir este documento",
     "handoffConnectDetail": "Conecta tu cuenta de stella. El documento se abrirá automáticamente cuando estés conectado.",
@@ -299,7 +300,7 @@
     "moreOptions": "Más opciones",
     "moreItemActions": "Más acciones para el elemento {number}",
     "noResults": "No hay recortes coincidentes",
-    "noResultsDescription": "¿Quieres buscar «{query}» en los registros?",
+    "noResultsSearchRegistries": "Buscar «{query}» en los registros",
     "noGroup": "Sin grupo",
     "newGroupOption": "Grupo nuevo…",
     "copyItem": "Copiar elemento {number}",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Pulsa {shortcut} para consultar el historial y elegir un recorte.",
     "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
     "welcomeStart": "Empezar a copiar",
-    "welcomeTitle": "Conoce tu portapapeles"
+    "welcomeTitle": "Conoce tu portapapeles",
+    "registryIdentifierSearchHint": "Introduce {identifiers}."
   },
   "activity": {
     "title": "Actividad",
@@ -482,9 +484,6 @@
     "unreadableEraseAction": "Borrar actividad ilegible",
     "unreadableEraseConfirmation": "Se borrarán la actividad guardada ilegible y los datos de recuperación de sus borradores pendientes. Es posible que los borradores creados ya existan. Esta acción no se puede deshacer.",
     "unreadableEraseNotice": "No se puede leer parte de la actividad guardada. Puede borrar la actividad guardada ilegible y los datos de recuperación de sus borradores.",
-    "discardPendingConfirmation": "Los datos de recuperación de borradores pendientes se eliminarán de este dispositivo. Es posible que los borradores creados ya existan. Esta acción no se puede deshacer.",
-    "discardPendingRecovery": "Descartar recuperación de borradores",
-    "batchUnavailable": "La creación de borradores no está disponible en este momento.",
     "pendingActivityProtected": "Complete la creación de borradores pendiente antes de eliminar actividad.",
     "draftMarkerFailed": "Los borradores se crearon, pero no se pudo guardar el comprobante local. Vuelva a intentarlo para guardar el comprobante.",
     "narrativeEvidence": "Trabajo en {evidence}",

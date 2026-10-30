@@ -1,4 +1,5 @@
 // parser-output-unchanged: The case DOM is shared for one assembly and cleanup happens on one owned clone; stored fields, HTML and AST output are unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own retention self-check changes no stored field or AST.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *
@@ -16,7 +17,7 @@
 
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
+import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
@@ -35,10 +36,7 @@ import {
   visibleHtmlText,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import {
-  validateAndLog,
-  type ValidationResult,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import {
   type MetadataUrlDefect,
   type SafeHref,
@@ -531,11 +529,46 @@ const dissentJudges = (heading: string, panel: PlTkPanelJudge[]): string[] => {
   });
 };
 
+/** `sędziego TK …`, `sędzi TK …`, `sędziów TK … i …`: a dissent's authors. */
+const DISSENT_AUTHORS = /\bsędzi\p{L}*\s/iu;
+
+/** Where a dissent names its authors: in its heading, or on its own line. */
+type DissentAuthors =
+  | { printedIn: "heading"; authorsAsPrinted: string }
+  | {
+      printedIn: "line";
+      authorsAsPrinted: string;
+      line: cheerio.Cheerio<AnyNode>;
+    };
+
 /**
- * The authors line of each `wyrok_zdanieodrebne` block: the first numbered
- * line after the `Zdanie odrębne` heading, which names the judge or judges
- * (`sędziego TK …`, `sędziów TK … i …`).
+ * The authors of one `wyrok_zdanieodrebne` block. The Tribunal prints them
+ * either in the heading itself (`Zdanie odrębne sędziego TK …`) or as the
+ * first numbered line under a bare `Zdanie odrębne` heading, followed by the
+ * line naming the ruling (`do wyroku Trybunału Konstytucyjnego z …`), which
+ * names no judge and is never read as one.
  */
+const dissentAuthorsOf = (
+  dissent: cheerio.Cheerio<AnyNode>,
+): DissentAuthors | undefined => {
+  const heading = collapse(
+    visibleHtmlText(dissent.find(".wyrok_naglowekNumerowany").first()),
+  );
+  const inHeading = DISSENT_AUTHORS.exec(heading);
+  if (inHeading !== null) {
+    return {
+      printedIn: "heading",
+      authorsAsPrinted: heading.slice(inHeading.index),
+    };
+  }
+  const line = dissent.find(".wyrok_akapitNumerowany").first();
+  const text = collapse(visibleHtmlText(line));
+  return DISSENT_AUTHORS.exec(text)?.index === 0
+    ? { printedIn: "line", authorsAsPrinted: text, line }
+    : undefined;
+};
+
+/** Each dissent's authors as printed, and the bench judges they name. */
 const dissentsOf = (
   $: Root,
   text: cheerio.Cheerio<AnyNode>,
@@ -544,18 +577,16 @@ const dissentsOf = (
   text
     .find(".wyrok_zdanieodrebne")
     .toArray()
-    .map((element) => {
-      const lines = $(element)
-        .find(".wyrok_akapitNumerowany")
-        .toArray()
-        .map((line) => collapse(visibleHtmlText($(line))))
-        .filter((line) => line.length > 0);
-      const authorsAsPrinted =
-        lines.find((line) => /^sędzi/iu.test(line)) ?? lines.at(0) ?? "";
-      return {
-        authorsAsPrinted,
-        judges: dissentJudges(authorsAsPrinted, panel),
-      };
+    .flatMap((element) => {
+      const authors = dissentAuthorsOf($(element));
+      return authors === undefined
+        ? []
+        : [
+            {
+              authorsAsPrinted: authors.authorsAsPrinted,
+              judges: dissentJudges(authors.authorsAsPrinted, panel),
+            },
+          ];
     });
 
 const footnotesOf = ($: Root, text: cheerio.Cheerio<AnyNode>): string[] =>
@@ -570,18 +601,205 @@ const footnotesOf = ($: Root, text: cheerio.Cheerio<AnyNode>): string[] =>
     )
     .filter((note) => note.length > 0);
 
+/** The anchor a footnote is printed under in the text's closing table. */
+const NOTE_ANCHOR_PREFIX = "tresc-przypisu-";
+
+/** An in-text reference to a footnote the closing table prints. */
+const NOTE_REFERENCE = /^#tresc-przypisu-[\w-]+$/u;
+
+/** The portal's raised-text class: footnote marks and `art. 446¹`. */
+const RAISED_CLASS = "wyrok_indeks_gorny";
+
+/** Whitespace holding a line break: the export's indentation, never a word. */
+const isExportWhitespace = (code: number | undefined): boolean =>
+  code === 0x20 ||
+  code === 0x09 ||
+  code === 0x0a ||
+  code === 0x0d ||
+  code === 0x0c;
+
+/** Start of the trailing export-whitespace run, when it contains a line feed. */
+const trailingIndentationStart = (text: string): number | undefined => {
+  let start = text.length;
+  let hasLineFeed = false;
+  while (start > 0) {
+    const code = text.codePointAt(start - 1);
+    if (!isExportWhitespace(code)) {
+      break;
+    }
+    hasLineFeed ||= code === 0x0a;
+    start -= 1;
+  }
+  return hasLineFeed ? start : undefined;
+};
+
+/** Elements a raised mark can sit in without leaving its line. */
+const INLINE_WRAPPERS = new Set([
+  "a",
+  "b",
+  "em",
+  "font",
+  "i",
+  "span",
+  "strong",
+]);
+
+/** Punctuation that closes onto the word before it. */
+const CLOSING_PUNCTUATION = /^[)\]}.,;:!?…”’»]/u;
+
+const isIndentation = (node: AnyNode | null): boolean =>
+  node !== null && isText(node) && trailingIndentationStart(node.data) === 0;
+
+/** `node`, or the inline wrappers it is the only content of on `side`. */
+const outermostRun = (node: AnyNode, side: "prev" | "next"): AnyNode => {
+  let current = node;
+  while (current[side] === null) {
+    const parent = current.parent;
+    if (
+      parent === null ||
+      !isTag(parent) ||
+      !INLINE_WRAPPERS.has(parent.name)
+    ) {
+      break;
+    }
+    current = parent;
+  }
+  return current;
+};
+
+/** A node's text where it continues the line, or `undefined` where not. */
+const lineTextOf = ($: Root, node: AnyNode): string | undefined => {
+  if (isText(node)) {
+    return node.data;
+  }
+  return isTag(node) && INLINE_WRAPPERS.has(node.name)
+    ? visibleHtmlText($(node))
+    : undefined;
+};
+
+/**
+ * The text the line prints after `node`, or `undefined` where the line
+ * ends or another kind of element follows.
+ */
+const visibleAfter = ($: Root, node: AnyNode): string | undefined => {
+  let current = outermostRun(node, "next").next;
+  while (current !== null) {
+    const text = lineTextOf($, current);
+    if (text === undefined) {
+      return undefined;
+    }
+    const visible = text.trim();
+    if (visible.length > 0) {
+      return visible;
+    }
+    current = outermostRun(current, "next").next;
+  }
+  return undefined;
+};
+
+/**
+ * A raised mark against the word it belongs to. The export breaks lines
+ * before and after nested runs, so `(§ 2</font> <font><font
+ * class="wyrok_indeks_gorny">1</font> </font>)` would read `§ 2 ¹ )` once
+ * whitespace collapses. A mark always closes onto the word before it, so
+ * indentation before it is dropped; indentation after it is dropped only
+ * where punctuation follows, since before a word it is the word space. A
+ * space the text itself prints beside a mark (`art. 446¹ ustawy`) is not
+ * indentation and stays.
+ */
+const tightenRaisedMark = ($: Root, mark: Element): void => {
+  for (;;) {
+    const before = outermostRun(mark, "prev").prev;
+    if (before !== null && isIndentation(before)) {
+      $(before).remove();
+      continue;
+    }
+    if (before !== null && isText(before)) {
+      const indentationStart = trailingIndentationStart(before.data);
+      if (indentationStart !== undefined) {
+        before.data = before.data.slice(0, indentationStart);
+      }
+    }
+    break;
+  }
+  for (;;) {
+    const after = outermostRun(mark, "next").next;
+    const closes = CLOSING_PUNCTUATION.test(visibleAfter($, mark) ?? "");
+    if (after === null || !isIndentation(after) || !closes) {
+      break;
+    }
+    $(after).remove();
+  }
+};
+
+/**
+ * The footnote markers in the text, as references to the notes the closing
+ * table prints. The portal opens each note from its marker in a tooltip,
+ * which is removed with the other widgets; the marker stays as a link to the
+ * note's own anchor, or as its bare mark where the table prints no note.
+ *
+ * The portal prints the mark raised and nothing else sets it apart, so on
+ * the text axis a number would run into the word it follows (`K 39/16` and
+ * note 1 would read `K 39/161`). The mark is therefore bracketed, `[1]`, as
+ * the other sources' note references read, and the note keeps the label it
+ * prints.
+ */
+const markFootnoteReferences = (
+  $: Root,
+  copy: cheerio.Cheerio<AnyNode>,
+): Element[] => {
+  const printed = new Set(
+    copy
+      .find(`a[name^="${NOTE_ANCHOR_PREFIX}"]`)
+      .toArray()
+      .flatMap((anchor) => {
+        const name = $(anchor).attr("name");
+        return name === undefined ? [] : [`#${name}`];
+      }),
+  );
+  return copy
+    .find('a[id*="tooltip"]')
+    .toArray()
+    .flatMap((element) => {
+      const marker = $(element);
+      const label = collapse(visibleHtmlText(marker));
+      const href = marker.attr("href") ?? "";
+      if (label.length === 0) {
+        marker.remove();
+        return [];
+      }
+      const mark = `[${label}]`;
+      const reference =
+        NOTE_REFERENCE.test(href) && printed.has(href)
+          ? $("<a></a>").attr("href", href).text(mark)
+          : $("<sup></sup>").text(mark);
+      marker.replaceWith(reference);
+      return reference.toArray().filter(isTag);
+    });
+};
+
 /**
  * The text container without the portal's widgets: tooltip popups (their
- * footnotes are read separately), the footnote markers that open them and
- * scripts.
+ * footnotes are read separately) and scripts. Footnote markers become links
+ * to their notes, and the portal's raised text becomes `<sup>`.
  */
 const cleanTextHtml = (
+  $: Root,
   text: cheerio.Cheerio<AnyNode>,
 ): { fragment: cheerio.Cheerio<AnyNode>; html: string } | undefined => {
   const copy = text.clone();
   copy.find(EXCLUDED_HTML_SELECTOR).remove();
   copy.find(".ui-tooltip").remove();
-  copy.find('a[id*="tooltip"]').remove();
+  const references = markFootnoteReferences($, copy);
+  // A note's own mark in the closing table keeps its class, which is how
+  // `footnoteOf` lifts it out as the note's label.
+  const raised = copy.find(`.${RAISED_CLASS}`).toArray().filter(isTag);
+  for (const element of raised) {
+    element.name = "sup";
+  }
+  for (const mark of [...references, ...raised]) {
+    tightenRaisedMark($, mark);
+  }
   const html = copy.html();
   return html === null || collapse(visibleHtmlText(copy)).length === 0
     ? undefined
@@ -666,7 +884,7 @@ export const readPlTkRuling = (
     byId($, `sprawaForm:tabView:pobierzDoc${documentId}`).attr("href"),
   );
 
-  const cleanedText = text.length === 0 ? undefined : cleanTextHtml(text);
+  const cleanedText = text.length === 0 ? undefined : cleanTextHtml($, text);
   if (cleanedText !== undefined) {
     page.cleanedTextByDocumentId.set(documentId, cleanedText.fragment);
   }
@@ -763,23 +981,37 @@ type ParagraphParts = Omit<ParagraphBlock, "id" | "anchorId">;
 type Builder = {
   blocks: Block[];
   heading: (parts: HeadingParts) => void;
-  paragraph: (parts: ParagraphParts) => void;
+  /**
+   * `anchorId` is the publisher's own anchor for the block, which a link in
+   * the text points at; a block without one, or whose anchor an earlier
+   * block already took, gets a positional anchor.
+   */
+  paragraph: (parts: ParagraphParts, anchorId?: string) => void;
 };
 
 const createBuilder = (): Builder => {
   const blocks: Block[] = [];
+  const anchors = new Set<string>();
   let index = 0;
-  const ids = (prefix: string): { id: string; anchorId: string } => {
+  const ids = (
+    prefix: string,
+    anchorId?: string,
+  ): { id: string; anchorId: string } => {
     index += 1;
-    return { id: `b${index}`, anchorId: `${prefix}-${index}` };
+    const anchor =
+      anchorId === undefined || anchors.has(anchorId)
+        ? `${prefix}-${index}`
+        : anchorId;
+    anchors.add(anchor);
+    return { id: `b${index}`, anchorId: anchor };
   };
   return {
     blocks,
     heading: (parts) => {
       blocks.push({ ...ids("h"), ...parts });
     },
-    paragraph: (parts) => {
-      blocks.push({ ...ids("p"), ...parts });
+    paragraph: (parts, anchorId) => {
+      blocks.push({ ...ids("p", anchorId), ...parts });
     },
   };
 };
@@ -788,23 +1020,28 @@ const PARAGRAPH_NUMBER = /^\d{1,5}$/u;
 
 /**
  * The portal sets emphasis with classes on `<font>` runs rather than with
- * `<b>` or `<i>`.
+ * `<b>` or `<i>`; its raised text is `<sup>` once `cleanTextHtml` has read
+ * it. A fragment link is kept only as a reference to a printed footnote.
  */
 const INLINE_OPTIONS = {
-  sanitizeHref: sanitizeUrl,
+  sanitizeHref: (href: string) =>
+    NOTE_REFERENCE.test(href) ? href : sanitizeUrl(href),
   emphasisClasses: {
     bold: ["wyrok_wytluszczenie"],
     italic: ["wyrok_kursywa"],
   },
+  superscripts: true,
 } as const;
 
-const isBlankText = (inline: Inline | undefined): boolean =>
-  inline?.type === "text" && inline.text.trim().length === 0;
+const isBlankEdge = (inline: Inline | undefined): boolean =>
+  inline?.type === "line-break" ||
+  (inline?.type === "text" && inline.text.trim().length === 0);
 
 /**
- * A block's inlines without the markup's indentation at either end. The
- * portal indents every run, so a paragraph opening with an emphasised run
- * would otherwise open with a whitespace run instead of the emphasis.
+ * A block's inlines with whitespace as a browser lays it out. The portal
+ * exports its text hard-wrapped and indented, so the source's line breaks
+ * and indentation are markup inside every paragraph and at either end of
+ * it, as is a `<br>` closing a block.
  */
 const walkBlockInlines = (
   $: cheerio.CheerioAPI,
@@ -813,13 +1050,13 @@ const walkBlockInlines = (
   const inlines = walkInlines($, node, INLINE_OPTIONS);
   let start = 0;
   let end = inlines.length;
-  while (start < end && isBlankText(inlines[start])) {
+  while (start < end && isBlankEdge(inlines[start])) {
     start += 1;
   }
-  while (end > start && isBlankText(inlines[end - 1])) {
+  while (end > start && isBlankEdge(inlines[end - 1])) {
     end -= 1;
   }
-  return inlines.slice(start, end);
+  return collapseHtmlWhitespace(inlines.slice(start, end));
 };
 
 const FOOTNOTE_ANCHOR = /^tresc-przypisu-(?<id>.+)$/u;
@@ -841,7 +1078,7 @@ const footnoteOf = (
     return null;
   }
   const body = node.clone();
-  const mark = body.find(".wyrok_indeks_gorny").first();
+  const mark = body.find(`.${RAISED_CLASS}`).first();
   const label = collapse(visibleHtmlText(mark));
   mark.remove();
   const inlines = walkBlockInlines($, body);
@@ -858,6 +1095,28 @@ type Context = {
 };
 
 type EmitOptions = Context & { number?: number | undefined };
+
+/**
+ * A dissent's heading with the judges who wrote it. Most dissents print a
+ * bare `Zdanie odrębne` and name their authors on the numbered line below,
+ * which would leave every dissent of a ruling under the same title. That
+ * line stays a paragraph, since it carries one of the Tribunal's running
+ * numbers; the heading repeats its words after the printed title.
+ */
+const dissentHeadingInlines = (
+  $: Root,
+  dissent: cheerio.Cheerio<AnyNode>,
+  heading: Inline[],
+): Inline[] => {
+  const authors = dissentAuthorsOf(dissent);
+  return authors?.printedIn === "line"
+    ? collapseHtmlWhitespace([
+        ...heading,
+        { type: "text", text: " " },
+        ...walkBlockInlines($, authors.line),
+      ])
+    : heading;
+};
 
 /**
  * Build the ruling's blocks from its text container.
@@ -880,13 +1139,17 @@ const buildBlocks = ($: Root, text: cheerio.Cheerio<AnyNode>): Block[] => {
   const emit = (node: cheerio.Cheerio<AnyNode>, options: EmitOptions): void => {
     const note = footnoteOf($, node);
     if (note !== null) {
-      builder.paragraph({
-        type: "paragraph",
-        role: "apparatus",
-        note: { type: "footnote", label: note.label, noteId: note.noteId },
-        inlines: note.inlines,
-        plainText: collapse(inlinesToPlainText(note.inlines)),
-      });
+      builder.paragraph(
+        {
+          type: "paragraph",
+          role: "apparatus",
+          note: { type: "footnote", label: note.label, noteId: note.noteId },
+          inlines: note.inlines,
+          plainText: collapse(inlinesToPlainText(note.inlines)),
+        },
+        // The anchor the marker in the text links to.
+        `${NOTE_ANCHOR_PREFIX}${note.noteId}`,
+      );
       return;
     }
     const inlines = walkBlockInlines($, node);
@@ -912,12 +1175,16 @@ const buildBlocks = ($: Root, text: cheerio.Cheerio<AnyNode>): Block[] => {
       if (root !== undefined) {
         openedRegions.add(root);
       }
+      const titled =
+        opensRegion && region === "dissent"
+          ? dissentHeadingInlines($, $(root), inlines)
+          : inlines;
       builder.heading({
         type: "heading",
         level: opensRegion && region !== "holding" ? 1 : 2,
         role: "section-heading",
-        inlines,
-        plainText,
+        inlines: titled,
+        plainText: collapse(inlinesToPlainText(titled)),
       });
       return;
     }
@@ -1012,22 +1279,9 @@ type ParsePlTkTextInput = {
   textHtml: string;
 };
 
-/**
- * Check the blocks against the text they were built from. The reference is
- * the portal's own markup, so text the builder failed to emit shows up as
- * lost content rather than being absent from both sides.
- */
-export const validatePlTkBlocks = (
-  caseNumber: string,
-  textHtml: string,
-  blocks: Block[],
-): ValidationResult =>
-  validateAndLog(
-    { parser: "pl-tk", caseNumber },
-    `<body>${textHtml}</body>`,
-    blocks,
-  );
-
+// The pipeline checks the blocks against the portal's own case page, read
+// from the stored raw (retention/sources/pl-tk.ts), not against the fragment
+// this parser selected.
 export const parsePlTkText = (
   input: ParsePlTkTextInput,
 ): { documentAst: DocumentAst; fulltext: string } => {
@@ -1035,7 +1289,6 @@ export const parsePlTkText = (
     input.page.cleanedTextByDocumentId.get(input.documentId) ??
     panic(`Ruling ${input.documentId} was not read from its parsed page`);
   const blocks = buildBlocks(input.page.$, fragment);
-  validatePlTkBlocks(input.caseNumber, input.textHtml, blocks);
   return {
     documentAst: {
       version: 1,
