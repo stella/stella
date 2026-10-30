@@ -6,6 +6,6 @@
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. These values have no separate feature storage."
+    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. Classify attached footnote regions before repeated furniture, using their measured line pitch and a page body-height fallback. These values have no separate feature storage."
   }
 }

@@ -249,6 +249,81 @@ const readLetterheadPage = async (
 
 describe("page numbers on letterhead pages", () => {
   test.each([
+    { opening: "separate", noteY: 84, footerY: 20 },
+    { opening: "joined", noteY: 84, footerY: 20 },
+    { opening: "measured", noteY: 90, footerY: 64 },
+    { opening: "numbered", noteY: 84, footerY: 20 },
+  ] as const)(
+    "repeated footnote citations stay with their labels beside running footers %j",
+    async ({ opening, noteY, footerY }) => {
+      const pdf = PDF.create();
+      const citation = "Published commentary, volume 4, page 25.";
+      const continuation = "Additional citation text.";
+      const footer = "Office publication footer";
+      for (const label of ["1", "2"]) {
+        const page = pdf.addPage({ size: "letter" });
+        page.drawText("Body reference", { x: 72, y: 700, size: 12 });
+        page.drawText(label, { x: 153, y: 704, size: 7 });
+        for (const index of [0, 1, 2]) {
+          page.drawText("Ordinary body text establishes the page type.", {
+            x: 72,
+            y: 600 - index * 15,
+            size: 12,
+          });
+        }
+        page.drawText(label, {
+          x: 72,
+          y: opening === "joined" ? noteY : 100,
+          size: 7,
+        });
+        page.drawText(citation, { x: 82, y: noteY, size: 9 });
+        if (opening === "measured") {
+          page.drawText(continuation, { x: 82, y: noteY - 10, size: 9 });
+        }
+        page.drawText(footer, { x: 72, y: footerY, size: 7 });
+        if (opening === "numbered") {
+          page.drawText(label, { x: 250, y: 5, size: 12 });
+        }
+      }
+      const bytes = await pdf.save();
+      const pages = await readPdfTextPages(bytes);
+      expect(pages).toHaveLength(2);
+      const citationLines = pages.map(({ lines }) =>
+        lines.find(({ text }) => text.includes(citation)),
+      );
+      expect(citationLines.at(0)?.bbox.y).toEqual(expect.any(Number));
+      expect(citationLines.at(1)?.bbox.y).toBe(citationLines.at(0)?.bbox.y);
+      for (const [index, page] of pages.entries()) {
+        if (opening !== "joined") {
+          expect(
+            page.lines.some(({ text }) => text.trim() === String(index + 1)),
+          ).toBe(true);
+        }
+        expect(page.lines.some(({ text }) => text === footer)).toBe(true);
+      }
+      const content = await extractPlPdfLetterheadContent(
+        bytes,
+        PL_PDF_PARAGRAPH_START.INDENT,
+      );
+      const notes = content.notes.filter(
+        (line): line is PlSnTextLine => line.type === "text",
+      );
+      for (const label of ["1", "2"]) {
+        expect(
+          notes
+            .filter(({ footnote }) => footnote?.label === label)
+            .flatMap(({ runs }) => runs.map(({ text }) => text))
+            .join(" ")
+            .trim(),
+        ).toBe(
+          opening === "measured" ? `${citation} ${continuation}` : citation,
+        );
+      }
+      expect(JSON.stringify(content)).not.toContain(footer);
+    },
+  );
+
+  test.each([
     "1",
     "-1-",
     "1/16",

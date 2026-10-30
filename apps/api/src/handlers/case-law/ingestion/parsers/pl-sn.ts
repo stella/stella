@@ -1579,6 +1579,21 @@ const withoutRepeatedFurniture = (
   pages: readonly PdfTextPage[],
   bodySize: number,
 ): PdfTextLine[][] => {
+  let read: NotesRead = { label: 0 };
+  const notePositions = pages.map(({ lines }, pageIndex) => {
+    const page = pageNotesOf({
+      lines: liftSuperscripts(lines, bodySize, true),
+      bodySize,
+      before: read,
+      pageNumber: pageIndex + 1,
+    });
+    read = page.read;
+    return new Set(
+      page.noteLines.map(
+        (line) => line.y ?? panic("A PDF note line must have a position"),
+      ),
+    );
+  });
   const inEdgeZone = (line: PdfTextLine, height: number): boolean =>
     line.bbox.y < height * EDGE_ZONE_RATIO ||
     line.bbox.y > height * (1 - EDGE_ZONE_RATIO);
@@ -1605,8 +1620,13 @@ const withoutRepeatedFurniture = (
     /\p{L}/u.test(line.text);
   const placed = new Map<string, { page: number; y: number }[]>();
   for (const [page, { height, lines }] of pages.entries()) {
+    const protectedNotes =
+      notePositions.at(page) ?? panic("Every page has classified note regions");
     for (const line of lines) {
-      if (letterheadCandidate(line, height)) {
+      if (
+        !protectedNotes.has(line.bbox.y) &&
+        letterheadCandidate(line, height)
+      ) {
         const key = keyOf(line, page);
         const places = placed.get(key);
         if (places === undefined) {
@@ -1650,7 +1670,13 @@ const withoutRepeatedFurniture = (
 
   const keptPages = pages.map(({ height, lines }, page) =>
     lines.filter((line) => {
-      if (!letterheadCandidate(line, height)) {
+      if (
+        (
+          notePositions.at(page) ??
+          panic("Every page has classified note regions")
+        ).has(line.bbox.y) ||
+        !letterheadCandidate(line, height)
+      ) {
         return true;
       }
       const key = keyOf(line, page);
@@ -1795,6 +1821,25 @@ type PageNotes = {
   readonly notes: readonly (NoteOpening & {
     readonly lines: readonly ExtractedLine[];
   })[];
+  readonly noteLines: readonly ExtractedLine[];
+  readonly read: NotesRead;
+};
+
+/** A detached footer lies beyond the spacing established within a note. */
+const NOTE_REGION_GAP_FACTOR = 1.5;
+
+const medianNotePitch = (pitches: readonly number[]): number | undefined => {
+  const sorted = pitches.toSorted((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  const high = sorted.at(middle);
+  if (high === undefined || sorted.length % 2 !== 0) {
+    return high;
+  }
+  return (
+    ((sorted.at(middle - 1) ?? panic("An even pitch set has a lower middle")) +
+      high) /
+    2
+  );
 };
 
 /**
@@ -1863,17 +1908,26 @@ const noteReferencesOf = (
  * from the page before): left in the body they interrupt a paragraph, where
  * a guess would file text under the wrong note.
  */
-const pageNotesOf = (
-  lines: readonly ExtractedLine[],
-  bodySize: number,
-  before: NotesRead,
-): PageNotes => {
+type PageNotesOptions = {
+  lines: readonly ExtractedLine[];
+  bodySize: number;
+  before: NotesRead;
+  pageNumber: number;
+};
+
+const pageNotesOf = ({
+  lines,
+  bodySize,
+  before,
+  pageNumber,
+}: PageNotesOptions): PageNotes => {
   let start = lines.length;
   while (
     start > 0 &&
-    printedSpansOf(lines[start - 1] ?? { spans: [], text: "", x: 0 }).every(
+    (printedSpansOf(lines[start - 1] ?? { spans: [], text: "", x: 0 }).every(
       ({ fontSize }) => fontSize < bodySize * NOTE_TYPE_RATIO,
-    )
+    ) ||
+      isPageNumber(lines[start - 1]?.text ?? "", pageNumber))
   ) {
     start -= 1;
   }
@@ -1924,9 +1978,15 @@ const pageNotesOf = (
       !continuesNumberedColumn(line, index),
   );
   if (first === -1) {
-    return { body: lines, notes: [] };
+    return { body: lines, notes: [], noteLines: [], read: before };
   }
   const notes: (NoteOpening & { lines: ExtractedLine[] })[] = [];
+  const noteLines: ExtractedLine[] = [];
+  const detached: ExtractedLine[] = [];
+  const pageBodyHeight = bodyFontSizeOf(lines.slice(0, start));
+  let previous: { type: "label" | "text"; line: ExtractedLine } | undefined;
+  let pitches: number[] = [];
+  let labelSize = before.labelSize;
   const referenceTargets = new Map<LineMark, PlSnFootnoteReference>();
   for (const line of lines.slice(first)) {
     const opening = referencedOpening(line);
@@ -1938,12 +1998,42 @@ const pageNotesOf = (
         "A footnote label is an unsigned integer of at most three digits",
       );
       openedOnPage = true;
+      labelSize = opening.labelSize ?? labelSize;
+      previous = {
+        type: opening.runs.some(({ text }) => text.trim().length > 0)
+          ? "text"
+          : "label",
+        line,
+      };
+      pitches = [];
+      noteLines.push(line);
       for (const { mark } of opening.references) {
         referenceTargets.set(mark, footnoteReferenceOf(opening.label));
       }
       notes.push({ ...opening, lines: [] });
     } else if (line.text.length > 0) {
-      notes.at(-1)?.lines.push(line);
+      const gap =
+        previous === undefined
+          ? undefined
+          : (previous.line.y ?? panic("A note region must have a position")) -
+            (line.y ?? panic("A note line must have a position"));
+      if (
+        gap === undefined ||
+        gap >
+          NOTE_REGION_GAP_FACTOR * (medianNotePitch(pitches) ?? pageBodyHeight)
+      ) {
+        detached.push(line);
+        previous = undefined;
+        continue;
+      }
+      if (gap > 0 && previous?.type === "text") {
+        pitches.push(gap);
+      }
+      previous = { type: "text", line };
+      noteLines.push(line);
+      (
+        notes.at(-1) ?? panic("An attached line must have an open note")
+      ).lines.push(line);
     }
   }
   const body = lines.slice(0, first).map((line) =>
@@ -1959,7 +2049,12 @@ const pageNotesOf = (
           }),
         },
   );
-  return { body, notes };
+  return {
+    body: [...body, ...detached],
+    notes,
+    noteLines,
+    read: { label: last, labelSize },
+  };
 };
 
 /** What the notes read before a page state about the next one. */
@@ -2010,7 +2105,7 @@ const readSetPages = ({
   const notes: PlSnLine[] = [];
   let read: NotesRead = { label: 0 };
 
-  const bodyPages = pages.map((pageLines) => {
+  const bodyPages = pages.map((pageLines, pageIndex) => {
     const lifted = liftSuperscripts(
       pageLines,
       bodySize,
@@ -2022,19 +2117,15 @@ const readSetPages = ({
     );
     let lines: readonly ExtractedLine[] = lifted;
     if (reading.separateNotes) {
-      const page = pageNotesOf(lifted, bodySize, read);
+      const page = pageNotesOf({
+        lines: lifted,
+        bodySize,
+        before: read,
+        pageNumber: pageIndex + 1,
+      });
       lines = page.body;
+      read = page.read;
       for (const note of page.notes) {
-        // Note numbers only rise, so each names one note.
-        read = {
-          label: parseIntegerToken(note.label, {
-            sign: "unsigned",
-            max: 999,
-          }).unwrap(
-            "A footnote label is an unsigned integer of at most three digits",
-          ),
-          labelSize: note.labelSize ?? read.labelSize,
-        };
         const footnote = footnoteReferenceOf(note.label);
         notes.push(
           { type: "text", runs: note.runs, indented: true, footnote },
