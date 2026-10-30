@@ -75,6 +75,10 @@
       "types": "./src/document-search-pieces.ts",
       "import": "./src/document-search-pieces.ts"
     },
+    "./heading-designator-levels": {
+      "types": "./src/heading-designator-levels.ts",
+      "import": "./src/heading-designator-levels.ts"
+    },
     "./document-kind": {
       "types": "./src/document-kind.ts",
       "import": "./src/document-kind.ts"
@@ -143,6 +147,10 @@
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
     },
+    "./source-contents": {
+      "types": "./src/source-contents.ts",
+      "import": "./src/source-contents.ts"
+    },
     "./spot-place": {
       "types": "./src/spot-place.ts",
       "import": "./src/spot-place.ts"
@@ -182,6 +190,7 @@
   },
   "dependencies": {
     "@stll/folio-core": "catalog:",
+    "@stll/agent-input": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
