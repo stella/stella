@@ -899,113 +899,14 @@ const ROUTINE_OPTION_KEYWORDS = new Set([
 ]);
 
 type SearchPathSetting =
-  | { type: "configured"; entries: string[] }
+  | { type: "accepted" }
   | { type: "missing" }
   | { type: "repeated" }
-  | { type: "unparseable" };
+  | { type: "non-canonical" }
+  | { type: "reset" };
 
-const parseSearchPathValue = (value: string): SearchPathSetting => {
-  let cursor = 0;
-  const entries: string[] = [];
-  const skipWhitespace = () => {
-    while (/\s/u.test(value[cursor] ?? "")) {
-      cursor++;
-    }
-  };
-
-  skipWhitespace();
-  if (value[cursor] === "=") {
-    cursor++;
-  } else {
-    const to = /^TO\b/iu.exec(value.slice(cursor));
-    if (!to) {
-      return { type: "unparseable" };
-    }
-    cursor += to[0].length;
-  }
-
-  while (cursor < value.length) {
-    skipWhitespace();
-    const quote = value[cursor];
-    if (quote === "'") {
-      cursor++;
-      let literal = "";
-      let closed = false;
-      while (cursor < value.length) {
-        if (value[cursor] !== "'") {
-          literal += value[cursor];
-          cursor++;
-          continue;
-        }
-        if (value[cursor + 1] === "'") {
-          literal += "'";
-          cursor += 2;
-          continue;
-        }
-        cursor++;
-        closed = true;
-        break;
-      }
-      if (!closed) {
-        return { type: "unparseable" };
-      }
-      const literalEntries = literal.split(",").map((entry) => entry.trim());
-      if (literalEntries.some((entry) => entry.length === 0)) {
-        return { type: "unparseable" };
-      }
-      entries.push(...literalEntries);
-    } else if (quote === '"') {
-      cursor++;
-      let identifier = "";
-      let closed = false;
-      while (cursor < value.length) {
-        if (value[cursor] !== '"') {
-          identifier += value[cursor];
-          cursor++;
-          continue;
-        }
-        if (value[cursor + 1] === '"') {
-          identifier += '"';
-          cursor += 2;
-          continue;
-        }
-        cursor++;
-        closed = true;
-        break;
-      }
-      if (!closed || identifier.length === 0) {
-        return { type: "unparseable" };
-      }
-      entries.push(identifier);
-    } else {
-      const identifier = /^[A-Za-z_][A-Za-z0-9_$]*/u.exec(
-        value.slice(cursor),
-      )?.[0];
-      if (!identifier) {
-        return { type: "unparseable" };
-      }
-      entries.push(identifier.toLowerCase());
-      cursor += identifier.length;
-    }
-
-    skipWhitespace();
-    if (cursor === value.length) {
-      break;
-    }
-    if (value[cursor] !== ",") {
-      return { type: "unparseable" };
-    }
-    cursor++;
-    skipWhitespace();
-    if (cursor === value.length) {
-      return { type: "unparseable" };
-    }
-  }
-
-  return entries.length === 0
-    ? { type: "unparseable" }
-    : { type: "configured", entries };
-};
+const CANONICAL_SEARCH_PATH_PATTERN =
+  /^\s*(?:=|TO)\s*(?:[a-z_][a-z0-9_]*\s*,\s*)*pg_temp\s*$/u;
 
 const readSecurityDefinerSearchPath = (
   statement: Statement,
@@ -1023,17 +924,44 @@ const readSecurityDefinerSearchPath = (
     return undefined;
   }
 
-  const functionName = tokens[functionIndex + 1]?.value ?? "<unknown>";
+  const nameEnd = tokens.findIndex(
+    (token, index) => index > functionIndex && token.value === "(",
+  );
+  const functionName = tokens
+    .slice(functionIndex + 1, nameEnd === -1 ? functionIndex + 2 : nameEnd)
+    .map(({ value }) => value)
+    .join("");
   const settingIndexes = tokens.flatMap((token, index) =>
     isIndexKeyword(token, "set") &&
     tokens[index + 1]?.value.toLowerCase() === "search_path"
       ? [index]
       : [],
   );
+  const resetIndexes = tokens.flatMap((token, index) =>
+    isIndexKeyword(token, "reset") &&
+    (isIndexKeyword(tokens[index + 1], "search_path") ||
+      isIndexKeyword(tokens[index + 1], "all"))
+      ? [index]
+      : [],
+  );
+  const isCreate = tokens.some((token) => isIndexKeyword(token, "create"));
+  const isAlter = tokens.some((token) => isIndexKeyword(token, "alter"));
+  if (!isCreate && !isAlter) {
+    return undefined;
+  }
+  if (isCreate && !isSecurityDefinerFunction) {
+    return undefined;
+  }
+  if (resetIndexes.length > 0) {
+    return {
+      functionName: functionName || "<unknown>",
+      setting: { type: "reset" },
+    };
+  }
   if (settingIndexes.length > 1) {
     return { functionName, setting: { type: "repeated" } };
   }
-  if (!isSecurityDefinerFunction) {
+  if (!isSecurityDefinerFunction && settingIndexes.length === 0) {
     return undefined;
   }
 
@@ -1044,7 +972,7 @@ const readSecurityDefinerSearchPath = (
 
   const valueStart = tokens[settingIndex + 1]?.index;
   if (valueStart === undefined) {
-    return { functionName, setting: { type: "unparseable" } };
+    return { functionName, setting: { type: "non-canonical" } };
   }
   const pathEnd = tokens.find(
     (token, index) =>
@@ -1057,7 +985,12 @@ const readSecurityDefinerSearchPath = (
     valueStart - leadingMaskedCharacters + "search_path".length,
     pathEnd === undefined ? undefined : pathEnd - leadingMaskedCharacters,
   );
-  return { functionName, setting: parseSearchPathValue(originalValue) };
+  return {
+    functionName,
+    setting: CANONICAL_SEARCH_PATH_PATTERN.test(originalValue)
+      ? { type: "accepted" }
+      : { type: "non-canonical" },
+  };
 };
 
 const securityDefinerSearchPathEndsWithPgTemp = (
@@ -1068,11 +1001,12 @@ const securityDefinerSearchPathEndsWithPgTemp = (
     return true;
   }
   switch (result.setting.type) {
-    case "configured":
-      return result.setting.entries.at(-1) === "pg_temp";
+    case "accepted":
+      return true;
     case "missing":
     case "repeated":
-    case "unparseable":
+    case "non-canonical":
+    case "reset":
       return false;
     default: {
       result.setting satisfies never;
@@ -1086,15 +1020,31 @@ const STATEMENT_INVARIANT_RULES = [
     id: "security-definer-search-path",
     description: (statement) => {
       const result = readSecurityDefinerSearchPath(statement);
-      if (result?.setting.type === "repeated") {
-        return `function ${result.functionName} has a repeated search_path setting`;
+      if (!result) {
+        return "function <unknown> has an invalid search_path setting";
       }
-      return `defines SECURITY DEFINER function ${result?.functionName ?? "<unknown>"} without a parseable search_path ending in pg_temp`;
+      switch (result.setting.type) {
+        case "repeated":
+          return `function ${result.functionName} has a repeated search_path setting`;
+        case "reset":
+          return `function ${result.functionName} resets search_path`;
+        case "missing":
+          return `function ${result.functionName} is missing a search_path setting`;
+        case "non-canonical":
+          return `function ${result.functionName} has a non-canonical search_path setting`;
+        case "accepted":
+          return panic("Accepted search_path cannot produce a finding");
+        default: {
+          result.setting satisfies never;
+          return panic("Unhandled search_path setting");
+        }
+      }
     },
     matches: (statement) =>
       !statement.deferred &&
       !securityDefinerSearchPathEndsWithPgTemp(statement),
-    guidance: "Set search_path explicitly and place pg_temp last.",
+    guidance:
+      "Use exactly one SET search_path = <unquoted lowercase identifiers>, pg_temp clause.",
   },
   {
     id: "pre-deploy-concurrent-index",

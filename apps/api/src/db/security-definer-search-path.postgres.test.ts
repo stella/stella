@@ -20,14 +20,7 @@ const hasSafeSearchPath = (routine: DefinerFunction) => {
     return false;
   }
   const value = setting.slice("search_path=".length).trim();
-  if (!value || value.toLowerCase() === "from current") {
-    return false;
-  }
-  const lastEntry = value
-    .split(",")
-    .map((entry) => entry.trim().replace(/^"|"$/gu, ""))
-    .at(-1);
-  return lastEntry?.toLowerCase() === "pg_temp";
+  return /^(?:[a-z_][a-z0-9_]*\s*,\s*)*pg_temp$/u.test(value);
 };
 
 const describeViolation = (routine: DefinerFunction) =>
@@ -56,6 +49,12 @@ describe.skipIf(!enabled)("security-definer search paths (postgres)", () => {
           CREATE FUNCTION ${schema}.unsafe_fixture() RETURNS integer
           LANGUAGE sql SECURITY DEFINER
           SET search_path = pg_catalog, public
+          AS 'SELECT 1'
+        `);
+        await db.execute(sql`
+          CREATE FUNCTION ${schema}.unsafe_quoted_fixture() RETURNS integer
+          LANGUAGE sql SECURITY DEFINER
+          SET search_path = pg_catalog, "PG_TEMP"
           AS 'SELECT 1'
         `);
         await db.execute(sql`
@@ -89,6 +88,7 @@ describe.skipIf(!enabled)("security-definer search paths (postgres)", () => {
           .map(describeViolation);
         expect(fixtureViolations).toEqual([
           `${fixtureSchema}.unsafe_fixture(): pg_catalog, public`,
+          `${fixtureSchema}.unsafe_quoted_fixture(): pg_catalog, "PG_TEMP"`,
         ]);
 
         const violations = routines

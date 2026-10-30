@@ -165,39 +165,21 @@ describe("check-migration-safety", () => {
       }
     });
 
-    it("accepts SECURITY DEFINER search paths ending in pg_temp", () => {
+    it("accepts a canonical SECURITY DEFINER search path", () => {
       expectClean(
         runChecker(
           reviewedDefiner("SET search_path = pg_catalog, public, pg_temp"),
         ),
       );
-      expectClean(
-        runChecker(reviewedDefiner('SET search_path TO pg_catalog, "pg_temp"')),
-      );
-      expectClean(
-        runChecker(reviewedDefiner("SET search_path = pg_catalog, PG_TEMP")),
-      );
-      expectClean(
-        runChecker(
-          reviewedDefiner("SET search_path = 'pg_catalog, public, pg_temp'"),
-        ),
-      );
-      expectClean(
-        runChecker(
-          reviewedDefiner("SET search_path = pg_catalog, 'public', pg_temp"),
-        ),
-      );
     });
 
-    it("reads quoted entries without allowing values after pg_temp", () => {
+    it.each([
+      'SET search_path = pg_catalog, "PG_TEMP"',
+      "SET search_path = 'pg_catalog, public, pg_temp'",
+      "SET search_path = pg_catalog, pg_temp, 'public'",
+    ])("rejects non-canonical search path %s", (options) => {
       expectFinding(
-        runChecker(reviewedDefiner('SET search_path = pg_catalog, "PG_TEMP"')),
-        "security-definer-search-path",
-      );
-      expectFinding(
-        runChecker(
-          reviewedDefiner("SET search_path = pg_catalog, pg_temp, 'public'"),
-        ),
+        runChecker(reviewedDefiner(options)),
         "security-definer-search-path",
       );
     });
@@ -226,6 +208,31 @@ describe("check-migration-safety", () => {
       expectFinding(result, "security-definer-search-path");
       expect(result.stderr).toContain(
         "function probe has a repeated search_path setting",
+      );
+    });
+
+    it("rejects a non-canonical ALTER FUNCTION search path", () => {
+      expectFinding(
+        runChecker(`
+          ALTER FUNCTION public.entity_feature_gate_value(text, jsonb)
+          SET search_path = public;
+        `),
+        "security-definer-search-path",
+      );
+    });
+
+    it("rejects ALTER FUNCTION search path resets", () => {
+      expectFinding(
+        runChecker("ALTER FUNCTION f(int) RESET search_path;"),
+        "security-definer-search-path",
+      );
+    });
+
+    it("accepts a canonical ALTER FUNCTION search path", () => {
+      expectClean(
+        runChecker(
+          "ALTER FUNCTION f(int) SET search_path = pg_catalog, pg_temp;",
+        ),
       );
     });
 
