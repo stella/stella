@@ -262,10 +262,10 @@ describe("invoice document export", () => {
     await exportPdf();
 
     expect(settlements).toEqual([
-      { status: "due", amountMinor: 605_000 },
-      { status: "due", amountMinor: 405_000 },
+      { status: "due", amountMinor: cents(605_000) },
+      { status: "due", amountMinor: cents(405_000) },
       { status: "settled" },
-      { status: "due", amountMinor: 200_000 },
+      { status: "due", amountMinor: cents(200_000) },
     ]);
     expect(writtenKeys).toHaveLength(4);
     expect(new Set(writtenKeys).size).toBe(4);

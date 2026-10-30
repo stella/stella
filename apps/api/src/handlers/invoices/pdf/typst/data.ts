@@ -100,6 +100,7 @@ type InvoiceTemplateData = {
     } | null;
   };
   payment:
+    | { status: "not_payable" }
     | {
         status: "settled";
         statement: string;
@@ -359,6 +360,9 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
 
   let paymentInstructions: InvoiceTemplateData["payment"];
   switch (options.settlement.status) {
+    case "not_payable":
+      paymentInstructions = { status: "not_payable" };
+      break;
     case "settled":
       paymentInstructions = { status: "settled", statement: l.paid };
       break;
@@ -389,7 +393,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       return panic("Unknown invoice settlement state");
   }
 
-  const data: InvoiceTemplateData = {
+  return Result.ok({
     lang,
     dir: lang === "ar" ? "rtl" : "ltr",
     title:
@@ -507,6 +511,5 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         seller?.barRegistration,
         seller?.footerNotes,
       ]).join("\n") || null,
-  };
-  return Result.ok(data);
+  } satisfies InvoiceTemplateData);
 };

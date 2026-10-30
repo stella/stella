@@ -221,6 +221,7 @@ export const createInvoicePdfExport = (
                 },
                 totals: amounts.totals,
                 settlement: invoicePaymentState({
+                  documentType: loaded.invoice.documentType,
                   totalAmount: loaded.invoice.totalAmount,
                   paidAmount: paidAmountOf(loaded.invoice.payments),
                 }),

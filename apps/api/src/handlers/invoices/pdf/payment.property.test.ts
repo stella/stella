@@ -20,6 +20,7 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
   assertProperty(
     "payment sequences keep the QR equal to the nonnegative ledger balance",
     fc.property(
+      fc.constantFrom("invoice", "advance", "credit_note"),
       fc.integer({ min: 0, max: 1_000_000 }),
       fc.array(
         fc.record({
@@ -28,12 +29,14 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
         }),
         { maxLength: 30 },
       ),
-      (gross, actions) => {
+      (documentType, gross, actions) => {
+        const total = documentType === "credit_note" ? -gross : gross;
         const payments: { amount: number; voidedAt: Date | null }[] = [];
         let remaining = gross;
         const check = () => {
           const settlement = invoicePaymentState({
-            totalAmount: gross,
+            documentType,
+            totalAmount: total,
             paidAmount: paidAmountOf(payments),
           });
           expect(remaining).toBeGreaterThanOrEqual(0);
@@ -41,12 +44,12 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
             ...fixture,
             settlement,
             totals: {
-              netAmountMinor: cents(gross),
+              netAmountMinor: cents(total),
               vatAmountMinor: cents(0),
-              grossAmountMinor: cents(gross),
+              grossAmountMinor: cents(total),
               vatBreakdown: [],
             },
-            invoice: { ...fixture.invoice, currency: "EUR" },
+            invoice: { ...fixture.invoice, documentType, currency: "EUR" },
             seller: {
               ...fixture.seller,
               country: "SK",
@@ -54,6 +57,14 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
             },
           };
           const qr = buildInvoicePaymentPayload(input)?.unwrap();
+          if (documentType === "credit_note") {
+            expect(settlement).toEqual({ status: "not_payable" });
+            expect(qr).toBeUndefined();
+            expect(buildInvoiceTemplateData(input).unwrap().payment).toEqual({
+              status: "not_payable",
+            });
+            return;
+          }
           if (remaining === 0) {
             expect(qr).toBeUndefined();
             expect(buildInvoiceTemplateData(input).unwrap().payment).toEqual({
@@ -62,13 +73,16 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
             });
             return;
           }
-          expect(settlement).toEqual({ status: "due", amountMinor: remaining });
+          expect(settlement).toEqual({
+            status: "due",
+            amountMinor: cents(remaining),
+          });
           const expected = buildPayBySquarePayload({
-            documentType: "invoice",
+            documentType,
             iban: input.seller.iban,
             bic: input.seller.bic,
             beneficiaryName: input.seller.legalName,
-            amountMinor: remaining,
+            amountMinor: cents(remaining),
             currency: "EUR",
             dueDate: input.invoice.dueDate,
             variableSymbol: "0987654321",

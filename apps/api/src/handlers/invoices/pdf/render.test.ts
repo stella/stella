@@ -73,7 +73,7 @@ const options = {
     grossAmountMinor: cents(55_555),
     vatBreakdown: [],
   },
-  settlement: { status: "due", amountMinor: 55_555 },
+  settlement: { status: "due", amountMinor: cents(55_555) },
   originalNumber: null,
 } satisfies RenderInvoicePdfOptions;
 

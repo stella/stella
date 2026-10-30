@@ -113,7 +113,10 @@ const golden = ({
       },
     ],
   },
-  settlement: { status: "due", amountMinor: line.netAmount + line.vatAmount },
+  settlement: {
+    status: "due",
+    amountMinor: cents(line.netAmount + line.vatAmount),
+  },
   originalNumber: null,
 });
 
@@ -307,6 +310,7 @@ describe("Slovak payment instructions follow settlement", () => {
           })),
         },
         settlement: invoicePaymentState({
+          documentType: base.invoice.documentType,
           totalAmount: 12_345,
           paidAmount: paidAmountOf([
             {

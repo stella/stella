@@ -2,6 +2,11 @@ import { PDF, PdfArray, PdfDict, PdfName, PdfStream } from "@libpdf/core";
 import { afterAll, describe, expect, test } from "bun:test";
 import { encode } from "uqr";
 
+import { INVOICE_PDF_LABELS } from "@stll/invoicing";
+import { cents } from "@stll/money";
+
+import { invoicePaymentState } from "@/api/lib/billing/invoice-payment-amounts";
+
 import { buildInvoicePaymentPayload } from "../render-helpers";
 import { buildInvoiceTemplateData, qrSvg } from "./data";
 import { CEE_DIACRITICS, DUMMY_ISDOC, invoiceFixture } from "./fixtures";
@@ -241,16 +246,63 @@ describe("payment QR as SVG", () => {
     );
   });
 
-  test("a credit note carries no QR code", () => {
+  test("an unpaid negative-total credit note prints no payment demand", async () => {
     const fixture = invoiceFixture(1);
-    const data = buildInvoiceTemplateData({
+    const input = {
       ...fixture,
-      invoice: { ...fixture.invoice, documentType: "credit_note" },
-    }).unwrap();
-    if (data.payment?.status !== "due") {
-      throw new TypeError("Expected due payment");
+      invoice: {
+        ...fixture.invoice,
+        documentType: "credit_note" as const,
+        lines: fixture.invoice.lines.map((line) => ({
+          ...line,
+          netAmount: -line.netAmount,
+          vatAmount: -line.vatAmount,
+          grossAmount: -line.grossAmount,
+        })),
+      },
+      totals: {
+        netAmountMinor: cents(-fixture.totals.netAmountMinor),
+        vatAmountMinor: cents(-fixture.totals.vatAmountMinor),
+        grossAmountMinor: cents(-fixture.totals.grossAmountMinor),
+        vatBreakdown: [],
+      },
+      settlement: invoicePaymentState({
+        documentType: "credit_note",
+        totalAmount: -fixture.totals.grossAmountMinor,
+        paidAmount: 0,
+      }),
+    };
+    expect(input.totals.grossAmountMinor).toBeLessThan(0);
+    const data = buildInvoiceTemplateData(input).unwrap();
+    expect(data.payment).toEqual({ status: "not_payable" });
+    const result = (
+      await renderInvoiceWithTypst({
+        invoice: input,
+        session,
+        attachments: [],
+        createdAt: CREATED_AT,
+      })
+    ).unwrap();
+    if (result.status !== "rendered") {
+      throw new TypeError(result.diagnostics.join("\n"));
     }
-    expect(data.payment.qrSvg).toBeNull();
+    const pdf = await PDF.load(result.pdf);
+    const printed = pdf
+      .extractText()
+      .map(({ text }) => spaces(text))
+      .join("\n");
+    const labels = INVOICE_PDF_LABELS[input.invoice.language];
+    for (const demand of [
+      labels.amountDue,
+      labels.payment,
+      labels.paid,
+      "IBAN",
+      "BIC",
+      input.seller.iban,
+      input.seller.accountNumber,
+    ]) {
+      expect(printed).not.toContain(demand);
+    }
   });
 });
 

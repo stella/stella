@@ -1,3 +1,6 @@
+import type { InvoiceDocumentType } from "@stll/invoicing";
+import { cents, type CentsAmount } from "@stll/money";
+
 /**
  * What a document settles: the amount owed on an invoice, the refund owed on
  * a credit note (whose total is negative). Payments are always positive.
@@ -19,16 +22,23 @@ export const invoicePaymentAmounts = ({
 });
 
 export type InvoicePaymentState =
-  { status: "settled" } | { status: "due"; amountMinor: number };
+  | { status: "not_payable" }
+  | { status: "settled" }
+  | { status: "due"; amountMinor: CentsAmount };
 
 /** Payment instructions use the ledger balance, independently of document totals. */
 export const invoicePaymentState = (
-  amounts: Parameters<typeof invoicePaymentAmounts>[0],
+  amounts: Parameters<typeof invoicePaymentAmounts>[0] & {
+    documentType: InvoiceDocumentType;
+  },
 ): InvoicePaymentState => {
+  if (amounts.documentType === "credit_note") {
+    return { status: "not_payable" };
+  }
   const { outstandingAmount } = invoicePaymentAmounts(amounts);
   return outstandingAmount === 0
     ? { status: "settled" }
-    : { status: "due", amountMinor: outstandingAmount };
+    : { status: "due", amountMinor: cents(outstandingAmount) };
 };
 
 /** The sum of the non-voided payments among an invoice's loaded payments. */

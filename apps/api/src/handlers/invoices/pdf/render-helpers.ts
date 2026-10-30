@@ -98,6 +98,7 @@ export const buildInvoicePaymentPayload = ({
   | (PolishQrPaymentResult & { errorCorrection: "L"; scheme: "zbp" })
 > | null => {
   switch (settlement.status) {
+    case "not_payable":
     case "settled":
       return null;
     case "due":
