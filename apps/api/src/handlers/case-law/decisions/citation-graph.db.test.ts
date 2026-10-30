@@ -1583,3 +1583,50 @@ test("a reviewed doctrine quote cannot bypass the source text disposition", asyn
   });
   expect(read.page.items.at(0)).not.toHaveProperty("evidenceQuote");
 });
+
+test("citation digests apply each printing manifestation's source policy", async () => {
+  const allowedId = createSafeId<"caseLawDecision">();
+  const restrictedId = createSafeId<"caseLawDecision">();
+  const languageGroupKey = "ECLI:CZ:US:2026:DIGEST.POLICY";
+  await db.insert(caseLawDecisions).values([
+    {
+      id: allowedId,
+      sourceId: openSourceId,
+      country: "CZE",
+      court: "Court",
+      caseNumber: "digest-policy",
+      language: "cs",
+      languageGroupKey,
+    },
+    {
+      id: restrictedId,
+      sourceId: withheldSourceId,
+      country: "CZE",
+      court: "Court",
+      caseNumber: "digest-policy",
+      language: "en",
+      languageGroupKey,
+    },
+  ]);
+  await db.insert(caseLawCitations).values([
+    {
+      citingDecisionId: restrictedId,
+      citationText: "restricted-reference",
+      kind: CITATION_KIND.PRECEDENT,
+    },
+  ]);
+  const digest = await readGatedDecisionCitationDigest({
+    caseLawDb,
+    decisionId: allowedId,
+    surface: "search",
+  });
+  expect(digest?.cites).toHaveLength(1);
+  expect(digest?.cites).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        citationText: null,
+        textWithheldReason: "source_licence",
+      }),
+    ]),
+  );
+});

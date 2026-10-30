@@ -11,7 +11,7 @@
  * transaction that approved the subject.
  */
 import { panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
@@ -91,34 +91,49 @@ export const readGatedDecisionCitationDigest = async ({
       if (!("items" in cites)) {
         return panic("A first citation page cannot carry an invalid cursor");
       }
-      const [source] = await subject.tx
-        .select({ descriptor: caseLawSources.descriptor })
-        .from(publishedCaseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-        )
-        .where(eq(publishedCaseLawDecisions.id, subject.id))
-        .limit(1);
-      if (source === undefined) {
-        return panic(`No source for gated decision ${String(subject.id)}`);
-      }
-      const textWithheldReason = decisionTextWithheldReason(source.descriptor);
+      const printingIds = [
+        ...new Set(cites.items.map(({ printedBy }) => printedBy)),
+      ];
+      const sources =
+        printingIds.length === 0
+          ? []
+          : await subject.tx
+              .select({
+                id: publishedCaseLawDecisions.id,
+                descriptor: caseLawSources.descriptor,
+              })
+              .from(publishedCaseLawDecisions)
+              .innerJoin(
+                caseLawSources,
+                eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+              )
+              .where(inArray(publishedCaseLawDecisions.id, printingIds))
+              .limit(LIMITS.caseLawDecisionCitationPageSize);
+      const policies = new Map(
+        sources.map(({ id, descriptor }) => [
+          id,
+          decisionTextWithheldReason(descriptor),
+        ]),
+      );
       return {
         summary,
         doctrineSummary,
         topCiting,
         cites: cites.items.map(
-          ({
-            evidenceQuote: _evidenceQuote,
-            printedBy: _printedBy,
-            ...item
-          }) => ({
-            ...item,
-            citationText:
-              textWithheldReason === null ? item.citationText : null,
-            textWithheldReason,
-          }),
+          ({ evidenceQuote: _evidenceQuote, printedBy, ...item }) => {
+            const textWithheldReason = policies.get(printedBy);
+            if (textWithheldReason === undefined) {
+              return panic(
+                `No source for citation printing decision ${String(printedBy)}`,
+              );
+            }
+            return {
+              ...item,
+              citationText:
+                textWithheldReason === null ? item.citationText : null,
+              textWithheldReason,
+            };
+          },
         ),
         citesMore: cites.nextCursor !== null,
       };
