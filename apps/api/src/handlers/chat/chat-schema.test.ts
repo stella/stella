@@ -1669,6 +1669,7 @@ describe("validateMessage", () => {
       ),
     };
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
