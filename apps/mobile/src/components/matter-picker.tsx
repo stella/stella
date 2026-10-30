@@ -4,8 +4,10 @@ import { Result } from "better-result";
 import { Pressable, View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { MatterIcon } from "@/components/ui/matter-icon";
-import { Text, TextInput } from "@/components/ui/text";
+import { Input } from "@stll/ui/input";
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { Text } from "@stll/ui/text";
+
 import { CheckIcon } from "@/icons.gen";
 import type { MatterSummary } from "@/state/matters";
 import { useUiColors } from "@/theme";
@@ -50,13 +52,13 @@ export const MatterPicker = ({
 
   return (
     <View className="gap-2">
-      <TextInput
+      <Input
         accessibilityLabel={t("findMatter")}
         autoCapitalize="none"
         onChangeText={setSearch}
         placeholder={t("findMatter")}
         value={search}
-        variant="search"
+        type="search"
       />
       <View className="border-border bg-card rounded-xl border px-3">
         {noneLabel === undefined ? null : (

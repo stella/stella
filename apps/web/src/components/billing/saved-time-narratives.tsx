@@ -37,6 +37,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 const PAGE_SIZE = 25;
@@ -101,13 +102,18 @@ export const SavedTimeNarratives = ({
     });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
+  const submitIntent = useIdempotentSubmit();
   const create = useMutation({
     mutationFn: async (savedName: string) =>
       unwrapApiResponse(
-        await api["saved-time-narratives"].post({
-          name: savedName,
-          narrative,
-          narrativeLanguage,
+        await submitIntent.run({
+          operation: "saved-time-narratives.create",
+          body: {
+            name: savedName,
+            narrative,
+            narrativeLanguage,
+          },
+          send: api["saved-time-narratives"].post,
         }),
       ),
     onSuccess: async () => {

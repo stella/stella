@@ -58,6 +58,7 @@ import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
 } from "@/lib/files/attached-template-upload-preflight";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceEntity, WorkspaceView } from "@/lib/types";
@@ -123,6 +124,7 @@ type SettleCardMovesOptions = {
 };
 
 export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const format = useFormatter();
   const labels = useBatchUploadLabels();
@@ -167,9 +169,17 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           };
 
       const createResult = await Result.tryPromise(async () =>
-        api
-          .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .put(body),
+        idempotentSubmit.run({
+          operation: JSON.stringify([
+            'api.tasks({workspaceId:toSafeId<"workspace">(workspaceId)})',
+            { workspaceId: toSafeId<"workspace">(workspaceId) },
+          ]),
+          body,
+          send: async (creationPayload) =>
+            api
+              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              .put(creationPayload),
+        }),
       );
 
       taskCreationPendingRef.current = false;
