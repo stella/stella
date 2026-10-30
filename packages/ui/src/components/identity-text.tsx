@@ -4,6 +4,7 @@ import { useCallback, useId, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 type IdentityTextProps = {
   children: string;
@@ -60,13 +61,16 @@ export const IdentityText = ({ children, className }: IdentityTextProps) => {
             setOpen(true);
           }
         }}
+        // TruncatedText cuts the name at its container; the tooltip here is
+        // its hint, because it also opens when the owning control takes focus.
         render={
-          <span
+          <TruncatedText
             className={cn(
-              "focus-visible:ring-ring block min-w-0 truncate outline-none [unicode-bidi:isolate] focus-visible:ring-2",
+              "focus-visible:ring-ring outline-none [unicode-bidi:isolate] focus-visible:ring-2",
               className,
             )}
             dir="auto"
+            hint={false}
             ref={textRef}
             role={overflow && !hasFocusOwner ? "button" : undefined}
             tabIndex={overflow && !hasFocusOwner ? 0 : undefined}
