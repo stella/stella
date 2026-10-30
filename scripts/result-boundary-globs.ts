@@ -230,6 +230,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
+  "packages/transcript/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
