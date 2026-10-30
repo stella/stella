@@ -175,3 +175,29 @@ const helperSelect = <Select>{shortOptions().map((zone) => <SelectItem value={zo
     ),
   ).toEqual([]);
 });
+
+test("does not treat a non-map call on a long-list helper as a mapped source", async () => {
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+import { COMMON_TIMEZONES } from "@/lib/timezones";
+const zoneOptions = () => COMMON_TIMEZONES;
+const joined = <Select><SelectItem value="all">{zoneOptions().join(",")}</SelectItem></Select>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([]);
+});
+
+test("treats a negative slice bound as still long", async () => {
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+import { COMMON_TIMEZONES } from "@/lib/timezones";
+const mostZones = () => COMMON_TIMEZONES.slice(0, -1);
+const select = <Select>{mostZones().map((zone) => <SelectItem value={zone}>{zone}</SelectItem>)}</Select>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([4]);
+});

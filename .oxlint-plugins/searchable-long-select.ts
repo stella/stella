@@ -289,13 +289,17 @@ const isBoundedSlice = (node: AstNode): boolean => {
     return false;
   }
   const [start, end] = node.arguments;
+  // Negative bounds count from the array's end, so only non-negative literal
+  // bounds prove the result is short.
   return (
     isAstNode(start) &&
     start.type === "Literal" &&
     typeof start.value === "number" &&
+    start.value >= 0 &&
     isAstNode(end) &&
     end.type === "Literal" &&
     typeof end.value === "number" &&
+    end.value >= 0 &&
     end.value - start.value <= SELECT_THRESHOLD
   );
 };
@@ -359,6 +363,7 @@ const isMappedHelperCall = (
 ): boolean =>
   isAstNode(node.callee) &&
   node.callee.type === "MemberExpression" &&
+  isIdentifier(node.callee.property, "map") &&
   isAstNode(node.callee.object) &&
   node.callee.object.type === "CallExpression" &&
   identifierResolvesTo(context, node.callee.object.callee, helpers);
