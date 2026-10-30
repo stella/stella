@@ -21,6 +21,7 @@
  * same groups.
  */
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { DECISION_DASH_CLASS_SOURCE } from "@stll/api-contract/decision-docket-grammar";
 
 /** The most cases one printed range may name before it is refused. */
@@ -204,7 +205,10 @@ const caseNumberTokens = (text: string): CaseNumberToken[] =>
       end: match.index + match[0].length,
       letter,
       dash,
-      ordinal: Number(digits),
+      // The pattern's ordinal is one to four ASCII digits.
+      ordinal: parseIntegerToken(digits, { sign: "unsigned" }).unwrap(
+        "A CJEU case number's ordinal is one to four digits",
+      ),
       digits,
       year,
     };

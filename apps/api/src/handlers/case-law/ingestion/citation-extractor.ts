@@ -1974,6 +1974,55 @@ const mergeCollectionCitations = ({
 /** An ECLI printed after a group's numbers, or two that disagreed. */
 type CjeuGroupPin = { ecli: string; key: string } | "conflicting";
 
+type CjeuMemberCitationOptions = {
+  section: { index: number; text: string };
+  caseNumber: string;
+  span: { start: number; end: number };
+};
+
+/** One case a CJEU reference names, with the hints printed around it. */
+const cjeuMemberCitation = ({
+  section,
+  caseNumber,
+  span,
+}: CjeuMemberCitationOptions): ExtractedCitation => ({
+  citationText: caseNumber,
+  sectionIndex: section.index,
+  citedDecisionTypeHint: detectCitationDecisionTypeHint(
+    section.text,
+    span.start,
+  ),
+  identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  identifierValue: caseNumber,
+  citedCourtHint: detectCitationCourtHint(section.text, span.start),
+  citedSheetNumber: detectCitationSheetNumber(section.text, span.end),
+  citedDecisionDate: detectCitationDecisionDate(section.text, span.start),
+});
+
+type RecordCjeuGroupPinOptions = {
+  pins: Map<string, CjeuGroupPin>;
+  dedupKey: string;
+  ecli: string;
+};
+
+/** Pin a case number to the ECLI printed with it, unless another disagrees. */
+const recordCjeuGroupPin = ({
+  pins,
+  dedupKey,
+  ecli,
+}: RecordCjeuGroupPinOptions): void => {
+  const pin = {
+    ecli,
+    key: normalizeDecisionIdentifierValue(DECISION_IDENTIFIER_TYPES.ECLI, ecli),
+  };
+  const pinned = pins.get(dedupKey);
+  if (pinned === undefined) {
+    pins.set(dedupKey, pin);
+  } else if (pinned !== "conflicting" && pinned.key !== pin.key) {
+    pins.set(dedupKey, "conflicting");
+  }
+};
+
 /**
  * Read the CJEU's own way of naming several cases in one reference (see
  * `cjeu-citation-groups.ts`) into the citations the patterns found:
@@ -2005,38 +2054,13 @@ const applyCjeuCitationGroups = ({
       for (const { caseNumber, span } of members) {
         const dedupKey = `${caseNumberType}:${normalizeDecisionIdentifierValue(caseNumberType, caseNumber)}`;
         if (!byKey.has(dedupKey)) {
-          byKey.set(dedupKey, {
-            citationText: caseNumber,
-            sectionIndex: section.index,
-            citedDecisionTypeHint: detectCitationDecisionTypeHint(
-              section.text,
-              span.start,
-            ),
-            identifierType: caseNumberType,
-            identifierValue: caseNumber,
-            citedCourtHint: detectCitationCourtHint(section.text, span.start),
-            citedSheetNumber: detectCitationSheetNumber(section.text, span.end),
-            citedDecisionDate: detectCitationDecisionDate(
-              section.text,
-              span.start,
-            ),
-          });
+          byKey.set(
+            dedupKey,
+            cjeuMemberCitation({ section, caseNumber, span }),
+          );
         }
-        if (ecli === null) {
-          continue;
-        }
-        const pin = {
-          ecli: ecli.text,
-          key: normalizeDecisionIdentifierValue(
-            DECISION_IDENTIFIER_TYPES.ECLI,
-            ecli.text,
-          ),
-        };
-        const pinned = pins.get(dedupKey);
-        if (pinned === undefined) {
-          pins.set(dedupKey, pin);
-        } else if (pinned !== "conflicting" && pinned.key !== pin.key) {
-          pins.set(dedupKey, "conflicting");
+        if (ecli !== null) {
+          recordCjeuGroupPin({ pins, dedupKey, ecli: ecli.text });
         }
       }
     }
