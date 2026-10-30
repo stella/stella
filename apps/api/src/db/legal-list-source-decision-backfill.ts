@@ -27,7 +27,7 @@ const DECISION_SQL = sqlCaseExpression({
  * does, so a source changed while this runs keeps exactly one baseline. The
  * gate trigger stamps each event's feature gate from its source. */
 export const LEGAL_LIST_SOURCE_DECISION_BACKFILL = {
-  introducedBy: "20261030034000_legal_list_item_source_decisions",
+  introducedBy: "20261030093000_legal_list_item_source_decisions",
   name: "legal-list-source-decisions",
   readCompletion: async (connection) => {
     const pending = await connection.query(
