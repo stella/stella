@@ -97,6 +97,7 @@ import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 import type { TaskDeploymentFeatures } from "@/api/lib/tasks/deployment-features";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
@@ -105,7 +106,6 @@ import {
   authorizedWorkspaceIds,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-
 /**
  * The flow run engine. `executeFlowStep` runs one step of one run per BullMQ
  * job (throwing to trigger the queue's retry/backoff, since the queue boundary
@@ -782,7 +782,7 @@ const settleReviewTask = async ({
         and(
           eq(entities.id, taskEntityId),
           eq(entities.workspaceId, workspaceId),
-          eq(entities.kind, "task"),
+          workTask(entities),
           inArray(entities.status, [
             TASK_STATUS.OPEN,
             TASK_STATUS.IN_PROGRESS,

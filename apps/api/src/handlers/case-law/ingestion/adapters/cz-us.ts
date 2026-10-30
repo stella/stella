@@ -671,8 +671,13 @@ const DETAIL_FIELD_BY_LABEL = new Map<string, NalusDetailFieldKey>(
  */
 const RECORD_CARD_SELECTOR = "table.recordCardTable";
 
-/** Repeats inside one value cell, as the court separates them. */
-const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>/giu;
+/**
+ * Repeats inside one value cell, as the court separates them: line breaks
+ * between judges or petitioners, list items between the acts a decision
+ * touches. Taking a list's text whole would run one act's last provision
+ * into the next act's number (`§ 35 odst.2` + `20/1966 Sb.`).
+ */
+const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>|<\/li\s*>/giu;
 
 const detailText = (text: string): string =>
   text.replaceAll(" ", " ").replace(/\s+/gu, " ").trim();

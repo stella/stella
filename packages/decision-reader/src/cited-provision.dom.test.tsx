@@ -14,6 +14,7 @@ import {
   E_SBIRKA_LIST_SCHEME,
   SLOV_LEX_LIST_SCHEME,
 } from "@stll/legal-ast/statute-list";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import { fakeReaderAdapters } from "./decision-text.test";
@@ -140,6 +141,11 @@ const wordingOf = (surface: Element) => {
 /** A provision drawn as one quotation, its letters hanging under the lead-in. */
 const expectOneStructuredQuote = (surface: Element) => {
   const quoted = wordingOf(surface);
+  for (const token of LEGAL_TEXT_CLASS_NAME.split(" ")) {
+    expect([...quoted.classList]).toContain(token);
+  }
+  expect([...quoted.classList]).toContain("hyphens-manual");
+  expect([...quoted.classList]).toContain("wrap-anywhere");
   expect(
     quoted.querySelectorAll('[data-slot="provision-card-quote"]'),
   ).toHaveLength(1);

@@ -7,7 +7,7 @@
 // byte ceiling instead:
 //
 //   - outbound HTTP: `safeOutboundFetchBytes` / `safeOutboundFetchStream`
-//     (`@/api/lib/safe-outbound-fetch`), or `readCappedBytes`
+//     (`@/api/lib/auth/authorized-outbound-fetch`), or `readCappedBytes`
 //     (`@stll/skills/streaming`) over `response.body`;
 //   - case-law publishers: `readPublisherText` / `readPublisherBytes`, or
 //     `readBodyText` over a `readPublisher` outcome
@@ -184,7 +184,7 @@ export default eslintCompatPlugin({
           fetchBody:
             "`.{{method}}()` buffers the whole fetch response with no size " +
             "limit. Read it with a byte ceiling: safeOutboundFetchBytes / " +
-            "safeOutboundFetchStream (@/api/lib/safe-outbound-fetch), or " +
+            "safeOutboundFetchStream (@/api/lib/auth/authorized-outbound-fetch), or " +
             "readCappedBytes (@stll/skills/streaming) over response.body. " +
             "Case-law publisher reads: readPublisherText / " +
             "readPublisherBytes, or readBodyText over a " +

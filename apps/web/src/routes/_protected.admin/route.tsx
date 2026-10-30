@@ -11,12 +11,20 @@ import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const searchSchema = routeSearchSchema({
   q: optionalSearchStringSchema(),
 });
 
 export const Route = createFileRoute("/_protected/admin")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.organization",
+      to: "/admin",
+    }),
+  },
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location, matches }) => {
     // These routes already require enrolment before commit. Its read is

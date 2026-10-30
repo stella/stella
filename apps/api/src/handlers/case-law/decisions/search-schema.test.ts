@@ -82,6 +82,7 @@ const validResponse = {
       citationCount: 0,
       citationAuthority: 0,
       textWithheldReason: null,
+      textAvailability: "available",
       matchingPassages: 1,
       match: "all_terms",
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -469,4 +470,28 @@ describe("case-law search response schema", () => {
   ])("rejects a response outside the declared contract", (response) => {
     expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(false);
   });
+});
+
+test("every search hit distinguishes a stored document from metadata only", () => {
+  for (const textAvailability of ["available", "metadata_only"] as const) {
+    const parsed = v.safeParse(searchDecisionsSuccessResponseSchema, {
+      ...validResponse,
+      hits: validResponse.hits.map((hit) => ({ ...hit, textAvailability })),
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.output.hits.map((hit) => hit.textAvailability)).toEqual([
+        textAvailability,
+      ]);
+    }
+  }
+  expect(
+    v.safeParse(searchDecisionsSuccessResponseSchema, {
+      ...validResponse,
+      hits: validResponse.hits.map((hit) => ({
+        ...hit,
+        textAvailability: undefined,
+      })),
+    }).success,
+  ).toBe(false);
 });

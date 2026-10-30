@@ -160,6 +160,7 @@ type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
+  sendDisabled?: boolean;
   /**
    * Emitted on send. `files` carries any attachments the user added via
    * the shared (+) menu, always an array (empty for preset chips, which
@@ -464,6 +465,7 @@ export const PromptBar = (props: PromptBarProps) => {
     status,
     pendingCount,
     canSubmitNow,
+    sendDisabled,
     onSubmit,
     onSubmitError,
     presetScopeChooser,
@@ -514,6 +516,7 @@ export const PromptBar = (props: PromptBarProps) => {
   } = getPromptBarAvailability({
     isEmpty,
     onRetry,
+    sendDisabled,
     onStop,
     queueWhileGenerating,
     sendDisabledReason,
@@ -573,6 +576,7 @@ export const PromptBar = (props: PromptBarProps) => {
   // silently drop the attached file. With attachments present the user sends
   // through the normal composer path instead.
   const presetChipsVisible =
+    !sendDisabled &&
     layout === "floating" &&
     !threadHasMessages &&
     presets !== undefined &&
@@ -959,6 +963,7 @@ const getPromptBarAvailability = ({
   onStop,
   queueWhileGenerating,
   sendDisabledReason,
+  sendDisabled = false,
   status,
 }: {
   isEmpty: boolean;
@@ -966,16 +971,15 @@ const getPromptBarAvailability = ({
   onStop: PromptBarProps["onStop"];
   queueWhileGenerating: boolean;
   sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  sendDisabled: PromptBarProps["sendDisabled"];
   status: PromptBarProps["status"];
 }) => {
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
   const isSendBlocked = sendDisabledReason !== undefined;
-  const submitDisabled = busy || isSendBlocked;
+  const submitDisabled = busy || isSendBlocked || sendDisabled;
   const retryOffer =
-    onRetry !== undefined && isEmpty && !busy && !isSendBlocked
-      ? onRetry
-      : undefined;
+    onRetry !== undefined && isEmpty && !submitDisabled ? onRetry : undefined;
   return {
     busy,
     composerActionMode: resolveChatComposerAction({
@@ -984,7 +988,7 @@ const getPromptBarAvailability = ({
       onRetry: retryOffer,
     }),
     composerSubmitDisabled: queueWhileGenerating
-      ? status === "applying" || isSendBlocked
+      ? status === "applying" || isSendBlocked || sendDisabled
       : submitDisabled,
     inputDisabled: isSendBlocked,
     isGenerating,
