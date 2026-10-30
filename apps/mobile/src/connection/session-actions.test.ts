@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  createAccessTokenSource,
   createSessionStore,
   type SessionGeneration,
   type StoredSession,
@@ -9,6 +10,7 @@ import { signOutSession } from "./session-actions";
 
 const SESSION = {
   signInId: "sign-in-a",
+  userId: "user-a",
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
   clientId: "mobile-client",
@@ -17,7 +19,7 @@ const SESSION = {
   refreshToken: "refresh-a",
 } satisfies StoredSession;
 
-for (const waitingOn of ["revocation", "deletion"] as const) {
+for (const waitingOn of ["cleanup", "revocation", "deletion"] as const) {
   test(`sign-in remains current after sign-out finishes ${waitingOn}`, async () => {
     const reached = Promise.withResolvers<undefined>();
     const resume = Promise.withResolvers<undefined>();
@@ -43,6 +45,12 @@ for (const waitingOn of ["revocation", "deletion"] as const) {
     const signingOut = signOutSession({
       store,
       session: SESSION,
+      beforeEnd: async () => {
+        if (waitingOn === "cleanup") {
+          reached.resolve(undefined);
+          await resume.promise;
+        }
+      },
       revoke: async () => {
         if (waitingOn === "revocation") {
           reached.resolve(undefined);
@@ -61,7 +69,7 @@ for (const waitingOn of ["revocation", "deletion"] as const) {
     };
     const signingIn = store.begin();
     const keeping = signingIn.write(replacement);
-    if (waitingOn === "revocation") {
+    if (waitingOn !== "deletion") {
       await keeping;
     }
     resume.resolve(undefined);
@@ -101,4 +109,45 @@ test("deferred state updates belong to the generation that scheduled them", () =
     published = "replacement";
   });
   expect(published).toBe("replacement");
+});
+
+test("session cleanup can authenticate before its credentials are retired", async () => {
+  let stored: StoredSession | null | undefined = SESSION;
+  const store = createSessionStore({
+    read: async () => stored,
+    write: async (session) => {
+      stored = session;
+    },
+    prepareClear: async () => {
+      stored = null;
+    },
+    clear: async () => {
+      stored = undefined;
+    },
+  });
+  const source = createAccessTokenSource({
+    fetch: async () =>
+      Response.json({ error: "unexpected_refresh" }, { status: 400 }),
+    initialAccess: { token: "cleanup-access", expiresAt: 900_000 },
+    now: () => 0,
+    session: SESSION,
+    generation: store.generation(),
+    store,
+  });
+  let cleaned = false;
+  const outcome = await signOutSession({
+    store,
+    session: SESSION,
+    beforeEnd: async () => {
+      expect(source.session()).toEqual(SESSION);
+      expect((await source.accessToken()).unwrap()).toBe("cleanup-access");
+      cleaned = true;
+    },
+    revoke: async () => {},
+    publish: () => {},
+  });
+  expect(outcome.isOk()).toBeTrue();
+  expect(cleaned).toBeTrue();
+  expect(source.session()).toBeUndefined();
+  expect(stored).toBeUndefined();
 });

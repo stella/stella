@@ -6,6 +6,7 @@ import type { SessionGeneration, SessionStore, StoredSession } from "./session";
 type SignOutOptions = {
   readonly store: SessionStore;
   readonly session: StoredSession | undefined;
+  readonly beforeEnd: (session: StoredSession) => Promise<void>;
   readonly revoke: (session: StoredSession) => Promise<void>;
   readonly publish: (generation: SessionGeneration) => void;
 };
@@ -13,9 +14,18 @@ type SignOutOptions = {
 export const signOutSession = async ({
   store,
   session,
+  beforeEnd,
   revoke,
   publish,
 }: SignOutOptions) => {
+  const generation = store.generation();
+  if (session !== undefined) {
+    await beforeEnd(session);
+  }
+  // Cleanup uses the current grant; a later sign-in owns any replacement.
+  if (!store.isCurrent(generation)) {
+    return Result.ok(undefined);
+  }
   const transition = store.begin();
   if (session !== undefined) {
     await revoke(session);

@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
-import { decisionPathForKey } from "./inputs";
+import { approvalPathForKey, decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
@@ -30,15 +30,19 @@ const DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    approvedDigests: v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
   }),
 );
+// The decision shape the generator accepts, as readDecisions produces it.
+export type ClassificationDecisionsInput = v.InferInput<typeof DECISIONS>;
 const REVISION_DECISIONS = v.record(
   v.string(),
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    approvedDigests: v.optional(
+      v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    ),
   }),
 );
 const SNAPSHOTS = v.record(
@@ -173,7 +177,7 @@ export const readClassificationInputsAtRevision = (
           key,
           {
             ...decision,
-            reviewedDigest: decision.reviewedDigest ?? "0".repeat(64),
+            approvedDigests: decision.approvedDigests ?? [],
           },
         ]),
       ),
@@ -340,7 +344,10 @@ const reviewJobs = ({
   documentDigest,
   observeJobs,
 }: ReviewJobsOptions) => {
-  const entries: Record<string, unknown> = {};
+  const entries: Record<
+    string,
+    { kind: string; qualifier: string; reviewedDigest: string }
+  > = {};
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
@@ -365,14 +372,6 @@ const reviewJobs = ({
               : [];
           }),
       );
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: job.digest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : job.digest;
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
@@ -385,9 +384,19 @@ const reviewJobs = ({
       });
       const privileged = isPrivilegedJobClosure({
         kind: decision?.kind,
+        privileged: job.privileged,
         shape: job.shape,
         reachableDocuments: reachable,
       });
+      const surfaceDigest = privileged ? job.privilegedDigest : job.digest;
+      const digest = Object.keys(dependencyDigests).length
+        ? sha256(
+            JSON.stringify({
+              digest: surfaceDigest,
+              dependencies: dependencyDigests,
+            }),
+          )
+        : surfaceDigest;
       derivedJobs.set(key, {
         digest,
         privileged,
@@ -396,11 +405,12 @@ const reviewJobs = ({
           reachableDocuments: reachable,
         }),
       });
-      if (!decision || decision.reviewedDigest !== digest) {
+      if (!decision || !decision.approvedDigests.includes(digest)) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
           qualifier:
             decision?.qualifier ?? "<describe the reviewed classification>",
+          // The approval file format the decision reader validates.
           reviewedDigest: digest,
         };
         if (privileged) {
@@ -435,7 +445,7 @@ const reviewJobs = ({
       )
         .map(
           ([key, value]) =>
-            `${decisionPathForKey(key)}\n${JSON.stringify(value, null, 2)}`,
+            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.reviewedDigest)}\n${JSON.stringify(value, null, 2)}`,
         )
         .join("\n")}`,
       privilegedJobs,

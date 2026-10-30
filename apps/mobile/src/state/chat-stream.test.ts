@@ -33,6 +33,7 @@ const SESSION: StoredSession = {
   resource: "https://stella.example.com/v1",
   signInId: "sign-in-1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 /** A source whose refresh answers `access-1`, so a retried request shows it. */

@@ -26,6 +26,7 @@ const SESSION: StoredSession = {
   resource: "https://stella.example.com/v1",
   signInId: "sign-in-1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 const sourceFor = (fetch: Fetch) => {

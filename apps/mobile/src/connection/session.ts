@@ -21,6 +21,13 @@ export const storedSessionSchema = v.object({
   revocationEndpoint: v.optional(v.pipe(v.string(), v.url())),
   resource: v.pipe(v.string(), v.url()),
   refreshToken: v.pipe(v.string(), v.minLength(1)),
+  /**
+   * The signed-in person's stable id on this server, the ID token's `sub`.
+   * With `serverUrl` it keys whatever the app keeps per account on the
+   * device; a session kept before it existed no longer parses and signs in
+   * again.
+   */
+  userId: v.pipe(v.string(), v.minLength(1)),
 });
 
 export type StoredSession = v.InferOutput<typeof storedSessionSchema>;
@@ -349,6 +356,7 @@ function sameSessionIdentity(a: StoredSession, b: StoredSession): boolean {
   return (
     a.signInId === b.signInId &&
     a.serverUrl === b.serverUrl &&
+    a.userId === b.userId &&
     a.issuer === b.issuer &&
     a.clientId === b.clientId &&
     a.tokenEndpoint === b.tokenEndpoint &&

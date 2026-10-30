@@ -289,6 +289,9 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/pack-reproducibly.sh
+            scripts/publish-package-selection.ts
+            scripts/publish-packages.ts
+            scripts/generate-npm-release-jobs.ts
             scripts/prepare-publish.ts
             scripts/publish-manifest.ts
             scripts/publish-declarations.ts
@@ -362,13 +365,13 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before || '' }}
         run: |
           set -euo pipefail
-          # A historical source checkout predates this selector. Recovery is
-          # always one named non-CLI package, so resolve it from the workflow
-          # input instead of asking the old source to run new tooling.
+          # Historical sources can predate the selector. Use current tooling
+          # with source manifests to resolve a named dispatch dependency closure.
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then
-            pkgs=("$MANUAL_PACKAGE")
+            selection="$(bun .pack-tooling/scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE" "$GITHUB_WORKSPACE")"
+            mapfile -t pkgs <<< "$selection"
           else
             mapfile -t pkgs < <(bun scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE")
           fi

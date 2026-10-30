@@ -16,10 +16,16 @@ import { restoredSource, sourceFor } from "@/connection/restored-session";
 import { isCurrentSessionSource } from "@/connection/session";
 import type { AccessTokenSource } from "@/connection/session";
 import { signOutSession } from "@/connection/session-actions";
+import {
+  type BeforeSessionEnd,
+  createSessionEndBoundary,
+} from "@/connection/session-end";
 import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
-import { APP_VARIANT } from "@/env";
+import { APP_VARIANT, PUSH_NOTIFICATIONS } from "@/env";
+import { currentPushDevice } from "@/native/push-device";
+import { unregisterPushDevice } from "@/state/push-devices";
 
 export type SessionState =
   | {
@@ -40,9 +46,33 @@ type SessionContextValue = {
    * A source left over from an earlier sign-in ends nothing.
    */
   readonly end: (source: AccessTokenSource) => void;
+  /**
+   * Runs `handler` before any sign-out or server-ended session forgets the
+   * session, at most a couple of seconds per handler; returns its removal.
+   */
+  readonly registerBeforeSessionEnd: (handler: BeforeSessionEnd) => () => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+/**
+ * Tells the server to stop sending to this phone, without asking the person
+ * anything. Best effort: should it fail, the server stops once Apple reports
+ * the token gone.
+ */
+const stopPushNotifications = async (source: AccessTokenSource) => {
+  if (!PUSH_NOTIFICATIONS) {
+    return;
+  }
+  const device = await currentPushDevice({ ask: false, locale: "" }).catch(
+    () => null,
+  );
+  if (device !== null) {
+    (
+      await unregisterPushDevice({ fetch, source, token: device.token })
+    ).unwrapOr(undefined);
+  }
+};
 
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
@@ -51,6 +81,10 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       ? { status: "signed-out", ended: false }
       : { status: "signed-in", source: restored },
   );
+  const [boundary] = useState(createSessionEndBoundary);
+  // Several requests can find the same session refused at once; its
+  // handlers run for the first only.
+  const [ending] = useState(() => new WeakSet<AccessTokenSource>());
 
   const value: SessionContextValue = {
     state,
@@ -118,6 +152,13 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
         store: deviceSessionStore,
         session:
           state.status === "signed-in" ? state.source.session() : undefined,
+        beforeEnd: async (session) => {
+          if (state.status === "signed-in") {
+            ending.add(state.source);
+            await boundary.run("signed-out", session);
+            await stopPushNotifications(state.source);
+          }
+        },
         revoke: async (session) => {
           (
             await revokeRefreshToken({
@@ -138,17 +179,35 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
           ),
       }),
     end: (source) => {
+      if (
+        state.status !== "signed-in" ||
+        !isCurrentSessionSource(state.source, source) ||
+        ending.has(source)
+      ) {
+        return;
+      }
+      const session = source.session();
+      if (session === undefined) {
+        return;
+      }
       const generation = deviceSessionStore.generation();
-      setState(
-        (current) =>
-          deviceSessionStore.commit(generation, () =>
-            current.status === "signed-in" &&
-            isCurrentSessionSource(current.source, source)
-              ? ({ status: "signed-out", ended: true } as const)
-              : current,
-          ) ?? current,
-      );
+      ending.add(source);
+      const signOutAfterHandlers = async () => {
+        await boundary.run("ended", session);
+        await stopPushNotifications(source);
+        setState(
+          (current) =>
+            deviceSessionStore.commit(generation, () =>
+              current.status === "signed-in" &&
+              isCurrentSessionSource(current.source, source)
+                ? ({ status: "signed-out", ended: true } as const)
+                : current,
+            ) ?? current,
+        );
+      };
+      return signOutAfterHandlers();
     },
+    registerBeforeSessionEnd: boundary.register,
   };
 
   return <SessionContext value={value}>{children}</SessionContext>;

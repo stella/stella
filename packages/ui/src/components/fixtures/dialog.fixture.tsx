@@ -87,6 +87,10 @@ const DialogFixture = () => {
               locale === "en"
                 ? "Unsaved changes. Press Esc again to discard"
                 : "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
+            unsavedChangesClose:
+              locale === "en"
+                ? "Unsaved changes. Close again to discard"
+                : "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
           }}
         >
           <Dialog

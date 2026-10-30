@@ -51,6 +51,10 @@ import type { VerifyBearerToken } from "@/api/mcp/auth";
  * phone must not be able to keep itself connected.
  */
 export const API_OAUTH_ROUTES = {
+  "GET /v1/workspaces/:workspaceId/vocabulary": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
+  },
   "GET /v1/workspaces": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/list.ts",
