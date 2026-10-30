@@ -28,6 +28,8 @@ import {
 } from "./replay";
 import { BACKGROUND_REPLAY_LIMITS } from "./replay-enrolment";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 type BackgroundReplayRunnerOptions = {
   rootDb: CaseLawRootHandle;
   ingestionDb: ScopedDb;
@@ -67,7 +69,7 @@ const readReservedReplayInput = async (
   (
     await withAggregateTransaction(
       rootDb,
-      AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+      BUDGET,
       async (tx) =>
         await tx
           .select({

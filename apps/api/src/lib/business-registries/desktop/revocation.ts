@@ -12,6 +12,8 @@ import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registri
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;
   organizationId: SafeId<"organization">;
@@ -32,36 +34,32 @@ export const revokeDesktopRegistryCredential = async ({
   expectedKeyHash,
   db = rootDb,
 }: RevokeDesktopRegistryCredentialOptions) =>
-  await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-    async (tx) => {
-      const revoked = await tx
-        .update(apikey)
-        .set({
-          enabled: false,
-          updatedAt: new Date(Temporal.Now.instant().epochMilliseconds),
-        })
-        .where(
-          and(
-            eq(apikey.id, keyId),
-            eq(apikey.referenceId, userId),
-            eq(apikey.enabled, true),
-            expectedKeyHash === undefined
-              ? undefined
-              : eq(apikey.key, expectedKeyHash),
-            desktopRegistryKeyOrganizationScope(organizationId),
-          ),
-        )
-        .returning({ id: apikey.id });
-      if (revoked.length === 0) {
-        return;
-      }
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
-        resourceId: keyId,
-        metadata: { purpose: DESKTOP_REGISTRY_KEY_CONFIG, enabled: false },
-      });
-    },
-  );
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
+    const revoked = await tx
+      .update(apikey)
+      .set({
+        enabled: false,
+        updatedAt: new Date(Temporal.Now.instant().epochMilliseconds),
+      })
+      .where(
+        and(
+          eq(apikey.id, keyId),
+          eq(apikey.referenceId, userId),
+          eq(apikey.enabled, true),
+          expectedKeyHash === undefined
+            ? undefined
+            : eq(apikey.key, expectedKeyHash),
+          desktopRegistryKeyOrganizationScope(organizationId),
+        ),
+      )
+      .returning({ id: apikey.id });
+    if (revoked.length === 0) {
+      return;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+      resourceId: keyId,
+      metadata: { purpose: DESKTOP_REGISTRY_KEY_CONFIG, enabled: false },
+    });
+  });

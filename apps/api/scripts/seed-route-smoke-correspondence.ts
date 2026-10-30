@@ -20,6 +20,8 @@ import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { DEFAULT_ORG_ID } from "./seed-utils";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 requireLocalDevOpen("Seeding");
 
 const [workspaceValue, correspondenceValue, subject] = v.parse(
@@ -35,51 +37,44 @@ const correspondenceId = toSafeId<"correspondence">(correspondenceValue);
 const db = openMaintenanceDb({ readOnly: false });
 
 await runScriptWithErrorOutput(async () => {
-  const filer = await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) => {
-      const seededFiler = (
-        await tx
-          .select({ id: user.id, name: user.name, email: user.email })
-          .from(workspaces)
-          .innerJoin(
-            member,
-            eq(member.organizationId, workspaces.organizationId),
-          )
-          .innerJoin(user, eq(user.id, member.userId))
-          .innerJoin(
-            workspaceMembers,
-            and(
-              eq(workspaceMembers.workspaceId, workspaces.id),
-              eq(workspaceMembers.userId, user.id),
-            ),
-          )
-          .where(
-            and(
-              eq(workspaces.id, workspaceId),
-              eq(workspaces.organizationId, DEFAULT_ORG_ID),
-              eq(workspaces.name, `route-smoke-${workspaceId.slice(0, 8)}`),
-              eq(workspaces.status, "active"),
-              eq(user.email, "test@stella.dev"),
-            ),
-          )
-          .limit(1)
-      ).at(0);
-      if (seededFiler === undefined) {
-        panic("Correspondence fixture requires the seeded user's smoke matter");
-      }
+  const filer = await withAggregateTransaction(db, BUDGET, async (tx) => {
+    const seededFiler = (
+      await tx
+        .select({ id: user.id, name: user.name, email: user.email })
+        .from(workspaces)
+        .innerJoin(member, eq(member.organizationId, workspaces.organizationId))
+        .innerJoin(user, eq(user.id, member.userId))
+        .innerJoin(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.workspaceId, workspaces.id),
+            eq(workspaceMembers.userId, user.id),
+          ),
+        )
+        .where(
+          and(
+            eq(workspaces.id, workspaceId),
+            eq(workspaces.organizationId, DEFAULT_ORG_ID),
+            eq(workspaces.name, `route-smoke-${workspaceId.slice(0, 8)}`),
+            eq(workspaces.status, "active"),
+            eq(user.email, "test@stella.dev"),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (seededFiler === undefined) {
+      panic("Correspondence fixture requires the seeded user's smoke matter");
+    }
 
-      return seededFiler;
-    },
-  );
+    return seededFiler;
+  });
   const scopedDb = createRootMembershipScopedDb({
     organizationId: DEFAULT_ORG_ID,
     userId: toSafeId<"user">(filer.id),
   });
   await withAggregateTransaction(
     { transaction: scopedDb },
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    BUDGET,
     async (tx) => {
       await tx.insert(correspondence).values({
         id: correspondenceId,

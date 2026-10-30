@@ -38,6 +38,8 @@ import {
 } from "@/api/scripts/link-republished-decisions-plan";
 import { flagInteger } from "@/api/scripts/repair-flags";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 await runScriptWithErrorOutput(async () => {
   const args = new Set(Bun.argv.slice(2));
   const apply = args.has("--apply");
@@ -99,7 +101,7 @@ await runScriptWithErrorOutput(async () => {
   if (reverse) {
     const outcomes = await withAggregateTransaction(
       rootDb,
-      AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+      BUDGET,
       async (tx) =>
         await reverseRepublishedDecisionBatch(tx, limit, reconcile(tx)),
     );
@@ -164,7 +166,7 @@ await runScriptWithErrorOutput(async () => {
   }
   const outcomes = await withAggregateTransaction(
     rootDb,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    BUDGET,
     async (tx) =>
       await applyRepublishedDecisionBatch(tx, candidates, reconcile(tx)),
   );

@@ -28,6 +28,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 type DesktopCredentialRequest = {
   body: {
     configId: typeof DESKTOP_REGISTRY_KEY_CONFIG;
@@ -110,95 +112,89 @@ export const issueDesktopAccountCredential = async ({
 }: IssueDesktopAccountCredentialOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(
-        database,
-        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-        async (tx) => {
-          const fence = await CredentialIssuanceFence.hold(tx, {
+      await withAggregateTransaction(database, BUDGET, async (tx) => {
+        const fence = await CredentialIssuanceFence.hold(tx, {
+          userId: identity.userId,
+          sessionId: identity.sessionId,
+        });
+        if (fence === null) {
+          return abortTransaction(
+            new HandlerError({
+              status: 401,
+              message: "Sign in again to connect stella desktop",
+            }),
+          );
+        }
+        const membershipLock = await withAggregateLock({
+          aggregate: "desktopMembership",
+          id: {
+            organizationId: identity.organizationId,
             userId: identity.userId,
-            sessionId: identity.sessionId,
-          });
-          if (fence === null) {
-            return abortTransaction(
-              new HandlerError({
-                status: 401,
-                message: "Sign in again to connect stella desktop",
-              }),
-            );
-          }
-          const membershipLock = await withAggregateLock({
-            aggregate: "desktopMembership",
-            id: {
+          },
+          mode: "share",
+          tx,
+        });
+        if (membershipLock.status === "missing") {
+          return abortTransaction(unavailable());
+        }
+        const [membership] = await tx
+          .select({ role: member.role, email: user.email, name: user.name })
+          .from(member)
+          .innerJoin(user, eq(user.id, member.userId))
+          .where(
+            and(
+              eq(member.userId, identity.userId),
+              eq(member.organizationId, identity.organizationId),
+            ),
+          );
+        if (
+          !membership ||
+          !isMemberRole(membership.role) ||
+          !hasCurrentMemberPermission(
+            membership.role,
+            DESKTOP_ACCOUNT_PERMISSION,
+          )
+        ) {
+          return abortTransaction(unavailable());
+        }
+        const [org] = await tx
+          .select({ name: organization.name })
+          .from(organization)
+          .where(eq(organization.id, identity.organizationId));
+        if (!org) {
+          return abortTransaction(unavailable());
+        }
+        const now = new Date(Temporal.Now.instant().epochMilliseconds);
+        const expiresAt = new Date(
+          now.getTime() + DESKTOP_REGISTRY_KEY_SECONDS * 1000,
+        );
+        const minted = await desktopCredentialWriter(fence, now).createApiKey({
+          body: {
+            configId: DESKTOP_REGISTRY_KEY_CONFIG,
+            name: "Desktop account",
+            userId: identity.userId,
+            expiresIn: null,
+            metadata: {
+              purpose: DESKTOP_REGISTRY_KEY_CONFIG,
               organizationId: identity.organizationId,
-              userId: identity.userId,
+              deviceJkt: identity.deviceJkt,
+              inactivityExpiresAt: expiresAt.toISOString(),
             },
-            mode: "share",
-            tx,
-          });
-          if (membershipLock.status === "missing") {
-            return abortTransaction(unavailable());
-          }
-          const [membership] = await tx
-            .select({ role: member.role, email: user.email, name: user.name })
-            .from(member)
-            .innerJoin(user, eq(user.id, member.userId))
-            .where(
-              and(
-                eq(member.userId, identity.userId),
-                eq(member.organizationId, identity.organizationId),
-              ),
-            );
-          if (
-            !membership ||
-            !isMemberRole(membership.role) ||
-            !hasCurrentMemberPermission(
-              membership.role,
-              DESKTOP_ACCOUNT_PERMISSION,
-            )
-          ) {
-            return abortTransaction(unavailable());
-          }
-          const [org] = await tx
-            .select({ name: organization.name })
-            .from(organization)
-            .where(eq(organization.id, identity.organizationId));
-          if (!org) {
-            return abortTransaction(unavailable());
-          }
-          const now = new Date(Temporal.Now.instant().epochMilliseconds);
-          const expiresAt = new Date(
-            now.getTime() + DESKTOP_REGISTRY_KEY_SECONDS * 1000,
-          );
-          const minted = await desktopCredentialWriter(fence, now).createApiKey(
-            {
-              body: {
-                configId: DESKTOP_REGISTRY_KEY_CONFIG,
-                name: "Desktop account",
-                userId: identity.userId,
-                expiresIn: null,
-                metadata: {
-                  purpose: DESKTOP_REGISTRY_KEY_CONFIG,
-                  organizationId: identity.organizationId,
-                  deviceJkt: identity.deviceJkt,
-                  inactivityExpiresAt: expiresAt.toISOString(),
-                },
-              },
-            },
-          );
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
-            resourceId: minted.id,
-            metadata: { purpose: DESKTOP_REGISTRY_KEY_CONFIG },
-          });
-          return {
-            account: { email: membership.email, name: membership.name },
-            organizationName: org.name,
-            key: minted.key,
-            expiresAt,
-          };
-        },
-      ),
+          },
+        });
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+          resourceId: minted.id,
+          metadata: { purpose: DESKTOP_REGISTRY_KEY_CONFIG },
+        });
+        return {
+          account: { email: membership.email, name: membership.name },
+          organizationName: org.name,
+          key: minted.key,
+          expiresAt,
+        };
+      }),
     catch: (cause) =>
       HandlerError.is(cause)
         ? cause

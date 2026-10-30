@@ -19,6 +19,8 @@ import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { endManualEntitlement } from "@/api/lib/usage/manual-entitlement";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 const inputSchema = v.strictObject({
   "organization-id": v.pipe(
     v.string(),
@@ -47,7 +49,7 @@ await runScriptWithErrorOutput(async () => {
   const db = openMaintenanceDb({ readOnly: false });
   const result = await withAggregateTransaction(
     db,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    BUDGET,
     async (tx) =>
       await endManualEntitlement(tx, {
         organizationId:

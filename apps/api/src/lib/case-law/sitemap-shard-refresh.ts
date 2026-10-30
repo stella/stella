@@ -45,6 +45,8 @@ import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 /**
  * A month is split into buckets once it holds more than this many decisions.
  * The snapshot is as old as the last refresh while the shard read counts live
@@ -488,72 +490,68 @@ const readPendingMonth = async (
   { db, budget }: RunContext,
   cursorMode: "advance" | "observe",
 ): Promise<PendingMonth> =>
-  await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-    async (tx) => {
-      await setTransactionBudget(tx, budget);
-      await tx
-        .insert(caseLawSitemapRefreshCursor)
-        .values({ slot: 0 })
-        .onConflictDoNothing();
-      const cursor = v.parse(
-        v.object({
-          last_country: v.string(),
-          last_year: v.string(),
-          last_month: v.string(),
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
+    await setTransactionBudget(tx, budget);
+    await tx
+      .insert(caseLawSitemapRefreshCursor)
+      .values({ slot: 0 })
+      .onConflictDoNothing();
+    const cursor = v.parse(
+      v.object({
+        last_country: v.string(),
+        last_year: v.string(),
+        last_month: v.string(),
+      }),
+      (await lockCaseLawSitemapRefreshCursor(tx)).at(0),
+    );
+    const row = executedRows(
+      await tx.execute(
+        sitemapPendingMonthsSql({
+          country: cursor.last_country,
+          year: cursor.last_year,
+          month: cursor.last_month,
         }),
-        (await lockCaseLawSitemapRefreshCursor(tx)).at(0),
-      );
-      const row = executedRows(
-        await tx.execute(
-          sitemapPendingMonthsSql({
-            country: cursor.last_country,
-            year: cursor.last_year,
-            month: cursor.last_month,
-          }),
+      ),
+    ).at(0);
+    if (row === undefined) {
+      return { status: "empty", changeRowsRead: 0 };
+    }
+    const {
+      status,
+      change_rows_read: changeRowsRead,
+      ...target
+    } = v.parse(
+      v.object({
+        status: v.picklist(["ready", "waiting"]),
+        country: v.string(),
+        year: v.string(),
+        month: v.string(),
+        change_rows_read: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(0),
+          v.maxValue(1),
         ),
-      ).at(0);
-      if (row === undefined) {
-        return { status: "empty", changeRowsRead: 0 };
-      }
-      const {
-        status,
-        change_rows_read: changeRowsRead,
-        ...target
-      } = v.parse(
-        v.object({
-          status: v.picklist(["ready", "waiting"]),
-          country: v.string(),
-          year: v.string(),
-          month: v.string(),
-          change_rows_read: v.pipe(
-            v.number(),
-            v.integer(),
-            v.minValue(0),
-            v.maxValue(1),
-          ),
-        }),
-        row,
-      );
-      // An exhausted time budget may check for completion without skipping work.
-      if (cursorMode === "advance") {
-        // Commit the next position before taking a month lock or doing a recount.
-        await tx
-          .update(caseLawSitemapRefreshCursor)
-          .set({
-            lastCountry: target.country,
-            lastYear: target.year,
-            lastMonth: target.month,
-          })
-          .where(eq(caseLawSitemapRefreshCursor.slot, 0));
-      }
-      if (status === "waiting") {
-        return { status, target, changeRowsRead };
-      }
+      }),
+      row,
+    );
+    // An exhausted time budget may check for completion without skipping work.
+    if (cursorMode === "advance") {
+      // Commit the next position before taking a month lock or doing a recount.
+      await tx
+        .update(caseLawSitemapRefreshCursor)
+        .set({
+          lastCountry: target.country,
+          lastYear: target.year,
+          lastMonth: target.month,
+        })
+        .where(eq(caseLawSitemapRefreshCursor.slot, 0));
+    }
+    if (status === "waiting") {
       return { status, target, changeRowsRead };
-    },
-  );
+    }
+    return { status, target, changeRowsRead };
+  });
 
 /**
  * Every visible log row older than the snapshot's xmin committed before it.
@@ -575,82 +573,79 @@ const drainMonth = async (
   target: SitemapMonth,
   rows: number,
 ): Promise<DrainMonthResult> =>
-  await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-    async (tx) => {
-      await setTransactionBudget(tx, budget);
-      if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
-        return { status: "held" };
-      }
-      await lockCaseLawRemovalSnapshots(tx);
-      const [progress] = await tx
-        .select()
-        .from(caseLawSitemapDrainProgress)
-        .where(targetConditions(target))
-        .limit(1);
-      let coveredBefore = progress?.coveredBefore;
-      let retiredThrough = progress?.retiredThrough ?? "0";
-      let recounted = false;
-      if (
-        coveredBefore === undefined ||
-        progress?.phase === "awaiting_visibility"
-      ) {
-        // Capture before counting/enumerating; every earlier transaction is in
-        // every subsequent READ COMMITTED snapshot used to publish this work.
-        const snapshot = executedRows(
-          await tx.execute(sql`
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
+    await setTransactionBudget(tx, budget);
+    if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
+      return { status: "held" };
+    }
+    await lockCaseLawRemovalSnapshots(tx);
+    const [progress] = await tx
+      .select()
+      .from(caseLawSitemapDrainProgress)
+      .where(targetConditions(target))
+      .limit(1);
+    let coveredBefore = progress?.coveredBefore;
+    let retiredThrough = progress?.retiredThrough ?? "0";
+    let recounted = false;
+    if (
+      coveredBefore === undefined ||
+      progress?.phase === "awaiting_visibility"
+    ) {
+      // Capture before counting/enumerating; every earlier transaction is in
+      // every subsequent READ COMMITTED snapshot used to publish this work.
+      const snapshot = executedRows(
+        await tx.execute(sql`
         SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS covered_before
       `),
-        ).at(0);
-        const nextBoundary = v.parse(
-          v.object({ covered_before: v.string() }),
-          snapshot,
-        ).covered_before;
-        if (
-          coveredBefore !== undefined &&
-          BigInt(nextBoundary) <= BigInt(coveredBefore)
-        ) {
-          return { status: "waiting" };
-        }
-        coveredBefore = nextBoundary;
-        if (target.country === SITEMAP_WHOLE_COUNTRY) {
-          await expandEveryCountry(tx);
-        } else if (target.year === SITEMAP_WHOLE_COUNTRY) {
-          await expandCountry(tx, target.country);
-        } else {
-          await recountMonth(tx, target);
-          recounted = true;
-        }
-        if (progress === undefined) {
-          await tx
-            .insert(caseLawSitemapDrainProgress)
-            .values({ ...target, coveredBefore });
-        } else {
-          const changed = await transitionScopedBatch({
-            tx,
-            spec: TRANSITIONS.caseLawSitemapDrainProgress,
-            identities: [target],
-            options: {
-              from: ["awaiting_visibility"],
-              to: "draining",
-              set: { coveredBefore, retiredThrough },
-            },
-            recordTransitionAuditEvent: () => undefined,
-          });
-          if (changed.length !== 1) {
-            panic("Locked sitemap coverage must resume from its waiting phase");
-          }
+      ).at(0);
+      const nextBoundary = v.parse(
+        v.object({ covered_before: v.string() }),
+        snapshot,
+      ).covered_before;
+      if (
+        coveredBefore !== undefined &&
+        BigInt(nextBoundary) <= BigInt(coveredBefore)
+      ) {
+        return { status: "waiting" };
+      }
+      coveredBefore = nextBoundary;
+      if (target.country === SITEMAP_WHOLE_COUNTRY) {
+        await expandEveryCountry(tx);
+      } else if (target.year === SITEMAP_WHOLE_COUNTRY) {
+        await expandCountry(tx, target.country);
+      } else {
+        await recountMonth(tx, target);
+        recounted = true;
+      }
+      if (progress === undefined) {
+        await tx
+          .insert(caseLawSitemapDrainProgress)
+          .values({ ...target, coveredBefore });
+      } else {
+        const changed = await transitionScopedBatch({
+          tx,
+          spec: TRANSITIONS.caseLawSitemapDrainProgress,
+          identities: [target],
+          options: {
+            from: ["awaiting_visibility"],
+            to: "draining",
+            set: { coveredBefore, retiredThrough },
+          },
+          recordTransitionAuditEvent: () => undefined,
+        });
+        if (changed.length !== 1) {
+          panic("Locked sitemap coverage must resume from its waiting phase");
         }
       }
-      const retirement = v.parse(
-        v.object({
-          candidates_read: v.number(),
-          retired: v.number(),
-          retired_through: v.nullable(v.string()),
-        }),
-        executedRows(
-          await tx.execute(sql`
+    }
+    const retirement = v.parse(
+      v.object({
+        candidates_read: v.number(),
+        retired: v.number(),
+        retired_through: v.nullable(v.string()),
+      }),
+      executedRows(
+        await tx.execute(sql`
         WITH RECURSIVE candidates AS (
           (
             SELECT id, xact, 1 AS step FROM ${caseLawSitemapChanges}
@@ -680,79 +675,74 @@ const drainMonth = async (
         SELECT (SELECT count(*)::int FROM candidates) AS candidates_read,
           count(*)::int AS retired, max(xact)::text AS retired_through FROM retired
       `),
-        ).at(0),
-      );
-      // One ordered probe per candidate remains cheap even with stale statistics.
-      // Stop at the first uncovered transaction and charge it to the allowance.
-      // The materialized ID array also bounds the DELETE probes.
-      const candidatesRead = retirement.candidates_read;
-      const complete =
-        candidatesRead < rows || retirement.retired < candidatesRead;
-      if (retirement.retired_through !== null) {
-        retiredThrough = retirement.retired_through;
+      ).at(0),
+    );
+    // One ordered probe per candidate remains cheap even with stale statistics.
+    // Stop at the first uncovered transaction and charge it to the allowance.
+    // The materialized ID array also bounds the DELETE probes.
+    const candidatesRead = retirement.candidates_read;
+    const complete =
+      candidatesRead < rows || retirement.retired < candidatesRead;
+    if (retirement.retired_through !== null) {
+      retiredThrough = retirement.retired_through;
+    }
+    if (retirement.retired < candidatesRead) {
+      const changed = await transitionScopedBatch({
+        tx,
+        spec: TRANSITIONS.caseLawSitemapDrainProgress,
+        identities: [target],
+        options: {
+          from: ["draining"],
+          to: "awaiting_visibility",
+          set: { retiredThrough },
+        },
+        recordTransitionAuditEvent: () => undefined,
+      });
+      if (changed.length !== 1) {
+        panic("Locked sitemap coverage must wait from its draining phase");
       }
-      if (retirement.retired < candidatesRead) {
-        const changed = await transitionScopedBatch({
-          tx,
-          spec: TRANSITIONS.caseLawSitemapDrainProgress,
-          identities: [target],
-          options: {
-            from: ["draining"],
-            to: "awaiting_visibility",
-            set: { retiredThrough },
-          },
-          recordTransitionAuditEvent: () => undefined,
-        });
-        if (changed.length !== 1) {
-          panic("Locked sitemap coverage must wait from its draining phase");
-        }
-      } else if (complete) {
-        await tx
-          .delete(caseLawSitemapDrainProgress)
-          .where(targetConditions(target));
-      } else {
-        await tx
-          .update(caseLawSitemapDrainProgress)
-          .set({ retiredThrough })
-          .where(targetConditions(target));
-      }
-      throwIfAborted(signal);
-      return {
-        status: complete ? "complete" : "draining",
-        candidatesRead,
-        recounted,
-      };
-    },
-  );
+    } else if (complete) {
+      await tx
+        .delete(caseLawSitemapDrainProgress)
+        .where(targetConditions(target));
+    } else {
+      await tx
+        .update(caseLawSitemapDrainProgress)
+        .set({ retiredThrough })
+        .where(targetConditions(target));
+    }
+    throwIfAborted(signal);
+    return {
+      status: complete ? "complete" : "draining",
+      candidatesRead,
+      recounted,
+    };
+  });
 
 /** The public index's size, read back for the capacity alarm. */
 const readPublicShardExtent = async (
   db: RefreshDb,
   budget: SitemapRefreshBudget,
 ): Promise<{ largestShard: number; shards: number }> =>
-  await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-    async (tx) => {
-      await tx.execute(sql`SET TRANSACTION READ ONLY`);
-      await setTransactionBudget(tx, budget);
-      const [extent] = await tx
-        .select({
-          largestShard: max(caseLawSitemapShards.total),
-          shards: sql<number>`count(*)::int`,
-        })
-        .from(caseLawSitemapShards)
-        .where(
-          inArray(caseLawSitemapShards.country, [
-            ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
-          ]),
-        );
-      return {
-        largestShard: extent?.largestShard ?? 0,
-        shards: extent?.shards ?? 0,
-      };
-    },
-  );
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
+    await tx.execute(sql`SET TRANSACTION READ ONLY`);
+    await setTransactionBudget(tx, budget);
+    const [extent] = await tx
+      .select({
+        largestShard: max(caseLawSitemapShards.total),
+        shards: sql<number>`count(*)::int`,
+      })
+      .from(caseLawSitemapShards)
+      .where(
+        inArray(caseLawSitemapShards.country, [
+          ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+        ]),
+      );
+    return {
+      largestShard: extent?.largestShard ?? 0,
+      shards: extent?.shards ?? 0,
+    };
+  });
 
 /**
  * How long one run recounts before it stops at the next month boundary. It

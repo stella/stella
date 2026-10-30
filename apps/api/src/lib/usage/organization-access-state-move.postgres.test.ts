@@ -30,6 +30,8 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -211,14 +213,11 @@ if (!databaseUrl || !runPostgres) {
             });
             await written.promise;
 
-            const move = withAggregateTransaction(
-              moverDb,
-              AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-              async (tx) =>
-                moveKeylessOrganizationsToFree(asTestRaw<Transaction>(tx), {
-                  now: new Date(),
-                  actor: "operator:test",
-                }),
+            const move = withAggregateTransaction(moverDb, BUDGET, async (tx) =>
+              moveKeylessOrganizationsToFree(asTestRaw<Transaction>(tx), {
+                now: new Date(),
+                actor: "operator:test",
+              }),
             );
             const { sql: observer } = openClient({ max: 1 });
             await waitForBlockedPid(observer, {

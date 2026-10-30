@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -67,12 +69,11 @@ const snapshotDatabase = (committedIds: Set<string>) => {
       let decisionPage = 0;
       return await work(
         asTestRaw({
-          execute: async (query: unknown) => {
-            if (typeof query !== "string") {
-              throw new TypeError(
-                "export issued a statement the double cannot read",
-              );
-            }
+          execute: async (statement: SQLWrapper | string) => {
+            const query =
+              typeof statement === "string"
+                ? statement
+                : new PgDialect().sqlToQuery(statement.getSQL()).sql;
             if (query === CORPUS_SLICE_SNAPSHOT_ISOLATION) {
               snapshot = new Set(committedIds);
               return [];

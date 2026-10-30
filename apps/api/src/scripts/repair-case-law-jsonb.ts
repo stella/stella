@@ -45,6 +45,8 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 await runScriptWithErrorOutput(async () => {
   // Hold the maintenance lane before the first statement: operator passes over
   // the case-law tables serialize here instead of deadlocking on row locks.
@@ -77,12 +79,9 @@ await runScriptWithErrorOutput(async () => {
   ): Promise<BatchResult | null> => {
     const cursorClause = cursorId ? sql`WHERE id > ${cursorId}::uuid` : sql``;
 
-    const rows = await withAggregateTransaction(
-      rootDb,
-      AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-      async (tx) => {
-        await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
-        const repaired = await tx.execute(sql`
+    const rows = await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+      await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
+      const repaired = await tx.execute(sql`
     WITH batch AS (
       SELECT id
       FROM case_law_decisions
@@ -137,22 +136,21 @@ await runScriptWithErrorOutput(async () => {
       (SELECT count(*)::int FROM updated) AS updated,
       ARRAY(SELECT id::text FROM updated) AS updated_ids
     `);
-        const ids = repaired.at(0)?.["updated_ids"];
-        if (!Array.isArray(ids)) {
-          panic("Decision JSONB repair did not return its written IDs");
-        }
-        await extendRepairedAt(
-          tx,
-          ids.map((id: unknown) => {
-            if (typeof id !== "string") {
-              return panic("Decision JSONB repair returned an invalid ID");
-            }
-            return brandPersistedCaseLawDecisionId(id);
-          }),
-        );
-        return repaired;
-      },
-    );
+      const ids = repaired.at(0)?.["updated_ids"];
+      if (!Array.isArray(ids)) {
+        panic("Decision JSONB repair did not return its written IDs");
+      }
+      await extendRepairedAt(
+        tx,
+        ids.map((id: unknown) => {
+          if (typeof id !== "string") {
+            return panic("Decision JSONB repair returned an invalid ID");
+          }
+          return brandPersistedCaseLawDecisionId(id);
+        }),
+      );
+      return repaired;
+    });
 
     const row = rows.at(0);
     if (!row) {

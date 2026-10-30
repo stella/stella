@@ -30,6 +30,8 @@ import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
@@ -67,25 +69,21 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
           name: "Generation sitemap source",
         }),
       );
-      await withAggregateTransaction(
-        db,
-        AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-        async (tx) => {
-          await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-          await lockCaseLawRemovalSnapshots(tx);
-          await tx.insert(caseLawDecisions).values({
-            id: generationDecisionId,
-            sourceId: generationSourceId,
-            country: generationCountry,
-            court: "Court",
-            language: "en",
-            caseNumber: "1/2024",
-            decisionDate: "2024-01-01",
-          });
-          await invalidateCaseLawSitemapShardsTx(tx, generationCountry);
-          await invalidateCaseLawSitemapShardsTx(tx, generationCountry);
-        },
-      );
+      await withAggregateTransaction(db, BUDGET, async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+        await lockCaseLawRemovalSnapshots(tx);
+        await tx.insert(caseLawDecisions).values({
+          id: generationDecisionId,
+          sourceId: generationSourceId,
+          country: generationCountry,
+          court: "Court",
+          language: "en",
+          caseNumber: "1/2024",
+          decisionDate: "2024-01-01",
+        });
+        await invalidateCaseLawSitemapShardsTx(tx, generationCountry);
+        await invalidateCaseLawSitemapShardsTx(tx, generationCountry);
+      });
       expect(
         await db
           .select({ generation: caseLawSitemapCountryGenerations.generation })
@@ -266,19 +264,15 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       ]);
       const removing = Result.tryPromise(
         async () =>
-          await withAggregateTransaction(
-            db,
-            AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-            async (tx) => {
-              await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-              await lockCaseLawRemovalSnapshots(tx);
-              await tx
-                .update(caseLawDecisions)
-                .set({ redactedAt: new Date() })
-                .where(eq(caseLawDecisions.id, decisionId));
-              await invalidateCaseLawSitemapShardsTx(tx, country);
-            },
-          ),
+          await withAggregateTransaction(db, BUDGET, async (tx) => {
+            await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+            await lockCaseLawRemovalSnapshots(tx);
+            await tx
+              .update(caseLawDecisions)
+              .set({ redactedAt: new Date() })
+              .where(eq(caseLawDecisions.id, decisionId));
+            await invalidateCaseLawSitemapShardsTx(tx, country);
+          }),
       ).finally(() => removalCommitted.resolve(undefined));
       await waitForExternalState({
         description:

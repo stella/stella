@@ -40,6 +40,7 @@ import {
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { errorTag } from "@/api/lib/errors/utils";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -48,6 +49,8 @@ import {
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { operatorFlags } from "@/api/scripts/operator-flags";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 /**
  * Fill in the language versions of EU decisions no stored row holds, one
@@ -150,7 +153,7 @@ const readFlags = (argv: readonly string[]): BackfillFlags | number => {
 const checkpointStore = (rootDb: CaseLawRootHandle) => ({
   loadCursor: async (): Promise<EcjBackfillMonth | null> =>
     (
-      await withAggregateTransaction(rootDb, async (tx) =>
+      await withAggregateTransaction(rootDb, BUDGET, async (tx) =>
         tx
           .select({ cursor: databaseBackfillStates.cursor })
           .from(databaseBackfillStates)
@@ -162,7 +165,7 @@ const checkpointStore = (rootDb: CaseLawRootHandle) => ({
     expected: EcjBackfillMonth | null,
     next: EcjBackfillMonth,
   ): Promise<boolean> =>
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       await tx
         .insert(databaseBackfillStates)
         .values({ name: CHECKPOINT, batch: initialBatchState() })
@@ -186,7 +189,7 @@ const checkpointStore = (rootDb: CaseLawRootHandle) => ({
   ): Promise<Set<string>> => {
     const unavailable = new Set<string>();
     for (const identityChunk of chunkItems(identities, HELD_LOOKUP_CHUNK)) {
-      const rows = await withAggregateTransaction(rootDb, async (tx) =>
+      const rows = await withAggregateTransaction(rootDb, BUDGET, async (tx) =>
         tx
           .select({ name: databaseBackfillStates.name })
           .from(databaseBackfillStates)
@@ -212,7 +215,7 @@ const checkpointStore = (rootDb: CaseLawRootHandle) => ({
     month: EcjBackfillMonth;
     identity: string;
   }): Promise<void> => {
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       await tx
         .insert(databaseBackfillStates)
         .values({
@@ -224,7 +227,7 @@ const checkpointStore = (rootDb: CaseLawRootHandle) => ({
     });
   },
   restart: async (): Promise<void> => {
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       await tx
         .update(databaseBackfillStates)
         .set({ cursor: null, updatedAt: new Date() })

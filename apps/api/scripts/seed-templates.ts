@@ -56,6 +56,8 @@ import {
   seedId,
 } from "./seed-utils";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 // ─── Clause body helpers ────────────────────────────────
 
 /** Plain paragraph. */
@@ -2571,7 +2573,7 @@ export async function seedTemplates(
   // repointed; on-conflict-do-nothing preserves a user's current thread.
   const templateChatCount = await withAggregateTransaction(
     db,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    BUDGET,
     async (tx) =>
       await seedTemplateChatThreads(tx, {
         organizationId: ORG_ID,

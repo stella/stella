@@ -393,6 +393,8 @@ import {
 } from "@/api/mcp/constants";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 export { resolveWorkspaceMemberAccess, resolveWorkspaceMemberAuthority };
 
 const authoritativeSessionReader = {
@@ -1735,7 +1737,7 @@ export const createAuth = (
     }: NewMembership) => {
       await withAggregateTransaction(
         rootDb,
-        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+        BUDGET,
         async (tx) =>
           await recordOrganizationProfessionalUse({
             tx,

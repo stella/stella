@@ -16,6 +16,8 @@ import {
 import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 const MAX_PRUNE_ROWS = 100;
 type ProofStoreDb = Pick<typeof rootDb, "transaction">;
 type ClaimProofOptions = {
@@ -109,7 +111,7 @@ export class ConsumedDesktopDeviceProof {
       try: async () =>
         await withAggregateTransaction(
           db,
-          AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+          BUDGET,
           async (tx) =>
             // audit: skip - Authentication receipts preserve single-use request authority independently.
             await tx

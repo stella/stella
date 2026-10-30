@@ -24,6 +24,8 @@ import {
   withAggregateTransaction,
 } from "./aggregate-lock";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 const recorder = () => {
   const statements: string[] = [];
   const execute = async (statement: SQL) => {
@@ -261,17 +263,13 @@ test.each(["commit", "rollback"] as const)(
     }
     for (const iteration of [1, 2]) {
       expect(
-        await withAggregateTransaction(
-          root,
-          AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-          async (tx) => {
-            await withAggregateLock({
-              ...aggregateFences().orgFeatureAdmission,
-              tx,
-            });
-            return iteration;
-          },
-        ),
+        await withAggregateTransaction(root, BUDGET, async (tx) => {
+          await withAggregateLock({
+            ...aggregateFences().orgFeatureAdmission,
+            tx,
+          });
+          return iteration;
+        }),
       ).toBe(iteration);
     }
   },
@@ -282,18 +280,14 @@ test("transaction-owning operations retain their parent's aggregate history thro
   const fixture = aggregateFences();
   const database = createAggregateSavepointDatabase(tx);
   expect(
-    await withAggregateTransaction(
-      database,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-      async (child) => {
-        await withAggregateLock({
-          ...fixture.orgFeatureAdmission,
-          tx: child,
-          mode: "shared",
-        });
-        return "complete";
-      },
-    ),
+    await withAggregateTransaction(database, BUDGET, async (child) => {
+      await withAggregateLock({
+        ...fixture.orgFeatureAdmission,
+        tx: child,
+        mode: "shared",
+      });
+      return "complete";
+    }),
   ).toBe("complete");
   expect(
     await rejectionOf(
@@ -308,11 +302,7 @@ test("transaction-owning operations retain their parent's aggregate history thro
   expect(statements).toHaveLength(1);
   expect(
     await rejectionOf(
-      withAggregateTransaction(
-        tx,
-        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-        async () => "unused",
-      ),
+      withAggregateTransaction(tx, BUDGET, async () => "unused"),
     ),
   ).toMatchObject({
     message: "Use the aggregate savepoint owner for nested transactions",

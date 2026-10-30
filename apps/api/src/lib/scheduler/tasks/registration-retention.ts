@@ -8,6 +8,8 @@ import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transactio
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 export const SWEEP_REGISTRATIONS_TASK = "auth.sweepRegistrations" as const;
 export const REGISTRATION_RETENTION_BATCH_SIZE = 100;
 
@@ -86,78 +88,75 @@ export const sweepRegistrations = async ({
   now,
   retentionDays,
 }: SweepRegistrationsOptions) =>
-  await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) => {
-      // Ceremony locks hold claim transitions; client locks serialize usage writes.
-      const selectedRegistrations = await tx.execute<{
-        id: string;
-        client_id: string;
-      }>(registrationRetentionRegistrationCandidates(now));
-      const clients = await tx.execute<{ client_id: string }>(
-        registrationRetentionClientCandidates({
-          now,
-          retentionDays,
-          registrationClientIds: selectedRegistrations.map(
-            ({ client_id }) => client_id,
-          ),
-        }),
-      );
-      const clientIds = clients.map(({ client_id }) => client_id);
-      const clientIdArray = sql`ARRAY[${sql.join(
-        clientIds.map((id) => sql`${id}`),
-        sql`, `,
-      )}]::text[]`;
-      const registrationIdArray = sql`ARRAY[${sql.join(
-        selectedRegistrations.map(({ id }) => sql`${id}`),
-        sql`, `,
-      )}]::text[]`;
-      const verifications = await tx.execute(sql`
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
+    // Ceremony locks hold claim transitions; client locks serialize usage writes.
+    const selectedRegistrations = await tx.execute<{
+      id: string;
+      client_id: string;
+    }>(registrationRetentionRegistrationCandidates(now));
+    const clients = await tx.execute<{ client_id: string }>(
+      registrationRetentionClientCandidates({
+        now,
+        retentionDays,
+        registrationClientIds: selectedRegistrations.map(
+          ({ client_id }) => client_id,
+        ),
+      }),
+    );
+    const clientIds = clients.map(({ client_id }) => client_id);
+    const clientIdArray = sql`ARRAY[${sql.join(
+      clientIds.map((id) => sql`${id}`),
+      sql`, `,
+    )}]::text[]`;
+    const registrationIdArray = sql`ARRAY[${sql.join(
+      selectedRegistrations.map(({ id }) => sql`${id}`),
+      sql`, `,
+    )}]::text[]`;
+    const verifications = await tx.execute(sql`
       DELETE FROM verification WHERE id IN (
         SELECT id FROM verification WHERE expires_at < ${now.toISOString()}::timestamptz
         ORDER BY expires_at, id LIMIT ${REGISTRATION_RETENTION_BATCH_SIZE}
         FOR UPDATE SKIP LOCKED
       ) RETURNING id
     `);
-      const assertions = await tx.execute(sql`
+    const assertions = await tx.execute(sql`
       DELETE FROM oauth_client_assertion WHERE id IN (
         SELECT id FROM oauth_client_assertion WHERE expires_at < ${now.toISOString()}::timestamptz
         ORDER BY expires_at, id LIMIT ${REGISTRATION_RETENTION_BATCH_SIZE}
         FOR UPDATE SKIP LOCKED
       ) RETURNING id
     `);
-      const handoffs = await tx.execute(sql`
+    const handoffs = await tx.execute(sql`
       DELETE FROM mcp_web_handoff WHERE id IN (
         SELECT id FROM mcp_web_handoff WHERE expires_at < ${now.toISOString()}::timestamptz
         ORDER BY expires_at, id LIMIT ${REGISTRATION_RETENTION_BATCH_SIZE}
       ) RETURNING id
     `);
-      const replayCutoff = new Date(
-        now.getTime() - AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS * 1000,
-      ).toISOString();
-      const replays = await tx.execute(sql`
+    const replayCutoff = new Date(
+      now.getTime() - AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS * 1000,
+    ).toISOString();
+    const replays = await tx.execute(sql`
       DELETE FROM agent_assertion_replay WHERE jti IN (
         SELECT jti FROM agent_assertion_replay WHERE expires_at < ${replayCutoff}::timestamptz
         ORDER BY expires_at, jti LIMIT ${REGISTRATION_RETENTION_BATCH_SIZE}
         FOR UPDATE SKIP LOCKED
       ) RETURNING jti
     `);
-      const registrations = await tx.execute<{ client_id: string }>(sql`
+    const registrations = await tx.execute<{ client_id: string }>(sql`
       DELETE FROM agent_registration r WHERE r.id = ANY(${registrationIdArray})
       AND r.expires_at < ${now.toISOString()}::timestamptz
       AND r.status IN ('pending', 'expired')
       AND r.bound_user_id IS NULL AND r.authorization_code IS NULL
       RETURNING r.client_id
     `);
-      const expiredClientIds = sql`ARRAY[${sql.join(
-        registrations.map(({ client_id }) => sql`${client_id}`),
-        sql`, `,
-      )}]::text[]`;
-      const cutoff = new Date(
-        now.getTime() - retentionDays * DAY_IN_MS,
-      ).toISOString();
-      const deletedClients = await tx.execute(sql`
+    const expiredClientIds = sql`ARRAY[${sql.join(
+      registrations.map(({ client_id }) => sql`${client_id}`),
+      sql`, `,
+    )}]::text[]`;
+    const cutoff = new Date(
+      now.getTime() - retentionDays * DAY_IN_MS,
+    ).toISOString();
+    const deletedClients = await tx.execute(sql`
       DELETE FROM oauth_client c
       WHERE c.client_id = ANY(${clientIdArray})
       AND c.registration_origin <> 'managed'
@@ -169,7 +168,7 @@ export const sweepRegistrations = async ({
       AND NOT EXISTS (SELECT 1 FROM agent_registration r WHERE r.client_id = c.client_id)
       RETURNING c.client_id
     `);
-      const budgets = await tx.execute(sql`
+    const budgets = await tx.execute(sql`
       DELETE FROM registration_daily_budget WHERE (day, kind) IN (
         SELECT day, kind FROM registration_daily_budget
         WHERE day < ${new Date(now.getTime() - 2 * DAY_IN_MS).toISOString()}::timestamptz
@@ -177,26 +176,25 @@ export const sweepRegistrations = async ({
         FOR UPDATE SKIP LOCKED
       ) RETURNING day
     `);
-      return {
-        verificationsDeleted: verifications.length,
-        assertionsDeleted: assertions.length,
-        handoffsDeleted: handoffs.length,
-        replaysDeleted: replays.length,
-        registrationsDeleted: registrations.length,
-        clientsDeleted: deletedClients.length,
-        budgetsDeleted: budgets.length,
-        hasMore:
-          selectedRegistrations.length === REGISTRATION_RETENTION_BATCH_SIZE ||
-          replays.length === REGISTRATION_RETENTION_BATCH_SIZE ||
-          verifications.length === REGISTRATION_RETENTION_BATCH_SIZE ||
-          assertions.length === REGISTRATION_RETENTION_BATCH_SIZE ||
-          handoffs.length === REGISTRATION_RETENTION_BATCH_SIZE ||
-          clients.length === REGISTRATION_RETENTION_BATCH_SIZE ||
-          registrations.length === REGISTRATION_RETENTION_BATCH_SIZE ||
-          budgets.length === REGISTRATION_RETENTION_BATCH_SIZE,
-      };
-    },
-  );
+    return {
+      verificationsDeleted: verifications.length,
+      assertionsDeleted: assertions.length,
+      handoffsDeleted: handoffs.length,
+      replaysDeleted: replays.length,
+      registrationsDeleted: registrations.length,
+      clientsDeleted: deletedClients.length,
+      budgetsDeleted: budgets.length,
+      hasMore:
+        selectedRegistrations.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        replays.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        verifications.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        assertions.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        handoffs.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        clients.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        registrations.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        budgets.length === REGISTRATION_RETENTION_BATCH_SIZE,
+    };
+  });
 
 export const sweepRegistrationRecords: SchedulerTask = async ({
   db,

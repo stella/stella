@@ -68,6 +68,8 @@ import {
 } from "./seed-legislation";
 import { seedId } from "./seed-utils";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 const JURISDICTION = "CZE";
 /** The one extraction revision the seeded links are published under. */
 const SEED_REVISION = 1;
@@ -257,93 +259,89 @@ export const readSyntheticSeedDecision = async (
   rootDb: SeedRootDb,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<SeededDecision | null> =>
-  await withAggregateTransaction(
-    rootDb,
-    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-    async (tx) => {
-      const rows = await tx
-        .select({
-          id: caseLawDecisions.id,
-          caseNumber: caseLawDecisions.caseNumber,
-          decisionDate: caseLawDecisions.decisionDate,
-          fulltext: caseLawDecisions.fulltext,
-          sections: caseLawDecisions.sections,
-          documentAst: caseLawDecisions.documentAst,
-          contentHash: caseLawDecisions.contentHash,
-          inputDigest: extractionInputDigest,
-          redactedAt: caseLawDecisions.redactedAt,
-          corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
-          updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
+  await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+    const rows = await tx
+      .select({
+        id: caseLawDecisions.id,
+        caseNumber: caseLawDecisions.caseNumber,
+        decisionDate: caseLawDecisions.decisionDate,
+        fulltext: caseLawDecisions.fulltext,
+        sections: caseLawDecisions.sections,
+        documentAst: caseLawDecisions.documentAst,
+        contentHash: caseLawDecisions.contentHash,
+        inputDigest: extractionInputDigest,
+        redactedAt: caseLawDecisions.redactedAt,
+        corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
+        updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          eq(caseLawSources.adapterKey, FIXTURE_SOURCE_KEYS.SYNTHETIC_CZ),
+        ),
+      )
+      .limit(1);
+    const row = rows.at(0) ?? panic("Synthetic seed decision was not found");
+    if (
+      row.redactedAt !== null ||
+      row.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
+    ) {
+      return null;
+    }
+    if (!isDocumentAst(row.documentAst) || row.fulltext === null) {
+      panic("Synthetic seed decision has no inline document payload");
+    }
+    let inputDigest = row.inputDigest;
+    if (row.contentHash === null) {
+      const updated = await tx
+        .update(caseLawDecisions)
+        .set({
+          contentHash: corpusContentHash({
+            text: row.fulltext,
+            sections: row.sections,
+            ast: row.documentAst,
+          }),
         })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
         .where(
           and(
-            eq(caseLawDecisions.id, decisionId),
-            eq(caseLawSources.adapterKey, FIXTURE_SOURCE_KEYS.SYNTHETIC_CZ),
+            eq(caseLawDecisions.id, row.id),
+            isNull(caseLawDecisions.contentHash),
+            isNull(caseLawDecisions.redactedAt),
+            eq(
+              caseLawDecisions.corpusMirrorStatus,
+              CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+            ),
+            timestampMatchesCasToken(
+              caseLawDecisions.updatedAt,
+              row.updatedAtToken,
+            ),
           ),
         )
-        .limit(1);
-      const row = rows.at(0) ?? panic("Synthetic seed decision was not found");
-      if (
-        row.redactedAt !== null ||
-        row.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
-      ) {
-        return null;
+        .returning({ inputDigest: extractionInputDigest });
+      const hydrated = updated.at(0);
+      if (hydrated === undefined) {
+        panic(
+          "Synthetic seed decision changed while preparing provision links",
+        );
       }
-      if (!isDocumentAst(row.documentAst) || row.fulltext === null) {
-        panic("Synthetic seed decision has no inline document payload");
-      }
-      let inputDigest = row.inputDigest;
-      if (row.contentHash === null) {
-        const updated = await tx
-          .update(caseLawDecisions)
-          .set({
-            contentHash: corpusContentHash({
-              text: row.fulltext,
-              sections: row.sections,
-              ast: row.documentAst,
-            }),
-          })
-          .where(
-            and(
-              eq(caseLawDecisions.id, row.id),
-              isNull(caseLawDecisions.contentHash),
-              isNull(caseLawDecisions.redactedAt),
-              eq(
-                caseLawDecisions.corpusMirrorStatus,
-                CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-              ),
-              timestampMatchesCasToken(
-                caseLawDecisions.updatedAt,
-                row.updatedAtToken,
-              ),
-            ),
-          )
-          .returning({ inputDigest: extractionInputDigest });
-        const hydrated = updated.at(0);
-        if (hydrated === undefined) {
-          panic(
-            "Synthetic seed decision changed while preparing provision links",
-          );
-        }
-        inputDigest = hydrated.inputDigest;
-      }
-      return {
-        id: row.id,
-        inputDigest,
-        decision: {
-          case_number: row.caseNumber,
-          decision_date: row.decisionDate,
-          fulltext: row.fulltext,
-          document_ast: row.documentAst,
-        },
-      };
-    },
-  );
+      inputDigest = hydrated.inputDigest;
+    }
+    return {
+      id: row.id,
+      inputDigest,
+      decision: {
+        case_number: row.caseNumber,
+        decision_date: row.decisionDate,
+        fulltext: row.fulltext,
+        document_ast: row.documentAst,
+      },
+    };
+  });
 
 type ReservedConnection = {
   unsafe: (query: string, params: unknown[]) => PromiseLike<unknown>;
@@ -435,25 +433,21 @@ export const seedSyntheticProvisionLinks = async ({
 
   await completeProvisionStateBackfill(backfill);
 
-  await withAggregateTransaction(
-    rootDb,
-    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-    async (tx) => {
-      await tx
-        .insert(caseLawProvisionExtractionRevisionsRegistry)
-        .values({
-          revision: SEED_REVISION,
-          jurisdiction: JURISDICTION,
-          engineInputDigest: sha256Hex("stella-local-seed:provision-engine"),
-          profileDigest: sha256Hex("stella-local-seed:provision-profile"),
-          projectionRevision: PROVISION_SPAN_PROJECTION_REVISION,
-        })
-        .onConflictDoNothing();
-      await tx.execute(
-        sql`SELECT set_case_law_provision_extraction_revision(${JURISDICTION}, ${SEED_REVISION}, ${SEED_REVISION})`,
-      );
-    },
-  );
+  await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+    await tx
+      .insert(caseLawProvisionExtractionRevisionsRegistry)
+      .values({
+        revision: SEED_REVISION,
+        jurisdiction: JURISDICTION,
+        engineInputDigest: sha256Hex("stella-local-seed:provision-engine"),
+        profileDigest: sha256Hex("stella-local-seed:provision-profile"),
+        projectionRevision: PROVISION_SPAN_PROJECTION_REVISION,
+      })
+      .onConflictDoNothing();
+    await tx.execute(
+      sql`SELECT set_case_law_provision_extraction_revision(${JURISDICTION}, ${SEED_REVISION}, ${SEED_REVISION})`,
+    );
+  });
 
   // The canonical decision lock precedes state writes; each transaction holds
   // only one decision and commits its citation rows with their publication.
@@ -462,90 +456,85 @@ export const seedSyntheticProvisionLinks = async ({
   // re-taken over the stored columns is no identity of the written payload.
   // The input digest carries the stored content hash.
   for (const { snapshot, ...decision } of published) {
-    await withAggregateTransaction(
-      rootDb,
-      AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-      async (tx) => {
-        const admitted = await lockUnredactedCitingDecisions({
-          tx,
-          decisionIds: [decision.id],
-          lock: true,
-        });
-        const current = (
-          await tx
-            .select({
-              inputDigest: extractionInputDigest,
-              fulltext: caseLawDecisions.fulltext,
-              documentAst: caseLawDecisions.documentAst,
-              corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
-            })
-            .from(caseLawDecisions)
-            .where(eq(caseLawDecisions.id, decision.id))
-            .limit(1)
-        ).at(0);
-        if (
-          !admitted.has(decision.id) ||
-          current === undefined ||
-          current.inputDigest !== decision.inputDigest ||
-          current.corpusMirrorStatus !==
-            CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED ||
-          current.fulltext !== snapshot.fulltext ||
-          !Bun.deepEquals(current.documentAst, snapshot.document_ast)
-        ) {
-          panic("Synthetic seed input changed before provision publication");
-        }
-        const state = (
-          await tx
-            .select({
-              inputDigest: sql<string>`encode(${caseLawProvisionExtractions.desiredInputDigest}, 'hex')`,
-              outcome: caseLawProvisionExtractions.outcome,
-            })
-            .from(caseLawProvisionExtractions)
-            .where(eq(caseLawProvisionExtractions.decisionId, decision.id))
-            .limit(1)
-        ).at(0);
-        if (state === undefined || state.inputDigest !== decision.inputDigest) {
-          panic("Synthetic seed provision state does not match its input");
-        }
-        if (state.outcome !== null) {
-          return;
-        }
-        if (decision.rows.length > 0) {
-          await tx
-            .insert(caseLawProvisionCitations)
-            .values(decision.rows)
-            .onConflictDoNothing();
-        }
-        const marked = await tx
-          .update(caseLawProvisionExtractions)
-          .set({
-            generation: sql`${caseLawProvisionExtractions.generation} + 1`,
-            outcome:
-              decision.rows.length === 0
-                ? "extracted_zero"
-                : "extracted_with_rows",
-            rowCount: decision.rows.length,
-            rowsDigest: decision.rowsDigest,
-            publishedProjectionDigest: sql`decode(${decision.projectionDigest}, 'hex')`,
-            publishedRevision: SEED_REVISION,
-            publishedJurisdiction: JURISDICTION,
-            publishedInputDigest: sql`decode(${decision.inputDigest}, 'hex')`,
-            publishedAt: sql`now()`,
-            dueAt: null,
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+      const admitted = await lockUnredactedCitingDecisions({
+        tx,
+        decisionIds: [decision.id],
+        lock: true,
+      });
+      const current = (
+        await tx
+          .select({
+            inputDigest: extractionInputDigest,
+            fulltext: caseLawDecisions.fulltext,
+            documentAst: caseLawDecisions.documentAst,
+            corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
           })
-          .where(
-            and(
-              eq(caseLawProvisionExtractions.decisionId, decision.id),
-              sql`${caseLawProvisionExtractions.desiredInputDigest} = decode(${decision.inputDigest}, 'hex')`,
-              isNull(caseLawProvisionExtractions.outcome),
-            ),
-          )
-          .returning({ id: caseLawProvisionExtractions.decisionId });
-        if (marked.length === 0) {
-          panic("Synthetic seed provision publication changed concurrently");
-        }
-      },
-    );
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, decision.id))
+          .limit(1)
+      ).at(0);
+      if (
+        !admitted.has(decision.id) ||
+        current === undefined ||
+        current.inputDigest !== decision.inputDigest ||
+        current.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED ||
+        current.fulltext !== snapshot.fulltext ||
+        !Bun.deepEquals(current.documentAst, snapshot.document_ast)
+      ) {
+        panic("Synthetic seed input changed before provision publication");
+      }
+      const state = (
+        await tx
+          .select({
+            inputDigest: sql<string>`encode(${caseLawProvisionExtractions.desiredInputDigest}, 'hex')`,
+            outcome: caseLawProvisionExtractions.outcome,
+          })
+          .from(caseLawProvisionExtractions)
+          .where(eq(caseLawProvisionExtractions.decisionId, decision.id))
+          .limit(1)
+      ).at(0);
+      if (state === undefined || state.inputDigest !== decision.inputDigest) {
+        panic("Synthetic seed provision state does not match its input");
+      }
+      if (state.outcome !== null) {
+        return;
+      }
+      if (decision.rows.length > 0) {
+        await tx
+          .insert(caseLawProvisionCitations)
+          .values(decision.rows)
+          .onConflictDoNothing();
+      }
+      const marked = await tx
+        .update(caseLawProvisionExtractions)
+        .set({
+          generation: sql`${caseLawProvisionExtractions.generation} + 1`,
+          outcome:
+            decision.rows.length === 0
+              ? "extracted_zero"
+              : "extracted_with_rows",
+          rowCount: decision.rows.length,
+          rowsDigest: decision.rowsDigest,
+          publishedProjectionDigest: sql`decode(${decision.projectionDigest}, 'hex')`,
+          publishedRevision: SEED_REVISION,
+          publishedJurisdiction: JURISDICTION,
+          publishedInputDigest: sql`decode(${decision.inputDigest}, 'hex')`,
+          publishedAt: sql`now()`,
+          dueAt: null,
+        })
+        .where(
+          and(
+            eq(caseLawProvisionExtractions.decisionId, decision.id),
+            sql`${caseLawProvisionExtractions.desiredInputDigest} = decode(${decision.inputDigest}, 'hex')`,
+            isNull(caseLawProvisionExtractions.outcome),
+          ),
+        )
+        .returning({ id: caseLawProvisionExtractions.decisionId });
+      if (marked.length === 0) {
+        panic("Synthetic seed provision publication changed concurrently");
+      }
+    });
   }
 
   const repairCounts = createStatuteCitationCountRepair(rootDb);

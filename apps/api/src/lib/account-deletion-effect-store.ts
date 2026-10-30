@@ -20,6 +20,8 @@ import {
 import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 export const ACCOUNT_DELETION_EFFECT_KIND = "account-deletion-s3" as const;
 const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
 export const ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS = 20;
@@ -159,75 +161,69 @@ export const ensureAccountDeletionEffectChunks = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
 ): Promise<number> =>
-  await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-    async (tx) => {
-      const existing = (
-        await tx
-          .select({ id: accountDeletionEffectChunks.id })
-          .from(accountDeletionEffectChunks)
-          .where(eq(accountDeletionEffectChunks.requestId, requestId))
-          .limit(1)
-      ).at(0);
-      if (existing) {
-        return 0;
-      }
-      const request = (
-        await tx
-          .select({ storageCleanup: accountDeletionRequests.storageCleanup })
-          .from(accountDeletionRequests)
-          .where(
-            and(
-              eq(accountDeletionRequests.id, requestId),
-              legacyParentEligiblePredicate(),
-            ),
-          )
-          .limit(1)
-          .for("update")
-      ).at(0);
-      if (!request) {
-        return 0;
-      }
-      const raced = (
-        await tx
-          .select({ id: accountDeletionEffectChunks.id })
-          .from(accountDeletionEffectChunks)
-          .where(eq(accountDeletionEffectChunks.requestId, requestId))
-          .limit(1)
-      ).at(0);
-      if (raced) {
-        return 0;
-      }
-      const chunks = createS3DeletionEffectChunks(
-        request.storageCleanup.s3Keys,
-      );
-      if (chunks.length > 0) {
-        await consumeInBatches({
-          batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
-          consume: async (batch) => {
-            // audit: skip — rolling-deploy materialization of the parent
-            // deletion intent; the parent row remains the audit record.
-            await tx.insert(accountDeletionEffectChunks).values(
-              batch.map((chunk) => ({
-                chunkIndex: chunk.chunkIndex,
-                effectType: chunk.effectType,
-                id: createSafeId<"accountDeletionEffectChunk">(),
-                payloadHash: chunk.payloadHash,
-                requestId,
-                s3Keys: chunk.s3Keys,
-              })),
-            );
-          },
-          items: chunks,
-        });
-      }
-      if (chunks.length === 0) {
-        await synchronizeParentProjection(tx, requestId);
-      }
-      return chunks.length;
-    },
-  );
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
+    const existing = (
+      await tx
+        .select({ id: accountDeletionEffectChunks.id })
+        .from(accountDeletionEffectChunks)
+        .where(eq(accountDeletionEffectChunks.requestId, requestId))
+        .limit(1)
+    ).at(0);
+    if (existing) {
+      return 0;
+    }
+    const request = (
+      await tx
+        .select({ storageCleanup: accountDeletionRequests.storageCleanup })
+        .from(accountDeletionRequests)
+        .where(
+          and(
+            eq(accountDeletionRequests.id, requestId),
+            legacyParentEligiblePredicate(),
+          ),
+        )
+        .limit(1)
+        .for("update")
+    ).at(0);
+    if (!request) {
+      return 0;
+    }
+    const raced = (
+      await tx
+        .select({ id: accountDeletionEffectChunks.id })
+        .from(accountDeletionEffectChunks)
+        .where(eq(accountDeletionEffectChunks.requestId, requestId))
+        .limit(1)
+    ).at(0);
+    if (raced) {
+      return 0;
+    }
+    const chunks = createS3DeletionEffectChunks(request.storageCleanup.s3Keys);
+    if (chunks.length > 0) {
+      await consumeInBatches({
+        batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+        consume: async (batch) => {
+          // audit: skip — rolling-deploy materialization of the parent
+          // deletion intent; the parent row remains the audit record.
+          await tx.insert(accountDeletionEffectChunks).values(
+            batch.map((chunk) => ({
+              chunkIndex: chunk.chunkIndex,
+              effectType: chunk.effectType,
+              id: createSafeId<"accountDeletionEffectChunk">(),
+              payloadHash: chunk.payloadHash,
+              requestId,
+              s3Keys: chunk.s3Keys,
+            })),
+          );
+        },
+        items: chunks,
+      });
+    }
+    if (chunks.length === 0) {
+      await synchronizeParentProjection(tx, requestId);
+    }
+    return chunks.length;
+  });
 
 // The deadline is fixed when the request is recorded. No object is deleted
 // before it, so no export attempt can still publish an object it removes.

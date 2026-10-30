@@ -51,6 +51,8 @@ import {
 } from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 /**
  * Whether an organization without its own AI config may run on the instance
  * provider. An unresolvable standing (a missing state row or free policy)
@@ -169,7 +171,7 @@ export const recordNewOrganizationAccessState = async (
   if (!("rollback" in db)) {
     await withAggregateTransaction(
       db,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+      BUDGET,
       async (tx) =>
         await recordNewOrganizationAccessState(tx, { organizationId, now }),
     );

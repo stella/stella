@@ -83,6 +83,8 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 // timeout: Boot the shared PGlite engine and complete schema before assertions.
 setDefaultTimeout(120_000);
 
@@ -656,7 +658,7 @@ test("auth settings reads leave the database reusable for later transactions", a
     expect(providerKeys(settings.orgAIConfig)).toEqual(["model-a-key"]);
     const members = await withAggregateTransaction(
       testDb,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+      BUDGET,
       async (tx) =>
         await tx
           .select({ userId: member.userId })

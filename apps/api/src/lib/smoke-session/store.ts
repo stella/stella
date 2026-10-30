@@ -31,6 +31,8 @@ import {
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { runtimeMode } from "@/api/runtime-mode";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 const SMOKE_PRINCIPAL = {
   default: "default",
   ai: "ai",
@@ -164,16 +166,12 @@ export const mintSmokeSession = async (
   // A real new account has accepted the professional-use statement before it
   // works in the product. The synthetic principal accepts as its operator on
   // every mint, so a principal created before acceptances existed converges.
-  await withAggregateTransaction(
-    rootDb,
-    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-    async (tx) => {
-      await acceptProfessionalUse({
-        tx,
-        userId: brandPersistedUserId(record.user.id),
-      });
-    },
-  );
+  await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+    await acceptProfessionalUse({
+      tx,
+      userId: brandPersistedUserId(record.user.id),
+    });
+  });
 
   // No cleanup of prior rows: sessions expire after 15 minutes and
   // better-auth ignores expired rows, so one row per deploy is inert.

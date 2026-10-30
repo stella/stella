@@ -48,6 +48,8 @@ import {
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 export const DECISION_IDENTIFIER_BACKFILL_VERSION = "typed-identifiers-v1";
 const POSTGRESQL_MAX_BIND_PARAMETERS = 65_535;
 // Leave more than one thousand bind slots for statuses, checkpoint values,
@@ -1084,7 +1086,7 @@ export const reconcileDecisionIdentifiersStep = async (
   await ensureCheckpoint(rootDb);
   const checkpoint = await withAggregateTransaction(
     rootDb,
-    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    BUDGET,
     async (tx) => await loadCheckpoint(tx, "none"),
   );
   if (checkpoint === null) {
@@ -1101,23 +1103,19 @@ export const reconcileDecisionIdentifiersStep = async (
     ) {
       return { status: "cooldown", completedAt: checkpoint.completedAt };
     }
-    await withAggregateTransaction(
-      rootDb,
-      AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-      async (tx) => {
-        const locked = await loadCheckpoint(tx, "for-update");
-        if (
-          locked?.phase ===
-            CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE &&
-          locked.completedAt === checkpoint.completedAt
-        ) {
-          await resetCheckpoint(tx, {
-            phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
-            kind: "new-pass",
-          });
-        }
-      },
-    );
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+      const locked = await loadCheckpoint(tx, "for-update");
+      if (
+        locked?.phase ===
+          CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE &&
+        locked.completedAt === checkpoint.completedAt
+      ) {
+        await resetCheckpoint(tx, {
+          phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+          kind: "new-pass",
+        });
+      }
+    });
   } else if (checkpoint.verificationRetryAfter !== null) {
     if (now.getTime() < new Date(checkpoint.verificationRetryAfter).getTime()) {
       return {
@@ -1125,34 +1123,30 @@ export const reconcileDecisionIdentifiersStep = async (
         retryAfter: checkpoint.verificationRetryAfter,
       };
     }
-    await withAggregateTransaction(
-      rootDb,
-      AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-      async (tx) => {
-        const locked = await loadCheckpoint(tx, "for-update");
-        if (locked === null) {
-          return;
-        }
-        const retryAfter = locked.verificationRetryAfter;
-        if (retryAfter === null) {
-          return;
-        }
-        if (now.getTime() < new Date(retryAfter).getTime()) {
-          return;
-        }
-        if (
-          locked.phase !==
-            CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS &&
-          locked.phase !== CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS
-        ) {
-          panic("Paused identifier checkpoint has an invalid phase");
-        }
-        await resetCheckpoint(tx, {
-          phase: locked.phase,
-          kind: "verification-resume",
-        });
-      },
-    );
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+      const locked = await loadCheckpoint(tx, "for-update");
+      if (locked === null) {
+        return;
+      }
+      const retryAfter = locked.verificationRetryAfter;
+      if (retryAfter === null) {
+        return;
+      }
+      if (now.getTime() < new Date(retryAfter).getTime()) {
+        return;
+      }
+      if (
+        locked.phase !==
+          CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS &&
+        locked.phase !== CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS
+      ) {
+        panic("Paused identifier checkpoint has an invalid phase");
+      }
+      await resetCheckpoint(tx, {
+        phase: locked.phase,
+        kind: "verification-resume",
+      });
+    });
   }
   const result = await runBackfillPage(rootDb, {
     batchSize: normalizeBatchSize(batchSize),

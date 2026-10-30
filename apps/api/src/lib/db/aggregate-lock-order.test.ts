@@ -21,6 +21,8 @@ import {
   withAggregateTransaction,
 } from "./aggregate-lock";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 describe("blocking aggregate order regressions", () => {
   test("chat revision locks scope the thread to its principal and the message to its thread", async () => {
     const fixture = aggregateFences();
@@ -184,7 +186,7 @@ describe("blocking aggregate order regressions", () => {
     };
     const escaped = await withAggregateTransaction(
       database,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+      BUDGET,
       async (transaction) => transaction,
     );
     const fixture = aggregateFences();
@@ -193,7 +195,8 @@ describe("blocking aggregate order regressions", () => {
         withAggregateLock({ ...fixture.workspace, tx: escaped }),
       ),
     ).toMatchObject({ message: "Aggregate savepoint transaction is closed" });
-    expect(statements).toHaveLength(0);
+    expect(statements).toHaveLength(1);
+    expect(statements.at(0)?.sql).toContain("transaction_timeout");
   });
 
   test("a busy nonblocking lower-rank advisory preserves the transaction high-water", async () => {

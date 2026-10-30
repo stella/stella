@@ -17,6 +17,8 @@ import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { endOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 const USAGE =
   "Usage: end-organization-evaluation.ts <organization-id> --actor <operator>";
 const { values, positionals } = parseArgs({
@@ -39,7 +41,7 @@ const db = openMaintenanceDb({ readOnly: false });
 await runScriptWithErrorOutput(async () => {
   const ended = await withAggregateTransaction(
     db,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    BUDGET,
     async (tx) =>
       await endOrganizationEvaluation(tx, {
         organizationId,

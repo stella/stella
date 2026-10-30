@@ -36,6 +36,8 @@ import {
   SYNTHETIC_SESSION_PREFIX,
 } from "./constants";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 type MintSyntheticSessionOptions = {
   keyLabel: string;
   requestId: string | undefined;
@@ -52,7 +54,7 @@ export const createSyntheticSessionStore = (
   }: MintSyntheticSessionOptions) => {
     const minted = await withAggregateTransaction(
       database,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+      BUDGET,
       async (tx) => {
         const now = new Date();
         // Updating the singleton locks it through commit, including provisioning and the audit write.
@@ -170,39 +172,35 @@ export const createSyntheticSessionStore = (
   };
 
   const revokeSyntheticSessions = async () =>
-    await withAggregateTransaction(
-      database,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-      async (tx) => {
-        const controlTransition = await transition({
+    await withAggregateTransaction(database, BUDGET, async (tx) => {
+      const controlTransition = await transition({
+        tx,
+        spec: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,
+        id: SYNTHETIC_SESSION_CONTROL_ID,
+        options: {
+          from: ["enabled"],
+          to: "revoked",
+          set: { updatedAt: new Date() },
+        },
+        recordTransitionAuditEvent: async () => await Promise.resolve(),
+      });
+      const { deletedSessions, deletedRoomTokens } =
+        await revokeMonitoringSessions({
           tx,
-          spec: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,
-          id: SYNTHETIC_SESSION_CONTROL_ID,
-          options: {
-            from: ["enabled"],
-            to: "revoked",
-            set: { updatedAt: new Date() },
+          userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+          recordAuditEvent: async (counts) => {
+            await recordSystemAudit(tx, "system:monitoring-session-revoke", {
+              subject: createSafeId<"systemScriptRun">(),
+              counts: {
+                revokedControls:
+                  controlTransition.type === "transitioned" ? 1 : 0,
+                ...counts,
+              },
+            });
           },
-          recordTransitionAuditEvent: async () => await Promise.resolve(),
         });
-        const { deletedSessions, deletedRoomTokens } =
-          await revokeMonitoringSessions({
-            tx,
-            userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
-            recordAuditEvent: async (counts) => {
-              await recordSystemAudit(tx, "system:monitoring-session-revoke", {
-                subject: createSafeId<"systemScriptRun">(),
-                counts: {
-                  revokedControls:
-                    controlTransition.type === "transitioned" ? 1 : 0,
-                  ...counts,
-                },
-              });
-            },
-          });
-        return { status: "revoked", deletedSessions, deletedRoomTokens };
-      },
-    );
+      return { status: "revoked", deletedSessions, deletedRoomTokens };
+    });
 
   const getSyntheticSessionStatus = async () => {
     const [control] = await database

@@ -147,6 +147,8 @@ import { getSearchMaintenance } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 const WORKER_CONCURRENCY = 2;
 export const RECONCILE_BATCH_SIZE = 100;
 const OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -630,121 +632,135 @@ export const persistOcrProjection = async ({
   run: typeof documentProcessingRuns.$inferSelect;
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
-  await withAggregateTransaction(
-    database,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) => {
-      const workspace = await lockRunWorkspace(tx, run);
-      if (!workspace) {
-        return "source_cancelled";
-      }
-      const source = await lockOcrProjectionSource(tx, run);
-      const ownedClaims = await tx
+  await withAggregateTransaction(database, BUDGET, async (tx) => {
+    const workspace = await lockRunWorkspace(tx, run);
+    if (!workspace) {
+      return "source_cancelled";
+    }
+    const source = await lockOcrProjectionSource(tx, run);
+    const ownedClaims = await tx
+      .update(documentProcessingRuns)
+      .set({ claimedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+        ),
+      )
+      .returning({
+        id: documentProcessingRuns.id,
+        requestSource: documentProcessingRuns.requestSource,
+      });
+    const ownedClaim = ownedClaims.at(0);
+    if (!ownedClaim) {
+      return "stale_claim";
+    }
+
+    const sourceState = classifyOcrProjectionSource({
+      run,
+      source,
+      workspaceStatus: workspace.status,
+    });
+    if (sourceState !== "current") {
+      await tx
         .update(documentProcessingRuns)
-        .set({ claimedAt: new Date(), updatedAt: new Date() })
+        .set({
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: new Date(),
+          errorCode: sourceState,
+          finishedAt: new Date(),
+          status: "cancelled",
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(documentProcessingRuns.id, run.id),
             eq(documentProcessingRuns.status, "running"),
             eq(documentProcessingRuns.claimedBy, claimToken),
           ),
+        );
+      return "source_cancelled";
+    }
+
+    // Native extraction takes the same entity lock before it persists a
+    // projection. An automatic OCR run that lost that race must index the
+    // selected current-version text, even when it came from another file
+    // field; an explicit manual request intentionally selects a fresh source.
+    if (shouldPreserveCurrentProjection(ownedClaim.requestSource)) {
+      const projections = await tx
+        .select({
+          ocrRunId: extractedContent.ocrRunId,
+          sourceEntityVersionId: extractedContent.sourceEntityVersionId,
+          sourceFieldId: extractedContent.sourceFieldId,
+          sourceFileId: extractedContent.sourceFileId,
+          sourceSha256Hex: extractedContent.sourceSha256Hex,
+        })
+        .from(extractedContent)
+        .where(
+          and(
+            eq(extractedContent.entityId, run.entityId),
+            eq(extractedContent.organizationId, run.organizationId),
+            eq(extractedContent.workspaceId, run.workspaceId),
+          ),
         )
-        .returning({
-          id: documentProcessingRuns.id,
-          requestSource: documentProcessingRuns.requestSource,
-        });
-      const ownedClaim = ownedClaims.at(0);
-      if (!ownedClaim) {
-        return "stale_claim";
+        .limit(1);
+      const projection = projections.at(0);
+      const projectionSourceRows = projection?.sourceFieldId
+        ? await tx
+            .select({
+              content: fields.content,
+              entityVersionId: fields.entityVersionId,
+              id: fields.id,
+              workspaceId: fields.workspaceId,
+            })
+            .from(fields)
+            .where(
+              and(
+                eq(fields.id, projection.sourceFieldId),
+                eq(fields.workspaceId, run.workspaceId),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (
+        projection &&
+        projection.ocrRunId !== run.id &&
+        isPreservableAutomaticProjection({
+          currentEntityVersionId: run.entityVersionId,
+          currentWorkspaceId: run.workspaceId,
+          provenance: projection,
+          sourceField: projectionSourceRows.at(0) ?? null,
+        })
+      ) {
+        return "preserved";
       }
+    }
 
-      const sourceState = classifyOcrProjectionSource({
-        run,
-        source,
-        workspaceStatus: workspace.status,
-      });
-      if (sourceState !== "current") {
-        await tx
-          .update(documentProcessingRuns)
-          .set({
-            claimedAt: null,
-            claimedBy: null,
-            errorAt: new Date(),
-            errorCode: sourceState,
-            finishedAt: new Date(),
-            status: "cancelled",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(documentProcessingRuns.id, run.id),
-              eq(documentProcessingRuns.status, "running"),
-              eq(documentProcessingRuns.claimedBy, claimToken),
-            ),
-          );
-        return "source_cancelled";
-      }
-
-      // Native extraction takes the same entity lock before it persists a
-      // projection. An automatic OCR run that lost that race must index the
-      // selected current-version text, even when it came from another file
-      // field; an explicit manual request intentionally selects a fresh source.
-      if (shouldPreserveCurrentProjection(ownedClaim.requestSource)) {
-        const projections = await tx
-          .select({
-            ocrRunId: extractedContent.ocrRunId,
-            sourceEntityVersionId: extractedContent.sourceEntityVersionId,
-            sourceFieldId: extractedContent.sourceFieldId,
-            sourceFileId: extractedContent.sourceFileId,
-            sourceSha256Hex: extractedContent.sourceSha256Hex,
-          })
-          .from(extractedContent)
-          .where(
-            and(
-              eq(extractedContent.entityId, run.entityId),
-              eq(extractedContent.organizationId, run.organizationId),
-              eq(extractedContent.workspaceId, run.workspaceId),
-            ),
-          )
-          .limit(1);
-        const projection = projections.at(0);
-        const projectionSourceRows = projection?.sourceFieldId
-          ? await tx
-              .select({
-                content: fields.content,
-                entityVersionId: fields.entityVersionId,
-                id: fields.id,
-                workspaceId: fields.workspaceId,
-              })
-              .from(fields)
-              .where(
-                and(
-                  eq(fields.id, projection.sourceFieldId),
-                  eq(fields.workspaceId, run.workspaceId),
-                ),
-              )
-              .limit(1)
-          : [];
-        if (
-          projection &&
-          projection.ocrRunId !== run.id &&
-          isPreservableAutomaticProjection({
-            currentEntityVersionId: run.entityVersionId,
-            currentWorkspaceId: run.workspaceId,
-            provenance: projection,
-            sourceField: projectionSourceRows.at(0) ?? null,
-          })
-        ) {
-          return "preserved";
-        }
-      }
-
-      await tx
-        .insert(extractedContent)
-        .values({
-          workspaceId: run.workspaceId,
-          entityId: run.entityId,
-          organizationId: run.organizationId,
+    await tx
+      .insert(extractedContent)
+      .values({
+        workspaceId: run.workspaceId,
+        entityId: run.entityId,
+        organizationId: run.organizationId,
+        sourceEntityVersionId: run.entityVersionId,
+        sourceFieldId: run.fieldId,
+        sourceFileId: run.sourceFileId,
+        sourceSha256Hex: run.sourceSha256Hex,
+        ocrRunId: run.id,
+        ocrProcessorVersion: run.processorVersion,
+        ocrPayloadCiphertext,
+        ocrPayloadIv,
+        ciphertext,
+        iv,
+        charCount: textLength,
+        language: null,
+        extractedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: extractedContent.entityId,
+        set: {
           sourceEntityVersionId: run.entityVersionId,
           sourceFieldId: run.fieldId,
           sourceFileId: run.sourceFileId,
@@ -758,43 +774,25 @@ export const persistOcrProjection = async ({
           charCount: textLength,
           language: null,
           extractedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: extractedContent.entityId,
-          set: {
-            sourceEntityVersionId: run.entityVersionId,
-            sourceFieldId: run.fieldId,
-            sourceFileId: run.sourceFileId,
-            sourceSha256Hex: run.sourceSha256Hex,
-            ocrRunId: run.id,
-            ocrProcessorVersion: run.processorVersion,
-            ocrPayloadCiphertext,
-            ocrPayloadIv,
-            ciphertext,
-            iv,
-            charCount: textLength,
-            language: null,
-            extractedAt: new Date(),
-          },
-        });
+        },
+      });
 
-      await tx
-        .update(documentProcessingRuns)
-        .set({
-          progressCompleted: pageCount,
-          progressTotal: pageCount,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(documentProcessingRuns.id, run.id),
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-          ),
-        );
-      return "persisted";
-    },
-  );
+    await tx
+      .update(documentProcessingRuns)
+      .set({
+        progressCompleted: pageCount,
+        progressTotal: pageCount,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+        ),
+      );
+    return "persisted";
+  });
 
 const completeDocumentProcessingRun = async ({
   claimToken,
@@ -943,68 +941,136 @@ export const processDocumentProcessingRun = async (
 ): Promise<void> => {
   lifecycleSignal.throwIfAborted();
   const claimToken = Bun.randomUUIDv7();
-  const run = await withAggregateTransaction(
-    database,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) => {
-      const runRows = await tx
-        .select({
-          entityId: documentProcessingRuns.entityId,
-          entityVersionId: documentProcessingRuns.entityVersionId,
-          kind: documentProcessingRuns.kind,
-          status: documentProcessingRuns.status,
-          attemptCount: documentProcessingRuns.attemptCount,
-          nextAttemptAt: documentProcessingRuns.nextAttemptAt,
-          organizationId: documentProcessingRuns.organizationId,
-          requestSource: documentProcessingRuns.requestSource,
-          workspaceId: documentProcessingRuns.workspaceId,
-        })
-        .from(documentProcessingRuns)
-        .where(eq(documentProcessingRuns.id, runId))
-        .limit(1);
-      const runContext = runRows.at(0);
-      if (
-        !runContext ||
-        runContext.status !== "queued" ||
-        runContext.attemptCount >= DOCUMENT_PROCESSING_MAX_ATTEMPTS ||
-        (runContext.nextAttemptAt !== null &&
-          runContext.nextAttemptAt.getTime() >
-            Temporal.Now.instant().epochMilliseconds)
-      ) {
-        return null;
-      }
+  const run = await withAggregateTransaction(database, BUDGET, async (tx) => {
+    const runRows = await tx
+      .select({
+        entityId: documentProcessingRuns.entityId,
+        entityVersionId: documentProcessingRuns.entityVersionId,
+        kind: documentProcessingRuns.kind,
+        status: documentProcessingRuns.status,
+        attemptCount: documentProcessingRuns.attemptCount,
+        nextAttemptAt: documentProcessingRuns.nextAttemptAt,
+        organizationId: documentProcessingRuns.organizationId,
+        requestSource: documentProcessingRuns.requestSource,
+        workspaceId: documentProcessingRuns.workspaceId,
+      })
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, runId))
+      .limit(1);
+    const runContext = runRows.at(0);
+    if (
+      !runContext ||
+      runContext.status !== "queued" ||
+      runContext.attemptCount >= DOCUMENT_PROCESSING_MAX_ATTEMPTS ||
+      (runContext.nextAttemptAt !== null &&
+        runContext.nextAttemptAt.getTime() >
+          Temporal.Now.instant().epochMilliseconds)
+    ) {
+      return null;
+    }
 
-      const workspace = await lockRunWorkspace(tx, runContext);
-      if (!workspace) {
-        return null;
-      }
+    const workspace = await lockRunWorkspace(tx, runContext);
+    if (!workspace) {
+      return null;
+    }
 
-      // Deleting a version takes this same entity lock before tombstoning and
-      // rejects the tombstone while an OCR run is dispatching. Conversely, a
-      // worker that arrives after the tombstone observes the replaced current
-      // version and cancels without sending the withdrawn bytes to a provider.
-      const entityRows = (
-        await withAggregateRowQuery({
-          tx,
-          aggregate: "entity",
-          id: { id: runContext.entityId, workspaceId: runContext.workspaceId },
-          mode: "update",
-          select: (lockTx) =>
-            lockTx
-              .select({
-                id: entities.id,
-                workspaceId: entities.workspaceId,
-                currentVersionId: entities.currentVersionId,
-              })
-              .from(entities),
+    // Deleting a version takes this same entity lock before tombstoning and
+    // rejects the tombstone while an OCR run is dispatching. Conversely, a
+    // worker that arrives after the tombstone observes the replaced current
+    // version and cancels without sending the withdrawn bytes to a provider.
+    const entityRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "entity",
+        id: { id: runContext.entityId, workspaceId: runContext.workspaceId },
+        mode: "update",
+        select: (lockTx) =>
+          lockTx
+            .select({
+              id: entities.id,
+              workspaceId: entities.workspaceId,
+              currentVersionId: entities.currentVersionId,
+            })
+            .from(entities),
+      })
+    ).rows;
+    if (entityRows.at(0)?.currentVersionId !== runContext.entityVersionId) {
+      await tx
+        .update(documentProcessingRuns)
+        .set({
+          errorAt: new Date(),
+          errorCode: "source_superseded",
+          finishedAt: new Date(),
+          status: "cancelled",
+          updatedAt: new Date(),
         })
-      ).rows;
-      if (entityRows.at(0)?.currentVersionId !== runContext.entityVersionId) {
+        .where(
+          and(
+            eq(documentProcessingRuns.id, runId),
+            inArray(documentProcessingRuns.status, ["queued", "failed"]),
+          ),
+        );
+      return null;
+    }
+
+    const workspaceDispatch = classifyOcrWorkspaceDispatch({
+      requestSource: runContext.requestSource,
+      workspaceStatus: workspace.status,
+    });
+    switch (workspaceDispatch) {
+      case "available":
+        break;
+      case "deferred":
+        // A deletion seal is reversible until object cleanup and the final
+        // database delete succeed. Keep an acknowledged manual request queued
+        // so reconciliation can deliver it if the workspace returns to active.
+        return null;
+      case "workspace_unavailable":
         await tx
           .update(documentProcessingRuns)
           .set({
             errorAt: new Date(),
-            errorCode: "source_superseded",
+            errorCode: "workspace_unavailable",
+            finishedAt: new Date(),
+            status: "cancelled",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(documentProcessingRuns.id, runId),
+              inArray(documentProcessingRuns.status, ["queued", "failed"]),
+            ),
+          );
+        return null;
+      default:
+        workspaceDispatch satisfies never;
+        panic(`Unhandled workspace dispatch: ${String(workspaceDispatch)}`);
+    }
+
+    // Opt-out takes this same settings lock before checking for running
+    // automatic jobs. Either it wins and a later worker observes `off` before
+    // claiming, or the worker wins and opt-out refuses until this dispatch is
+    // terminal; neither path can acknowledge opt-out while it sends a file.
+    if (runContext.kind === "ocr") {
+      const settingsRows = await tx
+        .select({
+          documentProcessingMode: organizationSettings.documentProcessingMode,
+        })
+        .from(organizationSettings)
+        .where(
+          eq(organizationSettings.organizationId, runContext.organizationId),
+        )
+        .limit(1)
+        .for("update");
+      if (
+        requiresOcrPolicy(runContext.requestSource) &&
+        settingsRows.at(0)?.documentProcessingMode !== "searchable-text"
+      ) {
+        await tx
+          .update(documentProcessingRuns)
+          .set({
+            errorAt: new Date(),
+            errorCode: "policy_disabled",
             finishedAt: new Date(),
             status: "cancelled",
             updatedAt: new Date(),
@@ -1017,88 +1083,16 @@ export const processDocumentProcessingRun = async (
           );
         return null;
       }
+    }
 
-      const workspaceDispatch = classifyOcrWorkspaceDispatch({
-        requestSource: runContext.requestSource,
-        workspaceStatus: workspace.status,
-      });
-      switch (workspaceDispatch) {
-        case "available":
-          break;
-        case "deferred":
-          // A deletion seal is reversible until object cleanup and the final
-          // database delete succeed. Keep an acknowledged manual request queued
-          // so reconciliation can deliver it if the workspace returns to active.
-          return null;
-        case "workspace_unavailable":
-          await tx
-            .update(documentProcessingRuns)
-            .set({
-              errorAt: new Date(),
-              errorCode: "workspace_unavailable",
-              finishedAt: new Date(),
-              status: "cancelled",
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(documentProcessingRuns.id, runId),
-                inArray(documentProcessingRuns.status, ["queued", "failed"]),
-              ),
-            );
-          return null;
-        default:
-          workspaceDispatch satisfies never;
-          panic(`Unhandled workspace dispatch: ${String(workspaceDispatch)}`);
-      }
-
-      // Opt-out takes this same settings lock before checking for running
-      // automatic jobs. Either it wins and a later worker observes `off` before
-      // claiming, or the worker wins and opt-out refuses until this dispatch is
-      // terminal; neither path can acknowledge opt-out while it sends a file.
-      if (runContext.kind === "ocr") {
-        const settingsRows = await tx
-          .select({
-            documentProcessingMode: organizationSettings.documentProcessingMode,
-          })
-          .from(organizationSettings)
-          .where(
-            eq(organizationSettings.organizationId, runContext.organizationId),
-          )
-          .limit(1)
-          .for("update");
-        if (
-          requiresOcrPolicy(runContext.requestSource) &&
-          settingsRows.at(0)?.documentProcessingMode !== "searchable-text"
-        ) {
-          await tx
-            .update(documentProcessingRuns)
-            .set({
-              errorAt: new Date(),
-              errorCode: "policy_disabled",
-              finishedAt: new Date(),
-              status: "cancelled",
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(documentProcessingRuns.id, runId),
-                inArray(documentProcessingRuns.status, ["queued", "failed"]),
-              ),
-            );
-          return null;
-        }
-      }
-
-      lifecycleSignal.throwIfAborted();
-      return await claimDocumentProcessingAttempt({
-        database: tx,
-        runId,
-        claimToken,
-        now: new Date(),
-      });
-    },
-  );
+    lifecycleSignal.throwIfAborted();
+    return await claimDocumentProcessingAttempt({
+      database: tx,
+      runId,
+      claimToken,
+      now: new Date(),
+    });
+  });
   if (!run) {
     return;
   }
@@ -1597,189 +1591,182 @@ export const persistMissingNativeExtractionRuns = async (
     return [];
   }
 
-  return await withAggregateTransaction(
-    database,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) => {
-      const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
-      if (liveCandidates.length === 0) {
+  return await withAggregateTransaction(database, BUDGET, async (tx) => {
+    const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
+    if (liveCandidates.length === 0) {
+      return [];
+    }
+    const lockedEntities = await withAggregateEntityBatch({
+      tx,
+      ids: liveCandidates.map((candidate) => ({
+        id: candidate.entityId,
+        workspaceId: candidate.workspaceId,
+      })),
+      mode: "update",
+      limit: RECONCILE_BATCH_SIZE,
+    });
+    const lockedEntityById = new Map(
+      lockedEntities.map((entity) => [entity.id, entity]),
+    );
+    const currentFields = await tx
+      .select({
+        content: fields.content,
+        entityVersionId: fields.entityVersionId,
+        id: fields.id,
+        workspaceId: fields.workspaceId,
+      })
+      .from(fields)
+      .where(
+        and(
+          inArray(
+            fields.id,
+            liveCandidates.map(({ fieldId }) => fieldId),
+          ),
+          inArray(
+            fields.workspaceId,
+            liveCandidates.map((candidate) => candidate.workspaceId),
+          ),
+        ),
+      )
+      .limit(RECONCILE_BATCH_SIZE);
+    const currentFieldById = new Map(
+      currentFields.map((field) => [field.id, field]),
+    );
+    const currentProjections = await tx
+      .select({
+        entityId: extractedContent.entityId,
+        sourceEntityVersionId: extractedContent.sourceEntityVersionId,
+        sourceFieldId: extractedContent.sourceFieldId,
+        sourceFileId: extractedContent.sourceFileId,
+        sourceSha256Hex: extractedContent.sourceSha256Hex,
+      })
+      .from(extractedContent)
+      .where(
+        and(
+          inArray(
+            extractedContent.organizationId,
+            liveCandidates.map((candidate) => candidate.organizationId),
+          ),
+          inArray(
+            extractedContent.workspaceId,
+            liveCandidates.map((candidate) => candidate.workspaceId),
+          ),
+          inArray(
+            extractedContent.entityId,
+            liveCandidates.map(({ entityId }) => entityId),
+          ),
+        ),
+      )
+      .limit(RECONCILE_BATCH_SIZE);
+    const currentProjectionByEntityId = new Map(
+      currentProjections.map((projection) => [projection.entityId, projection]),
+    );
+    const queuedAt = new Date();
+    const values = liveCandidates.flatMap((candidate) => {
+      const entity = lockedEntityById.get(candidate.entityId);
+      const field = currentFieldById.get(candidate.fieldId);
+      const projection = currentProjectionByEntityId.get(candidate.entityId);
+      const hasCurrentProjection = isCurrentNativeProjection(
+        projection,
+        candidate,
+      );
+      if (
+        entity?.currentVersionId !== candidate.entityVersionId ||
+        entity.workspaceId !== candidate.workspaceId ||
+        entity.readOnly ||
+        !field ||
+        !isSameNativeExtractionSource(candidate, field)
+      ) {
         return [];
       }
-      const lockedEntities = await withAggregateEntityBatch({
-        tx,
-        ids: liveCandidates.map((candidate) => ({
-          id: candidate.entityId,
-          workspaceId: candidate.workspaceId,
-        })),
-        mode: "update",
-        limit: RECONCILE_BATCH_SIZE,
-      });
-      const lockedEntityById = new Map(
-        lockedEntities.map((entity) => [entity.id, entity]),
-      );
-      const currentFields = await tx
-        .select({
-          content: fields.content,
-          entityVersionId: fields.entityVersionId,
-          id: fields.id,
-          workspaceId: fields.workspaceId,
-        })
-        .from(fields)
-        .where(
-          and(
-            inArray(
-              fields.id,
-              liveCandidates.map(({ fieldId }) => fieldId),
-            ),
-            inArray(
-              fields.workspaceId,
-              liveCandidates.map((candidate) => candidate.workspaceId),
-            ),
-          ),
-        )
-        .limit(RECONCILE_BATCH_SIZE);
-      const currentFieldById = new Map(
-        currentFields.map((field) => [field.id, field]),
-      );
-      const currentProjections = await tx
-        .select({
-          entityId: extractedContent.entityId,
-          sourceEntityVersionId: extractedContent.sourceEntityVersionId,
-          sourceFieldId: extractedContent.sourceFieldId,
-          sourceFileId: extractedContent.sourceFileId,
-          sourceSha256Hex: extractedContent.sourceSha256Hex,
-        })
-        .from(extractedContent)
-        .where(
-          and(
-            inArray(
-              extractedContent.organizationId,
-              liveCandidates.map((candidate) => candidate.organizationId),
-            ),
-            inArray(
-              extractedContent.workspaceId,
-              liveCandidates.map((candidate) => candidate.workspaceId),
-            ),
-            inArray(
-              extractedContent.entityId,
-              liveCandidates.map(({ entityId }) => entityId),
-            ),
-          ),
-        )
-        .limit(RECONCILE_BATCH_SIZE);
-      const currentProjectionByEntityId = new Map(
-        currentProjections.map((projection) => [
-          projection.entityId,
-          projection,
-        ]),
-      );
-      const queuedAt = new Date();
-      const values = liveCandidates.flatMap((candidate) => {
-        const entity = lockedEntityById.get(candidate.entityId);
-        const field = currentFieldById.get(candidate.fieldId);
-        const projection = currentProjectionByEntityId.get(candidate.entityId);
-        const hasCurrentProjection = isCurrentNativeProjection(
-          projection,
-          candidate,
-        );
-        if (
-          entity?.currentVersionId !== candidate.entityVersionId ||
-          entity.workspaceId !== candidate.workspaceId ||
-          entity.readOnly ||
-          !field ||
-          !isSameNativeExtractionSource(candidate, field)
-        ) {
-          return [];
-        }
-        if (hasCurrentProjection) {
-          const failedAt = new Date();
-          return [
-            {
-              id: createSafeId<"documentProcessingRun">(),
-              entityId: candidate.entityId,
-              entityVersionId: candidate.entityVersionId,
-              errorAt: failedAt,
-              errorCode: SEARCH_INDEX_FAILURE_CODE,
-              fieldId: candidate.fieldId,
-              kind: "native-extraction",
-              nextAttemptAt: failedAt,
-              organizationId: candidate.organizationId,
-              processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
-              requestedBy: null,
-              requestSource: "repair",
-              sourceFileId: candidate.content.id,
-              sourceSha256Hex: candidate.content.sha256Hex,
-              status: "failed",
-              workspaceId: candidate.workspaceId,
-            } satisfies typeof documentProcessingRuns.$inferInsert,
-          ];
-        }
+      if (hasCurrentProjection) {
+        const failedAt = new Date();
         return [
           {
             id: createSafeId<"documentProcessingRun">(),
             entityId: candidate.entityId,
             entityVersionId: candidate.entityVersionId,
+            errorAt: failedAt,
+            errorCode: SEARCH_INDEX_FAILURE_CODE,
             fieldId: candidate.fieldId,
             kind: "native-extraction",
-            // Due now rather than unscheduled, so the reconciliation tick
-            // that created this run also delivers it: the delivery phase
-            // runs last and selects scheduled work. Left unscheduled, the
-            // run would sit queued until the dispatch scheduler noticed it,
-            // which a batch worker may not outlive.
-            nextAttemptAt: queuedAt,
+            nextAttemptAt: failedAt,
             organizationId: candidate.organizationId,
             processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
             requestedBy: null,
             requestSource: "repair",
             sourceFileId: candidate.content.id,
             sourceSha256Hex: candidate.content.sha256Hex,
+            status: "failed",
             workspaceId: candidate.workspaceId,
           } satisfies typeof documentProcessingRuns.$inferInsert,
         ];
-      });
-      if (values.length === 0) {
-        return [];
       }
+      return [
+        {
+          id: createSafeId<"documentProcessingRun">(),
+          entityId: candidate.entityId,
+          entityVersionId: candidate.entityVersionId,
+          fieldId: candidate.fieldId,
+          kind: "native-extraction",
+          // Due now rather than unscheduled, so the reconciliation tick
+          // that created this run also delivers it: the delivery phase
+          // runs last and selects scheduled work. Left unscheduled, the
+          // run would sit queued until the dispatch scheduler noticed it,
+          // which a batch worker may not outlive.
+          nextAttemptAt: queuedAt,
+          organizationId: candidate.organizationId,
+          processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+          requestedBy: null,
+          requestSource: "repair",
+          sourceFileId: candidate.content.id,
+          sourceSha256Hex: candidate.content.sha256Hex,
+          workspaceId: candidate.workspaceId,
+        } satisfies typeof documentProcessingRuns.$inferInsert,
+      ];
+    });
+    if (values.length === 0) {
+      return [];
+    }
 
-      const repairableConflict = sql.join(
-        [
-          eq(documentProcessingRuns.status, "cancelled"),
-          inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-          inArray(documentProcessingRuns.errorCode, [
-            SOURCE_SUPERSEDED_CANCELLATION_CODE,
-            "workspace_unavailable",
-          ]),
+    const repairableConflict = sql.join(
+      [
+        eq(documentProcessingRuns.status, "cancelled"),
+        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
+        inArray(documentProcessingRuns.errorCode, [
+          SOURCE_SUPERSEDED_CANCELLATION_CODE,
+          "workspace_unavailable",
+        ]),
+      ],
+      sql` AND `,
+    );
+    const queued = await tx
+      .insert(documentProcessingRuns)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [
+          documentProcessingRuns.organizationId,
+          documentProcessingRuns.kind,
+          documentProcessingRuns.entityVersionId,
+          documentProcessingRuns.fieldId,
+          documentProcessingRuns.sourceFileId,
+          documentProcessingRuns.sourceSha256Hex,
+          documentProcessingRuns.processorVersion,
         ],
-        sql` AND `,
-      );
-      const queued = await tx
-        .insert(documentProcessingRuns)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [
-            documentProcessingRuns.organizationId,
-            documentProcessingRuns.kind,
-            documentProcessingRuns.entityVersionId,
-            documentProcessingRuns.fieldId,
-            documentProcessingRuns.sourceFileId,
-            documentProcessingRuns.sourceSha256Hex,
-            documentProcessingRuns.processorVersion,
-          ],
-          set: {
-            errorAt: sql`excluded.error_at`,
-            errorCode: sql`excluded.error_code`,
-            finishedAt: null,
-            nextAttemptAt: sql`excluded.next_attempt_at`,
-            requestSource: "repair",
-            status: sql`excluded.status`,
-            updatedAt: queuedAt,
-          },
-          setWhere: repairableConflict,
-        })
-        .returning({ id: documentProcessingRuns.id });
-      return queued.map(({ id }) => id);
-    },
-  );
+        set: {
+          errorAt: sql`excluded.error_at`,
+          errorCode: sql`excluded.error_code`,
+          finishedAt: null,
+          nextAttemptAt: sql`excluded.next_attempt_at`,
+          requestSource: "repair",
+          status: sql`excluded.status`,
+          updatedAt: queuedAt,
+        },
+        setWhere: repairableConflict,
+      })
+      .returning({ id: documentProcessingRuns.id });
+    return queued.map(({ id }) => id);
+  });
 };
 
 type EnqueueAttemptResult =

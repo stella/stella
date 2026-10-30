@@ -35,6 +35,8 @@ import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 const PROFESSIONAL_USE_AUDIT_FIELD = "professionalUseAcceptance";
 const OWNER_ROLE = "owner" satisfies MemberRole;
 
@@ -509,22 +511,18 @@ export const recordAccountProfessionalUse = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      await withAggregateTransaction(
-        rootDb,
-        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-        async (tx) => {
-          await withAggregateLock({
-            tx,
-            aggregate: "professionalUseAcceptance",
-            id: { userId },
-          });
-          await recordProfessionalUseAcceptance({
-            tx,
-            userId,
-            provenance: ACCOUNT_ACCEPTANCE_PROVENANCE[source](userId),
-          });
-        },
-      );
+      await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
+        await withAggregateLock({
+          tx,
+          aggregate: "professionalUseAcceptance",
+          id: { userId },
+        });
+        await recordProfessionalUseAcceptance({
+          tx,
+          userId,
+          provenance: ACCOUNT_ACCEPTANCE_PROVENANCE[source](userId),
+        });
+      });
       return await readUserProfessionalUse(rootDb, userId);
     },
     catch: (cause) =>

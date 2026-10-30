@@ -60,6 +60,8 @@ import type { SeededDecision } from "./seed-case-law-provisions";
 import { syntheticCaseLawFixtures } from "./seed-case-law-synthetic";
 import { seedId } from "./seed-utils";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 /** The scheduler's budgets for the provision state backfill's session. */
 const PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS = 60_000;
@@ -362,7 +364,7 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
       if (!decisionId) {
         const existing = await withAggregateTransaction(
           rootDb,
-          AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+          BUDGET,
           async (tx) =>
             await tx
               .select({ id: caseLawDecisions.id })

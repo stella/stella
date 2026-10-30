@@ -316,6 +316,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Drizzle rolls back transaction callbacks through rejection; returning a
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",
+  // Translate PostgreSQL transaction timeouts without changing Drizzle's
+  // rejection/rollback contract or exempting aggregate lock orchestration.
+  "apps/api/src/lib/db/aggregate-transaction-boundary.ts",
   "apps/api/src/lib/workflow-queue.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.

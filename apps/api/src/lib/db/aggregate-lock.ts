@@ -53,10 +53,10 @@ import {
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransactionBoundary } from "@/api/lib/db/aggregate-transaction-boundary";
 import {
   AGGREGATE_TRANSACTION_BUDGETS,
   type AggregateTransactionBudget,
-  AggregateTransactionTimeoutError,
 } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
@@ -747,14 +747,16 @@ export const withAggregateTransaction = async <Tx extends object, T>(
   if (histories.has(database) || "rollback" in database) {
     panic("Use the aggregate savepoint owner for nested transactions");
   }
-  const outcome = await Result.tryPromise({
-    try: async () =>
+  return await withAggregateTransactionBoundary(
+    budget,
+    async () =>
       await database.transaction(async (tx) => {
         if (!isSqlExecutor(tx)) {
           return panic("Aggregate transactions require an SQL executor");
         }
+        // SET preserves the caller's ability to choose its snapshot isolation.
         await tx.execute(
-          sql`SELECT set_config('transaction_timeout', ${String(budget.milliseconds)}, true)`,
+          sql.raw(`SET LOCAL transaction_timeout = ${budget.milliseconds}`),
         );
         const history = lockHistory(tx);
         assertAggregateLevelAvailable(history);
@@ -766,20 +768,7 @@ export const withAggregateTransaction = async <Tx extends object, T>(
           history.status = "closed";
         }
       }),
-    catch: (cause) => cause,
-  });
-  if (outcome.isErr()) {
-    if (getPgErrorCode(outcome.error) === "25P04") {
-      throw new AggregateTransactionTimeoutError({
-        message: `Aggregate transaction exceeded ${budget.reason} budget (${budget.milliseconds} ms)`,
-        cause: outcome.error,
-        budget,
-        reason: budget.reason,
-      });
-    }
-    throw outcome.error;
-  }
-  return outcome.value;
+  );
 };
 
 type SkipLockedBatchOptions<Tx extends object, Row, T> = {
@@ -923,7 +912,6 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   if (!("rollback" in tx)) {
     return await withAggregateTransaction(
       tx,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
       AGGREGATE_TRANSACTION_BUDGETS.requestPath,
       run,
     );
@@ -1681,6 +1669,20 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       options satisfies never;
       return panic("Unknown advisory aggregate");
   }
+};
+
+/** Session holders must use one dedicated connection until release. */
+export const caseLawSitemapMonthSessionLockSql = (
+  month: AggregateIdentities["caseLawSitemapMonth"],
+) => {
+  const { first, second } = advisoryResource({
+    aggregate: "caseLawSitemapMonth",
+    id: month,
+  });
+  return {
+    acquire: sql`SELECT pg_try_advisory_lock(${first}, ${second}) AS acquired`,
+    release: sql`SELECT pg_advisory_unlock(${first}, ${second}) AS released`,
+  };
 };
 
 type AggregateSessionConnection = {

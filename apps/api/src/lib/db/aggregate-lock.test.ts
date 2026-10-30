@@ -109,26 +109,76 @@ test("an empty invoice matter plan refuses before any lock query", async () => {
   expect(executions).toBe(0);
 });
 
+test.each(Object.values(AGGREGATE_TRANSACTION_BUDGETS))(
+  "budget setup preserves snapshot admission ($reason)",
+  async (budget) => {
+    const statements: string[] = [];
+    const dialect = new PgDialect();
+    const tx = {
+      execute: async (statement: SQL) => {
+        statements.push(dialect.sqlToQuery(statement).sql);
+      },
+    };
+    await withAggregateTransaction(
+      {
+        transaction: async (run: (transaction: typeof tx) => Promise<void>) =>
+          await run(tx),
+      },
+      budget,
+      async () => {
+        expect(statements).toEqual([
+          `SET LOCAL transaction_timeout = ${budget.milliseconds}`,
+        ]);
+      },
+    );
+  },
+);
+
 test("every aggregate transaction call supplies a named budget", async () => {
   const root = new URL("../../..", import.meta.url).pathname;
-  const glob = new Bun.Glob("**/*.ts");
+  const glob = new Bun.Glob("{src,scripts}/**/*.ts");
   const missing: string[] = [];
   for await (const path of glob.scan({ cwd: root, absolute: true })) {
+    const text = await Bun.file(path).text();
+    if (
+      path.endsWith(".test.ts") ||
+      !text.includes("withAggregateTransaction")
+    ) {
+      continue;
+    }
+    const budgetName =
+      /AGGREGATE_TRANSACTION_BUDGETS\s+as\s+(\w+)/u.exec(text)?.at(1) ??
+      "AGGREGATE_TRANSACTION_BUDGETS";
     const source = ts.createSourceFile(
       path,
-      await Bun.file(path).text(),
+      text,
       ts.ScriptTarget.Latest,
       true,
     );
+    const namedBudgets = new Set<string>();
+    for (const statement of source.statements) {
+      if (!ts.isVariableStatement(statement)) {
+        continue;
+      }
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer &&
+          ts.isPropertyAccessExpression(declaration.initializer) &&
+          declaration.initializer.expression.getText(source) === budgetName
+        ) {
+          namedBudgets.add(declaration.name.text);
+        }
+      }
+    }
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&
         ts.isIdentifier(node.expression) &&
         node.expression.text === "withAggregateTransaction" &&
         (node.arguments.length < 3 ||
-          !node.arguments[1]
-            ?.getText(source)
-            .startsWith("AGGREGATE_TRANSACTION_BUDGETS."))
+          (!node.arguments[1]?.getText(source).startsWith(`${budgetName}.`) &&
+            !namedBudgets.has(node.arguments[1]?.getText(source) ?? "")))
       ) {
         missing.push(
           `${path}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`,
@@ -142,7 +192,10 @@ test("every aggregate transaction call supplies a named budget", async () => {
 });
 
 const aggregateBudgetDatabaseUrl = process.env["DATABASE_URL"];
-if (aggregateBudgetDatabaseUrl) {
+if (
+  process.env["STELLA_RUN_POSTGRES_TESTS"] === "true" &&
+  aggregateBudgetDatabaseUrl
+) {
   describe("aggregate transaction budget (postgres)", () => {
     // timeout: the five-second database deadline must expire before the assertion.
     test("cancels cumulative short statements and names the budget", async () => {
@@ -154,6 +207,9 @@ if (aggregateBudgetDatabaseUrl) {
               openClient({ max: 1 }).db,
               AGGREGATE_TRANSACTION_BUDGETS.requestPath,
               async (tx) => {
+                await tx.execute(
+                  drizzleSql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`,
+                );
                 await tx.execute(
                   drizzleSql`SELECT set_config('statement_timeout', '4s', true)`,
                 );

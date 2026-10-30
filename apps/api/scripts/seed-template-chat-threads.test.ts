@@ -21,6 +21,8 @@ import {
   seedTemplateChatThreads,
 } from "./seed-template-chat-threads";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 const organizationId = toSafeId<"organization">("org_seed");
 const templates = [
   {
@@ -147,7 +149,7 @@ describe("seeded Template Studio chat associations", () => {
     for (let pass = 0; pass < 2; pass += 1) {
       await withAggregateTransaction(
         testDb,
-        AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+        BUDGET,
         async (tx) => await seedTemplateChatThreads(tx, input),
       );
       expect(await readExistingAssociation()).toEqual(beforeAssociation);

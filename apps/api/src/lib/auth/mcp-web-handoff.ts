@@ -40,6 +40,8 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+
 const HANDOFF_SESSION_LABEL_CAP = 100;
 export class WebHandoffOperationError extends TaggedError(
   "WebHandoffOperationError",
@@ -194,58 +196,54 @@ export const createWebHandoffService = ({
     ) {
       return null;
     }
-    return await withAggregateTransaction(
-      db,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-      async (tx) => {
-        const grant = (
-          await liveGrant(tx)
-            .where(
-              and(
-                eq(oauthConsent.userId, userId),
-                eq(oauthConsent.clientId, clientId),
-                eq(oauthConsent.referenceId, organizationId),
-              ),
-            )
-            .orderBy(desc(oauthConsent.updatedAt), desc(oauthConsent.id))
-            .limit(1)
-        ).at(0);
-        if (!grant || !hasWebHandoffScopes(grant.scopes)) {
-          return null;
-        }
-        const code = `sh1_${randomBytes(32).toBase64({ alphabet: "base64url", omitPadding: true })}`;
-        const id = Bun.randomUUIDv7();
-        const createdAt = now();
-        await tx.insert(mcpWebHandoff).values({
-          id,
-          codeHash: sha256Hex(code),
-          userId: grant.userId,
-          organizationId: grant.organizationId,
-          oauthClientId: grant.clientId,
-          consentId: grant.consentId,
-          allowedPaths: normalizedPaths,
+    return await withAggregateTransaction(db, BUDGET, async (tx) => {
+      const grant = (
+        await liveGrant(tx)
+          .where(
+            and(
+              eq(oauthConsent.userId, userId),
+              eq(oauthConsent.clientId, clientId),
+              eq(oauthConsent.referenceId, organizationId),
+            ),
+          )
+          .orderBy(desc(oauthConsent.updatedAt), desc(oauthConsent.id))
+          .limit(1)
+      ).at(0);
+      if (!grant || !hasWebHandoffScopes(grant.scopes)) {
+        return null;
+      }
+      const code = `sh1_${randomBytes(32).toBase64({ alphabet: "base64url", omitPadding: true })}`;
+      const id = Bun.randomUUIDv7();
+      const createdAt = now();
+      await tx.insert(mcpWebHandoff).values({
+        id,
+        codeHash: sha256Hex(code),
+        userId: grant.userId,
+        organizationId: grant.organizationId,
+        oauthClientId: grant.clientId,
+        consentId: grant.consentId,
+        allowedPaths: normalizedPaths,
+        kind,
+        expiresAt: new Date(createdAt.getTime() + WEB_HANDOFF_TTL_MS[kind]),
+        createdAt,
+        createdIpHash: ctx.ipAddress ? sha256Hex(ctx.ipAddress) : null,
+        uaHash: ctx.userAgent ? sha256Hex(ctx.userAgent) : null,
+      });
+      const audit = createAuditRecorder(
+        auditBindings(grant, ctx.request ?? new Request(env.FRONTEND_URL)),
+      );
+      await audit(tx, {
+        action: AUDIT_ACTION.MCP_WEB_HANDOFF_ISSUED,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
+        resourceId: id,
+        metadata: {
+          pathCount: normalizedPaths.length,
+          clientId: grant.clientId,
           kind,
-          expiresAt: new Date(createdAt.getTime() + WEB_HANDOFF_TTL_MS[kind]),
-          createdAt,
-          createdIpHash: ctx.ipAddress ? sha256Hex(ctx.ipAddress) : null,
-          uaHash: ctx.userAgent ? sha256Hex(ctx.userAgent) : null,
-        });
-        const audit = createAuditRecorder(
-          auditBindings(grant, ctx.request ?? new Request(env.FRONTEND_URL)),
-        );
-        await audit(tx, {
-          action: AUDIT_ACTION.MCP_WEB_HANDOFF_ISSUED,
-          resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
-          resourceId: id,
-          metadata: {
-            pathCount: normalizedPaths.length,
-            clientId: grant.clientId,
-            kind,
-          },
-        });
-        return code;
-      },
-    );
+        },
+      });
+      return code;
+    });
   };
 
   const listSessionClients = async (userId: SafeId<"user">) => {
@@ -400,19 +398,15 @@ const createHandoffRedemption = ({
       logger.info("mcp_web_handoff.refused", { reason });
       return;
     }
-    await withAggregateTransaction(
-      db,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-      async (tx) => {
-        const audit = createAuditRecorder(auditBindings(row, request));
-        await audit(tx, {
-          action: AUDIT_ACTION.MCP_WEB_HANDOFF_REFUSED,
-          resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
-          resourceId: row.id,
-          metadata: { reason },
-        });
-      },
-    );
+    await withAggregateTransaction(db, BUDGET, async (tx) => {
+      const audit = createAuditRecorder(auditBindings(row, request));
+      await audit(tx, {
+        action: AUDIT_ACTION.MCP_WEB_HANDOFF_REFUSED,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
+        resourceId: row.id,
+        metadata: { reason },
+      });
+    });
   };
   const consume = async ({
     code,
@@ -422,92 +416,88 @@ const createHandoffRedemption = ({
     previousOrganizationId,
     complete,
   }: HandoffConsumptionOptions) =>
-    await withAggregateTransaction(
-      db,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-      async (tx) => {
-        if (!enabled()) {
-          return null;
-        }
-        const grantedScopes = sql`ARRAY[${sql.join(
-          MCP_DEFAULT_RESOURCE_SCOPES.map((scope) => sql`${scope}`),
-          sql`, `,
-        )}]::text[]`;
-        const grantIsLive = exists(
-          liveGrant(tx).where(
-            and(
-              eq(oauthConsent.id, mcpWebHandoff.consentId),
-              eq(oauthConsent.userId, mcpWebHandoff.userId),
-              eq(oauthConsent.referenceId, mcpWebHandoff.organizationId),
-              eq(oauthConsent.clientId, mcpWebHandoff.oauthClientId),
-              sql`${oauthConsent.scopes} @> ${grantedScopes}`,
-            ),
+    await withAggregateTransaction(db, BUDGET, async (tx) => {
+      if (!enabled()) {
+        return null;
+      }
+      const grantedScopes = sql`ARRAY[${sql.join(
+        MCP_DEFAULT_RESOURCE_SCOPES.map((scope) => sql`${scope}`),
+        sql`, `,
+      )}]::text[]`;
+      const grantIsLive = exists(
+        liveGrant(tx).where(
+          and(
+            eq(oauthConsent.id, mcpWebHandoff.consentId),
+            eq(oauthConsent.userId, mcpWebHandoff.userId),
+            eq(oauthConsent.referenceId, mcpWebHandoff.organizationId),
+            eq(oauthConsent.clientId, mcpWebHandoff.oauthClientId),
+            sql`${oauthConsent.scopes} @> ${grantedScopes}`,
           ),
-        );
-        const consumed = (
-          await tx
-            .update(mcpWebHandoff)
-            .set({
-              consumedAt: now(),
-              consumedIpHash: ipAddress ? sha256Hex(ipAddress) : null,
-            })
-            .where(
-              and(
-                eq(mcpWebHandoff.codeHash, sha256Hex(code)),
-                isNull(mcpWebHandoff.consumedAt),
-                grantIsLive,
-                textEnabled() ? sql`true` : ne(mcpWebHandoff.kind, "text"),
-                sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
-                sql`${path} = ANY(${mcpWebHandoff.allowedPaths})`,
-              ),
-            )
-            .returning()
-        ).at(0);
-        if (!consumed) {
-          return null;
-        }
-        const completion = await complete({
-          handoff: consumed,
-          userId: brandPersistedUserId(consumed.userId),
-          organizationId: brandPersistedOrganizationId(consumed.organizationId),
-          consentId: consumed.consentId,
-          transaction: tx,
-        });
-        if (Result.isError(completion)) {
-          return abortTransaction(completion.error);
-        }
-        const sessionId = completion.value;
-        const completed = (
-          await tx
-            .update(mcpWebHandoff)
-            .set({ consumedSessionId: sessionId })
-            .where(eq(mcpWebHandoff.id, consumed.id))
-            .returning()
-        ).at(0);
-        if (!completed) {
-          panic("Handoff completion lost its locked receipt.");
-        }
-        const audit = createAuditRecorder(auditBindings(completed, request));
-        await audit(tx, {
-          action: AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED,
-          resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
-          resourceId: consumed.id,
-          metadata: {
-            kind: consumed.kind,
-            clientId: consumed.oauthClientId,
-            previousOrganizationId,
-            newOrganizationId: consumed.organizationId,
-            sessionId,
-          },
-        });
-        return {
-          handoff: completed,
-          userId: completed.userId,
-          organizationId: completed.organizationId,
-          consentId: completed.consentId,
-        };
-      },
-    );
+        ),
+      );
+      const consumed = (
+        await tx
+          .update(mcpWebHandoff)
+          .set({
+            consumedAt: now(),
+            consumedIpHash: ipAddress ? sha256Hex(ipAddress) : null,
+          })
+          .where(
+            and(
+              eq(mcpWebHandoff.codeHash, sha256Hex(code)),
+              isNull(mcpWebHandoff.consumedAt),
+              grantIsLive,
+              textEnabled() ? sql`true` : ne(mcpWebHandoff.kind, "text"),
+              sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
+              sql`${path} = ANY(${mcpWebHandoff.allowedPaths})`,
+            ),
+          )
+          .returning()
+      ).at(0);
+      if (!consumed) {
+        return null;
+      }
+      const completion = await complete({
+        handoff: consumed,
+        userId: brandPersistedUserId(consumed.userId),
+        organizationId: brandPersistedOrganizationId(consumed.organizationId),
+        consentId: consumed.consentId,
+        transaction: tx,
+      });
+      if (Result.isError(completion)) {
+        return abortTransaction(completion.error);
+      }
+      const sessionId = completion.value;
+      const completed = (
+        await tx
+          .update(mcpWebHandoff)
+          .set({ consumedSessionId: sessionId })
+          .where(eq(mcpWebHandoff.id, consumed.id))
+          .returning()
+      ).at(0);
+      if (!completed) {
+        panic("Handoff completion lost its locked receipt.");
+      }
+      const audit = createAuditRecorder(auditBindings(completed, request));
+      await audit(tx, {
+        action: AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
+        resourceId: consumed.id,
+        metadata: {
+          kind: consumed.kind,
+          clientId: consumed.oauthClientId,
+          previousOrganizationId,
+          newOrganizationId: consumed.organizationId,
+          sessionId,
+        },
+      });
+      return {
+        handoff: completed,
+        userId: completed.userId,
+        organizationId: completed.organizationId,
+        consentId: completed.consentId,
+      };
+    });
   const admitRedeem = async (address: string) =>
     (await consumeBudget(
       `redeem:address:${address}`,
@@ -520,35 +510,31 @@ const createHandoffRedemption = ({
       MCP_RATE_LIMITS.handoffRedeemUser,
     );
   const recordConfirmation = async (code: string, request: Request) =>
-    await withAggregateTransaction(
-      db,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-      async (tx) => {
-        const shown = (
-          await tx
-            .update(mcpWebHandoff)
-            .set({ confirmationShownAt: now() })
-            .where(
-              and(
-                eq(mcpWebHandoff.codeHash, sha256Hex(code)),
-                isNull(mcpWebHandoff.confirmationShownAt),
-                isNull(mcpWebHandoff.consumedAt),
-                sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
-              ),
-            )
-            .returning()
-        ).at(0);
-        if (!shown) {
-          return;
-        }
-        await createAuditRecorder(auditBindings(shown, request))(tx, {
-          action: AUDIT_ACTION.MCP_WEB_HANDOFF_CONFIRMATION_SHOWN,
-          resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
-          resourceId: shown.id,
-          metadata: { kind: shown.kind, clientId: shown.oauthClientId },
-        });
-      },
-    );
+    await withAggregateTransaction(db, BUDGET, async (tx) => {
+      const shown = (
+        await tx
+          .update(mcpWebHandoff)
+          .set({ confirmationShownAt: now() })
+          .where(
+            and(
+              eq(mcpWebHandoff.codeHash, sha256Hex(code)),
+              isNull(mcpWebHandoff.confirmationShownAt),
+              isNull(mcpWebHandoff.consumedAt),
+              sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
+            ),
+          )
+          .returning()
+      ).at(0);
+      if (!shown) {
+        return;
+      }
+      await createAuditRecorder(auditBindings(shown, request))(tx, {
+        action: AUDIT_ACTION.MCP_WEB_HANDOFF_CONFIRMATION_SHOWN,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
+        resourceId: shown.id,
+        metadata: { kind: shown.kind, clientId: shown.oauthClientId },
+      });
+    });
   return {
     inspect: async (code: string) => {
       const grant = await inspectWebHandoff(db, code);

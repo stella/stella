@@ -18,6 +18,8 @@ import type {
   PublicReadTransport,
 } from "./public-read-transports";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 type PublicReadWork = {
   pending: Set<Promise<void>>;
   status: "active" | "settling" | "settled";
@@ -336,11 +338,7 @@ export const withPublicReadIo = async <T>(
       readTransaction: async (database, operation) =>
         await trackPublicRead(context?.work, async () => {
           context?.signal?.throwIfAborted();
-          return await withAggregateTransaction(
-            database,
-            AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-            operation,
-          );
+          return await withAggregateTransaction(database, BUDGET, operation);
         }),
       fetchStream: async (input, init, fetcher) =>
         await fetchPublicRead({

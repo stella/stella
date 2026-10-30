@@ -5,11 +5,7 @@ import * as v from "valibot";
 import { caseLawSitemapChanges, corpusIndexGenerations } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
-import {
-  tryLockCaseLawSitemapMonth,
-  withAggregateTransaction,
-} from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
+import { caseLawSitemapMonthSessionLockSql } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -583,31 +579,29 @@ export const seedSitemapReadBudget = async ({
   await database.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_shards`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
-  const acquired = Promise.withResolvers<undefined>();
-  const release = Promise.withResolvers<undefined>();
-  const holding = withAggregateTransaction(
-    openClient().db,
-    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-    async (tx) => {
-      if (
-        !(await tryLockCaseLawSitemapMonth({
-          tx,
-          month: { country: "XQN", year: "2024", month: "01" },
-        }))
-      ) {
-        panic("Sitemap fixture backlog month is already held");
-      }
-      acquired.resolve(undefined);
-      await release.promise;
-    },
+  // The backlog stays held across the measurement without an idle transaction.
+  // A single connection with no idle expiry preserves the session lock.
+  const holder = openClient({ max: 1, idleTimeout: 0 }).db;
+  const lock = caseLawSitemapMonthSessionLockSql({
+    country: "XQN",
+    year: "2024",
+    month: "01",
+  });
+  const { acquired } = v.parse(
+    v.object({ acquired: v.boolean() }),
+    executedRows(await holder.execute(lock.acquire)).at(0),
   );
-  await Promise.race([
-    acquired.promise,
-    holding.then(() => panic("Sitemap fixture lock released before capture")),
-  ]);
+  if (!acquired) {
+    panic("Sitemap fixture backlog month is already held");
+  }
   return async () => {
-    release.resolve(undefined);
-    await holding;
+    const { released } = v.parse(
+      v.object({ released: v.boolean() }),
+      executedRows(await holder.execute(lock.release)).at(0),
+    );
+    if (!released) {
+      panic("Sitemap fixture backlog month was not held at release");
+    }
   };
 };
 

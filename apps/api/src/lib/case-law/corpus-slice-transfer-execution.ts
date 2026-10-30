@@ -13,6 +13,8 @@ import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 const TABLES = {
   sources: "case_law_sources",
   decisions: "case_law_decisions",
@@ -273,17 +275,13 @@ const executeCorpusSliceExport = async ({
 export const exportCorpusSliceFromDatabase = async (
   options: ExportExecutionOptions,
 ): Promise<CorpusSliceExportResult> =>
-  await withAggregateTransaction(
-    options.database,
-    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-    async (tx) => {
-      await tx.execute(CORPUS_SLICE_SNAPSHOT_ISOLATION);
-      return await executeCorpusSliceExport({
-        ...options,
-        database: {
-          execute: async (query) => await tx.execute(query),
-          transaction: options.database.transaction,
-        },
-      });
-    },
-  );
+  await withAggregateTransaction(options.database, BUDGET, async (tx) => {
+    await tx.execute(CORPUS_SLICE_SNAPSHOT_ISOLATION);
+    return await executeCorpusSliceExport({
+      ...options,
+      database: {
+        execute: async (query) => await tx.execute(query),
+        transaction: options.database.transaction,
+      },
+    });
+  });

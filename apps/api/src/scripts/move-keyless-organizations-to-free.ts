@@ -22,6 +22,8 @@ import {
   classifyKeylessOrganizationMoves,
 } from "@/api/scripts/move-keyless-organizations-to-free.logic";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 const USAGE =
   "Usage: move-keyless-organizations-to-free.ts [--apply --actor <operator>]";
 const { values } = parseArgs({
@@ -37,16 +39,13 @@ if (apply !== (actor !== undefined && actor !== "")) {
 
 const db = openMaintenanceDb({ readOnly: !apply });
 await runScriptWithErrorOutput(async () => {
-  const results = await withAggregateTransaction(
-    db,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) =>
-      apply
-        ? await applyKeylessOrganizationMoves(tx, {
-            now: new Date(),
-            actor: actor ?? panic(USAGE),
-          })
-        : await classifyKeylessOrganizationMoves(tx),
+  const results = await withAggregateTransaction(db, BUDGET, async (tx) =>
+    apply
+      ? await applyKeylessOrganizationMoves(tx, {
+          now: new Date(),
+          actor: actor ?? panic(USAGE),
+        })
+      : await classifyKeylessOrganizationMoves(tx),
   );
 
   for (const result of results) {

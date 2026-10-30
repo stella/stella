@@ -15,6 +15,8 @@ import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transactio
 import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { DOCUMENT_PROCESSING_MAX_ATTEMPTS } from "@/api/lib/document-processing-contract";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
+
 export { DOCUMENT_PROCESSING_MAX_ATTEMPTS } from "@/api/lib/document-processing-contract";
 
 export const documentProcessingRetryDelayMs = (attemptCount: number): number =>
@@ -61,65 +63,61 @@ export const failExhaustedQueuedRun = async ({
   workspaceId,
   now,
 }: FailExhaustedQueuedRunOptions) =>
-  await withAggregateTransaction(
-    database,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) => {
-      const locked = await withAggregateRowQuery({
-        tx,
-        aggregate: "processingClaim",
-        id: { id: runId, workspaceId },
-        mode: "update",
-        select: (queryTx) => queryTx.select().from(documentProcessingRuns),
-        where:
-          and(
-            eq(documentProcessingRuns.status, "queued"),
-            gte(
-              documentProcessingRuns.attemptCount,
-              DOCUMENT_PROCESSING_MAX_ATTEMPTS,
-            ),
-          ) ?? panic("Missing exhausted document processing predicate"),
-      });
-      const owned = locked.rows.at(0);
-      if (!owned) {
-        return null;
-      }
-      const errorCode = owned.errorCode ?? "worker_lease_expired";
-      const errorMessage =
-        owned.errorMessage ?? "Document processing retry budget exhausted";
-      const changed = await transition({
-        tx,
-        spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
-        id: runId,
-        options: {
-          from: ["queued"],
-          to: "failed",
-          set: {
-            claimedAt: null,
-            claimedBy: null,
-            errorAt: now,
-            errorCode,
-            errorMessage,
-            finishedAt: now,
-            nextAttemptAt: null,
-            nextDeliveryAt: null,
-            updatedAt: now,
-          },
+  await withAggregateTransaction(database, BUDGET, async (tx) => {
+    const locked = await withAggregateRowQuery({
+      tx,
+      aggregate: "processingClaim",
+      id: { id: runId, workspaceId },
+      mode: "update",
+      select: (queryTx) => queryTx.select().from(documentProcessingRuns),
+      where:
+        and(
+          eq(documentProcessingRuns.status, "queued"),
+          gte(
+            documentProcessingRuns.attemptCount,
+            DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+          ),
+        ) ?? panic("Missing exhausted document processing predicate"),
+    });
+    const owned = locked.rows.at(0);
+    if (!owned) {
+      return null;
+    }
+    const errorCode = owned.errorCode ?? "worker_lease_expired";
+    const errorMessage =
+      owned.errorMessage ?? "Document processing retry budget exhausted";
+    const changed = await transition({
+      tx,
+      spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
+      id: runId,
+      options: {
+        from: ["queued"],
+        to: "failed",
+        set: {
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: now,
+          errorCode,
+          errorMessage,
+          finishedAt: now,
+          nextAttemptAt: null,
+          nextDeliveryAt: null,
+          updatedAt: now,
         },
-        // Reconciliation repairs worker bookkeeping; the request owns its audit event.
-        recordTransitionAuditEvent: async () => await Promise.resolve(),
-      });
-      switch (changed.type) {
-        case "stale":
-          return panic("Locked exhausted document processing run changed");
-        case "transitioned":
-          return { errorCode, errorMessage };
-        default:
-          changed satisfies never;
-          return panic("Unknown document processing transition outcome");
-      }
-    },
-  );
+      },
+      // Reconciliation repairs worker bookkeeping; the request owns its audit event.
+      recordTransitionAuditEvent: async () => await Promise.resolve(),
+    });
+    switch (changed.type) {
+      case "stale":
+        return panic("Locked exhausted document processing run changed");
+      case "transitioned":
+        return { errorCode, errorMessage };
+      default:
+        changed satisfies never;
+        return panic("Unknown document processing transition outcome");
+    }
+  });
 
 /** The final dispatch fence also covers duplicate and premature queue delivery. */
 export const claimDocumentProcessingAttempt = async ({
@@ -223,80 +221,76 @@ export const failDocumentProcessingAttempt = async ({
   retryable = true,
   staleBefore,
 }: FailDocumentProcessingAttemptOptions) =>
-  await withAggregateTransaction(
-    database,
-    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-    async (tx) => {
-      const contexts = await tx
-        .select({ workspaceId: documentProcessingRuns.workspaceId })
-        .from(documentProcessingRuns)
-        .where(eq(documentProcessingRuns.id, runId))
-        .limit(1);
-      const context = contexts.at(0);
-      if (!context) {
-        return null;
-      }
-      const locked = await withAggregateRowQuery({
-        tx,
-        aggregate: "processingClaim",
-        id: { id: runId, workspaceId: context.workspaceId },
-        mode: "update",
-        select: (queryTx) => queryTx.select().from(documentProcessingRuns),
-        where:
-          and(
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-            staleBefore === undefined
-              ? undefined
-              : sql`${documentProcessingRuns.claimedAt} < ${staleBefore}::timestamptz`,
-          ) ?? panic("Missing document processing failure predicate"),
-      });
-      const owned = locked.rows.at(0);
-      if (!owned) {
-        return null;
-      }
-      const retryScheduled = shouldRetryDocumentProcessing(
-        owned.attemptCount,
-        typeof retryable === "function" ? retryable(owned) : retryable,
-      );
-      const changed = await transition({
-        tx,
-        spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
-        id: runId,
-        options: {
-          from: ["running"],
-          to: "failed",
-          set: {
-            claimedAt: null,
-            claimedBy: null,
-            errorAt: now,
-            errorCode,
-            errorMessage: errorMessage.slice(0, 2000),
-            finishedAt: retryScheduled ? null : now,
-            nextAttemptAt: retryScheduled
-              ? new Date(
-                  now.getTime() +
-                    documentProcessingRetryDelayMs(owned.attemptCount),
-                )
-              : null,
-            nextDeliveryAt: null,
-            updatedAt: now,
-          },
+  await withAggregateTransaction(database, BUDGET, async (tx) => {
+    const contexts = await tx
+      .select({ workspaceId: documentProcessingRuns.workspaceId })
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, runId))
+      .limit(1);
+    const context = contexts.at(0);
+    if (!context) {
+      return null;
+    }
+    const locked = await withAggregateRowQuery({
+      tx,
+      aggregate: "processingClaim",
+      id: { id: runId, workspaceId: context.workspaceId },
+      mode: "update",
+      select: (queryTx) => queryTx.select().from(documentProcessingRuns),
+      where:
+        and(
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+          staleBefore === undefined
+            ? undefined
+            : sql`${documentProcessingRuns.claimedAt} < ${staleBefore}::timestamptz`,
+        ) ?? panic("Missing document processing failure predicate"),
+    });
+    const owned = locked.rows.at(0);
+    if (!owned) {
+      return null;
+    }
+    const retryScheduled = shouldRetryDocumentProcessing(
+      owned.attemptCount,
+      typeof retryable === "function" ? retryable(owned) : retryable,
+    );
+    const changed = await transition({
+      tx,
+      spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
+      id: runId,
+      options: {
+        from: ["running"],
+        to: "failed",
+        set: {
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: now,
+          errorCode,
+          errorMessage: errorMessage.slice(0, 2000),
+          finishedAt: retryScheduled ? null : now,
+          nextAttemptAt: retryScheduled
+            ? new Date(
+                now.getTime() +
+                  documentProcessingRetryDelayMs(owned.attemptCount),
+              )
+            : null,
+          nextDeliveryAt: null,
+          updatedAt: now,
         },
-        recordTransitionAuditEvent: async () => await Promise.resolve(),
-      });
-      switch (changed.type) {
-        case "stale":
-          return null;
-        case "transitioned":
-          break;
-        default:
-          changed satisfies never;
-          return panic("Unknown document processing transition outcome");
-      }
-      return { attemptCount: owned.attemptCount, retryScheduled };
-    },
-  );
+      },
+      recordTransitionAuditEvent: async () => await Promise.resolve(),
+    });
+    switch (changed.type) {
+      case "stale":
+        return null;
+      case "transitioned":
+        break;
+      default:
+        changed satisfies never;
+        return panic("Unknown document processing transition outcome");
+    }
+    return { attemptCount: owned.attemptCount, retryScheduled };
+  });
 
 /** Periodic reconciliation remains bounded while sleeping through future retries. */
 export const documentProcessingSleepMs = (

@@ -42,6 +42,8 @@ import {
   storedAnalysisFingerprintFor,
 } from "./stored-analysis";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+
 /**
  * The Drizzle capabilities the store needs. Structural rather than a
  * concrete handle, so a script's own connection (or another driver's
@@ -383,47 +385,43 @@ export const createDbAnalysisStore = (
     // `FOR UPDATE` reads, and an UPDATE of this one row needs none.
     const outcome = await Result.tryPromise(
       async () =>
-        await withAggregateTransaction(
-          db,
-          AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
-          async (tx) => {
-            const claimed = await swapAnalysisRow(tx, {
-              decisionId,
-              observed,
-              sentinel,
-            });
-            if (claimed === null) {
-              return null;
-            }
-            await hooks.afterClaimLock?.(tx);
-            const [failure] = await tx
-              .select({ keyTag: caseLawAnalysisFailures.keyTag })
-              .from(caseLawAnalysisFailures)
-              .where(
-                and(
-                  eq(caseLawAnalysisFailures.decisionId, decisionId),
-                  eq(caseLawAnalysisFailures.keyTag, unlessFailed.keyTag),
-                  eq(caseLawAnalysisFailures.inputFingerprint, fingerprint),
-                  eq(caseLawAnalysisFailures.keySource, unlessFailed.keySource),
-                  sql`${caseLawAnalysisFailures.provider} IS NOT DISTINCT FROM ${unlessFailed.provider}`,
-                  // The same hold as `failureMatchesGuard`.
-                  or(
-                    sql`${caseLawAnalysisFailures.retryAfter} > ${unlessFailed.now.toISOString()}::timestamptz`,
-                    ...(unlessFailed.heldSince === null
-                      ? []
-                      : [
-                          sql`${caseLawAnalysisFailures.recordedAt} > ${unlessFailed.heldSince.toISOString()}::timestamptz`,
-                        ]),
-                  ),
+        await withAggregateTransaction(db, BUDGET, async (tx) => {
+          const claimed = await swapAnalysisRow(tx, {
+            decisionId,
+            observed,
+            sentinel,
+          });
+          if (claimed === null) {
+            return null;
+          }
+          await hooks.afterClaimLock?.(tx);
+          const [failure] = await tx
+            .select({ keyTag: caseLawAnalysisFailures.keyTag })
+            .from(caseLawAnalysisFailures)
+            .where(
+              and(
+                eq(caseLawAnalysisFailures.decisionId, decisionId),
+                eq(caseLawAnalysisFailures.keyTag, unlessFailed.keyTag),
+                eq(caseLawAnalysisFailures.inputFingerprint, fingerprint),
+                eq(caseLawAnalysisFailures.keySource, unlessFailed.keySource),
+                sql`${caseLawAnalysisFailures.provider} IS NOT DISTINCT FROM ${unlessFailed.provider}`,
+                // The same hold as `failureMatchesGuard`.
+                or(
+                  sql`${caseLawAnalysisFailures.retryAfter} > ${unlessFailed.now.toISOString()}::timestamptz`,
+                  ...(unlessFailed.heldSince === null
+                    ? []
+                    : [
+                        sql`${caseLawAnalysisFailures.recordedAt} > ${unlessFailed.heldSince.toISOString()}::timestamptz`,
+                      ]),
                 ),
-              )
-              .limit(1);
-            if (failure !== undefined) {
-              tx.rollback();
-            }
-            return claimed;
-          },
-        ),
+              ),
+            )
+            .limit(1);
+          if (failure !== undefined) {
+            tx.rollback();
+          }
+          return claimed;
+        }),
     );
     // The refusal's rollback is an answer, not a failure.
     if (
