@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Compte",
     "server": "Serveur",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "deleteAccount": "Supprimer le compte",
+    "deleteAccountHint": "Ouvre votre compte sur le web, où vous pouvez le supprimer avec tout ce qui vous appartient."
   },
   "header": {
     "search": "Rechercher"
@@ -199,7 +201,8 @@
     "retry": "Réessayer",
     "unavailable": "Le suivi du temps n’est pas activé pour votre organisation.",
     "startFailed": "Le minuteur n’a pas pu être démarré. Réessayez.",
-    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez."
+    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez.",
+    "more": "{count, plural, one {# autre minuteur} other {# autres minuteurs}}"
   },
   "scan": {
     "title": "Numériser un document",

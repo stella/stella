@@ -31,6 +31,7 @@ import {
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
   ModelRunError,
+  ModelRunUnfinishedError,
   PROVIDER_CALL_ERROR_MESSAGE,
   PROVIDER_ERROR_CODE,
   ProviderCallError,
@@ -1451,11 +1452,11 @@ describe("TanStack AI model-ingress guard", () => {
   const publicDecisionId = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
 
   test("redacts tenant ids out of the dispatched messages", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1486,11 +1487,11 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("leaves a request without tenant ids untouched and silent", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1515,11 +1516,11 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1551,10 +1552,10 @@ describe("TanStack AI model-ingress guard", () => {
     ]);
 
     resetProvider();
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
     const serverBuiltFailure = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1593,7 +1594,7 @@ describe("model dispatch within its admitted action", () => {
   const organizationId = toSafeId<"organization">("org_dispatch_lifetime");
   const dispatchOptions = {
     caching: noCaching,
-    finishPolicy: "allow-incomplete",
+    finishPolicy: "require-complete",
     organizationId,
     userId: null,
     dataClass: "customer",
@@ -1693,33 +1694,6 @@ describe("TanStack AI text generation", () => {
   // one adapter, and `testModel` is not the provider that shape was first seen
   // on: normalizing only the adapters named for it leaves the same truncated
   // answer returned on one provider and raised as a failure on the next.
-  test("returns the text a ceiling stop produced whichever adapter reports it", async () => {
-    queueRun(
-      runErrorRun({
-        code: "max_tokens",
-        deltas: ["as far as it got"],
-        message: "The response hit the output ceiling.",
-      }),
-    );
-
-    expect(
-      await generateTextForTestModel({
-        caching: noCaching,
-        finishPolicy: "allow-incomplete",
-        organizationId: null,
-        userId: null,
-        admission: NO_ORGANIZATION_MODEL_DISPATCH,
-        dataClass: "customer",
-        managedAIResidency: "eu",
-        orgAIConfig: null,
-        prompt: "Recap it.",
-        task: "chat",
-        serviceTier: "standard",
-        tenantWorkspaceIds: [],
-      }),
-    ).toBe("as far as it got");
-  });
-
   test("accepts a ceiling stop as the length finish an output-ceiling caller allows", async () => {
     queueRun(
       runErrorRun({
@@ -1788,14 +1762,14 @@ describe("TanStack AI text generation", () => {
     );
   });
 
-  test("rejects a cancelled run instead of returning its truncated text", async () => {
+  test("names a cancelled run as cancelled, not as an unfinished answer", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["half an ans"], controller));
 
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1835,7 +1809,7 @@ describe("TanStack AI text generation", () => {
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1862,7 +1836,7 @@ describe("TanStack AI text generation", () => {
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1878,14 +1852,16 @@ describe("TanStack AI text generation", () => {
     expect(output).toBe("a whole answer");
   });
 
-  test("keeps the output of a run that finished without a reason before the cancellation", async () => {
+  // A reported finish, even one without a reason, means the run completed
+  // before the signal fired: it is graded on that finish, never as cancelled.
+  test("grades a run that finished without a reason before the cancellation on its finish", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["a whole answer"], controller, "unreasoned"));
 
-    const output = await generateTextForTestModel({
+    const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1896,17 +1872,24 @@ describe("TanStack AI text generation", () => {
       task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
-    });
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
 
-    expect(output).toBe("a whole answer");
+    expect(controller.signal.aborted).toBe(true);
+    expect(caught).toBeInstanceOf(ModelRunUnfinishedError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).not.toBe(
+      "generation_cancelled",
+    );
   });
 
   test("collects text through the error-aware streaming boundary", async () => {
-    queueRun(textRun(["hello", " world"]));
+    queueRun(textRun(["hello", " world"], "stop"));
 
     const output = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1935,7 +1918,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1965,7 +1948,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2005,7 +1988,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2030,7 +2013,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,

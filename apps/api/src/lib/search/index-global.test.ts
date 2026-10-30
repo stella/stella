@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
@@ -25,6 +26,15 @@ const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 const searchGlobal = async (
   query: Parameters<typeof searchGlobalWithDatabase>[0],
 ) => await searchGlobalWithDatabase(query, { scopedDb });
+
+// The final SQL LIMIT bounds the source page; chat has earlier candidate limits.
+const sourcePageLimit = (compiled: ReturnType<PgDialect["sqlToQuery"]>) => {
+  const parameter = [...compiled.sql.matchAll(/\bLIMIT \$(\d+)/gu)]
+    .at(-1)
+    ?.at(1);
+  expect(parameter).toBeDefined();
+  return compiled.params[Number(parameter) - 1];
+};
 
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "test";
@@ -140,6 +150,36 @@ describe("global search SQL scope", () => {
     ]);
   });
 
+  test.each(["chat", "matter"] as const)(
+    "retains exact chat counts and facets when selecting %s",
+    async (type) => {
+      const dialect = new PgDialect();
+      rootDbExecuteMock.mockImplementation(async (query) => {
+        const text = dialect.sqlToQuery(query).sql;
+        return text.includes("count(*)::int AS total") &&
+          text.includes("FROM chat_thread_search_documents cst")
+          ? [{ total: 7 }]
+          : [];
+      });
+      const result = await searchGlobal({
+        query: "decision",
+        organizationId: toSafeId<"organization">("org_1"),
+        userId: toSafeId<"user">("user_1"),
+        accessibleWorkspaceIds: [],
+        selectedWorkspaceIds: [],
+        types: [type],
+        editedByUserIds: [],
+        mimeTypes: [],
+        limit: 10,
+      });
+      expect(result.hits).toEqual([]);
+      expect(result.totalCount).toBe(type === "chat" ? 7 : 0);
+      expect(
+        result.facets.type.find(({ value }) => value === "chat")?.count,
+      ).toBe(7);
+    },
+  );
+
   test("rechecks case-law redistribution on every projected read", async () => {
     await searchGlobal({
       query: "proportionality",
@@ -192,7 +232,7 @@ describe("global search SQL scope", () => {
     });
   });
 
-  test("applies the score/id cursor and bounded lookahead to every source", async () => {
+  test("applies source cursors and bounds each chat candidate batch", async () => {
     const sourceCases = [
       {
         tableSql: "FROM search_documents sd",
@@ -209,10 +249,6 @@ describe("global search SQL scope", () => {
       {
         tableSql: "FROM case_law_search_documents clsd",
         idSql: "'case-law:' || clsd.decision_id::text",
-      },
-      {
-        tableSql: "FROM chat_thread_search_documents cst",
-        idSql: "'chat:' || cst.thread_id::text",
       },
     ] as const;
     const dialect = new PgDialect();
@@ -254,7 +290,7 @@ describe("global search SQL scope", () => {
       expect(compiled.sql).toContain(source.idSql);
       expect(compiled.sql).toContain('COLLATE "C" <');
       expect(compiled.params).toContain(0.75);
-      expect(compiled.params.at(-1)).toBe(4);
+      expect(sourcePageLimit(compiled)).toBe(4);
     }
 
     const matterQuery = sourceQueries.at(1)?.compiled;
@@ -263,12 +299,17 @@ describe("global search SQL scope", () => {
     expect(matterQuery?.params.filter((param) => param === 0.15)).toHaveLength(
       3,
     );
-    expect(sourceQueries.at(4)?.compiled.sql).toContain(
-      "cst.preview_generation =",
+    const chatQuery = compiledQueries.find(({ sql }) =>
+      sql.includes("FROM chat_thread_search_documents cst"),
     );
-    expect(sourceQueries.at(4)?.compiled.params).toContain(
+    expect(chatQuery?.sql).toContain("cst.preview_generation =");
+    expect(chatQuery?.params).toContain(
       CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
     );
+    expect(chatQuery?.sql).not.toContain('COLLATE "C" <');
+    expect(
+      chatQuery === undefined ? undefined : sourcePageLimit(chatQuery),
+    ).toBe(LIMITS.searchChatCandidateThreadsMax + 1);
   });
 
   test("continues legacy offset cursors during a rolling deployment", async () => {
@@ -291,7 +332,11 @@ describe("global search SQL scope", () => {
     for (const [query] of rootDbExecuteMock.mock.calls) {
       const compiled = dialect.sqlToQuery(query);
       expect(compiled.sql).not.toContain('COLLATE "C" <');
-      expect(compiled.params.at(-1)).toBe(29);
+      expect(sourcePageLimit(compiled)).toBe(
+        compiled.sql.includes("FROM chat_thread_search_documents cst")
+          ? LIMITS.searchChatCandidateThreadsMax + 1
+          : 29,
+      );
     }
   });
 
@@ -328,7 +373,7 @@ describe("global search SQL scope", () => {
     );
     expect(compiled.sql).not.toContain("sd.tsv @@");
     expect(compiled.params).toContain(cursorValue);
-    expect(compiled.params.at(-1)).toBe(4);
+    expect(sourcePageLimit(compiled)).toBe(4);
   });
 
   test("preserves the SQL timestamp score in filter-only cursors", async () => {

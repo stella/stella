@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "اضغط {shortcut} لتصفح سجلك واختيار مقتطف.",
     "welcomeShortcutTitle": "افتحها من أي مكان.",
     "welcomeStart": "ابدأ النسخ",
-    "welcomeTitle": "تعرّف على حافظتك"
+    "welcomeTitle": "تعرّف على حافظتك",
+    "registryIdentifierSearchHint": "أدخل {identifiers}."
   },
   "activity": {
     "title": "النشاط",

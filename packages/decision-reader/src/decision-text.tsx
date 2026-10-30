@@ -13,6 +13,7 @@ import {
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -584,7 +585,7 @@ const buildAnchorsByPieceId = ({
       anchors.push({
         end: span.end,
         key: `decision:${span.source.id}`,
-        render: (children): ReactElement => {
+        render: (children, { isRangeStart }): ReactElement => {
           const marked = renderLinkAnnotations({
             annotations: linkAnnotations,
             children,
@@ -598,6 +599,7 @@ const buildAnchorsByPieceId = ({
             treatment: span.source.treatment,
             blockId,
             children: marked,
+            showBadge: isRangeStart,
           });
         },
         start: span.start,
@@ -907,7 +909,11 @@ const renderBlocksWithHoldingZone = ({
   const groups: Group[] = [];
 
   for (const block of blocks) {
-    const info = sectionMap?.get(block.anchorId) ?? null;
+    // Analysis may classify each caption line separately. Its section borders
+    // must not split one consecutive run into several disclosure controls.
+    const info = apparatusIds.has(block.id)
+      ? null
+      : (sectionMap?.get(block.anchorId) ?? null);
     const cssVar = info?.cssVar ?? null;
     const headingId = info?.headingId ?? null;
     const lastGroup = groups.at(-1);
@@ -1128,7 +1134,10 @@ export const DecisionText = ({
     if (visibleBlocks.length > 0) {
       return (
         <article
-          className="text-card-foreground text-start"
+          className={cn(
+            LEGAL_TEXT_CLASS_NAME,
+            "text-card-foreground text-start",
+          )}
           lang={decision.language}
           ref={articleRef}
           style={{
@@ -1192,7 +1201,10 @@ export const DecisionText = ({
     if (decision.fulltext) {
       return (
         <article
-          className="text-card-foreground text-start"
+          className={cn(
+            LEGAL_TEXT_CLASS_NAME,
+            "text-card-foreground text-start",
+          )}
           lang={decision.language}
           ref={articleRef}
           style={{
@@ -1238,7 +1250,7 @@ export const DecisionText = ({
     // can still work from.
     return (
       <article
-        className="text-card-foreground text-start"
+        className={cn(LEGAL_TEXT_CLASS_NAME, "text-card-foreground text-start")}
         lang={decision.language}
         ref={articleRef}
         style={{

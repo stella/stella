@@ -28,8 +28,10 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "audit_logs.changes",
   "cell_metadata.metadata",
   "chat_messages.content",
+  "request_idempotency_receipts.response_body",
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
+  "chat_run_logs.reference_summary",
   "entity_versions.collaboration_contributor_user_ids",
   "fields.content",
   "flow_run_steps.output",
@@ -464,6 +466,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Conversation history; tool payloads name members as they were.",
   "chat_run_log_entries.chunk":
     "Run log history; tool payloads name members as they were.",
+  "chat_run_logs.reference_summary":
+    "Derived conversation context can retain member identifiers in text; it grants no membership and expires with the run log.",
   "fields.content":
     "A person property value; it names someone and grants nothing.",
   "flow_run_steps.output": "Review gate decision attribution history.",
@@ -498,6 +502,10 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "request_idempotency_receipts.user_id":
+    "Organization-owned request coordination: retain through the bounded replay window so retries in other matters remain single-execution. Replay still passes the route's current authorization; organization removal clears the rows and account deletion cascades.",
+  "request_idempotency_receipts.response_body":
+    "Historical response cache, not membership or write authority. Current route authorization gates replay; organization removal erases the cache, while retention bounds matter-removal history without reopening creates in other matters.",
   "mcp_web_handoff.user_id":
     "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":

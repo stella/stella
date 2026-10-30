@@ -105,6 +105,10 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import {
+  fadeScrollEdges,
+  SCROLL_EDGE_FADE_CLASS,
+} from "@stll/ui/scroll-edge-fade";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { typedCharacter } from "@stll/ui/typed-character";
@@ -1745,6 +1749,13 @@ const ClipboardApp = () => {
     (node: HTMLDivElement | null) => {
       timelineRailRef.current = node;
       observeTimelineRail(node);
+      const stopFading = fadeScrollEdges(node);
+      // A returned cleanup replaces React's detach call with `null`.
+      return () => {
+        stopFading?.();
+        timelineRailRef.current = null;
+        observeTimelineRail(null);
+      };
     },
     [observeTimelineRail],
   );
@@ -3020,7 +3031,10 @@ const ClipboardApp = () => {
                 ) : (
                   <div
                     aria-label={t("timeline")}
-                    className="clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+                    className={cn(
+                      "clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1 [--fade-size:3rem]",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     onPointerMove={handleRailPointerMove}
                     onWheel={handleRailWheel}
                     ref={attachTimelineRail}
@@ -3308,9 +3322,13 @@ const ClipboardApp = () => {
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
                   <div
-                    className="flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+                    className={cn(
+                      "flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     data-clipboard-groups-scroller=""
                     onWheel={handleRailWheel}
+                    ref={fadeScrollEdges}
                   >
                     {snapshot.groups.map((group, groupIndex) => {
                       const groupStyle: ClipboardGroupStyle = {

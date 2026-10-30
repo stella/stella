@@ -111,6 +111,15 @@ describe("letter-spaced emphasis", () => {
     ["t a k t o:", "takto:"],
     ["z těchto d ů v o d ů:", "z těchto důvodů:"],
     ["O d ů v o d n ě n í :", "Odůvodnění:"],
+    // Verbatim from NSS 2 Afs 180/2004 and 2 Afs 154/2005.
+    [
+      "sp. zn. 31 Ca 51/2004, s e   z r u š u j e   a věc   s e   mu   v r a c í   k dalšímu řízení.",
+      "sp. zn. 31 Ca 51/2004, se zrušuje a věc se mu vrací k dalšímu řízení.",
+    ],
+    [
+      "P o u č e n í : Proti tomuto rozsudku   n e j s o u   opravné prostředky přípustné.",
+      "Poučení: Proti tomuto rozsudku nejsou opravné prostředky přípustné.",
+    ],
   ])("reads %j as %j", (spaced, words) => {
     expect(collapseLetterSpacing(spaced)).toBe(words);
   });
@@ -138,8 +147,18 @@ describe("letter-spaced emphasis", () => {
     "A. M., bytem SRN, a O. M., bytem, SRN",
     "společnosti s r. o. a a. s.",
     "Ústavní  soud  České  republiky",
+    // A spaced word elsewhere is no evidence for the prose around it.
+    "Soud rozhodoval   i o   nákladech řízení, protože žalobce uspěl.",
   ])("leaves ordinary text %j as it is", (text) => {
     expect(collapseLetterSpacing(text)).toBe(text);
+  });
+
+  test("reads the spaced words of mixed prose and emphasis, and only them", () => {
+    expect(
+      collapseLetterSpacing(
+        "Soud rozhodoval   i o   nákladech; návrh se z a m í t á .",
+      ),
+    ).toBe("Soud rozhodoval   i o   nákladech; návrh se zamítá.");
   });
 
   test("is idempotent", () => {
@@ -198,4 +217,15 @@ describe("letter-spaced emphasis", () => {
       expect(collapseLetterSpacing(text, { setApart: true })).toBe(text);
     });
   });
+});
+
+test("ordinary one-letter words beside spaced emphasis remain separate", () => {
+  expect(collapseLetterSpacing("rozhodl   i o   z a m í t á")).toBe(
+    "rozhodl   i o zamítá",
+  );
+  expect(collapseLetterSpacing("s e   mu   v r a c í")).toBe("se mu vrací");
+});
+
+test("a wholly spaced phrase retains the unambiguous emphasis context", () => {
+  expect(collapseLetterSpacing("a i   v e r d i k t")).toBe("ai verdikt");
 });

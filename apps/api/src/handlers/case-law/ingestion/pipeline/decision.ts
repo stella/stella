@@ -17,6 +17,7 @@ import {
 import { planDecisionWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import {
   acquireSourceRawArtifact,
+  archivePreservedObservationRaw,
   recordAbandonedRawWrite,
   withSourceRawRetry,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
@@ -50,10 +51,12 @@ import type {
   ProcessDecisionAttemptOptions,
   ProcessDecisionOptions,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { startDecisionRetentionCheck } from "@/api/handlers/case-law/ingestion/retention/retention-check";
 import {
   composeDecisionWithSupplements,
   type StoredSupplement,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
@@ -145,6 +148,7 @@ const storedInputMatchesDecision = (
  */
 const runDecisionAttempt = async ({
   metadataUrlSchema,
+  retention,
   statedEcliIdentity,
   input,
   inputProvenance,
@@ -205,6 +209,24 @@ const runDecisionAttempt = async ({
     return RECONCILE_CONTENTION;
   }
 
+  const rawOptions = {
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+    result,
+    existing,
+    sourceId,
+    decisionId,
+    rawWrites,
+    preservesExistingDetail: shape.preservesExistingDetail,
+    inputProvenance,
+    scopedDb,
+  };
+  const abandonRawWrite = async () => await recordAbandonedRawWrite(rawOptions);
+  const archiveOutcome = await archivePreservedObservationRaw(rawOptions);
+  if (archiveOutcome !== null) {
+    return archiveOutcome;
+  }
+
   const existingPolicyOutcome = await resolveExistingDecisionPolicy({
     scopedDb,
     existing,
@@ -219,26 +241,10 @@ const runDecisionAttempt = async ({
   if (existingPolicyOutcome !== null) {
     return existingPolicyOutcome;
   }
-
   signal?.throwIfAborted();
-  const sourceRawArtifact = await acquireSourceRawArtifact({
-    ...(signal === undefined ? {} : { signal }),
-    ...(s3Policy === undefined ? {} : { s3Policy }),
-    result,
-    existing,
-    preservesExistingDetail: shape.preservesExistingDetail,
-    sourceId,
-    decisionId,
-    rawWrites,
-  });
+  const sourceRawArtifact = await acquireSourceRawArtifact(rawOptions);
   if (sourceRawArtifact.type === "retry") {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
+    await abandonRawWrite();
     return sourceRawArtifact.outcome;
   }
   const rawArtifact = sourceRawArtifact.artifact;
@@ -304,13 +310,7 @@ const runDecisionAttempt = async ({
   const rowWrite = attempted.andThen((outcome) => outcome);
 
   if (Result.isError(rowWrite)) {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
+    await abandonRawWrite();
     if (isConcurrentIdentityInsert(rowWrite.error)) {
       return RECONCILE_CONTENTION;
     }
@@ -318,13 +318,7 @@ const runDecisionAttempt = async ({
   }
 
   if ("status" in rowWrite.value) {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
+    await abandonRawWrite();
     return RECONCILE_CONTENTION;
   }
   const { write, writeStatus } = rowWrite.value;
@@ -339,6 +333,21 @@ const runDecisionAttempt = async ({
   });
   if (settled !== null) {
     return settled;
+  }
+  // The row is committed. Its retention check starts now, off this write:
+  // it reads the adapter's own observation, before any supplement joined it,
+  // since the projection reads what this decision's publisher served. It
+  // runs once per applied write, so an unchanged decision or a retried
+  // contention is not reported again. PDF parsing runs in a subprocess;
+  // check failures and this write's abort never reject the write.
+  if (shape.incomingCarriesDocument) {
+    detached(
+      startDecisionRetentionCheck({
+        ...retention,
+        result: observation.observed,
+      }),
+      "case-law.retention-check",
+    );
   }
 
   signal?.throwIfAborted();
@@ -406,11 +415,16 @@ const processDecisionFromInput = async (
     options.scopedDb,
   ),
 ): Promise<ProcessResult> => {
-  const { metadataUrlSchema, sourceFingerprintVersion, statedEcliIdentity } =
-    await resolveSourceContract(options.sourceId);
+  const {
+    metadataUrlSchema,
+    retention,
+    sourceFingerprintVersion,
+    statedEcliIdentity,
+  } = await resolveSourceContract(options.sourceId);
   return await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
+    retention,
     sourceFingerprintVersion,
     sourceFingerprintFromStoredRaw: readStoredFingerprint,
     statedEcliIdentity,

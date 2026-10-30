@@ -941,12 +941,16 @@
         "reasoning": "Argumentation"
       },
       "errors": {
+        "analysisDisabled": "Die KI-Analyse ist auf diesem Server deaktiviert. Lesen Sie den Entscheidungstext oder versuchen Sie es später erneut.",
         "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
+        "decisionNotFound": "Diese Entscheidung wurde nicht gefunden. Öffnen Sie sie erneut über die Suche.",
+        "documentUnparseable": "Der Entscheidungstext ist noch nicht für die Analyse bereit. Lesen Sie die Originalquelle.",
+        "languageUnsupported": "Die KI-Analyse unterstützt die Sprache dieser Entscheidung noch nicht. Lesen Sie den Entscheidungstext oder die Originalquelle.",
         "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
         "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
         "retryAfter": "Sie können es ab {time} erneut versuchen.",
-        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}",
-        "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
+        "sourceRestricted": "Die Quelle erlaubt keine KI-Analyse. Lesen Sie den Entscheidungstext oder die Originalquelle.",
+        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}"
       },
       "generate": "KI-Leitsätze erzeugen",
       "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
@@ -1151,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
-      "headMatter": "Rubrum",
+      "headMatter": "Angaben zum Verfahren",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
     "research": {
@@ -1283,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
       "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
       "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
-    }
+    },
+    "withdrawnByPublisher": "Vom Herausgeber zurückgezogen"
   },
   "catalogue": {
     "addCustom": "Eigenes hinzufügen",
@@ -2079,8 +2084,6 @@
     "clearFilters": "Filter löschen",
     "clearSearch": "Suche löschen",
     "close": "Schließen",
-    "closeAll": "Alle schließen",
-    "closeOthers": "Andere schließen",
     "columns": "Spalten",
     "comfortable": "Komfortabel",
     "comingSoon": "Demnächst verfügbar",
@@ -2865,6 +2868,8 @@
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
       "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
+      "idempotencyInProgress": "Diese Anfrage wird noch verarbeitet. Warten Sie einen Moment und versuchen Sie es erneut.",
+      "idempotencyKeyReused": "Die Angaben haben sich seit dem vorherigen Versuch geändert. Setzen Sie das Formular zurück und versuchen Sie es erneut.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
@@ -3667,6 +3672,9 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "closeAllTabs": "{count, plural, one {# Tab} other {Alle # Tabs}} schließen",
+    "closeOtherTabs": "{count, plural, one {# anderen Tab} other {# andere Tabs}} schließen",
+    "closeTab": "<bdi>{name}</bdi> schließen",
     "conversionRefusal": {
       "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
       "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
@@ -4885,7 +4893,9 @@
     "viewOnGithub": "Auf GitHub ansehen"
   },
   "readerAnswers": {
+    "answerLanguage": "Antwortsprache",
     "budgetError": "Das Budget für Antworten ist aufgebraucht.",
+    "documentLanguage": "Dokumentsprache ({language})",
     "expand": "Antwort aufklappen",
     "explain": "Erklären",
     "followUp": "Rückfrage stellen",

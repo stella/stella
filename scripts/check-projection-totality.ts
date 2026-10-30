@@ -20,6 +20,8 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { unregisteredDecisionCopyStores } from "../apps/api/src/lib/case-law/withdrawn-copy-registry.ts";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE_ROOT = path.join(REPO_ROOT, "apps/api/src");
 const HANDLERS_ROOT = path.join(API_SOURCE_ROOT, "handlers");
@@ -313,4 +315,12 @@ const main = (): void => {
 
 if (import.meta.main) {
   main();
+}
+
+const unregisteredDecisionStores = unregisteredDecisionCopyStores();
+if (unregisteredDecisionStores.length > 0) {
+  console.error(
+    `Decision copy stores require withdrawal projections: ${unregisteredDecisionStores.join(", ")}`,
+  );
+  process.exitCode = 1;
 }
