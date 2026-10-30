@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "الوصول إلى المواقع متوقف. امنحه مرة واحدة كي تستخدم stella المواقع التي سجلت الدخول إليها."
-  },
-  "accessReady": {
-    "message": "جاهز. يمكن لـ stella استخدام علامة تبويب مخصصة مع بقاء جلسات تسجيل الدخول فعالة."
-  },
   "accessUpdateFailed": {
     "message": "تعذر على Chrome تغيير الوصول إلى المواقع."
   },
-  "adoptTab": {
-    "message": "استخدام هذا التبويب مع stella"
-  },
   "adoptUnsupported": {
     "message": "لا يمكن استخدام سوى الصفحات العامة عبر HTTPS مع stella."
-  },
-  "adoptedTab": {
-    "message": "يمكن لـ stella الآن قراءة $ORIGIN$ في هذا التبويب. اسأل عنه في المحادثة.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "جارٍ التحقق من الوصول إلى المواقع…"
-  },
-  "connectTab": {
-    "message": "ربط علامة تبويب stella الحالية"
-  },
-  "controllerReady": {
-    "message": "تم الربط بـ $ORIGIN$. لا يزال كل إجراء بحاجة إلى موافقة في stella.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "قطع اتصال علامة التبويب"
   },
   "downloadKept": {
     "message": "تنزيلات اكتملت أثناء تحكّم stella في علامة تبويب فأُبقيت: $COUNT$. تحقّق من مصدرها قبل فتحها.",
@@ -72,13 +38,62 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "السماح بجميع المواقع"
+  "unsupportedTab": {
+    "message": "افتح علامة تبويب لتطبيق stella ثم حاول مجدداً."
+  },
+  "connectionPurpose": {
+    "message": "عندما تطلب ذلك في الدردشة، يمكن لـ stella فتح المواقع وقراءتها في علامة تبويب منفصلة باستخدام جلسات تسجيل دخولك."
+  },
+  "statusConnected": {
+    "message": "متصل بـ $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "غير متصل"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "يلزم السماح بالوصول إلى المواقع"
+  },
+  "statusOpenStella": {
+    "message": "افتح stella للاتصال"
+  },
+  "statusTabHandedOver": {
+    "message": "تم تسليم علامة التبويب إلى stella: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "السماح بالوصول والاتصال"
+  },
+  "allowWebsiteAccess": {
+    "message": "السماح بالوصول إلى المواقع"
+  },
+  "connectTab": {
+    "message": "اتصال علامة تبويب stella هذه"
+  },
+  "adoptTab": {
+    "message": "استخدام علامة التبويب هذه مع stella"
+  },
+  "disconnectTab": {
+    "message": "قطع الاتصال"
+  },
+  "disconnectDescription": {
+    "message": "ستتوقف stella عن استخدام علامة التبويب المتصلة."
   },
   "revokeAccess": {
     "message": "إزالة الوصول إلى المواقع"
   },
-  "unsupportedTab": {
-    "message": "افتح علامة تبويب لتطبيق stella ثم حاول مجدداً."
+  "revokeDescription": {
+    "message": "يزيل إذن فتح المواقع وقراءتها."
+  },
+  "checkingAccess": {
+    "message": "جارٍ التحقق من الاتصال…"
   }
 }

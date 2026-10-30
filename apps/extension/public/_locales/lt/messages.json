@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "Prieiga prie svetainių išjungta. Suteikite ją vieną kartą, kad stella galėtų naudoti svetaines, prie kurių esate prisijungę."
-  },
-  "accessReady": {
-    "message": "Paruošta. stella gali naudoti atskirą kortelę, o jūsų prisijungimai lieka aktyvūs."
-  },
   "accessUpdateFailed": {
     "message": "Chrome nepavyko pakeisti prieigos prie svetainių."
   },
-  "adoptTab": {
-    "message": "Naudoti šią kortelę su stella"
-  },
   "adoptUnsupported": {
     "message": "Su stella galima naudoti tik viešus HTTPS puslapius."
-  },
-  "adoptedTab": {
-    "message": "stella dabar gali skaityti $ORIGIN$ šioje kortelėje. Klauskite apie ją pokalbyje.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Tikrinama prieiga prie svetainių…"
-  },
-  "connectTab": {
-    "message": "Prijungti dabartinę stella kortelę"
-  },
-  "controllerReady": {
-    "message": "Prisijungta prie $ORIGIN$. Kiekvieną veiksmą vis tiek reikia patvirtinti stelloje.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Atjungti kortelę"
   },
   "downloadKept": {
     "message": "Atsisiuntimai, kurie baigėsi, kol stella valdė skirtuką, ir buvo palikti: $COUNT$. Prieš atidarydami patikrinkite, iš kur jie.",
@@ -72,13 +38,62 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Leisti visas svetaines"
+  "unsupportedTab": {
+    "message": "Atverkite stella programos kortelę ir bandykite dar kartą."
+  },
+  "connectionPurpose": {
+    "message": "Kai paprašysite pokalbyje, „stella“ galės atskirame skirtuke atverti ir skaityti svetaines naudodama jūsų prisijungimus."
+  },
+  "statusConnected": {
+    "message": "Prisijungta prie $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Neprisijungta"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Reikia prieigos prie svetainių"
+  },
+  "statusOpenStella": {
+    "message": "Norėdami prisijungti, atverkite „stella“"
+  },
+  "statusTabHandedOver": {
+    "message": "Skirtukas perduotas „stella“: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Leisti prieigą ir prisijungti"
+  },
+  "allowWebsiteAccess": {
+    "message": "Leisti prieigą prie svetainių"
+  },
+  "connectTab": {
+    "message": "Prijungti šį „stella“ skirtuką"
+  },
+  "adoptTab": {
+    "message": "Naudoti šį skirtuką su „stella“"
+  },
+  "disconnectTab": {
+    "message": "Atsijungti"
+  },
+  "disconnectDescription": {
+    "message": "„stella“ nustos naudoti prijungtą skirtuką."
   },
   "revokeAccess": {
     "message": "Pašalinti prieigą prie svetainių"
   },
-  "unsupportedTab": {
-    "message": "Atverkite stella programos kortelę ir bandykite dar kartą."
+  "revokeDescription": {
+    "message": "Pašalina leidimą atverti ir skaityti svetaines."
+  },
+  "checkingAccess": {
+    "message": "Tikrinamas ryšys…"
   }
 }

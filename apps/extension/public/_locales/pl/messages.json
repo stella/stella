@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "Dostęp do witryn jest wyłączony. Przyznaj go raz, aby stella mogła korzystać z witryn, w których jesteś zalogowany."
-  },
-  "accessReady": {
-    "message": "Gotowe. stella może używać osobnej karty, a Twoje sesje logowania pozostaną aktywne."
-  },
   "accessUpdateFailed": {
     "message": "Chrome nie mógł zmienić dostępu do witryn."
   },
-  "adoptTab": {
-    "message": "Użyj tej karty ze stellą"
-  },
   "adoptUnsupported": {
     "message": "Ze stellą można używać tylko publicznych stron HTTPS."
-  },
-  "adoptedTab": {
-    "message": "stella może teraz czytać $ORIGIN$ na tej karcie. Zapytaj o nią na czacie.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Sprawdzanie dostępu do witryn…"
-  },
-  "connectTab": {
-    "message": "Połącz bieżącą kartę stella"
-  },
-  "controllerReady": {
-    "message": "Połączono z $ORIGIN$. Każde działanie nadal wymaga zatwierdzenia w stella.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Odłącz kartę"
   },
   "downloadKept": {
     "message": "Pobierania zakończone, gdy stella sterowała kartą, i zachowane: $COUNT$. Przed otwarciem sprawdź, skąd pochodzą.",
@@ -72,13 +38,62 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Zezwól na wszystkie witryny"
-  },
-  "revokeAccess": {
-    "message": "Usuń dostęp do witryn"
-  },
   "unsupportedTab": {
     "message": "Otwórz kartę aplikacji stella i spróbuj ponownie."
+  },
+  "connectionPurpose": {
+    "message": "Gdy poprosisz na czacie, stella może otwierać i czytać strony w osobnej karcie, korzystając z Twoich zalogowanych sesji."
+  },
+  "statusConnected": {
+    "message": "Połączono z $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Brak połączenia"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Wymagany dostęp do stron"
+  },
+  "statusOpenStella": {
+    "message": "Otwórz stellę, aby się połączyć"
+  },
+  "statusTabHandedOver": {
+    "message": "Karta przekazana stelli: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Zezwól na dostęp i połącz"
+  },
+  "allowWebsiteAccess": {
+    "message": "Zezwól na dostęp do stron"
+  },
+  "connectTab": {
+    "message": "Połącz tę kartę stelli"
+  },
+  "adoptTab": {
+    "message": "Użyj tej karty ze stellą"
+  },
+  "disconnectTab": {
+    "message": "Rozłącz"
+  },
+  "disconnectDescription": {
+    "message": "stella przestanie używać połączonej karty."
+  },
+  "revokeAccess": {
+    "message": "Usuń dostęp do stron"
+  },
+  "revokeDescription": {
+    "message": "Usuwa uprawnienie do otwierania i czytania stron."
+  },
+  "checkingAccess": {
+    "message": "Sprawdzanie połączenia…"
   }
 }

@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "El acceso a sitios web está desactivado. Concédelo una vez para que stella use los sitios donde has iniciado sesión."
-  },
-  "accessReady": {
-    "message": "Listo. stella puede usar una pestaña dedicada mientras mantienes tus sesiones abiertas."
-  },
   "accessUpdateFailed": {
     "message": "Chrome no pudo actualizar el acceso a sitios web."
   },
-  "adoptTab": {
-    "message": "Usar esta pestaña con stella"
-  },
   "adoptUnsupported": {
     "message": "Con stella solo se pueden usar páginas públicas HTTPS."
-  },
-  "adoptedTab": {
-    "message": "stella ya puede leer $ORIGIN$ en esta pestaña. Pregunte sobre ella en el chat.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Comprobando el acceso a sitios web…"
-  },
-  "connectTab": {
-    "message": "Conectar la pestaña actual de stella"
-  },
-  "controllerReady": {
-    "message": "Conectado a $ORIGIN$. Cada acción sigue necesitando aprobación en stella.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Desconectar pestaña"
   },
   "downloadKept": {
     "message": "Descargas que terminaron mientras stella controlaba una pestaña y se conservaron: $COUNT$. Comprueba su origen antes de abrirlas.",
@@ -72,13 +38,62 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Permitir todos los sitios"
+  "unsupportedTab": {
+    "message": "Abre una pestaña de la aplicación stella y vuelve a intentarlo."
+  },
+  "connectionPurpose": {
+    "message": "Cuando se lo pida en el chat, stella podrá abrir y leer sitios web en otra pestaña con sus sesiones iniciadas."
+  },
+  "statusConnected": {
+    "message": "Conectado a $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Sin conexión"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Se necesita acceso a sitios web"
+  },
+  "statusOpenStella": {
+    "message": "Abra stella para conectarse"
+  },
+  "statusTabHandedOver": {
+    "message": "Pestaña cedida a stella: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Permitir acceso y conectar"
+  },
+  "allowWebsiteAccess": {
+    "message": "Permitir acceso a sitios web"
+  },
+  "connectTab": {
+    "message": "Conectar esta pestaña de stella"
+  },
+  "adoptTab": {
+    "message": "Usar esta pestaña con stella"
+  },
+  "disconnectTab": {
+    "message": "Desconectar"
+  },
+  "disconnectDescription": {
+    "message": "stella dejará de usar la pestaña conectada."
   },
   "revokeAccess": {
     "message": "Quitar acceso a sitios web"
   },
-  "unsupportedTab": {
-    "message": "Abre una pestaña de la aplicación stella y vuelve a intentarlo."
+  "revokeDescription": {
+    "message": "Quita el permiso para abrir y leer sitios web."
+  },
+  "checkingAccess": {
+    "message": "Comprobando la conexión…"
   }
 }

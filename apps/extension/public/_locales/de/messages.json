@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "Der Websitezugriff ist deaktiviert. Erlaube ihn einmal, damit stella deine angemeldeten Websites nutzen kann."
-  },
-  "accessReady": {
-    "message": "Bereit. stella kann einen eigenen Tab verwenden, während du auf Websites angemeldet bleibst."
-  },
   "accessUpdateFailed": {
     "message": "Chrome konnte den Websitezugriff nicht aktualisieren."
   },
-  "adoptTab": {
-    "message": "Diesen Tab mit stella verwenden"
-  },
   "adoptUnsupported": {
     "message": "Mit stella lassen sich nur öffentliche HTTPS-Seiten verwenden."
-  },
-  "adoptedTab": {
-    "message": "stella kann $ORIGIN$ in diesem Tab jetzt lesen. Fragen Sie im Chat danach.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Websitezugriff wird geprüft…"
-  },
-  "connectTab": {
-    "message": "Aktuellen stella-Tab verbinden"
-  },
-  "controllerReady": {
-    "message": "Mit $ORIGIN$ verbunden. Jede Aktion muss weiterhin in stella genehmigt werden.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Tab trennen"
   },
   "downloadKept": {
     "message": "Downloads, die abgeschlossen wurden, während stella einen Tab gesteuert hat, und behalten wurden: $COUNT$. Prüfen Sie vor dem Öffnen, woher sie stammen.",
@@ -72,13 +38,62 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Alle Websites erlauben"
-  },
-  "revokeAccess": {
-    "message": "Websitezugriff entfernen"
-  },
   "unsupportedTab": {
     "message": "Öffne einen stella-App-Tab und versuche es erneut."
+  },
+  "connectionPurpose": {
+    "message": "Wenn Sie im Chat darum bitten, kann stella Websites in einem separaten Tab mit Ihren Anmeldungen öffnen und lesen."
+  },
+  "statusConnected": {
+    "message": "Verbunden mit $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Nicht verbunden"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Website-Zugriff erforderlich"
+  },
+  "statusOpenStella": {
+    "message": "stella zum Verbinden öffnen"
+  },
+  "statusTabHandedOver": {
+    "message": "Tab an stella übergeben: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Website-Zugriff erlauben und verbinden"
+  },
+  "allowWebsiteAccess": {
+    "message": "Website-Zugriff erlauben"
+  },
+  "connectTab": {
+    "message": "Diesen stella-Tab verbinden"
+  },
+  "adoptTab": {
+    "message": "Diesen Tab mit stella verwenden"
+  },
+  "disconnectTab": {
+    "message": "Verbindung trennen"
+  },
+  "disconnectDescription": {
+    "message": "stella verwendet den verbundenen Tab nicht mehr."
+  },
+  "revokeAccess": {
+    "message": "Website-Zugriff entfernen"
+  },
+  "revokeDescription": {
+    "message": "Entfernt die Berechtigung, Websites zu öffnen und zu lesen."
+  },
+  "checkingAccess": {
+    "message": "Verbindung wird geprüft…"
   }
 }
