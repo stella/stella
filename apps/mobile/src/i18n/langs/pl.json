@@ -127,6 +127,22 @@
     "currentVersion": "Bieżąca wersja",
     "loadFailed": "Nie udało się wczytać tej pozycji."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Nie udało się otworzyć tego dokumentu",
+    "failure": {
+      "offline": "Jesteś offline. Połącz się z internetem i spróbuj ponownie.",
+      "noFile": "Ten dokument nie ma jeszcze pliku.",
+      "failed": "Podczas otwierania coś poszło nie tak. Spróbuj ponownie za chwilę.",
+      "unsupported": "Zaktualizuj aplikację, aby otwierać dokumenty.",
+      "android": "W aplikacji na Androida nie można jeszcze otwierać dokumentów."
+    },
+    "retry": "Spróbuj ponownie",
+    "preview": "Otwórz podgląd",
+    "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
+    "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
+    "details": "Szczegóły"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Jasność w każdej sprawie.",
