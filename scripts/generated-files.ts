@@ -1021,35 +1021,6 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    id: "migration-restamp",
-    outputKind: "committed",
-    outputs: [
-      "apps/api/drizzle/**",
-      "apps/api/src/lib/db/**",
-      "scripts/migration-**",
-    ],
-    inputs: [
-      "scripts/migration-restamp.ts",
-      "scripts/check-migration-order.ts",
-    ],
-    write: [
-      "bun",
-      "scripts/migration-restamp.ts",
-      "--write",
-      "--base",
-      "origin/main",
-    ],
-    check: [
-      "bun",
-      "scripts/migration-restamp.ts",
-      "--check",
-      "--base",
-      "origin/main",
-    ],
-    autofix: false,
-    after: [],
-  },
-  {
     id: "migration-lock-baseline",
     outputKind: "committed",
     outputs: ["scripts/migration-lock-baseline.ts"],

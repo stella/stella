@@ -24,8 +24,10 @@ export const PR_GENERATORS = {
     prerequisites: [],
     outputs: [
       "apps/api/drizzle/**",
-      "apps/api/src/lib/db/**",
-      "scripts/migration-**",
+      "apps/api/src/lib/db/migration-alias-inventory.json",
+      "scripts/sha256-migration-ledger.json",
+      "scripts/migration-lock-baseline.ts",
+      "scripts/migration-lock-allowances/**",
     ],
   },
   "query-plan-contracts": {
@@ -133,7 +135,7 @@ export const assertOutputPaths = (
 ) => {
   const selected = selectedGenerator(generator);
   const matchesOutput = (file: string, output: string) => {
-    if (output.endsWith("/**") || output.endsWith("**")) {
+    if (output.endsWith("**")) {
       return file.startsWith(output.slice(0, -2));
     }
     return file === output;

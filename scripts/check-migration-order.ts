@@ -21,13 +21,13 @@ import {
   type MigrationIdentityChanges,
   readMigrationBaseSnapshot,
   runGit,
-} from "./migration-restamp";
+} from "./migration-stamps";
 
 export {
   findMigrationTimestampViolations,
   readMigrationBaseSnapshot,
   readMigrationChanges,
-} from "./migration-restamp";
+} from "./migration-stamps";
 
 type MigrationIdentityViolation =
   | { type: "invalid-name"; directory: string }

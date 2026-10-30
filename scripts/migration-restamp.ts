@@ -5,24 +5,18 @@ import { Glob } from "bun";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { createSha256 } from "@stll/sha256/bun";
-
+import {
+  findMigrationTimestampViolations,
+  MIGRATION_TIMESTAMP,
+  readMigrationBaseSnapshot,
+} from "./migration-stamps";
 import { PR_GENERATORS } from "./pr-regeneration";
 
-export type MigrationIdentityChanges = {
-  addedDirectories: readonly string[];
-  removedDirectories: readonly string[];
-};
-
-export type MigrationChanges = MigrationIdentityChanges & {
-  modifiedFiles: readonly string[];
-};
-
-export type StaleMigrationStamp = {
-  type: "stale-timestamp";
-  directory: string;
-  newestBaseDirectory: string;
-};
+export {
+  findMigrationTimestampViolations,
+  readMigrationBaseSnapshot,
+  readMigrationChanges,
+} from "./migration-stamps";
 
 export class StaleMigrationStampError extends Error {
   override name = "StaleMigrationStampError";
@@ -34,206 +28,16 @@ export class MigrationRestampScopeError extends Error {
   readonly _tag = "MigrationRestampScopeError";
 }
 
-// The regeneration job accepts only these outputs, so a reference outside
-// them is refused before anything is renamed.
+export class MigrationRestampBinaryReferenceError extends Error {
+  override name = "MigrationRestampBinaryReferenceError";
+  readonly _tag = "MigrationRestampBinaryReferenceError";
+}
+
 const WRITABLE_OUTPUTS = PR_GENERATORS["migration-restamp"].outputs.map(
   (pattern) => new Glob(pattern),
 );
 
-export const MIGRATION_TIMESTAMP = /(?:^|\/)([0-9]{14})_[^/]+$/u;
-export const MIGRATION_FILE = /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u;
-export const MIGRATION_FOLDER_FILE = /^apps\/api\/drizzle\/[^/]+\/.+$/u;
-export const ALIAS_INVENTORY_PATH =
-  "apps/api/src/lib/db/migration-alias-inventory.json";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-
-export const runGit = ({
-  arguments_,
-  cwd,
-}: {
-  arguments_: readonly string[];
-  cwd: string;
-}): Uint8Array => {
-  const result = Bun.spawnSync(["git", ...arguments_], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    panic(
-      `git ${arguments_.join(" ")} failed (${result.exitCode}): ${result.stderr.toString()}`,
-    );
-  }
-  return result.stdout;
-};
-
-export const readMigrationChanges = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}): MigrationChanges => {
-  const addedDirectories: string[] = [];
-  const removedDirectories: string[] = [];
-  const modifiedFiles: string[] = [];
-  const output = new TextDecoder().decode(
-    runGit({
-      arguments_: [
-        "diff",
-        "--no-renames",
-        "--name-status",
-        baseRef,
-        "--",
-        "apps/api/drizzle",
-      ],
-      cwd,
-    }),
-  );
-  for (const line of output.split("\n")) {
-    const [status, filename] = line.split("\t");
-    if (filename === undefined) {
-      continue;
-    }
-    if (status !== "A" && status !== "D" && status !== "M") {
-      panic(
-        `Unsupported migration change status ${String(status)} for ${filename}`,
-      );
-    }
-    if (status === "M" && MIGRATION_FOLDER_FILE.test(filename)) {
-      modifiedFiles.push(filename);
-      continue;
-    }
-    if (!MIGRATION_FILE.test(filename)) {
-      continue;
-    }
-    const directory = path.posix.dirname(filename);
-    if (status === "A") {
-      addedDirectories.push(directory);
-    } else if (status === "D") {
-      removedDirectories.push(directory);
-    }
-  }
-  return { addedDirectories, removedDirectories, modifiedFiles };
-};
-
-export const findMigrationTimestampViolations = ({
-  addedDirectories,
-  baseDirectories,
-}: {
-  addedDirectories: readonly string[];
-  baseDirectories: readonly string[];
-}): StaleMigrationStamp[] => {
-  let newestBase: { directory: string; stamp: string } | undefined;
-  for (const directory of baseDirectories) {
-    const stamp = MIGRATION_TIMESTAMP.exec(directory)?.at(1);
-    if (
-      stamp !== undefined &&
-      (newestBase === undefined || stamp > newestBase.stamp)
-    ) {
-      newestBase = { directory, stamp };
-    }
-  }
-  if (newestBase === undefined) {
-    return [];
-  }
-  return addedDirectories.flatMap((directory) => {
-    const stamp = MIGRATION_TIMESTAMP.exec(directory)?.at(1);
-    return stamp !== undefined && stamp <= newestBase.stamp
-      ? [
-          {
-            type: "stale-timestamp" as const,
-            directory,
-            newestBaseDirectory: newestBase.directory,
-          },
-        ]
-      : [];
-  });
-};
-
-const readGitFile = ({
-  ref,
-  file,
-  cwd,
-}: {
-  ref: string;
-  file: string;
-  cwd: string;
-}) => runGit({ arguments_: ["show", `${ref}:${file}`], cwd });
-
-const readBaseInventory = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}): unknown => {
-  const files = new TextDecoder()
-    .decode(
-      runGit({
-        arguments_: [
-          "ls-tree",
-          "--name-only",
-          baseRef,
-          "--",
-          ALIAS_INVENTORY_PATH,
-        ],
-        cwd,
-      }),
-    )
-    .trim();
-  if (files === "") {
-    return [];
-  }
-  if (files !== ALIAS_INVENTORY_PATH) {
-    panic(`Unexpected base inventory path: ${files}`);
-  }
-  return JSON.parse(
-    new TextDecoder().decode(
-      readGitFile({ ref: baseRef, file: ALIAS_INVENTORY_PATH, cwd }),
-    ),
-  );
-};
-
-export const readMigrationBaseSnapshot = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}) => {
-  const mergeBase = new TextDecoder()
-    .decode(runGit({ arguments_: ["merge-base", baseRef, "HEAD"], cwd }))
-    .trim();
-  const changes = readMigrationChanges({ baseRef: mergeBase, cwd });
-  const baseInventory = readBaseInventory({ baseRef: mergeBase, cwd });
-  const baseHashes = Object.fromEntries(
-    changes.modifiedFiles
-      .filter((candidate) => MIGRATION_FILE.test(candidate))
-      .map((file) => [
-        file,
-        createSha256()
-          .update(readGitFile({ ref: mergeBase, file, cwd }))
-          .digest("hex"),
-      ]),
-  );
-  const baseDirectories = new TextDecoder()
-    .decode(
-      runGit({
-        arguments_: [
-          "ls-tree",
-          "--name-only",
-          baseRef,
-          "--",
-          "apps/api/drizzle/",
-        ],
-        cwd,
-      }),
-    )
-    .split("\n")
-    .filter((directory) => MIGRATION_TIMESTAMP.test(directory));
-  return { mergeBase, changes, baseInventory, baseHashes, baseDirectories };
-};
 
 const stampToDate = (stamp: string) =>
   new Date(
@@ -250,6 +54,15 @@ const stampToDate = (stamp: string) =>
 const dateToStamp = (date: Date) =>
   date.toISOString().replace(/[-:T]/gu, "").slice(0, 14);
 
+const migrationNamePattern = (name: string) =>
+  new RegExp(
+    `(?<![\\w_-])${name.replaceAll(
+      /[.*+?^${}()|[\]\\]/gu,
+      (character) => `\\${character}`,
+    )}(?![\\w_-])`,
+    "gu",
+  );
+
 const trackedReferenceFiles = (cwd: string, name: string) => {
   const result = Bun.spawnSync(["git", "grep", "-l", "-z", "-F", "--", name], {
     cwd,
@@ -259,7 +72,58 @@ const trackedReferenceFiles = (cwd: string, name: string) => {
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     panic(`git grep failed (${result.exitCode}): ${result.stderr.toString()}`);
   }
-  return result.stdout.toString().split("\0").filter(Boolean);
+  return result.stdout
+    .toString()
+    .split("\0")
+    .filter(Boolean)
+    .filter((file) => {
+      const contents = readFileSync(path.join(cwd, file));
+      if (contents.includes(0)) {
+        if (migrationNamePattern(name).test(contents.toString("latin1"))) {
+          throw new MigrationRestampBinaryReferenceError(
+            `Binary generator output carries migration name ${name}: ${file}`,
+          );
+        }
+        return false;
+      }
+      return migrationNamePattern(name).test(contents.toString("utf-8"));
+    });
+};
+
+export const verifyRestampedMigrations = ({
+  baseRef,
+  cwd,
+  expectedAddedDirectories,
+}: {
+  baseRef: string;
+  cwd: string;
+  expectedAddedDirectories: readonly string[];
+}) => {
+  const snapshot = readMigrationBaseSnapshot({ baseRef, cwd });
+  const actual = snapshot.changes.addedDirectories.toSorted();
+  const expected = expectedAddedDirectories.toSorted();
+  if (
+    actual.length !== expected.length ||
+    actual.some((file, index) => file !== expected[index])
+  ) {
+    throw new StaleMigrationStampError(
+      `re-stamp wrote unexpected migration directories: expected ${expected.join(", ")}; found ${actual.join(", ")}`,
+    );
+  }
+  const stale = findMigrationTimestampViolations({
+    addedDirectories: actual,
+    baseDirectories: snapshot.baseDirectories,
+  });
+  if (stale.length > 0) {
+    throw new StaleMigrationStampError(
+      stale
+        .map(
+          ({ directory, newestBaseDirectory }) =>
+            `stale migration stamp: ${directory} must follow ${newestBaseDirectory}`,
+        )
+        .join("\n"),
+    );
+  }
 };
 
 export const restampMigrations = ({
@@ -384,7 +248,7 @@ export const restampMigrations = ({
     writeFileSync(
       filePath,
       readFileSync(filePath, "utf-8").replaceAll(
-        oldNames,
+        new RegExp(`(?<![\\w_-])(?:${oldNames.source})(?![\\w_-])`, "gu"),
         (name) =>
           renames.get(name) ?? panic(`Unplanned migration name ${name}`),
       ),
@@ -398,6 +262,16 @@ export const restampMigrations = ({
       panic(`Migration SQL changed while re-stamping ${oldName}`);
     }
   }
+  const movedByDirectory = new Map(
+    plan.map(({ directory, movedDirectory }) => [directory, movedDirectory]),
+  );
+  verifyRestampedMigrations({
+    baseRef,
+    cwd,
+    expectedAddedDirectories: snapshot.changes.addedDirectories.map(
+      (directory) => movedByDirectory.get(directory) ?? directory,
+    ),
+  });
   return plan.map(({ oldName, newName }) => ({ oldName, newName }));
 };
 

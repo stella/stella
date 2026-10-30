@@ -15,8 +15,11 @@ import { findMigrationIdentityViolation } from "./check-migration-order";
 import {
   checkMigrationStamps,
   findMigrationTimestampViolations,
+  MigrationRestampBinaryReferenceError,
   readMigrationBaseSnapshot,
   restampMigrations,
+  StaleMigrationStampError,
+  verifyRestampedMigrations,
 } from "./migration-restamp";
 
 const git = (cwd: string, ...arguments_: string[]) => {
@@ -77,7 +80,7 @@ test("reports and re-stamps a stale migration without changing SQL", () => {
     const oldName = "20260101010000_feature";
     migration(root, oldName, "select 'unchanged';\n");
     writeFileSync(
-      path.join(root, "references.json"),
+      path.join(root, "apps/api/src/lib/db/migration-alias-inventory.json"),
       `${JSON.stringify({ introducedBy: oldName })}\n`,
     );
     commitFeature(root);
@@ -109,10 +112,16 @@ test("reports and re-stamps a stale migration without changing SQL", () => {
       "apps/api/drizzle/20260101020100_feature/migration.sql",
     );
     expect(hash(newSql)).toBe(before);
-    expect(readFileSync(path.join(root, "references.json"), "utf-8")).toContain(
-      "20260101020100_feature",
-    );
+    expect(
+      readFileSync(
+        path.join(root, "apps/api/src/lib/db/migration-alias-inventory.json"),
+        "utf-8",
+      ),
+    ).toContain("20260101020100_feature");
     const after = readMigrationBaseSnapshot({ baseRef: "base", cwd: root });
+    expect(after.changes.addedDirectories).toEqual([
+      "apps/api/drizzle/20260101020100_feature",
+    ]);
     expect(
       findMigrationTimestampViolations({
         addedDirectories: after.changes.addedDirectories,
@@ -139,6 +148,69 @@ test("keeps two added migrations in relative order", () => {
       { oldName: "20260101003000_first", newName: "20260101020100_first" },
       { oldName: "20260101010000_second", newName: "20260101020200_second" },
     ]);
+    expect(
+      readMigrationBaseSnapshot({ baseRef: "base", cwd: root }).changes
+        .addedDirectories,
+    ).toEqual([
+      "apps/api/drizzle/20260101020100_first",
+      "apps/api/drizzle/20260101020200_second",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("post-write verification rejects a planned stamp that remains stale", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_feature");
+    commitFeature(root);
+    advanceBase(root);
+    expect(() =>
+      verifyRestampedMigrations({
+        baseRef: "base",
+        cwd: root,
+        expectedAddedDirectories: ["apps/api/drizzle/20260101010000_feature"],
+      }),
+    ).toThrow(StaleMigrationStampError);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("does not match a migration name inside a longer name", () => {
+  const root = fixture();
+  try {
+    const oldName = "20260101010000_first";
+    migration(root, oldName);
+    const inventory = path.join(
+      root,
+      "apps/api/src/lib/db/migration-alias-inventory.json",
+    );
+    writeFileSync(inventory, `${oldName}_backfill\n`);
+    commitFeature(root);
+    advanceBase(root);
+    restampMigrations({ baseRef: "base", cwd: root });
+    expect(readFileSync(inventory, "utf-8")).toBe(`${oldName}_backfill\n`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses a binary output that carries a migration name", () => {
+  const root = fixture();
+  try {
+    const oldName = "20260101010000_first";
+    migration(root, oldName);
+    writeFileSync(
+      path.join(root, "apps/api/src/lib/db/migration-alias-inventory.json"),
+      Buffer.from(`\0${oldName}\0`, "utf-8"),
+    );
+    commitFeature(root);
+    advanceBase(root);
+    expect(() => restampMigrations({ baseRef: "base", cwd: root })).toThrow(
+      MigrationRestampBinaryReferenceError,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
