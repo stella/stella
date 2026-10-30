@@ -1,3 +1,4 @@
+// parser-output-unchanged: Aspose writes `-aw-headerfooter-type` only as a nonempty declaration, which the former substring selector and the declaration read select alike.
 // parser-output-unchanged: Opt-in publisher-fragment comparison changes retention diagnostics only; parser output and default comparisons are unchanged.
 // parser-output-unchanged: hyphenatedLineBreaks is a new option no parser passes; every existing verdict is computed exactly as before.
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.

@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds named readers beside the unchanged `inlineStyleValue`; output changes only in parsers that call them, and those bump their own versions.
 import type { Element } from "domhandler";
 
 /** What a property's declaration means, or undefined for a value CSS rejects. */

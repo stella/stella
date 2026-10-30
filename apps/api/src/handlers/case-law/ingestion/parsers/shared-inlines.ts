@@ -1,3 +1,4 @@
+// parser-output-unchanged: span styles are read only under the opt-in `parseSpanStyle` option, which only cz-nss passes and cz-nss bumps its own version; every other walk is unchanged.
 // parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
 // parser-output-unchanged: `<sup>` becomes a superscript only under the opt-in `superscripts` option; every walk without it unwraps it as before.
 // parser-output-unchanged: exports the existing script/style exclusion as a selector so pl-tk can clean its owned DOM clone once; other parsers keep using the unchanged tag predicate.
