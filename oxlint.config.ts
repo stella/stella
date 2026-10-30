@@ -2004,6 +2004,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
+    "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -2076,6 +2077,7 @@ const config = defineConfig({
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
+    "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
@@ -3823,6 +3825,23 @@ const config = defineConfig({
       ],
       rules: {
         "no-ad-hoc-chat-link/no-ad-hoc-chat-link": "error",
+      },
+    },
+    {
+      // Keys on the chat stream and message paths are read off the wire
+      // (event types, part types, tool names); `key in table` also matches
+      // inherited names, so membership goes through the own-key helpers.
+      files: [
+        "packages/chat/src/**/*.{ts,tsx}",
+        "apps/web/src/features/chat/**/*.{ts,tsx}",
+        "apps/web/src/components/chat/**/*.{ts,tsx}",
+        "apps/api/src/handlers/chat/**/*.{ts,tsx}",
+        "apps/api/src/lib/chat/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dynamic-key-in-operator.fixture.ts",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}"],
+      rules: {
+        "no-dynamic-key-in-operator/no-dynamic-key-in-operator": "error",
       },
     },
     {
@@ -5964,6 +5983,17 @@ const config = defineConfig({
           "error",
           { entries: enforcedOwnershipEntries },
         ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-inline-flatten.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-parser-inline-flatten/no-parser-inline-flatten": "error",
       },
     },
     {

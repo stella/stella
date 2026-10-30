@@ -381,6 +381,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt"],
   ],
   [
+    "@formatjs/intl-pluralrules",
+    [
+      "https://formatjs.github.io/llms.txt",
+      "https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt",
+    ],
+  ],
+  [
     "@happy-dom/global-registrator",
     ["https://raw.githubusercontent.com/capricorn86/happy-dom/HEAD/llms.txt"],
   ],
