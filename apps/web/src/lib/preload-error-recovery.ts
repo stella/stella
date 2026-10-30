@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
-import { fetchWithTimeout } from "@stll/fetch";
-import { readCappedBytes } from "@stll/skills/streaming";
+import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
 
@@ -92,10 +91,11 @@ export const classifyFailedChunkLoad =
         if (!response.ok || !response.body) {
           return { type: "not-skew" };
         }
-        const bytes = await readCappedBytes(
-          response.body,
-          VERSION_MANIFEST_MAX_BYTES,
-        );
+        const bodyBytes = await readBodyWithIdleDeadline(response, {
+          idleMs: VERSION_MANIFEST_IDLE_TIMEOUT_MS,
+        });
+        const bytes =
+          bodyBytes.byteLength > VERSION_MANIFEST_MAX_BYTES ? null : bodyBytes;
         if (bytes === null) {
           return { type: "not-skew" };
         }

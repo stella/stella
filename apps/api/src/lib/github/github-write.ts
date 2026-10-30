@@ -12,7 +12,7 @@
 
 import { Result, TaggedError } from "better-result";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, readBodyJsonWithIdleDeadline } from "@stll/fetch";
 
 import type {
   GithubSafeText,
@@ -95,7 +95,10 @@ export const githubWrite = async (
     );
   }
   return await Result.tryPromise({
-    try: async (): Promise<unknown> => await response.value.json(),
+    try: async (): Promise<unknown> =>
+      await readBodyJsonWithIdleDeadline(response.value, {
+        idleMs: GITHUB_REQUEST_TIMEOUT_MS,
+      }),
     catch: (cause) =>
       new GithubWriteError({
         message: "GitHub returned an unreadable body",

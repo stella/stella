@@ -27,7 +27,7 @@ import {
 } from "@stll/api-contract/desktop-registry";
 import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 import { printError } from "@stll/errors";
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, readBodyTextWithIdleDeadline } from "@stll/fetch";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -373,7 +373,9 @@ export const evaluateToolsList = ({
 const readProbeResponse = async (
   response: Response,
 ): Promise<ProbeResponse> => {
-  const text = await response.text();
+  const text = await readBodyTextWithIdleDeadline(response, {
+    idleMs: PROBE_TIMEOUT_MS,
+  });
   let body: unknown;
   try {
     body = JSON.parse(text);

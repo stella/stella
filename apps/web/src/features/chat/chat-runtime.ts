@@ -31,7 +31,7 @@ import {
   chatTurnResumeProbeSchema,
 } from "@stll/chat/resume-contract";
 import { sleep } from "@stll/concurrency/sleep";
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, readBodyJsonWithIdleDeadline } from "@stll/fetch";
 
 import type {
   ChatClientTools,
@@ -704,7 +704,10 @@ export const createChatRuntime = ({
             }),
           );
         }
-        const data: unknown = await response.json();
+        const data = await readBodyJsonWithIdleDeadline(response, {
+          idleMs: CHAT_RESUME_PROBE_TIMEOUT_MS,
+          ...(signal === undefined || signal === null ? {} : { signal }),
+        });
         const parsed = v.safeParse(chatTurnResumeProbeSchema, data);
         if (!parsed.success) {
           return await Promise.reject(
