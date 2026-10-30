@@ -184,6 +184,8 @@ export const FAILURE_TAGS = [
   "EgressAnonymizerFailedError",
   "EmailEventsConfigError",
   "EmailParseError",
+  "EmptiedDocumentBatchError",
+  "EmptiedDocumentRepairArgumentsError",
   "EntityCheckCancelledError",
   "EntityCheckInputError",
   "EntityCheckUnavailableError",
