@@ -20,6 +20,8 @@ export type PageOrganizerSign = {
 };
 
 type PageOrganizerSignActionProps = {
+  /** Closes the editor, so the viewer shows the pages the stamp goes on. */
+  closeEditor: () => void;
   disabled: boolean;
   isDirty: boolean;
   /** Saves the page edits as a new version and resolves that version, or `null`. */
@@ -30,12 +32,14 @@ type PageOrganizerSignActionProps = {
 /**
  * Sign from the editor footer. Unsaved page edits are saved as a new version
  * first, and that version is signed; with no edits, the open version is.
+ * Either way the editor closes and the stamp is placed in the viewer.
  */
 export const PageOrganizerSignAction = ({
+  closeEditor,
   disabled,
   isDirty,
   saveVersion,
-  sign: { flow: pdfSignFlow },
+  sign: { flow: pdfSignFlow, target },
 }: PageOrganizerSignActionProps) => {
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
   return (
@@ -48,7 +52,7 @@ export const PageOrganizerSignAction = ({
               pdfSignFlow.startWith(saveVersion);
               return;
             }
-            pdfSignFlow.start();
+            pdfSignFlow.start(target, closeEditor);
           }}
           size="sm"
           {...(isDirty ? { tooltip: tPageEditor("signAfterSave") } : {})}

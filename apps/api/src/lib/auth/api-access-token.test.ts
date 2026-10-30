@@ -127,6 +127,7 @@ describe("which routes an API access token opens", () => {
     for (const [method, route] of [
       ["PUT", "/v1/workspaces"],
       ["PUT", "/v1/tasks/:workspaceId"],
+      ["PATCH", "/v1/tasks/:workspaceId"],
     ] as const) {
       expect(
         admitApiAccessTokenRoute({ method, route, scopes: readOnly }),
@@ -148,6 +149,59 @@ describe("which routes an API access token opens", () => {
     expect(
       [...routeScopes].filter((scope) => !MOBILE_SCOPES.includes(scope)),
     ).toEqual([]);
+  });
+
+  test("a new document version needs the documents write scope", () => {
+    const route = "/v1/entities/:workspaceId/upload-version";
+    expect(
+      admitApiAccessTokenRoute({
+        method: "POST",
+        route,
+        scopes: ["stella:read", "stella:matters_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    expect(
+      admitApiAccessTokenRoute({
+        method: "POST",
+        route,
+        scopes: ["stella:documents_write"],
+      }),
+    ).toEqual({ admitted: true });
+  });
+
+  test("an upload opens at its domain scope, its folder steps never", () => {
+    for (const route of [
+      "/v1/uploads/:workspaceId/presign",
+      "/v1/uploads/:workspaceId/:uploadId/finalize",
+      "/v1/uploads/:workspaceId/:uploadId/abort",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:read", "stella:documents_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:matters_write"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    for (const route of [
+      "/v1/uploads/:workspaceId/entity-create/preflight",
+      "/v1/uploads/:workspaceId/entity-create/tree",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:matters_write", "stella:documents_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("a request no route matched is refused", () => {
@@ -174,6 +228,14 @@ describe("which routes an API access token opens", () => {
             "/v1/tasks/",
             "/v1/tasks/:workspaceId",
             "/v1/tasks/:workspaceId/:taskId",
+            "/v1/time-timers/admin",
+            "/v1/time-timers/admin/:id/stop",
+            "/v1/entities/:workspaceId/upload",
+            "/v1/entities/:workspaceId/folio-collab-rooms/publish-version",
+            "/v1/files/:workspaceId/stamped/:fieldId",
+            "/v1/uploads/:workspaceId/entity-create/preflight",
+            "/v1/uploads/:workspaceId/entity-create/tree",
+            "/v1/properties/:workspaceId/property/:propertyId",
             "/v1/me/oauth-connections/:consentId",
             "/v1/contacts",
           ),
@@ -182,6 +244,8 @@ describe("which routes an API access token opens", () => {
           fc.constantFrom(
             "stella:read",
             "stella:matters_write",
+            "stella:billing_write",
+            "stella:documents_write",
             "stella:admin_write",
             "openid",
           ),

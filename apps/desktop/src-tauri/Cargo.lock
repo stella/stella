@@ -777,9 +777,9 @@ dependencies = [
 
 [[package]]
 name = "clipboard-win"
-version = "5.4.1"
+version = "5.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bde03770d3df201d4fb868f2c9c59e66a3e4e2bd06692a0fe701e7103c7e84d4"
+checksum = "052af7878466feccda12ba7a6a67d019d712f296809559b47c12c8cc196d3a9a"
 dependencies = [
  "error-code",
  "windows-win",
@@ -4841,6 +4841,7 @@ dependencies = [
  "csscolorparser",
  "dhat",
  "dirs 7.0.0",
+ "flate2",
  "futures-util",
  "hex",
  "icns",
@@ -4864,6 +4865,7 @@ dependencies = [
  "stella-desktop-signing-core",
  "stella-desktop-windows-signing",
  "sys-locale",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
@@ -4896,6 +4898,7 @@ version = "0.0.1"
 dependencies = [
  "block2",
  "core-foundation 0.10.1",
+ "libc",
  "objc2",
  "objc2-app-kit",
  "objc2-core-foundation",
@@ -4904,6 +4907,7 @@ dependencies = [
  "objc2-user-notifications",
  "objc2-web-kit",
  "tauri",
+ "tokio",
  "windows-sys 0.61.2",
 ]
 

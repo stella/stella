@@ -1,6 +1,20 @@
 {
   "entries": [
     {
+      "id": "apps/api/src/handlers/case-law/decisions/court-vocabulary-plan.postgres.test.ts::published court walks (postgres) > vocabulary and browse seek published index ranges at both corpus sizes",
+      "owner": "stella",
+      "reason": "The unchanged plan test passed in run 40647999241 and reported one heap fetch in run 40652291069. VACUUM visibility-map state depends on concurrent transaction snapshots; the exact-zero assertion needs an isolated visibility fixture.",
+      "created": "2026-10-28",
+      "expires": "2026-11-04"
+    },
+    {
+      "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.test.ts::the tip > a lap lists closed days only, from where the walk stopped to today",
+      "owner": "stella",
+      "reason": "The adapter captures the UTC date before fetching; the assertion recomputes it after fetching, so a UTC date change during the request changes the expected end date.",
+      "created": "2026-10-27",
+      "expires": "2026-11-10"
+    },
+    {
       "id": "apps/api/src/handlers/time-entries/suggestions/suggestions.integration.test.ts::time entry suggestions integration > an accepted suggestion's tail past midnight covers the next day's first minutes",
       "owner": "stella",
       "reason": "The midnight-tail case reads shared current-day fixture activity, so unrelated chat rows change its expected engagement minutes. Keep reporting failures while the fixture date is isolated.",

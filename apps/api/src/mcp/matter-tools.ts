@@ -10,6 +10,7 @@ import {
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -666,30 +667,12 @@ const handleListContactsTool: TypedMcpToolHandler<
 
 // --- save_contact -------------------------------------------------------
 
-const birthYearSchema = () =>
-  v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999));
-const birthMonthSchema = () =>
-  v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12));
-
 /**
  * A date of birth at the precision known, as contacts store it: a year, a
  * year and month, or a full date. Shared by save_contact and
  * check_counterparty, so a date read back from a contact is accepted as is.
  */
-const dateOfBirthInputSchema = v.variant("precision", [
-  v.strictObject({ precision: v.literal("year"), year: birthYearSchema() }),
-  v.strictObject({
-    precision: v.literal("month"),
-    year: birthYearSchema(),
-    month: birthMonthSchema(),
-  }),
-  v.strictObject({
-    precision: v.literal("day"),
-    year: birthYearSchema(),
-    month: birthMonthSchema(),
-    day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(31)),
-  }),
-]);
+const dateOfBirthInputSchema = contactBirthDateSchema;
 
 type ContactNameParts = {
   display_name?: string | undefined;
@@ -852,7 +835,9 @@ const handleSaveContactTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveContactArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+    return validationErrorResult(parsed.issues, undefined, {
+      date_of_birth: "dateOfBirth",
+    });
   }
   const input = parsed.output;
 
@@ -2475,7 +2460,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "'active' to archive or unarchive it. Returns the matter ID.",
     inputSchema: saveMatterArgsSchema,
     jsonSchemaProjectionWaiver: {
-      ignoreActions: ["partial_check"],
+      ignoreActions: ["check", "partial_check"],
       reason:
         "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
     },
@@ -2566,7 +2551,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     jsonSchemaProjectionWaiver: {
-      ignoreActions: ["partial_check"],
+      ignoreActions: ["check", "partial_check"],
       reason:
         "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
     },
@@ -2666,6 +2651,11 @@ export const MATTER_TOOL_DEFINITIONS = [
         spelling: "alpha-2",
         tool: "check_counterparty",
       }),
+    },
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["check"],
+      reason:
+        "Birth-date chronology is enforced at runtime because JSON Schema cannot compare a partial date with today.",
     },
     access: "read",
     permissions: { type: "all", permissions: { workspace: ["read"] } },
