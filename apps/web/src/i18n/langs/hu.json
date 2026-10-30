@@ -941,12 +941,16 @@
         "reasoning": "Érvelés"
       },
       "errors": {
+        "analysisDisabled": "Az AI-elemzés készítése ezen a szerveren ki van kapcsolva. Olvassa el a határozat szövegét, vagy próbálja újra később.",
         "answerIncomplete": "{source, select, organization {A szervezet {provider}-kulcsa hiányos választ adott.} other {Az AI-modell hiányos választ adott.}}",
+        "decisionNotFound": "Ez a határozat nem található. Nyissa meg újra a keresésből.",
+        "documentUnparseable": "A határozat szövege még nem áll készen az elemzésre. Olvassa el az eredeti forrást.",
+        "languageUnsupported": "Az AI-elemzés még nem támogatja a határozat nyelvét. Olvassa el a határozat szövegét vagy az eredeti forrást.",
         "providerRefused": "{source, select, organization {A(z) {provider} elutasította a szervezet kulcsával küldött kérést. Ellenőrizze a kulcsot, a kvótát és a számlázást a szervezet beállításaiban.} other {Az AI-szolgáltató elutasította a kérést.}}",
         "providerUnavailable": "{source, select, organization {A(z) {provider} jelenleg nem érhető el a szervezet kulcsával.} other {Az AI-szolgáltató jelenleg nem érhető el.}}",
         "retryAfter": "{time} után újra megpróbálhatja.",
-        "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}",
-        "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
+        "sourceRestricted": "A forrás nem engedélyezi az AI-elemzést. Olvassa el a határozat szövegét vagy az eredeti forrást.",
+        "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}"
       },
       "generate": "AI jogi tételek elkészítése",
       "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
@@ -1153,7 +1157,7 @@
     "reader": {
       "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
-      "headMatter": "Fejrész",
+      "headMatter": "Az ügy adatai",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
     },
     "research": {
@@ -1285,7 +1289,8 @@
       "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)",
       "versionBasisInferredCompact": "Határozat dátuma · következtetett",
       "versionBasisInferredExplanation": "A változatot a határozat dátumából következtettük ki. A határozat nem jelöli meg az alkalmazandó szövegváltozatot."
-    }
+    },
+    "withdrawnByPublisher": "A közzétevő visszavonta"
   },
   "catalogue": {
     "addCustom": "Egyéni hozzáadása",
@@ -2081,8 +2086,6 @@
     "clearFilters": "Szűrők törlése",
     "clearSearch": "Keresés törlése",
     "close": "Bezárás",
-    "closeAll": "Összes bezárása",
-    "closeOthers": "Többi bezárása",
     "columns": "Oszlopok",
     "comfortable": "Kényelmes",
     "comingSoon": "Hamarosan",
@@ -2356,6 +2359,7 @@
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
     "unsavedChanges": "Nem mentett módosítások",
+    "unsavedChangesClose": "Nem mentett módosítások. Az elvetéshez zárja be újra",
     "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
     "unverified": "Nem ellenőrzött",
@@ -2397,6 +2401,8 @@
     "returnToAgent": "A folytatáshoz térjen vissza az agenthez.",
     "returnsLocally": "Ezen a számítógépen visszatér a(z) {clientName} alkalmazásba",
     "returnsTo": "Visszatér a(z) {clientName} alkalmazásba",
+    "scopeAccountExportRead": "Személyesadat-exportok olvasása",
+    "scopeAccountExportWrite": "Személyesadat-exportok igénylése",
     "scopeAdminRead": "A szervezet auditnaplójának olvasása",
     "scopeAdminWrite": "A szervezet tagjainak és beállításainak kezelése",
     "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
@@ -2867,6 +2873,8 @@
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "hostedCheckoutOpen": "Ennél a szervezetnél már van megnyitott fizetési folyamat. Fejezze be, vagy indítson újat, miután lejárt.",
       "hostedSubscriptionLive": "Ennek a szervezetnek már van előfizetése. Módosítsa a „Hosztolt használat kezelése” részben.",
+      "idempotencyInProgress": "A kérés feldolgozása még folyamatban van. Várjon egy kicsit, majd próbálja újra.",
+      "idempotencyKeyReused": "Az adatok az előző próbálkozás óta megváltoztak. Állítsa alaphelyzetbe az űrlapot, majd próbálja újra.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
@@ -3669,6 +3677,9 @@
       "unsupportedVisualContent": "Ez a fájl képeket vagy vektorgrafikákat tartalmaz, amelyekben nem ellenőrizhető az érzékeny szöveg. Az exportálás nem érhető el.",
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
+    "closeAllTabs": "{count, plural, one {# lap} other {Mind a # lap}} bezárása",
+    "closeOtherTabs": "{count, plural, one {# másik lap} other {# másik lap}} bezárása",
+    "closeTab": "<bdi>{name}</bdi> bezárása",
     "conversionRefusal": {
       "legacyFormat": "Ez egy régi formátumú {format}-fájl. A konvertáláshoz mentse újra {replacementExtension} formátumban.",
       "unsupportedEncoding": "Ez a dokumentum nem támogatott {encoding} kódolást használ, ezért nem konvertálható.",
@@ -4887,7 +4898,9 @@
     "viewOnGithub": "Megtekintés GitHubon"
   },
   "readerAnswers": {
+    "answerLanguage": "Válasz nyelve",
     "budgetError": "A válaszokra szánt keret kimerült.",
+    "documentLanguage": "Dokumentum nyelve ({language})",
     "expand": "Válasz kibontása",
     "explain": "Magyarázat",
     "followUp": "Kiegészítő kérdés feltevése",
@@ -5069,6 +5082,15 @@
       "displayNameSaved": "Megjelenített név frissítve",
       "enterOtp": "Ellenőrző kód",
       "otpSentSuccess": "Az ellenőrző kódot elküldtük az e-mail címére.",
+      "personalDataExportDescription": "Kérd le a fiókodban tárolt személyes adatok letölthető másolatát. A letöltés egy órán át érhető el.",
+      "personalDataExportExpired": "Az export lejárt.",
+      "personalDataExportExpiresAt": "Eddig érhető el: {expiresAt}.",
+      "personalDataExportFailed": "Az export előkészítése nem sikerült.",
+      "personalDataExportReady": "Az export elkészült.",
+      "personalDataExportRequest": "Export igénylése",
+      "personalDataExportRequestNew": "Új export igénylése",
+      "personalDataExportTitle": "Adataim exportálása",
+      "personalDataExportWorking": "Az export előkészítése…",
       "preferredName": "Választott név",
       "preferredNameDescription": "A DOCX-fájlok követett módosításainál és megjegyzéseinél szerzőként jelenik meg.",
       "preferredNamePlaceholder": "Az Ön neve",

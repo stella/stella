@@ -11,16 +11,17 @@ import {
 import { useLocale, useTranslations } from "use-intl";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
 
 import { DecisionRow } from "@/components/decision-row";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
-import { PagingFooter, RetryButton } from "@/components/retry-button";
+import { LoadFailedCard } from "@/components/load-failure";
+import { PagingFooter } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
 import { epochMilliseconds } from "@/connection/clock";
-import type { Load } from "@/state/api-request";
+import type { ApiError, Load } from "@/state/api-request";
 import {
   appendDecisionsPage,
   CASE_LAW_COUNTRIES,
@@ -109,6 +110,7 @@ const LoadedDecisions = ({
   return (
     <DecisionTimeline
       country={request.country}
+      failure={Result.isError(result) ? result.error : undefined}
       firstPage={Result.isOk(result) ? result.value : undefined}
       // A new request starts the list over from its first page.
       key={loadedAt}
@@ -123,6 +125,7 @@ const LoadedDecisions = ({
 
 const DecisionTimeline = ({
   country,
+  failure,
   firstPage,
   onCountry,
   onReload,
@@ -131,6 +134,7 @@ const DecisionTimeline = ({
   serverUrl,
 }: {
   country: CaseLawCountry;
+  failure: ApiError | undefined;
   firstPage: DecisionsPage | undefined;
   onCountry: (country: CaseLawCountry) => void;
   onReload: () => void;
@@ -176,12 +180,15 @@ const DecisionTimeline = ({
       keyExtractor={(decision) => decision.id}
       keyboardDismissMode="on-drag"
       ListEmptyComponent={
-        firstPage === undefined ? (
-          <EmptyCard description={t("loadFailed")} title={t("unavailable")}>
-            <RetryButton label={t("retry")} onPress={onReload} />
-          </EmptyCard>
-        ) : (
+        failure === undefined ? (
           <EmptyCard description={t("noResultsHint")} title={t("noResults")} />
+        ) : (
+          <LoadFailedCard
+            error={failure}
+            onRetry={onReload}
+            retryLabel={t("retry")}
+            title={t("loadFailed")}
+          />
         )
       }
       ListFooterComponent={
@@ -205,7 +212,6 @@ const DecisionTimeline = ({
               <Button
                 accessibilityState={{ selected: option === country }}
                 key={option}
-                label={countryLabel(option)}
                 onPress={() => {
                   if (option !== country) {
                     onCountry(option);
@@ -213,7 +219,9 @@ const DecisionTimeline = ({
                 }}
                 size="sm"
                 variant={option === country ? "secondary" : "ghost"}
-              />
+              >
+                {countryLabel(option)}
+              </Button>
             ))}
           </ScrollView>
           {query === "" ? <Text variant="section">{t("newest")}</Text> : null}

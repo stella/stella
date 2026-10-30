@@ -127,6 +127,22 @@
     "currentVersion": "Bieżąca wersja",
     "loadFailed": "Nie udało się wczytać tej pozycji."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Nie udało się otworzyć tego dokumentu",
+    "failure": {
+      "offline": "Jesteś offline. Połącz się z internetem i spróbuj ponownie.",
+      "noFile": "Ten dokument nie ma jeszcze pliku.",
+      "failed": "Podczas otwierania coś poszło nie tak. Spróbuj ponownie za chwilę.",
+      "unsupported": "Zaktualizuj aplikację, aby otwierać dokumenty.",
+      "android": "W aplikacji na Androida nie można jeszcze otwierać dokumentów."
+    },
+    "retry": "Spróbuj ponownie",
+    "preview": "Otwórz podgląd",
+    "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
+    "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
+    "details": "Szczegóły"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Jasność w każdej sprawie.",
@@ -151,7 +167,9 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Serwer",
-    "signOut": "Wyloguj się"
+    "signOut": "Wyloguj się",
+    "deleteAccount": "Usuń konto",
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
   },
   "header": {
     "search": "Szukaj"
@@ -161,7 +179,6 @@
     "newest": "Najnowsze orzeczenia",
     "noResults": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie.",
     "noResultsHint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
-    "unavailable": "Wyszukiwanie jest tymczasowo niedostępne",
     "retry": "Spróbuj ponownie",
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
@@ -177,6 +194,14 @@
   "writes": {
     "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
     "signInAgain": "Zaloguj się ponownie"
+  },
+  "loads": {
+    "offline": "stella nie może połączyć się z Twoim serwerem. Sprawdź połączenie i spróbuj ponownie.",
+    "outdated": "Serwer odpowiedział w formacie, którego ta wersja aplikacji nie rozumie. Zaktualizuj aplikację lub serwer, jeśli nim zarządzasz.",
+    "consent": "To logowanie nie pozwala aplikacji odczytać tych danych. Zaloguj się ponownie, aby przyznać dostęp.",
+    "session": "Twoja sesja wygasła. Zaloguj się ponownie.",
+    "server": "Na serwerze wystąpił problem (błąd {status}). Spróbuj ponownie za chwilę.",
+    "refused": "Serwer odrzucił żądanie (błąd {status})."
   },
   "timers": {
     "title": "Liczniki czasu",
@@ -199,7 +224,8 @@
     "retry": "Spróbuj ponownie",
     "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
     "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
-    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie."
+    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie.",
+    "more": "{count, plural, one {i # inny stoper} few {i # inne stopery} other {i # innych stoperów}}"
   },
   "scan": {
     "title": "Zeskanuj dokument",

@@ -127,6 +127,22 @@
     "currentVersion": "Dabartinė versija",
     "loadFailed": "Nepavyko įkelti šio įrašo."
   },
+  "document": {
+    "title": "Dokumentas",
+    "failedTitle": "Nepavyko atidaryti šio dokumento",
+    "failure": {
+      "offline": "Esate neprisijungę. Prisijunkite prie interneto ir bandykite dar kartą.",
+      "noFile": "Šis dokumentas dar neturi failo.",
+      "failed": "Atidarant kažkas nepavyko. Po akimirkos bandykite dar kartą.",
+      "unsupported": "Atnaujinkite programėlę, kad galėtumėte atidaryti dokumentus.",
+      "android": "Android programėlėje dokumentų dar negalima atidaryti."
+    },
+    "retry": "Bandyti dar kartą",
+    "preview": "Atidaryti peržiūrą",
+    "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
+    "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
+    "details": "Išsami informacija"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Aiškumas kiekvienai bylai.",
@@ -151,7 +167,9 @@
   "settings": {
     "accountTitle": "Paskyra",
     "server": "Serveris",
-    "signOut": "Atsijungti"
+    "signOut": "Atsijungti",
+    "deleteAccount": "Ištrinti paskyrą",
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
   },
   "header": {
     "search": "Ieškoti"
@@ -161,7 +179,6 @@
     "newest": "Naujausi sprendimai",
     "noResults": "Niekas neatitiko žodžių, kurių reikalavo ši paieška.",
     "noResultsHint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
-    "unavailable": "Paieška laikinai nepasiekiama",
     "retry": "Bandyti dar kartą",
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
@@ -177,6 +194,14 @@
   "writes": {
     "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
     "signInAgain": "Prisijungti iš naujo"
+  },
+  "loads": {
+    "offline": "stella nepavyko susisiekti su jūsų serveriu. Patikrinkite ryšį ir bandykite dar kartą.",
+    "outdated": "Serveris atsakė formatu, kurio ši programėlės versija nesupranta. Atnaujinkite programėlę arba serverį, jei jį administruojate.",
+    "consent": "Šis prisijungimas neleidžia programėlei to skaityti. Prisijunkite iš naujo, kad suteiktumėte prieigą.",
+    "session": "Jūsų prisijungimas baigėsi. Prisijunkite iš naujo.",
+    "server": "Serveryje įvyko klaida (klaidos kodas {status}). Netrukus bandykite dar kartą.",
+    "refused": "Serveris atmetė užklausą (klaidos kodas {status})."
   },
   "timers": {
     "title": "Laikmačiai",
@@ -199,7 +224,8 @@
     "retry": "Bandyti dar kartą",
     "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
     "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
-    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą."
+    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą.",
+    "more": "{count, plural, one {dar # laikmatis} few {dar # laikmačiai} other {dar # laikmačių}}"
   },
   "scan": {
     "title": "Nuskenuoti dokumentą",

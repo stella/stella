@@ -1,19 +1,22 @@
 import { useTransition } from "react";
 
+import * as WebBrowser from "expo-web-browser";
 import { ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
+
 import { screenStyles } from "@/components/empty-state-screen";
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
+import { accountPageUrl } from "@/connection/account-page";
 import { useSession } from "@/connection/session-provider";
 
 const SettingsScreen = () => {
   const t = useTranslations();
   const { signOut, state } = useSession();
   const [pending, startTransition] = useTransition();
-  const serverUrl =
-    state.status === "signed-in" ? state.source.session().serverUrl : null;
+  const session = state.status === "signed-in" ? state.source.session() : null;
+  const serverUrl = session?.serverUrl ?? null;
 
   return (
     // The sheet's own bar carries the title and the close button.
@@ -33,9 +36,23 @@ const SettingsScreen = () => {
           <Text selectable>{serverUrl}</Text>
         </View>
       </View>
+      {session === null ? null : (
+        <View className="gap-2">
+          <Button
+            onPress={() => {
+              void WebBrowser.openBrowserAsync(accountPageUrl(session.issuer));
+            }}
+            variant="outline"
+          >
+            {t("settings.deleteAccount")}
+          </Button>
+          <View className="px-1">
+            <Text variant="caption">{t("settings.deleteAccountHint")}</Text>
+          </View>
+        </View>
+      )}
       <Button
         disabled={pending}
-        label={t("settings.signOut")}
         loading={pending}
         onPress={() => {
           startTransition(async () => {
@@ -43,7 +60,9 @@ const SettingsScreen = () => {
           });
         }}
         variant="destructive-outline"
-      />
+      >
+        {t("settings.signOut")}
+      </Button>
     </ScrollView>
   );
 };

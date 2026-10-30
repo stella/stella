@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
@@ -96,7 +97,6 @@ import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spa
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import { separateOpinionHeadingTail } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
@@ -161,20 +161,6 @@ export const parseUsDecisionHtml = (
       plainText: hiddenMeta.decisionForm,
     });
   }
-
-  // Build validation HTML from extracted lines instead of
-  // passing the raw page HTML. The page HTML concatenates
-  // all text without whitespace between sections, creating
-  // phantom words like "tarifu.ii.skutkové" that aren't in
-  // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationParagraphs = lines.map((line) =>
-    line.kind === "body" ? line.value.plainText : line.note.value.plainText,
-  );
-  validateAndLog(
-    { parser: "cz-us", caseNumber: input.caseNumber },
-    { type: "paragraphs", paragraphs: validationParagraphs },
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))

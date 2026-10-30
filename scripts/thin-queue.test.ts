@@ -377,9 +377,13 @@ const expectedPrSelection = ({
   }
   if (job === "ci-browser") {
     expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    // A PR runs the browser job for its desktop suite or for the UI
+    // playground specs the planner selected from its changes.
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
-      value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+      (value.needs["ci-plan"].outputs["desktop_browser_required"] === "true" ||
+        (value.needs["ci-plan"].outputs["ui_playground_specs"] ?? "[]") !==
+          "[]")
     );
   }
   if (job === "scan-engine-wasm-drift") {

@@ -941,12 +941,16 @@
         "reasoning": "Reasoning"
       },
       "errors": {
+        "analysisDisabled": "AI analysis generation is disabled on this server. Read the decision text or try again later.",
         "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "decisionNotFound": "This decision could not be found. Reopen it from search.",
+        "documentUnparseable": "The decision text is not ready for analysis. Read the original source.",
+        "languageUnsupported": "AI analysis does not yet support this decision’s language. Read the decision text or original source.",
         "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
         "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
         "retryAfter": "You can try again after {time}.",
-        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}",
-        "unavailable": "AI analysis is not available for this decision."
+        "sourceRestricted": "The source does not permit AI analysis. Read the decision text or original source.",
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}"
       },
       "generate": "Generate AI headnotes",
       "invitation": "With a free account, AI drafts working notes on this decision.",
@@ -1153,7 +1157,7 @@
     "reader": {
       "documentUpdated": "The document was updated.",
       "expandProvisions": "Expand provisions",
-      "headMatter": "Head matter",
+      "headMatter": "Case information",
       "sourceAttribution": "The source data is freely available at <link>{source}</link>."
     },
     "research": {
@@ -1285,7 +1289,8 @@
       "versionAtDecisionDateInferred": "Version at decision date (inferred)",
       "versionBasisInferredCompact": "Decision date · inferred",
       "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies."
-    }
+    },
+    "withdrawnByPublisher": "Withdrawn by publisher"
   },
   "catalogue": {
     "addCustom": "Add custom",
@@ -2081,8 +2086,6 @@
     "clearFilters": "Clear filters",
     "clearSearch": "Clear search",
     "close": "Close",
-    "closeAll": "Close all",
-    "closeOthers": "Close others",
     "columns": "Columns",
     "comfortable": "Comfortable",
     "comingSoon": "Coming soon",
@@ -2356,6 +2359,7 @@
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
     "unsavedChanges": "Unsaved changes",
+    "unsavedChangesClose": "Unsaved changes. Close again to discard",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?",
     "unverified": "Unverified",
@@ -2397,6 +2401,8 @@
     "returnToAgent": "Return to your agent to continue.",
     "returnsLocally": "Returns you to {clientName} on this computer",
     "returnsTo": "Returns you to {clientName}",
+    "scopeAccountExportRead": "Read your personal data exports",
+    "scopeAccountExportWrite": "Request your personal data exports",
     "scopeAdminRead": "Read your organization's audit log",
     "scopeAdminWrite": "Manage organization members and settings",
     "scopeBillingWrite": "Create, edit, and delete your time entries",
@@ -2867,6 +2873,8 @@
       "forbidden": "You do not have permission to do this.",
       "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.",
       "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.",
+      "idempotencyInProgress": "This request is still being processed. Wait a moment, then try again.",
+      "idempotencyKeyReused": "This submission changed since the previous attempt. Reset the form and try again.",
       "internalServerError": "The server could not complete the action. Please try again.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
@@ -3669,6 +3677,9 @@
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
+    "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
+    "closeTab": "Close <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
       "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
@@ -4887,7 +4898,9 @@
     "viewOnGithub": "View on GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Answer language",
     "budgetError": "The answer budget is exhausted.",
+    "documentLanguage": "Document language ({language})",
     "expand": "Expand answer",
     "explain": "Explain",
     "followUp": "Ask a follow-up",
@@ -5069,6 +5082,15 @@
       "displayNameSaved": "Display name updated",
       "enterOtp": "Verification code",
       "otpSentSuccess": "Verification code sent to your email.",
+      "personalDataExportDescription": "Request a downloadable copy of the personal data held in your account. The download is available for one hour.",
+      "personalDataExportExpired": "This export has expired.",
+      "personalDataExportExpiresAt": "Available until {expiresAt}.",
+      "personalDataExportFailed": "Your export could not be prepared.",
+      "personalDataExportReady": "Your export is ready.",
+      "personalDataExportRequest": "Request export",
+      "personalDataExportRequestNew": "Request a new export",
+      "personalDataExportTitle": "Export my data",
+      "personalDataExportWorking": "Preparing your export…",
       "preferredName": "Preferred name",
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",
       "preferredNamePlaceholder": "Your name",

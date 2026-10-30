@@ -6,6 +6,7 @@
     "activityRecording": "Aktywność: Rejestrowanie · dziś {hours} h",
     "activityPaused": "Aktywność: Wstrzymana · dziś {hours} h",
     "activityOff": "Aktywność: Wyłączona",
+    "openActivity": "Otwórz aktywność",
     "activityNow": "Teraz: {name}",
     "activityPause": "Wstrzymaj rejestrowanie",
     "activityResume": "Wznów rejestrowanie",
@@ -149,6 +150,7 @@
     "handoffUnavailable": "Nie udało się otworzyć dokumentu. Zacznij ponownie ze Stelli.",
     "handoffRetry": "Spróbuj ponownie",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
+    "unsavedChangesClose": "Niezapisane zmiany. Zamknij ponownie, aby je odrzucić",
     "handoffConnectToSign": "Połącz stella desktop, aby podpisać ten dokument",
     "handoffConnectToOpen": "Połącz stella desktop, aby otworzyć ten dokument",
     "handoffConnectDetail": "Połącz swoje konto stella. Dokument otworzy się automatycznie po połączeniu.",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Naciśnij {shortcut}, aby przejrzeć historię i wybrać wycinek.",
     "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
     "welcomeStart": "Zacznij kopiować",
-    "welcomeTitle": "Poznaj swój schowek"
+    "welcomeTitle": "Poznaj swój schowek",
+    "registryIdentifierSearchHint": "Wprowadź {identifiers}."
   },
   "activity": {
     "title": "Aktywność",

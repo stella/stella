@@ -6,6 +6,7 @@
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityPaused": "Aktivita: Pozastavené · dnes {hours} h",
     "activityOff": "Aktivita: Vypnuté",
+    "openActivity": "Otvoriť aktivitu",
     "activityNow": "Teraz: {name}",
     "activityPause": "Pozastaviť záznam",
     "activityResume": "Pokračovať v zázname",
@@ -149,6 +150,7 @@
     "handoffUnavailable": "Dokument sa nepodarilo otvoriť. Začnite znova zo Stelly.",
     "handoffRetry": "Skúsiť znova",
     "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
+    "unsavedChangesClose": "Neuložené zmeny. Ďalším zatvorením ich zahodíte",
     "handoffConnectToSign": "Na podpísanie tohto dokumentu pripojte stella desktop",
     "handoffConnectToOpen": "Na otvorenie tohto dokumentu pripojte stella desktop",
     "handoffConnectDetail": "Pripojte svoj účet stella. Dokument sa po pripojení otvorí automaticky.",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Stlačením {shortcut} prechádzajte históriu a vyberte výstrižok.",
     "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
     "welcomeStart": "Začať kopírovať",
-    "welcomeTitle": "Zoznámte sa so schránkou"
+    "welcomeTitle": "Zoznámte sa so schránkou",
+    "registryIdentifierSearchHint": "Zadajte {identifiers}."
   },
   "activity": {
     "title": "Aktivita",
