@@ -15,10 +15,11 @@ describe("citation probe candidates", () => {
   });
 
   test("an authority file number joined by non-breaking hyphens is benign", () => {
+    const nb = String.fromCodePoint(0x2011);
     expect(
-      residual("č. j. ABCD\\u2011123456\\u201112/XY\\u20112020\\u20111234AB"),
+      residual(`č. j. ABCD${nb}123456${nb}12/XY${nb}2020${nb}1234AB`),
     ).toBe(false);
-    expect(residual("č. j. ÚOHS\\u2011S123/2019/VZ")).toBe(false);
+    expect(residual(`č. j. ÚOHS${nb}S123/2019/VZ`)).toBe(false);
   });
 
   test("an enforcement-officer or arbitration file is benign, a docket is not", () => {

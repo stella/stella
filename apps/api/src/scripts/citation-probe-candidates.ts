@@ -14,7 +14,7 @@ export const standaloneCandidate = (match: string): string => {
 // anonymization placeholders, and statute/collection references.
 const BENIGN: readonly RegExp[] = [
   // Dashes include the non-breaking hyphen (U+2011) some sources print.
-  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–\\u2011][\w/–\\u2011-]{0,30}\d/u,
+  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–‑][\w/–‑-]{0,30}\d/u,
   /X{2,}/u,
   /\b\d{1,5}\/\d{2,4}\s{1,3}Sb\b/u,
   /\bZb\.\s*z\b/u,
