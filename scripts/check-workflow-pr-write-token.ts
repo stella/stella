@@ -27,6 +27,8 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     "resolve accepts only a release tag produced from main",
   ".github/workflows/release-tag.yml:tag":
     "the workflow_run path is rejected by the dispatch-only job condition",
+  ".github/workflows/scheduled-run-alerts.yml:notify":
+    "the workflow_run condition accepts only non-pull-request source events from this repository",
 } as const satisfies Record<string, string>;
 
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -62,6 +64,191 @@ const controlledRef = (value: unknown, reachable: boolean): boolean => {
   );
 };
 
+type Truth = "false" | "true" | "unknown";
+type ConditionContext = {
+  actor?: string;
+  eventName?: string;
+};
+
+const conditionTokens = (condition: string): string[] | undefined => {
+  let expression = condition
+    .trim()
+    .replace(/^\$\{\{\s*/u, "")
+    .replace(/\s*\}\}$/u, "");
+  let previous = "";
+  while (previous !== expression) {
+    previous = expression;
+    expression = expression.replace(
+      /[A-Za-z_][A-Za-z0-9_.]*\([^()]*\)/gu,
+      "opaque",
+    );
+  }
+  const tokens = expression.match(
+    /\s*(?:(&&|\|\||!=|==|!|\(|\))|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|([A-Za-z_][A-Za-z0-9_.-]*))/gu,
+  );
+  if (tokens === null) {
+    return expression === "" ? [] : undefined;
+  }
+  const normalized = tokens.map((token) => token.trim());
+  if (normalized.join("").length !== expression.replaceAll(/\s/gu, "").length) {
+    return undefined;
+  }
+  return normalized;
+};
+
+const negate = (value: Truth): Truth => {
+  if (value === "true") {
+    return "false";
+  }
+  if (value === "false") {
+    return "true";
+  }
+  return "unknown";
+};
+
+const conditionTruth = (
+  condition: string,
+  context: ConditionContext,
+): Truth => {
+  const tokens = conditionTokens(condition);
+  if (tokens === undefined || tokens.length === 0) {
+    return condition === "" ? "true" : "unknown";
+  }
+  let cursor = 0;
+  const valueOf = (token: string): string | undefined => {
+    if (
+      (token.startsWith("'") && token.endsWith("'")) ||
+      (token.startsWith('"') && token.endsWith('"'))
+    ) {
+      return token.slice(1, -1);
+    }
+    if (token === "github.event_name") {
+      return context.eventName;
+    }
+    if (token === "github.actor") {
+      return context.actor;
+    }
+    if (token === "true" || token === "false") {
+      return token;
+    }
+    return undefined;
+  };
+  const parseComparison = (): Truth => {
+    const leftToken = tokens.at(cursor);
+    if (leftToken === undefined) {
+      return "unknown";
+    }
+    cursor += 1;
+    if (leftToken === "true" || leftToken === "false") {
+      return leftToken;
+    }
+    const operator = tokens.at(cursor);
+    if (operator !== "==" && operator !== "!=") {
+      return "unknown";
+    }
+    cursor += 1;
+    const rightToken = tokens.at(cursor);
+    if (rightToken === undefined) {
+      return "unknown";
+    }
+    cursor += 1;
+    const left = valueOf(leftToken);
+    const right = valueOf(rightToken);
+    if (left === undefined || right === undefined) {
+      return "unknown";
+    }
+    const equal = left === right;
+    return (operator === "==") === equal ? "true" : "false";
+  };
+  const parsePrimary = (): Truth => {
+    if (tokens.at(cursor) === "(") {
+      cursor += 1;
+      const result = parseOr();
+      if (tokens.at(cursor) !== ")") {
+        return "unknown";
+      }
+      cursor += 1;
+      return result;
+    }
+    return parseComparison();
+  };
+  const parseUnary = (): Truth => {
+    if (tokens.at(cursor) === "!") {
+      cursor += 1;
+      return negate(parseUnary());
+    }
+    return parsePrimary();
+  };
+  const parseAnd = (): Truth => {
+    let result = parseUnary();
+    while (tokens.at(cursor) === "&&") {
+      cursor += 1;
+      const right = parseUnary();
+      if (result === "false" || right === "false") {
+        result = "false";
+      } else if (result === "true" && right === "true") {
+        result = "true";
+      } else {
+        result = "unknown";
+      }
+    }
+    return result;
+  };
+  const parseOr = (): Truth => {
+    let result = parseAnd();
+    while (tokens.at(cursor) === "||") {
+      cursor += 1;
+      const right = parseAnd();
+      if (result === "true" || right === "true") {
+        result = "true";
+      } else if (result === "false" && right === "false") {
+        result = "false";
+      } else {
+        result = "unknown";
+      }
+    }
+    return result;
+  };
+  const result = parseOr();
+  return cursor === tokens.length ? result : "unknown";
+};
+
+const excludesEvent = (condition: string, eventName: string): boolean =>
+  conditionTruth(condition, { eventName }) === "false";
+const excludesActor = (condition: string, actor: string): boolean =>
+  conditionTruth(condition, { actor }) === "false";
+
+const checkoutDirectory = (value: unknown): string => {
+  if (typeof value !== "string" || value === "" || value === ".") {
+    return ".";
+  }
+  return value.replace(/^\.\//u, "").replace(/\/$/u, "");
+};
+
+const stepRunsDirectory = (
+  step: Record<string, unknown>,
+  directory: string,
+): boolean => {
+  const command = typeof step["run"] === "string" ? step["run"] : "";
+  const uses = typeof step["uses"] === "string" ? step["uses"] : "";
+  const workingDirectory = checkoutDirectory(step["working-directory"]);
+  if (directory === ".") {
+    return command !== "" || uses.startsWith("./");
+  }
+  if (command !== "" && workingDirectory === directory) {
+    return true;
+  }
+  const escaped = directory.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const repositoryPath = new RegExp(`(?:^|[\\s'"=])\\.?/?${escaped}/`, "u");
+  return repositoryPath.test(command) || repositoryPath.test(uses);
+};
+
+const stepsOf = (job: Record<string, unknown>): unknown[] =>
+  Array.isArray(job["steps"]) ? job["steps"] : [];
+
+const stringField = (value: unknown): string =>
+  typeof value === "string" ? value : "";
+
 type StepFindingOptions = {
   condition: string;
   excludesDependabot: boolean;
@@ -78,10 +265,7 @@ type StepFindingOptions = {
 const findingsForStep = (options: StepFindingOptions): Finding[] => {
   const findings: Finding[] = [];
   for (const trigger of options.prTriggers) {
-    if (
-      trigger === "pull_request" &&
-      /github\.event_name\s*!=\s*['"]pull_request['"]/u.test(options.condition)
-    ) {
+    if (excludesEvent(options.condition, trigger)) {
       continue;
     }
     const classes: Finding["class"][] = [];
@@ -144,23 +328,27 @@ export const checkWorkflowPrivilegeSource = (
   }
   const findings: Finding[] = [];
   const jobEntries = Object.entries(parsed["jobs"]).filter(
-    (
-      entry,
-    ): entry is [string, Record<string, unknown> & { steps: unknown[] }] =>
+    (entry): entry is [string, Record<string, unknown>] =>
       record(entry[1]) &&
-      Array.isArray(entry[1]["steps"]) &&
       !(`${file}:${entry[0]}` in WORKFLOW_PRIVILEGE_ALLOWLIST),
   );
   for (const [jobName, rawJob] of jobEntries) {
     const permissions = rawJob["permissions"] ?? parsed["permissions"];
     const write = hasWrite(permissions);
-    const secret = hasSecret(rawJob);
-    const condition = typeof rawJob["if"] === "string" ? rawJob["if"] : "";
-    const excludesDependabot =
-      /github\.actor\s*!=\s*['"]dependabot\[bot\]['"]/u.test(condition);
-    let controlledRoot = false;
+    const steps = stepsOf(rawJob);
+    const secret =
+      hasSecret(parsed["env"]) ||
+      hasSecret(rawJob["env"]) ||
+      steps.some(
+        (step) =>
+          record(step) && (hasSecret(step["env"]) || hasSecret(step["with"])),
+      ) ||
+      rawJob["secrets"] === "inherit";
+    const condition = stringField(rawJob["if"]);
+    const excludesDependabot = excludesActor(condition, "dependabot[bot]");
+    const controlledDirectories = new Map<string, boolean>();
     let runsWorkflowRevision = false;
-    for (const rawStep of rawJob.steps) {
+    for (const rawStep of steps) {
       if (!record(rawStep)) {
         continue;
       }
@@ -170,18 +358,21 @@ export const checkWorkflowPrivilegeSource = (
         const ref = withValue["ref"];
         const base =
           typeof ref === "string" && /pull_request\.base\.sha/u.test(ref);
-        controlledRoot =
-          !base && controlledRef(ref, true) && withValue["path"] === undefined;
+        controlledDirectories.set(
+          checkoutDirectory(withValue["path"]),
+          !base && controlledRef(ref, true),
+        );
       }
       const artifact =
         uses.startsWith("actions/download-artifact@") &&
         (withValue["run-id"] !== undefined ||
           withValue["github-token"] !== undefined);
-      const command = typeof rawStep["run"] === "string" ? rawStep["run"] : "";
       const runsControlled =
         artifact ||
-        (controlledRoot && command !== "") ||
-        (controlledRoot && uses.startsWith("./"));
+        [...controlledDirectories].some(
+          ([directory, controlled]) =>
+            controlled && stepRunsDirectory(rawStep, directory),
+        );
       if (!runsControlled) {
         continue;
       }
@@ -201,6 +392,23 @@ export const checkWorkflowPrivilegeSource = (
           rawJob,
           secret,
           step,
+          write,
+        }),
+      );
+    }
+    const reusableUses = stringField(rawJob["uses"]);
+    if (reusableUses.startsWith("./") && (secret || write)) {
+      findings.push(
+        ...findingsForStep({
+          condition,
+          excludesDependabot,
+          file,
+          job: jobName,
+          permissions,
+          prTriggers,
+          rawJob,
+          secret,
+          step: reusableUses,
           write,
         }),
       );

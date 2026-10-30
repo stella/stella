@@ -300,7 +300,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
@@ -1725,7 +1725,7 @@ jobs:
           CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           fetch-depth: 0
           persist-credentials: false
@@ -1880,7 +1880,7 @@ jobs:
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
@@ -4604,7 +4604,7 @@ jobs:
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: scripts/retry.sh
@@ -4712,7 +4712,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
@@ -4935,7 +4935,7 @@ jobs:
         name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
@@ -6101,7 +6101,7 @@ jobs:
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
@@ -7233,7 +7233,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |

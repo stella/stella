@@ -49,6 +49,24 @@ describe("privileged workflow policy", () => {
       ),
     ).toHaveLength(0);
   });
+  test("refuses pull_request_target head tooling checked out to an explicit path", () => {
+    expect(
+      check(
+        workflow(
+          "pull_request_target",
+          `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: bash untrusted/scripts/x.sh`,
+        ),
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      check(
+        workflow(
+          "pull_request_target",
+          `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.base.sha }}\n          path: trusted\n      - run: bash trusted/scripts/x.sh`,
+        ),
+      ),
+    ).toHaveLength(0);
+  });
   test("refuses workflow_run artifacts executed with a secret", () => {
     const source = workflow(
       "workflow_run",
@@ -64,6 +82,21 @@ describe("privileged workflow policy", () => {
       "contents: read",
     );
     expect(check(source).some((item) => item.class === "class 2")).toBeTrue();
+  });
+  test("refuses pull_request branch scripts with a workflow-level secret", () => {
+    const source = `
+on: pull_request
+permissions:
+  contents: read
+env:
+  TOKEN: \${{ secrets.X }}
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@pin
+      - run: bash scripts/x.sh`;
+    expect(check(source)).not.toHaveLength(0);
   });
   test("accepts pull_request branch scripts with only a write GITHUB_TOKEN", () => {
     const source = workflow(
@@ -96,6 +129,28 @@ describe("privileged workflow policy", () => {
         (item) => item.class === "main-only guard",
       ),
     ).toBeTrue();
+  });
+  test("does not accept a substring event exclusion inside an always-true disjunction", () => {
+    const body = `    if: github.event_name != 'pull_request' || true
+    env:
+      KEY: \${{ secrets.KEY }}
+    steps:
+      - uses: actions/checkout@pin
+      - run: bash scripts/x.sh`;
+    expect(
+      check(workflow("pull_request", body, "contents: read")),
+    ).not.toHaveLength(0);
+  });
+  test("accepts a conjunctive event exclusion", () => {
+    const body = `    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    env:
+      KEY: \${{ secrets.KEY }}
+    steps:
+      - uses: actions/checkout@pin
+      - run: bash scripts/x.sh`;
+    expect(
+      check(workflow("pull_request", body, "contents: read")),
+    ).toHaveLength(0);
   });
   test("ignores push and schedule workflows", () => {
     for (const trigger of ["push", "schedule"]) {
