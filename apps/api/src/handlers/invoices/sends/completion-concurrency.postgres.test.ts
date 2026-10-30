@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -39,7 +40,6 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 const testState = createTestState({ file: import.meta.path, config: env });

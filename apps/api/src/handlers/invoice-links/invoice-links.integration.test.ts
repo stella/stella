@@ -13,6 +13,7 @@ import { buildCzechQrPaymentPayload, variableSymbolOf } from "@stll/invoicing";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import {
@@ -118,7 +119,6 @@ import {
 } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
