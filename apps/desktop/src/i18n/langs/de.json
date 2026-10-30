@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktive Bearbeitung} other {{count} aktive Bearbeitungen}}",
-    "clipboard": "Zwischenablageverlauf",
     "activity": "Aktivität",
     "activityRecording": "Aktivität: Aufzeichnung · heute {hours} h",
     "activityPaused": "Aktivität: Pausiert · heute {hours} h",
