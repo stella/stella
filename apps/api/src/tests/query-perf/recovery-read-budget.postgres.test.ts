@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, like, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import {
   flowDefinitions,
@@ -19,7 +20,6 @@ import {
   RECOVERY_SCAN_PHASES,
 } from "@/api/lib/scheduler/tasks/recovery-scan-identity";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { withQueryPerfFixture } from "@/api/tests/query-perf/fixture";
 import {
   RECOVERY_COHORT_SETUP,

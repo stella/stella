@@ -8,18 +8,13 @@
  */
 
 import { panic, Result } from "better-result";
-import {
-  afterAll,
-  beforeEach,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, getColumns, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -46,12 +41,11 @@ import {
 } from "@/api/lib/scouts/document-deadline-recovery";
 import {
   runDocumentDeadlineScout,
-  skipDeadlineScan,
   settleDocumentDeadlineScoutClaim,
+  skipDeadlineScan,
 } from "@/api/lib/scouts/document-deadlines";
 import { DEADLINE_SCOUT_MAX_ATTEMPTS } from "@/api/lib/scouts/document-deadlines.logic";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -61,7 +55,6 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-setDefaultTimeout(120_000);
 const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;

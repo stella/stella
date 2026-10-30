@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import {
   entities,
@@ -19,7 +20,6 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createCopyToWorkspace } from "./copy";

@@ -7,6 +7,8 @@ import { UPLOAD_FLOW_TRIGGER_RECOVERY_STATEMENT_TIMEOUT_MS } from "@/api/lib/sch
 
 /** The deadline each measured runtime owner applies, or no owner deadline. */
 export const QUERY_PERF_OWNER_DEADLINES = {
+  "scheduled.caseLaw.refreshCoverage":
+    CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
   "statement.caseLaw.globalSearchHits": undefined,
   "scheduled.flows.recoverUploadTriggers":
     UPLOAD_FLOW_TRIGGER_RECOVERY_STATEMENT_TIMEOUT_MS,
@@ -19,6 +21,8 @@ export const QUERY_PERF_OWNER_DEADLINES = {
     READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].statementDeadlineMs,
   "statement.caseLaw.coverageSources":
     CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
+  "statement.caseLaw.euCompletionPage":
+    READ_BUDGETS["statement.caseLaw.euCompletionPage"].statementDeadlineMs,
   "statement.legislation.candidateRows":
     PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
   "statement.documents.searchHits": undefined,

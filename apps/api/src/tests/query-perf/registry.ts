@@ -2,12 +2,15 @@ import { panic } from "better-result";
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { TransactionOf } from "@/api/db/scoped";
+import { buildEuCompletionPageQuery } from "@/api/handlers/case-law/ingestion/eu-completion-store";
 import { legislationCandidateRowsStatement } from "@/api/handlers/legislation/search";
 import type {
   ReadBudgetId,
   ScheduledJobReadBudgetId,
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { RECOVERY_SCAN_IDENTITIES } from "@/api/lib/scheduler/tasks/recovery-scan-identity";
@@ -19,9 +22,12 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { CorpusReadBudgetSeed, ServedCaseLaw } from "./corpus-seed";
 import {
   CASE_LAW_SCENARIOS,
+  coverageRefreshWroteSummary,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  prepareCoverageRefreshMeasurement,
   seedSitemapReadBudget,
+  sitemapRefreshRetiredChanges,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
@@ -50,6 +56,28 @@ export const queryPerfRegistry = (
 export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
   [
     {
+      budgetId: "statement.caseLaw.euCompletionPage",
+      build: (tx: TransactionOf<GatedTestDb>) =>
+        buildEuCompletionPageQuery(tx, {
+          sourceId: seed.completionSourceId,
+          mode: "dry-run",
+          parserVersion: 2,
+          after: null,
+          limit: 100,
+        }),
+      expectedRows: 100,
+      read: async (tx: TransactionOf<GatedTestDb>) =>
+        await buildEuCompletionPageQuery(tx, {
+          sourceId: seed.completionSourceId,
+          mode: "dry-run",
+          parserVersion: 2,
+          after: null,
+          limit: 100,
+        }),
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.caseLaw.euCompletionPage"],
+    },
+    {
       budgetId: "statement.legislation.candidateRows",
       build: (tx: TransactionOf<GatedTestDb>) =>
         // The fixture's transaction supplies the select surface the reader uses.
@@ -68,6 +96,7 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
+    read?: (tx: TransactionOf<GatedTestDb>) => Promise<unknown[]>;
     expectedRows: number;
     ownerDeadlineMs: number | undefined;
   }[];
@@ -78,6 +107,12 @@ export type ScheduledJobScenario = CaseLawScenario | RequestReceiptScenario;
 type CaseLawScheduledJobMeasurement = {
   type: "case-law";
   prepare?: typeof seedSitemapReadBudget;
+  /**
+   * Whether the run did the job's work, read before `prepare` restores the
+   * fixture. A governed job the load governor held issues only its bookkeeping,
+   * and its statements would pass a budget without measuring the work.
+   */
+  executed?: (database: GatedTestDb) => Promise<boolean>;
   task: string;
   scenarios: readonly {
     size: CaseLawScenario;
@@ -157,10 +192,22 @@ const recoveryScheduledJobMeasurements = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  [SCHEDULER_BACKFILL_IDS.coverage]: {
+    task: REFRESH_CASE_LAW_COVERAGE_TASK,
+    prepare: prepareCoverageRefreshMeasurement,
+    executed: coverageRefreshWroteSummary,
+    scenarios: [
+      {
+        size: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.size },
+        double: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.double },
+      },
+    ],
+  },
   "caseLaw.refreshSitemapShards.hourly": {
     type: "case-law",
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     prepare: seedSitemapReadBudget,
+    executed: sitemapRefreshRetiredChanges,
     scenarios: [
       {
         size: {
@@ -224,7 +271,10 @@ export const recoveryMeasurementRuns = (): RecoveryMeasurementRun[] =>
 type DeclaredJobReads = {
   id: string;
   task: string;
-  reads: { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  reads:
+    | { budget: ScheduledJobReadBudgetId; governance?: "load-governed" }
+    | "load-governed"
+    | "unmeasured";
 };
 
 /**
@@ -262,6 +312,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.refreshCoverage": "corpus",
   "statement.caseLaw.globalSearchHits": "case-law",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
@@ -269,6 +320,7 @@ export const READ_BUDGET_PROFILES = {
   "scheduled.signals.recoverScoutEmission": "corpus",
   "scheduled.requests.sweepReceipts": "corpus",
   "statement.caseLaw.coverageSources": "coverage",
+  "statement.caseLaw.euCompletionPage": "corpus",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
 } as const satisfies Record<

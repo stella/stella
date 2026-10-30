@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { admittedEntityWindowUnionSource } from "./signal-window-rows";

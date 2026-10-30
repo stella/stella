@@ -15,6 +15,7 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import {
@@ -33,7 +34,6 @@ import { classifyEntityResourceDeletions } from "@/api/lib/flows/visibility";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 const testState = createTestState({ file: import.meta.path, config: env });

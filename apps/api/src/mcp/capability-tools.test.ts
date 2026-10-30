@@ -3,10 +3,12 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
 import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { createTestState } from "@stll/test-state";
 
 import { member } from "@/api/db/auth-schema";
 import type { workspaceViews } from "@/api/db/schema";
@@ -57,7 +59,6 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -207,6 +208,7 @@ const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
 );
 
 const createContext = ({
+  credential,
   credentialPermissions,
   grantedScopes = [
     "stella:read",
@@ -223,6 +225,7 @@ const createContext = ({
   workspaceIds = ["ws_1"],
   toolConfirmation,
 }: {
+  credential?: AuthorizedMcpRequestContext["credential"];
   createOperationDatabaseScope?: AuthorizedMcpRequestContext["createOperationDatabaseScope"];
   credentialPermissions?: AuthorizedMcpRequestContext["credentialPermissions"];
   grantedScopes?: readonly string[];
@@ -236,6 +239,7 @@ const createContext = ({
 } = {}): AuthorizedMcpRequestContext => {
   const accessibleWorkspaceIdSet = new Set(workspaceIds);
   return authorizedMcpContextForTest({
+    ...(credential === undefined ? {} : { credential }),
     testDependencies: {
       loadOrgSettingsForAuth: loadOrgSettingsMock,
       consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
@@ -559,7 +563,10 @@ describe("list verification access grants across MCP tools", () => {
         resourceLookups += 1;
         return aggregateExecutionRows(statement, false);
       },
-      insert: () => ({ values: async () => [] }),
+      // Writes land nowhere; the only insert here is a history append.
+      insert: () => ({
+        values: () => ({ onConflictDoNothing: async () => [] }),
+      }),
       // A reader comment is written through its own guarded predicate; no
       // stored comment has the synthetic id, so the write reaches no row.
       delete: () => {
@@ -1017,6 +1024,114 @@ describe("list verification access grants across MCP tools", () => {
         expect(errorEnvelope(result).message).not.toBe("Not found");
       }
     }
+  });
+});
+
+describe("account export capability authority", () => {
+  const entries = capabilityCatalog.filter((entry) =>
+    entry.id.startsWith("account-exports."),
+  );
+  const oauthCredential = { type: "oauth_client", clientId: "client" } as const;
+
+  const listedAccountIds = async (context: AuthorizedMcpRequestContext) => {
+    const result = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "list_capabilities",
+      args: { domain: "account-exports", limit: 50 },
+      context,
+    });
+    return parseToolPayload<{ items: { id: string }[] }>(result).items.map(
+      ({ id }) => id,
+    );
+  };
+
+  test("catalog binds session capabilities to explicit account grants", () => {
+    expect(entries.map(({ id }) => id).toSorted()).toEqual([
+      "account-exports.create",
+      "account-exports.download.get",
+      "account-exports.get",
+      "account-exports.status.get",
+    ]);
+    expect(
+      entries.filter(({ access }) => access === "write").map(({ id }) => id),
+    ).toEqual(["account-exports.create"]);
+    for (const entry of entries) {
+      expect(entry.handlerKind).toBe("session");
+      expect(entry.scope).toBe(ACCOUNT_EXPORT_SCOPES[entry.access]);
+    }
+  });
+
+  test("account exports require a credential", async () => {
+    const context = createContext({
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    expect(await listedAccountIds(context)).toEqual([]);
+    for (const entry of entries) {
+      const described = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        args: { capability: entry.id },
+        context,
+      });
+      expect(errorEnvelope(described).code).toBe("not_found");
+      const invoked = await handleCapabilityCall({
+        args: { capability: entry.id, validate_only: true },
+        context,
+      });
+      expect(errorEnvelope(invoked).code).toBe("not_found");
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("read-only OAuth consent discovers reads and refuses requests", async () => {
+    const context = createContext({
+      credential: oauthCredential,
+      grantedScopes: ["stella:read", ACCOUNT_EXPORT_SCOPES.read],
+    });
+    expect((await listedAccountIds(context)).toSorted()).toEqual(
+      entries
+        .filter(({ access }) => access === "read")
+        .map(({ id }) => id)
+        .toSorted(),
+    );
+    for (const entry of entries.filter(({ access }) => access === "write")) {
+      const result = await handleCapabilityCall({
+        args: { capability: entry.id, validate_only: true },
+        context,
+      });
+      expect(errorEnvelope(result).code).toBe("not_found");
+    }
+  });
+
+  test("consented OAuth subject validates both access classes without building an export", async () => {
+    const context = createContext({
+      credential: oauthCredential,
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    expect((await listedAccountIds(context)).toSorted()).toEqual(
+      entries.map(({ id }) => id).toSorted(),
+    );
+    for (const entry of entries) {
+      const result = await handleCapabilityCall({
+        args: {
+          capability: entry.id,
+          validate_only: true,
+          input:
+            entry.inputSchema?.params === undefined
+              ? {}
+              : {
+                  params: { exportId: "00000000-0000-4000-8000-000000000001" },
+                },
+        },
+        context,
+      });
+      expect(parseToolPayload<{ valid: boolean }>(result).valid, entry.id).toBe(
+        true,
+      );
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1607,6 +1722,66 @@ describe("list_capabilities", () => {
 
 // --- describe_capability -----------------------------------------------------
 
+const enabledCatalogContext = () => {
+  for (const definition of Object.values(FEATURE_REGISTRY)) {
+    if ("deploymentFeature" in definition) {
+      testState.setConfig(definition.deploymentFeature, true);
+    }
+  }
+  const context = createContext({
+    credential: { type: "oauth_client", clientId: "client" },
+    grantedScopes: [
+      ...MCP_OAUTH_SCOPES,
+      ...Object.values(ACCOUNT_EXPORT_SCOPES),
+    ],
+  });
+  const grants = Object.fromEntries(
+    Object.keys(FEATURE_REGISTRY).map((featureId) => [
+      featureId,
+      [
+        {
+          type: "organization" as const,
+          organizationId: context.organizationId,
+        },
+      ],
+    ]),
+  );
+  const enrolments = Object.keys(FEATURE_REGISTRY).map((featureId) => ({
+    featureId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  }));
+  const enabled = {
+    ...context,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: context.organizationId,
+      userId: context.userId,
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants,
+            featureId,
+            organizationId: context.organizationId,
+            userId: context.userId,
+            user: { email: "standard@example.test", emailVerified: true },
+            membership: true,
+            enrolments,
+          }),
+        ]),
+      ),
+    }),
+  };
+  for (const featureId of Object.keys(FEATURE_REGISTRY)) {
+    expect(
+      isFeatureEnabled(enabled.featureAccessSnapshot, featureId, enabled),
+      featureId,
+    ).toBe(true);
+  }
+  return enabled;
+};
+
 describe("describe_capability", () => {
   test("returns metadata and the live input schema", async () => {
     const result = await call("describe_capability", {
@@ -1645,16 +1820,19 @@ describe("describe_capability", () => {
     // The catalog (and the CLI generated from it) is the reference spelling.
     const { expandSchemaDefs } =
       await import("../../../../packages/cli/src/expand-schema-defs.ts");
-    // The default context leaves conditional features off, the state the
-    // catalog is exported in; a capability its caller may not reach is hidden
-    // by describe, and only a feature-required one may be.
+    const context = enabledCatalogContext();
     const drift: string[] = [];
     for (const entry of capabilityCatalog) {
       if (entry.inputSchema === undefined) {
         continue;
       }
       const described = parseToolPayload<{ inputSchema?: unknown }>(
-        await call("describe_capability", { capability: entry.id }),
+        await handleMcpToolCall({
+          mode: "advanced",
+          toolName: "describe_capability",
+          args: { capability: entry.id },
+          context,
+        }),
       );
       if (described.inputSchema === undefined) {
         if (!("featureAccess" in entry) || entry.featureAccess !== "required") {
@@ -1700,10 +1878,9 @@ describe("capability executor gates", () => {
   });
 
   test("token/public capabilities are not invokable", async () => {
-    // No token/public capability exists in the catalog today; assert the guard
-    // by confirming the catalog holds only workspace/root kinds (defensive).
     const kinds = new Set(capabilityCatalog.map((e) => e.handlerKind));
-    expect([...kinds].toSorted()).toEqual(["root", "workspace"]);
+    expect(kinds.has("token")).toBe(false);
+    expect(kinds.has("public")).toBe(false);
   });
 
   test("waived capability -> feature_disabled", async () => {
@@ -3668,9 +3845,15 @@ describe("capability executor deployment feature gate", () => {
           !isFeatureEnabled(snapshot, entry.featureId, context),
       )
       .map(({ id }) => id);
-    expect([...new Set([...disabledIds, ...ungrantedIds])].toSorted()).toEqual(
-      hidden,
-    );
+    // Account exports also require account consent, which this caller lacks.
+    const accountConsentIds = capabilityCatalog
+      .filter((entry) => entry.id.startsWith("account-exports."))
+      .map(({ id }) => id);
+    expect(
+      [
+        ...new Set([...disabledIds, ...ungrantedIds, ...accountConsentIds]),
+      ].toSorted(),
+    ).toEqual(hidden);
   });
 
   test("describe exposes the feature flag on an enabled entry", async () => {
@@ -4098,62 +4281,8 @@ for (const grants of [
 }
 
 describe("capability executor access isolation", () => {
-  const enabledContext = () => {
-    for (const definition of Object.values(FEATURE_REGISTRY)) {
-      if ("deploymentFeature" in definition) {
-        testState.setConfig(definition.deploymentFeature, true);
-      }
-    }
-    const context = createContext({ grantedScopes: [...MCP_OAUTH_SCOPES] });
-    const grants = Object.fromEntries(
-      Object.keys(FEATURE_REGISTRY).map((featureId) => [
-        featureId,
-        [
-          {
-            type: "organization" as const,
-            organizationId: context.organizationId,
-          },
-        ],
-      ]),
-    );
-    const enrolments = Object.keys(FEATURE_REGISTRY).map((featureId) => ({
-      featureId,
-      organizationId: context.organizationId,
-      userId: context.userId,
-    }));
-    const enabled = {
-      ...context,
-      featureAccessSnapshot: createFeatureAccessSnapshot({
-        organizationId: context.organizationId,
-        userId: context.userId,
-        decisions: new Map(
-          Object.keys(FEATURE_REGISTRY).map((featureId) => [
-            featureId,
-            decideFeatureAccess({
-              registry: FEATURE_REGISTRY,
-              grants,
-              featureId,
-              organizationId: context.organizationId,
-              userId: context.userId,
-              user: { email: "standard@example.test", emailVerified: true },
-              membership: true,
-              enrolments,
-            }),
-          ]),
-        ),
-      }),
-    };
-    for (const featureId of Object.keys(FEATURE_REGISTRY)) {
-      expect(
-        isFeatureEnabled(enabled.featureAccessSnapshot, featureId, enabled),
-        featureId,
-      ).toBe(true);
-    }
-    return enabled;
-  };
-
   test("every catalog capability is refused by the opposite executor before dispatch", async () => {
-    const context = enabledContext();
+    const context = enabledCatalogContext();
     const classes = new Set<string>();
     for (const entry of capabilityCatalog) {
       classes.add(entry.access);

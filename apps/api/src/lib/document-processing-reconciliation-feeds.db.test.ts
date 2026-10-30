@@ -1,20 +1,16 @@
 import { panic } from "better-result";
-import {
-  afterAll,
-  beforeEach,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
-  featureEnrolments,
   entityVersions,
   extractedContent,
+  featureEnrolments,
   fields,
   workspaces,
 } from "@/api/db/schema";
@@ -28,7 +24,6 @@ import {
 } from "@/api/lib/document-processing-queue";
 import type { DocumentProcessingReconciliationDependencies } from "@/api/lib/document-processing-queue";
 import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/scouts/document-deadline-recovery";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -37,8 +32,6 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
-
-setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

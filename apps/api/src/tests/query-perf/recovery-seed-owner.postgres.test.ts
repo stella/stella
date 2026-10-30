@@ -4,6 +4,7 @@ import { eq, like, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import {
   flowDefinitions,
@@ -17,7 +18,6 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { escapeLike } from "@/api/lib/escape-like";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { withQueryPerfFixture } from "@/api/tests/query-perf/fixture";
 import { queryPerfDatabaseName } from "@/api/tests/query-perf/profiles";
 import { measureScheduledJobRunRaw } from "@/api/tests/query-perf/scheduled-run";

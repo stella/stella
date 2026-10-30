@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -11,7 +12,6 @@ import {
 } from "@/api/lib/flows/review-gate-task";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const testState = createTestState({ file: import.meta.path, config: env });

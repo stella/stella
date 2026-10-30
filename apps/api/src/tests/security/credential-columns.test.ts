@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { agentDelegation } from "@/api/db/agent-auth-schema";
 import { oauthConsent } from "@/api/db/auth-schema";
@@ -222,7 +223,11 @@ const addedCleartextColumns = (
 
 const readBaseRegistry = () => {
   const result = Bun.spawnSync(
-    ["git", "show", `origin/main:${REGISTRY_PATH}`],
+    [
+      "git",
+      "show",
+      `${treeBaseRevision({ repoRoot: REPO_ROOT })}:${REGISTRY_PATH}`,
+    ],
     { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
   );
   if (result.exitCode === 0) {

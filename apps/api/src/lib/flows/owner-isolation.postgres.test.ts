@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { flowRunUpdateRealtimeEvent } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, session, user } from "@/api/db/auth-schema";
 import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
@@ -57,7 +58,6 @@ import {
 } from "@/api/tests/helpers/auth-provider-id";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

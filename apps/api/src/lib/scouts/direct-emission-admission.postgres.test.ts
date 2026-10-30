@@ -11,6 +11,7 @@ import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -69,7 +70,6 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {

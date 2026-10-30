@@ -2,6 +2,7 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 
 import {
   caseLawDecisionCitationStatsState,
+  caseLawSitemapDrainProgress,
   desktopTimeEntryBatches,
 } from "@/api/db/schema";
 import { ACCOUNT_EXPORT_TRANSITIONS } from "@/api/lib/account-export/store";
@@ -93,6 +94,25 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: ["exact"] },
 });
 
+export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
+  tableName: "caseLawSitemapDrainProgress",
+  key: "country",
+  scope: ["year", "month"],
+  stateColumn: "phase",
+} as const;
+
+const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
+  table: caseLawSitemapDrainProgress,
+  key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
+  scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
+  stateColumn: SITEMAP_DRAIN_TRANSITION_IDENTITY.stateColumn,
+  edges: {
+    draining: ["awaiting_visibility"],
+    awaiting_visibility: ["draining"],
+  },
+  initial: ["draining"],
+});
+
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
   table: desktopTimeEntryBatches,
   key: "idempotencyKey",
@@ -156,6 +176,7 @@ export const TRANSITIONS = {
   caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawSitemapDrainProgress: SITEMAP_DRAIN_TRANSITIONS,
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },

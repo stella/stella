@@ -1,8 +1,13 @@
 import { panic, Result } from "better-result";
 
+import type { Verdict } from "@stll/db-load-gate/health";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { schedulerJobs } from "@/api/db/schema";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
+import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";
+import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
@@ -21,16 +26,30 @@ import { measureJobStatements } from "./statement-measurement";
 
 const noopTask = () => undefined;
 
+/**
+ * The load governor's admission for a measured run. The governor holds work
+ * in its configured busy windows, and held work issues only its own
+ * bookkeeping, so the measurement admits explicitly and the time of day
+ * cannot decide whether the measured work happens.
+ */
+export const QUERY_PERF_ADMISSION = {
+  kind: "normal",
+  signals: [],
+} as const satisfies Verdict;
+
 /** Measures each statement before its real execution without replaying task results. */
 export const measureScheduledJobRunRaw = async ({
   database,
   jobId,
   task: taskName,
+  admission = QUERY_PERF_ADMISSION,
   now = new Date("2026-01-10T12:00:00Z"),
 }: {
   database: GatedTestDb;
   jobId: string;
   task: string;
+  /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
+  admission?: Verdict;
   now?: Date;
 }) => {
   const job =
@@ -44,6 +63,11 @@ export const measureScheduledJobRunRaw = async ({
       noopTask,
       createCaseLawCoverageRefreshTask({
         compute: computeCaseLawCoverageAnswer,
+        createRuntime: (options) =>
+          createScriptBackfillRuntime({
+            ...options,
+            readVerdict: async () => await Promise.resolve(admission),
+          }),
       }),
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   const leaseToken = `query-perf-${createSafeId<"schedulerJobRun">()}`;
@@ -82,6 +106,11 @@ export const measureScheduledJobRunRaw = async ({
           .phase,
       } as const)
     : ({ type: "task" } as const);
+  // The search configuration is cached for 60 s, and the scheduled jobs run
+  // minutes apart, so a production run reads it cold. Every measured run does
+  // too, instead of depending on what an earlier run left in the cache.
+  resetPublicCaseLawConfigForTesting();
+  resetLocalCaseLawConfigForTesting();
   const measured = await measureJobStatements({
     database,
     run: async (measuredDatabase) =>
@@ -89,7 +118,7 @@ export const measureScheduledJobRunRaw = async ({
         const outcome = await task(
           asTestRaw<SchedulerTaskContext>({
             db: measuredDatabase,
-            dueAt: DueSlot.of({ nextRunAt: now }),
+            dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
             job: persistedJob,
             payload: persistedJob.payload,
             runId: createSafeId<"schedulerJobRun">(),
@@ -138,6 +167,8 @@ export const measureScheduledJobRun = async (options: {
   database: GatedTestDb;
   jobId: string;
   task: string;
+  /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
+  admission?: Verdict;
   now?: Date;
 }) => {
   const job =

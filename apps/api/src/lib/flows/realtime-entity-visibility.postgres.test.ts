@@ -11,6 +11,7 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, session, user } from "@/api/db/auth-schema";
 import { entities, workspaceMembers, workspaces } from "@/api/db/schema";
@@ -31,7 +32,6 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

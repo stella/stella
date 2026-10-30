@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { featureEnrolments, flowRuns, flowRunSteps } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -11,7 +12,6 @@ import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

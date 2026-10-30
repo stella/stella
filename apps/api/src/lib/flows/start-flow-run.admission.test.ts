@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { createTestState } from "@stll/test-state";
+
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -14,7 +16,6 @@ import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 

@@ -13,9 +13,9 @@ import {
   searchHistoryEntries,
   searchProjectionRepairQueue,
   taskAssignees,
+  workObligations,
   workspaceMembers,
   workspaces,
-  workObligations,
 } from "@/api/db/schema";
 import { getAuth } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -226,6 +226,6 @@ describe.skipIf(!enabled)(
           await db.delete(user).where(eq(user.id, actorUserId));
         }
       });
-    }, 60_000);
+    });
   },
 );

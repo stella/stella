@@ -7,6 +7,7 @@ import * as v from "valibot";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
@@ -62,7 +63,6 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });

@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import {
   entities,
@@ -16,7 +17,6 @@ import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   flowNotificationVisibilityCondition,

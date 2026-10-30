@@ -24,6 +24,7 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -82,7 +83,6 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { compileClientWireSchema } from "@/api/tests/helpers/wire-json-schema";
 

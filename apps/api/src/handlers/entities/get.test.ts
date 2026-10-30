@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
@@ -9,7 +10,6 @@ import readFieldFile from "@/api/handlers/entities/read-field-file";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,

@@ -7,11 +7,7 @@ import {
   INVOICE_SENT_AT_BACKFILL,
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
-import {
-  CASE_LAW_COVERAGE_COURT_INDEX,
-  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-  CASE_LAW_COVERAGE_INDEX,
-} from "@/api/lib/case-law/coverage-index";
+import { CASE_LAW_COVERAGE_INDEXES } from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -93,6 +89,7 @@ import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
+import { LEGAL_LIST_SOURCE_DECISION_BACKFILL } from "./legal-list-source-decision-backfill";
 import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
@@ -370,9 +367,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: `${tableName}_content_v3_pending_idx`,
     tableName,
   })),
-  CASE_LAW_COVERAGE_INDEX,
-  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-  CASE_LAW_COVERAGE_COURT_INDEX,
+  ...CASE_LAW_COVERAGE_INDEXES,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
@@ -988,6 +983,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...FEATURE_RECOVERY_CONSTRAINT_VALIDATIONS,
   RETAINED_ACTIVITY_OWNER_BACKFILL,
   ...RETAINED_ACTIVITY_CONSTRAINT_VALIDATIONS,
+  LEGAL_LIST_SOURCE_DECISION_BACKFILL,
 ];
 
 /**
@@ -1042,7 +1038,7 @@ type OnlineMigrationMode =
   | { operation: "validate"; report: OnlineMigrationStartupReport };
 
 type OnlineMigrationOptions = {
-  repairs?: readonly OnlineRepair[];
+  repairs: readonly OnlineRepair[];
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -1095,7 +1091,7 @@ export type OnlineMigrationStartupReport = {
  */
 export const reportOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  options: OnlineMigrationOptions = {},
+  options: OnlineMigrationOptions,
 ): Promise<
   | { type: "validated"; report: OnlineMigrationStartupReport }
   | { type: "migrator_active" }
@@ -1236,7 +1232,7 @@ const walkOnlineMigrations = async ({
   return await processOnlineRepairAt({
     connection,
     mode,
-    repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+    repairs: options.repairs,
     log:
       options.log ??
       ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),

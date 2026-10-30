@@ -21,7 +21,7 @@ describe.skipIf(!enabled)("feature recovery receipts", () => {
       const owner = `recovery_owner_${suffix}`;
       const migration = await Bun.file(
         new URL(
-          "../../drizzle/20261030052802_feature_recovery_receipt_owner_access/migration.sql",
+          "../../drizzle/20261030195719_feature_recovery_receipt_owner_access/migration.sql",
           import.meta.url,
         ),
       ).text();

@@ -34,6 +34,7 @@ import {
   workflowExtractionPreviewRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import {
@@ -77,7 +78,6 @@ import {
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // What one live-update publish costs as its audience grows. Every event kind a

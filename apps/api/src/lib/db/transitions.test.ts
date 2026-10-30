@@ -19,7 +19,10 @@ import { timestamptz } from "@/api/db/columns";
 import { FLOW_RUN_SCOPED_TRANSITIONS } from "@/api/lib/db/flow-run-transition-spec";
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  SITEMAP_DRAIN_TRANSITION_IDENTITY,
+  TRANSITIONS,
+} from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
   defineKeyedTransitions,
@@ -97,6 +100,7 @@ test("state-column ownership covers every scoped runtime transition", () => {
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      SITEMAP_DRAIN_TRANSITION_IDENTITY,
       ...Object.values(FLOW_RUN_SCOPED_TRANSITIONS).map(
         ({ key, scope, stateColumn }) => ({
           tableName: "flowRuns",

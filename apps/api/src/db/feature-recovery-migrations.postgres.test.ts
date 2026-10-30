@@ -13,19 +13,19 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const MIGRATIONS = [
-  { name: "20261030051702_signals_flows_enrolments" },
-  { name: "20261030051802_validate_signals_flows_enrolments" },
-  { name: "20261030051902_flow_upload_replay_index" },
-  { name: "20261030052002_upload_trigger_settlements" },
-  { name: "20261030052102_feature_recovery_grant_waits" },
-  { name: "20261030052202_flow_run_recovery_state_column" },
-  { name: "20261030052302_flow_recovery_outcomes" },
-  { name: "20261030052402_validate_flow_recovery_outcomes" },
-  { name: "20261030052502_flow_completion_notice_recovery_index" },
-  { name: "20261030052602_upload_trigger_skipped_recovery_index" },
-  { name: "20261030052702_validate_feature_recovery_constraints" },
-  { name: "20261030052802_feature_recovery_receipt_owner_access" },
-  { name: "20261030052902_flow_upload_receipt_entity_index" },
+  { name: "20261030194619_signals_flows_enrolments" },
+  { name: "20261030194719_validate_signals_flows_enrolments" },
+  { name: "20261030194819_flow_upload_replay_index" },
+  { name: "20261030194919_upload_trigger_settlements" },
+  { name: "20261030195019_feature_recovery_grant_waits" },
+  { name: "20261030195119_flow_run_recovery_state_column" },
+  { name: "20261030195219_flow_recovery_outcomes" },
+  { name: "20261030195319_validate_flow_recovery_outcomes" },
+  { name: "20261030195419_flow_completion_notice_recovery_index" },
+  { name: "20261030195519_upload_trigger_skipped_recovery_index" },
+  { name: "20261030195619_validate_feature_recovery_constraints" },
+  { name: "20261030195719_feature_recovery_receipt_owner_access" },
+  { name: "20261030195819_flow_upload_receipt_entity_index" },
 ] as const;
 const DEPENDENCIES = [
   "organization",

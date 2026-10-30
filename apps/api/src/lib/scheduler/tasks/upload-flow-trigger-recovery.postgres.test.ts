@@ -5,6 +5,7 @@ import type { PreparedQueryConfig } from "drizzle-orm/pg-core";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -50,7 +51,6 @@ import {
   withOrgScopedFixture,
   withOrgScopedFixtureTransaction,
 } from "@/api/tests/helpers/org-scoped-fixture";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { measureScheduledJobRunRaw } from "@/api/tests/query-perf/scheduled-run";
 import {

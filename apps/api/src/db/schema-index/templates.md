@@ -4,233 +4,233 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## template_lookup_formats · `templateLookupFormats` · templates.ts:67 · rls
+## template_lookup_formats · `templateLookupFormats` · templates.ts:69 · rls
 
 ```text
-template_lookup_formats.id               pUuid               pk,not null       templates.ts:70
-template_lookup_formats.organization_id  safeOrganizationId  fk,not null       templates.ts:71
-template_lookup_formats.registry         text                not null          templates.ts:74
-template_lookup_formats.name             varchar             not null          templates.ts:75
-template_lookup_formats.format           varchar             not null          templates.ts:76
-template_lookup_formats.preference       text                default,not null  templates.ts:77
-template_lookup_formats.created_at       timestamptz         default,not null  templates.ts:86
+template_lookup_formats.id               pUuid               pk,not null       templates.ts:72
+template_lookup_formats.organization_id  safeOrganizationId  fk,not null       templates.ts:73
+template_lookup_formats.registry         text                not null          templates.ts:76
+template_lookup_formats.name             varchar             not null          templates.ts:77
+template_lookup_formats.format           varchar             not null          templates.ts:78
+template_lookup_formats.preference       text                default,not null  templates.ts:79
+template_lookup_formats.created_at       timestamptz         default,not null  templates.ts:88
 ```
 
-## template_lookup_format_user_defaults · `templateLookupFormatUserDefaults` · templates.ts:136 · rls
+## template_lookup_format_user_defaults · `templateLookupFormatUserDefaults` · templates.ts:138 · rls
 
 One member's own choice among the organization's saved company specification formats, per registry.
 
 ```text
-template_lookup_format_user_defaults.user_id          text                fk,not null       templates.ts:139
-template_lookup_format_user_defaults.organization_id  safeOrganizationId  fk,not null       templates.ts:140
-template_lookup_format_user_defaults.registry         text                not null          templates.ts:141
-template_lookup_format_user_defaults.format_id        safeUuid            fk,not null       templates.ts:142
-template_lookup_format_user_defaults.created_at       timestamptz         default,not null  templates.ts:143
-template_lookup_format_user_defaults.updated_at       timestamptz         default,not null  templates.ts:144
+template_lookup_format_user_defaults.user_id          text                fk,not null       templates.ts:141
+template_lookup_format_user_defaults.organization_id  safeOrganizationId  fk,not null       templates.ts:142
+template_lookup_format_user_defaults.registry         text                not null          templates.ts:143
+template_lookup_format_user_defaults.format_id        safeUuid            fk,not null       templates.ts:144
+template_lookup_format_user_defaults.created_at       timestamptz         default,not null  templates.ts:145
+template_lookup_format_user_defaults.updated_at       timestamptz         default,not null  templates.ts:146
 ```
 
-## template_categories · `templateCategories` · templates.ts:186 · rls
+## template_categories · `templateCategories` · templates.ts:188 · rls
 
 ```text
-template_categories.id               pUuid               pk,not null       templates.ts:189
-template_categories.organization_id  safeOrganizationId  fk,not null       templates.ts:190
-template_categories.parent_id        safeUuid            fk,null           templates.ts:193
-template_categories.name             varchar             not null          templates.ts:199
-template_categories.description      text                null              templates.ts:200
-template_categories.sort_order       integer             default,not null  templates.ts:201
-template_categories.created_at       timestamptz         default,not null  templates.ts:202
-template_categories.updated_at       timestamptz         default,not null  templates.ts:203
+template_categories.id               pUuid               pk,not null       templates.ts:191
+template_categories.organization_id  safeOrganizationId  fk,not null       templates.ts:192
+template_categories.parent_id        safeUuid            fk,null           templates.ts:195
+template_categories.name             varchar             not null          templates.ts:201
+template_categories.description      text                null              templates.ts:202
+template_categories.sort_order       integer             default,not null  templates.ts:203
+template_categories.created_at       timestamptz         default,not null  templates.ts:204
+template_categories.updated_at       timestamptz         default,not null  templates.ts:205
 ```
 
-## templates · `templates` · templates.ts:243 · rls
+## templates · `templates` · templates.ts:245 · rls
 
 ```text
-templates.id               pUuid                pk,not null             templates.ts:246
-templates.organization_id  safeOrganizationId   fk,not null             templates.ts:247
-templates.category_id      safeUuid             fk,null                 templates.ts:250
-templates.name             varchar              not null                templates.ts:256
-templates.kind             text                 default,not null        templates.ts:257
-templates.file_name        varchar              not null                templates.ts:261
-templates.s3_key           varchar              not null                templates.ts:262
-templates.scanState        storedFileScanState  null                    templates.ts:263
-templates.size_bytes       integer              not null                templates.ts:264
-templates.manifest         jsonb                null                    templates.ts:265
-templates.field_count      integer              default,not null        templates.ts:266
-templates.current_version  integer              default,not null        templates.ts:267
-templates.tags             text                 array,null              templates.ts:268
-templates.languages        text                 array,default,not null  templates.ts:271  Ordered BCP-47 tags of the document text (bilingual templates list every language, primary first).
-templates.when_to_use      text                 null                    templates.ts:272
-templates.when_not_to_use  text                 null                    templates.ts:273
-templates.use_count        integer              default,not null        templates.ts:274
-templates.last_used_at     timestamptz          null                    templates.ts:275
-templates.origin_type      text                 default,not null        templates.ts:278  Discriminator of `origin`, duplicated as a column so it can be filtered and constrained without JSONB operators.
-templates.origin           jsonb                default,not null        templates.ts:282
-templates.created_by       text                 fk,not null             templates.ts:286
-templates.created_at       timestamptz          default,not null        templates.ts:290
-templates.updated_at       timestamptz          default,not null        templates.ts:291
+templates.id               pUuid                pk,not null             templates.ts:248
+templates.organization_id  safeOrganizationId   fk,not null             templates.ts:249
+templates.category_id      safeUuid             fk,null                 templates.ts:252
+templates.name             varchar              not null                templates.ts:258
+templates.kind             text                 default,not null        templates.ts:259
+templates.file_name        varchar              not null                templates.ts:263
+templates.s3_key           varchar              not null                templates.ts:264
+templates.scanState        storedFileScanState  null                    templates.ts:265
+templates.size_bytes       integer              not null                templates.ts:266
+templates.manifest         jsonb                null                    templates.ts:267
+templates.field_count      integer              default,not null        templates.ts:268
+templates.current_version  integer              default,not null        templates.ts:269
+templates.tags             text                 array,null              templates.ts:270
+templates.languages        text                 array,default,not null  templates.ts:273  Ordered BCP-47 tags of the document text (bilingual templates list every language, primary first).
+templates.when_to_use      text                 null                    templates.ts:274
+templates.when_not_to_use  text                 null                    templates.ts:275
+templates.use_count        integer              default,not null        templates.ts:276
+templates.last_used_at     timestamptz          null                    templates.ts:277
+templates.origin_type      text                 default,not null        templates.ts:280  Discriminator of `origin`, duplicated as a column so it can be filtered and constrained without JSONB operators.
+templates.origin           jsonb                default,not null        templates.ts:284
+templates.created_by       text                 fk,not null             templates.ts:288
+templates.created_at       timestamptz          default,not null        templates.ts:292
+templates.updated_at       timestamptz          default,not null        templates.ts:293
 ```
 
-## template_persistence_requests · `templatePersistenceRequests` · templates.ts:404
+## template_persistence_requests · `templatePersistenceRequests` · templates.ts:406
 
 Durable receipt that makes save_filled_template retries idempotent.
 
 ```text
-template_persistence_requests.id                   pUuid               pk,not null       templates.ts:407
-template_persistence_requests.organization_id      safeOrganizationId  fk,not null       templates.ts:408
-template_persistence_requests.workspace_id         safeWorkspaceId     fk,not null       templates.ts:411
-template_persistence_requests.user_id              text                fk,not null       templates.ts:414
-template_persistence_requests.idempotency_key      varchar             not null          templates.ts:418
-template_persistence_requests.request_fingerprint  varchar             not null          templates.ts:419
-template_persistence_requests.status               varchar             default,not null  templates.ts:422
-template_persistence_requests.claim_token          uuid                not null          templates.ts:427
-template_persistence_requests.claimed_at           timestamptz         default,not null  templates.ts:428
-template_persistence_requests.result               jsonb               null              templates.ts:429
-template_persistence_requests.created_at           timestamptz         default,not null  templates.ts:430
-template_persistence_requests.completed_at         timestamptz         null              templates.ts:431
+template_persistence_requests.id                   pUuid               pk,not null       templates.ts:409
+template_persistence_requests.organization_id      safeOrganizationId  fk,not null       templates.ts:410
+template_persistence_requests.workspace_id         safeWorkspaceId     fk,not null       templates.ts:413
+template_persistence_requests.user_id              text                fk,not null       templates.ts:416
+template_persistence_requests.idempotency_key      varchar             not null          templates.ts:420
+template_persistence_requests.request_fingerprint  varchar             not null          templates.ts:421
+template_persistence_requests.status               varchar             default,not null  templates.ts:424
+template_persistence_requests.claim_token          uuid                not null          templates.ts:429
+template_persistence_requests.claimed_at           timestamptz         default,not null  templates.ts:430
+template_persistence_requests.result               jsonb               null              templates.ts:431
+template_persistence_requests.created_at           timestamptz         default,not null  templates.ts:432
+template_persistence_requests.completed_at         timestamptz         null              templates.ts:433
 ```
 
-## template_versions · `templateVersions` · templates.ts:467 · rls
+## template_versions · `templateVersions` · templates.ts:469 · rls
 
 ```text
-template_versions.id               pUuid                pk,not null       templates.ts:470
-template_versions.organization_id  safeOrganizationId   fk,not null       templates.ts:471
-template_versions.template_id      safeUuid             fk,not null       templates.ts:472
-template_versions.version          integer              not null          templates.ts:473
-template_versions.s3_key           varchar              not null          templates.ts:474
-template_versions.scanState        storedFileScanState  null              templates.ts:475
-template_versions.manifest         jsonb                null              templates.ts:476
-template_versions.field_count      integer              default,not null  templates.ts:477
-template_versions.created_by       text                 fk,not null       templates.ts:478
-template_versions.created_at       timestamptz          default,not null  templates.ts:482
+template_versions.id               pUuid                pk,not null       templates.ts:472
+template_versions.organization_id  safeOrganizationId   fk,not null       templates.ts:473
+template_versions.template_id      safeUuid             fk,not null       templates.ts:474
+template_versions.version          integer              not null          templates.ts:475
+template_versions.s3_key           varchar              not null          templates.ts:476
+template_versions.scanState        storedFileScanState  null              templates.ts:477
+template_versions.manifest         jsonb                null              templates.ts:478
+template_versions.field_count      integer              default,not null  templates.ts:479
+template_versions.created_by       text                 fk,not null       templates.ts:480
+template_versions.created_at       timestamptz          default,not null  templates.ts:484
 ```
 
-## template_deletion_cleanup_requests · `templateDeletionCleanupRequests` · templates.ts:518 · rls
+## template_deletion_cleanup_requests · `templateDeletionCleanupRequests` · templates.ts:520 · rls
 
 Durable object cleanup recorded in the same transaction that deletes a template.
 
 ```text
-template_deletion_cleanup_requests.id                                  pUuid               pk,not null       templates.ts:521
-template_deletion_cleanup_requests.organization_id                     safeOrganizationId  not null          templates.ts:522
-template_deletion_cleanup_requests.s3_keys                             text                array,not null    templates.ts:523
-template_deletion_cleanup_requests.status                              text                default,not null  templates.ts:524
-template_deletion_cleanup_requests.{...deletionCleanupRetryColumns()}  spread                                templates.ts:529
+template_deletion_cleanup_requests.id                                  pUuid               pk,not null       templates.ts:523
+template_deletion_cleanup_requests.organization_id                     safeOrganizationId  not null          templates.ts:524
+template_deletion_cleanup_requests.s3_keys                             text                array,not null    templates.ts:525
+template_deletion_cleanup_requests.status                              text                default,not null  templates.ts:526
+template_deletion_cleanup_requests.{...deletionCleanupRetryColumns()}  spread                                templates.ts:531
 ```
 
-## search_documents · `searchDocuments` · templates.ts:549
+## search_documents · `searchDocuments` · templates.ts:551
 
 -- Search --
 
 ```text
-search_documents.{...entityFeatureGateColumns()}           spread                                templates.ts:552
-search_documents.{...entityFeatureWorkspaceGateColumns()}  spread                                templates.ts:553
-search_documents.entity_id                                 safeUuid            pk,fk,not null    templates.ts:554
-search_documents.organization_id                           safeOrganizationId  fk,not null       templates.ts:557
-search_documents.workspace_id                              safeWorkspaceId     fk,not null       templates.ts:560
-search_documents.kind                                      text                not null          templates.ts:563
-search_documents.title                                     text                default,not null  templates.ts:564
-search_documents.searchable_text                           text                default,not null  templates.ts:565
-search_documents.language                                  varchar             null              templates.ts:566
-search_documents.preview_generation                        uuid                null              templates.ts:567
-search_documents.tsv                                       tsvector            null              templates.ts:568
-search_documents.updated_at                                timestamptz         default,not null  templates.ts:569
+search_documents.{...entityFeatureGateColumns()}           spread                                templates.ts:554
+search_documents.{...entityFeatureWorkspaceGateColumns()}  spread                                templates.ts:555
+search_documents.entity_id                                 safeUuid            pk,fk,not null    templates.ts:556
+search_documents.organization_id                           safeOrganizationId  fk,not null       templates.ts:559
+search_documents.workspace_id                              safeWorkspaceId     fk,not null       templates.ts:562
+search_documents.kind                                      text                not null          templates.ts:565
+search_documents.title                                     text                default,not null  templates.ts:566
+search_documents.searchable_text                           text                default,not null  templates.ts:567
+search_documents.language                                  varchar             null              templates.ts:568
+search_documents.preview_generation                        uuid                null              templates.ts:569
+search_documents.tsv                                       tsvector            null              templates.ts:570
+search_documents.updated_at                                timestamptz         default,not null  templates.ts:571
 ```
 
-## search_document_preview_passages · `searchDocumentPreviewPassages` · templates.ts:599
+## search_document_preview_passages · `searchDocumentPreviewPassages` · templates.ts:601
 
 ```text
-search_document_preview_passages.{...entityFeatureGateColumns()}           spread                           templates.ts:602
-search_document_preview_passages.{...entityFeatureWorkspaceGateColumns()}  spread                           templates.ts:603
-search_document_preview_passages.entity_id                                 safeUuid            fk,not null  templates.ts:604
-search_document_preview_passages.organization_id                           safeOrganizationId  fk,not null  templates.ts:607
-search_document_preview_passages.workspace_id                              safeWorkspaceId     fk,not null  templates.ts:608
-search_document_preview_passages.generation                                uuid                not null     templates.ts:609
-search_document_preview_passages.ordinal                                   integer             not null     templates.ts:610
-search_document_preview_passages.content                                   text                not null     templates.ts:611
-search_document_preview_passages.tsv                                       tsvector            not null     templates.ts:612
+search_document_preview_passages.{...entityFeatureGateColumns()}           spread                           templates.ts:604
+search_document_preview_passages.{...entityFeatureWorkspaceGateColumns()}  spread                           templates.ts:605
+search_document_preview_passages.entity_id                                 safeUuid            fk,not null  templates.ts:606
+search_document_preview_passages.organization_id                           safeOrganizationId  fk,not null  templates.ts:609
+search_document_preview_passages.workspace_id                              safeWorkspaceId     fk,not null  templates.ts:610
+search_document_preview_passages.generation                                uuid                not null     templates.ts:611
+search_document_preview_passages.ordinal                                   integer             not null     templates.ts:612
+search_document_preview_passages.content                                   text                not null     templates.ts:613
+search_document_preview_passages.tsv                                       tsvector            not null     templates.ts:614
 ```
 
-## contact_search_documents · `contactSearchDocuments` · templates.ts:658 · rls
+## contact_search_documents · `contactSearchDocuments` · templates.ts:660 · rls
 
 ```text
-contact_search_documents.contact_id          safeUuid            pk,fk,not null    templates.ts:661
-contact_search_documents.organization_id     safeOrganizationId  fk,not null       templates.ts:664
-contact_search_documents.contact_type        text                not null          templates.ts:667
-contact_search_documents.title               text                default,not null  templates.ts:672
-contact_search_documents.searchable_text     text                default,not null  templates.ts:673
-contact_search_documents.preview_generation  uuid                null              templates.ts:674
-contact_search_documents.tsv                 tsvector            null              templates.ts:675
-contact_search_documents.updated_at          timestamptz         default,not null  templates.ts:676
+contact_search_documents.contact_id          safeUuid            pk,fk,not null    templates.ts:663
+contact_search_documents.organization_id     safeOrganizationId  fk,not null       templates.ts:666
+contact_search_documents.contact_type        text                not null          templates.ts:669
+contact_search_documents.title               text                default,not null  templates.ts:674
+contact_search_documents.searchable_text     text                default,not null  templates.ts:675
+contact_search_documents.preview_generation  uuid                null              templates.ts:676
+contact_search_documents.tsv                 tsvector            null              templates.ts:677
+contact_search_documents.updated_at          timestamptz         default,not null  templates.ts:678
 ```
 
-## contact_search_document_preview_passages · `contactSearchDocumentPreviewPassages` · templates.ts:693
+## contact_search_document_preview_passages · `contactSearchDocumentPreviewPassages` · templates.ts:695
 
 ```text
-contact_search_document_preview_passages.contact_id       safeUuid            fk,not null  templates.ts:696
-contact_search_document_preview_passages.organization_id  safeOrganizationId  fk,not null  templates.ts:701
-contact_search_document_preview_passages.generation       uuid                not null     templates.ts:702
-contact_search_document_preview_passages.ordinal          integer             not null     templates.ts:703
-contact_search_document_preview_passages.content          text                not null     templates.ts:704
-contact_search_document_preview_passages.tsv              tsvector            not null     templates.ts:705
+contact_search_document_preview_passages.contact_id       safeUuid            fk,not null  templates.ts:698
+contact_search_document_preview_passages.organization_id  safeOrganizationId  fk,not null  templates.ts:703
+contact_search_document_preview_passages.generation       uuid                not null     templates.ts:704
+contact_search_document_preview_passages.ordinal          integer             not null     templates.ts:705
+contact_search_document_preview_passages.content          text                not null     templates.ts:706
+contact_search_document_preview_passages.tsv              tsvector            not null     templates.ts:707
 ```
 
-## workspace_search_documents · `workspaceSearchDocuments` · templates.ts:734
+## workspace_search_documents · `workspaceSearchDocuments` · templates.ts:736
 
 ```text
-workspace_search_documents.workspace_id        safeWorkspaceId     pk,fk,not null    templates.ts:737
-workspace_search_documents.organization_id     safeOrganizationId  fk,not null       templates.ts:740
-workspace_search_documents.title               text                default,not null  templates.ts:743
-workspace_search_documents.searchable_text     text                default,not null  templates.ts:744
-workspace_search_documents.preview_generation  uuid                null              templates.ts:745
-workspace_search_documents.tsv                 tsvector            null              templates.ts:746
-workspace_search_documents.updated_at          timestamptz         default,not null  templates.ts:747
+workspace_search_documents.workspace_id        safeWorkspaceId     pk,fk,not null    templates.ts:739
+workspace_search_documents.organization_id     safeOrganizationId  fk,not null       templates.ts:742
+workspace_search_documents.title               text                default,not null  templates.ts:745
+workspace_search_documents.searchable_text     text                default,not null  templates.ts:746
+workspace_search_documents.preview_generation  uuid                null              templates.ts:747
+workspace_search_documents.tsv                 tsvector            null              templates.ts:748
+workspace_search_documents.updated_at          timestamptz         default,not null  templates.ts:749
 ```
 
-## workspace_search_document_preview_passages · `workspaceSearchDocumentPreviewPassages` · templates.ts:773
+## workspace_search_document_preview_passages · `workspaceSearchDocumentPreviewPassages` · templates.ts:775
 
 ```text
-workspace_search_document_preview_passages.workspace_id     safeWorkspaceId     fk,not null  templates.ts:776
-workspace_search_document_preview_passages.organization_id  safeOrganizationId  fk,not null  templates.ts:781
-workspace_search_document_preview_passages.generation       uuid                not null     templates.ts:782
-workspace_search_document_preview_passages.ordinal          integer             not null     templates.ts:783
-workspace_search_document_preview_passages.content          text                not null     templates.ts:784
-workspace_search_document_preview_passages.tsv              tsvector            not null     templates.ts:785
+workspace_search_document_preview_passages.workspace_id     safeWorkspaceId     fk,not null  templates.ts:778
+workspace_search_document_preview_passages.organization_id  safeOrganizationId  fk,not null  templates.ts:783
+workspace_search_document_preview_passages.generation       uuid                not null     templates.ts:784
+workspace_search_document_preview_passages.ordinal          integer             not null     templates.ts:785
+workspace_search_document_preview_passages.content          text                not null     templates.ts:786
+workspace_search_document_preview_passages.tsv              tsvector            not null     templates.ts:787
 ```
 
-## search_projection_repair_queue · `searchProjectionRepairQueue` · templates.ts:846 · rls
+## search_projection_repair_queue · `searchProjectionRepairQueue` · templates.ts:848 · rls
 
 The durable record that a search projection is behind its source.
 
 ```text
-search_projection_repair_queue.kind             text                not null          templates.ts:849
-search_projection_repair_queue.source_id        uuid                not null          templates.ts:856  Deliberately without a foreign key: a mark whose source is gone is not an error to prevent but work to discard, and the drain discards it on its next pass.
-search_projection_repair_queue.organization_id  safeOrganizationId  fk,not null       templates.ts:863  Unlike the storage-cleanup outboxes in schema/entities.ts, this queue holds no object keys: the drain only rewrites and deletes database rows.
-search_projection_repair_queue.revision         uuid                not null          templates.ts:864
-search_projection_repair_queue.enqueued_at      timestamptz         default,not null  templates.ts:865
-search_projection_repair_queue.attempts         integer             default,not null  templates.ts:866
-search_projection_repair_queue.next_attempt_at  timestamptz         default,not null  templates.ts:867
+search_projection_repair_queue.kind             text                not null          templates.ts:851
+search_projection_repair_queue.source_id        uuid                not null          templates.ts:858  Deliberately without a foreign key: a mark whose source is gone is not an error to prevent but work to discard, and the drain discards it on its next pass.
+search_projection_repair_queue.organization_id  safeOrganizationId  fk,not null       templates.ts:865  Unlike the storage-cleanup outboxes in schema/entities.ts, this queue holds no object keys: the drain only rewrites and deletes database rows.
+search_projection_repair_queue.revision         uuid                not null          templates.ts:866
+search_projection_repair_queue.enqueued_at      timestamptz         default,not null  templates.ts:867
+search_projection_repair_queue.attempts         integer             default,not null  templates.ts:868
+search_projection_repair_queue.next_attempt_at  timestamptz         default,not null  templates.ts:869
 ```
 
-## extracted_content · `extractedContent` · templates.ts:903
+## extracted_content · `extractedContent` · templates.ts:905
 
 One row per entity with extracted plaintext encrypted for search and downstream retrieval.
 
 ```text
-extracted_content.{...entityFeatureGateColumns()}           spread                                templates.ts:906
-extracted_content.{...entityFeatureWorkspaceGateColumns()}  spread                                templates.ts:907
-extracted_content.entity_id                                 safeUuid            pk,fk,not null    templates.ts:908
-extracted_content.organization_id                           safeOrganizationId  fk,not null       templates.ts:909
-extracted_content.workspace_id                              safeWorkspaceId     fk,not null       templates.ts:914
-extracted_content.source_entity_version_id                  safeUuid            fk,null           templates.ts:916  Immutable source identity; null only for pre-provenance rows.
-extracted_content.source_field_id                           safeUuid            fk,null           templates.ts:919
-extracted_content.source_file_id                            uuid                null              templates.ts:923
-extracted_content.source_sha256_hex                         varchar             null              templates.ts:924
-extracted_content.ocr_run_id                                safeUuid            null              templates.ts:926  OCR-only derivative identity; null for native extraction rows.
-extracted_content.ocr_processor_version                     integer             null              templates.ts:927
-extracted_content.ocr_payload_ciphertext                    bytea               null              templates.ts:929  Encrypted versioned page geometry used by viewers and regeneration.
-extracted_content.ocr_payload_iv                            bytea               null              templates.ts:930
-extracted_content.ciphertext                                bytea               not null          templates.ts:931
-extracted_content.iv                                        bytea               not null          templates.ts:932
-extracted_content.char_count                                integer             not null          templates.ts:933
-extracted_content.language                                  varchar             null              templates.ts:934
-extracted_content.extracted_at                              timestamptz         default,not null  templates.ts:935
+extracted_content.{...entityFeatureGateColumns()}           spread                                templates.ts:908
+extracted_content.{...entityFeatureWorkspaceGateColumns()}  spread                                templates.ts:909
+extracted_content.entity_id                                 safeUuid            pk,fk,not null    templates.ts:910
+extracted_content.organization_id                           safeOrganizationId  fk,not null       templates.ts:911
+extracted_content.workspace_id                              safeWorkspaceId     fk,not null       templates.ts:916
+extracted_content.source_entity_version_id                  safeUuid            fk,null           templates.ts:918  Immutable source identity; null only for pre-provenance rows.
+extracted_content.source_field_id                           safeUuid            fk,null           templates.ts:921
+extracted_content.source_file_id                            uuid                null              templates.ts:925
+extracted_content.source_sha256_hex                         varchar             null              templates.ts:926
+extracted_content.ocr_run_id                                safeUuid            null              templates.ts:928  OCR-only derivative identity; null for native extraction rows.
+extracted_content.ocr_processor_version                     integer             null              templates.ts:929
+extracted_content.ocr_payload_ciphertext                    bytea               null              templates.ts:931  Encrypted versioned page geometry used by viewers and regeneration.
+extracted_content.ocr_payload_iv                            bytea               null              templates.ts:932
+extracted_content.ciphertext                                bytea               not null          templates.ts:933
+extracted_content.iv                                        bytea               not null          templates.ts:934
+extracted_content.char_count                                integer             not null          templates.ts:935
+extracted_content.language                                  varchar             null              templates.ts:936
+extracted_content.extracted_at                              timestamptz         default,not null  templates.ts:937
 ```

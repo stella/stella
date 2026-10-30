@@ -13,6 +13,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NOTIFICATION_ENTITY_TYPE } from "@stll/api-contract/notifications";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -47,7 +48,6 @@ import type {
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";

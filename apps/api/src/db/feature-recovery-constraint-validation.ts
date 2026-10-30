@@ -12,63 +12,63 @@ export const FEATURE_RECOVERY_CONSTRAINTS = [
     tableName: "pending_scout_emissions",
     constraintName:
       "pending_scout_emissions_organization_id_organization_id_fk",
-    introducedBy: "20261030051702_signals_flows_enrolments",
+    introducedBy: "20261030194619_signals_flows_enrolments",
   },
   {
     tableName: "pending_scout_emissions",
     constraintName: "pending_scout_emissions_workspace_organization_fk",
-    introducedBy: "20261030051702_signals_flows_enrolments",
+    introducedBy: "20261030194619_signals_flows_enrolments",
   },
   {
     tableName: "flow_upload_trigger_intents",
     constraintName: "flow_upload_trigger_intents_definition_org_fk",
-    introducedBy: "20261030051702_signals_flows_enrolments",
+    introducedBy: "20261030194619_signals_flows_enrolments",
   },
   {
     tableName: "flow_upload_trigger_intents",
     constraintName: "flow_upload_trigger_intents_entity_ws_fk",
-    introducedBy: "20261030051702_signals_flows_enrolments",
+    introducedBy: "20261030194619_signals_flows_enrolments",
   },
   {
     tableName: "flow_upload_trigger_intents",
     constraintName: "flow_upload_trigger_intents_workspace_org_fk",
-    introducedBy: "20261030051702_signals_flows_enrolments",
+    introducedBy: "20261030194619_signals_flows_enrolments",
   },
   {
     tableName: "feature_enrolments",
     constraintName: "feature_enrolments_feature_id_check",
-    introducedBy: "20261030051702_signals_flows_enrolments",
+    introducedBy: "20261030194619_signals_flows_enrolments",
   },
   {
     tableName: "flow_runs",
     constraintName: "flow_runs_recovery_state_check",
-    introducedBy: "20261030052302_flow_recovery_outcomes",
+    introducedBy: "20261030195219_flow_recovery_outcomes",
   },
   {
     tableName: "flow_upload_trigger_intents",
     constraintName: "flow_upload_trigger_intents_settlement_check",
-    introducedBy: "20261030052302_flow_recovery_outcomes",
+    introducedBy: "20261030195219_flow_recovery_outcomes",
   },
   {
     tableName: "document_processing_runs",
     constraintName: "document_processing_runs_deadline_scout_skip_check",
-    introducedBy: "20261030052302_flow_recovery_outcomes",
+    introducedBy: "20261030195219_flow_recovery_outcomes",
   },
   {
     tableName: "pending_scout_emissions",
     constraintName: "pending_scout_emissions_status_check",
-    introducedBy: "20261030052102_feature_recovery_grant_waits",
+    introducedBy: "20261030195019_feature_recovery_grant_waits",
   },
   {
     tableName: "document_processing_runs",
     constraintName:
       "document_processing_runs_deadline_scout_status_values_check",
-    introducedBy: "20261030052102_feature_recovery_grant_waits",
+    introducedBy: "20261030195019_feature_recovery_grant_waits",
   },
   {
     tableName: "document_processing_runs",
     constraintName: "document_processing_runs_deadline_scout_lifecycle_check",
-    introducedBy: "20261030052102_feature_recovery_grant_waits",
+    introducedBy: "20261030195019_feature_recovery_grant_waits",
   },
 ] as const satisfies readonly IntroducedConstraint[];
 
@@ -76,17 +76,17 @@ export const RETAINED_ACTIVITY_CONSTRAINTS = [
   {
     tableName: "entities",
     constraintName: "entities_feature_owner_check",
-    introducedBy: "20261030053202_retained_activity_feature_ownership",
+    introducedBy: "20261030200119_retained_activity_feature_ownership",
   },
   {
     tableName: "audit_logs",
     constraintName: "audit_logs_feature_owner_check",
-    introducedBy: "20261030053302_retained_audit_feature_ownership",
+    introducedBy: "20261030200219_retained_audit_feature_ownership",
   },
   {
     tableName: "notifications",
     constraintName: "notifications_feature_owner_check",
-    introducedBy: "20261030053402_retained_notification_feature_ownership",
+    introducedBy: "20261030200319_retained_notification_feature_ownership",
   },
 ] as const satisfies readonly IntroducedConstraint[];
 

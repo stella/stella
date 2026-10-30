@@ -23,7 +23,7 @@ type ReadBudget = {
   pages: number;
   reason: string;
   /**
-   * Set only while a measured statement is over its budget and a change to
+   * Set only while a measured statement or job is over its budget and a change to
    * bring it under is in progress. The gate then requires the measurement to
    * stay above the budget, so the entry is removed as soon as it passes.
    */
@@ -35,6 +35,16 @@ type ReadBudget = {
 };
 
 export const READ_BUDGETS = {
+  "scheduled.caseLaw.refreshCoverage": {
+    surface: "scheduled-job",
+    pages: 150,
+    reason:
+      "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
+    overBudget: {
+      reason:
+        "Source ranking reads every court bucket before the top-N cut; per-source top-N court buckets materialized at facet refresh bring it under.",
+    },
+  },
   "statement.caseLaw.globalSearchHits": {
     surface: "statement",
     pages: 6000,
@@ -67,6 +77,13 @@ export const READ_BUDGETS = {
     reason:
       "One bounded census or dispatch phase, with related dimensions growing from 5,000 to 10,000 rows. The persisted cursor bounds each pass independently of recipient admission; rounding the measured maximum leaves index and heap layout headroom.",
   },
+  "statement.caseLaw.euCompletionPage": {
+    surface: "statement",
+    pages: 1500,
+    statementDeadlineMs: 10_000,
+    reason:
+      "One 100-row completion page measured against a fully completed 100,000-decision source: 1,201 shared pages, plus 299 pages (25% headroom) for B-tree layout variation. The source page, receipt, and index-job decision indexes bound work before eligibility filtering.",
+  },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,
@@ -79,7 +96,7 @@ export const READ_BUDGETS = {
     statementDeadlineMs: 30_000,
     runBudgetMs: 15 * 60 * 1000,
     reason:
-      "One 500-row change-log window, one indexed country-month decision range, and the replacement shard rows per step. A run stops between months after fifteen minutes, leaving the scheduler ceiling room for its current month, and every statement has a thirty-second database deadline.",
+      "At most 500 change-log discovery rows and retirement candidates combined per run; month recounts persist a snapshot boundary so bounded retirement does not repeat the decision scan. A run stops between months after fifteen minutes, leaving the scheduler ceiling room for its current month, and every statement has a thirty-second database deadline.",
   },
   "statement.legislation.candidateRows": {
     surface: "statement",
@@ -119,12 +136,19 @@ export const UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING = 20_000;
  *
  * - `{ budget }`: measured per run on the corpus fixture; the run must read
  *   at most the budget, and the same pages at twice the corpus size.
+ * - `{ budget, governance: "load-governed" }`: every batch runs under the
+ *   shared load governor and the whole run also stays within its budget.
  * - `"load-governed"`: every batch runs under the shared load governor.
  * - `"unmeasured"`: a job registered before read budgets, listed with its
  *   reason in `read-budgets-unmeasured.json`; that ledger only shrinks.
  */
 export type ScheduledJobReads =
-  { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  | {
+      budget: ScheduledJobReadBudgetId;
+      governance?: "load-governed";
+    }
+  | "load-governed"
+  | "unmeasured";
 
 /** The budgets each MCP tool's hot statements are measured against. */
 export const MCP_TOOL_READ_BUDGETS = {

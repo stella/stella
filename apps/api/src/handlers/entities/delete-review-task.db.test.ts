@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { flowRunSteps } from "@/api/db/schema";
@@ -12,7 +13,6 @@ import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 

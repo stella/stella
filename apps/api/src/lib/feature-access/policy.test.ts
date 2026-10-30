@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import type {
@@ -20,7 +21,6 @@ import {
 } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -80,6 +80,34 @@ test("generated views are generally available behind the deployment switch for v
           }
         }
       }
+    }
+  }
+});
+
+test("the activity timeline is never enabled without time billing", () => {
+  const principal = { organizationId: "org-a", userId: "user-a" } as const;
+  const billingEnrolment = { ...principal, featureId: "time-billing" } as const;
+  for (const activityGrant of [null, memberGrant, organizationGrant]) {
+    for (const enrolments of [[], [billingEnrolment]]) {
+      const decide = (featureId: string) =>
+        decideFeatureAccess({
+          ...principal,
+          registry: FEATURE_REGISTRY,
+          grants:
+            activityGrant === null
+              ? {}
+              : { "activity-timeline": [activityGrant] },
+          featureId,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+          enrolments,
+        }).status;
+      expect(decide("time-billing")).toBe(
+        enrolments.length > 0 ? "enabled" : "hidden",
+      );
+      expect(decide("activity-timeline")).toBe(
+        activityGrant !== null && enrolments.length > 0 ? "enabled" : "hidden",
+      );
     }
   }
 });

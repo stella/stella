@@ -79,6 +79,111 @@ const contactSnapshotAuditLogs = alias(
 
 type ActivityCategory = Exclude<MatterActivityCategory, "all">;
 
+type TaskAuditField =
+  | "agendaKind"
+  | "allDay"
+  | "attendees"
+  | "availability"
+  | "dueDate"
+  | "endAt"
+  | "listItemType"
+  | "location"
+  | "name"
+  | "occurredAt"
+  | "onlineMeetingUrl"
+  | "organizer"
+  | "priority"
+  | "recurrence"
+  | "remindAt"
+  | "sensitivity"
+  | "sortOrder"
+  | "startAt"
+  | "status"
+  | "timeZone";
+
+type EntityAuditField = "name" | "parentId";
+type FieldAuditField = "content";
+
+export type ActivityChangedField =
+  | "dueDate"
+  | "name"
+  | "parentFolder"
+  | "priority"
+  | "property"
+  | "schedule"
+  | "sortOrder"
+  | "status"
+  | "type";
+
+const TASK_ACTIVITY_FIELD_MAP = {
+  agendaKind: "schedule",
+  allDay: "schedule",
+  attendees: "schedule",
+  availability: "schedule",
+  dueDate: "dueDate",
+  endAt: "schedule",
+  listItemType: "type",
+  location: "schedule",
+  name: "name",
+  occurredAt: "schedule",
+  onlineMeetingUrl: "schedule",
+  organizer: "schedule",
+  priority: "priority",
+  recurrence: "schedule",
+  remindAt: "schedule",
+  sensitivity: "schedule",
+  sortOrder: "sortOrder",
+  startAt: "schedule",
+  status: "status",
+  timeZone: "schedule",
+} as const satisfies Record<TaskAuditField, ActivityChangedField>;
+
+const ENTITY_ACTIVITY_FIELD_MAP = {
+  name: "name",
+  parentId: "parentFolder",
+} as const satisfies Record<EntityAuditField, ActivityChangedField>;
+
+const FIELD_ACTIVITY_FIELD_MAP = {
+  content: "property",
+} as const satisfies Record<FieldAuditField, ActivityChangedField>;
+
+const mappedChangeKeys = (
+  changes: Record<string, unknown> | null,
+  mapping: Record<string, ActivityChangedField>,
+): ActivityChangedField[] => {
+  if (changes === null) {
+    return [];
+  }
+  const changedFields: ActivityChangedField[] = [];
+  for (const key of Object.keys(changes)) {
+    const field = Object.entries(mapping).find(
+      ([auditKey]) => auditKey === key,
+    )?.[1];
+    if (field !== undefined && !changedFields.includes(field)) {
+      changedFields.push(field);
+    }
+  }
+  return changedFields;
+};
+
+export const activityChangedFields = ({
+  changes,
+  entityKind,
+  resourceType,
+}: {
+  changes: Record<string, unknown> | null;
+  entityKind: string | null;
+  resourceType: string;
+}): ActivityChangedField[] => {
+  if (resourceType === AUDIT_RESOURCE_TYPE.FIELD) {
+    return mappedChangeKeys(changes, FIELD_ACTIVITY_FIELD_MAP);
+  }
+  return mappedChangeKeys(
+    changes,
+    entityKind === "task" ? TASK_ACTIVITY_FIELD_MAP : ENTITY_ACTIVITY_FIELD_MAP,
+  );
+};
+
 const createEntitySnapshotExpressions = (context: AuditReadContext) => {
   const projectedChanges = auditReadChangesSql(context, auditLogs);
   const projectedVersionChanges = auditReadChangesSql(
@@ -309,13 +414,6 @@ const createActivityExpressions = (context: AuditReadContext) => {
     OR ${projectedChanges} ? 'membersRemoved'
   )`;
 
-  // True when the audit row's only recorded change is the name, so the client
-  // can distinguish a rename from other updates (a move records `parentId`).
-  const renameOnlyChange = () => sql<boolean>`coalesce((
-  ${projectedChanges} ? 'name'
-  and (select count(*) = 1 from jsonb_object_keys(${projectedChanges}))
-), false)`;
-
   // The reviewed document's name as the run pinned it, so a review whose run
   // row is gone still names what it reviewed.
   const auditReviewDocumentName = () => sql<string | null>`case
@@ -458,6 +556,7 @@ end`;
   };
 
   return {
+    projectedChanges,
     resolvedAuditEntityIdSnapshot,
     auditEntityNameSnapshot,
     auditEntityMimeTypeSnapshot,
@@ -467,7 +566,6 @@ end`;
     legacyResourceKind,
     taskEntityResourceCondition,
     legacyWorkspaceTeamEvent,
-    renameOnlyChange,
     auditReviewDocumentName,
     auditCorrespondenceSubject,
     teamContactNameSnapshot,
@@ -546,8 +644,7 @@ export type MatterActivityItem = {
         name: string | null;
         type: Exclude<(typeof auditLogs.$inferSelect)["performerType"], "user">;
       };
-  /** The event's only recorded change is the target's name. */
-  renameOnly: boolean;
+  changedFields: ActivityChangedField[];
   runId: string | null;
   target: ActivityTarget;
   trigger: {
@@ -626,6 +723,7 @@ const readOverviewActivity = async ({
 > =>
   await Result.gen(async function* () {
     const {
+      projectedChanges,
       resolvedAuditEntityIdSnapshot,
       auditEntityNameSnapshot,
       auditEntityMimeTypeSnapshot,
@@ -635,7 +733,6 @@ const readOverviewActivity = async ({
       legacyResourceKind,
       taskEntityResourceCondition,
       legacyWorkspaceTeamEvent,
-      renameOnlyChange,
       auditReviewDocumentName,
       auditCorrespondenceSubject,
       teamContactNameSnapshot,
@@ -756,6 +853,7 @@ const readOverviewActivity = async ({
         const query = tx
           .select({
             action: sql<VisibleActivityAction>`${auditLogs.action}`,
+            changes: projectedChanges.as("activity_changes"),
             activityCategory: auditLogs.activityCategory,
             correspondenceSubjectSnapshot: auditCorrespondenceSubject(),
             approvalStatus: auditLogs.approvalStatus,
@@ -782,7 +880,6 @@ const readOverviewActivity = async ({
             resourceType: auditLogs.resourceType,
             reviewDocumentNameSnapshot: auditReviewDocumentName(),
             relationshipChange: auditRelationshipChangeSql(activityColumns),
-            renameOnly: renameOnlyChange(),
             runId: auditLogs.runId,
             triggerSource: auditLogs.triggerSource,
             triggerType: auditLogs.triggerType,
@@ -1051,9 +1148,13 @@ const readOverviewActivity = async ({
               : null,
           },
           category,
+          changedFields: activityChangedFields({
+            changes: row.changes,
+            entityKind: row.legacyKind,
+            resourceType: row.resourceType,
+          }),
           id: row.id,
           performer,
-          renameOnly: row.renameOnly,
           runId: resolveActivityRunId({
             resourceId: row.resourceId,
             resourceType: row.resourceType,
