@@ -221,6 +221,33 @@ describe("EntityActions", () => {
     });
   });
 
+  test("a nested object with no actions keeps the native menu, not its parent's", async () => {
+    const view = render(
+      <EntityActions actions={[{ label: "Open matter" }]} label="Matter">
+        <div data-testid="matter">
+          <span data-testid="matter-name">Lease review</span>
+          <EntityActions actions={[]} label="File">
+            <span data-testid="file">contract.docx</span>
+          </EntityActions>
+        </div>
+      </EntityActions>,
+    );
+    const onFile = rightClick(view.getByTestId("file"));
+    expect(onFile.defaultPrevented).toBe(false);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(openMenuLabels()).toEqual([]);
+
+    // The parent still answers for its own area.
+    expect(rightClick(view.getByTestId("matter-name")).defaultPrevented).toBe(
+      true,
+    );
+    await waitFor(() => {
+      expect(openMenuLabels()).toEqual(["Open matter"]);
+    });
+  });
+
   test("no actions: no button, no menu, the native menu stays", () => {
     const view = render(<Row actions={[]} />);
     expect(view.queryByRole("button", { name: "Actions" })).toBeNull();

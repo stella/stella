@@ -45,7 +45,8 @@ const EntityActionsContext = createContext<EntityActionsContextValue | null>(
 );
 
 export type EntityActionsProps = {
-  /** The object's actions, in menu order. Empty renders only `children`. */
+  /** The object's actions, in menu order. An empty list still owns the
+   *  object's right-click: the native menu stays, never a parent's menu. */
   actions: readonly EntityAction[];
   /** The object, which becomes the right-click target. It may render an
    *  `EntityActionsButton` anywhere inside. */
@@ -75,6 +76,24 @@ const focusReturnTarget = (
   }
   const focusable = target.closest<HTMLElement>(FOCUSABLE_SELECTOR);
   return focusable !== null && container.contains(focusable) ? focusable : null;
+};
+
+/**
+ * Right-clicks (and context-menu keys) an object already answered for. The
+ * innermost object owns the event even when it has no actions and leaves it
+ * to the native menu, so the objects around it never open theirs. A marker
+ * rather than `stopPropagation`: the native menu, and listeners further up
+ * such as the desktop webview's policy, still see the event.
+ */
+const ownedEvents = new WeakSet<Event>();
+
+/** Claims the event for this object; false when an inner object owns it. */
+const claimEvent = (event: Event): boolean => {
+  if (ownedEvents.has(event)) {
+    return false;
+  }
+  ownedEvents.add(event);
+  return true;
 };
 
 const EntityActionItems = ({
@@ -108,19 +127,14 @@ export const EntityActions = ({
   const [anchor, setAnchor] = useState<CursorAnchor | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const context: EntityActionsContextValue = { actions, heading, label };
-
-  if (actions.length === 0) {
-    return (
-      <EntityActionsContext value={context}>{children}</EntityActionsContext>
-    );
-  }
+  const hasActions = actions.length > 0;
 
   const openAt = (
     event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
     anchorRect: CursorAnchor,
   ) => {
     event.preventDefault();
-    // The innermost object answers; the one around it does not open too.
+    // A hand-written handler further up must not open a second menu either.
     event.stopPropagation();
     returnFocus.current = focusReturnTarget(event.currentTarget, event.target);
     setAnchor(anchorRect);
@@ -134,8 +148,12 @@ export const EntityActions = ({
       event.defaultPrevented ||
       !(event.target instanceof Node) ||
       !event.currentTarget.contains(event.target) ||
-      nativeContextMenuReason(event) !== null
+      !claimEvent(event.nativeEvent)
     ) {
+      return;
+    }
+    // Claimed: with no actions, or on a native target, the native menu stays.
+    if (!hasActions || nativeContextMenuReason(event) !== null) {
       return;
     }
     const { clientX: x, clientY: y } = event;
@@ -151,6 +169,12 @@ export const EntityActions = ({
       !isContextMenuKey(event) ||
       !(target instanceof Element) ||
       !event.currentTarget.contains(target) ||
+      !claimEvent(event.nativeEvent)
+    ) {
+      return;
+    }
+    if (
+      !hasActions ||
       nativeContextMenuReason({ shiftKey: false, target }) !== null
     ) {
       return;
@@ -166,6 +190,9 @@ export const EntityActions = ({
       {/* `contents` keeps the object's own layout: this element only listens. */}
       <div
         className="contents"
+        // Hand-written handlers further up resolve the object a right-click
+        // belongs to through this marker and leave this one alone.
+        data-context-menu-target=""
         data-slot="entity-actions"
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
@@ -173,24 +200,26 @@ export const EntityActions = ({
       >
         {children}
       </div>
-      <Menu
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen);
-          if (!nextOpen) {
-            setAnchor(null);
-          }
-        }}
-        open={open}
-      >
-        <MenuAnchor />
-        <MenuPopup
-          anchor={anchor ?? undefined}
-          data-slot="entity-actions-context-popup"
-          finalFocus={() => returnFocus.current ?? false}
+      {hasActions && (
+        <Menu
+          onOpenChange={(nextOpen) => {
+            setOpen(nextOpen);
+            if (!nextOpen) {
+              setAnchor(null);
+            }
+          }}
+          open={open}
         >
-          <EntityActionItems actions={actions} heading={heading} />
-        </MenuPopup>
-      </Menu>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={anchor ?? undefined}
+            data-slot="entity-actions-context-popup"
+            finalFocus={() => returnFocus.current ?? false}
+          >
+            <EntityActionItems actions={actions} heading={heading} />
+          </MenuPopup>
+        </Menu>
+      )}
     </EntityActionsContext>
   );
 };

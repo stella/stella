@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -37,9 +39,11 @@ import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation
 import { formatContextualTimestamp } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 
-type ChatMessageActionsMenuProps = {
+type ChatMessageActionsProps = {
   canExport: boolean;
   canFork: boolean;
+  /** The whole message: right-clicking anywhere in it opens its actions. */
+  children: ReactNode;
   /** The chat's matter scope; the fork carries it, and an inspector tab
    *  must be told it. Defaults to the thread's own matter. */
   contextMatterIds?: readonly string[] | undefined;
@@ -69,21 +73,32 @@ const FORK_DESTINATION_ICONS = {
 /** No matters beyond the thread's own: the fork keeps just that scope. */
 const NO_EXTRA_CONTEXT_MATTERS: readonly string[] = [];
 
-export const ChatMessageActionsMenu = ({
+type ChatMessageActionsRow = {
+  extras: ReactNode;
+  /** Registers the "…" button, which the export menu anchors to. */
+  setTrigger: (trigger: HTMLButtonElement | null) => void;
+};
+
+const ChatMessageActionsRowContext =
+  createContext<ChatMessageActionsRow | null>(null);
+
+/** One message's actions: its right-click menu and its "…" button's list. */
+const ChatMessageActions = ({
   canExport,
   canFork,
+  children,
   contextMatterIds = NO_EXTRA_CONTEXT_MATTERS,
   exportArtifact,
   message,
   threadRef,
-}: ChatMessageActionsMenuProps) => {
+}: ChatMessageActionsProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // A fork to the side panel confirms on this action row: the menu closes
   // on click, so the row is where the eye still is.
   const sidePanelChat = useSidePanelChat();
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
   const pendingForkThreadId = useRef<ChatThreadId | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const workspaceId =
@@ -180,28 +195,84 @@ export const ChatMessageActionsMenu = ({
       ]
     : forkActions;
 
+  // The "…" button sits in the message's action row; the row's status note
+  // and the export menu anchored to the button go with it.
+  const row: ChatMessageActionsRow = {
+    setTrigger,
+    extras: (
+      <>
+        <SidePanelChatNote status={sidePanelChat.status} />
+        <SidePanelChatAnnouncer status={sidePanelChat.status} />
+        {canExport && (
+          <MessageExportMenu
+            anchor={trigger}
+            artifact={exportArtifact ?? undefined}
+            key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
+            message={message}
+            onOpenChange={setExportOpen}
+            open={exportOpen}
+            threadRef={threadRef}
+          />
+        )}
+      </>
+    ),
+  };
+
   return (
-    <>
+    <ChatMessageActionsRowContext value={row}>
       <EntityActions
         actions={actions}
         heading={timestamp ?? undefined}
         label={t("common.actions")}
       >
-        <EntityActionsButton align="start" ref={triggerRef} side="top" />
+        {children}
       </EntityActions>
-      <SidePanelChatNote status={sidePanelChat.status} />
-      <SidePanelChatAnnouncer status={sidePanelChat.status} />
-      {canExport && (
-        <MessageExportMenu
-          anchor={triggerRef}
-          artifact={exportArtifact ?? undefined}
-          key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
-          message={message}
-          onOpenChange={setExportOpen}
-          open={exportOpen}
-          threadRef={threadRef}
-        />
-      )}
+    </ChatMessageActionsRowContext>
+  );
+};
+
+type ChatMessageActionsScopeProps = Omit<
+  ChatMessageActionsProps,
+  "threadRef"
+> & {
+  /** Absent on embedded surfaces, which offer no message actions. */
+  threadRef?: ChatThreadRef | undefined;
+};
+
+/**
+ * Wraps a whole message (its content and its action row) in its actions
+ * when the surface offers them, so right-clicking the message opens what its
+ * "…" button opens. Without actions the message renders as it is.
+ */
+export const ChatMessageActionsScope = ({
+  canFork,
+  children,
+  threadRef,
+  ...props
+}: ChatMessageActionsScopeProps): ReactNode =>
+  // Explicit ReactNode: returning bare `children` would infer React 19's
+  // Promise member, which promise-function-async flags on a sync component.
+  threadRef !== undefined && canFork ? (
+    <ChatMessageActions canFork={canFork} threadRef={threadRef} {...props}>
+      {children}
+    </ChatMessageActions>
+  ) : (
+    children
+  );
+
+/** The message's "…" button, inside the `ChatMessageActionsScope` around it. */
+export const ChatMessageActionsButton = () => {
+  const row = use(ChatMessageActionsRowContext);
+  if (row === null) {
+    panic(
+      "ChatMessageActionsButton renders inside ChatMessageActionsScope, which owns its actions",
+    );
+  }
+  const { extras, setTrigger } = row;
+  return (
+    <>
+      <EntityActionsButton align="start" ref={setTrigger} side="top" />
+      {extras}
     </>
   );
 };

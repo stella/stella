@@ -58,7 +58,10 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
-import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
+import {
+  ChatMessageActionsButton,
+  ChatMessageActionsScope,
+} from "@/components/chat/chat-message-actions-menu";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import {
@@ -111,7 +114,6 @@ import {
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
-import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -386,75 +388,88 @@ export const ChatThreadMessages = ({
               switch (policy) {
                 case "activity":
                   return renderActivityMessage(message.parts);
-                case "assistant":
+                case "assistant": {
+                  const canFork = canForkAssistantMessage({
+                    isGenerating: generationActive,
+                    messageId: message.id,
+                    messages,
+                  });
                   return (
                     <ChatAnswerDecisionProvider
                       message={message}
                       isAwaitingUser={awaitedAssistantMessageId === message.id}
                     >
-                      <AssistantMessageParts
-                        activeFileName={activeFileName}
-                        activeOrganizationId={activeOrganizationId}
-                        assistantTextDensity={assistantTextDensity}
-                        isAwaitingUser={
-                          awaitedAssistantMessageId === message.id
-                        }
-                        isGenerating={generationActive}
-                        isLatestAssistantMessage={
-                          message.id === retryableAssistantMessageId
-                        }
+                      {/* The whole answer is the right-click target for the
+                          actions its "…" button opens. */}
+                      <ChatMessageActionsScope
+                        canExport={getMessageText(message) !== ""}
+                        canFork={canFork}
+                        contextMatterIds={branchSource?.contextMatterIds}
+                        exportArtifact={findCreateDocumentArtifactForMessage(
+                          messages,
+                          index,
+                        )}
                         message={message}
-                        onAskUserEditAndRerun={onAskUserEditAndRerun}
-                        onAskUserEditingChange={onAskUserEditingChange}
-                        onAskUserSubmit={onAskUserSubmit}
-                        onCreateDocumentResolve={onCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-                        onOpenCreatedDocument={onOpenCreatedDocument}
-                        onOpenPlaybook={onOpenPlaybook}
-                        shouldShowToolCalls={shouldShowToolCalls}
-                        streamdownComponents={streamdownComponents}
-                        workspaceId={workspaceId}
                         threadRef={threadRef}
-                      />
-                      <ChatTurnDuration timing={message.metadata?.turnTiming} />
-                      <div
-                        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                        data-chat-answer-footer
-                        data-chat-copy-exclude
                       >
-                        <AssistantMessageActions
-                          exportArtifact={findCreateDocumentArtifactForMessage(
-                            messages,
-                            index,
-                          )}
-                          canFork={canForkAssistantMessage({
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          canRetry={canRetryAssistantMessage({
-                            error,
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          contextMatterIds={branchSource?.contextMatterIds}
+                        <AssistantMessageParts
+                          activeFileName={activeFileName}
+                          activeOrganizationId={activeOrganizationId}
+                          assistantTextDensity={assistantTextDensity}
+                          isAwaitingUser={
+                            awaitedAssistantMessageId === message.id
+                          }
+                          isGenerating={generationActive}
+                          isLatestAssistantMessage={
+                            message.id === retryableAssistantMessageId
+                          }
                           message={message}
-                          onResend={onResend}
+                          onAskUserEditAndRerun={onAskUserEditAndRerun}
+                          onAskUserEditingChange={onAskUserEditingChange}
+                          onAskUserSubmit={onAskUserSubmit}
+                          onCreateDocumentResolve={onCreateDocumentResolve}
+                          onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
+                          onOpenCreatedDocument={onOpenCreatedDocument}
+                          onOpenPlaybook={onOpenPlaybook}
+                          shouldShowToolCalls={shouldShowToolCalls}
+                          streamdownComponents={streamdownComponents}
+                          workspaceId={workspaceId}
                           threadRef={threadRef}
                         />
-                        <AssistantAnswerMetadata
-                          message={message}
-                          workspaceId={workspaceId}
-                          threadId={threadRef?.threadId}
-                          disabled={
-                            generationActive || !!awaitedAssistantMessageId
-                          }
-                          onAnswerEdited={onAnswerEdited}
+                        <ChatTurnDuration
+                          timing={message.metadata?.turnTiming}
                         />
-                      </div>
+                        <div
+                          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                          data-chat-answer-footer
+                          data-chat-copy-exclude
+                        >
+                          <AssistantMessageActions
+                            canFork={canFork}
+                            canRetry={canRetryAssistantMessage({
+                              error,
+                              isGenerating: generationActive,
+                              messageId: message.id,
+                              messages,
+                            })}
+                            message={message}
+                            onResend={onResend}
+                            threadRef={threadRef}
+                          />
+                          <AssistantAnswerMetadata
+                            message={message}
+                            workspaceId={workspaceId}
+                            threadId={threadRef?.threadId}
+                            disabled={
+                              generationActive || !!awaitedAssistantMessageId
+                            }
+                            onAnswerEdited={onAnswerEdited}
+                          />
+                        </div>
+                      </ChatMessageActionsScope>
                     </ChatAnswerDecisionProvider>
                   );
+                }
                 case "text":
                   return (
                     <TextMessageParts
@@ -1251,8 +1266,6 @@ const getMessageText = (message: PersistedChatMessage) => {
 const AssistantMessageActions = ({
   canFork: forkOffered,
   canRetry: retryOffered,
-  contextMatterIds,
-  exportArtifact,
   message,
   onResend,
   threadRef,
@@ -1261,9 +1274,6 @@ const AssistantMessageActions = ({
   canFork: boolean;
   /** `canRetryAssistantMessage`. */
   canRetry: boolean;
-  /** The chat's matter scope, which a fork opened in the inspector keeps. */
-  contextMatterIds?: readonly string[] | undefined;
-  exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
@@ -1315,16 +1325,7 @@ const AssistantMessageActions = ({
           {t("common.retry")}
         </Button>
       )}
-      {threadRef && forkOffered && (
-        <ChatMessageActionsMenu
-          canExport={Boolean(text)}
-          canFork={canFork}
-          contextMatterIds={contextMatterIds}
-          exportArtifact={exportArtifact}
-          message={message}
-          threadRef={threadRef}
-        />
-      )}
+      {canFork && <ChatMessageActionsButton />}
     </div>
   );
 };
