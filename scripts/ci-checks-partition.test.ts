@@ -1200,10 +1200,16 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     const end = run.indexOf("done\n", start) + "done\n".length;
     expect(end).toBeGreaterThan(start);
     const legacy = run.slice(start, end);
-    const [declarations, loop = ""] = legacy.split(")\n");
+    const legacyParts = legacy.split(")\n");
+    const declarations =
+      legacyParts.at(0) ??
+      panic("the legacy MCP output CI step needs output declarations");
+    const loop =
+      legacyParts.at(1) ??
+      panic("the legacy MCP output CI step needs an output-checking loop");
     expect(
       declarations
-        ?.slice("outputs=(\n".length)
+        .slice("outputs=(\n".length)
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean)
