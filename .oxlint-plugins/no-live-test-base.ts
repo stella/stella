@@ -314,29 +314,25 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
                   break;
                 }
                 case "absent": {
-                  const positional = node.arguments.filter((arg) => {
+                  // Literal words, argv arrays and spawner options are not a
+                  // directory; with no other argument the call runs in the
+                  // checkout, for spawners and Git-named wrappers alike.
+                  const directories = node.arguments.filter((arg) => {
                     const resolved = resolveStable(context, arg);
                     return (
                       isAstNode(arg) &&
                       resolved?.type !== "ArrayExpression" &&
+                      resolved?.type !== "TemplateLiteral" &&
                       !(
                         SPAWN_CALLS.has(name) &&
                         resolved?.type === "ObjectExpression"
                       ) &&
-                      staticStringValue(resolved) !== "git"
+                      staticStringValue(resolved) === null
                     );
                   });
                   if (
-                    positional.length > 0 &&
-                    !positional.some((arg) =>
-                      checkoutPath({ context, value: arg }),
-                    )
-                  ) {
-                    return;
-                  }
-                  if (
-                    gitWrapper &&
-                    !node.arguments.some((arg) =>
+                    directories.length > 0 &&
+                    !directories.some((arg) =>
                       checkoutPath({ context, value: arg }),
                     )
                   ) {

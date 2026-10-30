@@ -32,9 +32,12 @@ test("rejects moving test baselines in the checkout", async () => {
         'const pipeOptions = { stdout: "pipe" };',
         'Bun.spawnSync(["git", "show", "origin/main:a.json"], pipeOptions);',
         'Bun.spawnSync(["git", "show", "origin/main:a.json"], checkoutOptions);',
+        // A Git-named wrapper without a directory runs in the checkout.
+        'git("show", "origin/main:x");',
+        'git("show", "origin/main:x", { cwd: REPO_ROOT });',
       ].join("\n"),
     ),
-  ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 18]);
+  ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 18, 19, 20]);
 });
 
 test("allows fixture repositories and pinned reads without exemptions", async () => {
@@ -56,6 +59,8 @@ test("allows fixture repositories and pinned reads without exemptions", async ()
         'Bun.spawnSync(["git", "show", "origin/main:a.json"], { stdout: "pipe", ...fixtureOptions });',
         'Bun.spawnSync(["git", "show", "origin/main:a.json"], { ...callerOptions, cwd: fixture });',
         'Bun.spawnSync(["git", "show", "origin/main:a.json"], fixtureOptions);',
+        'git(fixture, "show", "origin/main:x");',
+        'git("show", "origin/main:x", { cwd: fixture });',
       ].join("\n"),
     ),
   ).toEqual([]);
