@@ -1,31 +1,12 @@
-import type { StatuteRowData } from "@/components/workspaces/table/types";
+import type { ComponentProps } from "react";
 
-import { PublicLawTable } from "./public-law-table";
-import type { PublicLawTableLayout } from "./public-law-table-layout.logic";
+import type { PublicLawTable } from "./public-law-table";
 
-const layout: PublicLawTableLayout = {
-  contentMode: "tight",
-  hidden: [],
-  order: [],
-  pinned: [],
-  sizing: {},
-};
+type Selection = NonNullable<
+  ComponentProps<typeof PublicLawTable>["selection"]
+>;
+type IsRequired<T, TKey extends keyof T> =
+  object extends Pick<T, TKey> ? false : true;
+type Assert<T extends true> = T;
 
-export const selectionRequiresActions = (
-  rows: StatuteRowData[],
-  selectedIds: string[],
-) => (
-  <PublicLawTable
-    columns={[]}
-    firstRowNumber={1}
-    getRowId={(row) => row.statute.id}
-    isLoading={false}
-    layout={layout}
-    onLayoutChange={() => undefined}
-    rowHost={{ renderRow: () => null }}
-    rows={rows}
-    // @ts-expect-error A selectable public-law table must expose its consumer.
-    selection={{ onSelectedIdsChange: () => undefined, selectedIds }}
-    sorting={null}
-  />
-);
+export type SelectionRequiresActions = Assert<IsRequired<Selection, "actions">>;

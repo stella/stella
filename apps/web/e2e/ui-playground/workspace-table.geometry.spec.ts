@@ -472,7 +472,7 @@ test("the whole selection cell toggles without opening a result and supports Shi
 }) => {
   const rows = page.locator(BODY_ROW);
   const first = rows.filter({
-    has: page.locator('[data-slot="table-selection-cell"][aria-label="1"]'),
+    has: page.getByRole("checkbox", { name: "Select 21 Cdo 1400/2024" }),
   });
   const firstSelection = first.locator('[data-slot="table-selection-cell"]');
   await expect(firstSelection).toHaveAttribute("aria-checked", "false");
@@ -483,7 +483,7 @@ test("the whole selection cell toggles without opening a result and supports Shi
   await expect(first).not.toHaveAttribute("data-active", "true");
 
   const third = rows.filter({
-    has: page.locator('[data-slot="table-selection-cell"][aria-label="3"]'),
+    has: page.getByRole("checkbox", { name: "Select 23 Cdo 1414/2024" }),
   });
   await third.locator('[data-slot="table-selection-cell"]').click({
     position: { x: 3, y: 3 },
