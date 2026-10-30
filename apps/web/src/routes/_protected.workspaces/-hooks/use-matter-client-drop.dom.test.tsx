@@ -237,7 +237,9 @@ test("Undo from an earlier move cannot replace a newer client assignment", async
   );
   await harness.apply(harness.calls.at(1));
   expect(harness.currentClientId()).toBe("client-third");
-  act(() => fireEvent.click(earlierUndo));
+  await act(async () => {
+    fireEvent.click(earlierUndo);
+  });
   expect(harness.calls.at(2)?.variables.update).toEqual({
     type: "clientId",
     value: MOVE.previousClientId,
