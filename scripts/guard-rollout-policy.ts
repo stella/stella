@@ -55,4 +55,22 @@ export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
     type: "full",
     check: ["bun", "scripts/check-tracked-symlinks.ts"],
   },
+  {
+    id: "parser-fixture-reader-guard",
+    rules: ["parser-fixture-reader-guard/parser-fixture-reader-guard"],
+    type: "changed-lines",
+    expiresAt: "2026-11-05T00:00:00.000Z",
+    check: [
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      "oxlint.config.ts",
+      "--allow",
+      "all",
+      "--deny",
+      "parser-fixture-reader-guard/parser-fixture-reader-guard",
+      "apps/api",
+    ],
+  },
 ] as const;
