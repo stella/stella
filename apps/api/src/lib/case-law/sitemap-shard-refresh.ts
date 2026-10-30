@@ -30,7 +30,7 @@ import {
   sitemapDocumentRepresentativeFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
-  lockCaseLawRemovalSnapshots,
+  lockCaseLawSitemapSnapshot,
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -365,9 +365,10 @@ const recountMonth = async (
     if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
       return false;
     }
-    // Skip an already held month before waiting on the shared removal fence.
-    // Hold that fence from the count's snapshot through publication.
-    await lockCaseLawRemovalSnapshots(tx);
+    // Skip an already held month before waiting on the sitemap snapshot
+    // fence, which removal also takes. Hold it from the count's snapshot
+    // through publication.
+    await lockCaseLawSitemapSnapshot(tx);
     const counted = executedRows(
       await tx.execute(sitemapMonthCountSql(target)),
     ).map((row) => v.parse(monthCountRowSchema, row));
