@@ -21,6 +21,7 @@ import {
 } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
+import { sanitizeFailureText } from "@/api/lib/observability/credential-text";
 import type {
   FailureGrading,
   FailureSink,
@@ -43,8 +44,10 @@ import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
 import { releaseFailureIdentity } from "@/api/lib/observability/release-failures";
 import {
+  getActiveRequest,
   getRequestContext,
   recordRequestFailure,
+  requireRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
 
@@ -59,6 +62,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "decisionId",
   "documentId",
   "entityId",
+  "eventId",
   "feature",
   "jobId",
   // Public corpus jurisdiction code.
@@ -160,6 +164,13 @@ const requestFields = (onRequest: boolean): LoggerAttributes => {
 
 const observedStoreRequests = new WeakSet<object>();
 
+const captureFailure = (
+  error: unknown,
+  options: Parameters<typeof captureObservedError>[1],
+): void => {
+  captureObservedError(error, options);
+};
+
 /**
  * `onRequest`: the failure belongs to the request in flight, so its record
  * carries the request id and the request keeps the observation for its
@@ -191,6 +202,13 @@ const observe = (
     ...context.accepted,
     ...requestFields(onRequest),
     ...errorFields(evidence),
+    ...(error instanceof Error
+      ? {
+          "cause.summary": sanitizeQueryErrorText(
+            sanitizeFailureText(error.message),
+          ),
+        }
+      : {}),
     ...failureFields(grading, sink),
     "failure.policy": sanitizeQueryErrorText(policy.source),
     ...(context.rejected > 0
@@ -236,7 +254,7 @@ const observe = (
             ...capture,
             scope: options.scope ?? capture.scope,
           };
-    captureObservedError(error, captureOptions);
+    captureFailure(error, captureOptions);
   }
 };
 
@@ -257,6 +275,30 @@ export const observeFailure = (
   }
 };
 
+/** Capture an already-counted unobserved answer through the failure owner. */
+export const captureUnobservedAnswerFailure = (
+  error: unknown,
+  {
+    context,
+    observation,
+    request,
+    scope,
+  }: {
+    readonly context: Record<string, string>;
+    readonly observation: FailureGrading;
+    readonly request: Request;
+    readonly scope: RequestExceptionScope | HandlerExceptionScope;
+  },
+): void => {
+  captureFailure(error, {
+    scope,
+    fingerprintKey: "observability.unobservedServerError",
+    request,
+    context,
+    observation,
+  });
+};
+
 /**
  * Observe the cause of the answer the request in flight is about to send,
  * reading the request from its async scope instead of a handle. The record
@@ -274,7 +316,19 @@ export const observeAnswerFailure = (
   }: { readonly sink: FailureSink; readonly ctx?: FailureContext | undefined },
 ): void => {
   const observed = Result.try(() => {
-    observe(error, { sink, ctx }, true);
+    const request = getActiveRequest();
+    observe(
+      error,
+      request === undefined
+        ? { sink, ctx }
+        : {
+            sink,
+            ctx,
+            request,
+            scope: requireRequestExceptionScope(request),
+          },
+      true,
+    );
   });
   if (Result.isError(observed)) {
     reportEmitFailure("observe", observed.error);

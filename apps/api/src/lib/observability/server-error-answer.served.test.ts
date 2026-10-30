@@ -89,6 +89,11 @@ const indexFailover = (): Error =>
     ),
   );
 
+const sensitiveFailure = (): Error =>
+  new Error(
+    "upstream refused Bearer sk-live-super-secret for lawyer@example.com",
+  );
+
 // A member route is a tenant action, so the admission boundary decides it.
 const memberRoute: RouteDefinition = {
   access: "member",
@@ -121,6 +126,11 @@ const handlerServer = serve(LIFECYCLE, {
     GET: defineEndpoint.public({}, () =>
       status(502, { message: "Bad gateway" }),
     ),
+  },
+  "/v1/signals/sensitive": {
+    GET: createSafePublicHandler(config, async function* () {
+      return Result.ok(searchIndexUnavailableResponse(sensitiveFailure()));
+    }),
   },
 });
 
@@ -222,5 +232,19 @@ describe("a server error answer", () => {
       /^req_[0-9a-f]{32}$/u,
     );
     expect(analytics.exceptions()).toHaveLength(1);
+  });
+
+  test("redacts credentials and personal data from a 5xx cause", async () => {
+    const response = await handlerServer.fetch(
+      "http://localhost/v1/signals/sensitive",
+    );
+    expect(response.status).toBe(503);
+
+    const cause = recordNamed(logs.records, "legal_search.index_unavailable");
+    expect(cause?.attributes?.["cause.summary"]).toBe(
+      "upstream refused Bearer [redacted-secret] for [redacted-email]",
+    );
+    expect(JSON.stringify(cause)).not.toContain("sk-live-super-secret");
+    expect(JSON.stringify(cause)).not.toContain("lawyer@example.com");
   });
 });

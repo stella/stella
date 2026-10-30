@@ -93,9 +93,17 @@ const respondFailure = (
   cause: unknown,
   statusCode: 500 | 503,
   message: string,
+  eventId?: string,
 ): Response =>
   observedResponse(
-    { sink: WEBHOOK_FAILED, cause, ctx: { source: "usage_provider.webhook" } },
+    {
+      sink: WEBHOOK_FAILED,
+      cause,
+      ctx: {
+        source: "usage_provider.webhook",
+        ...(eventId === undefined ? {} : { eventId }),
+      },
+    },
     JSON.stringify({ message }),
     { status: statusCode, headers: { "content-type": "application/json" } },
   );
@@ -260,7 +268,12 @@ export const receiveHostedUsageWebhook = async (
       // Nothing committed: the record's insert and result update share one
       // transaction, and the insert is keyed on the event id, so the
       // provider's retry of this 500 records it once.
-      return respondFailure(recorded.retry, 500, "Event record failed");
+      return respondFailure(
+        recorded.retry,
+        500,
+        "Event record failed",
+        eventId,
+      );
     }
     return respond(200, "Event type ignored");
   }
@@ -327,7 +340,7 @@ export const receiveHostedUsageWebhook = async (
     // NOT persist a failure row, because that would re-introduce
     // the "dedupe committed without dispatch" hole this refactor
     // closed.
-    return respondFailure(error, 500, "Dispatch failed");
+    return respondFailure(error, 500, "Dispatch failed", eventId);
   }
 
   if (outcome.kind === "duplicate") {

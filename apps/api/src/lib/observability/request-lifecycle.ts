@@ -43,6 +43,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
+import { captureUnobservedAnswerFailure } from "@/api/lib/observability/observe-failure";
 import { NO_ERROR_IDENTITY } from "@/api/lib/observability/release-failures";
 import {
   claimRequestRecord,
@@ -265,7 +266,7 @@ const observeUnobserved5xx = (
     identity: NO_ERROR_IDENTITY,
   });
   if (UNOBSERVED_5XX_POLICY.capture) {
-    captureObservedError(
+    captureUnobservedAnswerFailure(
       classifyFailure(
         new HandlerError({
           status: 500,
@@ -279,7 +280,6 @@ const observeUnobserved5xx = (
           method: request.method,
           routeTemplate: route,
         },
-        fingerprintKey: "observability.unobservedServerError",
         request,
         context: {
           route,
