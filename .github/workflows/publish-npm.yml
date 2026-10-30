@@ -810,40 +810,49 @@ jobs:
           # A bare Mach-O cannot be stapled. Gatekeeper checks its accepted
           # notarization ticket online when the installed executable runs.
 
-      - name: Ensure PSGallery is registered for Windows signing
+      - name: Checkout desktop Windows signing tooling
+        if: matrix.platform == 'windows-x64'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .cli-release-tooling
+          sparse-checkout: scripts/desktop-release-step.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Setup Rust for Windows signing tools
+        if: matrix.platform == 'windows-x64'
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.99.0
+
+      - name: Install desktop Windows signing CLI
+        if: matrix.platform == 'windows-x64'
+        uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
+        with:
+          crate: trusted-signing-cli
+          version: "0.10.0"
+          locked: true
+
+      - name: Locate desktop Windows signing tool
+        if: matrix.platform == 'windows-x64'
+        id: signtool
+        shell: bash
+        run: bun .cli-release-tooling/scripts/desktop-release-step.ts locate-windows-signing
+
+      - name: Sign Windows CLI with desktop release tooling
         if: matrix.platform == 'windows-x64'
         shell: bash
-        run: |
-          pwsh -NoProfile -NonInteractive -Command - <<'POWERSHELL'
-          $ErrorActionPreference = "Stop"
-          $expectedSourceLocation = "https://www.powershellgallery.com/api/v2"
-          $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
-          if (-not $repository) {
-            Register-PSRepository -Default
-            $repository = Get-PSRepository -Name PSGallery -ErrorAction Stop
-          }
-          if ($repository.SourceLocation.TrimEnd("/") -ne $expectedSourceLocation) {
-            throw "PSGallery has an unexpected source location"
-          }
-
-          POWERSHELL
-
-      - name: Sign Windows CLI via Azure Trusted Signing
-        if: matrix.platform == 'windows-x64'
         timeout-minutes: 10
-        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
-        with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
-          files-folder: native-cli
-          files-folder-filter: exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+          SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
+        run: bun .cli-release-tooling/scripts/desktop-release-step.ts sign-windows native-cli
 
       - name: Smoke test standalone CLI
         shell: bash

@@ -6,7 +6,9 @@ import { DESKTOP_WINDOWS_DRY_RUN_INPUTS } from "./ci-plan-scope";
 import {
   configureWindowsSigning,
   desktopArtifacts,
+  locateWindowsSignTool,
   resignWindowsArtifacts,
+  signWindowsArtifacts,
   stampCargoPackageVersion,
   stampDesktopRelease,
 } from "./desktop-release-step";
@@ -235,9 +237,11 @@ test("the Windows build action receives its release script path explicitly", () 
   expect(commands).toEqual([
     "    description: Path to desktop-release-step.ts",
   ]);
-  expect(action.match(/bun "\$\{\{ inputs\.script-path \}\}"/gu)?.length).toBe(
-    2,
-  );
+  const invocations = [...action.matchAll(/^\s+run: bun "([^"]+)"/gmu)];
+  expect(invocations.length).toBeGreaterThan(0);
+  for (const invocation of invocations) {
+    expect(invocation.at(1)).toBe(githubExpression("inputs.script-path"));
+  }
   expect(action).not.toMatch(
     /bun (?:\.\.\/)*scripts\/desktop-release-step\.ts/u,
   );
@@ -448,4 +452,155 @@ test("artifact discovery is recursive, stable, and rejects unrelated files", () 
     path.join(bundle, "nsis/Stella-windows.exe"),
   ]);
   expect(desktopArtifacts(path.join(bundle, "missing"))).toEqual([]);
+});
+
+test("Windows signing finds the newest installed SDK numerically", () => {
+  const programFiles = temporary();
+  const sdk = path.join(programFiles, "Windows Kits", "10", "bin");
+  for (const version of ["10.0.9.0", "10.0.10.0"]) {
+    mkdirSync(path.join(sdk, version, "x64"), { recursive: true });
+    writeFileSync(path.join(sdk, version, "x64/signtool.exe"), "fixture");
+  }
+  mkdirSync(path.join(sdk, "10.0.11.0"));
+  expect(locateWindowsSignTool(programFiles)).toBe(
+    path.join(sdk, "10.0.10.0", "x64/signtool.exe"),
+  );
+});
+
+test("Windows signing refuses an SDK without signtool", () => {
+  const programFiles = temporary();
+  mkdirSync(path.join(programFiles, "Windows Kits", "10", "bin"), {
+    recursive: true,
+  });
+  expect(() => locateWindowsSignTool(programFiles)).toThrow(
+    "signtool.exe not found",
+  );
+});
+
+const signingEnv = {
+  AZURE_TENANT_ID: "fixture-tenant",
+  AZURE_CLIENT_ID: "fixture-client",
+  AZURE_CLIENT_SECRET: "fixture-credential",
+  AZURE_ENDPOINT: "https://signing.example",
+  AZURE_CODE_SIGNING_ACCOUNT: "fixture-account",
+  AZURE_CERT_PROFILE: "fixture-profile",
+  SIGNTOOL_PATH: "fixture-signtool",
+};
+
+test("desktop and standalone executables use the same trusted signing arguments", () => {
+  const directory = temporary();
+  mkdirSync(path.join(directory, "nsis"), { recursive: true });
+  const native = path.join(directory, "stella-windows-x64.exe");
+  const desktop = path.join(directory, "nsis/Stella-setup.exe");
+  writeFileSync(native, "native");
+  writeFileSync(desktop, "desktop");
+  writeFileSync(path.join(directory, "installer.exe.zip"), "archive");
+  const commands: string[][] = [];
+  signWindowsArtifacts({
+    directory,
+    env: signingEnv,
+    run: (command) => {
+      commands.push(command);
+      return 0;
+    },
+  });
+  expect(commands).toEqual(
+    [desktop, native]
+      .toSorted()
+      .map((file) => [
+        "trusted-signing-cli",
+        "-e",
+        signingEnv.AZURE_ENDPOINT,
+        "-a",
+        signingEnv.AZURE_CODE_SIGNING_ACCOUNT,
+        "-c",
+        signingEnv.AZURE_CERT_PROFILE,
+        file,
+      ]),
+  );
+  expect(commands.flat()).not.toContain(signingEnv.AZURE_CLIENT_SECRET);
+});
+
+test("Windows signing fails before dispatch without credentials and stops on signer failure", () => {
+  const directory = temporary();
+  mkdirSync(directory);
+  writeFileSync(path.join(directory, "stella.exe"), "fixture");
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return 1;
+  };
+  expect(() =>
+    signWindowsArtifacts({
+      directory,
+      env: { ...signingEnv, AZURE_CLIENT_SECRET: "" },
+      run,
+    }),
+  ).toThrow("Missing AZURE_CLIENT_SECRET");
+  expect(calls).toBe(0);
+  expect(() =>
+    signWindowsArtifacts({ directory, env: signingEnv, run }),
+  ).toThrow("Windows executable signing failed");
+  expect(calls).toBe(1);
+});
+
+test("release signing actions keep Azure credentials out of third-party action steps", () => {
+  const nativeSource = readFileSync(
+    new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    "utf-8",
+  );
+  const desktopSource = readFileSync(
+    new URL(
+      "../.github/actions/desktop-windows-build/action.yml",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  for (const source of [nativeSource, desktopSource]) {
+    expect(source).not.toContain("azure/trusted-signing-action@");
+    expect(source).toContain(" sign-windows ");
+    const document: unknown = Bun.YAML.parse(source);
+    if (!record(document)) {
+      throw new TypeError("Expected signing workflow mapping");
+    }
+    const groups = record(document["jobs"])
+      ? Object.values(document["jobs"])
+      : [document["runs"]];
+    for (const group of groups) {
+      if (!record(group) || !Array.isArray(group["steps"])) {
+        continue;
+      }
+      for (const step of group["steps"]) {
+        if (
+          !record(step) ||
+          typeof step["uses"] !== "string" ||
+          step["uses"].startsWith("./")
+        ) {
+          continue;
+        }
+        expect(JSON.stringify(step["with"] ?? {})).not.toMatch(/AZURE_/u);
+        const inheritedEnv = record(group["env"]) ? group["env"] : {};
+        const stepEnv = record(step["env"]) ? step["env"] : {};
+        for (const [name, value] of Object.entries({
+          ...inheritedEnv,
+          ...stepEnv,
+        })) {
+          if (name.startsWith("AZURE_")) {
+            expect(value).toBe("");
+          }
+          expect(String(value)).not.toMatch(/secrets\.AZURE_/u);
+        }
+        if (
+          step["uses"].startsWith("baptiste0928/cargo-install@") &&
+          !record(document["jobs"])
+        ) {
+          expect(step["env"]).toMatchObject({
+            AZURE_TENANT_ID: "",
+            AZURE_CLIENT_ID: "",
+            AZURE_CLIENT_SECRET: "",
+          });
+        }
+      }
+    }
+  }
 });
