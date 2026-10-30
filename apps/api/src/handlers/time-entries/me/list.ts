@@ -45,6 +45,7 @@ const myTimeEntryColumns = {
   billedMinutes: timeEntries.billedMinutes,
   narrative: timeEntries.narrative,
   narrativeLanguage: timeEntries.narrativeLanguage,
+  activityCode: timeEntries.activityCode,
   billable: timeEntries.billable,
   status: timeEntries.status,
   source: timeEntries.source,
@@ -67,6 +68,7 @@ const toMyTimeEntryItem = (
     billedMinutes: row.billedMinutes,
     narrative: row.narrative,
     narrativeLanguage: row.narrativeLanguage,
+    activityCode: row.activityCode,
     billable: row.billable,
     status: row.status,
     source: row.source,
@@ -115,7 +117,6 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "invoiceNarrative",
   "noCharge",
   "taskCode",
-  "activityCode",
   // Invoice and split identifiers are internal billing links.
   "invoiceId",
   "invoiceAttachment",

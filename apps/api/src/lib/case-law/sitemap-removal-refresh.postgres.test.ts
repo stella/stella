@@ -242,7 +242,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
                       await removalCommitted.promise;
                     }
                     const rows = await target.execute(query);
-                    if (!paused && text.includes("WITH logged AS")) {
+                    if (!paused && text.includes("count(*)::int AS total")) {
                       paused = true;
                       counted.resolve(undefined);
                       await release.promise;
@@ -322,11 +322,9 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
         year: SITEMAP_WHOLE_COUNTRY,
         month: SITEMAP_WHOLE_COUNTRY,
       });
-      // The post-removal monthly row is consumed first; the following run
-      // expands the retained country invalidation before rebuilding February.
-      expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
-        type: "pending",
-      });
+      // Rotation may finish the monthly changes and country invalidation in
+      // either tick; both must complete within two post-removal ticks.
+      await refreshCaseLawSitemapShards(refreshDb);
       expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
         type: "refreshed",
       });
