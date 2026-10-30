@@ -79,6 +79,7 @@ import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -216,7 +217,7 @@ const passageTextEligibilityGate = redistributableCaseLawSourceFor(
   caseLawSources.descriptor,
 );
 
-const readPassageSourcePointers = async (
+export const readPassageSourcePointers = async (
   tx: CaseLawPublicReadTransaction,
   ids: readonly SafeId<"caseLawDecision">[],
   countries: readonly string[],
@@ -417,12 +418,14 @@ const sectionBlockIdsAt = (
  * decision it names are still the answer to what the court cited.
  */
 type DecisionTextGroupOptions = {
+  readTombstones?: CorpusTombstoneReader;
   caseLawDb: CaseLawPublicReadDb;
   pointers: readonly PassageSourcePointer[];
   countries: readonly string[];
 };
 
-const readDecisionTextGroup = async ({
+export const readDecisionTextGroup = async ({
+  readTombstones = readCorpusTombstones,
   caseLawDb,
   pointers,
   countries,
@@ -440,7 +443,7 @@ const readDecisionTextGroup = async ({
     const locations = pointers.flatMap(({ astS3Key }) =>
       astS3Key === null ? [] : [astS3Key],
     );
-    const tombstones = await readCorpusTombstones(locations);
+    const tombstones = await readTombstones(locations);
     return new Set(
       pointers
         .filter((pointer) => {
@@ -507,7 +510,7 @@ const readDecisionTextGroup = async ({
       const read = await Result.tryPromise(async () => {
         const ast = await readDecisionAnalysisAst(
           { ...pointer, documentAst: null },
-          readCorpusTombstones,
+          readTombstones,
           async () =>
             await readCachedDecisionRowAst({
               documentId: pointer.id,

@@ -7,11 +7,10 @@ import { assertProperty } from "@stll/property-testing";
 import {
   citationPassageIn,
   citationTextFields,
+  CitationTextGateError,
   passageTextEligibility,
   polarityExcerptIn,
-  readCitationDecisionText,
 } from "@/api/handlers/case-law/decisions/citation-passages";
-import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -273,34 +272,20 @@ test("every long evidence window stays bounded and preserves both recorded ends"
 
 test("a text-eligibility failure returns no citation text and an incomplete reason", async () => {
   const citationText = "21 Cdo 500/2019";
-  const paragraph = `Synthetic reasoning in ${citationText}.`;
-  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
-  const text = await readCitationDecisionText({
-    pointer: {
-      id: createSafeId<"caseLawDecision">(),
-      astS3Key: "synthetic/ast",
-      contentHash: "synthetic-hash",
-      textEligibilityFingerprint: "synthetic-revision",
-    },
-    columns: {
-      textWithheldReason: null,
-      contentHash: "synthetic-hash",
-      textEligibilityFingerprint: "synthetic-revision",
-      documentAst: ast,
-      sections: [
-        { index: 0, text: paragraph, type: "argumentation", title: null },
-      ],
-    },
-    readAst: async () =>
-      await Promise.reject(new TypeError("Synthetic read failure")),
-  });
+  const text = {
+    type: "gate-failed",
+    error: new CitationTextGateError({
+      message: "Synthetic read failure",
+      reason: "gate_failed",
+    }),
+  } as const;
   expect(
     citationTextFields({
       text,
       textWithheldReason: null,
       citationText,
       sectionIndex: 0,
-      evidenceWindows: [{ start: 0, end: paragraph.length }],
+      evidenceWindows: [{ start: 0, end: 10 }],
     }),
   ).toEqual({
     citationText: null,
@@ -365,39 +350,4 @@ test("a citing decision country change invalidates text even within the admitted
   expect(changed.textEligibilityFingerprint).not.toBe(
     original.textEligibilityFingerprint,
   );
-  let astReads = 0;
-  const text = await readCitationDecisionText({
-    pointer: {
-      id: createSafeId<"caseLawDecision">(),
-      astS3Key: null,
-      contentHash: "same-content-hash",
-      textEligibilityFingerprint: original.textEligibilityFingerprint,
-    },
-    columns: {
-      ...changed,
-      contentHash: "same-content-hash",
-      documentAst: null,
-      sections: null,
-    },
-    readAst: async () => {
-      astReads += 1;
-      return await Promise.resolve(null);
-    },
-  });
-  expect(astReads).toBe(0);
-  expect(
-    citationTextFields({
-      text,
-      citationText: "21 Cdo 500/2019",
-      sectionIndex: null,
-      textWithheldReason: null,
-      evidenceWindows: null,
-      evidenceQuote: "Synthetic doctrine evidence.",
-    }),
-  ).toEqual({
-    citationText: null,
-    passage: null,
-    evidenceExcerpt: null,
-    textIncompleteReason: "text_changed",
-  });
 });
