@@ -16,6 +16,7 @@ const authCapabilities = {
   social: {
     google: false,
     microsoft: false,
+    apple: false,
   },
 } as const satisfies AuthCapabilities;
 
@@ -36,7 +37,7 @@ describe("restricted password sign-in option", () => {
           localPassword: local,
           bootstrap,
         },
-        socialProviderFlags: { google: false, microsoft: false },
+        socialProviderFlags: { google: false, microsoft: false, apple: false },
       });
       expect(options.showReviewPasswordSignIn).toBe(shown);
     },
@@ -51,11 +52,13 @@ describe("sign-in panel options", () => {
         socialProviderFlags: {
           google: true,
           microsoft: true,
+          apple: true,
         },
       }),
     ).toMatchObject({
       showGoogle: false,
       showMicrosoft: false,
+      showApple: false,
       showSocialProviders: false,
       hasAboveEmailOptions: false,
     });
@@ -74,6 +77,7 @@ describe("sign-in panel options", () => {
         socialProviderFlags: {
           google: true,
           microsoft: false,
+          apple: false,
         },
       }),
     ).toMatchObject({
@@ -81,6 +85,24 @@ describe("sign-in panel options", () => {
       showSocialProviders: true,
       hasAboveEmailOptions: true,
     });
+  });
+
+  test("shows Apple only when the API and the client both enable it", () => {
+    const appleOption = (api: boolean, client: boolean) =>
+      resolveSignInOptions({
+        authCapabilities: {
+          ...authCapabilities,
+          social: { ...authCapabilities.social, apple: api },
+        },
+        socialProviderFlags: { google: false, microsoft: false, apple: client },
+      });
+    expect(appleOption(true, true)).toMatchObject({
+      showApple: true,
+      showSocialProviders: true,
+      accountCreation: "offered",
+    });
+    expect(appleOption(true, false).showApple).toBe(false);
+    expect(appleOption(false, true).showApple).toBe(false);
   });
 
   test.each([
@@ -112,9 +134,9 @@ describe("sign-in panel options", () => {
           authCapabilities: {
             ...capabilities,
             reviewPasswordSignIn: false,
-            social: { google, microsoft: false },
+            social: { google, microsoft: false, apple: false },
           },
-          socialProviderFlags: { google: true, microsoft: false },
+          socialProviderFlags: { google: true, microsoft: false, apple: false },
         }).accountCreation,
       ).toBe(expected);
     },
@@ -127,9 +149,9 @@ const everyOption = resolveSignInOptions({
     localPassword: true,
     reviewPasswordSignIn: false,
     bootstrap: false,
-    social: { google: true, microsoft: true },
+    social: { google: true, microsoft: true, apple: true },
   },
-  socialProviderFlags: { google: true, microsoft: true },
+  socialProviderFlags: { google: true, microsoft: true, apple: true },
 });
 
 describe("last-used sign-in method", () => {
@@ -154,11 +176,12 @@ describe("last-used sign-in method", () => {
   test("ignores a method this deployment no longer offers", () => {
     const emailOnly = resolveSignInOptions({
       authCapabilities,
-      socialProviderFlags: { google: true, microsoft: true },
+      socialProviderFlags: { google: true, microsoft: true, apple: true },
     });
     for (const method of [
       SIGN_IN_METHOD.google,
       SIGN_IN_METHOD.microsoft,
+      SIGN_IN_METHOD.apple,
       SIGN_IN_METHOD.password,
     ]) {
       expect(
@@ -170,7 +193,7 @@ describe("last-used sign-in method", () => {
   test("marks nothing when the page offers a single method", () => {
     const emailOnly = resolveSignInOptions({
       authCapabilities,
-      socialProviderFlags: { google: false, microsoft: false },
+      socialProviderFlags: { google: false, microsoft: false, apple: false },
     });
     expect(
       resolveLastUsedSignInMethod({
@@ -183,7 +206,7 @@ describe("last-used sign-in method", () => {
   test("counts the quiet password option as another method", () => {
     const emailAndReviewPassword = resolveSignInOptions({
       authCapabilities: { ...authCapabilities, reviewPasswordSignIn: true },
-      socialProviderFlags: { google: false, microsoft: false },
+      socialProviderFlags: { google: false, microsoft: false, apple: false },
     });
     expect(
       resolveLastUsedSignInMethod({
@@ -201,7 +224,7 @@ describe("last-used sign-in method", () => {
         reviewPasswordSignIn: false,
         bootstrap: true,
       },
-      socialProviderFlags: { google: false, microsoft: false },
+      socialProviderFlags: { google: false, microsoft: false, apple: false },
     });
     expect(
       resolveLastUsedSignInMethod({

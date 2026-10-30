@@ -7,9 +7,10 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import {
+  member,
   oauthAccessToken,
   oauthClient,
   oauthRefreshToken,
@@ -18,8 +19,20 @@ import {
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { getAuth } from "@/api/lib/auth";
-import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  CredentialIssuanceFence,
+  removeOrganizationMemberWithAuthArtifacts,
+  revokeAllUserDurableCredentials,
+} from "@/api/lib/auth-artifacts";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   authorizeOAuthClient,
@@ -28,6 +41,7 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 // timeout: each case signs in, registers a client and completes a grant first
@@ -65,19 +79,36 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       body: { name: "Reset race", slug: `reset-race-${Bun.randomUUIDv7()}` },
       headers: browser.headers(),
     });
+    const coOwnerId = mintAuthProviderId<"user">();
+    await rootDb.insert(user).values({
+      id: coOwnerId,
+      name: "Reset race co-owner",
+      email: `${coOwnerId.toLowerCase()}@example.test`,
+    });
+    cleanup.push(
+      async () => await rootDb.delete(user).where(eq(user.id, coOwnerId)),
+    );
     cleanup.push(
       async () =>
         await rootDb.delete(organization).where(eq(organization.id, firm.id)),
     );
+    await rootDb.insert(member).values({
+      id: mintAuthProviderIdValue(),
+      organizationId: firm.id,
+      userId: coOwnerId,
+      role: "owner",
+      createdAt: new Date(),
+    });
     await browser.setActiveOrganization(firm.id);
     const client = await registerOAuthClient();
+    const organizationId = brandPersistedOrganizationId(firm.id);
     cleanup.push(
       async () =>
         await rootDb
           .delete(oauthClient)
           .where(eq(oauthClient.clientId, client.clientId)),
     );
-    return { browser, client };
+    return { browser, client, organizationId };
   };
 
   const resetAccess = async (userId: string) =>
@@ -134,6 +165,141 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       expect(reset).toBe(true);
       expect(refreshed.status).toBe(400);
       expect(await refreshed.json()).toMatchObject({ error: "invalid_grant" });
+      expect(await countTokenRows(client.clientId)).toEqual({
+        refreshTokens: 0,
+        accessTokens: 0,
+      });
+    });
+
+    test("a refresh that rotated before a member removal cannot issue its successor", async () => {
+      const { browser, client, organizationId } = await fixture();
+      const grant = await grantOAuthClient(browser, client);
+      const userId = brandPersistedUserId(browser.userId);
+      let removed = false;
+      context.adapter.incrementOne = async <T>(
+        args: Parameters<typeof originalIncrement>[0],
+      ) => {
+        const rotated = await originalIncrement<T>(args);
+        if (args.model === "oauthRefreshToken" && !removed) {
+          removed = true;
+          // The removal commits between the rotation and the successor's write.
+          await rootDb.transaction(async (tx) => {
+            const [membership] = await tx
+              .select({ id: member.id })
+              .from(member)
+              .where(
+                and(
+                  eq(member.userId, userId),
+                  eq(member.organizationId, organizationId),
+                ),
+              );
+            await removeOrganizationMemberWithAuthArtifacts(tx, {
+              memberId:
+                membership?.id ?? panic("The fixture member must exist"),
+              organizationId,
+              userId,
+            });
+          });
+        }
+        return rotated;
+      };
+      const refreshed = await refreshOAuthGrant({
+        client,
+        refreshToken: grant.refreshToken,
+      });
+      expect(removed).toBe(true);
+      expect(refreshed.status).toBe(400);
+      expect(await refreshed.json()).toMatchObject({ error: "invalid_grant" });
+      expect(await countTokenRows(client.clientId)).toEqual({
+        refreshTokens: 0,
+        accessTokens: 0,
+      });
+    });
+
+    test("a member removal waits for a held issuance and then deletes its token", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      const { browser, client, organizationId } = await fixture();
+      await grantOAuthClient(browser, client);
+      const userId = brandPersistedUserId(browser.userId);
+      const [issued] = await rootDb
+        .select({
+          authorizationCodeId: oauthRefreshToken.authorizationCodeId,
+          scopes: oauthRefreshToken.scopes,
+        })
+        .from(oauthRefreshToken)
+        .where(eq(oauthRefreshToken.clientId, client.clientId));
+      if (!issued || issued.authorizationCodeId === null) {
+        panic("The grant must name its authorization code");
+      }
+      const grantId = issued.authorizationCodeId;
+      const [membership] = await rootDb
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.userId, userId),
+            eq(member.organizationId, organizationId),
+          ),
+        );
+      const memberId = membership?.id ?? panic("The fixture member must exist");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: issueDb } = openClient();
+        const { db: removalDb } = openClient();
+        const { sql: observer } = openClient();
+        const [removalWorker] = await removalDb
+          .select({ pid: sql<number>`pg_backend_pid()` })
+          .from(member)
+          .where(eq(member.id, memberId));
+        if (!removalWorker) {
+          panic("The removal session must exist");
+        }
+        let removal: Promise<void> | undefined;
+        // Issuance holds the fence for an organization-scoped token; the
+        // removal must wait for it rather than delete the membership under it.
+        await issueDb.transaction(async (tx) => {
+          const [issuer] = await tx
+            .select({ pid: sql<number>`pg_backend_pid()` })
+            .from(member)
+            .where(eq(member.id, memberId));
+          if (!issuer) {
+            panic("The issuing session must exist");
+          }
+          const fence = await CredentialIssuanceFence.holdForGrant(tx, {
+            userId,
+            sessionId: null,
+            grantId,
+            organizationId,
+          });
+          expect(fence).not.toBeNull();
+          removal = removalDb.transaction(
+            async (removalTx) =>
+              await removeOrganizationMemberWithAuthArtifacts(removalTx, {
+                memberId,
+                organizationId,
+                userId,
+              }),
+          );
+          await waitForBlockedPid(observer, {
+            waitingPid: removalWorker.pid,
+            holdingPid: issuer.pid,
+          });
+          await tx.insert(oauthRefreshToken).values({
+            id: Bun.randomUUIDv7(),
+            token: Bun.randomUUIDv7(),
+            clientId: client.clientId,
+            userId,
+            referenceId: organizationId,
+            authorizationCodeId: grantId,
+            scopes: issued.scopes,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          });
+        });
+        if (removal === undefined) {
+          panic("The racing removal must have started");
+        }
+        await removal;
+      });
       expect(await countTokenRows(client.clientId)).toEqual({
         refreshTokens: 0,
         accessTokens: 0,

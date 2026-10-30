@@ -299,8 +299,8 @@ export const indexDecision = async (
     return Result.ok(undefined);
   }
 
-  // oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy -- the title is persisted in search projections; changing its format re-projects the whole corpus and needs its own reviewed change.
-  const title = `${decision.caseNumber} — ${decision.court}`;
+  // Preserve the persisted projection title format without re-projecting the corpus.
+  const title = `${decision.caseNumber} \u2014 ${decision.court}`;
   const bodyText =
     decision.fulltext ??
     // SAFETY: sections is typed as unknown in Drizzle's JSONB

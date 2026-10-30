@@ -76,6 +76,8 @@ const documentFor = (
     sections: null,
   });
 const preview = projectProvisionPreview({
+  country: "CZE",
+  url: null,
   documentId,
   language: "cs",
   anchorId: "par_12a",
@@ -95,6 +97,7 @@ const dependencies = (
     expect(input.anchor).toBe(anchor);
     return {
       ...preview,
+      country: "CZE",
       url: buildLegislationDocumentAppUrl({
         country: "CZE",
         documentId,

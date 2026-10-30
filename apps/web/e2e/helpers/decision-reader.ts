@@ -43,10 +43,9 @@ const navigateInApp = async (
 };
 
 /**
- * Waits for the decision reader a signed-in user keeps and returns it. While
- * the lazy authenticated workspace loads, the page shows the gated reader as
- * its Suspense fallback, then mounts the authenticated reader in its place,
- * so a node read from the fallback is detached by then.
+ * Waits for a signed-in user's decision reader to offer their AI and returns
+ * it. The reader mounts gated and stays mounted; the lazy member chunk turns
+ * the same reader's AI on once it arrives, which is what this waits for.
  */
 export const expectMemberDecisionReader = async (
   page: Page,

@@ -50,6 +50,7 @@ export {
   buildPohodaXml,
   buildPeppolSkFiles,
   buildUblFiles,
+  quantityText,
   variableSymbolOf,
   type InvoiceExportLine,
   type InvoiceExportLineSource,

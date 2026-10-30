@@ -11,6 +11,7 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
+import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
@@ -116,6 +117,7 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   expensesRoute,
   internalTimeEntriesRoute,
   invoicesRoute,
+  clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
   numberSeriesRoute,
@@ -330,6 +332,37 @@ describe("time billing admission census", () => {
       }
     }
   });
+
+  test("a challenged access token hears its challenge; any other refusal sees no route", async () => {
+    for (const [statusCode, challenge, expected] of [
+      [403, 'Bearer error="insufficient_scope"', 403],
+      [401, 'Bearer error="invalid_token"', 401],
+      [403, undefined, 404],
+      [401, undefined, 404],
+    ] as const) {
+      const route = routes(
+        { "/": { POST: defineEndpoint.public({}, () => "served") } },
+        {
+          middleware: [
+            featureAccessGate(FEATURE_ID, {
+              resolveAuth: async (ctx) => {
+                if (challenge !== undefined) {
+                  ctx.set.headers["www-authenticate"] = challenge;
+                }
+                return { ok: false, statusCode };
+              },
+            }),
+          ],
+        },
+      );
+      await using server = serveRoutes(route);
+      const response = await server.fetch(
+        new Request("http://localhost/", { method: "POST" }),
+      );
+      expect(response.status).toBe(expected);
+      expect(response.headers.get("www-authenticate")).toBe(challenge ?? null);
+    }
+  });
 });
 
 describe("time billing over REST", () => {
@@ -416,6 +449,8 @@ describe("time billing on agent surfaces", () => {
     );
     expect(expectedCapabilities).toContain("time-entries.create");
     expect(expectedCapabilities).toContain("invoices.create");
+    expect(expectedCapabilities).toContain("client-invoices.create");
+    expect(expectedCapabilities).toContain("client-invoices.prefill");
 
     await withTimeBilling(false, async () => {
       for (const mode of MCP_MODES) {

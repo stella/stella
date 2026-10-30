@@ -25,6 +25,7 @@ const termSchema = v.object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add always-mask terms to a matter's anonymization gazetteer, each with " +
     "a canonical form, a label, and optional spelling variants. Idempotent " +

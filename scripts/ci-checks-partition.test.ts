@@ -1238,21 +1238,26 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
       },
     };
   }
-  if (
-    step.name === "Test release policy scripts" &&
-    fields.run?.includes(
-      "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
-    )
-  ) {
-    return {
-      ...step,
-      run: fields.run
+  if (step.name === "Test release policy scripts" && fields.run !== undefined) {
+    let run = fields.run;
+    if (
+      run.includes(
+        "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+      )
+    ) {
+      run = run
         .replace(
           "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
           "bun test scripts/release-version-dispatch.test.ts\n",
         )
-        .replace("bash scripts/release-pending.test.sh\n", ""),
-    };
+        .replace("bash scripts/release-pending.test.sh\n", "");
+    }
+    // A baseline before the release hold retired still carries its shell
+    // suite. Normalize only that removed owner, never another release check.
+    if (!trackedFiles.has("scripts/check-main-merge-hold.test.sh")) {
+      run = run.replace("bash scripts/check-main-merge-hold.test.sh\n", "");
+    }
+    return { ...step, run };
   }
   if (
     step.name === "Test oxlint plugins" &&
@@ -1379,6 +1384,29 @@ test("the store cache save supervisor runs exactly once in the rest leg", () => 
   expect(owners).toEqual([{ leg: "ci-checks-rest", run: command }]);
 });
 
+test("the guard rollout scope suite is an independently receipted static check", () => {
+  const namedStep = v.looseObject({ name: v.string() });
+  const owners = partitionIds.flatMap((leg) => {
+    const { steps } = v.parse(v.looseObject({ steps: v.unknown() }), jobs[leg]);
+    return flattenWorkflowSteps(steps)
+      .filter((step) => v.is(namedStep, step))
+      .filter((step) =>
+        stepFields(step).run?.includes("scripts/guard-rollouts.test.ts"),
+      )
+      .map((step) => ({ leg, step }));
+  });
+  expect(owners).toHaveLength(1);
+  expect(owners.at(0)?.leg).toBe("ci-checks-policy");
+  expect(owners.at(0)?.step).toMatchObject({
+    name: "Guard rollout scope tests",
+    env: {
+      CI_CHECK_KIND: "STATIC",
+      CI_CHECK_INPUTS: "tracked-tree+generated-inputs",
+    },
+  });
+  expect(owners.at(0)?.step["id"]).toMatch(/^static_check_/u);
+});
+
 test("parallel CI checks preserve every merge-base check exactly once", () => {
   expect(jobs).not.toHaveProperty("ci-checks");
   expect(new Set(removedChecks.map(({ name }) => name)).size).toBe(
@@ -1405,6 +1433,7 @@ test("code-quality pool preserves every moved check exactly once", () => {
     "Aggregate ownership",
     "Split-button census",
     "Database awaits in loops",
+    "Online unique index dependency guard",
     "API timeout mutation guard",
     "Result consumption (rest)",
   ];

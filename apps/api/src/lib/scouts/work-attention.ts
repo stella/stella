@@ -40,6 +40,7 @@ import {
 import type { WorkAttentionObligation } from "@/api/lib/scouts/work-attention.logic";
 import type { NewSignal } from "@/api/lib/signals/emit";
 import { runScout } from "@/api/lib/signals/scout";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { workObligationEligibleEntity } from "@/api/lib/work-obligations/eligibility";
 
 /** The statuses an obligation still owes somebody an answer in. */
@@ -131,7 +132,7 @@ const obligationFactsColumns = {
 const obligationEntityJoin = and(
   eq(entities.id, workObligations.entityId),
   eq(entities.workspaceId, workObligations.workspaceId),
-  eq(entities.kind, "task"),
+  workTask(entities),
   workObligationEligibleEntity,
 );
 

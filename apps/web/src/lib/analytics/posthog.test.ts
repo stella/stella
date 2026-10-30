@@ -1087,6 +1087,58 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
+  const expectTransientSignal = (
+    transportKind: "network" | "timeout" | "aborted",
+  ) => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new APIError({
+        status: 0,
+        message: "Private browser transport detail",
+        transportKind,
+      }),
+      {
+        fingerprintKey: "desktop-presence:query",
+        scope: { type: "handler", handlerId: "desktop-presence" },
+      },
+    );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "desktop-presence:query",
+      transport_kind: transportKind,
+    });
+  };
+
+  test("captureError records a network API transport failure as one transient signal", () => {
+    expectTransientSignal("network");
+  });
+
+  test("captureError records a timeout API transport failure as one transient signal", () => {
+    expectTransientSignal("timeout");
+  });
+
+  test("captureError records an aborted API transport failure as one transient signal", () => {
+    expectTransientSignal("aborted");
+  });
+
+  test("captureError ignores a bare abort exception", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(new DOMException("Cancelled", "AbortError"), {
+      fingerprintKey: "posthog:abort-error",
+      scope: { type: "handler", handlerId: "posthog:abort-error" },
+    });
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
   test("captureError sends the error type and a message-free stack", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",

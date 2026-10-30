@@ -14,8 +14,10 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ClaimCommentsScope = {
   claim: Pick<VerificationClaim, "anchor" | "id" | "text">;
@@ -56,6 +58,7 @@ export const useClaimComments = ({
   runId,
   workspaceId,
 }: ClaimCommentsScope): ClaimComments => {
+  const submit = useIdempotentSubmit();
   const user = useMaybeAuthenticatedUser();
   const options = claimCommentsOptions({
     claimId: claim.id,
@@ -67,7 +70,7 @@ export const useClaimComments = ({
     workspaceId,
   });
   const queryKey = options.queryKey;
-  const view = useQueryView(useQuery({ ...options, enabled: user !== null }));
+  const view = queryView(useQuery({ ...options, enabled: user !== null }));
   useQueryViewError(view, "useClaimComments:query");
   const comments = view.type === "items" ? view.items : [];
   const commentRoutes = () =>
@@ -87,11 +90,15 @@ export const useClaimComments = ({
       visibility: AnnotationVisibility;
     }) =>
       unwrapApiResponse(
-        await commentRoutes().post({
-          body,
-          claimId: toSafeId<"legalListClaim">(claim.id),
-          runId: toSafeId<"legalListVerificationRun">(runId),
-          visibility,
+        await submit.run({
+          operation: `claim-comments:${workspaceId}:${runId}:${claim.id}`,
+          body: {
+            body,
+            claimId: toSafeId<"legalListClaim">(claim.id),
+            runId: toSafeId<"legalListVerificationRun">(runId),
+            visibility,
+          },
+          send: commentRoutes().post,
         }),
       ),
     pendingInput: ({ body, visibility }) => ({

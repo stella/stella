@@ -171,6 +171,7 @@ test.each(Object.values(DESKTOP_HANDOFF_FAILURE))(
       await ui.result.current.sign({
         target: {
           entityId: "90123344-5566-7788-9900-aabbccddeeff",
+          fieldId: "90123344-5566-7788-9900-aabbccddeeff",
           propertyId: "90123344-5566-7788-9900-aabbccddeeff",
           workspaceId: "90123344-5566-7788-9900-aabbccddeeff",
         },

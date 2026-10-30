@@ -330,15 +330,17 @@ const ingest = async (
   input: IngestionResult,
 ): Promise<void> => {
   order += 1n;
-  const outcome = await processDecision({
-    input,
-    observationOrder: order,
-    sourceId,
-    scopedDb,
-    observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus,
-  });
+  const outcome = (
+    await processDecision({
+      input,
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus,
+    })
+  ).unwrap();
   expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 

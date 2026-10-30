@@ -34,6 +34,7 @@ import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 
@@ -87,6 +88,7 @@ export const MessageExportMenu = ({
   threadRef,
   message,
 }: MessageExportMenuProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const hasCitations =
     message !== undefined && hasMessageExportCitations(message);
@@ -114,26 +116,30 @@ export const MessageExportMenu = ({
             message: "Chat message is unavailable during a live update",
           });
         }
-        const response = await api.chat
-          .threads({ threadId: threadRef.threadId })
-          .export.post(
-            {
-              messageId: toSafeId<"chatMessage">(message.id),
-              format: "docx",
-              citationStyle: hasCitations ? citationStyle : "none",
-            },
-            {
-              query:
-                threadRef.scope === "workspace"
-                  ? {
-                      workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
-                    }
-                  : {},
-              fetch: {
-                signal: AbortSignal.timeout(EXPORT_REQUEST_TIMEOUT_MS),
-              },
-            },
-          );
+        const response = await idempotentSubmit.run({
+          operation: `chat.${threadRef.threadId}.export`,
+          body: {
+            messageId: toSafeId<"chatMessage">(message.id),
+            format: "docx" as const,
+            citationStyle: hasCitations ? citationStyle : ("none" as const),
+          },
+          send: async (body) =>
+            api.chat
+              .threads({ threadId: threadRef.threadId })
+              .export.post(body, {
+                query:
+                  threadRef.scope === "workspace"
+                    ? {
+                        workspaceId: toSafeId<"workspace">(
+                          threadRef.workspaceId,
+                        ),
+                      }
+                    : {},
+                fetch: {
+                  signal: AbortSignal.timeout(EXPORT_REQUEST_TIMEOUT_MS),
+                },
+              }),
+        });
         const { downloadUrl, fileName } = unwrapApiResponse(response);
         const file = await fetchWithTimeout(downloadUrl, {
           timeoutMs: DOWNLOAD_TIMEOUT_MS,

@@ -206,7 +206,7 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ControlSizesPlayground } from "@/routes/dev/-components/control-sizes-playground";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
@@ -360,6 +360,7 @@ export function UiPlayground() {
                 <div className="flex flex-wrap items-center gap-2">
                   <SplitButton
                     size="sm"
+                    primaryContent="icon"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
                     onPrimaryClick={() => {
@@ -378,6 +379,7 @@ export function UiPlayground() {
                   </SplitButton>
                   <SplitButton
                     size="md"
+                    primaryContent="icon"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
                     onPrimaryClick={() => {
@@ -1110,7 +1112,7 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      notifyUserError(undefined, "Unable to save", {
+                      notifyUserProblem("Unable to save", {
                         description: "The server rejected the update.",
                       });
                     }}

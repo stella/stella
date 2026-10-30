@@ -9,8 +9,8 @@ defaults:
     shell: bash
 
 # Build, sign, and publish the Tauri desktop app for each release tag.
-# Runs after release.yml succeeds so the GitHub Release object already
-# exists; this workflow only adds desktop installers + the updater
+# Runs after release.yml's production promotion succeeds, including a run
+# with failed publication jobs; adds desktop installers + the updater
 # manifest to it. Skipped automatically (for STABLE tags as well as
 # prereleases) when nothing the desktop actually ships changed since
 # the previous same-channel release, so backend-only releases don't
@@ -47,18 +47,8 @@ concurrency:
 
 jobs:
   resolve:
-    # Only a successful Release Artifacts run may trigger the desktop
-    # publication path. Release Artifacts publishes the GitHub Release only
-    # after production promotion is verified, so a failed run leaves a draft;
-    # accepting `failure` here would attach installers to that draft and
-    # reach the CDN publication steps below. Manual dispatch remains
-    # available for recovery, but its stable path is gated by the post-build
-    # production verification job.
-    #
-    # Skip `cancelled` (a newer release.yml run replaced it; that newer run
-    # will trigger us instead) and `skipped` (release.yml never actually ran,
-    # so there's nothing for us to release).
-    #
+    # A successful production promotion authorizes this ref even when another
+    # publication job failed. The resolve step verifies the upstream job receipt.
     # A workflow_run trigger is accepted only from this repository's own
     # release workflow, started by a tag push or a manual dispatch. The tag
     # comes from that run's release manifest, never its head branch (a
@@ -66,8 +56,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main')
-      || (github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.head_repository.full_name == github.repository
+      || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
       && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
     runs-on: ubuntu-24.04
@@ -128,6 +117,7 @@ jobs:
           RELEASE_INPUT: ${{ inputs.release_ref }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
+          cp scripts/check-release-publication-source.sh "$RUNNER_TEMP/check-release-publication-source.sh"
           REF=$(bash scripts/desktop-release-ref.sh "$RELEASE_INPUT" "$UPSTREAM_RUN_ID")
 
           # Pattern must stay aligned with scripts/release-channel.sh
@@ -173,10 +163,17 @@ jobs:
             exit 1
           fi
 
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
-            echo "::error::Release tag $REF is not reachable from protected main"
-            exit 1
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
+          if [[ -n "$UPSTREAM_RUN_ID" ]]; then
+            if ! bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA"; then
+              echo "::notice::No production promotion receipt for $REF; no desktop publication."
+              exit 0
+            fi
+          else
+            [[ "$REF" != *-* ]] || { echo 'Desktop publication requires a stable promoted ref' >&2; exit 1; }
+            # Manual recovery must target the commit production currently serves.
+            served=$(bash scripts/retry.sh curl --fail --silent --show-error https://api.stll.app/ready | jq -er '.commit')
+            [[ "$served" == "$RELEASE_SHA" ]] || { echo 'Production is not serving the requested release' >&2; exit 1; }
           fi
 
           if ! bash "$GH_RETRY_SCRIPT" release view "$REF" >/dev/null; then
@@ -198,6 +195,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout
+        if: steps.ref.outputs.value != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pin to the resolved commit SHA to eliminate tag/branch
@@ -208,21 +206,15 @@ jobs:
           persist-credentials: false
 
       - name: Decide whether desktop changed since previous tag
+        if: steps.ref.outputs.value != ''
         id: diff
         env:
           CURRENT_TAG: ${{ steps.ref.outputs.value }}
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Manual dispatch is the rebuild escape hatch (e.g. re-running
-          # a release whose signing job failed), so it never skips.
-          # Mirrors ci.yml's dispatch-forces-checks behaviour.
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "Manual dispatch; forcing a desktop build."
-            {
-              echo "should_build=true"
-              echo "previous_tag="
-            } >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -626,8 +618,9 @@ jobs:
         run: |
           echo "::add-mask::$BUCKET"
           echo "::add-mask::$DIST_ID"
-          account_id="$(printf '%s' "$BUCKET" | grep -oE '[0-9]{12}' | head -n1 || true)"
-          [ -n "$account_id" ] && echo "::add-mask::$account_id"
+          if [[ "$BUCKET" =~ [0-9]{12} ]]; then
+            echo "::add-mask::${BASH_REMATCH[0]}"
+          fi
 
       - name: Mirror latest.json to downloads CDN
         env:

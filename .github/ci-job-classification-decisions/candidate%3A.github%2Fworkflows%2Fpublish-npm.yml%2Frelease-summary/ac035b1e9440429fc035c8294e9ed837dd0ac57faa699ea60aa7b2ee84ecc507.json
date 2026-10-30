@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Reports package publishing outcomes with read-only permissions; performs no publishing or release writes.",
+  "reviewedDigest": "ac035b1e9440429fc035c8294e9ed837dd0ac57faa699ea60aa7b2ee84ecc507"
+}

@@ -25,6 +25,7 @@ import {
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuCheckboxItem,
   MenuGroup,
   MenuGroupLabel,
@@ -125,9 +126,9 @@ import {
   slashItemSkillId,
 } from "@/lib/prompts/chat-skill-availability.logic";
 import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
+import { queryView } from "@/lib/query-view.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -295,6 +296,7 @@ export const ComposerPlusMenu = ({
                 triggerClassName,
               )}
               size={COMPOSER_CONTROL_BUTTON_SIZE}
+              tooltip={t("chat.composerMenu.open")}
               type="button"
               variant="secondary"
             />
@@ -693,7 +695,7 @@ export const ComposerSkillsMenu = ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const skillsView = useQueryView(skillsQuery, {
+  const skillsView = queryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(
         (page) => page.builtIn.length === 0 && page.installed.length === 0,
@@ -889,7 +891,7 @@ export const ComposerSkillsMenu = ({
 };
 
 // The trigger-less Menu a shortcut opens at the caret, following the
-// sr-only-trigger shape of the shell's anchored menus (`useAnchoredMenu`).
+// nonfocusable-anchor shape of the shell's anchored menus (`useAnchoredMenu`).
 const ComposerShortcutPopup = ({
   anchor,
   children,
@@ -908,7 +910,7 @@ const ComposerShortcutPopup = ({
   side: ShortcutPopupSide;
 }) => (
   <Menu onOpenChange={onOpenChange} open={open}>
-    <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+    <MenuAnchor />
     <MenuPopup
       align="start"
       anchor={anchor}
@@ -986,7 +988,7 @@ const useContextMentionSearch = ({
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const view = useQueryView(mentionQuery, {
+  const view = queryView(mentionQuery, {
     isEmpty: (data) => data.items.length === 0 && data.failures.length === 0,
   });
   return {
@@ -1036,7 +1038,7 @@ export const ComposerContextMenu = ({
     }),
     enabled,
   });
-  const mattersView = useQueryView(mattersQuery, {
+  const mattersView = queryView(mattersQuery, {
     isEmpty: (data) => data.workspaces.length === 0,
   });
   const matters: ContextMatter[] =
@@ -1476,10 +1478,10 @@ export const ComposerMcpSubmenu = ({
     ...mcpConnectionsOptions(activeOrganizationId, userId),
     enabled,
   });
-  const connectorsView = useQueryView(connectorsQuery, {
+  const connectorsView = queryView(connectorsQuery, {
     isEmpty: (data) => data.connectors.length === 0,
   });
-  const connectionsView = useQueryView(connectionsQuery, {
+  const connectionsView = queryView(connectionsQuery, {
     isEmpty: (data) => data.connections.length === 0,
   });
   const connectorsData =

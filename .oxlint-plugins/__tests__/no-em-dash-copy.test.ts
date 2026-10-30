@@ -48,6 +48,7 @@ test("allows the lone empty-cell marker", async () => {
 
 test("allows en dash ranges, entities outside JSX and comments", async () => {
   expect(await lint('const range = "2019–2024";')).toEqual([]);
+  expect(await lint('const label = "Uloženo – právě teď";')).toEqual([]);
   expect(await lint('const entity = "&mdash;";')).toEqual([]);
   expect(await lint('// draft — not sent\nconst label = "Draft";')).toEqual([]);
   expect(await lint("const p = <p>{/* draft — not sent */}Draft</p>;")).toEqual(

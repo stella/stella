@@ -26,6 +26,9 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import { filenameForContext } from "./utils.ts";
+
 const EM_DASH = "\u2014";
 const EM_DASH_ENTITY = /&(?:mdash|#8212|#x0*2014);/iu;
 
@@ -56,6 +59,24 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const enforces = (node: { range: readonly [number, number] }) => {
+          const start = context.sourceCode.getLocFromIndex(node.range[0]).line;
+          const end = context.sourceCode.getLocFromIndex(
+            node.range[1] - 1,
+          ).line;
+          for (let line = start; line <= end; line++) {
+            if (
+              guardEnforcesLine({
+                guard: "no-em-dash-copy",
+                file: filenameForContext(context),
+                line,
+              })
+            ) {
+              return true;
+            }
+          }
+          return false;
+        };
         return {
           Literal(node) {
             if (typeof node.value !== "string") {
@@ -68,8 +89,9 @@ export default eslintCompatPlugin({
               return;
             }
             if (
-              containsEmDash(raw) ||
-              (decodesEntities && EM_DASH_ENTITY.test(raw))
+              (containsEmDash(raw) ||
+                (decodesEntities && EM_DASH_ENTITY.test(raw))) &&
+              enforces(node)
             ) {
               context.report({ node, messageId: "emDash" });
             }
@@ -79,7 +101,7 @@ export default eslintCompatPlugin({
             if (EMPTY_CELL_MARKER.test(raw)) {
               return;
             }
-            if (containsEmDash(raw)) {
+            if (containsEmDash(raw) && enforces(node)) {
               context.report({ node, messageId: "emDash" });
             }
           },
@@ -88,7 +110,10 @@ export default eslintCompatPlugin({
             if (EMPTY_CELL_TEXT.test(raw)) {
               return;
             }
-            if (containsEmDash(raw) || EM_DASH_ENTITY.test(raw)) {
+            if (
+              (containsEmDash(raw) || EM_DASH_ENTITY.test(raw)) &&
+              enforces(node)
+            ) {
               context.report({ node, messageId: "emDash" });
             }
           },

@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -44,6 +45,8 @@ export type DecisionCitationChipProps = {
    * not only its badge.
    */
   citingText?: ReactNode;
+  /** The citation range owner emits the badge; later text runs do not. */
+  showBadge?: boolean | undefined;
 };
 
 const DecisionCitationLabel = ({
@@ -127,11 +130,15 @@ const DecisionCitationTriggerContent = ({
   label,
   paragraph,
   presentation,
-}: Pick<DecisionCitationChipProps, "citingText" | "decision" | "label"> & {
+  showBadge,
+}: Pick<
+  DecisionCitationChipProps,
+  "citingText" | "decision" | "label" | "showBadge"
+> & {
   /** The court's number, already in the reader's formatting locale. */
   paragraph: string | null;
   presentation: DecisionCitationPresentation;
-}) => {
+}): ReactNode => {
   const t = useTranslations();
   const badge = (
     <DecisionCitationLabel
@@ -154,6 +161,9 @@ const DecisionCitationTriggerContent = ({
   }
   if (citingText === undefined) {
     return badge;
+  }
+  if (!showBadge) {
+    return citingText;
   }
   return (
     <>
@@ -179,6 +189,7 @@ export const DecisionCitationChip = ({
   onOpen,
   label,
   citingText,
+  showBadge = true,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -255,7 +266,6 @@ export const DecisionCitationChip = ({
             ref={triggerRef}
           />
         }
-        tooltip={false}
       >
         <DecisionCitationTriggerContent
           citingText={citingText}
@@ -263,6 +273,7 @@ export const DecisionCitationChip = ({
           label={label}
           paragraph={paragraph}
           presentation={presentation}
+          showBadge={showBadge}
         />
       </PopoverTrigger>
       <PopoverPanel
@@ -295,7 +306,10 @@ export const DecisionCitationChip = ({
         {passage !== undefined && (
           <ScrollArea axis="vertical" className="max-h-64">
             <div
-              className="text-sm wrap-anywhere whitespace-pre-wrap"
+              className={cn(
+                LEGAL_TEXT_CLASS_NAME,
+                "text-sm whitespace-pre-wrap",
+              )}
               dir="auto"
             >
               {passage}

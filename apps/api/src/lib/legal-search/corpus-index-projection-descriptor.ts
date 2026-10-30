@@ -127,8 +127,8 @@ export const caseLawProjectionTitle = ({
     canonicalIdentifiers.length === 0
       ? caseNumber
       : canonicalIdentifiers.map(({ value }) => value).join(" · ");
-  // oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy -- the title is persisted in search projections; changing its format re-projects the whole corpus and needs its own reviewed change.
-  return `${reference} — ${court}`;
+  // Preserve the persisted projection title format without re-projecting the corpus.
+  return `${reference} \u2014 ${court}`;
 };
 
 type PublisherFingerprintFields = {

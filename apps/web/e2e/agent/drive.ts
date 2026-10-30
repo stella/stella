@@ -14,7 +14,13 @@ import { chromium } from "@playwright/test";
 import type { Browser, BrowserContext, Page, Response } from "@playwright/test";
 import { panic } from "better-result";
 import { existsSync, realpathSync } from "node:fs";
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readdir,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -22,7 +28,13 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { createNetworkCollector, summarizeCapture } from "../helpers/network";
+import {
+  installRenderProbe,
+  measureAction,
+  type RenderActionMeasurement,
+} from "../helpers/render-probe";
 import { createBrowserErrorCollector } from "../helpers/test";
+import type { DriveScriptContext } from "./drive-context";
 import { collectSeparateNavigationMeasurements } from "./drive-measure";
 import {
   type DriveOptions,
@@ -36,6 +48,11 @@ import {
   parseDriveArgs,
   summarizeSamples,
 } from "./drive-report";
+import {
+  type CensusSample,
+  formatCensusReport,
+  summarizeCensus,
+} from "./render-census-report";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const STORAGE_STATE = path.join(REPO_ROOT, ".playwright/storage-state.json");
@@ -81,7 +98,7 @@ const textEnteredContexts = new WeakSet<BrowserContext>();
 
 type Session = {
   browser: Browser;
-  newContext: () => Promise<BrowserContext>;
+  newContext: (options?: { renderProbe?: boolean }) => Promise<BrowserContext>;
 };
 
 const openSession = async (options: DriveOptions): Promise<Session> => {
@@ -93,7 +110,7 @@ const openSession = async (options: DriveOptions): Promise<Session> => {
   const browser = await chromium.launch();
   return {
     browser,
-    newContext: async () => {
+    newContext: async (contextOptions) => {
       const context = await browser.newContext({
         baseURL: WEB_URL,
         colorScheme: options.colorScheme,
@@ -132,6 +149,9 @@ const openSession = async (options: DriveOptions): Promise<Session> => {
         },
         { binding: TEXT_ENTRY_BINDING, events: TEXT_ENTRY_EVENTS },
       );
+      if (contextOptions?.renderProbe) {
+        await installRenderProbe(context);
+      }
       return context;
     },
   };
@@ -337,21 +357,24 @@ const snap = async (targets: string[], options: DriveOptions) => {
   return await writeReport(outputDir, sections);
 };
 
-type DriveScriptContext = {
-  apiUrl: string;
-  page: Page;
-  // Screenshots after the same readiness checks as `snap`; `waitFor` names
-  // the element that proves this step rendered (default `main`).
-  snap: (label: string, options?: { waitFor?: string }) => Promise<void>;
-  webUrl: string;
-};
-
 const isDriveScript = (
   value: unknown,
 ): value is (context: DriveScriptContext) => Promise<void> =>
   typeof value === "function";
 
-const run = async (scriptPath: string, options: DriveOptions) => {
+type ExecuteScriptOptions = {
+  scriptPath: string;
+  options: DriveOptions;
+  session: Session;
+  outputDir: string;
+};
+
+const executeScript = async ({
+  scriptPath,
+  options,
+  session,
+  outputDir,
+}: ExecuteScriptOptions) => {
   const absolute = path.resolve(process.cwd(), scriptPath);
   const imported: unknown = await import(pathToFileURL(absolute).href);
   const script: unknown =
@@ -362,17 +385,21 @@ const run = async (scriptPath: string, options: DriveOptions) => {
     throw new Error(`${scriptPath} must default-export an async function`);
   }
 
-  const session = await openSession(options);
-  const outputDir = await createOutputDir(`run-${path.basename(scriptPath)}`);
   const lines: string[] = [];
+  const measurements: RenderActionMeasurement[] = [];
   const stepProblems: string[] = [];
   let findings: PageFindings;
+  const context = await session.newContext({ renderProbe: true });
   try {
-    const context = await session.newContext();
     const tracked = await trackPage(context);
     const scriptResult = await script({
       apiUrl: API_URL,
       page: tracked.page,
+      measureAction: async (label, action) => {
+        const measurement = await measureAction(tracked.page, label, action);
+        measurements.push(measurement);
+        return measurement;
+      },
       snap: async (label, snapOptions) => {
         const ready = await waitUntilReady(
           tracked,
@@ -411,11 +438,115 @@ const run = async (scriptPath: string, options: DriveOptions) => {
         `script failed: ${scriptResult.message} (${screenshot})`,
       );
     }
+  } finally {
     await context.close();
+  }
+  return { findings, lines, measurements };
+};
+
+const run = async (scriptPath: string, options: DriveOptions) => {
+  const session = await openSession(options);
+  const outputDir = await createOutputDir(`run-${path.basename(scriptPath)}`);
+  try {
+    const result = await executeScript({
+      scriptPath,
+      options,
+      session,
+      outputDir,
+    });
+    await writeFile(
+      path.join(outputDir, "renders.json"),
+      `${JSON.stringify(result.measurements, null, 2)}\n`,
+    );
+    return await writeReport(outputDir, [{ ...result, title: scriptPath }]);
   } finally {
     await session.browser.close();
   }
-  return await writeReport(outputDir, [{ findings, lines, title: scriptPath }]);
+};
+
+const census = async (options: DriveOptions) => {
+  const flowDir = path.join(import.meta.dirname, "render-census");
+  const availableFlows = (await readdir(flowDir))
+    .filter((file) => file.endsWith(".flow.ts"))
+    .toSorted();
+  if (availableFlows.length === 0) {
+    panic("No render census flows found");
+  }
+  const requested = options.flows.split(",");
+  const unknown = requested.filter(
+    (flow) => !availableFlows.includes(`${flow}.flow.ts`),
+  );
+  if (options.flows !== "all" && unknown.length > 0) {
+    panic(`Unknown render census flows: ${unknown.join(", ")}`);
+  }
+  const flows =
+    options.flows === "all"
+      ? availableFlows
+      : availableFlows.filter((file) =>
+          requested.includes(file.replace(/\.flow\.ts$/u, "")),
+        );
+  const session = await openSession(options);
+  const outputDir = await createOutputDir("render-census");
+  const samples: CensusSample[] = [];
+  const sections: ReportSection[] = [];
+  const attempts: (Awaited<ReturnType<typeof executeScript>> & {
+    flow: string;
+    warmup: boolean;
+    sample: number;
+  })[] = [];
+  try {
+    for (const flow of flows) {
+      for (let sample = 0; sample <= options.samples; sample++) {
+        const sampleDir = path.join(outputDir, flow, String(sample));
+        await mkdir(sampleDir, { recursive: true });
+        const result = await executeScript({
+          scriptPath: path.join(flowDir, flow),
+          options,
+          session,
+          outputDir: sampleDir,
+        });
+        if (result.measurements.length === 0) {
+          result.findings.navigationProblems.push(
+            "The census flow did not measure any actions",
+          );
+        }
+        attempts.push({ ...result, flow, warmup: sample === 0, sample });
+        sections.push({
+          findings: result.findings,
+          lines: result.lines,
+          title: `${flow}: ${sample === 0 ? "warm-up" : `sample ${String(sample)}`}`,
+        });
+        if (hasBlockingFindings(result.findings)) {
+          break;
+        }
+        if (sample > 0) {
+          samples.push({ flow, measurements: result.measurements });
+        }
+      }
+    }
+  } finally {
+    await session.browser.close();
+  }
+  const summary = summarizeCensus(samples);
+  const failures = attempts.filter(({ findings }) =>
+    hasBlockingFindings(findings),
+  );
+  const table = [
+    formatCensusReport(summary),
+    `Requested ${String(options.samples)} samples per flow after one warm-up.`,
+    ...failures.flatMap(({ flow, sample, findings }) => [
+      "",
+      `Unmeasured ${flow}, ${sample === 0 ? "warm-up" : `sample ${String(sample)}`}:`,
+      formatFindings(findings),
+    ]),
+  ].join("\n");
+  await writeFile(
+    path.join(outputDir, "census.json"),
+    `${JSON.stringify({ attempts, samples, summary }, null, 2)}\n`,
+  );
+  await writeFile(path.join(outputDir, "census.md"), `${table}\n`);
+  console.log(table);
+  return await writeReport(outputDir, sections);
 };
 
 const readLcp = async (page: Page) =>
@@ -604,6 +735,10 @@ const main = async () => {
     }
     case "run": {
       blocking = await run(target, options);
+      break;
+    }
+    case "census": {
+      blocking = await census(options);
       break;
     }
     case "measure": {
