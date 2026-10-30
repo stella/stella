@@ -77,7 +77,10 @@ const ROMAN_VALUES: Readonly<Record<string, number>> = {
 
 /** A roman numeral's value, or null when the token is not one. */
 const romanValue = (token: string): number | null => {
-  const digits = [...token.toLowerCase()].map((digit) => ROMAN_VALUES[digit]);
+  const digits = Array.from(
+    token.toLowerCase(),
+    (digit) => ROMAN_VALUES[digit],
+  );
   if (digits.length === 0 || digits.some((value) => value === undefined)) {
     return null;
   }

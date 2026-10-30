@@ -197,7 +197,7 @@ describe("headings nested by their own designators", () => {
     const nested = withDesignatorHeadingLevels(blocks);
     expect(levelsOf(nested)).toEqual(levelsOf(blocks));
     for (const [index, block] of nested.entries()) {
-      expect(block).toBe(blocks[index] as Block);
+      expect(block).toBe(blocks[index]);
     }
   });
 });
