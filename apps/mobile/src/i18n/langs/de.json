@@ -163,7 +163,6 @@
     "newest": "Neueste Entscheidungen",
     "noResults": "Nichts entspricht den Wörtern, die diese Suche verlangt hat.",
     "noResultsHint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
-    "unavailable": "Die Suche ist vorübergehend nicht verfügbar",
     "retry": "Erneut versuchen",
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
@@ -179,6 +178,14 @@
   "writes": {
     "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",
     "signInAgain": "Erneut anmelden"
+  },
+  "loads": {
+    "offline": "stella konnte Ihren Server nicht erreichen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "outdated": "Ihr Server hat in einem Format geantwortet, das diese App-Version nicht versteht. Aktualisieren Sie die App oder, falls Sie ihn betreiben, den Server.",
+    "consent": "Diese Anmeldung erlaubt der App nicht, dies zu lesen. Melden Sie sich erneut an, um den Zugriff zu erteilen.",
+    "session": "Ihre Anmeldung ist abgelaufen. Melden Sie sich erneut an.",
+    "server": "Auf Ihrem Server ist ein Fehler aufgetreten (Fehler {status}). Versuchen Sie es gleich noch einmal.",
+    "refused": "Ihr Server hat die Anfrage abgelehnt (Fehler {status})."
   },
   "timers": {
     "title": "Timer",

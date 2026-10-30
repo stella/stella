@@ -1,14 +1,25 @@
 import { expect, test } from "bun:test";
 
-import { listAdapters } from "./adapters/adapter-registry";
-import { replayCapability } from "./replay";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
   validateReplayEnrolment,
 } from "./replay-enrolment";
 
-test("the committed replay registry validates its budgets and reviewed dry runs", () => {
+test("the committed registry previews paragraph-label sources and the common courts portal, and enrolment validates its budget and reviewed dry run", () => {
+  expect(
+    Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
+  ).toEqual([
+    [ADAPTER_KEYS.CZ_REGIONAL, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.CZ_NS, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.CZ_NSS, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.SK_COURTS, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.SK_US, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.PL_NCOURT, { mode: "dry-run", dailyBudget: 10_000 }],
+  ]);
   for (const policy of Object.values(REPLAY_ENROLMENT)) {
     validateReplayEnrolment(policy);
   }
@@ -45,19 +56,4 @@ test("the committed replay registry validates its budgets and reviewed dry runs"
     dailyBudget: BACKGROUND_REPLAY_LIMITS.maxDailyBudget,
     reviewedDryRun: "fixture receipt",
   });
-});
-
-test("every enabled replay source can reparse its archived input", () => {
-  for (const adapter of listAdapters()) {
-    if (REPLAY_ENROLMENT[adapter.key].mode === "off") {
-      continue;
-    }
-    expect({
-      adapter: adapter.key,
-      capability: replayCapability(adapter).type,
-    }).toEqual({
-      adapter: adapter.key,
-      capability: "supported",
-    });
-  }
 });

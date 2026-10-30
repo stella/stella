@@ -163,7 +163,6 @@
     "newest": "Newest decisions",
     "noResults": "Nothing matched the words this search required.",
     "noResultsHint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.",
-    "unavailable": "Search is temporarily unavailable",
     "retry": "Try again",
     "headnote": "Headnote",
     "textUnavailable": "No text is available for this decision",
@@ -179,6 +178,14 @@
   "writes": {
     "consentNeeded": "To make changes from the app, stella needs your permission. Sign in again to give it.",
     "signInAgain": "Sign in again"
+  },
+  "loads": {
+    "offline": "stella could not reach your server. Check your connection and try again.",
+    "outdated": "Your server answered in a form this version of the app does not understand. Update the app, or the server if you run it.",
+    "consent": "This sign-in does not let the app read this. Sign in again to give it access.",
+    "session": "Your sign-in has expired. Sign in again.",
+    "server": "Your server ran into a problem (error {status}). Try again in a moment.",
+    "refused": "Your server refused the request (error {status})."
   },
   "timers": {
     "title": "Timers",

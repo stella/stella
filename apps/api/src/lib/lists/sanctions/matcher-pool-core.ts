@@ -27,6 +27,10 @@ export const SANCTIONS_MATCHER_CONFIG = {
   deadlineMs: 250,
 } as const;
 
+// Long enough for a reply already on the worker channel to be drained, while
+// remaining far below the two-minute warm lease stall limit.
+export const SANCTIONS_MATCHER_REPLY_GRACE_MS = 10 ** 3;
+
 export type SanctionsMatcherSession = {
   signal: AbortSignal;
   hasEdition: (source: SanctionsSource, editionId: string) => boolean;
@@ -111,6 +115,39 @@ const retireMatcherSlot = async (
   await slot.termination;
 };
 
+const drainMatcherReply = async ({
+  slot,
+  worker,
+  clock,
+  reportFailure,
+  detached,
+}: {
+  slot: Slot;
+  worker: Worker;
+  clock: MatcherDeadlineClock;
+  reportFailure: typeof reportSanctionsScreeningFailure;
+  detached: ReturnType<typeof createDetached>;
+}): Promise<void> =>
+  await new Promise((resolve) => {
+    const finish = () => {
+      cancelGrace();
+      worker.off("message", drain);
+      resolve();
+    };
+    const drain = () => {
+      slot.awaitingReply = false;
+      finish();
+    };
+    const cancelGrace = clock.schedule(() => {
+      worker.off("message", drain);
+      detached(
+        retireMatcherSlot(slot, reportFailure).then(resolve),
+        "sanctions.matcher-reply-grace",
+      );
+    }, SANCTIONS_MATCHER_REPLY_GRACE_MS);
+    worker.once("message", drain);
+  });
+
 type MatcherExitOptions = {
   slot: Slot;
   worker: Worker;
@@ -133,6 +170,11 @@ const handleMatcherExit = ({
   detached,
 }: MatcherExitOptions) => {
   if (slot.worker !== worker) {
+    return;
+  }
+  // A deadline already owns this abandoned exchange. Its grace drain or
+  // retirement completes the lifecycle without a second failure report.
+  if (slot.fail === null && slot.busy && slot.awaitingReply) {
     return;
   }
   if (slot.fail !== null) {
@@ -519,14 +561,25 @@ export const createSanctionsMatcherPoolCore = ({
         failure.outcome = outcome;
         reportFailure({ stage: "matcher-pool", reason: cause, error });
         controller.abort();
-        // A deadline alone keeps the worker and its indexes: only one that
-        // still owes a reply is unsafe to lend again.
-        if (
-          lease.slot !== null &&
-          lease.retirement === null &&
-          (cause !== "deadline" || lease.slot.awaitingReply)
-        ) {
-          lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
+        if (lease.slot !== null && lease.retirement === null) {
+          const worker = lease.slot.worker;
+          if (
+            cause === "deadline" &&
+            lease.slot.awaitingReply &&
+            worker !== null
+          ) {
+            // Do not lend a worker with an unread reply. Drain that reply while
+            // the slot stays busy, or retire it once the bounded grace expires.
+            lease.retirement = drainMatcherReply({
+              slot: lease.slot,
+              worker,
+              clock,
+              reportFailure,
+              detached,
+            });
+          } else if (cause !== "deadline") {
+            lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
+          }
         }
         failed.resolve(outcome);
         return outcome;

@@ -71,6 +71,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./heading-designator-levels": {
+      "types": "./src/heading-designator-levels.ts",
+      "import": "./src/heading-designator-levels.ts"
+    },
     "./document-kind": {
       "types": "./src/document-kind.ts",
       "import": "./src/document-kind.ts"
@@ -138,6 +142,10 @@
     "./slovak-document-roles": {
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
+    },
+    "./source-contents": {
+      "types": "./src/source-contents.ts",
+      "import": "./src/source-contents.ts"
     },
     "./spot-place": {
       "types": "./src/spot-place.ts",

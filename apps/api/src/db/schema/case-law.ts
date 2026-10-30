@@ -10,6 +10,7 @@ import {
   CASE_LAW_RESEARCH_ANSWER_TYPES,
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -658,6 +659,12 @@ export const caseLawDecisions = p.pgTable(
     }),
     decisionDate: p.date("decision_date"),
     decisionType: p.varchar("decision_type", { length: 128 }),
+    /** Extraction defects in the stored document, independent of parser and jurisdiction. */
+    extractionWarnings: p
+      .jsonb("extraction_warnings")
+      .$type<ExtractionWarnings>()
+      .notNull()
+      .default([]),
     fulltext: p.text(),
     /** Last reconciliation attempt to re-read a textless listing-only detail. */
     textlessDetailRecheckedAt: timestamptz("textless_detail_rechecked_at"),
@@ -1379,6 +1386,17 @@ export const caseLawDecisionIdentifierBackfills = p.pgTable(
       .notNull()
       .default(0),
     completedAt: timestamptz("completed_at"),
+    repairedCount: p.integer("repaired_count").notNull().default(0),
+    lastCompletedRepairedCount: p
+      .integer("last_completed_repaired_count")
+      .notNull()
+      .default(0),
+    lastCompletedAt: timestamptz("last_completed_at"),
+    verificationRetryCount: p
+      .integer("verification_retry_count")
+      .notNull()
+      .default(0),
+    verificationRetryAfter: timestamptz("verification_retry_after"),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
@@ -1397,6 +1415,10 @@ export const caseLawDecisionIdentifierBackfills = p.pgTable(
     p.check(
       "case_law_decision_identifier_backfills_counts_nonnegative",
       sql`${t.decisionsScanned} >= 0 AND ${t.citationsScanned} >= 0`,
+    ),
+    p.check(
+      "case_law_identifier_retry_shape",
+      sql`${t.verificationRetryCount} BETWEEN 0 AND 3 AND (${t.verificationRetryCount} = 3) = (${t.verificationRetryAfter} IS NOT NULL)`,
     ),
     p.check(
       "case_law_decision_identifier_backfills_terminal_shape",
