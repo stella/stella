@@ -1013,6 +1013,8 @@
     "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx": 1,
     "apps/web/src/routes/_protected.contacts/import.tsx": 1,
     "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx": 1,
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx": 1,
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/bottom-row.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/-components/client-group-header.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx": 2,
