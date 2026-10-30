@@ -88,7 +88,7 @@ export const createConditionPreviewHandler = ({
           abortSignal: request.signal,
           runDecisions: async ({ fields, values, abortSignal }) => {
             if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-              return Result.err(storedAIConfigUnreadableError(undefined));
+              return Result.err(storedAIConfigUnreadableError());
             }
             if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.ownKeyRequired) {
               return Result.err(ownAIKeyRequiredError());

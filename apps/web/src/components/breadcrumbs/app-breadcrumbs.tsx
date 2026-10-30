@@ -1,15 +1,15 @@
 import { Fragment } from "react";
 
-import { Link, useMatches } from "@tanstack/react-router";
+import { useMatches } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
   Breadcrumb,
-  BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 
+import { declaredBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs.logic";
 import { ChatBreadcrumb } from "@/components/breadcrumbs/chat-breadcrumb";
 import { ClausesBreadcrumb } from "@/components/breadcrumbs/clauses-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
@@ -19,257 +19,25 @@ import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
 import { TemplatesBreadcrumb } from "@/components/breadcrumbs/templates-breadcrumb";
 import { WorkspaceBreadcrumb } from "@/components/breadcrumbs/workspace-breadcrumb";
-import type { RouterFullPath } from "@/lib/types";
-
-const PATH_SEPARATOR = "|";
-
-const serializeKey = (paths: readonly RouterFullPath[]) =>
-  paths.join(PATH_SEPARATOR);
-
-type BreadcrumbEntry =
-  | React.JSX.Element
-  | ((params: Record<string, string | undefined>) => React.ReactNode);
-
-type BreadcrumbDefinition = {
-  key: string;
-  paths: readonly RouterFullPath[];
-  entry: BreadcrumbEntry;
-};
-
-const renderPdfBreadcrumb = () => <PdfBreadcrumb />;
-
-const renderWorkspaceBreadcrumb = ({
-  workspaceId,
-}: Record<string, string | undefined>) => {
-  if (!workspaceId) {
-    return null;
-  }
-  return <WorkspaceBreadcrumb workspaceId={workspaceId} />;
-};
-
-const renderContactBreadcrumb = ({
-  contactId,
-}: Record<string, string | undefined>) => {
-  if (!contactId) {
-    return null;
-  }
-  return <ContactBreadcrumb contactId={contactId} />;
-};
-
-const renderChatThreadBreadcrumb = ({
-  threadId,
-  workspaceId,
-}: Record<string, string | undefined>) => {
-  if (!threadId) {
-    return null;
-  }
-  // `workspaceId` is present only on the workspace-scoped chat route; it
-  // scopes the inline rename's PATCH the same way the thread query is scoped.
-  return <ChatBreadcrumb threadId={threadId} workspaceId={workspaceId} />;
-};
-
-const renderBreadcrumbEntry = (
-  entry: BreadcrumbEntry,
-  params: Record<string, string | undefined>,
-): React.ReactNode => (typeof entry === "function" ? entry(params) : entry);
-
-const defineBreadcrumb = (
-  paths: readonly RouterFullPath[],
-  entry: BreadcrumbEntry,
-): BreadcrumbDefinition => ({
-  key: serializeKey(paths),
-  paths,
-  entry,
-});
+import { getTranslator } from "@/i18n/i18n-store";
+import type { RouteBreadcrumb } from "@/routes/-route-presentation";
 
 export const AppBreadcrumbs = () => {
-  const t = useTranslations();
+  useTranslations();
+  const t = getTranslator();
   const matches = useMatches();
 
-  const breadcrumbDefinitions: BreadcrumbDefinition[] = [
-    defineBreadcrumb(
-      ["/workspaces/"],
-      <BreadcrumbItem className="min-w-8 shrink">
-        <Link
-          activeOptions={{ exact: true, includeSearch: false }}
-          activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground min-w-0 truncate"
-          title={t("common.matters")}
-          to="/workspaces"
-        >
-          {t("common.matters")}
-        </Link>
-      </BreadcrumbItem>,
-    ),
-    defineBreadcrumb(["/workspaces/$workspaceId"], renderWorkspaceBreadcrumb),
-    defineBreadcrumb(
-      ["/workspaces/$workspaceId/$viewId/document"],
-      renderPdfBreadcrumb,
-    ),
-    defineBreadcrumb(
-      ["/inbox/"],
-      <BreadcrumbLink to="/inbox">{t("navigation.inbox")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/knowledge"],
-      <BreadcrumbLink to="/knowledge">
-        {t("navigation.knowledge")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(["/knowledge/templates"], <TemplatesBreadcrumb />),
-    defineBreadcrumb(
-      ["/knowledge/styles"],
-      <BreadcrumbLink to="/knowledge/styles">
-        {t("styleSets.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/contacts/"],
-      <BreadcrumbLink to="/contacts">
-        {t("navigation.contacts")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/contacts/import"],
-      <BreadcrumbItem>{t("contacts.importStudio.title")}</BreadcrumbItem>,
-    ),
-    defineBreadcrumb(["/knowledge/clauses"], <ClausesBreadcrumb />),
-    defineBreadcrumb(["/knowledge/playbooks"], <PlaybooksBreadcrumb />),
-    defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),
-    defineBreadcrumb(
-      ["/knowledge/tools"],
-      <BreadcrumbLink to="/knowledge/tools">
-        {t("knowledge.sections.tools.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(["/knowledge/tools/$entry"], <SkillBreadcrumb />),
-    defineBreadcrumb(
-      ["/settings"],
-      <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/settings/account/profile"],
-      <BreadcrumbLink to="/settings/account/profile">
-        {t("common.profile")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/settings/account/desktop"],
-      <BreadcrumbLink to="/settings/account/desktop">
-        {t("settings.account.desktop")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin"],
-      <BreadcrumbLink to="/admin">{t("common.organization")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/general"],
-      <BreadcrumbLink to="/admin/general">{t("admin.general")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/members"],
-      <BreadcrumbLink to="/admin/members">
-        {t("common.members")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/usage"],
-      <BreadcrumbLink to="/admin/usage">
-        {t("admin.planAndUsage")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/audit-logs"],
-      <BreadcrumbLink to="/admin/audit-logs">
-        {t("settings.organization.auditLogs")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/ai"],
-      <BreadcrumbLink to="/admin/ai">
-        {t("admin.modelsAndProviders")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/anonymization"],
-      <BreadcrumbLink to="/admin/anonymization">
-        {t("settings.organization.anonymization.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/tools"],
-      <BreadcrumbLink to="/admin/tools">
-        {t("knowledge.sections.tools.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/matter-numbering"],
-      <BreadcrumbLink to="/admin/matter-numbering">
-        {t("settings.organization.matterNumbering")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/document-types"],
-      <BreadcrumbLink to="/admin/document-types">
-        {t("settings.organization.documentTypes.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/time-policy"],
-      <BreadcrumbLink to="/admin/time-policy">
-        {t("settings.organization.timePolicy.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/number-series"],
-      <BreadcrumbLink to="/admin/number-series">
-        {t("billing.numberSeries.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/vat-rates"],
-      <BreadcrumbLink to="/admin/vat-rates">
-        {t("billing.vatRates.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/billing"],
-      <BreadcrumbLink to="/admin/billing">
-        {t("admin.billingProfiles")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/chat"],
-      <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/chat/history"],
-      <BreadcrumbLink to="/chat/history">{t("common.history")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/chat/$threadId", "/chat/workspaces/$workspaceId/$threadId"],
-      renderChatThreadBreadcrumb,
-    ),
-  ];
-
-  const breadcrumbs = (() => {
-    const results = new Map<string, React.ReactNode>();
-
-    for (const match of matches) {
-      for (const definition of breadcrumbDefinitions) {
-        if (definition.paths.some((path) => match.fullPath.startsWith(path))) {
-          const result = renderBreadcrumbEntry(definition.entry, match.params);
-
-          if (result !== null && result !== undefined && result !== false) {
-            results.set(definition.key, result);
-          }
-        }
-      }
-    }
-
-    return [...results.entries()];
-  })();
+  const breadcrumbs = declaredBreadcrumbs(matches).map(
+    ({ decision, key }) =>
+      [
+        key,
+        renderBreadcrumb(
+          decision,
+          matches.at(-1)?.params ?? {},
+          decision.type === "label" ? t(decision.labelKey) : undefined,
+        ),
+      ] as const,
+  );
 
   return (
     <Breadcrumb className="min-w-0 has-[input]:flex-1">
@@ -284,3 +52,43 @@ export const AppBreadcrumbs = () => {
     </Breadcrumb>
   );
 };
+
+function renderBreadcrumb(
+  decision: Exclude<RouteBreadcrumb, { type: "inherit" } | { type: "none" }>,
+  params: Record<string, string | undefined>,
+  translatedLabel: string | undefined,
+) {
+  if (decision.type === "label") {
+    return <BreadcrumbLink to={decision.to}>{translatedLabel}</BreadcrumbLink>;
+  }
+  if (decision.type === "entity") {
+    if (decision.entity === "pdf") {
+      return <PdfBreadcrumb />;
+    }
+    if (decision.entity === "matter" && params["workspaceId"]) {
+      return <WorkspaceBreadcrumb workspaceId={params["workspaceId"]} />;
+    }
+    if (decision.entity === "contact" && params["contactId"]) {
+      return <ContactBreadcrumb contactId={params["contactId"]} />;
+    }
+    if (decision.entity === "chat" && params["threadId"]) {
+      return (
+        <ChatBreadcrumb
+          threadId={params["threadId"]}
+          workspaceId={params["workspaceId"]}
+        />
+      );
+    }
+    return null;
+  }
+  if (decision.detail === "clauses") {
+    return <ClausesBreadcrumb />;
+  }
+  if (decision.detail === "playbooks") {
+    return <PlaybooksBreadcrumb />;
+  }
+  if (decision.detail === "skill") {
+    return <SkillBreadcrumb />;
+  }
+  return <TemplatesBreadcrumb />;
+}

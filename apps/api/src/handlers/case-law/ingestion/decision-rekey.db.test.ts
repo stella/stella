@@ -146,18 +146,20 @@ if (!databaseUrl || !runPostgresTests) {
       contract: SourceContract,
     ): Promise<void> => {
       observedSecond += 1;
-      await processDecision(
-        {
-          input,
-          observationOrder: BigInt(observedSecond),
-          sourceId,
-          scopedDb,
-          observedAt: new Date(
-            Date.UTC(2026, 9, 5, 12, 0, 0) + observedSecond * 1000,
-          ),
-        },
-        async () => await Promise.resolve(contract),
-      );
+      (
+        await processDecision(
+          {
+            input,
+            observationOrder: BigInt(observedSecond),
+            sourceId,
+            scopedDb,
+            observedAt: new Date(
+              Date.UTC(2026, 9, 5, 12, 0, 0) + observedSecond * 1000,
+            ),
+          },
+          async () => await Promise.resolve(contract),
+        )
+      ).unwrap();
     };
 
     const storedRows = async (sourceId: SafeId<"caseLawSource">) =>
@@ -283,7 +285,7 @@ if (!databaseUrl || !runPostgresTests) {
           input: observation({ registration, sourceDocumentId: "doc-c", ecli }),
           sourceId,
           metadataUrlSchema: contract.metadataUrlSchema,
-        });
+        }).unwrap();
         const identity = await scopedDb(
           async (tx) =>
             await resolveDecisionIdentityTx(tx, {
@@ -391,17 +393,19 @@ if (!databaseUrl || !runPostgresTests) {
       const ecli = "ECLI:XX:NONE:2024:1";
       // The default resolver reads the persisted source, whose key no
       // manifest declares: the path a seeded source takes.
-      await processDecision({
-        input: observation({
-          registration: noneSource,
-          sourceDocumentId: "doc-a",
-          ecli,
-        }),
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date(Date.UTC(2026, 9, 5, 12, 0, 0)),
-      });
+      (
+        await processDecision({
+          input: observation({
+            registration: noneSource,
+            sourceDocumentId: "doc-a",
+            ecli,
+          }),
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date(Date.UTC(2026, 9, 5, 12, 0, 0)),
+        })
+      ).unwrap();
       await store(
         sourceId,
         observation({

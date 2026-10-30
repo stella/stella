@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
@@ -11,6 +10,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { fileFieldQuery } from "@/api/lib/files/read-file";

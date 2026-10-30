@@ -10,6 +10,7 @@ import {
   parseSource,
   walk,
 } from "@stll/scripts/src/syntax-tree";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -17,7 +18,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {

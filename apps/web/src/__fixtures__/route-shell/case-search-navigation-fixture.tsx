@@ -43,6 +43,7 @@ const hit = {
   keywords: null,
   textWithheldReason: null,
   citationAuthority: 0,
+  textAvailability: "available",
   matchingPassages: 1,
   headline: "Fixture <mark>odpovědnost</mark> za <mark>škodu</mark>",
   match: "all_terms",
@@ -161,6 +162,171 @@ export const declareCaseSearchNavigationCases = (fixture: FixtureRuntime) => {
         expect(document.activeElement).toBe(next);
         expect(searched).toContainEqual({ query, offset: 0 });
         expect(searched).toContainEqual({ query, offset: 50 });
+        expect(runtime.caughtErrors).toEqual([]);
+      } finally {
+        await unmountCaseSearch(fixture, runtime);
+      }
+    });
+  }
+
+  for (const { name, selector, label, expected } of [
+    { name: "dismiss", selector: "button", label: "Dismiss", expected: { country: "cze" } },
+    { name: "correct", selector: "a", label: "Show Ústavný súd SR in Slovakia", expected: { country: "svk", court: "Ústavný súd SR" } },
+  ]) {
+    test(`case search renders the removed-filter notice and retains presentation search state on ${name}`, async () => {
+      fixture.state.audience = "anonymous";
+      fixture.state.response = async (request) => {
+        const url = new URL(request.url);
+        if (url.pathname === "/v1/case/decisions/filter-validation") {
+          return Response.json({ filters: { court: "Ústavný súd SR" }, removed: [] });
+        }
+        if (url.pathname === "/v1/case/decisions/search") {
+          const body = v.parse(searchBody, await request.json());
+          return Response.json(response(body.offset));
+        }
+        return undefined;
+      };
+      const runtime = await mountCaseSearch(fixture);
+      try {
+        await fixture.act(async () => {
+          await runtime.router.navigate({
+            to: "/law/cases",
+            search: {
+              country: "cze",
+              q: query,
+              questions: ["question-fixture"],
+              rewrite: "off",
+              rewrittenFrom: "original query",
+              filterNotice: [{ field: "court", value: "Ústavný súd SR", countries: ["SVK"] }],
+            },
+          });
+        });
+        await fixture.waitFor(() => {
+          expect(document.body.textContent).toContain("SYN 1/2026");
+          expect([...document.querySelectorAll('[role="status"]')].some((status) => status.textContent.includes("Ústavný súd SR"))).toBe(true);
+        });
+        const target = [...document.querySelectorAll(selector)].find(
+          (element) => element.textContent === label,
+        );
+        if (target === undefined) {
+          panic("The mounted search must offer the notice action");
+        }
+        const { fireEvent } = await import("@testing-library/react");
+        fixture.act(() => { fireEvent.click(target); });
+        await fixture.waitFor(() => {
+          expect(runtime.router.state.location.search).toMatchObject({
+            ...expected,
+            q: query,
+            questions: ["question-fixture"],
+            rewrite: "off",
+            rewrittenFrom: "original query",
+          });
+          expect(runtime.router.state.location.search.filterNotice).toBeUndefined();
+        });
+        expect(runtime.caughtErrors).toEqual([]);
+      } finally {
+        await unmountCaseSearch(fixture, runtime);
+      }
+    });
+  }
+
+  test("case search correction redirects a foreign court without losing presentation state or valid filters", async () => {
+    const retained = {
+      country: "cze",
+      q: query,
+      questions: ["question-fixture"],
+      rewrite: "off",
+      rewrittenFrom: "original query",
+      from: "2026-01-01",
+      to: "2026-12-31",
+      lang: "cs",
+      type: "judgment",
+      sourceId: "00000000-0000-4000-8000-000000000012",
+    } as const;
+    const removed = [
+      { field: "court", value: "Ústavný súd SR", countries: ["SVK"] },
+    ];
+    const validatedCourts: (string | null)[] = [];
+    fixture.state.audience = "anonymous";
+    fixture.state.response = async (request) => {
+      const url = new URL(request.url);
+      if (url.pathname === "/v1/case/decisions/filter-validation") {
+        const court = url.searchParams.get("court");
+        validatedCourts.push(court);
+        return Response.json({
+          filters: {
+            lang: retained.lang,
+            type: retained.type,
+            sourceId: retained.sourceId,
+          },
+          removed: court === null ? [] : removed,
+        });
+      }
+      if (url.pathname === "/v1/case/decisions/search") {
+        const body = v.parse(searchBody, await request.json());
+        return Response.json(response(body.offset));
+      }
+      return undefined;
+    };
+    const runtime = await mountCaseSearch(fixture);
+    try {
+      await fixture.act(async () => {
+        await runtime.router.navigate({
+          to: "/law/cases",
+          search: { ...retained, questions: [...retained.questions], court: "Ústavný súd SR", page: 2 },
+        });
+      });
+      await fixture.waitFor(() => {
+        expect(validatedCourts).toContain("Ústavný súd SR");
+        expect(runtime.router.state.location.search).toMatchObject({
+          ...retained,
+          filterNotice: removed,
+        });
+        expect(runtime.router.state.location.search.court).toBeUndefined();
+        expect(runtime.router.state.location.search.page).toBeUndefined();
+        expect(searchInput().value).toBe(query);
+        expect(document.body.textContent).toContain("SYN 1/2026");
+        expect([...document.querySelectorAll('[role="status"]')].some((status) => status.textContent.includes("Ústavný súd SR"))).toBe(true);
+      });
+      expect(runtime.caughtErrors).toEqual([]);
+    } finally {
+      await unmountCaseSearch(fixture, runtime);
+    }
+  });
+
+  for (const failure of [
+    { name: "429", status: 429, code: "TOO_MANY_REQUESTS" },
+    { name: "503", status: 503, code: "INTERNAL_SERVER_ERROR" },
+    { name: "timeout", status: 503, code: "57014" },
+  ]) {
+    test(`case search keeps the page and selected filters usable after filter validation ${failure.name}`, async () => {
+      let validationRequests = 0;
+      fixture.state.audience = "anonymous";
+      fixture.state.response = async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/v1/case/decisions/filter-validation") {
+          validationRequests += 1;
+          return Response.json({ code: failure.code, message: "Validation unavailable" }, { status: failure.status });
+        }
+        if (pathname === "/v1/case/decisions/search") {
+          const body = v.parse(searchBody, await request.json());
+          return Response.json(response(body.offset));
+        }
+        return undefined;
+      };
+      const runtime = await mountCaseSearch(fixture);
+      try {
+        await fixture.act(async () => {
+          await runtime.router.navigate({ to: "/law/cases", search: { country: "svk", court: "Ústavný súd SR", q: query } });
+        });
+        await fixture.waitFor(() => {
+          expect(validationRequests).toBeGreaterThan(0);
+          expect(document.body.textContent).toContain("SYN 1/2026");
+          expect(document.body.textContent).toContain("Filters");
+          expect(searchInput().value).toBe(query);
+          expect(runtime.router.state.location.search.court).toBe("Ústavný súd SR");
+          expect(runtime.router.state.location.search.filterNotice).toBeUndefined();
+        });
         expect(runtime.caughtErrors).toEqual([]);
       } finally {
         await unmountCaseSearch(fixture, runtime);

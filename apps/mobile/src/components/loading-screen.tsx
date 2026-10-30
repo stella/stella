@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 
 import { useAppColors } from "@/theme";
 
@@ -7,16 +7,8 @@ export const LoadingScreen = () => {
   const colors = useAppColors();
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <ActivityIndicator color={colors.accent} />
+    <View className="bg-background flex-1 items-center justify-center">
+      <ActivityIndicator color={colors.muted} />
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  screen: {
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-  },
-});

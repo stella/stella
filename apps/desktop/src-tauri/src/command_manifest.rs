@@ -77,7 +77,6 @@ macro_rules! with_stella_commands {
       time_entry_commands::time_entry_search_matters => "time_entry_search_matters",
       time_entry_commands::time_entry_candidates => "time_entry_candidates",
       time_entry_commands::time_entry_submit_batch_confirmed => "time_entry_submit_batch_confirmed",
-      time_entry_commands::time_entry_discard_pending_batch_confirmed => "time_entry_discard_pending_batch_confirmed",
       activity_commands::activity_assign_ranges => "activity_assign_ranges",
       activity_commands::activity_get_day => "activity_get_day",
       activity_commands::activity_set_recording_status => "activity_set_recording_status",
@@ -101,6 +100,12 @@ macro_rules! with_stella_commands {
       harness_commands::harness_install => "harness_install",
       harness_commands::harness_cancel_install => "harness_cancel_install",
       harness_commands::harness_remove => "harness_remove",
+      chatgpt_auth_commands::chatgpt_auth_get_status => "chatgpt_auth_get_status",
+      chatgpt_auth_commands::chatgpt_auth_start => "chatgpt_auth_start",
+      chatgpt_auth_commands::chatgpt_auth_cancel => "chatgpt_auth_cancel",
+      chatgpt_auth_commands::chatgpt_auth_complete => "chatgpt_auth_complete",
+      chatgpt_auth_commands::chatgpt_auth_disconnect => "chatgpt_auth_disconnect",
+      chatgpt_auth_commands::chatgpt_auth_open_usage => "chatgpt_auth_open_usage",
     }
   };
 }
