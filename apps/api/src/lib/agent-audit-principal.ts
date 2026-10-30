@@ -1,42 +1,30 @@
-import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { panic } from "better-result";
 
-import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { rootDb } from "@/api/db/root";
-import { oauthGrantRevocations } from "@/api/db/schema";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { McpSession } from "@/api/mcp/auth";
-import { McpAuthenticationError } from "@/api/mcp/errors";
 
 type ResolveAgentAuditExecutionOptions = {
-  credential: McpSession["credential"];
-  organizationId: SafeId<"organization">;
+  credential: AdmittedMcpSession["credential"];
   userId: SafeId<"user">;
-  db?: Pick<typeof rootDb, "select">;
 };
 
 /**
  * Resolve the verified MCP credential into activity provenance. The human
- * remains the accountable owner while the credential is the performer. This
- * owner-level lookup is deliberately isolated here because agent-registration
- * control-plane rows deny access to the scoped application role.
+ * remains the accountable owner while the credential is the performer.
+ * The admission owner has already bound any agent registration to this identity.
  */
-export const resolveAgentAuditExecution = async ({
+export const resolveAgentAuditExecution = ({
   credential,
-  organizationId,
   userId,
-  db = rootDb,
-}: ResolveAgentAuditExecutionOptions): Promise<
-  Result<AuditExecutionContext | undefined, McpAuthenticationError>
-> => {
+}: ResolveAgentAuditExecutionOptions): AuditExecutionContext | undefined => {
   if (credential === undefined) {
-    return Result.ok(undefined);
+    return undefined;
   }
 
   switch (credential.type) {
     case "agent_run":
-      return Result.ok({
+      return {
         performer: {
           type: "agent",
           id: "stella-assistant",
@@ -49,15 +37,15 @@ export const resolveAgentAuditExecution = async ({
           source: "mcp",
           sourceId: credential.runId,
         },
-      });
+      };
     case "delegated_user":
-      return Result.ok({
+      return {
         performer: { id: userId, type: "user" },
         trigger: { source: "mcp", type: "direct" },
-      });
+      };
     case "personal_api_key":
     case "machine_api_key":
-      return Result.ok({
+      return {
         performer: {
           type: "agent",
           id: `${credential.type === "personal_api_key" ? "personal-key" : "machine-key"}:${credential.id}`,
@@ -69,71 +57,28 @@ export const resolveAgentAuditExecution = async ({
           source: "mcp",
           sourceId: credential.id,
         },
-      });
+      };
     case "oauth_client": {
-      const match = await db
-        .select({
-          registrationId: agentRegistration.id,
-          revokedAt: oauthGrantRevocations.revokedAt,
-          revokedGrantId: oauthGrantRevocations.grantId,
-        })
-        .from(sql`(SELECT 1) AS oauth_session`)
-        .leftJoin(
-          agentRegistration,
-          and(
-            eq(agentRegistration.clientId, credential.clientId),
-            eq(agentRegistration.boundUserId, userId),
-            eq(agentRegistration.boundOrganizationId, organizationId),
-            eq(agentRegistration.status, "claimed"),
-          ),
-        )
-        .leftJoin(
-          oauthGrantRevocations,
-          and(
-            eq(oauthGrantRevocations.oauthClientId, credential.clientId),
-            eq(oauthGrantRevocations.userId, userId),
-            eq(oauthGrantRevocations.organizationId, organizationId),
-            credential.grantId === undefined
-              ? sql`${oauthGrantRevocations.revokedAt} >= to_timestamp(${credential.issuedAt})`
-              : eq(oauthGrantRevocations.grantId, credential.grantId),
-          ),
-        )
-        .limit(1)
-        .then((rows) => rows.at(0) ?? null);
-
-      const isRevoked =
-        match?.revokedAt !== null &&
-        match?.revokedAt !== undefined &&
-        (credential.grantId === undefined ||
-          match.revokedGrantId === credential.grantId);
-      if (isRevoked) {
-        return Result.err(
-          new McpAuthenticationError({
-            message: "Invalid or expired token",
-          }),
-        );
-      }
-
-      if (!match?.registrationId) {
-        return Result.ok({
+      if (!credential.registrationId) {
+        return {
           performer: { id: userId, type: "user" },
           trigger: { source: "mcp", type: "direct" },
-        });
+        };
       }
 
-      return Result.ok({
+      return {
         performer: {
           type: "agent",
-          id: match.registrationId,
+          id: credential.registrationId,
           name: null,
         },
         trigger: {
           type: "credential",
           ownerUserId: userId,
           source: "mcp",
-          sourceId: match.registrationId,
+          sourceId: credential.registrationId,
         },
-      });
+      };
     }
     default: {
       credential satisfies never;

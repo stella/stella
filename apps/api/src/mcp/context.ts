@@ -63,6 +63,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -644,7 +645,7 @@ const admitMcpMember = async ({
 };
 
 export const resolveMcpSessionContext = async (
-  session: McpSession,
+  session: AdmittedMcpSession,
   {
     clientIp = null,
     request,
@@ -678,15 +679,10 @@ export const resolveMcpSessionContext = async (
   if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
-  const auditExecutionResult = await resolveAgentAuditExecution({
+  const auditExecution = resolveAgentAuditExecution({
     credential: session.credential,
-    organizationId,
     userId,
   });
-  if (Result.isError(auditExecutionResult)) {
-    throw auditExecutionResult.error;
-  }
-  const auditExecution = auditExecutionResult.value;
   const memberRole = authorization.role;
   const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {
     organizationId,

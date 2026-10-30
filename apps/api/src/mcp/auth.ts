@@ -9,6 +9,8 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { admitMcpSession } from "@/api/lib/auth/oauth-grant-admission";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import { OAUTH_GRANT_ID_CLAIM } from "@/api/lib/auth/oauth-grant-identity";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
@@ -283,13 +285,15 @@ export const authenticateMcpRequest = async (
     resolveApiKeySession,
     reviewAccount = getReviewAccountConfig(),
     verifyToken,
+    admissionOptions,
   }: {
     mode?: McpMode | undefined;
     reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
     resolveApiKeySession: typeof resolveMachineApiKeySession;
     verifyToken?: VerifyBearerToken;
+    admissionOptions?: Parameters<typeof admitMcpSession>[1];
   },
-): Promise<Result<McpSession, McpAuthenticationFailure>> => {
+): Promise<Result<AdmittedMcpSession, McpAuthenticationFailure>> => {
   const authenticated = isMachineApiKeyCredential(bearerToken)
     ? await Result.tryPromise({
         try: async () => await resolveApiKeySession(bearerToken, { mode }),
@@ -301,8 +305,12 @@ export const authenticateMcpRequest = async (
           ...(verifyToken === undefined ? {} : { verifyToken }),
         })
       ).andThen(extractMcpSession);
-  return authenticated.map((session) =>
-    narrowReviewOrganizationScopes(session, reviewAccount),
+  if (authenticated.isErr()) {
+    return authenticated;
+  }
+  return await admitMcpSession(
+    narrowReviewOrganizationScopes(authenticated.value, reviewAccount),
+    admissionOptions,
   );
 };
 
@@ -311,12 +319,14 @@ export const authenticateAccountExportRequest = async (
   bearerToken: string,
   {
     verifyToken,
+    admissionOptions,
     reviewAccount = getReviewAccountConfig(),
   }: {
     verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+    admissionOptions?: Parameters<typeof admitMcpSession>[1];
     reviewAccount?: Pick<ReviewAccountConfig, "organizationId">;
   } = {},
-): Promise<Result<McpSession, McpAuthenticationFailure>> => {
+): Promise<Result<AdmittedMcpSession, McpAuthenticationFailure>> => {
   if (isMachineApiKeyCredential(bearerToken)) {
     return Result.err(
       new McpAuthenticationError({
@@ -340,7 +350,11 @@ export const authenticateAccountExportRequest = async (
       catch: classifyMcpTokenVerificationError,
     })
   ).andThen(extractMcpSession);
-  return authenticated.map((session) =>
-    narrowReviewOrganizationScopes(session, reviewAccount),
+  if (authenticated.isErr()) {
+    return authenticated;
+  }
+  return await admitMcpSession(
+    narrowReviewOrganizationScopes(authenticated.value, reviewAccount),
+    admissionOptions,
   );
 };

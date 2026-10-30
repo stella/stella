@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { REVIEW_ACCOUNT_EXCLUDED_SCOPES } from "@/api/lib/auth/review-account-policy";
@@ -11,6 +12,18 @@ import { MCP_MODES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const admissionQuery = {
+  from: () => admissionQuery,
+  leftJoin: () => admissionQuery,
+  limit: async () => [],
+};
+const admissionOptions = {
+  db: asTestRaw<Pick<typeof rootDb, "select">>({
+    select: () => admissionQuery,
+  }),
+};
 
 const credentialCases = [
   {
@@ -40,6 +53,7 @@ describe("MCP account authorization", () => {
               : "credential.fixture",
             {
               mode,
+              admissionOptions,
               verifyToken: async () => ({
                 sub: "user_one",
                 org_id: organizationId,
@@ -174,6 +188,7 @@ describe("MCP account authorization", () => {
               ? `${MACHINE_API_KEY_PREFIX}fixture`
               : "credential.fixture",
             {
+              admissionOptions,
               verifyToken: async () => ({
                 sub: "user_review",
                 org_id: organizationId,
@@ -298,6 +313,7 @@ describe("MCP account authorization", () => {
             ? `${MACHINE_API_KEY_PREFIX}fixture`
             : "credential.fixture",
           {
+            admissionOptions,
             reviewAccount: { organizationId: "org_review" },
             verifyToken: async () => ({
               sub: "user_one",

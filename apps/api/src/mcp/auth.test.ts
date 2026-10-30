@@ -4,6 +4,7 @@ import type { JWTPayload, JWTVerifyOptions } from "jose";
 
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 
+import type { rootDb } from "@/api/db/root";
 import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
@@ -18,6 +19,18 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const admissionQuery = {
+  from: () => admissionQuery,
+  leftJoin: () => admissionQuery,
+  limit: async () => [],
+};
+const admissionOptions = {
+  db: asTestRaw<Pick<typeof rootDb, "select">>({
+    select: () => admissionQuery,
+  }),
+};
 
 const sessionFrom = (payload: JWTPayload) => {
   const session = extractMcpSession(payload);
@@ -46,6 +59,7 @@ describe("extractMcpSession", () => {
       const authenticated = await authenticateAccountExportRequest(
         "oauth-token",
         {
+          admissionOptions,
           reviewAccount: { organizationId: "org_review" },
           verifyToken: async () => ({
             sub: "user_one",
@@ -82,6 +96,7 @@ describe("extractMcpSession", () => {
     const authenticated = await authenticateAccountExportRequest(
       "oauth-token",
       {
+        admissionOptions,
         verifyToken: async (
           _token: string | undefined,
           options?: { verifyOptions?: JWTVerifyOptions },

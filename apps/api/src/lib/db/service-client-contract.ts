@@ -1,4 +1,4 @@
-import type { McpSession } from "@/api/mcp/auth";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 
 /** Shared by the schema, persistence and the token boundary; loads no auth runtime. */
 export const SERVICE_CLIENT_BUDGET_CEILINGS = {
@@ -34,7 +34,7 @@ export type ServiceClientBinding = {
 };
 
 /** Service principals exist only at this public-law boundary. */
-export type LegalResolveSession = McpSession | ServiceOAuthPrincipal;
+export type LegalResolveSession = AdmittedMcpSession | ServiceOAuthPrincipal;
 
 export const isServiceResolveSession = (
   session: LegalResolveSession,

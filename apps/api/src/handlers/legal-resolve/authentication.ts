@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { admitMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import { resolveServiceOAuthToken } from "@/api/lib/auth/service-client";
@@ -23,6 +24,7 @@ type LegalResolveAuthenticationDependencies = {
   mode?: "default" | "law";
   verifyToken?: Parameters<typeof verifyMcpAccessToken>[1]["verifyToken"];
   resolveService?: typeof resolveServiceOAuthToken;
+  admissionOptions?: Parameters<typeof admitMcpSession>[1];
 };
 
 export const authenticateLegalResolveToken = async (
@@ -31,6 +33,7 @@ export const authenticateLegalResolveToken = async (
     mode = "law",
     verifyToken,
     resolveService = resolveServiceOAuthToken,
+    admissionOptions,
   }: LegalResolveAuthenticationDependencies = {},
 ): Promise<Result<LegalResolveSession, McpAuthenticationFailure>> => {
   if (isMachineApiKeyCredential(bearerToken)) {
@@ -49,8 +52,13 @@ export const authenticateLegalResolveToken = async (
   if (
     verified.value[SERVICE_CLIENT_PRINCIPAL_CLAIM] !== SERVICE_CLIENT_PRINCIPAL
   ) {
-    return extractMcpSession(verified.value).map((session) =>
-      narrowReviewOrganizationScopes(session, getReviewAccountConfig()),
+    const extracted = extractMcpSession(verified.value);
+    if (extracted.isErr()) {
+      return extracted;
+    }
+    return await admitMcpSession(
+      narrowReviewOrganizationScopes(extracted.value, getReviewAccountConfig()),
+      admissionOptions,
     );
   }
   if (mode !== "law") {

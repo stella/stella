@@ -30,6 +30,7 @@ import { hasRequestBody, reframeBoundedRequest } from "@/api/http/request-body";
 import type { BoundedRequest } from "@/api/http/request-body";
 import type { captureError as captureApiError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/analytics/capture";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -59,7 +60,7 @@ import {
   resolveMachineApiKeySession,
   revalidateMachineApiKeySession,
 } from "@/api/mcp/api-key-auth";
-import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
+import type { McpAuthenticationFailure } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
   featureOmittedCapabilityIds,
@@ -216,7 +217,7 @@ type McpServerDependencies = {
       mode: McpMode;
       resolveApiKeySession: typeof resolveMachineApiKeySession;
     },
-  ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
+  ) => Promise<Result<AdmittedMcpSession, McpAuthenticationFailure>>;
   captureError: typeof captureApiError;
   observeTransportFailure?: typeof observeMcpTransportFailure;
   getMcpToolDefinition: (
@@ -255,7 +256,7 @@ type McpServerDependencies = {
   ) => ReadResourceResult | Promise<ReadResourceResult>;
   recordMcpSessionInitialized: RecordMcpSessionInitialized;
   resolveMcpSessionContext: (
-    session: McpSession,
+    session: AdmittedMcpSession,
     options: { clientIp?: string | null; request: Request },
   ) => Promise<McpRequestResources>;
 };
@@ -344,7 +345,10 @@ export const mcpOmittedToolNamesByReason = ({
 
 /** An accepted MCP credential: who it resolved to, and what an event-stream
  *  answer to it stays bound to. */
-type McpAuthenticated = { session: McpSession; stream: SseStreamBinding };
+type McpAuthenticated = {
+  session: AdmittedMcpSession;
+  stream: SseStreamBinding;
+};
 
 const withMcpCors = async (
   response: Response,
@@ -624,7 +628,7 @@ const withCappedRequestBody = async (
  */
 type McpFactoryState = {
   context: McpRequestResources;
-  session: McpSession;
+  session: AdmittedMcpSession;
 };
 
 const factoryState = new AsyncLocalStorage<McpFactoryState>();
@@ -883,7 +887,7 @@ export const createMcpHttpRequestHandler = ({
     requestContext: ServerContext;
     context: McpRequestResources;
     mode: McpMode;
-    session: McpSession;
+    session: AdmittedMcpSession;
   };
   const handleToolsCallRequest = async ({
     toolRequest,
@@ -1089,7 +1093,7 @@ export const createMcpHttpRequestHandler = ({
   }: {
     context: McpRequestResources;
     mode: McpMode;
-    session: McpSession;
+    session: AdmittedMcpSession;
   }) => {
     const serverBuildStartedAt = performance.now();
     // The low-level Server API accepts JSON Schema directly, which keeps the
@@ -1255,7 +1259,7 @@ export const createMcpHttpRequestHandler = ({
     mode: McpMode;
     parsedBody: unknown;
     request: Request;
-    session: McpSession;
+    session: AdmittedMcpSession;
   }): Promise<Response> => {
     const server = await createMcpServer({ context, mode, session });
     const transport = new WebStandardStreamableHTTPServerTransport({

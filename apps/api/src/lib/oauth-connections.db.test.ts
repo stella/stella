@@ -21,6 +21,7 @@ import {
   session,
 } from "@/api/db/auth-schema";
 import { oauthGrantRevocations } from "@/api/db/schema";
+import { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
 import {
@@ -146,6 +147,11 @@ const opensMcpContext = async (accessToken: string): Promise<boolean> => {
   );
   return resolved.isOk();
 };
+
+const opensLegalResolve = async (accessToken: string) =>
+  (
+    await authenticateLegalResolveToken(accessToken, { mode: "default" })
+  ).isOk();
 
 const signDelegatedUserToken = async (
   userId: string,
@@ -351,7 +357,10 @@ describe("disconnecting a connected app", () => {
     ).toBe(1);
   });
 
-  test("refuses only the disconnected app's already-issued MCP token", async () => {
+  test.each([
+    { entry: "MCP", opensSession: opensMcpContext },
+    { entry: "legal-resolve", opensSession: opensLegalResolve },
+  ])("applies connected-app admission to $entry", async ({ opensSession }) => {
     const auth = getAuth();
     const owner = await signInHuman(
       `revocation-owner-${Bun.randomUUIDv7()}@stella.dev`,
@@ -408,7 +417,7 @@ describe("disconnecting a connected app", () => {
         ),
       ),
     ).toBe(0);
-    expect(await opensMcpContext(disconnectedGrant.accessToken)).toBe(true);
+    expect(await opensSession(disconnectedGrant.accessToken)).toBe(true);
     const connection = (await listConnections(owner)).find(
       ({ clientId }) => clientId === disconnectedClient.clientId,
     );
@@ -417,14 +426,52 @@ describe("disconnecting a connected app", () => {
     }
     expect((await disconnect(owner, connection.id)).status).toBe(200);
 
-    expect(await opensMcpContext(disconnectedGrant.accessToken)).toBe(false);
-    expect(await opensMcpContext(keptGrant.accessToken)).toBe(true);
-    expect(await opensMcpContext(otherUserGrant.accessToken)).toBe(true);
-    expect(await opensMcpContext(delegatedToken)).toBe(true);
-    expect(await opensMcpContext(agentRunToken.token)).toBe(true);
+    expect(await opensSession(disconnectedGrant.accessToken)).toBe(false);
+    const revocation = (
+      await testDb
+        .select({ revokedAt: oauthGrantRevocations.revokedAt })
+        .from(oauthGrantRevocations)
+        .where(
+          and(
+            eq(oauthGrantRevocations.organizationId, organization.id),
+            eq(oauthGrantRevocations.userId, owner.userId),
+            eq(
+              oauthGrantRevocations.oauthClientId,
+              disconnectedClient.clientId,
+            ),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (!revocation) {
+      throw new Error("The disconnected grant must have a revocation");
+    }
+    const issuedAt = Math.floor(revocation.revokedAt.getTime() / 1000);
+    for (const offset of [0, 1]) {
+      const token = await auth.api.signJWT({
+        body: {
+          payload: {
+            sub: owner.userId,
+            org_id: organization.id,
+            client_id: disconnectedClient.clientId,
+            scope: "stella:read",
+            aud: getMcpResourceUrl(),
+            iss: getAuthIssuerUrl(),
+            iat: issuedAt + offset,
+            exp: issuedAt + 600,
+          },
+        },
+      });
+      expect(await opensSession(token.token)).toBe(offset === 1);
+    }
+
+    expect(await opensSession(keptGrant.accessToken)).toBe(true);
+    expect(await opensSession(otherUserGrant.accessToken)).toBe(true);
+    expect(await opensSession(delegatedToken)).toBe(true);
+    expect(await opensSession(agentRunToken.token)).toBe(true);
 
     const reconnectedGrant = await grantOAuthClient(owner, disconnectedClient);
-    expect(await opensMcpContext(reconnectedGrant.accessToken)).toBe(true);
+    expect(await opensSession(reconnectedGrant.accessToken)).toBe(true);
 
     const reconnectedConnection = (await listConnections(owner)).find(
       ({ clientId }) => clientId === disconnectedClient.clientId,
@@ -436,11 +483,11 @@ describe("disconnecting a connected app", () => {
       200,
     );
 
-    expect(await opensMcpContext(disconnectedGrant.accessToken)).toBe(false);
-    expect(await opensMcpContext(reconnectedGrant.accessToken)).toBe(false);
+    expect(await opensSession(disconnectedGrant.accessToken)).toBe(false);
+    expect(await opensSession(reconnectedGrant.accessToken)).toBe(false);
 
     const thirdGrant = await grantOAuthClient(owner, disconnectedClient);
-    expect(await opensMcpContext(thirdGrant.accessToken)).toBe(true);
+    expect(await opensSession(thirdGrant.accessToken)).toBe(true);
   });
 
   test("ends that grant's tokens and consent and leaves the user's other connected apps working", async () => {
