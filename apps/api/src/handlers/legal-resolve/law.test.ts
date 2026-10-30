@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+} from "@stll/api-contract/public-country-capability";
+
+import {
   admitLawRead,
   type LawReadAdmission,
 } from "@/api/handlers/legal-resolve/admission";
@@ -379,7 +384,7 @@ describe("written law citations", () => {
 });
 
 describe("country admission", () => {
-  test("returns country unavailable outside Czechia", async () => {
+  test("returns country unavailable for an unsupported country", async () => {
     expect(
       await resolveLawCitation({
         admission,
@@ -391,3 +396,18 @@ describe("country admission", () => {
     });
   });
 });
+
+for (const country of PUBLIC_COUNTRIES.filter(
+  (candidate) =>
+    PUBLIC_COUNTRY_CAPABILITIES[candidate].legislation === "admitted",
+)) {
+  test(`advertised legislation country ${country} has a citation resolver`, async () => {
+    expect(
+      await resolveLawCitation({
+        admission,
+        country,
+        input: { citation: "0/0000" },
+      }),
+    ).toEqual({ status: "not_found", reason: "unknown_document" });
+  });
+}

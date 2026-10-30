@@ -7,15 +7,29 @@ import {
   PUBLIC_COUNTRY_CAPABILITIES,
   type PublicCountry,
 } from "@stll/api-contract/public-country-capability";
+import {
+  statuteGazetteAbbreviation,
+  statuteGazetteEliCollection,
+} from "@stll/api-contract/statute-gazette";
+import {
+  STATUTE_QUERY_CAPABILITIES,
+  type StatuteQueryCountry,
+} from "@stll/api-contract/statute-query-capability";
+import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
 import {
   locateGazetteCitations,
   PROVISION_CITATION_GRAMMARS,
 } from "@stll/legal-atlas/provision-citation-grammars";
+import type {
+  JurisdictionProfile,
+  WorkIdentifier,
+} from "@stll/legal-atlas/provision-citation-profile";
 import {
   nominativeTitle,
   resolveActCitation,
 } from "@stll/legal-atlas/provision-citation-resolve";
+import { SK_PROFILE } from "@stll/legal-atlas/sk-provision-citation-profile";
 import { todayFor } from "@stll/time";
 
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
@@ -23,11 +37,34 @@ import { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
 import { readNamedLegislationWorks } from "@/api/lib/legal-search/legislation-work-names";
-import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import {
+  legislationPublicReadDb,
+  type LegislationReadDb,
+} from "@/api/lib/legislation-public-read-db";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
-const CZE = "CZE";
+type LawProfile = {
+  citation: JurisdictionProfile;
+  queryCountry: StatuteQueryCountry;
+  timeZone: string;
+  gazette: (typeof PROVISION_CITATION_GRAMMARS)[JurisdictionProfile["jurisdiction"]]["gazette"];
+};
+
+const LAW_PROFILES = {
+  CZE: {
+    citation: CZ_PROFILE,
+    queryCountry: "cze",
+    timeZone: "Europe/Prague",
+    gazette: PROVISION_CITATION_GRAMMARS.CZE.gazette,
+  },
+  SVK: {
+    citation: SK_PROFILE,
+    queryCountry: "svk",
+    timeZone: "Europe/Bratislava",
+    gazette: PROVISION_CITATION_GRAMMARS.SVK.gazette,
+  },
+} as const satisfies Record<JurisdictionProfile["jurisdiction"], LawProfile>;
 
 type LawResolveInput = {
   citation?: string | undefined;
@@ -43,12 +80,6 @@ type LawResolver = (input: LawResolveInput) => Promise<LegalResolveResponse>;
 /** Works the corpus's stored titles name, for an act the profile does not list. */
 type ReadNamedWorks = (name: string) => Promise<readonly { eli: string }[]>;
 
-const readCzechNamedWorks: ReadNamedWorks = async (name) =>
-  await legislationPublicReadDb(
-    async (tx) =>
-      await readNamedLegislationWorks(tx, { query: name, country: CZE }),
-  );
-
 class UnresolvedActCitationError extends TaggedError(
   "UnresolvedActCitationError",
 )<{
@@ -56,7 +87,7 @@ class UnresolvedActCitationError extends TaggedError(
 }> {}
 
 const UNRESOLVED_ACT_CITATION = failureSink({
-  event: "legal_resolve.czech_law.unresolved_act",
+  event: "legal_resolve.law.unresolved_act",
   expected: [],
 });
 
@@ -67,19 +98,20 @@ const UNRESOLVED_ACT_CITATION = failureSink({
  * The name stays out of telemetry, which carries no free text a request
  * supplied; the count per jurisdiction is the signal.
  */
-const reportUnresolvedActCitation = () => {
+const reportUnresolvedActCitation = (country: string) => {
   observeFailure(
     new UnresolvedActCitationError({
-      message: "A Czech act citation named no act",
+      message: "An act citation named no act",
     }),
     {
       sink: UNRESOLVED_ACT_CITATION,
-      ctx: { feature: "legal-resolve", jurisdiction: CZE },
+      ctx: { feature: "legal-resolve", jurisdiction: country },
     },
   );
 };
 
-type CzechLawDependencies = {
+type LawDependencies = {
+  legislationDb?: LegislationReadDb;
   resolveExpression?: typeof resolveStatuteExpression;
   readDocument?: typeof readPublicLegislationHandler;
   readPreview?: typeof readProvisionPreviewHandler;
@@ -90,18 +122,19 @@ type CzechLawDependencies = {
 
 type CitedActRead =
   | { type: "work"; eli: string }
-  | { type: "unknown" }
+  | { type: "unknown"; hint?: string }
   | { type: "unresolved"; actName: string };
 
 // A `number/year` reference. When the gazette grammar declines one, it named
-// a case-law reporter or the treaty collection (`89/2012 Sb. rozh.`,
-// `67/2013 Sb. m. s.`), which no title fallback may read as a statute.
+// a bare act number, a case-law reporter or the treaty collection. Only
+// the shared query grammar may admit a number without its gazette suffix.
 const NUMBERED_REFERENCE = /\d\s*\/\s*\d{4}/u;
 
 type ReadCitedActOptions = {
   citation: string;
   citedOn: string;
   readNamedWorks: ReadNamedWorks;
+  profile: LawProfile;
 };
 
 /**
@@ -114,30 +147,47 @@ const readCitedAct = async ({
   citation,
   citedOn,
   readNamedWorks,
+  profile,
 }: ReadCitedActOptions): Promise<CitedActRead> => {
   const gazette = locateGazetteCitations(citation).find(
-    ({ jurisdiction }) => jurisdiction === CZE,
+    ({ jurisdiction }) => jurisdiction === profile.citation.jurisdiction,
   );
   if (gazette !== undefined) {
-    return { type: "work", eli: gazette.eli };
+    const read = resolveActCitation({
+      text: citation.slice(gazette.start, gazette.end),
+      profile: profile.citation,
+      citedOn,
+    });
+    if (read.status === "resolved") {
+      return readWork(read.work, profile);
+    }
+    return { type: "unknown" };
   }
   if (NUMBERED_REFERENCE.test(citation)) {
-    return { type: "unknown" };
+    const references = readStatuteQueryReferences(
+      profile.queryCountry,
+      citation,
+    );
+    if (references.length !== 1) {
+      return { type: "unknown" };
+    }
+    const read = resolveActCitation({
+      text: citation,
+      profile: profile.citation,
+      citedOn,
+    });
+    return read.status === "resolved"
+      ? readWork(read.work, profile)
+      : { type: "unknown" };
   }
   const read = resolveActCitation({
     text: citation,
-    profile: CZ_PROFILE,
+    profile: profile.citation,
     citedOn,
   });
   switch (read.status) {
     case "resolved":
-      return {
-        type: "work",
-        eli: PROVISION_CITATION_GRAMMARS.CZE.gazette.eli({
-          number: String(read.work.number),
-          year: String(read.work.year),
-        }),
-      };
+      return readWork(read.work, profile);
     case "ambiguous_act":
       return { type: "unknown" };
     case "no_act":
@@ -158,13 +208,14 @@ const readCitedAct = async ({
   }
   // Only a name shaped like a short title (`zákona o …`) is a miss worth
   // reporting; free text that names nothing is the caller's.
-  return nominativeTitle(read.actName, CZ_PROFILE) === null
+  return nominativeTitle(read.actName, profile.citation) === null
     ? { type: "unknown" }
     : { type: "unresolved", actName: read.actName };
 };
 
 const normalizedSection = (
   section: string,
+  profile: JurisdictionProfile,
 ): { anchor: string; section: string } | null => {
   const match = /^(?:§\s*)?(\d+)\s*([a-z])?$/iu.exec(section.trim());
   const number = match?.at(1);
@@ -172,11 +223,49 @@ const normalizedSection = (
     return null;
   }
   const suffix = match?.at(2)?.toLowerCase() ?? "";
-  return { anchor: `par_${number}${suffix}`, section: `${number}${suffix}` };
+  return {
+    anchor: profile.anchor.render.section(`${number}${suffix}`),
+    section: `${number}${suffix}`,
+  };
 };
 
-const czechToday = (): string => todayFor("Europe/Prague").toString();
-const CZECH_COLLECTION_OF_LAWS = "sb";
+const collectionKey = (collection: string) =>
+  collection.replace(/[.\s]/gu, "").toLowerCase();
+
+const readWork = (work: WorkIdentifier, profile: LawProfile): CitedActRead => {
+  if (
+    !Number.isSafeInteger(work.number) ||
+    work.number < 1 ||
+    work.number > 99_999 ||
+    !Number.isSafeInteger(work.year) ||
+    work.year < profile.citation.earliestYear ||
+    work.year > 9999
+  ) {
+    return { type: "unknown" };
+  }
+  const collection = statuteGazetteEliCollection(work.collection);
+  if (
+    collection !==
+    STATUTE_QUERY_CAPABILITIES[profile.queryCountry].defaultCollection
+  ) {
+    return { type: "unknown" };
+  }
+  const expected = statuteGazetteAbbreviation(collection, work.year);
+  if (expected !== work.collection) {
+    return {
+      type: "unknown",
+      hint: `Use ${expected ?? panic("Statute collection has no spelling")} for an act published in ${String(work.year)}.`,
+    };
+  }
+  return {
+    type: "work",
+    eli: profile.gazette.eli({
+      number: String(work.number),
+      year: String(work.year),
+      collection: work.collection,
+    }),
+  };
+};
 
 const isInForceOn = (
   from: string | null,
@@ -184,118 +273,150 @@ const isInForceOn = (
   date: string,
 ): boolean => (from === null || from <= date) && (to === null || to > date);
 
-export const resolveCzechLaw = async (
-  input: LawResolveInput,
-  {
-    resolveExpression = resolveStatuteExpression,
-    readDocument = readPublicLegislationHandler,
-    readPreview = readProvisionPreviewHandler,
-    readNamedWorks = readCzechNamedWorks,
-    reportUnresolvedAct = reportUnresolvedActCitation,
-    today = czechToday,
-  }: CzechLawDependencies = {},
-): Promise<LegalResolveResponse> => {
-  const missing: string[] = [];
-  let eli: string | undefined;
-  if (input.citation !== undefined) {
-    const act = await readCitedAct({
-      citation: input.citation,
-      citedOn: input.asOf ?? today(),
-      readNamedWorks,
-    });
+type StructuredActRead =
+  CitedActRead | { type: "incomplete"; missing: string[] };
+
+const readStructuredAct = (
+  { collection, year, number }: LawResolveInput,
+  profile: LawProfile,
+): StructuredActRead => {
+  if (collection === undefined || year === undefined || number === undefined) {
+    return {
+      type: "incomplete",
+      missing: Object.entries({ collection, year, number }).flatMap(
+        ([key, value]) => (value === undefined ? [key] : []),
+      ),
+    };
+  }
+  const printed = profile.citation.collections.find(({ spellings }) =>
+    spellings.some(
+      (spelling) => collectionKey(spelling) === collectionKey(collection),
+    ),
+  );
+  const canonical =
+    statuteGazetteAbbreviation(collection, Number(year)) ??
+    printed?.canonical ??
+    null;
+  if (
+    canonical === null ||
+    !profile.citation.collections.some((entry) => entry.canonical === canonical)
+  ) {
+    return { type: "unknown" };
+  }
+  return readWork(
+    { number: Number(number), year: Number(year), collection: canonical },
+    profile,
+  );
+};
+
+const createLawResolver =
+  (profile: LawProfile) =>
+  async (
+    input: LawResolveInput,
+    {
+      legislationDb = legislationPublicReadDb,
+      resolveExpression = resolveStatuteExpression,
+      readDocument = readPublicLegislationHandler,
+      readPreview = readProvisionPreviewHandler,
+      readNamedWorks = async (name) =>
+        await legislationDb(
+          async (tx) =>
+            await readNamedLegislationWorks(tx, {
+              query: name,
+              country: profile.citation.jurisdiction,
+            }),
+        ),
+      reportUnresolvedAct = () =>
+        reportUnresolvedActCitation(profile.citation.jurisdiction),
+      today = () => todayFor(profile.timeZone).toString(),
+    }: LawDependencies = {},
+  ): Promise<LegalResolveResponse> => {
+    const act =
+      input.citation === undefined
+        ? readStructuredAct(input, profile)
+        : await readCitedAct({
+            citation: input.citation,
+            citedOn: input.asOf ?? today(),
+            readNamedWorks,
+            profile,
+          });
+    let eli: string;
     switch (act.type) {
       case "work":
         eli = act.eli;
         break;
+      case "incomplete":
+        return { status: "incomplete_identifier", missing: act.missing };
       case "unresolved":
         reportUnresolvedAct(act.actName);
-        break;
+        return { status: "not_found", reason: "unknown_document" };
       case "unknown":
-        break;
+        return {
+          status: "not_found",
+          reason: "unknown_document",
+          ...(act.hint === undefined ? {} : { hint: act.hint }),
+        };
       default:
         act satisfies never;
         return panic("Unknown cited act read");
     }
-  } else {
-    if (input.collection === undefined) {
-      missing.push("collection");
+    if (input.section === undefined) {
+      return { status: "incomplete_identifier", missing: ["section"] };
     }
-    if (input.year === undefined) {
-      missing.push("year");
+    const section = normalizedSection(input.section, profile.citation);
+    if (section === null) {
+      return { status: "not_found", reason: "unknown_section" };
     }
-    if (input.number === undefined) {
-      missing.push("number");
+    const expression = await resolveExpression(
+      { eli, ...(input.asOf === undefined ? {} : { asOf: input.asOf }) },
+      legislationDb,
+      "search",
+    );
+    if (expression.type !== "expression") {
+      return { status: "not_found", reason: "unknown_document" };
     }
-    if (missing.length === 0) {
-      const { collection, year, number } = input;
-      if (
-        collection === CZECH_COLLECTION_OF_LAWS &&
-        year !== undefined &&
-        number !== undefined
-      ) {
-        eli = PROVISION_CITATION_GRAMMARS.CZE.gazette.eli({ number, year });
-      }
+    const [document, preview] = await Promise.all([
+      readDocument(expression.id, legislationDb, "search"),
+      readPreview({
+        documentId: expression.id,
+        anchor: section.anchor,
+        citedAnchor: undefined,
+        legislationDb,
+      }),
+    ]);
+    if (!("eli" in document)) {
+      return { status: "not_found", reason: "unknown_document" };
     }
-  }
-  if (missing.length > 0) {
-    return { status: "incomplete_identifier", missing };
-  }
-  if (eli === undefined) {
-    return { status: "not_found", reason: "unknown_document" };
-  }
-  if (input.section === undefined) {
-    return { status: "incomplete_identifier", missing: ["section"] };
-  }
-  const section = normalizedSection(input.section);
-  if (section === null) {
-    return { status: "not_found", reason: "unknown_section" };
-  }
-  const expression = await resolveExpression(
-    { eli, ...(input.asOf === undefined ? {} : { asOf: input.asOf }) },
-    legislationPublicReadDb,
-    "search",
-  );
-  if (expression.type !== "expression") {
-    return { status: "not_found", reason: "unknown_document" };
-  }
-  const [document, preview] = await Promise.all([
-    readDocument(expression.id, legislationPublicReadDb, "search"),
-    readPreview({
-      documentId: expression.id,
-      anchor: section.anchor,
-      citedAnchor: undefined,
-      legislationDb: legislationPublicReadDb,
-    }),
-  ]);
-  if (!("eli" in document)) {
-    return { status: "not_found", reason: "unknown_document" };
-  }
-  if (!("blocks" in preview)) {
-    return { status: "not_found", reason: "unknown_section" };
-  }
-  const inForce = {
-    from: document.versionValidFrom,
-    to: document.versionValidTo,
+    if (!("blocks" in preview)) {
+      return { status: "not_found", reason: "unknown_section" };
+    }
+    const inForce = {
+      from: document.versionValidFrom,
+      to: document.versionValidTo,
+    };
+    return {
+      status: "resolved",
+      document: {
+        kind: "provision",
+        documentId: expression.id,
+        eli,
+        country: profile.citation.jurisdiction,
+        title: document.title,
+        section: section.section,
+        readerUrl:
+          preview.url ??
+          panic("Resolved public-law provision has no reader URL"),
+        inForce,
+        versionStatus: isInForceOn(inForce.from, inForce.to, today())
+          ? "current"
+          : "outdated",
+        blocks: preview.blocks,
+      },
+    };
   };
-  return {
-    status: "resolved",
-    document: {
-      kind: "provision",
-      documentId: expression.id,
-      eli,
-      country: "CZE",
-      title: document.title,
-      section: section.section,
-      readerUrl:
-        preview.url ?? panic("Resolved public-law provision has no reader URL"),
-      inForce,
-      versionStatus: isInForceOn(inForce.from, inForce.to, today())
-        ? "current"
-        : "outdated",
-      blocks: preview.blocks,
-    },
-  };
-};
+
+export const resolveCzechLaw = createLawResolver(LAW_PROFILES.CZE);
+export const resolveSlovakLaw = createLawResolver(LAW_PROFILES.SVK);
 
 const unavailable: LawResolver = async () =>
   await Promise.resolve({ status: "country_unavailable" });
@@ -307,7 +428,7 @@ const LAW_RESOLVERS = {
   GBR: unavailable,
   HUN: unavailable,
   POL: unavailable,
-  SVK: unavailable,
+  SVK: resolveSlovakLaw,
   USA: unavailable,
 } as const satisfies Record<PublicCountry, LawResolver>;
 

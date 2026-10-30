@@ -10,6 +10,7 @@ import {
 import {
   CZE_CASE_LAW_REPORTER_TAIL_RE,
   STATUTE_GAZETTES,
+  statuteGazetteAbbreviation,
 } from "./statute-gazette";
 import {
   STATUTE_QUERY_CAPABILITIES,
@@ -134,6 +135,17 @@ const actFromNumber = (
       return null;
     }
     collection = collections[abbreviation] ?? null;
+    const spelling =
+      collection === null
+        ? null
+        : statuteGazetteAbbreviation(collection, Number(year));
+    if (
+      spelling === null ||
+      canonicalCollectionAbbreviation(foldStatuteQuery(spelling)) !==
+        abbreviation
+    ) {
+      return null;
+    }
   }
 
   return {
