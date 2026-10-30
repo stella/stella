@@ -124,7 +124,7 @@ export const ProvisionCitingDecisions = ({
         <NumberInput
           allowOutOfRange
           className="w-24"
-          defaultValue={filters.citingYear ?? null}
+          defaultValue={filters.citingYear}
           // A year, not a quantity: no thousands separator.
           format={{ useGrouping: false }}
           inputProps={{
@@ -170,8 +170,9 @@ export const ProvisionCitingDecisions = ({
           role="alert"
         >
           {t("statutes.citingDecisionsYearOutOfRange", {
-            max: PROVISION_CITING_FILTER_LIMITS.yearMax,
-            min: PROVISION_CITING_FILTER_LIMITS.yearMin,
+            // Years, not quantities: no locale grouping.
+            max: String(PROVISION_CITING_FILTER_LIMITS.yearMax),
+            min: String(PROVISION_CITING_FILTER_LIMITS.yearMin),
           })}
         </p>
       )}

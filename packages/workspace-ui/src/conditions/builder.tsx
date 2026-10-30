@@ -468,7 +468,11 @@ const LeafRow = ({
               );
               return;
             }
-            const nextField = fields[Number(next)];
+            // Items carry their index as text; match it exactly rather than
+            // coercing the value back to a number.
+            const nextField = fields.find(
+              (_option, optionIndex) => String(optionIndex) === next,
+            );
             if (nextField) {
               onChange(leafFromField(nextField));
             }
