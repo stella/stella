@@ -1595,14 +1595,17 @@ const provisionOutcomeForRow = (
   if (body.provision === undefined) {
     return null;
   }
-  const provedMatches = [...(proofs ?? [])]
-    .filter(([, outcome]) => outcome.type === "match")
-    .map(([id]) => sql`${id}::uuid`);
   const probe = provisionLinkReadOutcomeSql({
     decisionId: sql`${publishedCaseLawDecisions.id}`,
     jurisdiction: body.country,
     provision: body.provision,
   });
+  if (proofs === undefined) {
+    return probe;
+  }
+  const provedMatches = [...proofs]
+    .filter(([, outcome]) => outcome.type === "match")
+    .map(([id]) => sql`${id}::uuid`);
   return provedMatches.length === 0
     ? probe
     : sql<ProvisionLinkReadOutcome>`CASE
@@ -3622,6 +3625,31 @@ export const provisionDecisionCandidatesQuery = (
     .limit(limit);
 };
 
+type ResumeProbeCursorOptions = {
+  order: ProvisionListOrder;
+  row: ProvisionListRow;
+  after: { anchor: string; spanStart: number };
+};
+
+/** The cursor that resumes `row`'s membership probe after its last examined link. */
+const resumeProbeCursor = ({ order, row, after }: ResumeProbeCursorOptions) => {
+  const base = decodePaginationCursor(order.cursorAfter(row));
+  return base === null
+    ? panic("Provision cursor encoder returned an invalid cursor")
+    : encodePaginationCursor([
+        ...base.flatMap((part) =>
+          typeof part === "string" ||
+          typeof part === "number" ||
+          typeof part === "boolean" ||
+          part === null
+            ? [part]
+            : [],
+        ),
+        after.anchor,
+        after.spanStart,
+      ]);
+};
+
 /**
  * Decisions citing a provision, read in authority or date order with keyset
  * pagination. Small citing sets narrow the rank walk by id; broad ones use
@@ -3774,21 +3802,11 @@ export const listCaseLawProvisionDecisions = async ({
       return order.cursorAfter(last);
     }
     if (incompleteRow?.provisionOutcome.type === "incomplete") {
-      const base = decodePaginationCursor(order.cursorAfter(incompleteRow));
-      return base === null
-        ? panic("Provision cursor encoder returned an invalid cursor")
-        : encodePaginationCursor([
-            ...base.flatMap((part) =>
-              typeof part === "string" ||
-              typeof part === "number" ||
-              typeof part === "boolean" ||
-              part === null
-                ? [part]
-                : [],
-            ),
-            incompleteRow.provisionOutcome.after.anchor,
-            incompleteRow.provisionOutcome.after.spanStart,
-          ]);
+      return resumeProbeCursor({
+        order,
+        row: incompleteRow,
+        after: incompleteRow.provisionOutcome.after,
+      });
     }
     if (order.probe !== undefined && lastExamined !== undefined) {
       return order.cursorAfter(lastExamined);
