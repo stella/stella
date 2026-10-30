@@ -1,5 +1,5 @@
 import { fail as panic } from "node:assert";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 export type GuardRollout = {
   id: string;
@@ -15,7 +15,7 @@ export type GuardRollout = {
 export const GUARD_ROLLOUT_DIRECTORY = "scripts/guard-rollouts";
 
 export const guardRolloutSource = (id: string) =>
-  `${GUARD_ROLLOUT_DIRECTORY}/${id}.ts`;
+  `${GUARD_ROLLOUT_DIRECTORY}/${id}.json`;
 
 const isStringArray = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -49,20 +49,21 @@ const loadedFiles = new Map<string, GuardRollout>();
 for (const file of readdirSync(
   new URL("guard-rollouts/", import.meta.url),
 ).toSorted()) {
-  if (!file.endsWith(".ts")) {
+  if (!file.endsWith(".json")) {
     continue;
   }
   const source = `${GUARD_ROLLOUT_DIRECTORY}/${file}`;
-  const id = /^([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*)\.ts$/u.exec(file)?.[1];
+  const id = /^([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*)\.json$/u.exec(file)?.[1];
   if (id === undefined) {
-    panic(`guard rollout file must be <kebab-case-id>.ts: ${source}`);
+    panic(`guard rollout file must be <kebab-case-id>.json: ${source}`);
   }
   const url = new URL(`guard-rollouts/${file}`, import.meta.url);
-  const rollout: unknown = (
-    await import(url.href).catch((error: unknown) =>
-      panic(`Cannot load guard rollout ${source}: ${String(error)}`),
-    )
-  ).default;
+  let rollout: unknown;
+  try {
+    rollout = JSON.parse(readFileSync(url, "utf-8"));
+  } catch (error) {
+    panic(`Cannot load guard rollout ${source}: ${String(error)}`);
+  }
   if (!isGuardRollout(rollout)) {
     panic(`Invalid guard rollout: ${source}`);
   }
@@ -83,7 +84,7 @@ export const guardRolloutsFromFiles = (
     rollout.id === file
       ? rollout
       : panic(
-          `guard rollout filename must match id: ${file}.ts (${rollout.id})`,
+          `guard rollout filename must match id: ${file}.json (${rollout.id})`,
         ),
   );
 

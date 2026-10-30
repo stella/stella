@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
@@ -359,7 +360,7 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
 // CI_CHECKS_PARTITION_BASE=HEAD compares the head with itself.
 const mergeBase =
   process.env["CI_CHECKS_PARTITION_BASE"] ??
-  git(["merge-base", "origin/main", "HEAD"]);
+  treeBaseRevision({ repoRoot: repository });
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
 }).transformSync(

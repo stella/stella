@@ -148,7 +148,7 @@ const fullRollout = (id: string): GuardRollout => ({
 test("discovery loads every rollout in file name order", () => {
   expect(GUARD_ROLLOUTS.map(({ id }) => guardRolloutSource(id))).toEqual(
     readdirSync(path.join(ROOT, GUARD_ROLLOUT_DIRECTORY))
-      .filter((file) => file.endsWith(".ts"))
+      .filter((file) => file.endsWith(".json"))
       .toSorted()
       .map((file) => `${GUARD_ROLLOUT_DIRECTORY}/${file}`),
   );
@@ -175,13 +175,17 @@ const loadRollouts = (root: string) =>
       "-e",
       'import { GUARD_ROLLOUT_FILES, GUARD_ROLLOUTS } from "./scripts/guard-rollout-policy.ts"; console.log(JSON.stringify({ files: GUARD_ROLLOUT_FILES, rollouts: GUARD_ROLLOUTS }));',
     ],
-    { cwd: root, encoding: "utf-8" },
+    { cwd: root, encoding: "utf-8", maxBuffer: 2 ** 20 },
   );
 
 test("parallel rollout branches merge cleanly and both load without an install", () => {
   withRolloutRepo((root) => {
     const git = (...args: string[]) =>
-      execFileSync("git", args, { cwd: root, encoding: "utf-8" }).trim();
+      execFileSync("git", args, {
+        cwd: root,
+        encoding: "utf-8",
+        maxBuffer: 2 ** 20,
+      }).trim();
     git("init", "-b", "base");
     git("config", "user.name", "Rollout fixture");
     git("config", "user.email", "rollout@example.test");
@@ -193,7 +197,7 @@ test("parallel rollout branches merge cleanly and both load without an install",
       git("switch", "-c", id, "base");
       writeFileSync(
         path.join(root, guardRolloutSource(id)),
-        `await Promise.resolve(); export default ${JSON.stringify(fullRollout(id))};`,
+        JSON.stringify(fullRollout(id)),
       );
       git("add", ".");
       git("commit", "-m", `add ${id}`);
@@ -216,38 +220,37 @@ test("parallel rollout branches merge cleanly and both load without an install",
 });
 
 test.each([
-  { label: "missing default export", source: "export const rollout = {};" },
-  { label: "null rollout", source: "export default null;" },
-  { label: "missing fields", source: 'export default { id: "bad-guard" };' },
+  { label: "invalid JSON", source: "{" },
+  { label: "null rollout", source: "null" },
+  { label: "missing fields", source: '{ "id": "bad-guard" }' },
   {
     label: "unknown type",
-    source: 'export default { id: "bad-guard", type: "other", check: [] };',
+    source: '{ "id": "bad-guard", "type": "other", "check": [] }',
   },
   {
     label: "invalid check",
-    source: 'export default { id: "bad-guard", type: "full", check: [1] };',
+    source: '{ "id": "bad-guard", "type": "full", "check": [1] }',
   },
   {
     label: "invalid rules",
     source:
-      'export default { id: "bad-guard", type: "full", check: [], rules: "rule" };',
+      '{ "id": "bad-guard", "type": "full", "check": [], "rules": "rule" }',
   },
   {
     label: "missing expiry",
-    source:
-      'export default { id: "bad-guard", type: "changed-lines", check: [] };',
+    source: '{ "id": "bad-guard", "type": "changed-lines", "check": [] }',
   },
   {
     label: "missing generator",
-    source: 'export default { id: "bad-guard", type: "autofix", check: [] };',
+    source: '{ "id": "bad-guard", "type": "autofix", "check": [] }',
   },
   {
     label: "mismatched id",
-    source: 'export default { id: "other", type: "full", check: [] };',
+    source: '{ "id": "other", "type": "full", "check": [] }',
   },
   {
-    label: "failed import",
-    source: 'throw new TypeError("fixture import failed");',
+    label: "invalid syntax",
+    source: "not json",
   },
 ])("a bad rollout panics with its path: $label", ({ source }) => {
   withRolloutRepo((root) => {
@@ -260,12 +263,12 @@ test.each([
   });
 });
 
-test.each(["Guard.ts", "a-1.ts", "a--b.ts", "1a.ts"])(
+test.each(["Guard.json", "a-1.json", "a--b.json", "1a.json"])(
   "an invalid rollout filename panics with its path: %s",
   (file) => {
     withRolloutRepo((root) => {
       const source = `${GUARD_ROLLOUT_DIRECTORY}/${file}`;
-      writeFileSync(path.join(root, source), "export default {};");
+      writeFileSync(path.join(root, source), "{}");
       const loaded = loadRollouts(root);
       expect(loaded.status).not.toBe(0);
       expect(loaded.stderr).toContain(source);
@@ -286,7 +289,7 @@ test("rollouts from separate files preserve registry order", () => {
 test("a rollout whose file name differs from its id panics", () => {
   expect(() =>
     guardRolloutsFromFiles({ renamed: fullRollout("a-guard") }),
-  ).toThrow("guard rollout filename must match id: renamed.ts (a-guard)");
+  ).toThrow("guard rollout filename must match id: renamed.json (a-guard)");
 });
 
 test("a duplicate rollout id panics through the file name contract", () => {
@@ -295,5 +298,5 @@ test("a duplicate rollout id panics through the file name contract", () => {
       "a-guard": fullRollout("a-guard"),
       "b-guard": fullRollout("a-guard"),
     }),
-  ).toThrow("guard rollout filename must match id: b-guard.ts (a-guard)");
+  ).toThrow("guard rollout filename must match id: b-guard.json (a-guard)");
 });

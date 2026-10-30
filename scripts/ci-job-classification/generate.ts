@@ -7,6 +7,12 @@ import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
 import { approvalPathForKey, decisionPathForKey } from "./inputs";
+import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+  reachableJobDocuments,
+} from "./job-digests";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
@@ -17,11 +23,7 @@ import {
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import {
-  isPrivilegedJobClosure,
-  isRepositoryWritingJob,
-  ReviewRequiredError,
-} from "./review";
+import { isRepositoryWritingJob, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -261,7 +263,7 @@ type DocumentDigestOptions = {
 };
 // A document digest binds its own shape and every metadata document it
 // reaches, so editing a callee changes the digest of each caller.
-const createDocumentDigest = ({
+export const createDocumentDigest = ({
   nodes,
   parsedDocuments,
 }: DocumentDigestOptions) => {
@@ -307,36 +309,7 @@ type ReviewJobsOptions = DocumentDigestOptions & {
   documentDigest: (id: string) => string;
   observeJobs?: (jobs: ReadonlyMap<string, DerivedJob>) => void;
 };
-type ReachableDocumentsOptions = DocumentDigestOptions & {
-  initialTargets: string[];
-};
-const reachableDocuments = ({
-  initialTargets,
-  nodes,
-  parsedDocuments,
-}: ReachableDocumentsOptions) => {
-  const documents: ParsedDocument[] = [];
-  const visited = new Set<string>();
-  const visit = (id: string) => {
-    if (visited.has(id)) {
-      return;
-    }
-    visited.add(id);
-    const node = nodes.get(id);
-    const parsed = parsedDocuments.get(id);
-    if (!node || node.type !== "metadata" || !parsed) {
-      return;
-    }
-    documents.push(parsed);
-    for (const target of Object.values(node.edges)) {
-      visit(target);
-    }
-  };
-  for (const target of initialTargets) {
-    visit(target);
-  }
-  return documents;
-};
+
 const reviewJobs = ({
   nodes,
   parsedDocuments,
@@ -351,6 +324,13 @@ const reviewJobs = ({
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
+
+  const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+    nodes,
+    parsedDocuments,
+    decisions,
+  });
+
   for (const node of nodes.values()) {
     if (node.type !== "metadata") {
       continue;
@@ -362,41 +342,29 @@ const reviewJobs = ({
     node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
       const key = `${node.repository}:${node.path}/${jobId}`;
       observedJobs.add(key);
-      const dependencyDigests = Object.fromEntries(
-        Object.keys(job.dependencies)
-          .toSorted(compareCodeUnit)
-          .flatMap((reference) => {
-            const target = node.edges[reference];
-            return target && nodes.get(target)?.type === "metadata"
-              ? [[reference, documentDigest(target)]]
-              : [];
-          }),
-      );
+      const dependencyDigests = jobDependencyDigests({
+        definition: job,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
         return target ? [target] : [];
       });
-      const reachable = reachableDocuments({
+      const reachable = reachableJobDocuments({
         initialTargets: targets,
         nodes,
         parsedDocuments,
       });
-      const privileged = isPrivilegedJobClosure({
-        kind: decision?.kind,
-        privileged: job.privileged,
-        shape: job.shape,
-        reachableDocuments: reachable,
+      const privileged = jobPrivileges.get(key) ?? false;
+      const digest = expectedJobDigest({
+        definition: job,
+        privileged,
+        inheritedGrants: inheritedGrants.get(key),
+        dependencyDigests,
       });
-      const surfaceDigest = privileged ? job.privilegedDigest : job.digest;
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: surfaceDigest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : surfaceDigest;
       derivedJobs.set(key, {
         digest,
         privileged,
