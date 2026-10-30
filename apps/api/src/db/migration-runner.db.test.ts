@@ -298,50 +298,81 @@ const laneHolders = async (observer: SQL) => {
   return row?.holders ?? Number.NaN;
 };
 
-const A_WITH_SCHEDULER = `${CREATE_PROBE};--> statement-breakpoint
-CREATE TABLE lock_probe (id integer);--> statement-breakpoint
-CREATE TABLE scheduler_jobs (
-  id text PRIMARY KEY,
-  paused_by text,
-  paused_until timestamptz,
-  pause_reason text,
-  paused_since timestamptz,
-  locked_by text,
-  locked_until timestamptz,
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT scheduler_jobs_pause_attribution_check CHECK (
-    paused_until IS NULL OR (
-      paused_by IS NOT NULL AND length(btrim(paused_by)) > 0
-      AND pause_reason IS NOT NULL AND length(btrim(pause_reason)) >= 8
-    )
+const stripLeadingComments = (statement: string): string =>
+  statement.replace(/^(?:\s*--[^\n]*\n)+/u, "").trim();
+
+const migrationStatements = (name: string): string[] =>
+  readFileSync(nodePath.join(CORPUS_DIR, name, "migration.sql"), "utf-8")
+    .split("--> statement-breakpoint")
+    .map(stripLeadingComments)
+    .filter((statement) => statement !== "" && !statement.startsWith("SET "));
+
+/**
+ * `scheduler_jobs` as the app migrations define it: the statements that create
+ * and alter the table, taken from the migration files themselves, then both
+ * pause migrations whole (columns, attribution and unpausable-audit checks,
+ * the 72-hour bound trigger and the pause log trigger). A later migration that
+ * changes the table fails the catalogue comparison below.
+ */
+const REAL_SCHEDULER_JOBS_DEFINITION = [
+  {
+    name: "20260430131000_agenda_scheduler_infosoud",
+    only: /^(?:CREATE|ALTER) TABLE "scheduler_jobs"/u,
+  },
+  {
+    name: "20260729150000_timestamptz_everywhere",
+    only: /^ALTER TABLE "scheduler_jobs"/u,
+  },
+  { name: "20261003123100_scheduler_operator_pauses", only: /./u },
+  { name: "20261022120000_scheduler_pause_bound", only: /./u },
+] as const;
+
+const realSchedulerJobsStatements = (): string[] =>
+  REAL_SCHEDULER_JOBS_DEFINITION.flatMap(({ name, only }) => {
+    const statements = migrationStatements(name).filter((statement) =>
+      only.test(statement),
+    );
+    expect(statements.length, name).toBeGreaterThan(0);
+    return statements;
+  });
+
+const installRealSchedulerJobs = async (observer: SQL) => {
+  for (const statement of realSchedulerJobsStatements()) {
+    await observer.unsafe(statement);
+  }
+};
+
+const SCHEDULER_SEED = `INSERT INTO scheduler_jobs
+  (id, task, schedule, next_run_at, paused_by, paused_until, pause_reason) VALUES
+  ('job.reader', 'task', '{}'::jsonb, now(), NULL, NULL, NULL),
+  ('job.other', 'task', '{}'::jsonb, now(), NULL, NULL, NULL),
+  ('job.expired', 'task', '{}'::jsonb, now(), 'operator', now() - interval '1 hour', 'Elapsed maintenance'),
+  ('job.operator', 'task', '{}'::jsonb, now(), 'operator', now() + interval '2 hours', 'Incident hold reason'),
+  ('scheduler.pauseAudit.hourly', 'task', '{}'::jsonb, now(), NULL, NULL, NULL)`;
+
+/** What a database holds for `scheduler_jobs`, in catalogue terms. */
+const schedulerJobsCatalogue = async (observer: SQL) => ({
+  columns: await observer.unsafe(
+    `SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS type,
+            a.attnotnull, pg_get_expr(d.adbin, d.adrelid) AS "default"
+     FROM pg_attribute a
+     LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+     WHERE a.attrelid = 'scheduler_jobs'::regclass AND a.attnum > 0 AND NOT a.attisdropped
+     ORDER BY a.attname`,
   ),
-  CONSTRAINT scheduler_jobs_pause_audit_unpausable_check CHECK (
-    id <> 'scheduler.pauseAudit.hourly' OR paused_until IS NULL
-  )
-);--> statement-breakpoint
-CREATE FUNCTION scheduler_job_pause_since() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF NEW.paused_until > CURRENT_TIMESTAMP THEN
-    IF TG_OP = 'UPDATE' AND OLD.paused_until > CURRENT_TIMESTAMP THEN
-      NEW.paused_since = OLD.paused_since;
-    ELSE
-      NEW.paused_since = CURRENT_TIMESTAMP;
-    END IF;
-  ELSE
-    NEW.paused_since = NULL;
-  END IF;
-  RETURN NEW;
-END;
-$$;--> statement-breakpoint
-CREATE TRIGGER scheduler_job_pause_since
-BEFORE INSERT OR UPDATE OF paused_until ON scheduler_jobs
-FOR EACH ROW EXECUTE FUNCTION scheduler_job_pause_since();--> statement-breakpoint
-INSERT INTO scheduler_jobs (id, paused_by, paused_until, pause_reason) VALUES
-  ('job.reader', NULL, NULL, NULL),
-  ('job.other', NULL, NULL, NULL),
-  ('job.expired', 'operator', now() - interval '1 hour', 'Elapsed maintenance'),
-  ('job.operator', 'operator', now() + interval '2 hours', 'Incident hold reason'),
-  ('scheduler.pauseAudit.hourly', NULL, NULL, NULL);`;
+  constraints: await observer.unsafe(
+    `SELECT conname, pg_get_constraintdef(oid) AS definition
+     FROM pg_constraint WHERE conrelid = 'scheduler_jobs'::regclass
+     ORDER BY conname`,
+  ),
+  triggers: await observer.unsafe(
+    `SELECT tgname, pg_get_triggerdef(oid) AS definition,
+            pg_get_functiondef(tgfoid) AS "function"
+     FROM pg_trigger WHERE tgrelid = 'scheduler_jobs'::regclass AND NOT tgisinternal
+     ORDER BY tgname`,
+  ),
+});
+
 const ALTER_AFTER_DRAIN = "ALTER TABLE lock_probe ADD COLUMN reissued boolean;";
 const FAILING_AFTER_ALTER = `${ALTER_AFTER_DRAIN}--> statement-breakpoint\nSELECT 1 / 0;`;
 const FAST_LOCK_WAIT_RETRY = {
@@ -1495,21 +1526,40 @@ if (!runPostgresTests || databaseUrl === undefined) {
     });
 
     describe("scheduled jobs around the schema phase", () => {
+      test("the fixture's scheduler_jobs matches the table the app migrations build", async () => {
+        await withCorpusBundle(async (corpusFolder) => {
+          await withScratch(async (real) => {
+            appliedResult(await real.run(corpusFolder));
+            await withScratch(async (fixture) => {
+              await installRealSchedulerJobs(fixture.observer);
+              expect(await schedulerJobsCatalogue(fixture.observer)).toEqual(
+                await schedulerJobsCatalogue(real.observer),
+              );
+            });
+          });
+        });
+      });
+
       // A is applied first; B is the pending set under test.
       const withSchedulerBundle = async (
         pendingSql: string,
         work: (scratch: Scratch, folder: string) => Promise<void>,
       ) => {
         await withBundle(
-          [{ name: A, sql: A_WITH_SCHEDULER }],
+          [{ name: A, sql: CREATE_PROBE }],
           async (firstFolder) => {
             await withBundle(
               [
-                { name: A, sql: A_WITH_SCHEDULER },
+                { name: A, sql: CREATE_PROBE },
                 { name: B, sql: pendingSql },
               ],
               async (folder) => {
                 await withScratch(async (scratch) => {
+                  // The production table, trigger and constraints; the
+                  // migrations under test are the ledger's concern only.
+                  await installRealSchedulerJobs(scratch.observer);
+                  await scratch.observer.unsafe(SCHEDULER_SEED);
+                  await scratch.observer.unsafe(CREATE_LOCK_PROBE);
                   appliedResult(await scratch.run(firstFolder));
                   await work(scratch, folder);
                 });
