@@ -479,19 +479,26 @@ const paragraphLayoutOf = (
 const FONT_WEIGHT_RE = /^(?:normal|bold|bolder|lighter|\d{1,4})$/u;
 const BOLD_WEIGHT = 600;
 
-/** Whether an element's own style sets it bold, read as the cascade reads it. */
-const styleSetsBold = (node: AnyNode): boolean =>
-  isTag(node) &&
-  inlineStyleValue(node, (property, value) =>
-    property === "font-weight" && FONT_WEIGHT_RE.test(value)
-      ? {
-          value:
-            value === "bold" ||
-            value === "bolder" ||
-            Number(value) >= BOLD_WEIGHT,
-        }
-      : undefined,
-  )?.value === true;
+/**
+ * Whether an element's own style sets it bold (`true`) or not (`false`), read
+ * as the cascade reads it; `undefined` when it declares no weight.
+ */
+const ownBoldness = (node: AnyNode | undefined): boolean | undefined =>
+  node !== undefined && isTag(node)
+    ? inlineStyleValue(node, (property, value) =>
+        property === "font-weight" && FONT_WEIGHT_RE.test(value)
+          ? {
+              value:
+                value === "bold" ||
+                value === "bolder" ||
+                Number(value) >= BOLD_WEIGHT,
+            }
+          : undefined,
+      )?.value
+    : undefined;
+
+/** A block reads as bold when nearly all of its text is set bold. */
+const BOLD_SHARE = 0.7;
 
 /**
  * One leaf paragraph or <div> as a chunk, its heading cues read from the
@@ -509,14 +516,22 @@ const styledBlockChunk = (
     return null;
   }
 
-  const boldText = visibleHtmlText(
-    $el.find("span").filter((_, span) => styleSetsBold(span)),
-  ).trim();
+  const spanText = (weight: boolean): string =>
+    visibleHtmlText(
+      $el.find("span").filter((_, span) => ownBoldness(span) === weight),
+    ).trim();
+  // A bold block stays bold except where a span sets its text back to normal;
+  // otherwise its bold spans decide.
+  const boldSpanLength = spanText(true).length;
+  const bold =
+    ownBoldness($el.get(0)) === true
+      ? spanText(false).length <= plainText.length * (1 - BOLD_SHARE)
+      : boldSpanLength > 0 && boldSpanLength >= plainText.length * BOLD_SHARE;
   return {
     inlines,
     plainText,
     centered: styleCentres($el.get(0)),
-    bold: boldText.length > 0 && boldText.length >= plainText.length * 0.7,
+    bold,
     letterSpacing:
       style.includes("letter-spacing") ||
       $el.find("span[style*='letter-spacing']").length > 0,
@@ -705,7 +720,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           inlines,
           plainText,
           centered: styleCentres(liEl),
-          bold: styleSetsBold(liEl),
+          bold: ownBoldness(liEl) === true,
           letterSpacing: false,
           fontSize: 12,
           paragraphLayout: "unknown",

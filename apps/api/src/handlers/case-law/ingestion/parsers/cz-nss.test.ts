@@ -1312,6 +1312,37 @@ describe("layout read from inline style", () => {
       }).map(([type]) => type),
     ).toEqual(["paragraph", "paragraph"]);
   });
+
+  // A paragraph can carry its weight itself rather than through a span; a
+  // span inside it that sets the text back to normal undoes it.
+  const ownWeightSection = (paragraph: string) =>
+    parseNssDecisionHtml(
+      baseInput(
+        nssUnitDecisionHtml.replace(
+          "<p>[2] Krajský soud",
+          () => `${paragraph}<p>[2] Krajský soud`,
+        ),
+      ),
+    )
+      .documentAst.blocks.filter((block) =>
+        block.plainText.includes("Posouzení věci"),
+      )
+      .map((block) => [block.type, block.plainText]);
+
+  test.each([
+    `<p style="text-align:center;font-weight:bold">2. Posouzení věci</p>`,
+    `<p style="text-align: center; font-weight: bold">2. Posouzení věci</p>`,
+  ])("a paragraph bold by its own style is a section heading: %s", (html) => {
+    expect(ownWeightSection(html)).toEqual([["heading", "2. Posouzení věci"]]);
+  });
+
+  test("a bold paragraph whose text a span sets back to normal is not a heading", () => {
+    expect(
+      ownWeightSection(
+        `<p style="text-align: center; font-weight: bold"><span style="font-weight: normal">2. Posouzení věci</span></p>`,
+      ).map(([type]) => type),
+    ).toEqual(["paragraph"]);
+  });
 });
 
 describe("table caption retention", () => {
