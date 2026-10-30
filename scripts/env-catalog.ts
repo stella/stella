@@ -1536,6 +1536,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The promote names the repository whose deployment names the deploy
+  // contract check reads (scripts/check-deploy-env-contract.ts).
+  "DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
   // the commit it deploys, the infrastructure repository and its App token,
   // the readiness endpoint and edge header, and the bounds tests shorten.
