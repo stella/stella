@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_KIS",
   "key": "pl-kis",
-  "parserVersion": 12,
+  "parserVersion": 13,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs."
+    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."
   }
 }

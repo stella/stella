@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_UOHS",
   "key": "cz-uohs",
-  "parserVersion": 6,
+  "parserVersion": 7,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-read font-run segmentation after the shared PDF style mapping changed; Czech output remains plain text and footnote links, with no independent feature storage."
+    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."
   }
 }
