@@ -1075,7 +1075,10 @@ const readFeatureDeclarationSources = async () => {
 
 type GeneratedFeatureDeclarationOptions = Parameters<
   typeof assertFeatureAccessDeclarations
->[0] & { dispatchRecords: readonly CapabilityDispatchRecord[] };
+>[0] & {
+  dispatchRecords: readonly CapabilityDispatchRecord[];
+  invoiceManagementFiles: ReadonlySet<string>;
+};
 
 /** Validate emitted dispatch entries rather than previously generated shards. */
 const validateGeneratedFeatureDeclarations = ({
