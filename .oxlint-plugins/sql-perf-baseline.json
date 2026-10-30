@@ -6,7 +6,7 @@
   "apps/api/src/handlers/legislation/list.ts": 2,
   "apps/api/src/handlers/workspaces/read-overview-activity-actors.query.ts": 2,
   "apps/api/src/lib/entities/query-entities.ts": 2,
-  "apps/api/src/lib/entity-filters.ts": 4,
+  "apps/api/src/lib/entity-filters.ts": 3,
   "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts": 1,
   "apps/api/src/lib/search/index-global.ts": 1
 }

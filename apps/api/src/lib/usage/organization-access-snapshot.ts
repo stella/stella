@@ -6,6 +6,7 @@ import {
   organizationAccessStates,
   organizationConfiguredAccess,
   usageEntitlements,
+  usagePolicies,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -118,8 +119,11 @@ export const readOrganizationAccessSnapshot = async (
   if (isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
     const source = await db
       .select({
+        source: usageEntitlements.source,
         status: usageEntitlements.status,
         cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
+        currentPeriodEnd: usageEntitlements.currentPeriodEnd,
+        serviceActionsPerPeriod: usagePolicies.serviceActionsPerPeriod,
         hostedLastEventAt: usageEntitlements.hostedLastEventAt,
         hostedEntitlementExternalId:
           usageEntitlements.hostedEntitlementExternalId,
@@ -128,6 +132,10 @@ export const readOrganizationAccessSnapshot = async (
         configured: getColumns(organizationConfiguredAccess),
       })
       .from(usageEntitlements)
+      .innerJoin(
+        usagePolicies,
+        eq(usagePolicies.id, usageEntitlements.usagePolicyId),
+      )
       .leftJoin(
         organizationConfiguredAccess,
         eq(
@@ -141,25 +149,51 @@ export const readOrganizationAccessSnapshot = async (
     if (source === undefined) {
       return original;
     }
-    if (source.status === "cancelled" && !source.cancelAtPeriodEnd) {
-      return {
-        state: CONFIGURED_ACCESS_STATE,
-        configuredAccess: { status: "disabled" },
-        original,
-      } as const satisfies OrganizationAccessSnapshot;
-    }
-    const configured = source.configured;
-    // The signature and the off-state read share their evaluated projection;
-    // unrelated persistence changes cannot invalidate a valid overlay.
-    if (
-      configured !== null &&
-      configuredAccessSourceMatches({ configured, original, source })
-    ) {
-      return {
-        state: CONFIGURED_ACCESS_STATE,
-        configuredAccess: decodeConfiguredAccess(configured),
-        original,
-      } as const satisfies OrganizationAccessSnapshot;
+    switch (source.source) {
+      case "hosted": {
+        if (source.status === "cancelled" && !source.cancelAtPeriodEnd) {
+          return {
+            state: CONFIGURED_ACCESS_STATE,
+            configuredAccess: { status: "disabled" },
+            original,
+          } as const satisfies OrganizationAccessSnapshot;
+        }
+        const configured = source.configured;
+        // The signature and the off-state read share their evaluated
+        // projection; unrelated persistence changes cannot invalidate a valid
+        // overlay.
+        if (
+          configured !== null &&
+          configuredAccessSourceMatches({ configured, original, source })
+        ) {
+          return {
+            state: CONFIGURED_ACCESS_STATE,
+            configuredAccess: decodeConfiguredAccess(configured),
+            original,
+          } as const satisfies OrganizationAccessSnapshot;
+        }
+        return original;
+      }
+      case "manual":
+        // A manual entitlement has no provider events: its period end alone
+        // bounds the paid access, as it bounds the policy limits in
+        // `organization_effective_policy`. A policy without a service-action
+        // budget grants no paid access, as for a hosted entitlement.
+        return {
+          state: CONFIGURED_ACCESS_STATE,
+          configuredAccess:
+            source.serviceActionsPerPeriod === null
+              ? { status: "disabled" }
+              : {
+                  status: source.cancelAtPeriodEnd ? "ending" : "active",
+                  periodEndsAt: source.currentPeriodEnd,
+                  serviceActionsPerPeriod: source.serviceActionsPerPeriod,
+                },
+          original,
+        } satisfies OrganizationAccessSnapshot;
+      default:
+        source.source satisfies never;
+        return panic("Unhandled entitlement source");
     }
   }
   return original;

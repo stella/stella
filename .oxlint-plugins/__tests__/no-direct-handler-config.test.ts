@@ -2,32 +2,33 @@ import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-test("rejects mutable endpoint config for supported HTTP route verbs", async () => {
+const lint = async (lines: readonly string[]) =>
+  await lintSingleRule("no-direct-handler-config", lines.join("\n"), {
+    plugin: "require-safe-route-handlers",
+  });
+
+test("rejects writes to a retained endpoint config", async () => {
   expect(
-    await lintSingleRule(
-      "no-direct-handler-config",
-      'app.get("/", endpoint.handler, endpoint.config);\napp.post("/", endpoint.handler, endpoint.config);\napp.put("/", endpoint.handler, endpoint.config);\napp.patch("/", endpoint.handler, endpoint.config);\napp.delete("/", endpoint.handler, endpoint.config);',
-      { plugin: "require-safe-route-handlers" },
-    ),
-  ).toEqual([1, 2, 3, 4, 5]);
+    await lint([
+      "Object.assign(endpoint.config, { permissions: {} });",
+      "Reflect.deleteProperty(endpoint.config.permissions, 'workspace');",
+      "(endpoint.config as Mutable).permissions = {};",
+      "delete (endpoint.config as Mutable).mcp;",
+      "(endpoint.config as Mutable).retries++;",
+      "Object.defineProperty(endpoint.config, 'mcp', { value: {} });",
+      "",
+    ]),
+  ).toEqual([1, 2, 3, 4, 5, 6]);
 });
 
-test("accepts fresh projections instead of sharing the mutable config", async () => {
+test("accepts reads and fresh copies of the config", async () => {
   expect(
-    await lintSingleRule(
-      "no-direct-handler-config",
-      'app.post("/", endpoint.handler, { body: endpoint.config.body, permissions: endpoint.config.permissions });\napp.get("/", endpoint.handler);',
-      { plugin: "require-safe-route-handlers" },
-    ),
-  ).toEqual([]);
-});
-
-test("leaves non-route config consumers alone", async () => {
-  expect(
-    await lintSingleRule(
-      "no-direct-handler-config",
-      'app.use(endpoint.config);\napp.group("/", endpoint.handler, endpoint.config);',
-      { plugin: "require-safe-route-handlers" },
-    ),
+    await lint([
+      "const copy = Object.assign({}, endpoint.config, { body });",
+      "const permissions = endpoint.config.permissions;",
+      "export const r = routes({ '/': { GET: endpoint } });",
+      "settings.configured = true;",
+      "",
+    ]),
   ).toEqual([]);
 });

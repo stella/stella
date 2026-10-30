@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionAliasMovedIdentities,
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawRawSweeps,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -23,6 +23,7 @@ import {
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawDocumentErasureIncompleteError } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { listS3ObjectPage } from "@/api/lib/s3";
 
 /**
@@ -480,11 +481,17 @@ export const reconcileCaseLawRawSweeps = async ({
         : swept;
     if (Result.isError(outcome)) {
       result.failed += 1;
-      captureError(outcome.error, {
-        decisionId: owner.decisionId,
-        prefix: rawDocumentPrefix(documentOwner(owner)),
-        step: "reconcileCaseLawRawSweeps.sweep",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "legalsearch.reconcileCaseLawRawSweeps.outcome_error",
+          {
+            decisionId: owner.decisionId,
+            prefix: rawDocumentPrefix(documentOwner(owner)),
+            step: "reconcileCaseLawRawSweeps.sweep",
+          },
+        ),
+      );
       continue;
     }
     if (outcome.value.type === "swept") {

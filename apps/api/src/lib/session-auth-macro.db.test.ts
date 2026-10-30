@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { session as authSession } from "@/api/db/auth-schema";
 import { meRoute } from "@/api/handlers/me/routes";
 import { AUTH_REJECTION_BODY, getAuth } from "@/api/lib/auth";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { verifyAndDeleteUser } from "@/api/lib/delete-account";
@@ -22,7 +23,13 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const routeServer = serveRoutesForTest(meRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 setDefaultTimeout(120_000);
 
@@ -37,7 +44,7 @@ afterAll(async () => {
 });
 
 const requestAccountRoute = async (browser: HumanBrowser) =>
-  await meRoute.handle(
+  await routeServer.fetch(
     new Request("http://localhost/me/professional-use", {
       headers: { cookie: browser.cookieHeader() },
     }),
@@ -81,6 +88,19 @@ describe("account-route session liveness", () => {
       .set({ expiresAt: new Date(0) })
       .where(eq(authSession.userId, browser.userId));
 
+    await expectAuthRejection(await requestAccountRoute(browser), 401);
+  });
+
+  test("refuses a cached cookie at the absolute cap while expiry is still in the future", async () => {
+    const browser = await signIn();
+    expect((await requestAccountRoute(browser)).status).toBe(200);
+    await testDb
+      .update(authSession)
+      .set({
+        createdAt: new Date(Date.now() - SESSION_ABSOLUTE_AGE_MS - 1),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      })
+      .where(eq(authSession.userId, browser.userId));
     await expectAuthRejection(await requestAccountRoute(browser), 401);
   });
 

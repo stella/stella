@@ -26,9 +26,9 @@ export const BASELINE_PATHS = {
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-write-contracts.ts */
-  writeContracts: "scripts/write-contracts-baseline.json",
+  writeContracts: "scripts/write-contract-routes-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
-  aggregateMutations: "scripts/aggregate-mutations-baseline.json",
+  aggregateMutations: "scripts/aggregate-mutation-routes-baseline.json",
   /** scripts/check-oxlint-effective-config.ts */
   oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */
@@ -41,6 +41,8 @@ export const BASELINE_PATHS = {
   offlineCheckImports: "scripts/offline-check-import-allowlist.json",
   /** scripts/check-ci-network-steps.ts */
   ciNetworkSteps: "scripts/ci-network-steps-allowlist.json",
+  /** scripts/check-tracked-file-sizes.ts */
+  trackedFileSizes: "scripts/tracked-file-size-baseline.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
@@ -59,14 +61,12 @@ export const BASELINE_PATHS = {
   testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
-  /** apps/api/src/tests/query-perf/query-perf.test.ts */
-  queryPerf: "apps/api/src/tests/query-perf/baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
   mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
   /** apps/api/scripts/deployment-feature-guard.ts */
-  deploymentFeature: "apps/api/deployment-feature-baseline.json",
+  deploymentFeature: "apps/api/deployment-feature-routes-baseline.json",
   /** apps/api/src/handlers/chat/provider-request-cache.integration.test.ts */
   chatPromptPrefix:
     "apps/api/src/tests/fixtures/provider-request-schemas/chat-prompt-baseline.json",

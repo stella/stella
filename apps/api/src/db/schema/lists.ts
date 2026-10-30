@@ -17,8 +17,8 @@ import {
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
 import {
-  LIST_ITEM_TYPES,
   jsonb,
+  LIST_ITEM_TYPES,
   p,
   pUuid,
   safeUuid,

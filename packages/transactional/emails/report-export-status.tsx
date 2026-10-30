@@ -14,7 +14,7 @@ import {
 
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
-import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
+import { brand, BRAND_FOOTER_TEXT, ICON_URL, sharedStyles } from "./_shared";
 
 export type ReportExportEmailStatus = "completed" | "failed";
 

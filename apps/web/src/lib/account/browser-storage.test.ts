@@ -177,9 +177,9 @@ describe("registered browser storage families", () => {
     });
     expect(browserStorage("local")).toBeNull();
     const local = deviceStorage("local");
-    local.setItem("sidebar_state", "open");
-    expect(local.getItem("sidebar_state")).toBeNull();
-    local.removeItem("sidebar_state");
+    local.setItem("stella.templates.density", "compact");
+    expect(local.getItem("stella.templates.density")).toBeNull();
+    local.removeItem("stella.templates.density");
     const session = browserStateStorage("session");
     session.setItem("stella.storage-owner", "visitor");
     expect(session.getItem("stella.storage-owner")).toBeNull();
@@ -197,18 +197,18 @@ describe("required registered persistence", () => {
       );
     }
     const strict = requireBrowserStorage("local").unwrap();
-    strict.setItem("sidebar_state", "expanded");
-    expect(strict.getItem("sidebar_state")).toBe("expanded");
+    strict.setItem("stella.templates.density", "comfortable");
+    expect(strict.getItem("stella.templates.density")).toBe("comfortable");
     expect(() => strict.setItem("unregistered.fixture", "value")).toThrow(
       "Unregistered local storage family",
     );
     original.setItem = () => {
       throw new DOMException("Storage quota exceeded", "QuotaExceededError");
     };
-    expect(() => strict.setItem("sidebar_state", "collapsed")).toThrow(
+    expect(() => strict.setItem("stella.templates.density", "compact")).toThrow(
       "Storage quota exceeded",
     );
-    expect(strict.getItem("sidebar_state")).toBe("expanded");
+    expect(strict.getItem("stella.templates.density")).toBe("comfortable");
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {},

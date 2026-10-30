@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
@@ -220,29 +221,37 @@ afterEach(() => {
   }
 });
 
-const userTab = (id: number, url: string): chrome.tabs.Tab => ({
-  active: true,
-  autoDiscardable: true,
-  discarded: false,
-  frozen: false,
-  groupId: -1,
-  highlighted: true,
-  id,
-  incognito: false,
-  index: 0,
-  lastAccessed: 0,
-  pinned: false,
-  // oxlint-disable-next-line typescript/no-deprecated -- chrome.tabs.Tab still requires the field
-  selected: true,
-  url,
-  windowId: 1,
-});
+const userTab = (id: number, url: string): chrome.tabs.Tab => {
+  const tab = {
+    active: true,
+    autoDiscardable: true,
+    discarded: false,
+    frozen: false,
+    groupId: -1,
+    highlighted: true,
+    id,
+    incognito: false,
+    index: 0,
+    lastAccessed: 0,
+    pinned: false,
+    selected: true,
+    url,
+    windowId: 1,
+  };
+  return tab;
+};
 
 const click = (ref = "e:0:1") =>
   ({
     action: "click",
     page: { revision: "revision-1", url: PAGE_URL },
-    target: { name: "Pay invoice", ref, role: "button" },
+    target: {
+      context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+      href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+      name: "Pay invoice",
+      ref,
+      role: "button",
+    },
   }) satisfies BrowserControlCommand;
 
 const OBSERVED_TAB = { revision: "revision-1", tabId: CONTROLLED_TAB_ID };

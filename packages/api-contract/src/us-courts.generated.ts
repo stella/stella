@@ -26,7 +26,7 @@ export const US_COURT_DIRECTORY_SOURCES = {
  * checker reads one string instead of thousands of object literals;
  * `us-courts.ts` reads it into checked rows once.
  */
-// oxfmt-ignore
+// prettier-ignore
 export const US_COURT_DIRECTORY_TEXT: string = `accepted|acca|Army Court of Criminal Appeals|Army Court of Criminal Appeals|Army Court of Criminal Appeals|MA|court|military|national|appellate|||true||p00
 accepted|admiraltyctsc|South Carolina Admiralty Court|South Carolina Admiralty Court|South Carolina Admiralty Court|SS|court|state|SC|special|||false||p14
 accepted|afcca|United States Air Force Court of Criminal Appeals|United States Air Force Court of Criminal Appeals|Air Force Court of Criminal Appeals|MA|court|military|national|appellate|||true||p00

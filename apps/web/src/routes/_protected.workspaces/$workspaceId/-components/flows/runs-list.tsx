@@ -1,4 +1,4 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -8,6 +8,7 @@ import {
   FlowStatusBadge,
   FlowTriggerBadge,
 } from "@/components/flows/flow-badges";
+import { useFormatter } from "@/i18n/formatting-context";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import type { FlowRunListItem } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/flow-run-types";
 

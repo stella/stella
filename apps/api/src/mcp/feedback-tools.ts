@@ -49,6 +49,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /** Per-organization delivery budget: feedback is a trickle, not a stream. */
 export const SUBMIT_RATE_LIMIT_MAX_PER_ORG = 20;
@@ -337,6 +338,9 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     access: "read",
+    permissions: openMcpRead(
+      "builds a feedback preview from caller-supplied data",
+    ),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     name: "prepare_feedback",
@@ -478,7 +482,10 @@ const handleSubmitFeedbackTool: McpToolHandler<
     },
   });
   if (Result.isError(submitted)) {
-    return internalFailureResult(submitted.error);
+    return internalFailureResult(
+      submitted.error,
+      "mcp.handleSubmitFeedbackTool.submitted_error",
+    );
   }
 
   const { deduplicated, deliveries, receipt, redactions, warning } =

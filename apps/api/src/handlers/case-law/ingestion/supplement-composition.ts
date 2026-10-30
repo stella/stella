@@ -28,7 +28,7 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
 import type {
   DecisionSupplementTarget,
   EmptyAst,

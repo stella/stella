@@ -12,8 +12,8 @@ import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 
 import {
-  type StableStringifyInput,
   stableStringify,
+  type StableStringifyInput,
 } from "@stll/stable-stringify";
 
 import type { JsonSchema, RegistryToolListing } from "./route-types.js";

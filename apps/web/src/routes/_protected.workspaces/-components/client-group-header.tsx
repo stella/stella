@@ -32,7 +32,7 @@ export const ClientGroupHeader = ({
         "sticky top-0 z-10 col-span-full",
         "flex cursor-pointer items-center gap-2",
         "bg-background/95 border-b backdrop-blur-sm",
-        "pt-4 pb-2 text-start first:pt-0",
+        "pt-4 pb-2 text-start group-first/client-section:pt-0",
       )}
       data-group-id={group.groupId}
       onClick={onToggle}
@@ -51,6 +51,7 @@ export const ClientGroupHeader = ({
           <span>{personalLabel}</span>
         ) : (
           <span
+            aria-label={group.clientName}
             className="hover:underline"
             onClick={(e) => {
               e.stopPropagation();

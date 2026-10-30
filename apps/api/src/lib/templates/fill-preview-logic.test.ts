@@ -13,8 +13,8 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import {
-  createSelectQueryMock,
   createScopedDbMock,
+  createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
 import { fillPreviewLogic } from "./fill-preview-logic";

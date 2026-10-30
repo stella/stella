@@ -1,11 +1,42 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   BoundedLruCache,
   compareByLocale,
   compareCodeUnit,
   getCollator,
+  LOCALE_CACHE_LIMIT,
 } from "./collation";
+
+const collationString = fc
+  .array(
+    fc.constantFrom(
+      "a",
+      "A",
+      "á",
+      "ä",
+      "c",
+      "č",
+      "h",
+      "i",
+      "o",
+      "ô",
+      "r",
+      "ř",
+      "0",
+      "2",
+      "9",
+      "😀",
+      "\u{E000}",
+    ),
+    { maxLength: 12 },
+  )
+  .map((characters) => characters.join(""));
+
+const sign = (value: number): number => (value === 0 ? 0 : Math.sign(value));
 
 describe("getCollator", () => {
   test("caches one collator instance per locale", () => {
@@ -24,6 +55,10 @@ describe("getCollator", () => {
     }
 
     expect(getCollator("en-x-cache-origin")).not.toBe(original);
+  });
+
+  test("uses the documented cache bound", () => {
+    expect(LOCALE_CACHE_LIMIT).toBe(16);
   });
 });
 
@@ -47,6 +82,65 @@ describe("compareByLocale", () => {
       "á",
       "b",
     ]);
+  });
+
+  test("pins Czech tailored letters, accents, and case tiers", () => {
+    expect(
+      ["řeka", "cibule", "Řeka", "čaj", "rak", "Cibule"].toSorted(
+        compareByLocale("cs"),
+      ),
+    ).toEqual(["cibule", "Cibule", "čaj", "rak", "řeka", "Řeka"]);
+  });
+
+  test("pins Slovak ä, ô, and ch ordering", () => {
+    expect(
+      ["iba", "chata", "hora", "otec", "ôkovať", "auto", "ä", "az"].toSorted(
+        compareByLocale("sk"),
+      ),
+    ).toEqual(["auto", "az", "ä", "hora", "chata", "iba", "otec", "ôkovať"]);
+  });
+
+  test("uses variant sensitivity and lexical digit ordering", () => {
+    const collator = getCollator("cs");
+    expect(collator.resolvedOptions()).toMatchObject({
+      numeric: false,
+      sensitivity: "variant",
+    });
+    expect(["2", "10", "a", "A", "á"].toSorted(collator.compare)).toEqual([
+      "10",
+      "2",
+      "a",
+      "A",
+      "á",
+    ]);
+  });
+
+  test("defines a total order whose result is sorted consistently", () => {
+    assertProperty(
+      "defines a total order whose result is sorted consistently",
+      fc.property(
+        fc.array(collationString, { maxLength: 40 }),
+        collationString,
+        collationString,
+        collationString,
+        (values, a, b, c) => {
+          const compare = compareByLocale("cs");
+          expect(compare(a, a)).toBe(0);
+          expect(sign(compare(a, b))).toBe(sign(-compare(b, a)));
+          if (compare(a, b) <= 0 && compare(b, c) <= 0) {
+            expect(compare(a, c)).toBeLessThanOrEqual(0);
+          }
+
+          const sorted = values.toSorted(compare);
+          for (let index = 1; index < sorted.length; index += 1) {
+            expect(
+              compare(sorted[index - 1] ?? "", sorted[index] ?? ""),
+            ).toBeLessThanOrEqual(0);
+          }
+          expect(sorted.toSorted(compare)).toEqual(sorted);
+        },
+      ),
+    );
   });
 
   test("is usable as a field comparator via a small wrapper", () => {
@@ -81,6 +175,26 @@ describe("compareCodeUnit", () => {
     // orderings depend on this staying put.
     expect(compareCodeUnit("\u{1F600}", "\uE000")).toBe(-1);
   });
+
+  test("code-unit comparison defines a total order", () => {
+    assertProperty(
+      "code-unit comparison defines a total order",
+      fc.property(
+        collationString,
+        collationString,
+        collationString,
+        (a, b, c) => {
+          expect(compareCodeUnit(a, a)).toBe(0);
+          expect(sign(compareCodeUnit(a, b))).toBe(
+            sign(-compareCodeUnit(b, a)),
+          );
+          if (compareCodeUnit(a, b) <= 0 && compareCodeUnit(b, c) <= 0) {
+            expect(compareCodeUnit(a, c)).toBeLessThanOrEqual(0);
+          }
+        },
+      ),
+    );
+  });
 });
 
 describe("BoundedLruCache", () => {
@@ -103,5 +217,29 @@ describe("BoundedLruCache", () => {
     cache.set("c", 3);
     expect(cache.get("b")).toBeUndefined();
     expect(cache.get("a")).toBe(10);
+  });
+
+  test("never retains more entries than its bound", () => {
+    const cache = new BoundedLruCache<number, object>(LOCALE_CACHE_LIMIT);
+    const values = Array.from({ length: LOCALE_CACHE_LIMIT + 1 }, () => ({}));
+    for (const [key, value] of values.entries()) {
+      cache.set(key, value);
+    }
+    expect(cache.get(0)).toBeUndefined();
+    for (let key = 1; key < values.length; key += 1) {
+      expect(cache.get(key)).toBe(values[key]);
+    }
+  });
+
+  test("reading an undefined value still refreshes its recency", () => {
+    const cache = new BoundedLruCache<string, number | undefined>(2);
+    cache.set("a", undefined);
+    cache.set("b", 2);
+    cache.get("a");
+    cache.set("c", 3);
+    expect(cache.get("b")).toBeUndefined();
+    cache.get("a");
+    cache.set("d", 4);
+    expect(cache.get("c")).toBeUndefined();
   });
 });

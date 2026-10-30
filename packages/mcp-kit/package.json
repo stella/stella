@@ -1,6 +1,6 @@
 {
   "name": "@stll/mcp-kit",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Framework-free MCP tool registry, compact schemas, and lazy capability discovery",
   "keywords": [
     "discovery",
@@ -41,7 +41,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/mcp-kit",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-kit",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"
   },
   "dependencies": {

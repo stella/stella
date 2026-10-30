@@ -7,10 +7,10 @@ import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
-  reduceSendQueue,
-  snapshotChatRequestOptions,
   type QueuedChatEntry,
+  reduceSendQueue,
   type SendQueueState,
+  snapshotChatRequestOptions,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { toSafeId } from "@/lib/safe-id";
 

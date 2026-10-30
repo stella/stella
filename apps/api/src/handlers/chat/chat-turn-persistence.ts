@@ -11,6 +11,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -39,9 +40,9 @@ import type {
 import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import type {
-  ChatTurnTiming,
-  ChatTurnOutcome,
   ChatMessageRole,
+  ChatTurnOutcome,
+  ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
@@ -946,8 +947,7 @@ export const readChatTurnView = async ({
 export type ChatTurnExecutionClaim = {
   acceptedTurnId: SafeId<"chatTurn"> | null;
   continuationInteraction?:
-    | { toolCallId: string; type: ChatTurnInteractionType }
-    | undefined;
+    { toolCallId: string; type: ChatTurnInteractionType } | undefined;
   incomingMessageId: SafeId<"chatMessage">;
   incomingMessageRole: ChatMessageRole;
   organizationId: SafeId<"organization">;
@@ -1292,7 +1292,7 @@ export const renewChatTurnExecutionLease = async (options: {
 type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
 
 /** The index that makes a run id name one turn in its organization. */
-const CHAT_TURN_RUN_ID_INDEX = "chat_turns_org_run_id_uidx";
+const CHAT_TURN_RUN_ID_INDEX = CHAT_TURNS_ORG_RUN_ID_UIDX;
 
 const classifyRunIdWrite = (
   written: Result<ChatTurnExecutionStanding, SafeDbError>,

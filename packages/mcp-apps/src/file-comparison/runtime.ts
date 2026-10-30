@@ -9,11 +9,11 @@ import { formatAppError, LocalizedAppError } from "../shared/app-error";
 import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
-  isUploadRecord,
-  createUploadTranslator,
+  bindUploadSdkErrors,
   connectUploadApp,
   createUploadSubscriptions,
-  bindUploadSdkErrors,
+  createUploadTranslator,
+  isUploadRecord,
 } from "../shared/upload-bridge";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;

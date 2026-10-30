@@ -2,15 +2,15 @@ import { panic } from "better-result";
 
 import {
   GLOBAL_SEARCH_RESULT_TYPES,
-  isEntityKind,
   type GlobalSearchResultType,
+  isEntityKind,
   type ResourceName,
   type ResourceRef,
 } from "@stll/api-contract";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
-import type { ContactType } from "@/api/db/schema";
+import type { ContactType, DocumentProcessingStatus } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chooseExtractionSource } from "@/api/lib/extraction-runs/extraction-source-owner";
@@ -201,6 +201,7 @@ export type EntityGlobalSearchHit = GlobalSearchHitBase & {
   fileFieldId: string | null;
   filePropertyId: string | null;
   mimeType: string | null;
+  processingStatus?: DocumentProcessingStatus | null;
 };
 
 export type MatterGlobalSearchHit = GlobalSearchHitBase & {

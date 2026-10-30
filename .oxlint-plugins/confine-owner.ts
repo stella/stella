@@ -46,7 +46,7 @@
 // Cross-module local re-exports, mutable aliases and custom query wrappers are
 // outside this syntax boundary.
 
-import { eslintCompatPlugin, type Context } from "@oxlint/plugins";
+import { type Context, eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   type AstNode,
@@ -61,10 +61,10 @@ import {
   isMemberAccess,
   isStringLiteral,
   memberPropertyName,
+  repoRelativeFilename,
   resolveImport,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
-  repoRelativeFilename,
   type ScopeContext,
   stableInitializer,
   staticStringValue,
@@ -567,9 +567,7 @@ const stableValue = (
 };
 
 type PropertyLookup =
-  | { kind: "absent" }
-  | { kind: "unknown" }
-  | { kind: "value"; node: AstNode };
+  { kind: "absent" } | { kind: "unknown" } | { kind: "value"; node: AstNode };
 
 // Absent and unknown stay distinct through nested spreads: an unresolved
 // spread may override what came before it, an absent property cannot.

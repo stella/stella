@@ -3,18 +3,22 @@
  * because the same rules answer three questions at once: what the loader
  * fetches, what the canonical link says, and what "clear filters" clears.
  *
- * The orders themselves come from the search contract rather than a list of
- * their own: a URL that offered an order the endpoint does not serve, or
- * defaulted to a different one, would be a silent disagreement with the
- * answer. Relevance is first there, and being the default is why it is absent
- * from the URL: a link says what the reader chose, not what they accepted.
+ * The orders themselves come from the contract through `decision-order.logic`
+ * rather than a list of their own: a URL that offered an order the endpoint
+ * does not serve, or defaulted to a different one, would be a silent
+ * disagreement with the answer. A default order is absent from the URL: a
+ * link says what the reader chose, not what they accepted.
  */
 
 import { Result } from "better-result";
 
-import { DEFAULT_SEARCH_SORT } from "@stll/api-contract/search";
-import type { SearchSort } from "@stll/api-contract/search";
+import type { DecisionSort } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
+
+import {
+  decisionSortParam,
+  sortKeptAcrossQueryEdit,
+} from "@/features/case-law/decision-order.logic";
 
 /** What the case-law results URL accepts. Every field is single-select. */
 export type CaseLawIndexSearch = {
@@ -40,7 +44,8 @@ export type CaseLawIndexSearch = {
    * leaves it out.
    */
   rewrittenFrom?: string | undefined;
-  sort?: SearchSort | undefined;
+  /** The search's order with a query, the listing's without; see `decisionOrder`. */
+  sort?: DecisionSort | undefined;
   sourceId?: string | undefined;
   /**
    * Require every word the query carries, as a link beside the results asks
@@ -198,7 +203,9 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
  * new query is a new search and starts without them, while a filter, sort,
  * page or strict change narrows the same topic and keeps them. So the drop
  * belongs to the transition rather than to each caller: no place that writes
- * `q` can forget it.
+ * `q` can forget it. The order is kept only where the result set the edit
+ * lands on serves it: adding words to an oldest-first listing makes a search,
+ * which has no oldest-first order.
  */
 export const withQuery = (
   previous: CaseLawIndexSearch,
@@ -211,6 +218,7 @@ export const withQuery = (
   const next = {
     ...previous,
     q,
+    sort: sortKeptAcrossQueryEdit(previous.sort, q),
     strict: undefined,
     questions: undefined,
     rewrite: undefined,
@@ -283,19 +291,6 @@ export const withOriginalWords = (
         rewrittenFrom: undefined,
       };
 
-/**
- * The sort as the URL carries it: absent while it is the default, so the same
- * result set has one canonical address rather than two.
- */
-export const decisionSortParam = (
-  sort: SearchSort | undefined,
-): SearchSort | undefined =>
-  sort === undefined || sort === DEFAULT_SEARCH_SORT ? undefined : sort;
-
-/** The sort a search runs under, whatever the URL left out. */
-export const decisionSortOrder = (sort: SearchSort | undefined): SearchSort =>
-  sort ?? DEFAULT_SEARCH_SORT;
-
 export const createCaseLawIndexPath = (
   search: CaseLawIndexSearch,
 ): `/law/cases${string}` => {
@@ -333,7 +328,7 @@ export const createCaseLawIndexPath = (
   if (isStrictSearch(strict)) {
     params.set("strict", STRICT_SEARCH_VALUE);
   }
-  const sortParam = decisionSortParam(sort);
+  const sortParam = decisionSortParam(sort, q);
   if (sortParam !== undefined) {
     params.set("sort", sortParam);
   }

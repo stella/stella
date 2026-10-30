@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -29,7 +30,7 @@ const createContext = ({
       request: new Request("https://example.test/v1/expenses/workspace_test", {
         method: "PUT",
       }),
-      route: "/v1/expenses/:workspaceId",
+      route: "/v1/expenses/:workspaceId" satisfies ApiRoutePath,
       safeDb,
       workspaceId: toSafeId<"workspace">("workspace_test"),
       memberRole: sessionMemberRole("owner"),

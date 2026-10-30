@@ -673,11 +673,7 @@ const resolveModelTargets = (specs: readonly string[]): ModelTarget[] =>
 // --------------- Scoring ---------------
 
 type FieldOutcome =
-  | "correct"
-  | "wrong"
-  | "hallucinated"
-  | "missing"
-  | "schema-violation";
+  "correct" | "wrong" | "hallucinated" | "missing" | "schema-violation";
 
 type FieldGrade = {
   key: string;
@@ -954,7 +950,7 @@ const runTask = async ({
     };
   }
 
-  const output = result.value;
+  const output = result.value.output;
   const fields = task.properties.map((fixture) => gradeField(fixture, output));
   return {
     modelId,

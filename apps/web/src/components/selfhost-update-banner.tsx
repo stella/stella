@@ -17,8 +17,9 @@ import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import { deviceStorage } from "@/lib/account/browser-storage";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
+import { queryView } from "@/lib/query-view.logic";
 import { compareSemver } from "@/lib/semver-compare";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 const RELEASES_API_URL =
   "https://api.github.com/repos/stella/stella/releases/latest";
@@ -80,8 +81,8 @@ export const SelfhostUpdateBanner = () => {
       return parsed.output;
     },
   });
-  const releaseView = useQueryView(releaseQuery);
-  useQueryViewError(releaseView);
+  const releaseView = queryView(releaseQuery);
+  useQueryViewError(releaseView, "SelfhostUpdateBanner:query");
   const release = releaseView.type === "items" ? releaseView.items : undefined;
   const latestVersion = release ? stripPrefix(release.tag_name) : "";
   const dismissedKey = `${DISMISSED_KEY_PREFIX}${latestVersion}`;

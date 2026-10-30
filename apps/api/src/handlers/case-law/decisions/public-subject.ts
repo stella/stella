@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import { status } from "elysia";
 
+import { status } from "@/api/http/status";
 /** Public route factories and the census of handlers they gate. */
 import type {
   ExactSuccessSchemaGuard,
@@ -35,12 +35,12 @@ type UnreadableSubjectAddress =
 const unreadableAddress = (message: string) => status(400, { message });
 type UnreadableAddressStatus = ReturnType<typeof unreadableAddress>;
 
-/** Handlers the factory produced; the route census checks both directions. */
-const gatedHandlers = new Set<unknown>();
+/** Route definitions the factory produced; the route census checks both directions. */
+const gatedDefinitions = new Set<unknown>();
 
 /**
  * The subject travels beside the context rather than merged into it: an
- * intersection over Elysia's context type is instantiated afresh at every
+ * intersection over the handler context type is instantiated afresh at every
  * call site, and the route tree is a hot enough generic path to feel it.
  */
 type SubjectHandlerOptions<TConfig extends PublicHandlerConfig, TRead> = {
@@ -122,7 +122,7 @@ const buildGatedSubjectHandler = <
       return Result.ok(response);
     },
   );
-  gatedHandlers.add(definition.handler);
+  gatedDefinitions.add(definition);
   return definition;
 };
 
@@ -169,9 +169,10 @@ export const createSafePublicSubjectHandler = <
     followUp: readIsTheResponse,
   });
 
-/** Whether a mounted route handler came out of the factory. */
-export const isSubjectGatedHandler = (handler: unknown): boolean =>
-  typeof handler === "function" && gatedHandlers.has(handler);
+/** Whether a mounted route's definition came out of the factory. */
+export const isSubjectGatedDefinition = (definition: unknown): boolean =>
+  gatedDefinitions.has(definition);
 
-/** Every handler the factory produced, for the census's other direction. */
-export const subjectGatedHandlers = (): ReadonlySet<unknown> => gatedHandlers;
+/** Every definition the factory produced, for the census's other direction. */
+export const subjectGatedDefinitions = (): ReadonlySet<unknown> =>
+  gatedDefinitions;

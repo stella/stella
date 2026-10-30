@@ -1,11 +1,11 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { getLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
 import {
   createExactIconOrigin,
   ICON_URL_MAX_LENGTH,
-  normalizeExactIconUrl,
+  toExactIconUrl,
 } from "@/api/handlers/chat/link-icons/origin";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
@@ -28,32 +28,35 @@ const config = {
         "Decorative icons use a bundled fallback when bytes are unavailable.",
     },
   },
-  query: t.Object({ url: t.String({ maxLength: ICON_URL_MAX_LENGTH }) }),
+  query: v.object({
+    url: v.pipe(v.string(), v.maxLength(ICON_URL_MAX_LENGTH)),
+  }),
 } satisfies HandlerConfig;
 
 const readOrigin = createExactIconOrigin();
 
 // This root read uses authenticated identity and fetches only validated public bytes;
 // it neither reads nor writes tenant data.
-const getExactIcon = createSafeRootHandler(
-  config,
-  async function* ({ query: { url }, user, request, set }) {
-    const normalizedUrl = normalizeExactIconUrl(url);
-    if (normalizedUrl === null) {
-      return Result.ok(linkIconBody({ type: "no-icon" }, set));
-    }
-    const outcome = yield* Result.ok(
-      await readLinkIcon({
-        hostname: normalizedUrl,
-        userId: user.id,
-        ip: resolveClientIp(request, null) ?? "unresolved",
-        cache: getLinkIconCache(),
-        readOrigin: async (target) =>
-          await readOrigin(target, grantThirdPartyOutboundPermit()),
-      }),
-    );
-    return Result.ok(linkIconBody(outcome, set));
-  },
-);
+export const createGetExactIconHandler = (readCache = getLinkIconCache) =>
+  createSafeRootHandler(
+    config,
+    async function* ({ query: { url }, user, request, set }) {
+      const target = toExactIconUrl(url);
+      if (target === null) {
+        return Result.ok(linkIconBody({ type: "no-icon" }, set));
+      }
+      const outcome = yield* Result.ok(
+        await readLinkIcon({
+          hostname: target,
+          userId: user.id,
+          ip: resolveClientIp(request, null) ?? "unresolved",
+          cache: readCache(),
+          readOrigin: async (exact) =>
+            await readOrigin(exact.value, grantThirdPartyOutboundPermit()),
+        }),
+      );
+      return Result.ok(linkIconBody(outcome, set));
+    },
+  );
 
-export default getExactIcon;
+export default createGetExactIconHandler();

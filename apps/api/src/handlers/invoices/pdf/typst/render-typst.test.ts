@@ -2,7 +2,7 @@ import { PDF, PdfArray, PdfDict, PdfName, PdfStream } from "@libpdf/core";
 import { afterAll, describe, expect, test } from "bun:test";
 import { encode } from "uqr";
 
-import { buildInvoicePaymentPayload } from "../render";
+import { buildInvoicePaymentPayload } from "../render-helpers";
 import { buildInvoiceTemplateData, qrSvg } from "./data";
 import { CEE_DIACRITICS, DUMMY_ISDOC, invoiceFixture } from "./fixtures";
 import { PDFA_PRODUCER } from "./pdfa";
@@ -46,6 +46,68 @@ const render = async (lineCount: number) => {
 };
 
 describe("Typst invoice renderer", () => {
+  test("groups interleaved lines by matter and prints matter subtotals before invoice totals", async () => {
+    const fixture = invoiceFixture(3);
+    const input = {
+      ...fixture,
+      invoice: {
+        ...fixture.invoice,
+        lines: fixture.invoice.lines.map((line, index) => ({
+          ...line,
+          workspaceId: index === 1 ? "matter-two" : "matter-one",
+          workspaceName: index === 1 ? "Litigation" : "Contract review",
+          description:
+            ["First consultation", "Court filing", "Second consultation"].at(
+              index,
+            ) ?? "",
+        })),
+      },
+    };
+    const data = buildInvoiceTemplateData(input).unwrap();
+    expect(
+      data.groups.map(({ workspaceName, lines }) => ({
+        workspaceName,
+        descriptions: lines.map(({ description }) => description),
+      })),
+    ).toEqual([
+      {
+        workspaceName: "Contract review",
+        descriptions: ["First consultation", "Second consultation"],
+      },
+      { workspaceName: "Litigation", descriptions: ["Court filing"] },
+    ]);
+    const outcome = (
+      await renderInvoiceWithTypst({
+        invoice: input,
+        session,
+        createdAt: CREATED_AT,
+      })
+    ).unwrap();
+    if (outcome.status !== "rendered") {
+      throw new Error(outcome.diagnostics.join("\n"));
+    }
+    const pdf = await PDF.load(outcome.pdf);
+    const text = pdf
+      .extractText()
+      .map(({ text: pageText }) => spaces(pageText))
+      .join("\n");
+    expect(text.indexOf("Contract review")).toBeLessThan(
+      text.indexOf("First consultation"),
+    );
+    expect(text.indexOf("Second consultation")).toBeLessThan(
+      text.indexOf("Litigation"),
+    );
+    expect(text.indexOf("Litigation")).toBeLessThan(
+      text.indexOf("Court filing"),
+    );
+    for (const group of data.groups) {
+      expect(text).toContain(spaces(group.net));
+      expect(text).toContain(spaces(group.vat));
+      expect(text).toContain(spaces(group.total));
+    }
+    expect(text).toContain(spaces(data.totals.gross));
+  });
+
   test("prints every field the live renderer prints", async () => {
     const fixture = invoiceFixture(3);
     const data = buildInvoiceTemplateData(fixture).unwrap();
@@ -79,7 +141,7 @@ describe("Typst invoice renderer", () => {
     for (const value of expected) {
       expect(folded).toContain(spaces(value).toLocaleLowerCase("cs"));
     }
-    for (const line of data.lines) {
+    for (const line of data.groups.flatMap(({ lines }) => lines)) {
       expect(text).toContain(spaces(line.total));
       expect(text).toContain(spaces(line.quantity ?? ""));
     }
@@ -95,7 +157,9 @@ describe("Typst invoice renderer", () => {
     const { pdf, pages } = await render(60);
     expect(pdf.getPageCount()).toBeGreaterThan(2);
     const header = data.labels.description.toLocaleUpperCase("cs");
-    const lineTotal = spaces(data.lines[0]?.total ?? "missing");
+    const lineTotal = spaces(
+      data.groups.at(0)?.lines.at(0)?.total ?? "missing",
+    );
     const pagesWithLines = pages.filter((page) => page.includes(lineTotal));
     expect(pagesWithLines.length).toBeGreaterThan(2);
     for (const page of pagesWithLines) {
@@ -149,7 +213,7 @@ describe("Typst invoice renderer", () => {
   });
 });
 
-describe("SPAYD QR as SVG", () => {
+describe("payment QR as SVG", () => {
   test("the SVG paths reproduce the encoder's module matrix exactly", () => {
     const payment = buildInvoicePaymentPayload(invoiceFixture(1));
     expect(payment).not.toBeNull();
@@ -183,4 +247,104 @@ describe("SPAYD QR as SVG", () => {
     }).unwrap();
     expect(data.payment?.qrSvg).toBeNull();
   });
+});
+
+describe("Typst country invoice wording", () => {
+  test.each(["sk", "en"] as const)(
+    "extracts mandated Slovak reverse-charge wording in %s",
+    async (lang) => {
+      const fixture = invoiceFixture(1);
+      const sourceLine = fixture.invoice.lines.at(0);
+      if (sourceLine === undefined) {
+        throw new Error("Fixture must contain an invoice line");
+      }
+      const input = {
+        ...fixture,
+        seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
+        invoice: {
+          ...fixture.invoice,
+          language: lang,
+          lines: [{ ...sourceLine, vatTreatment: "reverse_charge" as const }],
+        },
+      };
+      const outcome = (
+        await renderInvoiceWithTypst({
+          invoice: input,
+          session,
+          attachments: [isdoc],
+          createdAt: CREATED_AT,
+        })
+      ).unwrap();
+      if (outcome.status !== "rendered") {
+        throw new Error(outcome.diagnostics.join("\n"));
+      }
+      const text = (await PDF.load(outcome.pdf))
+        .extractText()
+        .map((page) => page.text)
+        .join("\n");
+      expect(text).toContain("Prenesenie daňovej povinnosti.");
+    },
+  );
+
+  test("extracts a Slovak exemption reason", async () => {
+    const fixture = invoiceFixture(1);
+    const sourceLine = fixture.invoice.lines.at(0);
+    if (sourceLine === undefined) {
+      throw new Error("Fixture must contain an invoice line");
+    }
+    const input = {
+      ...fixture,
+      seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
+      invoice: {
+        ...fixture.invoice,
+        language: "en" as const,
+        lines: [
+          {
+            ...sourceLine,
+            vatTreatment: "exempt" as const,
+            exemptionReason: "§ 38",
+          },
+        ],
+      },
+    };
+    const outcome = (
+      await renderInvoiceWithTypst({
+        invoice: input,
+        session,
+        attachments: [isdoc],
+        createdAt: CREATED_AT,
+      })
+    ).unwrap();
+    if (outcome.status !== "rendered") {
+      throw new Error(outcome.diagnostics.join("\n"));
+    }
+    const text = (await PDF.load(outcome.pdf))
+      .extractText()
+      .map((page) => page.text)
+      .join("\n");
+    expect(text).toContain("Dodanie je oslobodené od dane.");
+    expect(text).toContain("§ 38");
+  });
+});
+
+test("Slovak payment documents carry the complete official print mark at its recommended size", () => {
+  const fixture = invoiceFixture(1);
+  const slovak = buildInvoiceTemplateData({
+    ...fixture,
+    seller: {
+      ...fixture.seller,
+      iban: "SK2711000000123456789012",
+      country: "SK",
+      bic: "FIKTSKBA",
+    },
+    invoice: { ...fixture.invoice, currency: "EUR", language: "sk" },
+  }).unwrap();
+  expect(slovak.payment?.qrWidthMm).toBe(37.254);
+  expect(slovak.payment?.qrSvg).toContain('viewBox="0 0 64 75"');
+  for (const id of ["g3522-3", "g3493-4", "g3487-0"]) {
+    expect(slovak.payment?.qrSvg).toContain(`id="${id}"`);
+  }
+  const czech = buildInvoiceTemplateData(fixture).unwrap();
+  expect(czech.payment?.qrWidthMm).toBe(32);
+  expect(czech.payment?.qrSvg).not.toContain('id="g3522-3"');
 });

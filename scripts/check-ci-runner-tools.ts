@@ -230,25 +230,35 @@ const jobTools = (
 
 // Resolve the common static event-based runner choice without assuming a
 // computed/self-hosted runner shares a hosted image's installed programs.
+// Normalize an event-name or variable comparison so the same condition is
+// spelled the same way in step guards and in runner choices.
+// GitHub Actions compares strings case-insensitively, so values are folded
+// to one case.
 const eventOperand = (operand: string) => {
-  const match = /^github\.event_name\s*(==|!=)\s*(['"])([\w-]+)\2$/u.exec(
-    operand,
-  );
+  const match =
+    /^(github\.event_name|vars\.[A-Za-z_][A-Za-z0-9_]*)\s*(==|!=)\s*(['"])([\w-]+)\3$/u.exec(
+      operand,
+    );
   if (match === null) {
     return operand;
   }
-  const operator = match[1];
-  const event = match[3];
-  if (operator === undefined || event === undefined) {
+  const subject = match[1];
+  const operator = match[2];
+  const value = match[4];
+  if (subject === undefined || operator === undefined || value === undefined) {
     return operand;
   }
-  return `github.event_name ${operator} '${event}'`;
+  return `${subject} ${operator} '${value.toLowerCase()}'`;
 };
 const operands = (condition: unknown) =>
   conditionOperands(condition).map(eventOperand);
-// Parse only static event choices. Each token is consumed in order, so extra
+// Parse only static runner choices: `condition && value || value`, where a
+// condition compares `github.event_name` or a repository/organization
+// variable with a literal, and a value is a literal, a `fromJSON('...')`
+// literal or a parenthesized choice. Each token is consumed in order, so extra
 // operators, computed values and malformed JSON cannot acquire guarantees.
-const parseRunnerChoice = (source: string) => {
+type RunnerLeaf = { runner: unknown; condition: string[] };
+const parseRunnerChoice = (source: string): RunnerLeaf[] | undefined => {
   let remaining = source.trim();
   const consume = (pattern: RegExp) => {
     const match = pattern.exec(remaining);
@@ -262,10 +272,7 @@ const parseRunnerChoice = (source: string) => {
     const match = consume(/^'((?:[^']|'')*)'/u);
     return match?.[1]?.replaceAll("''", "'");
   };
-  const branch = (): unknown => {
-    if (!remaining.startsWith("fromJSON")) {
-      return literal();
-    }
+  const fromJson = (): unknown => {
     if (consume(/^fromJSON\s*\(\s*/u) === undefined) {
       return undefined;
     }
@@ -285,36 +292,75 @@ const parseRunnerChoice = (source: string) => {
       return undefined;
     }
   };
+  const flip = (operator: string) => (operator === "==" ? "!=" : "==");
+  const condition = () => {
+    const subject = consume(
+      /^(github\.event_name|vars\.[A-Za-z_][A-Za-z0-9_]*)\s*(==|!=)\s*/u,
+    );
+    const value = literal();
+    const name = subject?.[1];
+    const operator = subject?.[2];
+    if (
+      name === undefined ||
+      (operator !== "==" && operator !== "!=") ||
+      value === undefined ||
+      !/^[\w-]+$/u.test(value)
+    ) {
+      return undefined;
+    }
+    // GitHub compares strings case-insensitively; match its spelling.
+    const folded = value.toLowerCase();
+    return {
+      holds: `${name} ${operator} '${folded}'`,
+      fails: `${name} ${flip(operator)} '${folded}'`,
+    };
+  };
+  const value = (depth: number): RunnerLeaf[] | undefined => {
+    if (consume(/^\(\s*/u) !== undefined) {
+      const nested = choice(depth + 1);
+      return nested === undefined || consume(/^\)/u) === undefined
+        ? undefined
+        : nested;
+    }
+    const runner = remaining.startsWith("fromJSON") ? fromJson() : literal();
+    return runner === undefined ? undefined : [{ runner, condition: [] }];
+  };
+  const choice = (depth: number): RunnerLeaf[] | undefined => {
+    if (depth > 4) {
+      return undefined;
+    }
+    const guard = condition();
+    if (guard === undefined || consume(/^&&\s*/u) === undefined) {
+      return undefined;
+    }
+    const first = value(depth);
+    if (first === undefined || consume(/^\|\|\s*/u) === undefined) {
+      return undefined;
+    }
+    const fallback = value(depth);
+    if (fallback === undefined) {
+      return undefined;
+    }
+    return [
+      ...first.map((leaf) => ({
+        runner: leaf.runner,
+        condition: [guard.holds, ...leaf.condition],
+      })),
+      ...fallback.map((leaf) => ({
+        runner: leaf.runner,
+        condition: [guard.fails, ...leaf.condition],
+      })),
+    ];
+  };
   if (consume(/^\$\{\{\s*/u) === undefined) {
     return undefined;
   }
-  const condition = consume(/^github\.event_name\s*(==|!=)\s*/u);
-  const event = literal();
-  if (
-    condition === undefined ||
-    event === undefined ||
-    !/^[\w-]+$/u.test(event) ||
-    consume(/^&&\s*/u) === undefined
-  ) {
-    return undefined;
-  }
-  const first = branch();
-  if (first === undefined || consume(/^\|\|\s*/u) === undefined) {
-    return undefined;
-  }
-  const fallback = branch();
-  if (
-    fallback === undefined ||
+  const leaves = choice(0);
+  return leaves === undefined ||
     consume(/^\}\}/u) === undefined ||
     remaining !== ""
-  ) {
-    return undefined;
-  }
-  const operator = condition[1];
-  if (operator !== "==" && operator !== "!=") {
-    return undefined;
-  }
-  return { operator, event, first, fallback };
+    ? undefined
+    : leaves;
 };
 type RunnerToolchainOptions = {
   runner: unknown;
@@ -365,33 +411,40 @@ const runnerCases = ({
       },
     ];
   }
-  const { operator, event, first, fallback } = choice;
-  return [
-    {
-      guaranteed: runnerTools(first, job["container"], selfHosted),
-      condition: [`github.event_name ${operator} '${event}'`],
-      toolchain: runnerToolchain({ runner: first, job, selfHosted }),
-    },
-    {
-      guaranteed: runnerTools(fallback, job["container"], selfHosted),
-      condition: [
-        `github.event_name ${operator === "==" ? "!=" : "=="} '${event}'`,
-      ],
-      toolchain: runnerToolchain({ runner: fallback, job, selfHosted }),
-    },
-  ];
+  return choice.map(({ runner: leaf, condition }) => ({
+    guaranteed: runnerTools(leaf, job["container"], selfHosted),
+    condition,
+    toolchain: runnerToolchain({ runner: leaf, job, selfHosted }),
+  }));
 };
+// Conditions on one subject (the event name or one variable) that cannot all
+// hold: two different required values, or a value both required and excluded.
 const contradictoryEvents = (conditions: readonly string[]) => {
-  const equal = new Set<string>();
-  const unequal = new Set<string>();
+  const subjects = new Map<
+    string,
+    { equal: Set<string>; unequal: Set<string> }
+  >();
   for (const operand of conditions) {
-    const match = /^github\.event_name (==|!=) '([\w-]+)'$/u.exec(operand);
-    if (match?.[2] === undefined) {
+    const match =
+      /^(github\.event_name|vars\.[A-Za-z_][A-Za-z0-9_]*) (==|!=) '([\w-]+)'$/u.exec(
+        operand,
+      );
+    const subject = match?.[1];
+    const value = match?.[3];
+    if (subject === undefined || value === undefined) {
       continue;
     }
-    (match[1] === "==" ? equal : unequal).add(match[2]);
+    const sets = subjects.get(subject) ?? {
+      equal: new Set(),
+      unequal: new Set(),
+    };
+    (match?.[2] === "==" ? sets.equal : sets.unequal).add(value);
+    subjects.set(subject, sets);
   }
-  return equal.size > 1 || [...equal].some((event) => unequal.has(event));
+  return [...subjects.values()].some(
+    ({ equal, unequal }) =>
+      equal.size > 1 || [...equal].some((value) => unequal.has(value)),
+  );
 };
 
 type Install = { tool: string; condition: readonly string[] };
@@ -1001,8 +1054,7 @@ const stepExecution = ({
   labelPrefix,
   index,
 }: StepExecutionOptions):
-  | { problem: string }
-  | { label: string; cwd: string; shell: string } => {
+  { problem: string } | { label: string; cwd: string; shell: string } => {
   const stepName = step["name"];
   const id = step["id"];
   if (stepName !== undefined && typeof stepName !== "string") {

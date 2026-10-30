@@ -8,7 +8,7 @@ import { Result } from "better-result";
  */
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { pdfSigningSessions } from "@/api/db/schema";

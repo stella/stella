@@ -3,11 +3,11 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BYOK_MODEL_OPTIONS,
-  resolveDefaultModel,
   getOutputTokenLimit,
   isBYOKModelRoleSupported,
-  MODEL_TASKS,
   MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
+  resolveDefaultModel,
 } from "@stll/ai-catalog";
 
 import {

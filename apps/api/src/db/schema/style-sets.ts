@@ -8,8 +8,8 @@ import {
   safeOrganizationId,
   storedFileScanState,
   storedFileScanStateCheck,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 export const styleSets = p.pgTable(

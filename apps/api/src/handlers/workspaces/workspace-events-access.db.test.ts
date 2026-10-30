@@ -10,10 +10,11 @@ import {
 
 import {
   newNotificationRealtimeEvent,
+  RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
-  RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import { rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
@@ -22,10 +23,12 @@ import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { createHttpApp } from "@/api/http/app";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   brandActorSessionIdentity,
   brandPersistedOrganizationId,
@@ -38,11 +41,12 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // A matter's event stream across the removal of one of its members: the real
-// stream route and its access macro, the real member-removal route, and the
-// real revocation it triggers.
+// stream route and its workspace access served over HTTP, the real
+// member-removal route, and the real revocation it triggers.
 
 setDefaultTimeout(120_000);
 
@@ -55,7 +59,19 @@ beforeAll(async () => {
   startSse(realtimeAuthorizers);
 });
 
+const server = serveForTest(
+  createHttpApp({
+    routes: [
+      ...workspaceEventsRoute,
+      ...notificationsRoute,
+      ...workspacesRoute,
+    ],
+    middleware: [errorBoundary],
+  }),
+);
+
 afterAll(async () => {
+  await server.stop();
   stopSse();
   await releaseAgentAuthTestDb();
 });
@@ -66,18 +82,27 @@ const BASE = "http://localhost";
 const STREAM_CLOSE_WAIT_MS = 2000;
 
 const openEventStream = async (browser: HumanBrowser, workspaceId: string) =>
-  await workspaceEventsRoute.handle(
+  await server.fetch(
     new Request(`${BASE}/workspaces/${workspaceId}/events`, {
       headers: { cookie: browser.cookieHeader() },
     }),
   );
 
 const openUserEventStream = async (browser: HumanBrowser) =>
-  await notificationsRoute.handle(
+  await server.fetch(
     new Request(`${BASE}/v1/notifications/events`, {
       headers: { cookie: browser.cookieHeader() },
     }),
   );
+
+const heartbeatDecoder = new TextDecoder();
+
+/** A chunk of nothing but heartbeat frames, which carry no event. */
+const isHeartbeatOnly = (chunk: Uint8Array) =>
+  heartbeatDecoder
+    .decode(chunk)
+    .split(SSE_HEARTBEAT_FRAME)
+    .every((part) => part === "");
 
 const readNextChunk = async (response: Response) => {
   const { body } = response;
@@ -86,11 +111,21 @@ const readNextChunk = async (response: Response) => {
   }
   const reader = body.getReader();
   try {
-    const result = await Promise.race([
-      reader.read(),
-      Bun.sleep(STREAM_CLOSE_WAIT_MS).then(() => "timeout" as const),
-    ]);
-    return result;
+    const deadline = Bun.sleep(STREAM_CLOSE_WAIT_MS).then(
+      () => "timeout" as const,
+    );
+    // A heartbeat keeps an idle connection open and says nothing about
+    // delivery; a slow setup can queue one before the step under test.
+    for (;;) {
+      const result = await Promise.race([reader.read(), deadline]);
+      if (
+        result === "timeout" ||
+        result.done ||
+        !isHeartbeatOnly(result.value)
+      ) {
+        return result;
+      }
+    }
   } finally {
     try {
       await reader.cancel();
@@ -202,7 +237,7 @@ describe("a matter's event stream when a member is removed", () => {
     const ownerStream = await openEventStream(owner, workspaceId);
     expect(ownerStream.status).toBe(200);
 
-    const removal = await workspacesRoute.handle(
+    const removal = await server.fetch(
       new Request(
         `${BASE}/workspaces/${workspaceId}/members/${member.userId}`,
         {

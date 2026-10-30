@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   auditablePackages,
   dependencyChanges,
-  resolutionSource,
   type ResolutionSource,
+  resolutionSource,
 } from "./dependency-audit-scope";
 
 const lockfile = (packages: Record<string, unknown>) =>

@@ -25,8 +25,10 @@ test("all runtime owners preserve known SHA-256 vectors and encodings", async ()
     const bytes = Buffer.from(hex, "hex");
     for (const owner of [bun, node]) {
       expect(owner.sha256Hex(input)).toBe(hex);
-      expect(owner.sha256Base64(input)).toBe(bytes.toString("base64"));
-      expect(owner.sha256Base64Url(input)).toBe(bytes.toString("base64url"));
+      expect(owner.sha256Base64(input)).toBe(bytes.toBase64());
+      expect(owner.sha256Base64Url(input)).toBe(
+        bytes.toBase64({ alphabet: "base64url", omitPadding: true }),
+      );
       const actual = owner.sha256Bytes(input);
       expect(Buffer.isBuffer(actual)).toBe(true);
       expect(actual).toEqual(bytes);
@@ -36,8 +38,8 @@ test("all runtime owners preserve known SHA-256 vectors and encodings", async ()
     expect(new Uint8Array(await browser.sha256Bytes(input))).toEqual(
       new Uint8Array(bytes),
     );
-    expect(sha256HexToBase64(hex)).toBe(bytes.toString("base64"));
-    expect(sha256Base64ToHex(bytes.toString("base64"))).toBe(hex);
+    expect(sha256HexToBase64(hex)).toBe(bytes.toBase64());
+    expect(sha256Base64ToHex(bytes.toBase64())).toBe(hex);
   }
 });
 
@@ -96,4 +98,105 @@ test("incremental hashing preserves large chunked byte streams and update order"
     }
   }
   expect(await browser.sha256Hex(bytes)).toBe(hex);
+});
+
+type BlobReadLedger = {
+  /** Reads of the whole Blob through any body accessor. */
+  wholeReads: number;
+  /** Byte ranges read through slices, in read order. */
+  ranges: [start: number, end: number][];
+  /** Most bytes one read handed to the hasher at once. */
+  peakHeldBytes: number;
+};
+
+const emptyLedger = (): BlobReadLedger => ({
+  wholeReads: 0,
+  ranges: [],
+  peakHeldBytes: 0,
+});
+
+// A selected File as the upload path sees it: every way of reading its bytes
+// is counted, so a pass that reads the whole body or a range twice shows up.
+const countingBlob = (bytes: Uint8Array, ledger: BlobReadLedger): Blob => {
+  class CountingSlice extends Blob {
+    readonly range: [number, number];
+    constructor(parts: BlobPart[], range: [number, number]) {
+      super(parts);
+      this.range = range;
+    }
+    override async arrayBuffer(): Promise<ArrayBuffer> {
+      ledger.ranges.push(this.range);
+      ledger.peakHeldBytes = Math.max(ledger.peakHeldBytes, this.size);
+      return await super.arrayBuffer();
+    }
+  }
+  class CountingBlob extends Blob {
+    override async arrayBuffer(): Promise<ArrayBuffer> {
+      ledger.wholeReads += 1;
+      ledger.peakHeldBytes = Math.max(ledger.peakHeldBytes, this.size);
+      return await super.arrayBuffer();
+    }
+    override async bytes(): Promise<Uint8Array<ArrayBuffer>> {
+      ledger.wholeReads += 1;
+      ledger.peakHeldBytes = Math.max(ledger.peakHeldBytes, this.size);
+      return await super.bytes();
+    }
+    override async text(): Promise<string> {
+      ledger.wholeReads += 1;
+      return await super.text();
+    }
+    override stream(): ReadableStream<Uint8Array<ArrayBuffer>> {
+      ledger.wholeReads += 1;
+      return super.stream();
+    }
+    override slice(start = 0, end = this.size): Blob {
+      const clampedEnd = Math.min(end, this.size);
+      return new CountingSlice(
+        [super.slice(start, clampedEnd)],
+        [start, clampedEnd],
+      );
+    }
+  }
+  return new CountingBlob([Uint8Array.from(bytes)]);
+};
+
+test("a Blob is hashed in one front-to-back pass of bounded chunks at any size", async () => {
+  const smallSize = browser.BLOB_HASH_CHUNK_BYTES * 2 + 7;
+  for (const size of [
+    1,
+    browser.BLOB_HASH_CHUNK_BYTES - 1,
+    browser.BLOB_HASH_CHUNK_BYTES,
+    browser.BLOB_HASH_CHUNK_BYTES + 1,
+    smallSize,
+    smallSize * 10,
+  ]) {
+    const bytes = Uint8Array.from({ length: size }, (_, index) => index % 251);
+    const ledger = emptyLedger();
+
+    expect(await browser.sha256Hex(countingBlob(bytes, ledger))).toBe(
+      node.sha256Hex(bytes),
+    );
+
+    expect(ledger.wholeReads).toBe(0);
+    expect(ledger.peakHeldBytes).toBe(
+      Math.min(size, browser.BLOB_HASH_CHUNK_BYTES),
+    );
+    // Contiguous, non-overlapping ranges that cover every byte exactly once.
+    let next = 0;
+    for (const [start, end] of ledger.ranges) {
+      expect(start).toBe(next);
+      expect(end).toBeGreaterThan(start);
+      next = end;
+    }
+    expect(next).toBe(size);
+    expect(ledger.ranges).toHaveLength(
+      Math.ceil(size / browser.BLOB_HASH_CHUNK_BYTES),
+    );
+  }
+
+  const ledger = emptyLedger();
+  expect(await browser.sha256Hex(countingBlob(new Uint8Array(), ledger))).toBe(
+    node.sha256Hex(""),
+  );
+  expect(ledger).toEqual(emptyLedger());
 });

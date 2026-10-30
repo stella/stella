@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
@@ -11,34 +11,32 @@ import {
   selectRoutablePlaybooks,
 } from "@/api/lib/workflow/route-playbooks";
 
-// ── The Elysia optional-UnionEnum coercion gotcha ──────────────────────
-// Elysia coerces an absent optional UnionEnum to its FIRST member (driven by
-// the TypeBox `default`). `manual` is first, so an absent trigger becomes the
-// safe default rather than silently auto-running playbooks as `onClassified`.
+// ── An absent trigger is never invented ────────────────────────────────
+// The schema declares no default, so an omitted trigger reaches the handler
+// as undefined and `playbookTrigger` owns the default to manual, rather than
+// the boundary silently picking a member such as `onClassified`.
 describe("playbookScopeSchema — trigger", () => {
   test("accepts both trigger values and an absent trigger", () => {
-    expect(Value.Check(playbookScopeSchema, {})).toBe(true);
-    expect(Value.Check(playbookScopeSchema, { trigger: "manual" })).toBe(true);
-    expect(Value.Check(playbookScopeSchema, { trigger: "onClassified" })).toBe(
-      true,
-    );
+    expect(v.is(playbookScopeSchema, {})).toBe(true);
+    expect(v.is(playbookScopeSchema, { trigger: "manual" })).toBe(true);
+    expect(v.is(playbookScopeSchema, { trigger: "onClassified" })).toBe(true);
   });
 
   test("rejects an unknown trigger value", () => {
-    expect(Value.Check(playbookScopeSchema, { trigger: "auto" })).toBe(false);
+    expect(v.is(playbookScopeSchema, { trigger: "auto" })).toBe(false);
   });
 
   test("an absent trigger stays absent on the wire, never onClassified", () => {
-    // Literal-union optionals (unlike UnionEnum) get no TypeBox default, so an
-    // omitted trigger reaches the handler as undefined; `playbookTrigger` owns
-    // the default to manual.
-    expect(Value.Default(playbookScopeSchema, {})).toEqual({});
+    // The decoded value the handler receives carries no trigger at all.
+    const decoded = v.parse(playbookScopeSchema, {});
+    expect(decoded).toEqual({});
+    expect(decoded).not.toHaveProperty("trigger");
   });
 
   test("preserves an explicit onClassified trigger", () => {
-    expect(
-      Value.Default(playbookScopeSchema, { trigger: "onClassified" }),
-    ).toEqual({ trigger: "onClassified" });
+    expect(v.parse(playbookScopeSchema, { trigger: "onClassified" })).toEqual({
+      trigger: "onClassified",
+    });
   });
 });
 

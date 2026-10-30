@@ -6,12 +6,12 @@ import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
-  RecordConflict,
   ClaimReviewEventPayload,
+  RecordConflict,
 } from "@/api/lib/lists/verification/contract";
 import {
-  EMPTY_CLAIM_REVIEW,
   contestedFactIds,
+  EMPTY_CLAIM_REVIEW,
   foldClaimReview,
   needsAttention,
   rejectReviewEvent,

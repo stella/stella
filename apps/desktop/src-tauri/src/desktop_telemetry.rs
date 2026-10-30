@@ -605,6 +605,9 @@ impl DesktopTelemetry {
       crate::onboarding::ONBOARDING_WINDOW_LABEL => {
         report.window = DesktopTelemetryWindow::Onboarding;
       }
+      crate::accessibility_guide::GUIDE_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Onboarding;
+      }
       _ => {}
     }
     self.capture_event(DesktopErrorEvent {

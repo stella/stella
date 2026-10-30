@@ -222,6 +222,7 @@ export const findHistoryWalks = (
 
 const trackedTests = (): Map<string, string> => {
   const files = execFileSync("git", ["ls-files", "-z"], {
+    maxBuffer: 2 ** 30,
     cwd: REPO_ROOT,
     encoding: "utf-8",
   })

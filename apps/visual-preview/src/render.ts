@@ -4,9 +4,9 @@ import * as v from "valibot";
 
 import {
   VISUAL_PREVIEW_LIMITS,
+  type VisualPreviewInput,
   visualPreviewInputSchema,
   visualPreviewOutputSchema,
-  type VisualPreviewInput,
 } from "@stll/api-contract/visual-preview";
 
 const PREVIEW_VIEWPORT_HEIGHT = 800;

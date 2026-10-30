@@ -61,8 +61,7 @@ type LegacyGraphCitationPlan = {
 };
 
 export type CitationPlan =
-  | LegacyGraphCitationPlan
-  | { disposition: "annotation-only" };
+  LegacyGraphCitationPlan | { disposition: "annotation-only" };
 
 export const annotationOnlyCitationPlan = (): CitationPlan => ({
   disposition: "annotation-only",

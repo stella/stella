@@ -1,13 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  chmod,
-  mkdtemp,
-  mkdir,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -20,12 +12,18 @@ const FAKE_GH = `#!/usr/bin/env python3
 import json,os,pathlib,subprocess,sys
 root=pathlib.Path(os.environ['FAKE_ROOT'])
 args=sys.argv[1:]
+if args[:2]==['run','download']:
+ with (root/'calls').open('a') as calls:calls.write('artifact '+args[2]+' '+args[args.index('--repo')+1]+'\\n')
+ if os.environ.get('RECEIPT')!='available':sys.exit(1)
+ directory=pathlib.Path(args[args.index('--dir')+1])
+ (directory/'receipt.json').write_text('{"commit":"fixture"}')
+ sys.exit(0)
 sys.stdin.buffer.read()
 endpoint=next((arg for arg in args if arg.startswith('/')), '')
 method=args[args.index('--method')+1] if '--method' in args else 'GET'
 if endpoint.endswith('/access_tokens'):phase='token'
 elif endpoint.endswith('/dispatches'):phase='dispatch'
-elif '/runs?' in endpoint:phase='lookup'
+elif '/runs?' in endpoint:phase='lookup' if (root/'dispatch-count').exists() else 'existing'
 elif endpoint.endswith('/runs/777'):phase='poll'
 elif endpoint=='/installation/token':phase='revoke'
 elif endpoint.endswith('/installation'):phase='installation'
@@ -42,10 +40,18 @@ if failing:
  sys.exit(23)
 if phase=='installation':payload={'id':123}
 elif phase=='token':payload={'token':'fixture-token'}
+elif phase=='existing':
+ matching=[] if os.environ['PRIOR_RUN']=='none' else [{'id':777,'display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV'],'status':('in_progress' if os.environ['PRIOR_RUN']=='active' else 'completed'),'conclusion':('success' if os.environ['PRIOR_RUN']=='success' else 'failure' if os.environ['PRIOR_RUN']=='failed' else None)}]
+ pages=[{'workflow_runs':matching}]
+ if os.environ['PRIOR_RUN_PAGE']=='2':
+  pages=[{'workflow_runs':[{'id':1000+i,'display_title':'Promote v9.9.'+str(i)+' → staging','status':'completed','conclusion':'success'} for i in range(100)]},{'workflow_runs':matching}]
+ if '--paginate' not in args:pages=pages[:1]
+ if '--slurp' in args:payload=pages
+ else:payload=pages[0]
 elif phase=='lookup':payload={'workflow_runs':[
- {'id':444,'created_at':'2026-01-01T00:00:00Z','display_title':'Promote v1.2.3 → staging'},
- {'id':555,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3-rc.1 → staging'},
- {'id':777,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3 → staging'}]}
+ {'id':444,'created_at':'2026-01-01T00:00:00Z','display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV']},
+ {'id':555,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3-rc.1 → '+os.environ['TARGET_ENV']},
+ {'id':777,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV']}]}
 elif phase=='poll':
  completed=attempt>= (3 if os.environ['FAILURE_PHASE']=='poll' else 2)
  payload={'status':'completed' if completed else 'in_progress','conclusion':'success' if completed else None,'html_url':'https://github.com/example/infra/actions/runs/777'}
@@ -76,10 +82,22 @@ else:
 type PromotionScenarioOptions = {
   failurePhase: "lookup" | "poll" | "none";
   failureKind: "transport" | "unknown";
+  receipt?: "available" | "missing";
+  targetEnvironment: "production" | "staging";
+  priorRun?: "none" | "success" | "active" | "failed";
+  priorRunPage?: 1 | 2;
+  expectedSha?: string;
+  deployedSha?: string;
 };
 const promotionScenario = async ({
   failurePhase,
   failureKind,
+  receipt,
+  targetEnvironment,
+  priorRun = "none",
+  priorRunPage = 1,
+  expectedSha = "",
+  deployedSha = "a".repeat(40),
 }: PromotionScenarioOptions) => {
   const action = v.parse(
     v.object({
@@ -88,23 +106,24 @@ const promotionScenario = async ({
     Bun.YAML.parse(await readFile(ACTION, "utf-8")),
   );
   const directory = await mkdtemp(
-    path.join(tmpdir(), "promote-dispatch-test-"),
+    path.resolve(import.meta.dir, "../.promote-dispatch-test-"),
   );
   try {
     const scripts = path.join(directory, "scripts");
     const actionPath = path.join(directory, ".github/actions/promote-dispatch");
     await Promise.all([mkdir(scripts), mkdir(actionPath, { recursive: true })]);
     await writeFile(path.join(scripts, "gh-retry.sh"), await readFile(HELPER));
-    for (const [name, source] of Object.entries({
-      gh: FAKE_GH,
-      openssl: FAKE_OPENSSL,
-      date: FAKE_DATE,
-      sleep: FAKE_SLEEP,
-    })) {
-      const executable = path.join(directory, name);
-      await writeFile(executable, source);
-      await chmod(executable, 0o700);
-    }
+    await Promise.all([
+      writeFile(path.join(directory, "gh"), FAKE_GH, { mode: 0o700 }),
+      writeFile(path.join(directory, "openssl"), FAKE_OPENSSL, { mode: 0o700 }),
+      writeFile(path.join(directory, "date"), FAKE_DATE, { mode: 0o700 }),
+      writeFile(path.join(directory, "sleep"), FAKE_SLEEP, { mode: 0o700 }),
+      writeFile(
+        path.join(directory, "curl"),
+        `#!/bin/sh\nprintf '{"status":"ok","commit":"${deployedSha}"}\\n'\n`,
+        { mode: 0o700 },
+      ),
+    ]);
     const process = Bun.spawn(["bash", "-c", action.runs.steps[0].run], {
       cwd: directory,
       env: {
@@ -112,6 +131,9 @@ const promotionScenario = async ({
         PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
         FAKE_ROOT: directory,
         FAILURE_PHASE: failurePhase,
+        PRIOR_RUN: priorRun,
+        PRIOR_RUN_PAGE: String(priorRunPage),
+        EXPECTED_SHA: expectedSha,
         FAILURE_KIND: failureKind,
         GITHUB_ACTION_PATH: actionPath,
         APP_CLIENT_ID: "fixture-app",
@@ -119,12 +141,15 @@ const promotionScenario = async ({
         INFRA_REPO: "example/infra",
         WORKFLOW_FILE: "promote-release.yml",
         RELEASE_REF: "v1.2.3",
-        TARGET_ENV: "staging",
+        TARGET_ENV: targetEnvironment,
         RUN_MIGRATIONS: "true",
         FRONTEND: "false",
         IMAGE_DIGEST: "",
         WEB_IMAGE_DIGEST: "",
         GIT_SHA: "",
+        STAGING_PROOF_STATE_PATH:
+          receipt === undefined ? "" : path.join(directory, "proof-state"),
+        RECEIPT: receipt ?? "",
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -142,10 +167,21 @@ const promotionScenario = async ({
     expect(calls.filter((call) => call.startsWith("token "))).toEqual([
       "token POST 1 ok",
     ]);
-    expect(calls.filter((call) => call.startsWith("dispatch "))).toEqual([
-      "dispatch POST 1 ok",
-    ]);
-    return { exit, stdout, stderr, calls };
+    expect(calls.filter((call) => call.startsWith("dispatch "))).toEqual(
+      targetEnvironment === "production" &&
+        (priorRun === "success" ||
+          priorRun === "active" ||
+          (priorRun === "none" &&
+            expectedSha !== "" &&
+            expectedSha === deployedSha))
+        ? []
+        : ["dispatch POST 1 ok"],
+    );
+    const receiptFile = Bun.file(path.join(directory, "proof-state.ecs.json"));
+    const recordedReceipt = (await receiptFile.exists())
+      ? await receiptFile.text()
+      : undefined;
+    return { exit, stdout, stderr, calls, recordedReceipt };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -155,6 +191,7 @@ test("promotion watches the exact dispatched run through completion", async () =
   const result = await promotionScenario({
     failurePhase: "none",
     failureKind: "unknown",
+    targetEnvironment: "staging",
   });
   expect(result.exit).toBe(0);
   expect(result.stdout).toContain("Found dispatched run: 777");
@@ -173,6 +210,7 @@ test.each(["lookup", "poll"] as const)(
     const result = await promotionScenario({
       failurePhase,
       failureKind: "transport",
+      targetEnvironment: "staging",
     });
     expect(result.calls).toContain(`${failurePhase} GET 1 failed`);
     expect(result.exit).toBe(0);
@@ -195,6 +233,7 @@ test.each(["lookup", "poll"] as const)(
     const result = await promotionScenario({
       failurePhase,
       failureKind: "unknown",
+      targetEnvironment: "staging",
     });
     expect(result.exit).toBe(1);
     expect(
@@ -208,3 +247,136 @@ test.each(["lookup", "poll"] as const)(
     expect(result.stdout).not.toContain("Promote run completed successfully:");
   },
 );
+
+test("proof consumes the ECS receipt from the exact dispatched run", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "staging",
+    receipt: "available",
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toContain("artifact 777 example/infra");
+  expect(result.recordedReceipt).toBe('{"commit":"fixture"}');
+});
+
+test("a missing ECS receipt remains absent for the proof readiness gate", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "staging",
+    receipt: "missing",
+  });
+  expect(result.exit).toBe(0);
+  expect(result.recordedReceipt).toBeUndefined();
+  expect(result.stdout).toContain(
+    "::warning::Deployment ECS readiness receipt is unavailable.",
+  );
+});
+
+for (const priorRun of ["success", "active", "failed"] as const) {
+  test(`production retries ${priorRun} receipts only when they can still succeed`, async () => {
+    const result = await promotionScenario({
+      failurePhase: "none",
+      failureKind: "unknown",
+      targetEnvironment: "production",
+      priorRun,
+    });
+    expect(result.exit).toBe(0);
+    expect(
+      result.calls.filter((call) => call.startsWith("dispatch POST")),
+    ).toHaveLength(priorRun === "failed" ? 1 : 0);
+  });
+}
+
+test("production already serving the exact API and web SHA never dispatches again", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "production",
+    expectedSha: "a".repeat(40),
+    deployedSha: "a".repeat(40),
+  });
+  expect(result.exit).toBe(0);
+  expect(
+    result.calls.filter((call) => call.startsWith("dispatch POST")),
+  ).toHaveLength(0);
+});
+
+test("an active promotion is watched to completion even when production already serves the SHA", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "production",
+    priorRun: "active",
+    expectedSha: "a".repeat(40),
+    deployedSha: "a".repeat(40),
+  });
+  expect(result.exit, result.stderr).toBe(0);
+  expect(result.stdout + result.stderr).not.toContain(
+    "Production already serves",
+  );
+  expect(result.calls.some((call) => call.startsWith("poll "))).toBe(true);
+});
+
+// A failed run may have stopped after the rollout, so the served commit
+// alone cannot stand in for its unfinished infrastructure work.
+test("a failed promotion is dispatched again even when production already serves the SHA", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "production",
+    priorRun: "failed",
+    expectedSha: "a".repeat(40),
+    deployedSha: "a".repeat(40),
+  });
+  expect(result.exit, result.stderr).toBe(0);
+  expect(result.stdout + result.stderr).not.toContain(
+    "Production already serves",
+  );
+  expect(
+    result.calls.filter((call) => call.startsWith("dispatch POST")),
+  ).toHaveLength(1);
+});
+
+test("a successful promotion on the second page prevents another dispatch", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "production",
+    priorRun: "success",
+    priorRunPage: 2,
+  });
+  expect(result.exit).toBe(0);
+  expect(result.stdout).toContain("Promotion already succeeded: 777");
+  expect(
+    result.calls.filter((call) => call.startsWith("dispatch POST")),
+  ).toHaveLength(0);
+  expect(result.calls.filter((call) => call.startsWith("poll "))).toHaveLength(
+    0,
+  );
+});
+
+for (const priorRun of ["success", "active"] as const) {
+  test(`staging dispatches again after an old ${priorRun} receipt when a different SHA is deployed`, async () => {
+    const expectedSha = "a".repeat(40);
+    const deployedSha = "b".repeat(40);
+    expect(deployedSha).not.toBe(expectedSha);
+    const result = await promotionScenario({
+      failurePhase: "none",
+      failureKind: "unknown",
+      targetEnvironment: "staging",
+      priorRun,
+      expectedSha,
+      deployedSha,
+    });
+    expect(result.exit).toBe(0);
+    expect(
+      result.calls.filter((call) => call.startsWith("dispatch POST")),
+    ).toEqual(["dispatch POST 1 ok"]);
+    expect(
+      result.calls.filter((call) => call.startsWith("existing ")),
+    ).toHaveLength(0);
+    expect(result.stdout).toContain("Found dispatched run: 777");
+  });
+}

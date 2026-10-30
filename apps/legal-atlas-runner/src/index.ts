@@ -1,10 +1,10 @@
 import { fileURLToPath } from "node:url";
 
 import {
-  LEGAL_AST_CAPABILITIES,
   getRunnerDefinition,
   getRunnerDefinitions,
   isRunnerName,
+  LEGAL_AST_CAPABILITIES,
 } from "@stll/legal-atlas";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 

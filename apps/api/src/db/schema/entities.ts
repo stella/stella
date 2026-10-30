@@ -1,4 +1,7 @@
-import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import type {
+  AiCellSettlement,
+  ApiFileSecurityRejectionDetails,
+} from "@stll/api-contract";
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
@@ -33,10 +36,9 @@ import {
   AGENDA_SENSITIVITIES,
   ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
-  LIST_ITEM_TYPES,
-  TASK_ASSIGNEE_ROLES,
   isNotNull,
   jsonb,
+  LIST_ITEM_TYPES,
   organization,
   organizationCheck,
   p,
@@ -46,6 +48,7 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  TASK_ASSIGNEE_ROLES,
   timestamptz,
   user,
   workspaceCheck,
@@ -1286,7 +1289,7 @@ export const pendingUploads = p.pgTable(
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
     claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
-    /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
+    /** Finalize deadline (`uploadTimeline`); later requests only replay terminal results. */
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     finalizedAt: timestamptz("finalized_at"),
@@ -1497,6 +1500,8 @@ export const fields = p.pgTable(
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
     content: jsonb().$type<FieldContent>().notNull(),
+    /** Durable terminal outcome of the latest AI run for this cell. */
+    aiSettlement: jsonb("ai_settlement").$type<AiCellSettlement>(),
     /** Workflow run that currently owns this non-terminal cell. */
     ownerRunId: p.text("owner_run_id"),
     /** Batch within the workflow run that currently owns this cell. */
@@ -1555,7 +1560,8 @@ export const fields = p.pgTable(
     // immutable projection of the text a cell displays. Partial on the
     // findable types so pending and error placeholders stay out of the GIN
     // pending list; `fields-find-text-index.test.ts` binds that list to
-    // `FIELD_FIND_SUPPORT` and to the migration.
+    // `FIELD_FIND_SUPPORT` and to the migration. No query reads it once the
+    // find folds through `search_fold`.
     p
       .index("fields_find_text_trgm_idx")
       .using("gin", sql`field_find_text(${table.content}) gin_trgm_ops`)

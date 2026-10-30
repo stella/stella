@@ -1,3 +1,5 @@
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 export type DurationParts = {
   hours: number;
   minutes: number;
@@ -18,10 +20,5 @@ export const parseDurationPart = (value: string): number | null => {
     return 0;
   }
 
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
-    return null;
-  }
-
-  return parsed;
+  return parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(null);
 };

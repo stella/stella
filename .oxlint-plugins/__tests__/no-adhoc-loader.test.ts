@@ -43,21 +43,30 @@ test("accepts canonical status, decorative, region and skeleton indicators", asy
 });
 
 test("shared button and toast owners cannot introduce alternative loaders", async () => {
-  for (const sourcePath of [
-    "packages/ui/src/components/button.tsx",
-    "packages/ui/src/components/toast.tsx",
-  ]) {
-    expect(
-      await lintSingleRule(
-        "no-adhoc-loader",
-        "const view = <LoaderCircleIcon />;",
-        {
-          cwd: "scratch",
-          sourcePath,
-        },
-      ),
-    ).toEqual([1]);
-  }
+  const results = await Promise.all(
+    [
+      "packages/ui/src/components/button.tsx",
+      "packages/ui/src/components/toast.tsx",
+    ].map(async (lintCase, index) => {
+      const sourcePath = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "no-adhoc-loader",
+          "const view = <LoaderCircleIcon />;",
+          {
+            cwd: "scratch",
+            sourcePath,
+          },
+        ),
+        expected: [1],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("rejects spinner icons compound names and hand rolled progress", async () => {

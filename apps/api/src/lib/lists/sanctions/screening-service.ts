@@ -5,8 +5,8 @@ import type { CountryCode } from "@stll/country-codes";
 import {
   buildScreeningIndex,
   DEFAULT_CUTOFF,
-  MAX_QUERY_TOKENS,
   MAX_QUERY_CHARACTERS,
+  MAX_QUERY_TOKENS,
   SANCTIONS_SOURCES,
   screen,
 } from "@stll/sanctions";

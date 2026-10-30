@@ -1,4 +1,4 @@
-import { panic, Result, TaggedError, type InferOk } from "better-result";
+import { type InferOk, panic, Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { TransformStream } from "node:stream/web";
 
@@ -9,16 +9,16 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
   caseLawDecisionJudges,
+  caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type StoredRawReparseInput,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -36,9 +36,9 @@ import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
-  readCorpusText,
-  readCorpusAst,
   type CorpusByteSourceSeams,
+  readCorpusAst,
+  readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import {
@@ -47,10 +47,10 @@ import {
 } from "@/api/lib/s3";
 
 import {
-  EuCompletionStop,
   EU_COMPLETION_LIMITS,
   type EuCompletionRowOptions,
   type EuCompletionRowOutcome,
+  EuCompletionStop,
 } from "./eu-completion";
 import {
   ecjCompletionFingerprint,
@@ -65,8 +65,8 @@ import {
 } from "./eu-completion-store";
 import type {
   createEuCompletionStore,
-  EuCompletionReceipt,
   EuCompletionFailure,
+  EuCompletionReceipt,
 } from "./eu-completion-store";
 
 class CompletionReviewRequired extends TaggedError("CompletionReviewRequired")<{

@@ -27,6 +27,7 @@ import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import restorePlaybookVersion from "@/api/handlers/playbooks/versions/restore";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -45,8 +46,8 @@ import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -84,7 +85,7 @@ const orgContext = (organizationId = ids.orgA) => {
     pinServerValidatedWorkspaceId: () => false,
     audit: createAuditRecorder(bindings),
     request: bindings.request,
-    route: "/playbooks",
+    route: "/v1/playbooks" satisfies ApiRoutePath,
     safeDb: toSafeDbMock(
       asTestRaw<ScopedDb>(
         createScopedDb(testDb, [], organizationId, ids.userA1),

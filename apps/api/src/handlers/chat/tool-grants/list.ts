@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { loadChatToolGrants } from "@/api/handlers/chat/tools/chat-tool-grants";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 const config = {
   contract: "patch",
@@ -12,7 +12,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
   access: "read",
-  query: t.Object({ threadId: tSafeId("chatThread") }),
+  query: v.object({ threadId: resourceIdSchema("chatThread") }),
 } satisfies HandlerConfig;
 
 /**

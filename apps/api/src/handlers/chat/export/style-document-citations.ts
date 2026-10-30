@@ -1,10 +1,12 @@
+import { panic } from "better-result";
+
 import {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_RESOURCE_HREF_PREFIX,
   EMAIL_CITATION_HREF_PREFIX,
+  OFFICE_CITATION_HREF_PREFIX,
   parseChatDecisionPassageHref,
   parseEmailCitationHref,
-  OFFICE_CITATION_HREF_PREFIX,
   parseOfficeCitationHref,
 } from "@stll/api-contract";
 import type {
@@ -19,7 +21,6 @@ import type {
 import type { Document } from "@stll/folio-core";
 
 import type { ChatExportCitationStyle } from "@/api/handlers/chat/export/citation-footnotes";
-import { unreachable } from "@/api/lib/errors/tagged-errors";
 
 const FOLIO_CITATION_PREFIX = "#folio:";
 const SEARCH_SUMMARY_CITATION_TARGET_PREFIX = "#stella-search-summary=";
@@ -27,9 +28,7 @@ const SEARCH_SUMMARY_CITATION_MARKER = /\[(?<number>[1-9]\d*)\]/gu;
 const SEARCH_SUMMARY_SOURCE_NUMBER = /^\[(?<number>[1-9]\d*)\]/u;
 
 type InternalReferenceMode =
-  | "references"
-  | "unverified-citations"
-  | "verified-citations";
+  "references" | "unverified-citations" | "verified-citations";
 
 const isCitationHyperlink = (
   { href }: Hyperlink,
@@ -361,15 +360,20 @@ const transformTable = (
                 transformBlock(child, context),
               ),
             };
-          // A bookmark marker is a position and a preserved block is opaque
-          // markup: neither can hold a citation, and this switch rebuilds the
-          // cell, so both are written back as they came.
+          // A bookmark or move range marker is a position and a preserved
+          // block is opaque markup: none can hold a citation, and this switch
+          // rebuilds the cell, so all are written back as they came.
           case "preservedBlock":
           case "bookmarkStart":
           case "bookmarkEnd":
+          case "moveFromRangeStart":
+          case "moveFromRangeEnd":
+          case "moveToRangeStart":
+          case "moveToRangeEnd":
             return block;
           default:
-            return unreachable(
+            block satisfies never;
+            return panic(
               `Unhandled table-cell block: ${JSON.stringify(block)}`,
             );
         }
@@ -393,15 +397,21 @@ const transformBlock = (
         ...block,
         content: block.content.map((child) => transformBlock(child, context)),
       };
-    // Nothing to style, and this switch rebuilds the document body, so a
-    // bookmark marker and an opaque preserved block are written back as they
-    // came: dropping either would move a bookmark range or lose markup.
+    // Nothing to style, and this switch rebuilds the document body, so
+    // bookmark and move range markers and an opaque preserved block are
+    // written back as they came: dropping any would move a range or lose
+    // markup.
     case "preservedBlock":
     case "bookmarkStart":
     case "bookmarkEnd":
+    case "moveFromRangeStart":
+    case "moveFromRangeEnd":
+    case "moveToRangeStart":
+    case "moveToRangeEnd":
       return block;
     default:
-      return unreachable(`Unhandled document block: ${JSON.stringify(block)}`);
+      block satisfies never;
+      return panic(`Unhandled document block: ${JSON.stringify(block)}`);
   }
 };
 
@@ -429,8 +439,7 @@ type StyleDocumentCitationsOptions = {
   /** Parsed from a persisted search-summary Sources block. This remains
    * untrusted unless `internalReferenceMode` is `verified-citations`. */
   trustedSearchSummaryCitationSources?:
-    | readonly { number: number; source: string }[]
-    | undefined;
+    readonly { number: number; source: string }[] | undefined;
   unverifiedCitationLabel: string;
 };
 
@@ -530,17 +539,20 @@ export const styleDocumentCitationsWithCounts = (
             countInlineCitations(child);
           }
           return;
-        // Hold no paragraph content: a bookmark marker is a position and a
-        // preserved block is opaque markup, so neither carries a citation
-        // hyperlink to count.
+        // Hold no paragraph content: a bookmark or move range marker is a
+        // position and a preserved block is opaque markup, so none carries a
+        // citation hyperlink to count.
         case "preservedBlock":
         case "bookmarkStart":
         case "bookmarkEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
           return;
         default:
-          return unreachable(
-            `Unhandled document block: ${JSON.stringify(block)}`,
-          );
+          block satisfies never;
+          return panic(`Unhandled document block: ${JSON.stringify(block)}`);
       }
     };
     for (const block of document.package.document.content) {

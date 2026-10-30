@@ -61,11 +61,9 @@ test("literal language data is independent of process commands", () => {
   ).toEqual([]);
 });
 
-// These two tests read every CI script and workflow in the repository, which
-// takes seconds on a shared runner: they carry their own budget instead of
-// the 5 s default.
 const REPOSITORY_SCAN_TIMEOUT_MS = 30_000;
 
+// Measured p95: 14.1 s; this must scan every CI script and workflow.
 test(
   "every CI script and workflow uses the command owner",
   () => {
@@ -93,6 +91,7 @@ test(
         await Bun.file(path.join(root, file)).text(),
       );
       const jobs = record(parsed) ? parsed["jobs"] : undefined;
+      const workflowEnv = record(parsed) ? parsed["env"] : undefined;
       expect(record(jobs), file).toBe(true);
       if (!record(jobs)) {
         continue;
@@ -164,6 +163,14 @@ test(
         expect(preserveIndex, label).toBeGreaterThan(checkoutIndex);
         for (const index of calls) {
           expect(preserveIndex, label).toBeLessThan(index);
+          // The tooling checkout keeps no credentials: gh reads GH_TOKEN only.
+          const scopes = [steps[index]?.["env"], env, workflowEnv];
+          expect(
+            scopes.some(
+              (scope) => record(scope) && typeof scope["GH_TOKEN"] === "string",
+            ),
+            `${label}: step ${index} has no GH_TOKEN`,
+          ).toBe(true);
         }
       }
     }

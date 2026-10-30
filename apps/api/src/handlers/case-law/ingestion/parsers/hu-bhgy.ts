@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
 import { panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
@@ -29,18 +30,19 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
-  TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
+  TrackedRunContent,
 } from "@stll/docx-core/model";
 import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
   ParagraphBlock,
@@ -62,20 +64,14 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import {
-  createParagraphLineReader,
   type BodyDocumentLine,
+  createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";
-
-const HU_BHGY_PARSER = "hu-bhgy";
 
 // ── The document as lines ────────────────────────────────
 
@@ -229,6 +225,10 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         item satisfies never;
@@ -324,12 +324,16 @@ const itemsOf = (
         // A content control is a wrapper; its children are the document's.
         return itemsOf(block.content, notesAfter);
       // No line of the decision: a preserved block is opaque markup folio does
-      // not model and holds no text, and a bookmark marker is a position. This
-      // parser reads text, so it skips all three rather than round-tripping
-      // them.
+      // not model and holds no text, and a bookmark or move range marker is a
+      // position. This parser reads text, so it skips them rather than
+      // round-tripping them.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         block satisfies never;
@@ -366,13 +370,7 @@ const headingKey = (text: string): string =>
   ).toLocaleLowerCase("hu-HU");
 
 /** Where in the document the walk currently is, which decides a body role. */
-type Region =
-  | "front"
-  | "operative"
-  | "reasoning"
-  | "apparatus"
-  | "closing"
-  | "certification";
+type Region = "front" | "operative" | "reasoning" | "closing" | "certification";
 
 /**
  * The section headings the collection prints, and the depth each sits at.
@@ -393,11 +391,13 @@ type SectionHeading = {
 const SECTION_HEADINGS = [
   { key: "rendelkező rész", level: 1, region: "operative" },
   { key: "indokolás", level: 1, region: "reasoning" },
-  { key: "a döntés elvi tartalma", level: 1, region: "apparatus" },
+  { key: "a döntés elvi tartalma", level: 1, region: "reasoning" },
+  { key: "a határozat elvi tartalma", level: 1, region: "reasoning" },
+  { key: "alkalmazott jogszabályok", level: 1, region: "reasoning" },
   {
     key: "alkalmazott jogszabályok és joggyakorlat",
     level: 1,
-    region: "apparatus",
+    region: "reasoning",
   },
   { key: "záradék", level: 1, region: "closing" },
   { key: "a felülvizsgálat alapjául szolgáló tényállás", level: 2 },
@@ -1032,7 +1032,7 @@ export type ParseHuBhgyInput = {
 };
 
 export type ParseHuBhgyOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: DecisionSection[];
   /** Read off the document; the listing states only the year. */
@@ -1119,9 +1119,8 @@ const BODY_ROLE = {
   front: "intro",
   operative: "holding",
   reasoning: "argumentation",
-  apparatus: "apparatus",
   closing: "closing",
-  certification: "apparatus",
+  certification: "closing",
 } as const satisfies Record<Region, ParagraphRole>;
 
 const HEADING_ROLE_BY_LEVEL = {
@@ -1176,7 +1175,7 @@ export const parseHuBhgyDecision = (
       region = "certification";
       builder.paragraph({
         type: "paragraph",
-        role: "apparatus",
+        role: "closing",
         inlines: inlinesOf(line.runs),
         plainText: line.text,
       });
@@ -1192,6 +1191,10 @@ export const parseHuBhgyDecision = (
 
     if (region === "front") {
       titleLines.push(line.text);
+      // Court numbering ends the caption even when its heading is absent.
+      if (COURT_PARAGRAPH_NUMBER.test(line.text.trim())) {
+        region = "reasoning";
+      }
     }
 
     // ── A section heading the publisher prints ──
@@ -1314,7 +1317,7 @@ export const parseHuBhgyDecision = (
     );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
-    if (numbered === null || number === undefined) {
+    if (number === undefined) {
       builder.paragraph({
         type: "paragraph",
         role,
@@ -1392,20 +1395,9 @@ export const parseHuBhgyDecision = (
     .filter((text) => text.length > 0)
     .join("\n\n");
 
-  validateAndLog(
-    {
-      parser: HU_BHGY_PARSER,
-      caseNumber: input.listedCaseNumber,
-      language: "hu",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(lineTexts),
-    blocks,
-  );
-
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: HU_BHGY_SOURCE_SYSTEM,

@@ -311,7 +311,7 @@ export const createPrivateTaskSink = async ({
     const existing = await findTask(entry);
     const body = [
       `<!-- dated-waiver:${waiverKey(entry)} -->`,
-      `<!-- failure-source:${Buffer.from(JSON.stringify({ sha: evidence.sha, sourceFingerprint: evidence.sourceFingerprint, observedAt: evidence.observedAt })).toString("base64")} -->`,
+      `<!-- failure-source:${Buffer.from(JSON.stringify({ sha: evidence.sha, sourceFingerprint: evidence.sourceFingerprint, observedAt: evidence.observedAt })).toBase64()} -->`,
       "Fix the root cause. Do not retry the failing job, extend the deadline, or weaken the check.",
       "",
       JSON.stringify(

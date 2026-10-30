@@ -72,7 +72,11 @@ const Results = ({
   const [page, setPage] = useState(initialPage);
   const [shownPage, setShownPage] = useState<number | null>(initialPage);
   const regionRef = useRef<HTMLDivElement>(null);
-  const requestPage = usePublicLawPageArrival({ regionRef, shownPage });
+  const requestPage = usePublicLawPageArrival({
+    focusOnArrival: "first-result",
+    regionRef,
+    shownPage,
+  });
   const model = publicLawNumberedPagerModel({
     deepestPage: DEEPEST_PAGE,
     rest,

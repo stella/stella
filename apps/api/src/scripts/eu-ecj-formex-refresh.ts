@@ -58,9 +58,7 @@ type RefreshRow = Pick<
 type RefreshOutcome = Awaited<ReturnType<typeof refreshEcjStoredFormex>>;
 type TerminalRefreshOutcome = Exclude<RefreshOutcome["type"], "rate-limited">;
 type ResultOutcome =
-  | TerminalRefreshOutcome
-  | "skipped-resume"
-  | `would-${TerminalRefreshOutcome}`;
+  TerminalRefreshOutcome | "skipped-resume" | `would-${TerminalRefreshOutcome}`;
 export type EcjFormexRefreshResult = {
   id: string;
   sourceDocumentId: string;
@@ -99,8 +97,7 @@ type RunEcjFormexRefreshOptions = {
 };
 
 type RequestedIdentity =
-  | { type: "row"; value: string }
-  | { type: "document"; value: string };
+  { type: "row"; value: string } | { type: "document"; value: string };
 
 const inputError = (message: string): never => {
   throw new EcjFormexRefreshInputError({ message });

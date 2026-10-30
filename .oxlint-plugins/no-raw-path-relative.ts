@@ -13,8 +13,8 @@ import {
   isIdentifierReference,
   isStringLiteral,
   patternKeyFor,
-  resolveVariable,
   resolveImportedExpressionForEnforcement,
+  resolveVariable,
   stableInitializer,
   staticStringValue,
 } from "./utils.ts";

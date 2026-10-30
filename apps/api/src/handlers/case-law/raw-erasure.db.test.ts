@@ -26,8 +26,8 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionAliases,
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawIndexJobs,
   caseLawRawSweeps,
   caseLawSources,
@@ -45,8 +45,8 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   censusCaseLawRawObjectsPage,

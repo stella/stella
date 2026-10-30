@@ -9,11 +9,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceJustification } from "@/lib/types";
-import {
-  useQueryView,
-  useQueryViewError,
-  useQueryViewErrors,
-} from "@/lib/use-query-view";
+import { useQueryViewError, useQueryViewErrors } from "@/lib/use-query-view";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
@@ -50,8 +46,8 @@ export const useSyncJustifications = (
     }),
     enabled: enabled && normalizedEntityIds.length > 0,
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useSyncJustifications:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   useExternalSyncEffect(() => {
@@ -119,7 +115,10 @@ export const useSyncJustificationChunks = (
     queries,
     combine: combineResults,
   });
-  useQueryViewErrors(syncedResults.map(({ view }) => view));
+  useQueryViewErrors(
+    syncedResults.map(({ view }) => view),
+    "useSyncJustificationChunks:query",
+  );
 
   useExternalSyncEffect(() => {
     const syncedKeys = syncedResultsRef.current;

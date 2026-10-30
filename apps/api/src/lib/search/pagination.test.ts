@@ -24,6 +24,7 @@ type TestHit = {
 
 type TestScoredHit = {
   hit: TestHit;
+  tier: 1 | 2 | 3 | 4;
   score: number;
 };
 
@@ -42,17 +43,17 @@ const candidatesAfterCursor = ({
     .flatMap((prefix) =>
       sorted
         .filter(
-          ({ hit, score }) =>
+          ({ hit, tier, score }) =>
             hit.id.startsWith(prefix) &&
             (cursor === null ||
-              isAfterGlobalSearchCursor({ id: hit.id, score }, cursor)),
+              isAfterGlobalSearchCursor({ id: hit.id, tier, score }, cursor)),
         )
         .slice(0, limit + 1),
     )
     .toSorted(compareScoredSearchHits);
 
 const pageThrough = (
-  source: readonly { hit: TestHit; score: number }[],
+  source: readonly { hit: TestHit; tier: 1 | 2 | 3 | 4; score: number }[],
   limit: number,
 ): TestHit[] => {
   const sorted = source.toSorted(compareScoredSearchHits);
@@ -83,12 +84,21 @@ const pageThrough = (
 };
 
 describe("global search keyset pagination", () => {
+  test.each(["1e1", "+10", " 10", "0xA"])(
+    "refuses non-decimal seen-count token %s",
+    (token) => {
+      expect(
+        parseGlobalSearchCursor(encodeCursor(0.8, `${token}:entity:2`)),
+      ).toEqual({ type: "invalid" });
+    },
+  );
+
   test("encodes the last returned score and globally unique id", () => {
     const page = paginateScoredSearchHits({
       scoredHits: [
-        { hit: { id: "matter:3" }, score: 0.9 },
-        { hit: { id: "entity:2" }, score: 0.8 },
-        { hit: { id: "contact:1" }, score: 0.7 },
+        { hit: { id: "matter:3" }, tier: 2, score: 0.9 },
+        { hit: { id: "entity:2" }, tier: 2, score: 0.8 },
+        { hit: { id: "contact:1" }, tier: 1, score: 0.7 },
       ],
       limit: 2,
       seen: 0,
@@ -97,6 +107,7 @@ describe("global search keyset pagination", () => {
     expect(page).toEqual({
       items: [{ id: "matter:3" }, { id: "entity:2" }],
       nextCursor: encodeGlobalSearchCursor({
+        tier: 2,
         score: 0.8,
         id: "entity:2",
         seen: 2,
@@ -106,6 +117,7 @@ describe("global search keyset pagination", () => {
 
   test("keeps new cursors consumable by legacy replicas", () => {
     const cursor = encodeGlobalSearchCursor({
+      tier: 2,
       score: 0.8,
       id: "entity:2",
       seen: 25,
@@ -114,7 +126,7 @@ describe("global search keyset pagination", () => {
     expect(decodeCursor(cursor)).toEqual({ score: 25, id: "global" });
     expect(parseGlobalSearchCursor(cursor)).toEqual({
       type: "keyset",
-      cursor: { score: 0.8, id: "entity:2", seen: 25 },
+      cursor: { tier: 2, score: 0.8, id: "entity:2", seen: 25 },
     });
   });
 
@@ -137,7 +149,12 @@ describe("global search keyset pagination", () => {
         fc.constantFrom(...GLOBAL_SEARCH_HIT_ID_PREFIXES),
         fc.uuid(),
         (seen, score, prefix, id) => {
-          const keysetCursor = { score, id: `${prefix}${id}`, seen };
+          const keysetCursor = {
+            tier: 2 as const,
+            score,
+            id: `${prefix}${id}`,
+            seen,
+          };
           const encoded = encodeGlobalSearchCursor(keysetCursor);
 
           expect(decodeCursor(encoded)).toEqual({ score: seen, id: "global" });
@@ -158,8 +175,8 @@ describe("global search keyset pagination", () => {
     expect(
       paginateScoredSearchHits({
         scoredHits: [
-          { hit: { id: "matter:2" }, score: 0.9 },
-          { hit: { id: "entity:1" }, score: 0.8 },
+          { hit: { id: "matter:2" }, tier: 2, score: 0.9 },
+          { hit: { id: "entity:1" }, tier: 1, score: 0.8 },
         ],
         limit: 2,
         seen: 0,
@@ -171,6 +188,7 @@ describe("global search keyset pagination", () => {
     const page = paginateScoredSearchHits({
       scoredHits: Array.from({ length: 11 }, (_, index) => ({
         hit: { id: `entity:${index}` },
+        tier: 1,
         score: 11 - index,
       })),
       limit: 25,
@@ -185,7 +203,8 @@ describe("global search keyset pagination", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
       globalSearchCursorSql({
-        cursor: { score: 0.75, id: "case-law:decision_1", seen: 10 },
+        cursor: { tier: 2, score: 0.75, id: "case-law:decision_1", seen: 10 },
+        tier: sql`title_tier`,
         score: sql`ts_rank(document, query)::float8`,
         id: sql`'case-law:' || decision_id::text`,
       }),
@@ -193,7 +212,7 @@ describe("global search keyset pagination", () => {
 
     expect(compiled.sql).toContain("ts_rank(document, query)::float8 <");
     expect(compiled.sql).toContain('COLLATE "C" <');
-    expect(compiled.params).toEqual([0.75, 0.75, "case-law:decision_1"]);
+    expect(compiled.params).toEqual([2, 2, 0.75, 0.75, "case-law:decision_1"]);
   });
 
   test("rejects cursors that do not identify a global search hit", () => {
@@ -218,6 +237,7 @@ describe("global search keyset pagination", () => {
         .tuple(fc.constantFrom(...GLOBAL_SEARCH_HIT_ID_PREFIXES), fc.uuid())
         .map(([prefix, id]) => `${prefix}${id}`),
       score: fc.integer({ min: 0, max: 8 }),
+      tier: fc.constantFrom(1, 2, 3, 4),
     });
 
     fc.assert(
@@ -229,8 +249,9 @@ describe("global search keyset pagination", () => {
         }),
         fc.integer({ min: 1, max: 40 }),
         (rows, limit) => {
-          const source = rows.map(({ id, score }) => ({
+          const source = rows.map(({ id, tier, score }) => ({
             hit: { id },
+            tier,
             score,
           }));
           const expected = source
@@ -245,11 +266,11 @@ describe("global search keyset pagination", () => {
   });
 
   test("an insert before the cursor cannot shift or duplicate the next page", () => {
-    const original = [
-      { hit: { id: "entity:4" }, score: 4 },
-      { hit: { id: "entity:3" }, score: 3 },
-      { hit: { id: "entity:2" }, score: 2 },
-      { hit: { id: "entity:1" }, score: 1 },
+    const original: TestScoredHit[] = [
+      { hit: { id: "entity:4" }, tier: 4, score: 4 },
+      { hit: { id: "entity:3" }, tier: 3, score: 3 },
+      { hit: { id: "entity:2" }, tier: 2, score: 2 },
+      { hit: { id: "entity:1" }, tier: 1, score: 1 },
     ];
     const first = paginateScoredSearchHits({
       scoredHits: original,
@@ -259,16 +280,17 @@ describe("global search keyset pagination", () => {
     const cursor = decodeGlobalSearchCursor(first.nextCursor ?? "");
     expect(cursor).not.toBeNull();
 
-    const afterInsert = [
-      { hit: { id: "entity:new" }, score: 5 },
+    const afterInsert: TestScoredHit[] = [
+      { hit: { id: "entity:new" }, tier: 4, score: 5 },
       ...original,
-    ].filter(
-      ({ hit, score }) =>
+    ];
+    const afterCursor = afterInsert.filter(
+      ({ hit, tier, score }) =>
         cursor === null ||
-        isAfterGlobalSearchCursor({ id: hit.id, score }, cursor),
+        isAfterGlobalSearchCursor({ id: hit.id, tier, score }, cursor),
     );
     const second = paginateScoredSearchHits({
-      scoredHits: afterInsert,
+      scoredHits: afterCursor,
       limit: 2,
       seen: cursor?.seen ?? 0,
     });

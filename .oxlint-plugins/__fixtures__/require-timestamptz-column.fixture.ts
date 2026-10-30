@@ -57,8 +57,8 @@ const _spacedPrecision = customType<{ data: Date }>({
 });
 
 // A quoted property key parses as a string literal, not an identifier, and
-// must not bypass the rule. oxfmt-ignore keeps the quotes in place.
-// oxfmt-ignore
+// must not bypass the rule. prettier-ignore keeps the quotes in place.
+// prettier-ignore
 // oxlint-disable-next-line require-timestamptz-column/require-timestamptz-column
 const _quotedKey = customType<{ data: Date }>({
   "dataType": () => "timestamp",

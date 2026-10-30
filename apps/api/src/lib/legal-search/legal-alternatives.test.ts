@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 import {
@@ -10,8 +10,8 @@ import {
   withLegalAlternativesIdentity,
 } from "@/api/lib/legal-search/legal-alternatives";
 import {
-  NO_EXPANSION_DICTIONARY_IDENTITY,
   isMorphologyDictionaryContentHash,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
   serializeExpansionDictionaryIdentity,
 } from "@/api/lib/legal-search/morphology/dictionary";
 import { FUNCTION_WORDS } from "@/api/lib/legal-search/morphology/function-words";
@@ -94,7 +94,7 @@ describe("normalizeLegalAlternatives", () => {
     );
 
     expect(normalized).toHaveLength(LEGAL_ALTERNATIVES_LIMITS.terms);
-    expect(Value.Check(tLegalAlternatives, normalized)).toBe(true);
+    expect(v.is(tLegalAlternatives, normalized)).toBe(true);
     // A fixed point: the search normalizes what it receives again.
     expect(
       normalizeLegalAlternatives(normalized, {

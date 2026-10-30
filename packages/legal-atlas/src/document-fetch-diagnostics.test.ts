@@ -6,9 +6,9 @@ import {
   DOCUMENT_FETCH_OUTCOME,
   documentErrorDiagnostics,
   documentFetchErrorOutcome,
+  type DocumentFetchOutcome,
   documentFetchResponseOutcome,
   documentResponseDiagnostics,
-  type DocumentFetchOutcome,
 } from "./document-fetch-diagnostics";
 
 const errorWithCode = (code: string) =>

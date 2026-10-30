@@ -16,12 +16,12 @@ import {
   appendAutocompleteToken,
   autocompleteSuggestionKey,
   autocompleteSuggestionPlugin,
+  type AutocompleteTriggerSkipReason,
   clearAutocompleteSuggestion,
   finishAutocompleteSuggestion,
   getAutocompleteSuggestion,
   shouldTriggerAutocomplete,
   startAutocompleteSuggestion,
-  type AutocompleteTriggerSkipReason,
 } from "@stll/folio-react";
 
 import { useMountEffect } from "@/hooks/use-effect";

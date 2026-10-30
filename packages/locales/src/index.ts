@@ -8,6 +8,7 @@ export type {
   Language,
   LanguageCode,
   LanguageEntry,
+  UiLanguageCode,
   UiLocale,
 } from "./languages.js";
 export {

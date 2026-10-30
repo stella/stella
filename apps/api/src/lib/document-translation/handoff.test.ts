@@ -2,6 +2,7 @@ import { expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 import { handoffCommittedDocumentTranslationRun } from "./handoff";
 
@@ -26,10 +27,13 @@ test("preserves a committed translation run when queue delivery stalls", async (
   });
 
   expect(enqueue).toHaveBeenCalledWith(ids);
-  expect(captureDeliveryError).toHaveBeenCalledWith(expect.any(TimeoutError), {
-    runId: ids.runId,
-    workspaceId: ids.workspaceId,
-  });
+  expect(captureDeliveryError).toHaveBeenCalledWith(
+    expect.any(TimeoutError),
+    handlerErrorContext("documentTranslation.handoff", {
+      runId: ids.runId,
+      workspaceId: ids.workspaceId,
+    }),
+  );
 });
 
 test("captures queue rejection without failing the committed run", async () => {

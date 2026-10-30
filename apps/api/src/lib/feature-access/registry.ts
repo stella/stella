@@ -1,6 +1,8 @@
 // parser-output-unchanged: registering desktop activity access leaves existing ingestion features and parsed records unchanged.
 // parser-output-unchanged: assigning the sample case handlers to list verification leaves parsed records unchanged.
+// parser-output-unchanged: assigning the client invoice handlers to time billing leaves parsed records unchanged.
 // parser-output-unchanged: registering AI memory access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: registering desktop local agent access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -102,6 +104,11 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   "activity-timeline": {
     enrolment: "invitation",
   },
+  // Desktop-gated like the timeline: the desktop installs and runs agent
+  // CLIs only while this decision is enabled.
+  "local-agents": {
+    enrolment: "invitation",
+  },
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "general-availability",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
@@ -124,6 +131,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/billing-codes",
+        "apps/api/src/handlers/client-invoices",
         "apps/api/src/handlers/expenses",
         "apps/api/src/handlers/invoices",
         "apps/api/src/handlers/number-series",

@@ -13,10 +13,10 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 
 import {
-  readPublishableCheckpoint,
+  isFolioCollabIdempotencyConstraintError,
   matchesFolioCollabCheckpointCut,
   matchesFolioCollabPublishedCut,
-  isFolioCollabIdempotencyConstraintError,
+  readPublishableCheckpoint,
 } from "./publish-folio-collab-version";
 
 describe("folio collaboration publication cut", () => {

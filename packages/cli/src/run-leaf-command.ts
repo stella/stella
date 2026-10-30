@@ -10,6 +10,11 @@ import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
 
 import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
+
+import {
   actionAdmissionRefusalLines,
   actionAdmissionRefusalOutput,
   readCliActionAdmissionRefusal,
@@ -35,25 +40,25 @@ import {
 } from "./mcp-client.js";
 import {
   EXIT_CODES,
+  type ExitCode,
   FEATURE_DISABLED_ERROR_CODES,
+  mapHttpStatusExit,
   MAX_ALL_BYTES,
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
-  mapHttpStatusExit,
   resolveMcpErrorCodeExit,
-  type ExitCode,
 } from "./mcp-constants.js";
 import {
   buildRenderPlan,
   jsonlLine,
   MERGED_TEXT_PATH,
+  type OutputFormat,
+  type RenderPlan,
   renderPlanExitCode,
   renderResult,
   selectFormat,
   terminalWidth,
   valueAtPath,
-  type OutputFormat,
-  type RenderPlan,
   type Writers,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -209,10 +214,14 @@ const parseBoundedInt = (
   spec: FlagSpec,
   raw: string,
 ): Result<number | string, string> => {
-  if (!/^-?\d+$/u.test(raw.trim())) {
-    return Result.ok(raw);
+  const parsed = parseIntegerToken(raw);
+  // Localized spellings remain the server normalizer's responsibility; unsafe integers cannot be sent without losing precision.
+  if (parsed.isErr()) {
+    return parsed.error.reason === "unsafe-integer"
+      ? Result.err(`${spec.flag} expects a safe integer`)
+      : Result.ok(raw);
   }
-  const value = Number.parseInt(raw.trim(), 10);
+  const value = parsed.value;
   if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
@@ -226,10 +235,12 @@ const parseBoundedNumber = (
   spec: FlagSpec,
   raw: string,
 ): Result<number | string, string> => {
-  const value = Number(raw.trim());
-  if (!Number.isFinite(value)) {
+  const parsed = parseDecimalToken(raw);
+  // Do not coerce an empty token to zero; unresolved spellings go to the server normalizer.
+  if (parsed.isErr()) {
     return Result.ok(raw);
   }
+  const value = parsed.value;
   if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
@@ -314,8 +325,7 @@ const coerceFlagValue = async (
 };
 
 type ArgsResult =
-  | { ok: true; args: Record<string, unknown> }
-  | { ok: false; message: string };
+  { ok: true; args: Record<string, unknown> } | { ok: false; message: string };
 
 type ComposeInputFromFlagsOptions<T extends FlagSpec> = {
   base: Record<string, unknown>;
@@ -491,11 +501,13 @@ export const confirmDestructive = async ({
   flags,
   writers,
   label,
+  operation = "destructive",
 }: {
   context: Context;
   flags: LeafFlags;
   writers: Writers;
   label: string;
+  operation?: "destructive" | "approval";
 }): Promise<"proceed" | "aborted"> => {
   if (flags[RESERVED_FLAG_KEYS.yes] === true) {
     return "proceed";
@@ -509,7 +521,9 @@ export const confirmDestructive = async ({
     return "aborted";
   }
   if (!context.process.stdin.isTTY) {
-    writers.stderr("refusing destructive op without --yes on non-TTY\n");
+    writers.stderr(
+      `refusing ${operation === "destructive" ? "destructive op" : "operation requiring approval"} without --yes on non-TTY\n`,
+    );
     return "aborted";
   }
   // A TTY confirmation must read a single line: `readAllStdin` waits for EOF,
@@ -519,7 +533,7 @@ export const confirmDestructive = async ({
     output: context.process.stdout,
   });
   const rawAnswer = await rl.question(
-    `Run destructive command '${label}'? [y/N] `,
+    `Run ${operation === "destructive" ? "destructive command" : "command requiring approval"} '${label}'? [y/N] `,
   );
   rl.close();
   const answer = rawAnswer.trim().toLowerCase();
@@ -601,6 +615,7 @@ type ErrorEnvelope = {
   hint: string | undefined;
   issues: readonly ErrorIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId: string | undefined;
 };
@@ -632,7 +647,7 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
 
 /**
  * Parse the structured tool-error envelope
- * (`{"error":{"code","message","hint?","issues?","retryable?"}}`) a modern
+ * (`{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?"}}`) a modern
  * server tags every tool failure with. Unknown fields are ignored, so a newer
  * server that grows the envelope never breaks this parser. Returns `null` for a
  * legacy plain-text or bare-`{code}` error so the caller falls back to today's
@@ -660,6 +675,11 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     requestId: parseRequestId(error["requestId"]),
     ...(typeof error["retryable"] === "boolean"
       ? { retryable: error["retryable"] }
+      : {}),
+    ...(typeof error["retryAfterMs"] === "number" &&
+    Number.isFinite(error["retryAfterMs"]) &&
+    error["retryAfterMs"] >= 0
+      ? { retryAfterMs: error["retryAfterMs"] }
       : {}),
     ...(typeof error["contactUrl"] === "string"
       ? { contactUrl: error["contactUrl"] }
@@ -818,11 +838,11 @@ export const reservedFlagUsageError = (flags: LeafFlags): string | null => {
     return `--output must be one of: json, table, jsonl (got "${output}")`;
   }
   const limit = flags[RESERVED_FLAG_KEYS.limit];
-  if (typeof limit === "string") {
-    const trimmed = limit.trim();
-    if (!/^\d+$/u.test(trimmed) || Number.parseInt(trimmed, 10) < 1) {
-      return `--limit expects a positive integer (got "${limit}")`;
-    }
+  if (
+    typeof limit === "string" &&
+    parseIntegerToken(limit, { sign: "unsigned", min: 1 }).isErr()
+  ) {
+    return `--limit expects a positive integer (got "${limit}")`;
   }
   return null;
 };
@@ -1114,6 +1134,7 @@ export const toolErrorLines = (
     message: string;
     code?: string;
     retryable?: boolean;
+    retryAfterMs?: number;
     contactUrl?: string;
     hint: string | undefined;
     issues: readonly { path: string; message: string }[];
@@ -1434,7 +1455,12 @@ export const runLeafCommand = async ({
     args["cursor"] = cursorFlag;
   }
   if (typeof limitFlag === "string") {
-    args["limit"] = Number.parseInt(limitFlag.trim(), 10);
+    args["limit"] = parseIntegerToken(limitFlag, {
+      sign: "unsigned",
+      min: 1,
+    }).unwrap(
+      "Reserved pagination limit was validated before building the request",
+    );
   }
 
   if (allActive) {

@@ -11,6 +11,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { renderResultInputs } from "./ci-result-inputs";
+
 // ci-result's outcome step, run as CI runs it, against a GitHub API served
 // from fixtures: a run whose required jobs were all cancelled is green only
 // when a newer code run superseded it, and then only as a pass-through; a
@@ -90,7 +92,13 @@ for arg in "$@"; do
     *) endpoint=$arg ;;
   esac
 done
-jq -ce --arg key "$endpoint" '.[$key]' "$FIXTURES" || {
+printf '%s\\n' "$endpoint" >> "$FIXTURES.requests"
+# A {"sequence": [...]} fixture answers its nth request with its nth entry
+# (the last one from then on).
+count=$(grep -cxF -- "$endpoint" "$FIXTURES.requests")
+jq -ce --arg key "$endpoint" --argjson n "$count" '.[$key]
+  | if type == "object" and has("sequence")
+    then .sequence[([$n, (.sequence | length)] | min) - 1] else . end' "$FIXTURES" || {
   echo "unexpected request: $endpoint" >&2
   exit 1
 }
@@ -121,42 +129,51 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
   writeFileSync(fixtureFile, JSON.stringify(fixtures));
   const output = path.join(directory, "output");
   writeFileSync(output, "");
-  // A mirror that waits would poll for 90 minutes: fail fast instead.
-  const child = Bun.spawnSync(["bash", "-e", "-o", "pipefail", "-c", script], {
-    timeout: 60_000,
-    env: {
-      PATH: process.env["PATH"] ?? "",
-      HOME: directory,
-      GITHUB_WORKFLOW: "CI Checks",
-      TMPDIR: directory,
-      ...staticEnv,
-      EVENT: "pull_request",
-      PR_NUMBER: String(PR),
-      REPO,
-      HEAD_SHA: HEAD,
-      BASE_SHA: "b".repeat(40),
-      GITHUB_RUN_ID: String(RUN),
-      GITHUB_RUN_ATTEMPT: "1",
-      GITHUB_OUTPUT: output,
-      GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
-      GH_RETRY_SCRIPT: gh,
-      FIXTURES: fixtureFile,
-      PLAN: "{}",
-      PLAN_RESULT: "success",
-      RUN_REQUIRED: "true",
-      TRUSTED: "true",
-      SUITE_DEPTH: "fast",
-      QUEUE_DEPTH: "full",
-      QUEUE_VALIDATION: "false",
-      METADATA_ONLY: "false",
-      PR_ACTION: "synchronize",
-      PR_HEAVY_SUITES: "run",
-      COVERAGE_PROFILE: "normal-v1",
-      HEAVY_ONLY: "false",
-      PR_DEPTH_ONLY: "false",
-      ...env,
-    },
+  // Job results and plan outputs reach the outcome script as the inputs step
+  // writes them, never through the environment.
+  const rendered = renderResultInputs(script, {
+    needs: env["NEEDS"] ?? "{}",
+    plan: env["PLAN"] ?? "{}",
   });
+  // A mirror that waits would poll for 90 minutes: fail fast instead.
+  const child = Bun.spawnSync(
+    ["bash", "-e", "-o", "pipefail", "-c", rendered],
+    {
+      timeout: 60_000,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: directory,
+        GITHUB_WORKFLOW: "CI Checks",
+        TMPDIR: directory,
+        ...staticEnv,
+        EVENT: "pull_request",
+        PR_NUMBER: String(PR),
+        REPO,
+        HEAD_SHA: HEAD,
+        BASE_SHA: "b".repeat(40),
+        GITHUB_RUN_ID: String(RUN),
+        GITHUB_RUN_ATTEMPT: "1",
+        GITHUB_OUTPUT: output,
+        GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
+        GH_RETRY_SCRIPT: gh,
+        FIXTURES: fixtureFile,
+        PLAN: "{}",
+        PLAN_RESULT: "success",
+        RUN_REQUIRED: "true",
+        TRUSTED: "true",
+        SUITE_DEPTH: "fast",
+        QUEUE_DEPTH: "full",
+        QUEUE_VALIDATION: "false",
+        METADATA_ONLY: "false",
+        PR_ACTION: "synchronize",
+        PR_HEAVY_SUITES: "run",
+        COVERAGE_PROFILE: "normal-v1",
+        HEAVY_ONLY: "false",
+        PR_DEPTH_ONLY: "false",
+        ...env,
+      },
+    },
+  );
   const line = readFileSync(output, "utf-8")
     .split("\n")
     .find((entry) => entry.startsWith("required_summary="));
@@ -394,7 +411,7 @@ test("a metadata run mirrors a code run's evaluated success", () => {
   expect(run.exitCode, run.log).toBe(0);
   expect(run.record).toMatchObject({
     basis: "pass_through",
-    pass_through_reason: "metadata-mirror",
+    pass_through_reason: "metadata",
     reused_from_run_id: 90,
   });
 });
@@ -480,4 +497,66 @@ test("no record, a stale attempt, another head or a cancelled required job is no
     expect(run.exitCode, JSON.stringify(runs) + run.log).toBe(1);
     expect(run.record?.verdict).toBe("failure");
   }
+});
+
+// The pass-through reasons merge-bar accepts in a required-jobs record
+// (stella-ops merge-bar-v2/src/summary.rs, `PassThroughReason`); it refuses
+// any other value, so every reason the step writes must be one of these.
+const MERGE_BAR_PASS_THROUGH_REASONS = [
+  "draft",
+  "enqueued",
+  "metadata",
+  "reused",
+  "superseded",
+];
+
+test("every pass-through reason the step writes is one merge-bar reads", () => {
+  const written = [
+    ...new Set(
+      [...script.matchAll(/\bpass_through_reason=([a-z-]*)/gu)]
+        .map((match) => match[1] ?? "")
+        .filter((reason) => reason !== ""),
+    ),
+  ].toSorted();
+  expect(written).toEqual(MERGE_BAR_PASS_THROUGH_REASONS);
+});
+
+test("the required-jobs artifact keeps its exact external schema", () => {
+  const schema =
+    /\| \{version: 1, event: \$event,[\s\S]*?verdict: \(if \$status == "0" then "success" else "failure" end\)\}/u.exec(
+      script,
+    )?.[0];
+  expect(schema).toBeDefined();
+  expect(
+    [...(schema ?? "").matchAll(/(?:\{|,)\s*([a-z_]+):/gu)].map(
+      ([, field]) => field,
+    ),
+  ).toEqual([
+    "version",
+    "event",
+    "head_sha",
+    "base_sha",
+    "run_id",
+    "run_attempt",
+    "depth",
+    "coverage_profile",
+    "reused_from_run_id",
+    "basis",
+    "pass_through_reason",
+    "required",
+    "job",
+    "conclusion",
+    "not_required",
+    "verdict",
+  ]);
+});
+
+test("metadata mirroring and verified supersession remain fail closed", () => {
+  expect(script).toContain("mirror_metadata_code_run");
+  expect(script).toContain("Metadata mirror could not list CI code runs.");
+  expect(script).toContain(
+    "Cancelled CI job failed-step lookup was unavailable.",
+  );
+  expect(script).toContain("cancelled_dependencies_were_superseded");
+  expect(script).toContain("CI run was superseded by a newer run");
 });

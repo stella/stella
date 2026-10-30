@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/email/recipient-deliverability.ts",
+  "delta": 1,
+  "reason": "The declared recipient-deliverability door: a send and a provider event name an address, not a tenant, so it reads and records only the refusal columns of the account using that address on the owner connection."
+}

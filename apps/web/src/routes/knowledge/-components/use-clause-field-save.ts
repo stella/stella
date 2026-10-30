@@ -5,8 +5,8 @@ import { toAPIError, type ToAPIErrorProps } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
-// Eden response shape the persist call returns; only the error branch is read
-// here, so the success payload stays `unknown`.
+// API client response shape the persist call returns; only the error branch
+// is read here, so the success payload stays `unknown`.
 type ClausePersistResponse = {
   data: unknown;
   error: ToAPIErrorProps | null;
@@ -16,7 +16,7 @@ type UseClauseFieldSaveOptions = {
   /** Current persisted value; a save that matches it is skipped. */
   value: string | null;
   /**
-   * Persists the normalized value and returns the Eden response. The typed
+   * Persists the normalized value and returns the API client response. The typed
    * `api.clauses(...).post(...)` call stays at the call site so inference and
    * the per-field payload key stay explicit.
    */
@@ -41,7 +41,7 @@ export const useClauseFieldSave = ({
   const t = useTranslations();
 
   // Single funnel for both failure channels: a thrown `persist` (network
-  // failure) and an `.error` Eden response both revert the draft and show
+  // failure) and an `.error` API response both revert the draft and show
   // the same localized toast.
   const fail = (error: unknown, description: string) => {
     onError?.();

@@ -58,6 +58,7 @@ export * from "./schema/notifications";
 export * from "./schema/correspondence";
 export * from "./schema/feedback";
 export * from "./schema/feature-enrolments";
+export * from "./schema/request-idempotency";
 export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,
@@ -157,3 +158,7 @@ export * from "./schema/soft-law";
 
 export * from "./schema/desktop-presence";
 export * from "./schema/desktop-device-proof-replay";
+
+export * from "./schema/mcp-web-handoff";
+
+export * from "./schema/case-law-withdrawal-status";

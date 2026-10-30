@@ -61,8 +61,8 @@ import {
   insertPastedTextChip,
   PASTED_TEXT_ATTACHMENTS_ATTR,
   PastedText,
-  readPastedTextAttachments,
   pastedTextChipContent,
+  readPastedTextAttachments,
 } from "@/components/chat-pasted-text-extension";
 import type {
   PastedTextAttachment,
@@ -133,22 +133,40 @@ type ChatDraftFileAttachment = {
 };
 
 export type ChatDraftAttachment =
-  | ChatDraftFileAttachment
-  | PastedTextAttachment;
+  ChatDraftFileAttachment | PastedTextAttachment;
 
 export type ChatInputDraft = {
   files: ChatDraftAttachment[];
   html: string;
 };
 
-/** A submit gate intentionally kept the draft intact for the user to retry. */
-export class ChatSubmitPreservedError extends TaggedError(
-  "ChatSubmitPreservedError",
-)<{
-  message: string;
-  /** A materialized thread can supersede the local draft id during submit. */
-  restoreThreadKey?: string;
-}> {}
+/**
+ * What a composer send did with the draft it was handed. `submit` clears the
+ * composer before it calls the send, then restores the draft unless the send
+ * reports `sent`; a send that throws restores it as well. Every send names
+ * its outcome, so a send that declines (no AI key, a model choice that did
+ * not save, a busy thread) cannot drop the user's draft by returning early.
+ */
+export type ChatSendOutcome =
+  | { kind: "sent" }
+  | {
+      kind: "kept";
+      /** A materialized thread can supersede the local draft id during submit. */
+      restoreThreadKey?: string;
+    };
+
+/** The draft was sent or consumed (a command that ran), so it stays cleared. */
+export const CHAT_SEND_SENT = {
+  kind: "sent",
+} as const satisfies ChatSendOutcome;
+/** The send declined; the composer gets the draft back for a retry. */
+export const CHAT_SEND_KEPT = {
+  kind: "kept",
+} as const satisfies ChatSendOutcome;
+
+export type ChatSend = (
+  draft: ChatInputDraft,
+) => Promise<ChatSendOutcome> | ChatSendOutcome;
 
 export const CHAT_MENTION_SOURCE_LABELS = {
   context: "chat.composerMenu.context",
@@ -216,7 +234,13 @@ const readMentionSources = async (
         cause: result.error,
         retryable: true,
       });
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "readMentionSources:failure",
+        scope: {
+          type: "handler",
+          handlerId: `chat-mention.${labelKey}.${read.operation}`,
+        },
+      });
       failures.push(error);
       continue;
     }
@@ -286,9 +310,7 @@ export type ChatEditorController = {
   setContent: (content: ComposerSource) => void;
   setEditable: (editable: boolean) => void;
   setSubmitHandler: (handler: (() => Promise<void>) | null) => void;
-  submit: (
-    send: (draft: ChatInputDraft) => Promise<void> | void,
-  ) => Promise<void>;
+  submit: (send: ChatSend) => Promise<void>;
 };
 
 // The stable manager API: every field is a `useCallback`, so the whole value
@@ -530,6 +552,23 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   );
 };
 
+/**
+ * The chat editor manager for a composer that may mount where no route put
+ * one above it, such as the overlay of a public law reader. Under an existing
+ * provider it passes that provider's manager through, so the composer shares
+ * its registrations and drafts guard instead of starting a rival one.
+ */
+export const ChatEditorScope = ({ children }: React.PropsWithChildren) => {
+  const manager = use(ChatEditorManagerContext);
+  return manager === null ? (
+    <ChatEditorProvider>{children}</ChatEditorProvider>
+  ) : (
+    <ChatEditorManagerContext value={manager}>
+      {children}
+    </ChatEditorManagerContext>
+  );
+};
+
 // Drafts live in memory for every thread, including threads whose composer is
 // not mounted, so the provider that owns their lifecycle reports them; a
 // separate component keeps the flip from re-rendering the provider.
@@ -561,7 +600,7 @@ export const useChatEditorExtensionVersion = () =>
 type UseChatComposerWiringOptions = {
   controller: ChatEditorController;
   inputDisabled: boolean;
-  onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  onSubmit: ChatSend;
   onSubmitError?: ((error: unknown) => void) | undefined;
   /**
    * Pre-submit gate. Return `false` to abort the submit (e.g. when a
@@ -600,9 +639,7 @@ export const useChatComposerWiring = ({
       return;
     }
     try {
-      await submit(async (draft) => {
-        await onSubmit(draft);
-      });
+      await submit(onSubmit);
     } catch (error) {
       onSubmitError?.(error);
     }
@@ -1058,7 +1095,10 @@ export const useChatEditor = ({
       // would fall back to LTR on the empty doc and strand the caret left.
       ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
       class:
-        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
+        // `overflow-y-auto` makes the x axis scrollable too, so nothing may
+        // be wider than the editor: long tokens break anywhere, and a
+        // reference chip clamps itself to the line (`InlinePill`).
+        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm wrap-anywhere focus-visible:outline-none",
     }),
     handlePaste: (_view, event) => {
       // Consume every paste before ProseMirror can parse clipboard HTML.
@@ -1510,7 +1550,7 @@ export const useChatEditor = ({
   }, [addFiles]);
 
   const submit = useCallback(
-    async (send: (draft: ChatInputDraft) => Promise<void> | void) => {
+    async (send: ChatSend) => {
       if (!isUsableEditor(editor)) {
         return;
       }
@@ -1564,15 +1604,8 @@ export const useChatEditor = ({
       applyIsEmpty(true);
       draftStartedThreadKeyRef.current = null;
 
-      try {
-        await send({ files, html });
-      } catch (error) {
+      const restoreDraft = (restoreThreadKey: string) => {
         attachmentsRef.current = files;
-        const restoreThreadKey =
-          ChatSubmitPreservedError.is(error) &&
-          error.restoreThreadKey !== undefined
-            ? error.restoreThreadKey
-            : threadKey;
         setDraft(
           restoreThreadKey,
           createChatDraftState({
@@ -1588,7 +1621,17 @@ export const useChatEditor = ({
             draftStartedThreadKeyRef.current = restoreThreadKey;
           }
         }
+      };
+
+      let outcome: ChatSendOutcome;
+      try {
+        outcome = await send({ files, html });
+      } catch (error) {
+        restoreDraft(threadKey);
         throw error;
+      }
+      if (outcome.kind === "kept") {
+        restoreDraft(outcome.restoreThreadKey ?? threadKey);
       }
     },
     [

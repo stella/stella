@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -11,19 +11,19 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   isBufferIntentWorkspaceUnavailableError,
-  reserveObjectCleanupIntent,
   objectWriterSettlementAfterCleanup,
+  reserveObjectCleanupIntent,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import {
   loadPublicationPreliminary,
   matchesFolioCollabCheckpointCut,
   preparePublicationBytes,
-  PUBLISHED_FILE_ENCRYPTION,
   publishCheckpointInTransaction,
+  PUBLISHED_FILE_ENCRYPTION,
 } from "@/api/lib/entity-versions/publish-folio-collab-checkpoint";
 import type {
   PublicationPreliminary,
@@ -37,6 +37,7 @@ import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organiz
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
@@ -66,13 +67,13 @@ export const isFolioCollabIdempotencyConstraintError = (error: unknown) =>
     FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT,
   );
 
-const publishFolioCollabVersionBodySchema = t.Object({
-  description: t.Optional(t.String({ maxLength: 1024 })),
-  expectedGeneration: t.Integer({ minimum: 0 }),
-  expectedSha256Hex: t.String({ minLength: 64, maxLength: 64 }),
-  idempotencyKey: t.String({ format: "uuid" }),
-  label: t.Optional(t.String({ maxLength: 128 })),
-  roomId: tSafeId("folioCollabRoom"),
+const publishFolioCollabVersionBodySchema = v.object({
+  description: v.exactOptional(v.pipe(v.string(), v.maxLength(1024))),
+  expectedGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  expectedSha256Hex: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
+  idempotencyKey: v.pipe(v.string(), v.uuid()),
+  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
+  roomId: resourceIdSchema("folioCollabRoom"),
 });
 
 type CheckpointRoom = Extract<
@@ -214,7 +215,13 @@ const cleanupPublicationSource = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, { roomId, storageKey: source.key });
+    captureError(
+      cleanup.error,
+      handlerErrorContext("entities.cleanupPublicationSource.cleanup_error", {
+        roomId,
+        storageKey: source.key,
+      }),
+    );
   }
   const settlement = await settleObjectCleanupIntentsAfterWriter({
     intentIds: [source.cleanupIntentId],
@@ -225,7 +232,13 @@ const cleanupPublicationSource = async ({
     safeDb,
   });
   if (Result.isError(settlement)) {
-    captureError(settlement.error, { roomId, storageKey: source.key });
+    captureError(
+      settlement.error,
+      handlerErrorContext(
+        "entities.cleanupPublicationSource.settlement_error",
+        { roomId, storageKey: source.key },
+      ),
+    );
   }
 };
 
@@ -331,7 +344,12 @@ const startPublicationFollowUps = async ({
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: publication.entityId }),
   );
   await processExtraction(publication.entityId).catch((error: unknown) => {
-    captureError(error, { entityId: publication.entityId });
+    captureError(
+      error,
+      handlerErrorContext("publication.processExtraction", {
+        entityId: publication.entityId,
+      }),
+    );
   });
   enqueuePdfDerivativeOrMarkFailed({
     encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
@@ -342,10 +360,13 @@ const startPublicationFollowUps = async ({
     userId: brandPersistedUserId(userId),
     workspaceId,
   }).catch((error: unknown) => {
-    captureError(error, {
-      entityId: publication.entityId,
-      fieldId: publication.fieldId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("publication.enqueuePdfDerivative", {
+        entityId: publication.entityId,
+        fieldId: publication.fieldId,
+      }),
+    );
   });
   computeVersionDiffStats({
     entityId: publication.entityId,
@@ -359,7 +380,12 @@ const startPublicationFollowUps = async ({
     versionId: publication.versionId,
     workspaceId,
   }).catch((error: unknown) => {
-    captureError(error, { versionId: publication.versionId });
+    captureError(
+      error,
+      handlerErrorContext("publication.computeVersionDiff", {
+        versionId: publication.versionId,
+      }),
+    );
   });
 };
 

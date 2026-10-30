@@ -5,8 +5,8 @@ import type { ChatMessageAcceptedEdit } from "@stll/api-contract/chat-message-re
 
 import type { Transaction } from "@/api/db/root";
 import {
-  chatMessages,
   chatMessageRevisions,
+  chatMessages,
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";

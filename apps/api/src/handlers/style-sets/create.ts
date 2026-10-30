@@ -1,19 +1,19 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { createStoredStyleSet } from "@/api/handlers/style-sets/storage";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { defaultVarcharSchema, fileSchema } from "@/api/lib/custom-schema";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
   extractStyleSetFile,
   normalizeStyleSetName,
 } from "@/api/lib/style-sets";
 
-const bodySchema = t.Object({
-  name: tDefaultVarchar,
-  styleSource: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+const bodySchema = v.object({
+  name: defaultVarcharSchema,
+  styleSource: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
 });
 
 const config = {

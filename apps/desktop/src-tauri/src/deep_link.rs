@@ -1066,7 +1066,7 @@ async fn redeem_and_open_desktop_edit(
   let result = {
     let mut mgr = manager.lock().await;
     recheck_handoff_account(&app_handle, &account).await?;
-    mgr.open_file(request, Some(prefetched_buffer)).await
+    mgr.open_file(request, prefetched_buffer).await
   }?;
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;

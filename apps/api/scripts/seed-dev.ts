@@ -80,13 +80,14 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
-import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
+import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
@@ -127,20 +128,20 @@ import { seedMarketingCaseLaw } from "./seed-marketing-case-law";
 import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
-  ensureSeedColleaguesInOrganization,
   ensurePrimarySeedUserInOrganization,
+  ensureSeedColleaguesInOrganization,
   ensureTestUsers,
 } from "./seed-test-user";
 import {
   at,
   buildSeedUserIds,
   buildSeedUserRates,
-  DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_ORG_ID,
+  DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   pickAuthor,
-  seedId,
   seedFileIdentity,
+  seedId,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -971,7 +972,7 @@ const isSeedEmailFileName = (fileName: string): fileName is SeedEmailFileName =>
 
 const wrapBase64 = (value: Buffer): string =>
   value
-    .toString("base64")
+    .toBase64()
     .match(/.{1,76}/gu)
     ?.join("\r\n") ?? "";
 
@@ -5275,7 +5276,10 @@ export async function seed(organizationId?: string, userId?: string) {
               color: c.color,
               registrationNumber:
                 "registrationNumber" in c ? c.registrationNumber : undefined,
-              taxId: "taxId" in c ? c.taxId : undefined,
+              ...contactTaxIdentifiers({
+                taxId: "taxId" in c ? c.taxId : null,
+                vatId: null,
+              }),
               bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
               billingAddress:
                 "billingAddress" in c ? c.billingAddress : undefined,
@@ -5306,7 +5310,7 @@ export async function seed(organizationId?: string, userId?: string) {
               displayName: c.displayName,
               organizationName: c.organizationName,
               registrationNumber: c.registrationNumber,
-              taxId: c.taxId,
+              ...contactTaxIdentifiers({ taxId: c.taxId, vatId: null }),
               billingAddress: c.billingAddress,
               defaultHourlyRate: cents(c.defaultHourlyRate),
               currency: c.currency,

@@ -49,19 +49,28 @@ describe.serial("audit detail read ownership", () => {
       "const safeId = table.id;",
       "const { resourceId } = table;",
     ];
-    for (const source of sources) {
-      expect(
-        await lintSingleRule(
-          "confine-owner",
-          [
-            source,
-            'import { alias } from "drizzle-orm/pg-core"; import { getTableColumns } from "drizzle-orm";',
-            ...reads,
-          ].join("\n"),
-          options,
-        ),
-      ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
-    }
+    const results = await Promise.all(
+      sources.map(async (lintCase, index) => {
+        const source = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule(
+            "confine-owner",
+            [
+              source,
+              'import { alias } from "drizzle-orm/pg-core"; import { getTableColumns } from "drizzle-orm";',
+              ...reads,
+            ].join("\n"),
+            options,
+          ),
+          expected: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("rejects implicit complete rows and admits selections of other columns", async () => {
@@ -854,35 +863,42 @@ test("the AI label is reached only through a typed disclosure context", async ()
   const entry = OWNERSHIP.find(({ id }) => id === "ai-disclosure-label");
   expect(entry).toBeDefined();
   const options = { ruleOptions: { entries: [entry] } };
-  for (const source of [
-    'import { AiLabel } from "@stll/ui/ai-label";',
-    'import { AiLabel } from "@stll/ui/components/ai-label";',
-  ]) {
-    const rejectedPaths = [
-      "apps/web/src/features/chat/components/answer-mark.tsx",
-      "apps/web/src/components/ai-disclosure-label.tsx",
-      "packages/decision-reader/src/headnote-block.tsx",
-      "apps/desktop/src/renderer/ai-mark.tsx",
-    ];
-    const ownerPath = "packages/decision-reader/src/reader-ai-label.tsx";
-    const sourcePaths = [...rejectedPaths, ownerPath];
-    expect(
-      await lintRuleAcrossFiles(
-        "confine-owner",
-        Object.fromEntries(
-          sourcePaths.map((sourcePath) => [sourcePath, source]),
+  const results = await Promise.all(
+    [
+      'import { AiLabel } from "@stll/ui/ai-label";',
+      'import { AiLabel } from "@stll/ui/components/ai-label";',
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+      const rejectedPaths = [
+        "apps/web/src/features/chat/components/answer-mark.tsx",
+        "apps/web/src/components/ai-disclosure-label.tsx",
+        "packages/decision-reader/src/headnote-block.tsx",
+        "apps/desktop/src/renderer/ai-mark.tsx",
+      ];
+      const ownerPath = "packages/decision-reader/src/reader-ai-label.tsx";
+      const sourcePaths = [...rejectedPaths, ownerPath];
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintRuleAcrossFiles(
+          "confine-owner",
+          Object.fromEntries(
+            sourcePaths.map((sourcePath) => [sourcePath, source]),
+          ),
+          options,
         ),
-        options,
-      ),
-    ).toEqual(
-      Object.fromEntries(
-        sourcePaths.map((sourcePath) => [
-          sourcePath,
-          sourcePath === ownerPath ? [] : [1],
-        ]),
-      ),
-    );
-  }
+        expected: Object.fromEntries(
+          sourcePaths.map((sourcePath) => [
+            sourcePath,
+            sourcePath === ownerPath ? [] : [1],
+          ]),
+        ),
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 describe.serial("verification run evidence reads", () => {
@@ -943,15 +959,24 @@ describe("matter proof minting ownership", () => {
       'export * from "../proofs/checked-transaction";',
       'const mint = await import("@/api/lib/proofs/checked-transaction");',
     ];
-    for (const source of sources) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
-          ruleOptions: { entries: [entry] },
-          sourcePath,
-          cwd: "scratch",
-        }),
-      ).toEqual([1]);
-    }
+    const results = await Promise.all(
+      sources.map(async (lintCase, index) => {
+        const source = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule("confine-owner", source, {
+            ruleOptions: { entries: [entry] },
+            sourcePath,
+            cwd: "scratch",
+          }),
+          expected: [1],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("admits the matter predicate through the production ownership declaration", async () => {

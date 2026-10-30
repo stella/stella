@@ -18,14 +18,14 @@ import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/cor
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexManifestCoversJurisdiction,
   type CorpusIndexManifest,
+  corpusIndexManifestCoversJurisdiction,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  deriveCorpusIndexProjectionDescriptor,
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
   type CorpusIndexProjectionInput,
+  deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";

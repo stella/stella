@@ -22,7 +22,7 @@ import {
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
@@ -31,7 +31,7 @@ const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
 const DESKTOP_ACCOUNT_LINK_HASH = "#desktop-account";
 
-export class DesktopBridgeUnavailableError extends Error {
+class DesktopBridgeUnavailableError extends Error {
   public constructor() {
     super("desktop_bridge_unavailable");
     this.name = "DesktopBridgeUnavailableError";
@@ -80,6 +80,14 @@ type DesktopAccountChallenge = {
   portSecret: string;
   protocol: string;
 };
+
+export const desktopAccountGrantRequest = (
+  challenge: DesktopAccountChallenge,
+) => ({
+  correlationId: challenge.correlationId,
+  verifierHash: challenge.verifierHash,
+  deviceJkt: challenge.deviceJkt,
+});
 
 type DesktopAccountAttempt =
   | {
@@ -354,7 +362,7 @@ const createDesktopEditHandoff = async ({
       propertyId: toSafeId<"property">(propertyId),
     });
 
-  return unwrapEden(response) satisfies DesktopEditHandoff;
+  return unwrapApiResponse(response) satisfies DesktopEditHandoff;
 };
 
 const readDesktopEditHandoffStatus = async ({
@@ -371,7 +379,7 @@ const readDesktopEditHandoffStatus = async ({
     })
     .status.get();
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 const launchDesktopEditHandoff = (deepLinkUrl: string) => {
@@ -406,19 +414,28 @@ export const hasDesktopAccountChallenge = () =>
   accountAttempt?.type === "challenge" &&
   accountAttempt.challenge.expiresAt > Temporal.Now.instant().epochMilliseconds;
 
-const readDesktopConnection = async (
-  correlationId: string,
-  portSecret: string,
-) => {
+type ReadDesktopConnectionOptions = {
+  correlationId: string;
+  portSecret: string;
+  request?: typeof fetchWithTimeout;
+};
+
+export const readDesktopConnection = async ({
+  correlationId,
+  portSecret,
+  request = fetchWithTimeout,
+}: ReadDesktopConnectionOptions) => {
   const query = new URLSearchParams({ correlationId });
   const path = `/v1/connection?${query.toString()}`;
   const url = `${DESKTOP_BRIDGE_URL}${path}`;
   const fetched = await Result.tryPromise({
     try: async () =>
-      await fetchWithTimeout(
+      await request(
         url,
         loopback({
+          credentials: "omit",
           method: "GET",
+          referrerPolicy: "no-referrer",
           timeoutMs: 1000,
           headers: await desktopBridgeProofHeaders({
             portSecret,
@@ -531,12 +548,10 @@ export const linkDesktopAccount = async ({
           message: "desktop_account_conflict",
         });
       }
-      const grant = unwrapEden(
-        await api["desktop-registry"].grant.post({
-          correlationId: challenge.correlationId,
-          verifierHash: challenge.verifierHash,
-          deviceJkt: challenge.deviceJkt,
-        }),
+      const grant = unwrapApiResponse(
+        await api["desktop-registry"].grant.post(
+          desktopAccountGrantRequest(challenge),
+        ),
       );
       const matched = resolveDesktopAccountLink({
         browserAccount,
@@ -556,10 +571,10 @@ export const linkDesktopAccount = async ({
         new Date(grant.expiresAt).getTime(),
       );
       while (Temporal.Now.instant().epochMilliseconds < deadline) {
-        const connection = await readDesktopConnection(
-          challenge.correlationId,
-          challenge.portSecret,
-        );
+        const connection = await readDesktopConnection({
+          correlationId: challenge.correlationId,
+          portSecret: challenge.portSecret,
+        });
         if (connection.isOk()) {
           const status = connection.value;
           switch (status) {

@@ -39,8 +39,8 @@ import {
   hashPdfSigningToken,
   lockedCreatorAccess,
   openPdfSigningSession,
-  redeemPdfSigningHandoff,
   recordPdfSigningHandoffFailure,
+  redeemPdfSigningHandoff,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

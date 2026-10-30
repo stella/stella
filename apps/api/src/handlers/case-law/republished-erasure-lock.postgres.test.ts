@@ -5,8 +5,8 @@ import { eq, inArray } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionAliases,
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawSources,
 } from "@/api/db/schema";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";

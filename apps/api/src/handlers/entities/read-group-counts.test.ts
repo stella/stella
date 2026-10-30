@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -29,19 +30,18 @@ const createContext = ({
     body,
     safeDb,
     request: new Request("https://example.test/v1/entities/group-counts"),
-    route: "/v1/entities/:workspaceId/group-counts",
+    route: "/v1/entities/:workspaceId/group-counts" satisfies ApiRoutePath,
   });
 
 // Single-select property path issues three safeDb calls in order: the property
 // type lookup (must be a select type), the grouped value counts (LATERAL
 // unnest/scalar union), then the uncategorized NOT EXISTS count. Queue the
 // results in that order so the test fails loudly if the call order changes.
-const createSafeDb =
-  (results: unknown[]): GroupCountsCtx["safeDb"] =>
-  async <T>() => {
+const createSafeDb = (results: unknown[]): GroupCountsCtx["safeDb"] =>
+  asTestRaw<GroupCountsCtx["safeDb"]>(async () => {
     const result = results.shift() ?? [];
-    return Result.ok(asTestRaw<T>(result));
-  };
+    return Result.ok(result);
+  });
 
 describe("readGroupCounts", () => {
   test("single-select property: two values plus a non-zero uncategorized bucket", async () => {

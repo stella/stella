@@ -17,9 +17,7 @@ export type DownloadRendition = (typeof DOWNLOAD_RENDITIONS)[number];
 
 /** What a download hands over: the uploaded bytes, or one rendition of them. */
 export type DownloadVariant =
-  | "original"
-  | DownloadRendition
-  | "reference-scrubbed";
+  "original" | DownloadRendition | "reference-scrubbed";
 
 export type DownloadOptions = {
   metadata: "keep" | "strip";

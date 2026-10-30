@@ -2,15 +2,20 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { LOCALES, parseGlossary } from "./glossary-gen";
+import { isPlainRecord } from "./i18n-check";
 import {
   buildForbiddenRules,
+  findBareErrors,
   findDroppedExactSelectors,
   findDroppedPlurals,
+  findForbiddenGuidance,
   findForbiddenTerms,
-  hasInvalidCapitalizedStella,
   findIcuError,
+  findInternalIdArguments,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  hasInvalidCapitalizedStella,
+  isBareErrorMessage,
   isSuppressed,
 } from "./i18n-lint";
 import type { LintBaseline } from "./i18n-lint";
@@ -67,6 +72,29 @@ describe("stella wordmark casing", () => {
     expect(hasInvalidCapitalizedStella("stella reviews the document")).toBe(
       false,
     );
+  });
+});
+
+describe("findInternalIdArguments", () => {
+  test("flags an argument that names a storage handle", () => {
+    expect(findInternalIdArguments("Replace {blockId}")).toEqual(["blockId"]);
+    expect(
+      findInternalIdArguments(
+        "{count, plural, one {# edit in {paraId}} other {# edits in {commentIds}}}",
+      ),
+    ).toEqual(["commentIds", "paraId"]);
+  });
+
+  test("accepts arguments that describe what the reader knows", () => {
+    expect(
+      findInternalIdArguments("Replace “{find}” with “{replace}”"),
+    ).toEqual([]);
+    expect(
+      findInternalIdArguments(
+        "{label, select, none {Rewrite a paragraph} other {Rewrite paragraph {label}}}",
+      ),
+    ).toEqual([]);
+    expect(findInternalIdArguments("Paid {amount} on {valid}")).toEqual([]);
   });
 });
 
@@ -430,6 +458,67 @@ describe("terminology: forbiddenAlways", () => {
   });
 });
 
+describe("terminology: catalogue copy quality", () => {
+  const guidance =
+    "Use direct, specific, professional language instead of placeholder, promotional, or playful copy.";
+  const fill = (value: string): Record<string, string> =>
+    Object.fromEntries(LOCALES.map((locale) => [locale, value]));
+  const forbiddenAlways = Object.fromEntries(
+    ["en", ...LOCALES].map((locale) => [
+      locale,
+      ["Lorem ipsum", "seamless", "Oops", "\\p{Emoji}"],
+    ]),
+  );
+  const rules = buildForbiddenRules(
+    parseGlossary(
+      JSON.stringify({
+        verbs: [],
+        legalConcepts: [],
+        nouns: [
+          {
+            id: "catalogue-copy-quality",
+            en: "Catalogue copy quality",
+            guidance,
+            forbiddenAlways,
+            translations: fill("x"),
+          },
+        ],
+        ptBR: [],
+      }),
+    ),
+  );
+
+  test.each(["Lorem ipsum dolor sit amet", "A seamless workflow", "Oops!"])(
+    "rejects filler copy: %s",
+    (value) => {
+      expect(findForbiddenTerms(value, value, "en", rules)).not.toEqual([]);
+    },
+  );
+
+  test("rejects emoji code points in every locale", () => {
+    expect(findForbiddenTerms("Saved", "Uloženo ✅", "cs", rules)).toEqual([
+      "\\p{Emoji}",
+    ]);
+  });
+
+  test("reports the expected replacement tone", () => {
+    expect(
+      findForbiddenGuidance({
+        source: "Oops!",
+        target: "Oops!",
+        locale: "en",
+        rules,
+      }),
+    ).toEqual([guidance]);
+  });
+
+  test("allows concrete copy and non-emoji symbols", () => {
+    expect(
+      findForbiddenTerms("File saved", "Soubor uložen § 10", "cs", rules),
+    ).toEqual([]);
+  });
+});
+
 describe("terminology: key triggers and forbiddenOnKey", () => {
   const fill = (value: string): Record<string, string> =>
     Object.fromEntries(LOCALES.map((locale) => [locale, value]));
@@ -741,6 +830,63 @@ describe("terminology: matter transfers", () => {
         realRules,
         "errors.example",
       ),
+    ).toEqual([]);
+  });
+});
+
+describe("bare error messages", () => {
+  test("a message that only says something failed is bare", () => {
+    for (const message of [
+      "Error",
+      "Error:",
+      "error.",
+      "Something went  wrong",
+      "An unexpected error occurred!",
+      "Oops\u2026",
+      "Action failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(true);
+    }
+  });
+
+  test("a message that says what failed or what to do is not bare", () => {
+    for (const message of [
+      "Something went wrong. Try again, or reload the page if it keeps happening.",
+      "Something went wrong. Please try again.",
+      "Recent activity could not be loaded.",
+      "Failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(false);
+    }
+  });
+
+  test("reports the keys of bare messages", () => {
+    expect(
+      findBareErrors({
+        "common.somethingWentWrong":
+          "Something went wrong. Try again, or reload the page if it keeps happening.",
+        "billing.saveFailed": "Something went wrong",
+        "common.error": "Error",
+      }),
+    ).toEqual(["billing.saveFailed", "common.error"]);
+  });
+
+  test("the MCP app catalog has no bare message", async () => {
+    const catalogPath = path.resolve(
+      import.meta.dir,
+      "../../api-contract/src/mcp-app-messages.json",
+    );
+    const catalog: unknown = JSON.parse(await Bun.file(catalogPath).text());
+    const en = isPlainRecord(catalog) ? catalog["en"] : undefined;
+    if (!isPlainRecord(en)) {
+      throw new Error(`${catalogPath} has no en messages`);
+    }
+    expect(
+      Object.entries(en)
+        .filter(
+          ([, value]) => typeof value === "string" && isBareErrorMessage(value),
+        )
+        .map(([key]) => key),
     ).toEqual([]);
   });
 });

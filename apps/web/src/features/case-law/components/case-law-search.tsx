@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
 import {
-  PublicLawSearch,
   publicLawAskScope,
+  PublicLawSearch,
 } from "@/components/public-law-search";
 import type { PublicLawAskScope } from "@/components/public-law-search";
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";

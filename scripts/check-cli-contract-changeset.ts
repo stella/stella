@@ -8,11 +8,11 @@ import path from "node:path";
 
 import { isChangesetEntry } from "./changeset-guard";
 import {
-  CLI_CONTRACT_SURFACE_PATHS,
   canonicalJson,
   canonicalSurfacePart,
-  compareStableVersions,
   changesetNamesCli,
+  CLI_CONTRACT_SURFACE_PATHS,
+  compareStableVersions,
 } from "./check-cli-release-coupling";
 
 const DEFAULT_ROOT = path.resolve(import.meta.dirname, "..");

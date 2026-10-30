@@ -118,6 +118,7 @@ jobs:
       - name: Fetch the branch and main as objects
         if: steps.select.outputs.branch != ''
         id: fetch
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.select.outputs.head }}
@@ -127,7 +128,7 @@ jobs:
           git init -q --bare "$RUNNER_TEMP/repo.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$RUNNER_TEMP/repo.git" -c "http.extraheader=AUTHORIZATION: basic $auth" \
+          bash "$GITHUB_WORKSPACE/.trusted/scripts/retry.sh" git -C "$RUNNER_TEMP/repo.git" -c "http.extraheader=AUTHORIZATION: basic $auth" \
             fetch --no-tags -q "$SERVER_URL/$GITHUB_REPOSITORY.git" \
             "+$HEAD_SHA:refs/resolve/head" "+refs/heads/main:refs/resolve/main"
           echo "main=$(git -C "$RUNNER_TEMP/repo.git" rev-parse refs/resolve/main)" >> "$GITHUB_OUTPUT"
@@ -136,7 +137,7 @@ jobs:
       # uploads; no other run's artifacts are visible here.
       - name: Download the resolution
         if: steps.select.outputs.branch != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-conflicts
           run-id: ${{ steps.select.outputs.run }}
@@ -159,7 +160,7 @@ jobs:
       - name: Mint App token
         if: steps.select.outputs.branch != ''
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}

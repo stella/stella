@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { parsePlainDate, Temporal, todayFor } from "@stll/time";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 import { APIError } from "@/lib/errors/api";
 
 const TIME_POLICY_FIELDS = [
@@ -32,9 +32,7 @@ export type TimePolicySettings = TimePolicy &
 export const TIME_UNIT_OPTIONS = [1, 5, 6, 10, 15, 30, 60] as const;
 
 type MonthLock =
-  | { type: "clear" }
-  | { type: "locked"; date: string }
-  | { type: "invalid" };
+  { type: "clear" } | { type: "locked"; date: string } | { type: "invalid" };
 
 export const resolveMonthLock = (
   month: string,

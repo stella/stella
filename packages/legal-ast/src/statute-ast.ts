@@ -142,7 +142,8 @@ export const isStatuteAst = (val: unknown): val is StatuteAst =>
   isStatuteSource(val["source"]) &&
   isStatuteMetadata(val["metadata"]) &&
   Array.isArray(val["body"]) &&
-  val["body"].every(isStatuteBlock);
+  val["body"].every(isStatuteBlock) &&
+  hasUniqueStatuteIdentities(val["body"]);
 
 export const parseStatuteAst = (raw: unknown): StatuteAst | null => {
   if (raw === null || raw === undefined) {
@@ -267,3 +268,47 @@ const isStatuteTableCell = (val: unknown): val is StatuteTableCell =>
 
 const isStatuteTableRow = (val: unknown): val is StatuteTableCell[] =>
   Array.isArray(val) && val.every(isStatuteTableCell);
+
+/** Every persisted identity addresses one node in the complete statute tree. */
+const hasUniqueStatuteIdentities = (body: readonly StatuteBlock[]): boolean => {
+  const eIds = new Set<string>();
+  const anchors = new Set<string>();
+
+  const visit = (blocks: readonly StatuteBlock[]): boolean => {
+    for (const block of blocks) {
+      if (block.type !== "edit") {
+        if (eIds.has(block.eId)) {
+          return false;
+        }
+        eIds.add(block.eId);
+      }
+      if (
+        block.type !== "edit" &&
+        block.type !== "footnote" &&
+        anchors.has(block.anchorId)
+      ) {
+        return false;
+      }
+      if (block.type !== "edit" && block.type !== "footnote") {
+        anchors.add(block.anchorId);
+      }
+      if (block.type === "provision" && !visit(block.children)) {
+        return false;
+      }
+      if (block.type === "list") {
+        for (const item of block.items) {
+          if (eIds.has(item.eId)) {
+            return false;
+          }
+          eIds.add(item.eId);
+          if (!visit(item.children)) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  };
+
+  return visit(body);
+};

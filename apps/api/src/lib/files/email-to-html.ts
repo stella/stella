@@ -20,15 +20,15 @@ import PostalMime, { type Address } from "postal-mime";
 
 import {
   EMAIL_CITATION_BLOCK_MODE,
-  type EmailAttachmentDescriptor,
   EMAIL_HEADER_CITATION_ID,
   EMAIL_TEXT_ATTACHMENT_CHARSET,
   EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS,
+  type EmailAttachmentDescriptor,
   type EmailCitationBlock,
   type EmailCitationBlockMode,
   type EmailTextAttachmentCharset,
-  MAX_EMAIL_CITATION_BLOCKS,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+  MAX_EMAIL_CITATION_BLOCKS,
 } from "@stll/api-contract";
 import {
   EML_MIME_TYPE,
@@ -79,8 +79,7 @@ export type EmailAttachment = {
 };
 
 type EmailBody =
-  | { type: "html"; html: string }
-  | { type: "text"; text: string };
+  { type: "html"; html: string } | { type: "text"; text: string };
 
 export type ParsedEmail = {
   subject: string | null;
@@ -456,7 +455,7 @@ const parseEml = async (
           attachment.mimeType,
           attachment.filename,
         ),
-        dataBase64: Buffer.from(bytes).toString("base64"),
+        dataBase64: Buffer.from(bytes).toBase64(),
       });
     }
   }
@@ -566,7 +565,7 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
         attachment.mimeType,
         attachment.fileName,
       ),
-      dataBase64: Buffer.from(attachment.bytes).toString("base64"),
+      dataBase64: Buffer.from(attachment.bytes).toBase64(),
     });
   }
 
@@ -1000,8 +999,7 @@ type EmailFoldCandidate = {
 };
 
 type EmailBodyToken =
-  | { type: "candidate"; candidate: EmailFoldCandidate }
-  | { type: "content" };
+  { type: "candidate"; candidate: EmailFoldCandidate } | { type: "content" };
 
 type CheerioApi = ReturnType<typeof load>;
 

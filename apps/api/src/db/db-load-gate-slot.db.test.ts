@@ -73,8 +73,8 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
             await lowerConnection`ROLLBACK`;
             await lower.close();
             await index.close();
-            lowerConnection.release();
-            indexConnection.release();
+            await lowerConnection.release();
+            await indexConnection.release();
           }
         });
       });
@@ -118,8 +118,8 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
       } finally {
         await operator.close();
         await index.close();
-        operatorConnection.release();
-        indexConnection.release();
+        await operatorConnection.release();
+        await indexConnection.release();
       }
     });
   });
@@ -174,9 +174,9 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
         await backfill.close();
         await first.close();
         await second.close();
-        backfillConnection.release();
-        firstConnection.release();
-        secondConnection.release();
+        await backfillConnection.release();
+        await firstConnection.release();
+        await secondConnection.release();
       }
     });
   });
@@ -225,9 +225,9 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
         await a`ROLLBACK`;
         await b`ROLLBACK`;
         await index.close();
-        a.release();
-        b.release();
-        c.release();
+        await a.release();
+        await b.release();
+        await c.release();
       }
     });
   });
@@ -301,7 +301,7 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
         await repair.close();
         await operator.close();
         for (const connection of connections) {
-          connection.release();
+          await connection.release();
         }
       }
     });
@@ -341,8 +341,8 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
           expect((await next.tryAcquire()).unwrap()).toBe(true);
         } finally {
           await next.close();
-          killed.release();
-          survivor.release();
+          await killed.release();
+          await survivor.release();
         }
       },
       { closeMode: "force" },
@@ -410,7 +410,7 @@ describe.skipIf(!enabled)("operator compatibility alias correlation", () => {
         await second.close();
         await index.close();
         for (const connection of connections) {
-          connection.release();
+          await connection.release();
         }
       }
     });

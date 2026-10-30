@@ -97,6 +97,7 @@ export const CLI_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[] = [
 export const CLI_NON_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[] = [
   // `stella:read` already admits public-law reads for the logged-in user.
   "stella:law_read",
+  "stella:memory_write",
   "stella:admin_write",
   "stella:onboarding",
   "stella:external_mcps",

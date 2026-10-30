@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -15,16 +15,17 @@ import {
   pdfSigningSessions,
   searchDocuments,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   broadcastWorkspaceResourceSetUpdated,
   broadcastWorkspaceResourceUpdated,
@@ -34,8 +35,8 @@ import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flu
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const paramsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
-  versionId: tSafeId("entityVersion"),
+  entityId: resourceIdSchema("entity"),
+  versionId: resourceIdSchema("entityVersion"),
 });
 
 const config = {
@@ -440,15 +441,24 @@ export const deleteEntityVersionHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([params.entityId]).catch(captureError);
+  flushEntitySearchRepairs([params.entityId]).catch(
+    createErrorCapture(
+      handlerErrorContext(
+        "deleteEntityVersionHandler.flushEntitySearchRepairs",
+      ),
+    ),
+  );
 
   const promotedVersionId = txOutcome.promotedVersionId;
   if (promotedVersionId !== null) {
     await processPromotedVersion(params.entityId).catch((error: unknown) =>
-      captureError(error, {
-        entityId: params.entityId,
-        versionId: promotedVersionId,
-      }),
+      captureError(
+        error,
+        handlerErrorContext("versions.deleteEntityVersionHandler", {
+          entityId: params.entityId,
+          versionId: promotedVersionId,
+        }),
+      ),
     );
   }
 

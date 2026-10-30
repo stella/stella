@@ -20,16 +20,16 @@ import {
 } from "../entity-feature-gate-columns";
 import {
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";

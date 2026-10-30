@@ -13,6 +13,7 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { CitingDecisionItem } from "@/features/statutes/components/citing-decision-item";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
@@ -150,20 +151,22 @@ export const ProvisionCitingDecisions = ({
       )}
       {isPending && <CitingDecisionsLoader />}
       {isError && (
-        <div className="flex flex-col items-start gap-1" role="alert">
-          <p className="text-muted-foreground text-xs">
-            {t("errors.actionFailed")}
-          </p>
-          <Button
-            onClick={() =>
-              detached(refetch(), "statutes.citing-decisions-retry")
-            }
-            size="sm"
-            variant="ghost"
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
+        <RecoverableErrorStatus
+          className="flex flex-col items-start gap-1"
+          message={t("errors.actionFailed")}
+          messageClassName="text-muted-foreground text-xs"
+          actions={
+            <Button
+              onClick={() =>
+                detached(refetch(), "statutes.citing-decisions-retry")
+              }
+              size="sm"
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          }
+        />
       )}
       {!isPending && !isError && decisions.length === 0 && (
         <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>

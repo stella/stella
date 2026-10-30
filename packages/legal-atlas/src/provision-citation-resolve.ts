@@ -4,11 +4,14 @@ import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   type ActTitleSpec,
+  ANCHORED_SUBDIVISION_LEVELS,
   formatWorkIdentifier,
   type JurisdictionProfile,
+  SECTION_UNITS,
   type SectionUnit,
   type WorkIdentifier,
 } from "./provision-citation-profile";
+import { provisionCitationProfileFor } from "./provision-citation-profiles";
 
 /**
  * The provision a caller asks about, read from how a lawyer types it:
@@ -428,33 +431,40 @@ const readNamedAct = (
     : { kind: "works", works, units };
 };
 
+type ProvisionPath = Pick<
+  ResolvedProvisionCitation,
+  "unit" | "section" | "sectionSuffix" | "subsection" | "letter" | "point"
+>;
+
 const renderCitation = (
   profile: JurisdictionProfile,
-  resolved: Omit<ResolvedProvisionCitation, "status" | "anchor" | "citation">,
+  provision: ProvisionPath,
+  workIdentifier: string,
 ) => {
   const terms = profile.citationTerms;
   const parts = [
-    `${resolved.unit === "article" ? terms.article : terms.section} ${String(resolved.section)}${resolved.sectionSuffix ?? ""}`,
+    `${provision.unit === "article" ? terms.article : terms.section} ${String(provision.section)}${provision.sectionSuffix ?? ""}`,
   ];
-  if (resolved.subsection !== null) {
-    parts.push(`${terms.subsection} ${resolved.subsection}`);
+  if (provision.subsection !== null) {
+    parts.push(`${terms.subsection} ${provision.subsection}`);
   }
-  if (resolved.letter !== null) {
-    parts.push(`${terms.letter} ${resolved.letter})`);
+  if (provision.letter !== null) {
+    parts.push(`${terms.letter} ${provision.letter})`);
   }
-  if (resolved.point !== null) {
-    parts.push(`${terms.point} ${resolved.point}`);
+  if (provision.point !== null) {
+    parts.push(`${terms.point} ${provision.point}`);
   }
-  return `${parts.join(" ")} ${resolved.workIdentifier}`;
+  return `${parts.join(" ")} ${workIdentifier}`;
 };
 
-const renderAnchor = (
+/**
+ * The publisher anchor of a provision path, in the profile's scheme: one
+ * segment per named level, the same anchor a resolved citation carries.
+ */
+export const renderProvisionAnchor = (
   profile: JurisdictionProfile,
-  resolved: Pick<
-    ResolvedProvisionCitation,
-    "unit" | "section" | "sectionSuffix" | "subsection" | "letter" | "point"
-  >,
-) => {
+  resolved: ProvisionPath,
+): string => {
   const { render, join } = profile.anchor;
   const segments = [
     render[resolved.unit](
@@ -471,6 +481,74 @@ const renderAnchor = (
     segments.push(render.point(resolved.point));
   }
   return segments.join(join);
+};
+
+const SECTION_DESIGNATOR = /^(?<number>\d+)(?<suffix>\p{Ll}*)$/u;
+
+/**
+ * The provision path a publisher anchor names, read through the same scheme
+ * that minted it. Only an anchor that renders back to itself is read, so
+ * anything else (a heading id, a reordered path) names no provision.
+ */
+const parseAnchor = (
+  profile: JurisdictionProfile,
+  anchor: string,
+): ProvisionPath | null => {
+  const { render, join } = profile.anchor;
+  const [head, ...rest] = anchor.split(join);
+  const unit = SECTION_UNITS.find((candidate) =>
+    head?.startsWith(render[candidate]("")),
+  );
+  if (head === undefined || unit === undefined) {
+    return null;
+  }
+  const designator = SECTION_DESIGNATOR.exec(
+    head.slice(render[unit]("").length),
+  )?.groups;
+  if (designator?.["number"] === undefined) {
+    return null;
+  }
+  const subdivisions = Object.fromEntries(
+    ANCHORED_SUBDIVISION_LEVELS.map((level) => {
+      const prefix = render[level]("");
+      const segment = rest.find((part) => part.startsWith(prefix));
+      return [level, segment?.slice(prefix.length) ?? null] as const;
+    }),
+  );
+  const path: ProvisionPath = {
+    unit,
+    section: Number(designator["number"]),
+    sectionSuffix:
+      designator["suffix"] === undefined || designator["suffix"] === ""
+        ? null
+        : designator["suffix"],
+    subsection: subdivisions["subsection"] ?? null,
+    letter: subdivisions["letter"] ?? null,
+    point: subdivisions["point"] ?? null,
+  };
+  return renderProvisionAnchor(profile, path) === anchor ? path : null;
+};
+
+/**
+ * How a publisher anchor reads printed (`par_106-odst_4` in `262/2006 Sb.` is
+ * `§ 106 odst. 4 262/2006 Sb.`), in the spelling a resolved citation echoes.
+ * Null where the jurisdiction has no profile, or the anchor names no
+ * provision under it.
+ */
+export const anchorProvisionCitation = ({
+  anchor,
+  jurisdiction,
+  workIdentifier,
+}: {
+  anchor: string;
+  jurisdiction: string;
+  workIdentifier: string;
+}): string | null => {
+  const profile = provisionCitationProfileFor(jurisdiction);
+  const path = profile === null ? null : parseAnchor(profile, anchor);
+  return profile === null || path === null
+    ? null
+    : renderCitation(profile, path, workIdentifier);
 };
 
 const DATE_PATTERN = /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/gu;
@@ -579,9 +657,14 @@ const readSubdivisionPath = (
   }
 };
 
+type ActRefusal = Extract<
+  ProvisionCitationResolution,
+  { status: "no_act" | "ambiguous_act" }
+>;
+
 type ActResolution =
   | { kind: "work"; work: WorkIdentifier; unit: SectionUnit | undefined }
-  | { kind: "refused"; resolution: ProvisionCitationResolution };
+  | { kind: "refused"; resolution: ActRefusal };
 
 /**
  * The act the rest of the citation names: a gazette number outright, else
@@ -743,7 +826,145 @@ export const resolveProvisionCitation = ({
   return {
     status: "resolved",
     ...resolved,
-    anchor: renderAnchor(profile, resolved),
-    citation: renderCitation(profile, resolved),
+    anchor: renderProvisionAnchor(profile, resolved),
+    citation: renderCitation(profile, resolved, resolved.workIdentifier),
   };
+};
+
+type ActCitationResolution =
+  | { status: "resolved"; work: WorkIdentifier; workIdentifier: string }
+  /** `actName` is the words that name the act, any provision set aside. */
+  | { status: "no_act"; actName: string }
+  | Extract<ProvisionCitationResolution, { status: "ambiguous_act" }>;
+
+/** Brackets and separators around an act name once its provision is cut. */
+const LEADING_NAME_EDGES = new Set(["[", "(", ",", ";", ":"]);
+const TRAILING_NAME_EDGES = new Set(["]", ")", ",", ";", ":"]);
+const WHITESPACE = /^\s$/u;
+
+// A scan from each end rather than an anchored regex: alternating `+` runs
+// backtrack quadratically on a long run of separators.
+const trimNameEdges = (text: string): string => {
+  let start = 0;
+  let end = text.length;
+  while (
+    start < end &&
+    (LEADING_NAME_EDGES.has(text.charAt(start)) ||
+      WHITESPACE.test(text.charAt(start)))
+  ) {
+    start += 1;
+  }
+  while (
+    end > start &&
+    (TRAILING_NAME_EDGES.has(text.charAt(end - 1)) ||
+      WHITESPACE.test(text.charAt(end - 1)))
+  ) {
+    end -= 1;
+  }
+  return text.slice(start, end);
+};
+
+/**
+ * Where a version statement (`ve znění pozdějších předpisů`, `ve znění zákona
+ * č. …`, `ve znění účinném do …`) starts, or the text's end: the act's name
+ * comes before it, and a corpus lookup with it attached misses the name.
+ */
+const versionStatementStart = (
+  text: string,
+  { versionGrammar }: JurisdictionProfile,
+): number => {
+  const lower = text.toLowerCase();
+  let start = text.length;
+  for (const phrase of [
+    ...versionGrammar.currentVersionMarkers,
+    ...versionGrammar.amendmentPrefixes,
+    ...versionGrammar.dateStatements.map(({ prefix }) => prefix),
+  ]) {
+    const at = lower.indexOf(phrase.toLowerCase());
+    if (
+      at !== -1 &&
+      at < start &&
+      (at === 0 || /[\s,;(]/u.test(lower.charAt(at - 1)))
+    ) {
+      start = at;
+    }
+  }
+  return start;
+};
+
+const actNameOf = (text: string, profile: JurisdictionProfile) => {
+  const normalized = normalize(text);
+  return trimNameEdges(
+    normalized.slice(0, versionStatementStart(normalized, profile)),
+  );
+};
+
+/**
+ * The act a citation names, read as `resolveProvisionCitation` reads it: by
+ * gazette number, alias or title for the citing date. A provision printed
+ * with it (`§ 2 odst. 4 písm. b) zákona …`) is set aside, so a citation
+ * names its act with or without one.
+ */
+export const resolveActCitation = ({
+  text,
+  profile,
+  citedOn,
+}: ResolveOptions): ActCitationResolution => {
+  const resolver = compiledFor(profile);
+  const normalized = normalize(text);
+  const section = resolver.section.exec(normalized);
+  const before =
+    section === null ? normalized : normalized.slice(0, section.index);
+  const after =
+    section === null
+      ? ""
+      : normalized.slice(
+          readSubdivisionPath(
+            normalized,
+            section.index + section[0].length,
+            resolver,
+          ).end,
+        );
+  const act = resolveAct(`${before} ${after}`, resolver, profile, citedOn);
+  if (act.kind === "work") {
+    return {
+      status: "resolved",
+      work: act.work,
+      workIdentifier: formatWorkIdentifier(act.work),
+    };
+  }
+  switch (act.resolution.status) {
+    case "no_act": {
+      // An act's name follows the provision it is cited for (`§ 2 zákona
+      // o …`); what precedes it is a lead-in (`Z § 2 …`, `ustanovení § 2`).
+      const named = actNameOf(after, profile);
+      return {
+        status: "no_act",
+        actName: named === "" ? actNameOf(before, profile) : named,
+      };
+    }
+    case "ambiguous_act":
+      return act.resolution;
+    default:
+      act.resolution satisfies never;
+      return panic("Unknown act resolution");
+  }
+};
+
+/**
+ * The name with its head in the nominative (`zákona o obětech trestných
+ * činů` → `zákon o obětech trestných činů`), the form a stored title states;
+ * null when the name is not a head of the profile followed by more words.
+ */
+export const nominativeTitle = (
+  name: string,
+  profile: JurisdictionProfile,
+): string | null => {
+  const [head = "", ...words] = normalize(name).split(" ");
+  const lowered = head.toLowerCase();
+  const spec = profile.titleHeads.find(({ forms }) => forms.includes(lowered));
+  if (spec === undefined || words.length === 0) {
+    return null;
+  }
+  return [spec.nominative, ...words].join(" ");
 };

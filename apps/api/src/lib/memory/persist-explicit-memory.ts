@@ -10,15 +10,24 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockMemberAccessRow,
+  lockWorkspaceLifecycle,
+} from "@/api/lib/db/aggregate-lock";
+import { hasCurrentActiveWorkspaceMemberPermission } from "@/api/lib/db/member-authority";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   ChatToolError,
-  HandlerError,
   ConcurrentModificationError,
+  HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import { isMemberRole } from "@/api/lib/member-roles";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import type { MemoryDedupScope } from "@/api/lib/memory/memory-dedup";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasCurrentMemberPermission,
+  hasMemberPermission,
+} from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 /**
@@ -147,14 +156,15 @@ const MEMORY_WRITE_REFUSAL_MESSAGES = {
   "kind-requires-workspace": "Kind is only allowed on workspace-scoped memory",
 } as const satisfies Record<MemoryWriteRefusalCode, string>;
 
+const memoryWriteRefusal = (code: MemoryWriteRefusalCode, kind: AiMemoryKind) =>
+  new MemoryWriteRefusedError({
+    code,
+    kind,
+    message: MEMORY_WRITE_REFUSAL_MESSAGES[code],
+  });
+
 const refuse = (code: MemoryWriteRefusalCode, kind: AiMemoryKind) =>
-  Result.err(
-    new MemoryWriteRefusedError({
-      code,
-      kind,
-      message: MEMORY_WRITE_REFUSAL_MESSAGES[code],
-    }),
-  );
+  Result.err(memoryWriteRefusal(code, kind));
 
 /**
  * Checks run in the order the REST create route has always reported them:
@@ -272,9 +282,61 @@ type PersistExplicitMemoryOptions = {
   tx: Transaction;
 };
 
-export type PersistExplicitMemoryResult = {
-  id: SafeId<"aiMemory">;
-  type: "created" | "existing" | "reactivated";
+export type PersistExplicitMemoryResult =
+  | {
+      id: SafeId<"aiMemory">;
+      type: "created" | "existing" | "reactivated";
+    }
+  | {
+      error: MemoryWriteRefusedError;
+      type: "authority_unavailable";
+    };
+
+type HoldCurrentMemoryWriteAuthorityOptions = {
+  organizationId: SafeId<"organization">;
+  permissions: PermissionInput;
+  scope: AiMemoryScope;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+/** Hold the live member and matter authority needed by one explicit write. */
+export const holdCurrentMemoryWriteAuthority = async ({
+  organizationId,
+  permissions,
+  scope,
+  tx,
+  userId,
+  workspaceId,
+}: HoldCurrentMemoryWriteAuthorityOptions): Promise<boolean> => {
+  if (scope === "workspace") {
+    if (workspaceId === null) {
+      return false;
+    }
+    // Archive and deletion take this fence before changing the workspace.
+    // Holding it through the access proof and memory write prevents a cached
+    // request authorization from surviving a committed lifecycle transition.
+    await lockWorkspaceLifecycle(tx, workspaceId);
+    return await hasCurrentActiveWorkspaceMemberPermission({
+      db: tx,
+      organizationId,
+      permissions,
+      userId,
+      workspaceId,
+    });
+  }
+  const member = await lockMemberAccessRow({
+    tx,
+    organizationId,
+    userId,
+    mode: "share",
+  });
+  return (
+    member !== undefined &&
+    isMemberRole(member.role) &&
+    hasCurrentMemberPermission(member.role, permissions)
+  );
 };
 
 const MEMORY_DEDUP_MAX_ATTEMPTS = 3;
@@ -374,6 +436,24 @@ export const persistExplicitMemory = async ({
   scope: { target },
   tx,
 }: PersistExplicitMemoryOptions): Promise<PersistExplicitMemoryResult> => {
+  if (
+    !(await holdCurrentMemoryWriteAuthority({
+      organizationId: target.organizationId,
+      permissions: MEMORY_WRITE_PERMISSIONS[target.scope],
+      scope: target.scope,
+      tx,
+      userId: target.createdBy,
+      workspaceId: target.workspaceId,
+    }))
+  ) {
+    return {
+      error: memoryWriteRefusal(
+        target.scope === "workspace" ? "workspace-not-active" : "forbidden",
+        target.kind,
+      ),
+      type: "authority_unavailable",
+    };
+  }
   const identity = createMemoryDedupIdentity({
     ...target,
     content: memory.content,

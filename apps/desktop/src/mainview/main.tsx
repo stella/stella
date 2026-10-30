@@ -24,9 +24,9 @@ import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
-  describeError,
   desktopTelemetryWindowFromLabel,
   installDesktopErrorTelemetry,
   reportDesktopError,
@@ -40,6 +40,10 @@ const ClipboardEditorWindow = lazy(
 );
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
 const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
+
+const AccessibilityGuideApp = lazy(
+  async () => import("../onboarding/AccessibilityGuideApp"),
+);
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
@@ -129,6 +133,12 @@ const Root = () => {
     content = (
       <Suspense fallback={<main className="bg-background min-h-dvh" />}>
         <ActivityApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "accessibility-guide") {
+    content = (
+      <Suspense fallback={null}>
+        <AccessibilityGuideApp />
       </Suspense>
     );
   } else if (windowLabel === "onboarding") {

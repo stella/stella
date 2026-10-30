@@ -21,12 +21,12 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeOffIcon,
+  FileTextIcon,
   LockKeyholeIcon,
   PauseIcon,
   PlayIcon,
   ShieldAlertIcon,
   TextIcon,
-  FileTextIcon,
   Trash2Icon,
   XIcon,
 } from "@stll/ui/icons";
@@ -120,13 +120,9 @@ const RETENTION_LABEL_KEYS = {
 
 const reportActivityError = (
   operation: (typeof DESKTOP_TELEMETRY_OPERATIONS)[
-    | "activityRead"
-    | "activitySubscribe"
-    | "activityUpdate"],
+    "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
-    | "eventSubscriptionFailed"
-    | "invalidResponse"
-    | "invokeFailed"],
+    "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
 ) => {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({

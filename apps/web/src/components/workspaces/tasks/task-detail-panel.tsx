@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useRouteContext } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -25,9 +25,10 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { InspectorTitle } from "@/components/inspector/inspector-title";
 import {
-  isTaskPriority,
   isListItemType,
+  isTaskPriority,
   isTaskStatus,
   toISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
@@ -60,10 +61,12 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
@@ -115,10 +118,7 @@ const TaskDetailPanelContent = ({
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.id,
-  });
+  const userId = useAuthenticatedUser().id;
 
   const {
     data: task,
@@ -150,7 +150,7 @@ const TaskDetailPanelContent = ({
           ...taskUpdateBody(update),
           taskId: toSafeId<"entity">(update.taskId),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       if (taskUpdateClearsWorkflowReason(variables)) {
@@ -173,7 +173,10 @@ const TaskDetailPanelContent = ({
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure",
+        scope: { type: "handler", handlerId: "TaskDetailPanelContent:failure" },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
@@ -200,7 +203,7 @@ const TaskDetailPanelContent = ({
       })({ entityId: toSafeId<"entity">(taskId) }).patch({
         ...workflowUpdateBody(update),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       if (workflowUpdateClearsReason(variables)) {
@@ -209,12 +212,19 @@ const TaskDetailPanelContent = ({
       await invalidateWorkflow();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "TaskDetailPanelContent:failure-2",
+        },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
 
-  const workflowActionMutation = useMutation({
+  const workflowActionMutation = useIdempotentMutation({
+    idempotencyScope: `tasks.${workspaceId}.${taskId}.workflow`,
     mutationFn: async (
       action:
         | { type: "acknowledge" }
@@ -223,14 +233,15 @@ const TaskDetailPanelContent = ({
             action: "reopen";
             reason?: string;
           },
+      request,
     ) => {
       const endpoint = api["work-obligations"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) });
       if (action.type === "acknowledge") {
-        return unwrapEden(await endpoint.acknowledge.post({}));
+        return unwrapApiResponse(await endpoint.acknowledge.post({}, request));
       }
-      return unwrapEden(
+      return unwrapApiResponse(
         await endpoint.transition.post({
           action: action.action,
           ...(action.reason ? { reason: action.reason } : {}),
@@ -244,7 +255,13 @@ const TaskDetailPanelContent = ({
       await invalidateWorkflow();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "TaskDetailPanelContent:failure-3",
+        },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
@@ -274,7 +291,13 @@ const TaskDetailPanelContent = ({
                     userId: toSafeId<"user">(userId),
                   });
                 if (response.error) {
-                  analytics.captureError(toAPIError(response.error));
+                  analytics.captureError(toAPIError(response.error), {
+                    fingerprintKey: "TaskDetailPanelContent:failure-4",
+                    scope: {
+                      type: "handler",
+                      handlerId: "TaskDetailPanelContent:failure-4",
+                    },
+                  });
                   await queryClient.invalidateQueries({
                     queryKey: taskKeys.detail(workspaceId, taskId),
                   });
@@ -292,7 +315,13 @@ const TaskDetailPanelContent = ({
                   }),
                 ]);
               } catch (error: unknown) {
-                analytics.captureError(error);
+                analytics.captureError(error, {
+                  fingerprintKey: "TaskDetailPanelContent:failure-5",
+                  scope: {
+                    type: "handler",
+                    handlerId: "TaskDetailPanelContent:failure-5",
+                  },
+                });
                 detached(
                   queryClient.invalidateQueries({
                     queryKey: taskKeys.detail(workspaceId, taskId),
@@ -590,13 +619,12 @@ const TaskDetailPanelContent = ({
               />
             </span>
           ) : (
-            <button
-              className="hover:text-foreground-strong-muted w-full overflow-hidden text-start text-base font-semibold text-ellipsis whitespace-pre"
-              onClick={startEditingName}
-              type="button"
+            <InspectorTitle
+              isEmpty={task.name === ""}
+              onEdit={startEditingName}
             >
-              {name}
-            </button>
+              {task.name === "" ? t("untitled") : task.name}
+            </InspectorTitle>
           )}
         </div>
 

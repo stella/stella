@@ -6,6 +6,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import type { CorpusPackBatchOutcome } from "@/api/lib/legal-search/corpus-pack-batch";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -120,10 +121,16 @@ export const processResultForCorpusOutcome = (
           "error.detail": wrappedErrorDetail(outcome.error),
         }),
       );
-      captureError(outcome.error, {
-        decisionId,
-        step: "processDecision.corpusWrite",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "pipeline.processResultForCorpusOutcome.outcome_error",
+          {
+            decisionId,
+            step: "processDecision.corpusWrite",
+          },
+        ),
+      );
       return {
         status: PROCESS_DECISION_STATUS.RETRYABLE,
         inserted: true,

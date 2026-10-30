@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { cents, currencyMinorUnitDigits, type CentsAmount } from "@stll/money";
+import { cents, type CentsAmount, currencyMinorUnitDigits } from "@stll/money";
 
 import { invalidInput, type InvoicingResult } from "./errors";
 import { parseIban } from "./iban";
@@ -64,13 +64,14 @@ const formatMinorAmount = (
   return `${amount / scale}.${String(amount % scale).padStart(digits, "0")}`;
 };
 
-export const validateVariableSymbol = (
-  variableSymbol: string,
+export const validatePaymentSymbol = (
+  symbol: string,
+  kind: "Variable" | "Constant" | "Specific",
 ): InvoicingResult<string> => {
-  if (!/^\d{1,10}$/u.test(variableSymbol)) {
-    return invalidInput("Variable symbol must contain 1 to 10 digits");
+  if (!/^\d{1,10}$/u.test(symbol)) {
+    return invalidInput(`${kind} symbol must contain 1 to 10 digits`);
   }
-  return Result.ok(variableSymbol);
+  return Result.ok(symbol);
 };
 
 /** `YYYY-MM-DD` as `YYYYMMDD`, refusing dates that do not exist. */

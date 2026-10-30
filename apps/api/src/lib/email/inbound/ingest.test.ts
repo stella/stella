@@ -3,10 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
 import {
-  ingestInboundMail,
-  InboundPersistenceError,
   type InboundDeliveryOutcome,
   type InboundDeliveryStore,
+  InboundPersistenceError,
+  ingestInboundMail,
   type PersistInboundDeliveryOptions,
 } from "@/api/lib/email/inbound/ingest";
 

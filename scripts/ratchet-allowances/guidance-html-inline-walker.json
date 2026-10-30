@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 1,
+  "reason": "The guidance HTML builder reuses the case-law parsers' inline walker (walkInlines, ownTableRows) instead of a second HTML-to-inline implementation, as lib/legal-search/parsers/validate-ast.ts already does with visibleHtmlText. Moving shared-inlines.ts into lib touches every case-law HTML parser and belongs in its own change."
+}

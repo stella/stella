@@ -1,6 +1,6 @@
 import {
-  isCaseLawJurisdiction,
   type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 
 import {
@@ -26,6 +26,7 @@ const CORPUS_MORPHOLOGY_LANGUAGE_BY_JURISDICTION = {
   AUT: "de",
   CZE: "cs",
   EU: null,
+  GBR: "en",
   HUN: "hu",
   POL: "pl",
   SVK: "sk",

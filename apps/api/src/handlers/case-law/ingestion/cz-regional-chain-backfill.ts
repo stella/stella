@@ -45,9 +45,7 @@ import {
   czRegionalEnvelopeWithChain,
   fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
-import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
-import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/pipeline/stored-decision-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { logger } from "@/api/lib/observability/logger";
@@ -260,26 +258,14 @@ export const runCzRegionalChainBackfill = async ({
       return;
     }
 
-    await sourceLease.beforeDatabaseMark();
-    await processDecision({
-      input: {
-        ...reparsed.result,
-        // The stored hash covers what the crawl observed. Keeping it leaves
-        // the crawl's dedup exactly where it was, so this run does not make
-        // the next cycle re-fetch what it has just written.
-        rawHash: row.sourceHash ?? reparsed.result.rawHash,
-      },
+    await applyStoredDecisionBackfill({
+      row,
+      result: reparsed.result,
       sourceId,
       scopedDb,
-      observedAt: new Date(),
-      observationOrder: await allocateSourceObservationOrder({
-        leaseToken: sourceLease.leaseToken,
-        scopedDb,
-        sourceId,
-      }),
-      refresh: DECISION_REFRESH.ALWAYS,
+      sourceLease,
+      report,
     });
-    report.applied += 1;
   };
 
   const applyRow = async (row: BackfillRow): Promise<void> => {

@@ -1,7 +1,7 @@
 import { chat, EventType } from "@tanstack/ai";
 import type { AdapterYieldChunk, ContentPart } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
@@ -18,6 +18,9 @@ import {
   createStellaOpenRouterText,
   StellaOpenRouterTextAdapter,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 class InspectableOpenRouterAdapter extends StellaOpenRouterTextAdapter {
   convertForRequest(part: ContentPart) {
@@ -59,6 +62,56 @@ describe("instance provider redirect policy", () => {
     }
   });
 
+  test("maps spent managed credentials to unavailable without changing BYOK", async () => {
+    const originalFetch = globalThis.fetch;
+    const previousChecks = env.FEATURE_MANAGED_PROVIDER_CHECKS;
+    testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
+    let calls = 0;
+    globalThis.fetch = Object.assign(
+      async () => {
+        calls++;
+        return Response.json(
+          { error: { code: 402, message: "Insufficient credits" } },
+          { status: 402 },
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    try {
+      const options = {
+        model: BYOK_DEFAULT_MODELS.openrouter.chat.modelId,
+        messages: [{ role: "user" as const, content: "fixture request" }],
+        logger: resolveDebugOption(false),
+      };
+      const managed = createManagedOpenRouterText({
+        model: options.model,
+        apiKey: "managed-key",
+        managedAIResidency: "eu",
+      }).unwrap();
+      const byok = createStellaOpenRouterText(options.model, "byok-key");
+      const terminalChunks: AdapterYieldChunk[] = [];
+      for await (const chunk of managed.chatStream(options)) {
+        terminalChunks.push(chunk);
+      }
+      const managedTerminal = terminalChunks.at(-1);
+      expect(managedTerminal).toMatchObject({
+        type: EventType.RUN_ERROR,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      });
+      terminalChunks.length = 0;
+      for await (const chunk of byok.chatStream(options)) {
+        terminalChunks.push(chunk);
+      }
+      expect(terminalChunks.at(-1)).not.toMatchObject({
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      });
+      expect(calls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+      testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", previousChecks);
+    }
+  });
+
   const model = BYOK_DEFAULT_MODELS.openrouter.chat.modelId;
   for (const scope of ["eu", "us", "public_corpus", "byok"] as const) {
     for (const path of ["chat", "structured", "structured-stream"] as const) {
@@ -66,7 +119,7 @@ describe("instance provider redirect policy", () => {
         test(`${scope} preserves redirect policy on ${path} for ${status}`, async () => {
           const originalFetch = globalThis.fetch;
           const previousChecks = env.FEATURE_MANAGED_PROVIDER_CHECKS;
-          env.FEATURE_MANAGED_PROVIDER_CHECKS = false;
+          testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
           const requests: Request[] = [];
           const redirectedHost = "redirected-provider.invalid";
           globalThis.fetch = Object.assign(
@@ -200,7 +253,10 @@ describe("instance provider redirect policy", () => {
             );
           } finally {
             globalThis.fetch = originalFetch;
-            env.FEATURE_MANAGED_PROVIDER_CHECKS = previousChecks;
+            testState.setConfig(
+              "FEATURE_MANAGED_PROVIDER_CHECKS",
+              previousChecks,
+            );
           }
         });
       }
@@ -215,7 +271,7 @@ const adapter = new InspectableOpenRouterAdapter(
 
 describe("OpenRouter document transport", () => {
   test("serializes inline PDF bytes as file_data instead of a URL or text", () => {
-    const base64 = Buffer.from("%PDF-1.4\nsynthetic").toString("base64");
+    const base64 = Buffer.from("%PDF-1.4\nsynthetic").toBase64();
 
     expect(
       adapter.convertForRequest({
@@ -277,7 +333,7 @@ describe("OpenRouter document transport", () => {
     });
 
     try {
-      const base64 = Buffer.from("%PDF-1.4\nwire").toString("base64");
+      const base64 = Buffer.from("%PDF-1.4\nwire").toBase64();
       const wireAdapter = new StellaOpenRouterTextAdapter(
         { apiKey: "test-openrouter-key" },
         "google/gemini-2.5-flash",

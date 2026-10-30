@@ -1,16 +1,16 @@
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { fetchWithResolvedAddress } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import {
-  fetchWithResolvedAddress,
   OUTBOUND_PROTOCOL_POLICY,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
@@ -55,8 +55,8 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "url_preview" },
   access: "read",
-  query: t.Object({
-    url: t.String({ minLength: 1, maxLength: MAX_URL_LENGTH }),
+  query: v.object({
+    url: v.pipe(v.string(), v.minLength(1), v.maxLength(MAX_URL_LENGTH)),
   }),
 } satisfies HandlerConfig;
 
@@ -419,6 +419,7 @@ const fetchPreviewUrl = async (
           if (redirects === MAX_PREVIEW_REDIRECTS) {
             throw new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Source redirected too many times",
             });
           }
@@ -427,6 +428,7 @@ const fetchPreviewUrl = async (
           if (!location) {
             throw new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Source redirected without a location",
             });
           }
@@ -445,6 +447,7 @@ const fetchPreviewUrl = async (
         if (!response.value.ok) {
           throw new HandlerError({
             status: 502,
+            code: "internal_error",
             message: `Source returned HTTP ${response.value.status}`,
           });
         }
@@ -466,6 +469,7 @@ const fetchPreviewUrl = async (
 
       throw new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "Source redirected too many times",
       });
     },
@@ -474,6 +478,7 @@ const fetchPreviewUrl = async (
         ? cause
         : new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "Source could not be fetched",
             cause,
           }),

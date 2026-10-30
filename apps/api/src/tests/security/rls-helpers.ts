@@ -10,6 +10,7 @@ import { stella, stellaIngestion } from "@/api/db/rls";
 import {
   aiMemories,
   anonymizationBlacklistEntries,
+  bilingualTranslationRuns,
   billingCodes,
   caseLawDecisions,
   caseLawMatterLinks,
@@ -24,7 +25,6 @@ import {
   contacts,
   documentCounters,
   documentReferenceCounters,
-  bilingualTranslationRuns,
   docxSuggestions,
   entities,
   entityVersionAiSummaries,
@@ -65,6 +65,7 @@ import type { ClauseBody } from "@/api/lib/clauses/types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { createUserFileKey } from "@/api/lib/file-key";
 import { cents } from "@/api/lib/money";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -324,6 +325,12 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       createdAt: new Date(),
     },
   ]);
+  for (const organizationId of [ids.orgA, ids.orgB]) {
+    await recordNewOrganizationAccessState(db, {
+      organizationId,
+      now: new Date(),
+    });
+  }
 
   await db.insert(member).values([
     {

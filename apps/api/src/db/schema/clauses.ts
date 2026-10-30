@@ -1,15 +1,15 @@
 import {
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
+  timestamptz,
   tsvector,
   user,
-  timestamptz,
 } from "./common";
 import type {
   AnyPgColumn,

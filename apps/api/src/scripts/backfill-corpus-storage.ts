@@ -47,8 +47,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
-  timestampCasToken,
   type TimestampCasToken,
+  timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
@@ -67,6 +67,7 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 
 // Hold the maintenance lane before the first statement: operator passes over
@@ -220,10 +221,13 @@ await runScriptWithErrorOutput(async () => {
         return;
       case "failed":
         failed += 1;
-        captureError(outcome.error, {
-          decisionId,
-          step: "backfillCorpusStorage",
-        });
+        captureError(
+          outcome.error,
+          handlerErrorContext("scripts.recordOutcome.outcome_error", {
+            decisionId,
+            step: "backfillCorpusStorage",
+          }),
+        );
         return;
       default:
         outcome satisfies never;
@@ -278,7 +282,12 @@ await runScriptWithErrorOutput(async () => {
         // The batch never reached its per-decision outcomes, so nothing in it
         // was recorded.
         failed += chunk.length;
-        captureError(settled.error, { step: "backfillCorpusStorage" });
+        captureError(
+          settled.error,
+          handlerErrorContext("scripts.capture.settled_error", {
+            step: "backfillCorpusStorage",
+          }),
+        );
         continue;
       }
       for (const [decisionId, outcome] of settled.value) {

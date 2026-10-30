@@ -16,8 +16,8 @@ import {
   TAG_FIELD_VALUE_LIMIT,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
-  corpusIndexGroupConfig,
   caseLawManifestGroups,
+  corpusIndexGroupConfig,
   resolveCorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -138,6 +138,7 @@ const COURT_DOMAIN_BOUND = {
   AUT: 200,
   CZE: 200,
   EU: 10,
+  GBR: 200,
   HUN: 200,
   POL: 400,
   SVK: 200,

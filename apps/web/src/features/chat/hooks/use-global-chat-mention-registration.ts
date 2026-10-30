@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ChatCorpusScope } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -38,7 +38,7 @@ import {
 import {
   PublicLawUnavailableError,
   toPublicLawError,
-  unwrapPublicLawEden,
+  unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -93,12 +93,15 @@ const searchCaseLawMentions = async ({
     // not a defect to report on every keystroke; the picker simply has no
     // decisions to offer.
     if (!PublicLawUnavailableError.is(error)) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "searchCaseLawMentions:failure",
+        scope: { type: "handler", handlerId: "searchCaseLawMentions:failure" },
+      });
     }
     return [];
   }
 
-  const data = unwrapPublicLawEden(response, "searchPublicCaseLawMentions");
+  const data = unwrapPublicLawResponse(response, "searchPublicCaseLawMentions");
 
   return data.hits.map((hit) => ({
     resource: resourceRef({
@@ -156,10 +159,16 @@ const loadSourceMentions = async ({
     ),
   ]);
   if (Result.isError(catalog)) {
-    getAnalytics().captureError(catalog.error);
+    getAnalytics().captureError(catalog.error, {
+      fingerprintKey: "loadSourceMentions:catalog",
+      scope: { type: "handler", handlerId: "loadSourceMentions:catalog" },
+    });
   }
   if (Result.isError(connections)) {
-    getAnalytics().captureError(connections.error);
+    getAnalytics().captureError(connections.error, {
+      fingerprintKey: "loadSourceMentions:connections",
+      scope: { type: "handler", handlerId: "loadSourceMentions:connections" },
+    });
   }
   const connectorCatalog = Result.isOk(catalog) ? catalog.value : null;
   return buildSourceMentionOptions({

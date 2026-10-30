@@ -32,10 +32,10 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
-  flipCaseLawJurisdictionServing,
-  purgeFlippedJurisdictionBatchTx,
   type CaseLawServingFlipContext,
   type CaseLawServingFlipOptions,
+  flipCaseLawJurisdictionServing,
+  purgeFlippedJurisdictionBatchTx,
 } from "@/api/lib/legal-search/case-law-serving-flip";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";

@@ -488,6 +488,7 @@ test("malformed or stale selections widen, while none and valid selected plans s
   ).toEqual({ mode: "selected", files: ["src/db.test.ts"] });
 });
 
+// Measured p95 is 14.7 s; this test must discover and graph the real Postgres suites.
 test("verification suites participate in general Postgres discovery and changed-file selection", async () => {
   const runner = packageJson.ciGateTestRunners["test:postgres"];
   const discovered = await discoverGatedTestFiles({ apiRoot, ...runner });
@@ -541,6 +542,7 @@ test("verification suites participate in general Postgres discovery and changed-
   }
 }, 30_000);
 
+// Measured p95 is 25.0 s; this test must rebuild the real API graph for each declaration.
 test("a change to any online lock-taking declaration selects the contention suite", async () => {
   const suite = "src/db/online-ddl-contention.postgres.test.ts";
   const runner = packageJson.ciGateTestRunners["test:postgres"];
@@ -579,4 +581,4 @@ test("a change to any online lock-taking declaration selects the contention suit
       expect(selection.files, file).toContain(suite);
     }
   }
-}, 60_000);
+}, 50_000);

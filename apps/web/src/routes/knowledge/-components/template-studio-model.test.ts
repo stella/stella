@@ -5,9 +5,9 @@ import {
   studioFieldToManifestField,
 } from "./template-studio-model";
 import {
+  type TemplateEditableField,
   templateValueSourcePatch,
   templateValueSourceTransition,
-  type TemplateEditableField,
 } from "./template-value-source";
 
 /** The persisted shape of one parsed field, or null when nothing parsed. */

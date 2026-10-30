@@ -22,7 +22,6 @@ import {
 } from "@/api/lib/files/delete-organization-file";
 import {
   authorizeOrganizationFileWrite,
-  runCheckedOrganizationFileWrite,
   commitOrganizationFileBytes,
   commitOrganizationFilesBytes,
   copyOrganizationFile,
@@ -34,9 +33,11 @@ import {
   removeOrganizationFilesBytes,
   reserveOrganizationFileBytes,
   reserveOrganizationFilesBytes,
+  runCheckedOrganizationFileWrite,
   writeOrganizationFile,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -110,7 +111,8 @@ beforeAll(async () => {
     seats: 1,
     currentPeriodStart: new Date(now - 60_000),
     currentPeriodEnd: new Date(now + 60_000),
-    source: "manual",
+    // The suite walks provider statuses on this row: hosted semantics.
+    source: "hosted",
   });
   await testDb.insert(usageSeatAssignments).values({
     id: assignmentId,
@@ -484,13 +486,19 @@ describe("organization file usage", () => {
       storageBytesPerAssignment: 40n,
       serviceActionsPerPeriod: 3,
     });
-    await testDb.insert(organizationAccessStates).values({
-      organizationId: ids.orgB,
+    const evaluationEnded = {
       state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
       evaluationStartedAt: new Date(now - 120_000),
       evaluationEndsAt: new Date(now - 60_000),
       evaluationEndedAt: new Date(now - 60_000),
-    });
+    };
+    await testDb
+      .insert(organizationAccessStates)
+      .values({ organizationId: ids.orgB, ...evaluationEnded })
+      .onConflictDoUpdate({
+        target: organizationAccessStates.organizationId,
+        set: evaluationEnded,
+      });
     try {
       const freeInput = (objectKey: string, sizeBytes: number) => ({
         organizationId: ids.orgB,
@@ -524,6 +532,10 @@ describe("organization file usage", () => {
       await testDb
         .delete(organizationAccessStates)
         .where(eq(organizationAccessStates.organizationId, ids.orgB));
+      await recordNewOrganizationAccessState(testDb, {
+        organizationId: ids.orgB,
+        now: new Date(),
+      });
       await testDb
         .delete(usagePolicies)
         .where(eq(usagePolicies.id, freePolicyId));

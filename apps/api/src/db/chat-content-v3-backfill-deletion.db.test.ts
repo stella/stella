@@ -120,14 +120,16 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
       for (const statement of receiptRowSecurity) {
         await connectionA.sql.unsafe(statement);
       }
-      expect(
-        await connectionA.sql.unsafe<{ forced: boolean; policies: number }[]>(
+      expect([
+        ...(await connectionA.sql.unsafe<
+          { forced: boolean; policies: number }[]
+        >(
           `SELECT relforcerowsecurity AS forced,
                   (SELECT count(*)::int FROM pg_policy WHERE polrelid = '${schema}.chat_content_v3_backfill_receipts'::regclass) AS policies
            FROM pg_class
            WHERE oid = '${schema}.chat_content_v3_backfill_receipts'::regclass`,
-        ),
-      ).toEqual([{ forced: true, policies: 1 }]);
+        )),
+      ]).toEqual([{ forced: true, policies: 1 }]);
 
       await connectionA.sql.unsafe(
         "INSERT INTO organization (id) VALUES ($1)",
@@ -154,11 +156,11 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
         );
       }
 
-      expect(
-        await connectionA.sql.unsafe<{ content: unknown }[]>(
+      expect([
+        ...(await connectionA.sql.unsafe<{ content: unknown }[]>(
           `SELECT content FROM ${CHAT_CONTENT_V3_SOURCES[source].table}`,
-        ),
-      ).toEqual([{ content }]);
+        )),
+      ]).toEqual([{ content }]);
 
       const selected = Promise.withResolvers<undefined>();
       const resumeBatch = Promise.withResolvers<undefined>();
@@ -240,24 +242,24 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
           done: true,
           value: [],
         });
-        expect(
-          await connectionA.sql.unsafe<{ id: string }[]>(
+        expect([
+          ...(await connectionA.sql.unsafe<{ id: string }[]>(
             "SELECT id FROM chat_messages",
-          ),
-        ).toEqual([]);
-        expect(
-          await connectionA.sql.unsafe<{ id: string }[]>(
+          )),
+        ]).toEqual([]);
+        expect([
+          ...(await connectionA.sql.unsafe<{ id: string }[]>(
             "SELECT id FROM chat_message_revisions",
-          ),
-        ).toEqual([]);
+          )),
+        ]).toEqual([]);
         await connectionB.sql.unsafe("DELETE FROM organization WHERE id = $1", [
           organizationId,
         ]);
-        expect(
-          await connectionA.sql.unsafe<{ row_id: string }[]>(
+        expect([
+          ...(await connectionA.sql.unsafe<{ row_id: string }[]>(
             "SELECT row_id FROM chat_content_v3_backfill_receipts",
-          ),
-        ).toEqual([]);
+          )),
+        ]).toEqual([]);
       } finally {
         resumeBatch.resolve(undefined);
         if (transactionOpen) {

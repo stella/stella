@@ -1,4 +1,8 @@
 import {
+  CONNECT_CONNECTOR_TOOL_NAME,
+  LIST_CONNECTABLE_CONNECTORS_TOOL_NAME,
+} from "@stll/api-contract/chat-connector";
+import {
   REQUEST_SECRET_TOOL_NAME,
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
@@ -82,13 +86,12 @@ const buildProposalWrapper = (
  *
  * Approval handling ("buffered approval"): a subagent runs autonomously
  * with no client to answer a per-call approval pause, so it must never
- * execute an approval-requiring tool (any `mutation` / `external` /
- * `publicUnofficial` policy) inline. Prompt-injected text in a document
+ * execute an approval-requiring tool inline. Prompt-injected text in a document
  * the subagent reads could otherwise drive an irreversible delete/write
  * the user never approved. Classification is by the authoritative policy
  * WeakMap (`getChatToolPolicy`), not the raw `needsApproval` field:
  *
- *  - policy `needsApproval === false` (internal / publicOfficial reads):
+ *  - policy `needsApproval === false` (internal reads):
  *    cloned as-is (approval was never required for these), with the
  *    policy preserved so anonymization still treats a public tool as
  *    public.
@@ -117,7 +120,9 @@ export const projectToolMapForSubagent = (
     if (
       name === SPAWN_SUBAGENTS_TOOL_NAME ||
       name === REQUEST_SECRET_TOOL_NAME ||
-      name === USE_CONNECTOR_SECRET_TOOL_NAME
+      name === USE_CONNECTOR_SECRET_TOOL_NAME ||
+      name === CONNECT_CONNECTOR_TOOL_NAME ||
+      name === LIST_CONNECTABLE_CONNECTORS_TOOL_NAME
     ) {
       continue;
     }

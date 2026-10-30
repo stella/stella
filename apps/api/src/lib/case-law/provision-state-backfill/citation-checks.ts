@@ -22,9 +22,9 @@ import { isRecord } from "@/api/lib/type-guards";
 import { inBackfillTransaction, PROVISION_BACKFILL_BUDGET } from "./step";
 import type {
   ProvisionBackfillCompletion,
-  ProvisionBackfillUnit,
   ProvisionBackfillSession,
   ProvisionBackfillStep,
+  ProvisionBackfillUnit,
 } from "./step";
 
 const REPAIR_NAME = "case-law-provision-citation-checks";

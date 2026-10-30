@@ -10,11 +10,10 @@ import { assertProperty } from "@stll/property-testing";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
-  type CorpusIndexHit,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
+  type CorpusIndexHit,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
@@ -369,7 +368,7 @@ const handlerQuery = (
   if (query === null) {
     throw new Error(`the entry ${text} built no engine query`);
   }
-  return withCaseLawDatedDecisions(query, "relevance");
+  return query;
 };
 
 const ENTRIES = [

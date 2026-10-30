@@ -19,6 +19,7 @@ import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { settingsNavSections } from "@/components/settings-shell/settings-nav";
+import { env } from "@/env";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -26,7 +27,8 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 const NAV_ITEM_CLASS = cn(
   "hover:bg-sidebar-accent/60 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden",
@@ -46,7 +48,8 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
   const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
   const timeBilling = useTimeBillingPreviewEnabled();
   const roleQuery = useQuery(roleOptions);
-  const roleView = useQueryView(roleQuery);
+  const roleView = queryView(roleQuery);
+  useQueryViewError(roleView, "SettingsShell.role:query");
   const role =
     roleView.type === "items" && roleView.refetchError === undefined
       ? roleView.items
@@ -66,6 +69,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
       }),
     beta: betaFeaturesAvailable(),
     timeBilling,
+    usage: env.VITE_FEATURE_USAGE,
   });
 
   const activeItem = sections

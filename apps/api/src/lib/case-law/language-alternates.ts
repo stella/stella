@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
@@ -64,7 +64,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
   definePublicLawSharedQuery(
     PUBLIC_LAW_SHARED_QUERY.caseLawLanguageAlternates,
     async (
-      tx: CaseLawPublicReadTransaction,
+      tx: Pick<CaseLawPublicReadTransaction, "select">,
       languageGroupKeys: readonly string[],
       countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
     ): Promise<PublicDecisionLanguageAlternateRow[]> => {
@@ -219,7 +219,7 @@ export const readPublicDecisionLanguageAlternatesForGroupKeys = async (
  * page as selected (nulls and repeats included), one read for all of them.
  */
 export const readPublicDecisionLanguageAlternatesInTx = async (
-  tx: CaseLawPublicReadTransaction,
+  tx: Pick<CaseLawPublicReadTransaction, "select">,
   languageGroupKeys: readonly (string | null)[],
   countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 ): Promise<PublicDecisionLanguageAlternatesByGroup> => {

@@ -10,12 +10,7 @@ export type DependencyChanges = {
 };
 
 export type ResolutionSource =
-  | "registry"
-  | "workspace"
-  | "link"
-  | "file"
-  | "git"
-  | "tarball";
+  "registry" | "workspace" | "link" | "file" | "git" | "tarball";
 
 const resolutionParts = (resolution: string): [name: string, spec: string] => {
   const separator = resolution.indexOf("@", resolution.startsWith("@") ? 1 : 0);

@@ -5,8 +5,8 @@ import { useTranslations } from "use-intl";
 import {
   Accordion,
   AccordionItem,
-  AccordionTrigger,
   AccordionPanel,
+  AccordionTrigger,
 } from "@stll/ui/accordion";
 
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
@@ -15,13 +15,13 @@ import {
   roleModelsFromOverrideModels,
 } from "@/components/ai-config-role-models.logic";
 import type {
-  RoleModelOverrides,
-  RoleModelSelections,
+  DecisionModelState,
+  ModelSelection,
   ProviderDefaultRoleModels,
   ProviderValue,
+  RoleModelOverrides,
+  RoleModelSelections,
   RoleValue,
-  ModelSelection,
-  DecisionModelState,
   StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
 

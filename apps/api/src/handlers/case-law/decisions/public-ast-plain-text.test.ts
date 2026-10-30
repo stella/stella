@@ -40,8 +40,8 @@ import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/a
 import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";

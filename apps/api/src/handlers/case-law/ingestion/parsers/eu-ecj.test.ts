@@ -23,6 +23,7 @@ import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import * as cheerio from "cheerio";
 
+import { headingPathsByAnchor } from "@stll/legal-ast";
 import {
   hasBlockInlines,
   hasInlineChildren,
@@ -42,14 +43,14 @@ import {
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 
 import {
+  manifestationStem,
   PORTAL_CORPUS,
   PORTAL_DOCUMENT_CONTAINER,
   PORTAL_STEM_SUFFIX,
   type PortalPair,
+  portalStem,
   SHELL_STEM,
   SHELL_STEM_SUFFIX,
-  manifestationStem,
-  portalStem,
 } from "./__fixtures__/eu-ecj/corpus";
 
 /**
@@ -256,6 +257,29 @@ describe("parseEcjDecisionHtml", () => {
       sections.filter((section) => section.title !== null).length,
     ).toBeGreaterThan(1);
 
+    // The ruling is a section of its own. No heading that covers the
+    // reasoning ("Costs", "Balancing of interests") may also cover the
+    // operative part, or every outline files the ruling under it.
+    const paths = headingPathsByAnchor(blocks);
+    const headingsOf = (role: "holding" | "reasoning") =>
+      new Set(
+        blocks
+          .filter((block) =>
+            role === "holding"
+              ? block.type === "paragraph" && block.role === "holding"
+              : block.type === "paragraph" && block.number !== undefined,
+          )
+          .flatMap((block) =>
+            (paths.get(block.anchorId) ?? []).map(({ anchorId }) => anchorId),
+          ),
+      );
+    const reasoningHeadings = headingsOf("reasoning");
+    expect(
+      [...headingsOf("holding")].filter((anchor) =>
+        reasoningHeadings.has(anchor),
+      ),
+    ).toEqual([]);
+
     const formex = await readFixture(`${stem}.fmx.xml.gz`);
     if (formex === undefined) {
       return;
@@ -266,12 +290,13 @@ describe("parseEcjDecisionHtml", () => {
     // layouts that publish structure can be held to it: the oldest one
     // prints paragraph numbers as ordinary text, names its sections
     // with `<h2>` where Formex declares more, and omits the keyword
-    // chain from the rendering entirely. Recovering those would mean
-    // guessing at text, so the parser does not, and neither does this.
-    // Its `pointN` anchors are the marker for the layouts that do.
+    // chain from the rendering entirely. The parser reads its numbers off
+    // the text, but the Formex of those works encodes the printed Reports,
+    // whose numbering also runs through the report for the hearing, so it
+    // is no oracle for them; their tests are below. Its `pointN` anchors
+    // are the marker for the layouts Formex can check.
     if (!html.includes('id="point')) {
       expect(parsed.keywords).toEqual([]);
-      expect(numbered).toHaveLength(0);
       return;
     }
 
@@ -901,4 +926,281 @@ test("excludes script and style from the keyword metadata chain", () => {
     html: "<body><p class='coj-sum-title-1'>JUDGMENT</p><p class='coj-index'>First<script>bad-keyword</script> — Second<style>bad-style</style></p><p class='coj-normal'>Decision body.</p></body>",
   });
   expect(keywords).toEqual(["First", "Second"]);
+});
+
+const parseStem = async (stem: string): Promise<Block[]> => {
+  const html = await readFixture(`${stem}.html.gz`);
+  if (html === undefined) {
+    throw new Error(`Missing fixture for ${stem}`);
+  }
+  const [celex = ""] = stem.split(".");
+  return parseEcjDecisionHtml({
+    caseNumber: celex,
+    ecli: undefined,
+    court: "Court of Justice",
+    decisionDate: undefined,
+    decisionType: undefined,
+    sourceUrl: undefined,
+    celex,
+    html,
+  }).documentAst.blocks;
+};
+
+const blockWithText = (blocks: readonly Block[], text: string) =>
+  blocks.find((block) => block.plainText === text);
+
+const headingTitlesOf = (blocks: readonly Block[], anchorId: string) =>
+  (headingPathsByAnchor(blocks).get(anchorId) ?? []).map(({ title }) => title);
+
+/**
+ * The oldest layout states its structure only in its text: printed
+ * numbers, bare sub-headings, report page markers, a contents line and the
+ * publisher's section anchors. Formex is no oracle for these works (see
+ * above), so each recording is held to what its pages print.
+ */
+describe("the oldest layout", () => {
+  test.each([
+    { stem: "61990CJ0006.en", last: 48, first: "By orders of 9 July" },
+    { stem: "61978CJ0120.en", last: 16, first: "BY ORDER OF 28 APRIL" },
+    { stem: "62004CJ0144.hu", last: 79, first: "Az előzetes döntéshozatal" },
+    { stem: "62013TO0488.cs", last: 41, first: "Dne 6. září 2011" },
+  ])(
+    "$stem reads the printed numbers 1 to $last as the paragraphs' own",
+    async ({ stem, last, first }) => {
+      const blocks = await parseStem(stem);
+      expect(
+        blocks.flatMap((block) =>
+          block.type === "paragraph" && block.number !== undefined
+            ? [block.number]
+            : [],
+        ),
+      ).toEqual(Array.from({ length: last }, (_, index) => index + 1));
+      // The number is structure, not text: it is gone from the paragraph.
+      const point1 = blocks.find((block) => block.anchorId === "point1");
+      expect(point1?.plainText.startsWith(first)).toBe(true);
+    },
+  );
+
+  /**
+   * The grounds of a decision in the oldest layout, one `<p>` per line, set
+   * as the recorded pages set them (`61978CJ0120.en`): the contents line,
+   * then each section behind its anchor code.
+   */
+  const legacyGrounds = (lines: readonly string[]): Block[] =>
+    parseEcjDecisionHtml({
+      caseNumber: "120/78",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "61978CJ0120",
+      html: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>',
+        '<div class="listNotice"><div class="texte">',
+        '<p><a href="#I1">Parties</a><br/><a href="#MO">Grounds</a><br/>',
+        '<a href="#DI">Operative part</a><br/></p>',
+        '<a name="I1"/><h2 class="rech">Parties</h2><p>IN CASE 120/78</p>',
+        '<a name="MO"/><h2 class="rech">Grounds</h2>',
+        ...lines.map((line) => `<p>${line}</p>`),
+        '<a name="DI"/><h2 class="rech">Operative part</h2>',
+        "<p>THE COURT HEREBY RULES:</p>",
+        "</div></div></body></html>",
+      ].join(""),
+    }).documentAst.blocks;
+
+  /** Each paragraph's number, or null, with its text. */
+  const numberedLines = (blocks: readonly Block[]) =>
+    blocks.flatMap((block) =>
+      block.type === "paragraph" && block.role === undefined
+        ? [[block.number ?? null, block.plainText] as const]
+        : [],
+    );
+
+  test("a quoted list item never takes the number of the Court's next paragraph", () => {
+    // The quoted item is numbered `2.`, the Court's own `2` follows it: the
+    // number expected next is printed twice.
+    const blocks = legacyGrounds([
+      "1 The national court asks whether either of two readings applies:",
+      "2. Second alternative.",
+      "2 The Court's next paragraph.",
+      "3 It follows that the rule applies.",
+      "4 The costs are not recoverable.",
+    ]);
+    expect(numberedLines(blocks)).toEqual([
+      [1, "The national court asks whether either of two readings applies:"],
+      [null, "2. Second alternative."],
+      [2, "The Court's next paragraph."],
+      [3, "It follows that the rule applies."],
+      [4, "The costs are not recoverable."],
+    ]);
+  });
+
+  test("a quoted list running ahead of the Court's numbering stays quoted", () => {
+    const blocks = legacyGrounds([
+      "1 The provision reads:",
+      "2. The Member States shall ensure that the rule applies.",
+      "3. They shall inform the Commission.",
+      "2 That provision does not apply.",
+      "3 It follows that the action is dismissed.",
+      "4 The costs are not recoverable.",
+    ]);
+    expect(numberedLines(blocks).map(([number]) => number)).toEqual([
+      1,
+      null,
+      null,
+      2,
+      3,
+      4,
+    ]);
+  });
+
+  test("a date opening the grounds is not the first paragraph", () => {
+    const blocks = legacyGrounds([
+      "1 May 2000 is the date of the contested decision.",
+      "1 By application lodged at the Court the applicant seeks annulment.",
+      "2 The applicant relies on two pleas.",
+    ]);
+    expect(numberedLines(blocks)).toEqual([
+      [null, "1 May 2000 is the date of the contested decision."],
+      [1, "By application lodged at the Court the applicant seeks annulment."],
+      [2, "The applicant relies on two pleas."],
+    ]);
+  });
+
+  test("a number that two paragraphs carry alike numbers neither", () => {
+    // Written the same way, a quoted item and the Court's paragraph cannot
+    // be told apart; both keep their figure as text, and the run goes on.
+    const blocks = legacyGrounds([
+      "1. The national court asks:",
+      "2. Second alternative.",
+      "2. The Court's next paragraph.",
+      "3. It follows that the rule applies.",
+    ]);
+    expect(numberedLines(blocks)).toEqual([
+      [1, "The national court asks:"],
+      [null, "2. Second alternative."],
+      [null, "2. The Court's next paragraph."],
+      [3, "It follows that the rule applies."],
+    ]);
+  });
+
+  test("a quoted question opening with `1 .` keeps its number as text", async () => {
+    const blocks = await parseStem("61978CJ0120.en");
+    const question = blocks.find((block) =>
+      block.plainText.startsWith("1 . MUST THE CONCEPT"),
+    );
+    expect(question?.type).toBe("paragraph");
+    expect(question).not.toHaveProperty("number");
+  });
+
+  test("bare sub-headings are headings, nested by their markers", async () => {
+    const blocks = await parseStem("61990CJ0006.en");
+    const conditions = blockWithText(
+      blocks,
+      "(b) The conditions for State liability",
+    );
+    expect(conditions).toMatchObject({ type: "heading", level: 3 });
+    expect(headingTitlesOf(blocks, conditions?.anchorId ?? "")).toEqual([
+      "Grounds",
+      "Liability of the State for loss and damage resulting from breach of its obligations under Community law",
+    ]);
+
+    const hungarian = await parseStem("62004CJ0144.hu");
+    expect(blockWithText(hungarian, "Jogi háttér")).toMatchObject({
+      type: "heading",
+    });
+    // A quoted list item is punctuated, so it stays a paragraph.
+    expect(
+      hungarian.find((block) =>
+        block.plainText.startsWith("a) az ilyen szerződések"),
+      )?.type,
+    ).toBe("paragraph");
+  });
+
+  test.each(["61990CJ0006.en", "62013TO0488.cs"])(
+    "%s opens with its first section, not with the contents line",
+    async (stem) => {
+      const blocks = await parseStem(stem);
+      const sections = blocks.filter(
+        (block) => block.type === "heading" && block.level === 1,
+      );
+      expect(sections.length).toBeGreaterThan(1);
+      expect(blocks.at(0)).toBe(sections.at(0));
+      // The line repeats every section title, run together.
+      expect(
+        blocks.some(
+          (block) =>
+            block.type === "paragraph" &&
+            sections.every((section) =>
+              block.plainText.includes(section.plainText),
+            ),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test("sections take their role from the publisher's anchors", async () => {
+    const blocks = await parseStem("61990CJ0006.en");
+    const after = (title: string) =>
+      blocks.at(blocks.findIndex((block) => block.plainText === title) + 1);
+    expect(after("Parties")).toMatchObject({ role: "intro" });
+    expect(after("Grounds")).toMatchObject({ number: 1 });
+    expect(after("Grounds")).not.toHaveProperty("role");
+    expect(after("Operative part")).toMatchObject({ role: "holding" });
+  });
+
+  test("printed report page markers become page anchors", async () => {
+    const blocks = await parseStem("61955CJ0008.en");
+    const pages = blocks.flatMap((block) =>
+      hasBlockInlines(block)
+        ? block.inlines.flatMap((inline) =>
+            inline.type === "page-anchor" ? [inline.label] : [],
+          )
+        : [],
+    );
+    expect(pages).toEqual(["255", "256", "257", "258", "259"]);
+    expect(blocks.some((block) => /^P \. \d+$/u.test(block.plainText))).toBe(
+      false,
+    );
+  });
+});
+
+describe("converter output", () => {
+  test("anchors that repeat are not read as paragraph numbers", async () => {
+    // The operative part and the summary each count from `point1`: the ids
+    // name lists, and a number that names two passages names neither.
+    const html = await readFixture("61955CJ0008.da.html.gz");
+    expect(html?.split('id="point1"').length).toBeGreaterThan(2);
+    const blocks = await parseStem("61955CJ0008.da");
+    expect(
+      blocks.filter(
+        (block) => block.type === "paragraph" && block.number !== undefined,
+      ),
+    ).toEqual([]);
+    // The marker stays with the text it numbers.
+    expect(
+      blocks.some((block) =>
+        block.plainText.startsWith("1. Sagen antages til realitetsbehandling"),
+      ),
+    ).toBe(true);
+  });
+
+  test("the sentence introducing the ruling heads its own section", async () => {
+    const blocks = await parseStem("62019CO0791.en");
+    const formula =
+      "On those grounds, the Court (Grand Chamber) hereby orders:";
+    expect(blockWithText(blocks, formula)).toMatchObject({
+      type: "heading",
+      level: 1,
+    });
+    const holdings = blocks.filter(
+      (block) => block.type === "paragraph" && block.role === "holding",
+    );
+    expect(holdings.length).toBeGreaterThan(1);
+    for (const holding of holdings) {
+      expect(headingTitlesOf(blocks, holding.anchorId)).toEqual([formula]);
+    }
+  });
 });

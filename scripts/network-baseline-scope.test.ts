@@ -496,10 +496,98 @@ describe("reviewed network budgets", () => {
     // The declared depth is stamped with the current method, so the main
     // recording keeps it as a floor rather than replacing it with one sample.
     expect(result.baseline).toEqual({
-      "/chat": { ...entry(3), depthMethod: NETWORK_DEPTH_METHOD },
+      "/chat": {
+        depth: 3,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /1", "GET /3"],
+      },
       "/settings": entry(2),
     });
     expect(result.notices).toEqual(["- `/chat`: `Additional endpoint`"]);
+  });
+
+  test("a budget keeps every request and count main recorded after it was written", () => {
+    // stella#6560: a settings budget written before main added
+    // GET /v1/organization-settings to every settings page made that request
+    // read as new on the PR that edited the budget.
+    const result = prepareComparisonBaseline({
+      base: {
+        "/settings": {
+          depth: 2,
+          requests: ["GET /v1/session", "GET /v1/organization-settings"],
+          requestCounts: {
+            "GET /v1/session": 1,
+            "GET /v1/organization-settings": 1,
+          },
+          dbQueries: { "GET /v1/organization-settings": 2 },
+        },
+      },
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [
+        {
+          route: "/settings",
+          reason: "Connector list",
+          budget: {
+            depth: 3,
+            requests: ["GET /v1/session", "GET /v1/connectors"],
+            requestCounts: { "GET /v1/session": 2, "GET /v1/connectors": 1 },
+          },
+        },
+      ],
+    });
+    expect(result.baseline["/settings"]).toEqual({
+      depth: 3,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: [
+        "GET /v1/session",
+        "GET /v1/organization-settings",
+        "GET /v1/connectors",
+      ],
+      requestCounts: {
+        "GET /v1/session": 2,
+        "GET /v1/organization-settings": 1,
+        "GET /v1/connectors": 1,
+      },
+      dbQueries: { "GET /v1/organization-settings": 2 },
+    });
+  });
+
+  test("a budget written against older main never lowers a recorded value", () => {
+    const result = prepareComparisonBaseline({
+      base: {
+        "/settings": {
+          depth: 4,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /v1/session"],
+          requestCounts: { "GET /v1/session": 3 },
+          responseSizes: { "GET /v1/session": 4096 },
+        },
+      },
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [
+        {
+          route: "/settings",
+          reason: "Older budget",
+          budget: {
+            depth: 3,
+            requests: ["GET /v1/session"],
+            requestCounts: { "GET /v1/session": 2 },
+            responseSizes: { "GET /v1/session": 1024 },
+          },
+        },
+      ],
+    });
+    expect(result.baseline["/settings"]).toEqual({
+      depth: 4,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: ["GET /v1/session"],
+      requestCounts: { "GET /v1/session": 3 },
+      responseSizes: { "GET /v1/session": 4096 },
+    });
   });
 
   test.each([
@@ -707,6 +795,7 @@ describe("merge-base preparation integration", () => {
       const prepare = (script: string) =>
         run(["bash", script], {
           GH_RETRY_SCRIPT: path.join(root, "scripts/gh-retry.sh"),
+          NETWORK_RETRY_SCRIPT: path.join(root, "scripts/retry.sh"),
           PATH: `${path.join(directory, "bin")}:${runnerPath}`,
           BASE_SHA: recordedBase,
           GITHUB_EVENT_NAME: "pull_request",
@@ -985,8 +1074,13 @@ esac
       );
       checked(["git", "add", "apps/web/e2e/network-budgets/change.json"]);
       checked(["git", "commit", "-m", "declare budget"]);
+      // The budget raises main's recorded /chat entry; GET /1 stays known.
       expect(prepare(nextBase)).toEqual({
-        "/chat": { ...entry(9), depthMethod: NETWORK_DEPTH_METHOD },
+        "/chat": {
+          depth: 9,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /1", "GET /9"],
+        },
         "/settings": entry(2),
       });
       const inheritedBase = checked(["git", "rev-parse", "HEAD"]);
@@ -995,20 +1089,29 @@ esac
         "/settings": entry(2),
       });
       // Main must seed declarations even when no request observes them yet.
-      // The recording seed keeps the declared depth as a floor (current method).
+      // The recording seed keeps the declared depth as a floor (current method)
+      // and, like the recorder, keeps every request main already recorded.
       const declared = {
-        "/chat": { ...entry(9), depthMethod: NETWORK_DEPTH_METHOD },
+        "/chat": {
+          depth: 9,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /1", "GET /9"],
+        },
         "/settings": entry(2),
       };
       expect(
         prepare(inheritedBase, { NETWORK_BASELINE_PURPOSE: "recording" }),
       ).toEqual(declared);
+      // Seeded from the published recording, the declaration keeps its GET /8.
       expect(
         prepare(inheritedBase, {
           ...artifactEnv,
           NETWORK_BASELINE_PURPOSE: "recording",
         }),
-      ).toEqual(declared);
+      ).toEqual({
+        ...declared,
+        "/chat": { ...declared["/chat"], requests: ["GET /8", "GET /9"] },
+      });
       // The next publication contains the declaration plus a measured peak.
       const newerPublication = { "/chat": entry(10), "/settings": entry(2) };
       writeFileSync(

@@ -2,7 +2,6 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
-import { isMcpTransportRequest } from "@/api/handlers/mcp/routes-core";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
@@ -14,15 +13,6 @@ import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 const MCP_TRANSPORT_RATE_LIMIT_SCOPE = "mcp-transport";
 const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE = "mcp-transport-address";
-
-/**
- * Only the JSON-RPC transport paths carry a budget. Protected-resource
- * discovery and CORS preflight are static, credential-free, and answered before
- * a client knows how to authenticate, so throttling them would break discovery
- * rather than bound any cost.
- */
-export const isMcpTransportRateLimitedRequest = (request: Request): boolean =>
-  request.method !== "OPTIONS" && isMcpTransportRequest(request);
 
 const BEARER_SCHEME = "bearer ";
 
@@ -91,7 +81,6 @@ export const MCP_TRANSPORT_RATE_LIMIT_POLICY = {
   duration: API_RATE_LIMITS.mcpTransport.duration,
   errorResponse: MCP_RATE_LIMIT_JSON_RPC_ERROR,
   max: API_RATE_LIMITS.mcpTransport.max,
-  skip: (request: Request) => !isMcpTransportRateLimitedRequest(request),
   budget: (key: string) =>
     key.startsWith(`${MCP_TRANSPORT_RATE_LIMIT_SCOPE}:token:`)
       ? { name: "mcp.transport.bearer", keyKind: "bearer" }
@@ -140,7 +129,8 @@ export const createMcpAuthenticationFailureLimiter = (
 ) => {
   options.context.init({ duration: options.duration });
   const skip = async (request: Request) =>
-    env.E2E_DISABLE_AUTH_RATE_LIMIT || (await options.skip?.(request));
+    env.E2E_DISABLE_AUTH_RATE_LIMIT ||
+    (await options.skip?.(request, undefined));
   const getKey = async ({
     request,
     clientIp,

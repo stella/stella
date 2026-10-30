@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -21,6 +20,7 @@ import {
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
+  NO_REGISTRY_WEB_SEARCH,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -28,9 +28,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 
-const credentialRegistrySchema = t.UnionEnum(
-  BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
-);
+const credentialRegistrySchema = v.picklist(BUSINESS_REGISTRY_CREDENTIAL_SLUGS);
 
 export const readBusinessRegistryCredentials = createSafeRootHandler(
   {
@@ -74,13 +72,10 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
     permissions: { organizationSettings: ["update"] },
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
-    body: t.Object(
-      {
-        registry: credentialRegistrySchema,
-        credential: t.String({ minLength: 1, maxLength: 512 }),
-      },
-      { additionalProperties: false },
-    ),
+    body: v.strictObject({
+      registry: credentialRegistrySchema,
+      credential: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+    }),
   },
   async function* ({ body, safeDb, session, recordAuditEvent }) {
     const observer = actionRequestObserver(
@@ -113,6 +108,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
       encryptRegistryCredential(session.activeOrganizationId, credential),
     );
     const probe = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       observer,
       permit: grantThirdPartyOutboundPermit(),
       handler: bindRegistryCredential(
@@ -163,7 +159,7 @@ export const deleteBusinessRegistryCredential = createSafeRootHandler(
     permissions: { organizationSettings: ["update"] },
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
-    query: t.Object({ registry: credentialRegistrySchema }),
+    query: v.object({ registry: credentialRegistrySchema }),
   },
   async function* ({ query, safeDb, session, recordAuditEvent }) {
     yield* Result.await(

@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
@@ -17,25 +17,25 @@ import {
   spendScreeningWork,
 } from "./name-match";
 import type {
+  IndexBuildSteps,
   NameIndex,
   NameMatch,
   NameMatches,
   ScreeningWorkBudget,
-  IndexBuildSteps,
 } from "./name-match";
 import {
-  nameReading,
   hasExcessQueryTokens,
-  MAX_QUERY_TOKENS,
   MAX_QUERY_CHARACTERS,
+  MAX_QUERY_TOKENS,
+  nameReadings,
 } from "./normalise";
 import type { NameReading } from "./normalise";
 import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
 import type { ScreeningEntry } from "./screening-entries";
 import {
   screeningWorkBound,
-  screeningWorkStatsSteps,
   type ScreeningWorkStats,
+  screeningWorkStatsSteps,
 } from "./screening-work-bound";
 import { isCalendarDate } from "./values";
 
@@ -156,10 +156,7 @@ export type QueryBirthDate = {
 export type FieldComparison = "match" | "mismatch" | "not-compared";
 
 type BirthDateComparison =
-  | "exact"
-  | "approximate"
-  | "mismatch"
-  | "not-compared";
+  "exact" | "approximate" | "mismatch" | "not-compared";
 
 const birthDateMatch = (
   query: QueryBirthDate,
@@ -598,7 +595,8 @@ const prepareScreeningQuery = (
       }),
     );
   }
-  const readings = kinds.map((kind) => nameReading(query.name, kind));
+  // Each reading of the name, its own first, in each interpretation.
+  const readings = kinds.flatMap((kind) => nameReadings(query.name, kind));
   const tokens = readings.at(0)?.tokens ?? [];
   const identifierKeys = new Set(
     (query.identifiers ?? [])

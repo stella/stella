@@ -32,6 +32,7 @@ export const MCP_ADVANCED_RESOURCE_SCOPES = [
   "stella:matters_write",
   "stella:contacts_write",
   "stella:chat",
+  "stella:memory_write",
   "stella:knowledge_write",
   "stella:billing_write",
   "stella:admin_read",
@@ -54,6 +55,7 @@ export const MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE = {
   "stella:matters_write": null,
   "stella:contacts_write": null,
   "stella:chat": null,
+  "stella:memory_write": null,
   "stella:knowledge_write": null,
   "stella:billing_write": null,
   "stella:admin_read": null,
@@ -93,6 +95,7 @@ const MCP_RESOURCE_SCOPE_ACCESS = {
   "stella:matters_write": "write-only",
   "stella:contacts_write": "write-only",
   "stella:chat": "read-capable",
+  "stella:memory_write": "write-only",
   "stella:knowledge_write": "write-only",
   "stella:billing_write": "write-only",
   "stella:admin_read": "read-capable",
@@ -120,7 +123,7 @@ const isMcpWriteOnlyResourceScope = (
   MCP_RESOURCE_SCOPE_ACCESS[scope] === "write-only";
 
 export const MCP_WRITE_ONLY_RESOURCE_SCOPES =
-  MCP_DEFAULT_RESOURCE_SCOPES.filter(isMcpWriteOnlyResourceScope);
+  MCP_ADVANCED_RESOURCE_SCOPES.filter(isMcpWriteOnlyResourceScope);
 
 export const MCP_OAUTH_PROTOCOL_SCOPES = [
   "openid",
@@ -146,6 +149,19 @@ export const VERIFIED_OAUTH_CLIENT_BRANDS = [
 
 export type VerifiedOAuthClientBrand =
   (typeof VERIFIED_OAUTH_CLIENT_BRANDS)[number];
+
+/**
+ * What the consent screen may claim about the client asking. A `verified`
+ * client is named by its brand alone: its product name and mark come from
+ * stella, never from its registration. A `verified_unbranded` client's
+ * locations are all known but name no single product, such as a platform that
+ * serves connectors anyone can publish. Any other client is `unverified`.
+ * `name` is the client's registered name, shown only as its own claim.
+ */
+export type OAuthConsentClient =
+  | { type: "verified"; brand: VerifiedOAuthClientBrand }
+  | { type: "verified_unbranded"; name: string | null }
+  | { type: "unverified"; name: string | null };
 
 export type McpOAuthScope =
   | (typeof MCP_OAUTH_PROTOCOL_SCOPES)[number]

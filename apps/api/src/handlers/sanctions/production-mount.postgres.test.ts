@@ -1,19 +1,20 @@
-import { Value } from "@sinclair/typebox/value";
 import { makeSignature } from "better-auth/crypto";
 import { RedisClient } from "bun";
 import { describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
-  sanctionsSources,
-  sanctionsEditions,
   sanctionsEditionEntries,
+  sanctionsEditions,
   sanctionsEntryPayloads,
+  sanctionsSources,
 } from "@/api/db/schema";
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { getAuth } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -22,11 +23,8 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -137,7 +135,8 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
           }
           const { publicSanctionsResponseSchema } =
             await import("@/api/handlers/sanctions/search-response");
-          const { default: api } = await import("@/api/server");
+          const { apiApp } = await import("@/api/server");
+          await using api = serveForTest(apiApp);
           for (const { source, id } of editions) {
             const warmed = await sharedSanctionsMatcherPool.run(
               async (session) =>
@@ -189,7 +188,7 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
             }),
           ).toBeNull();
           const search = async (cookie?: string) => {
-            const response = await api.handle(
+            const response = await api.fetch(
               new Request("http://localhost/v1/sanctions/search", {
                 method: "POST",
                 headers: {
@@ -219,13 +218,15 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
           ]) {
             const response = await search(cookie);
             expect(response.status).toBe(200);
-            const body = Value.Decode(
+            const parsed = v.safeParse(
               publicSanctionsResponseSchema[200],
               await response.json(),
             );
-            expect([
-              ...Value.Errors(publicSanctionsResponseSchema[200], body),
-            ]).toEqual([]);
+            expect(parsed.issues).toBeUndefined();
+            if (!parsed.success) {
+              throw new TypeError("Sanctions answer broke its schema");
+            }
+            const body = parsed.output;
             expect(body.status).toBe("possible-match");
             outcomes.push(JSON.stringify(body));
           }
@@ -249,7 +250,7 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
                 status: 422,
               },
             ]) {
-              const response = await api.handle(
+              const response = await api.fetch(
                 new Request("http://localhost/v1/sanctions/search", {
                   method: "POST",
                   headers: {

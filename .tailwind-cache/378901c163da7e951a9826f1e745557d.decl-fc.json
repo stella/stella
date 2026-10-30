@@ -1,0 +1,1 @@
+{"@md:flex":{"valid":true,"declarations":[["@","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"max-w-[calc(100%-1rem)]":{"valid":true,"declarations":[["","max-width","calc(100% - 1rem)"]],"values":{"calc(100% - 1rem)":{"p":[],"f":[],"u":false}}}}

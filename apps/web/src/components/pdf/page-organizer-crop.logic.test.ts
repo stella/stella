@@ -8,13 +8,13 @@ import { isPageTransformRequest } from "@/lib/pdf/page-editor/page-editor-protoc
 import {
   adjustCropBox,
   clampCropMarginsMm,
+  CROP_ADJUST_MODES,
   cropKeyDelta,
   cropToMarginsMm,
   displayedCropBox,
   displayedPageSizeMm,
   marginsFromDisplayedBox,
   marginsMmToCrop,
-  CROP_ADJUST_MODES,
 } from "./page-organizer-crop.logic";
 
 const MAX_GENERATED_PAGE_POINTS = 3000;

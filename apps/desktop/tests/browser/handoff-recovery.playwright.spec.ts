@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
+import { installTauriIpc } from "./tauri-ipc";
 
 const html = readFileSync(
   new URL("../../src/mainview/selfhost-connect-dialog.html", import.meta.url),
@@ -18,13 +19,15 @@ for (const [locale, { dialog: strings }] of Object.entries({ en, ar })) {
       await page.exposeFunction("recordResponse", (response: unknown) =>
         responses.push(response),
       );
-      await page.addInitScript(() => {
-        Reflect.set(window, "__TAURI_INTERNALS__", {
-          invoke: (command: string, args: unknown) =>
-            command === "fit_static_dialog"
-              ? Promise.resolve(null)
-              : Reflect.get(window, "recordResponse")(args),
-        });
+      await installTauriIpc(page, {
+        windowLabel: "selfhost-connect",
+        unhandled: "resolveUndefined",
+        arg: null,
+        handlers: () => ({
+          fit_static_dialog: () => null,
+          self_host_connect_dialog_respond: (args) =>
+            Reflect.get(window, "recordResponse")(args),
+        }),
       });
       await page.route("**/handoff-dialog-test", async (route) => {
         await route.fulfill({ contentType: "text/html", body: html });

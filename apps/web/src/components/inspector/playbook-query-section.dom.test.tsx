@@ -13,7 +13,7 @@ const { cleanup, fireEvent, render, waitFor } =
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { PlaybookQuerySection } = await import("./playbook-query-section");
 
 const disposers = new Set<() => Promise<void>>();
@@ -57,7 +57,7 @@ for (const queryKey of [
             return request.promise;
           },
         });
-        const view = useQueryView(query);
+        const view = queryView(query);
         return (
           <PlaybookQuerySection
             view={view}

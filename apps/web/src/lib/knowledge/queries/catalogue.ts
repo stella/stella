@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { catalogueQueryRoot } from "@/lib/resource-query-roots.logic";
 
 export const catalogueKeys = {
@@ -18,7 +18,7 @@ export const catalogueOptions = (organizationId: string, userId: string) =>
     queryKey: catalogueKeys.list(organizationId, userId),
     queryFn: async ({ signal }) => {
       const response = await api.catalogue.get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });

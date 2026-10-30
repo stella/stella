@@ -17,6 +17,7 @@ import {
   createNotificationsInTransaction,
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 export type ReportExportNotificationEmail = Parameters<
   typeof sendReportExportStatusEmail
@@ -323,9 +324,12 @@ const captureNotificationError = (
   error: unknown,
   { exportId, operation, workspaceId }: NotificationErrorContext,
 ) => {
-  captureError(error, {
-    exportId,
-    operation: `report_export.notification.${operation}`,
-    workspaceId,
-  });
+  captureError(
+    error,
+    handlerErrorContext(`reports.notification.${operation}`, {
+      exportId,
+      operation: `report_export.notification.${operation}`,
+      workspaceId,
+    }),
+  );
 };

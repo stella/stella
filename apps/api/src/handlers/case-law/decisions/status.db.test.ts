@@ -207,7 +207,7 @@ const readStatementTimeout = async (
   return typeof value === "string" ? value : null;
 };
 
-/** The per-court activity behind the corpus-status popover's breakdown. */
+/** The per-court activity behind the coverage page's court breakdown. */
 const readActivity = async (
   excludedSourceIds: readonly SafeId<"caseLawSource">[],
 ) =>
