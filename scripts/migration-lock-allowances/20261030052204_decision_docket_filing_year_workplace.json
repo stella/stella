@@ -1,0 +1,3 @@
+{
+  "create-function": "The replacement changes only function catalog metadata with its existing signature and EXECUTE grants, under 1s lock_timeout and 30s statement_timeout; dependent expression and predicate indexes rebuild separately through the registered concurrent online repair."
+}

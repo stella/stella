@@ -1,4 +1,5 @@
 // parser-output-unchanged: [cz-uohs] only records listed with an empty, over-long or unsanitizable IRI change, which the pipeline refused before and now stores listing-only under a quarantine id; keyed rows gain a repair-only alias, nothing they store.
+// parser-output-unchanged: Stored-object replay reuses the ingestion PDF parser and assembly without changing their output.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -15,13 +16,20 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
+  readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisherBytes,
@@ -44,6 +52,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import {
   READ_OUTCOME_METADATA_KEY,
+  type ReadOutcome,
   type StoredReadOutcome,
   storedReadUnavailable,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
@@ -68,6 +77,7 @@ import {
   type RepairAlias,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -572,11 +582,55 @@ const czUohsRepairAliases = (
     ? {}
     : { sourceDocumentIdRepairAliases: repairAliases };
 
-const readCzUohsDecision = async (
-  record: CzUohsRecord,
-  { sourceDocumentId, repairAliases }: CzUohsKeyedIdentity,
-  signal?: AbortSignal,
-): Promise<IngestionResult> => {
+type CzUohsDocumentRead =
+  | { type: "publisher"; signal: AbortSignal | undefined }
+  | { type: "stored"; documents: ReadonlyMap<string, Uint8Array> };
+
+type ReadCzUohsDocumentOptions = {
+  input: CzUohsDocumentRead;
+  part: string;
+  url: string;
+};
+
+const readCzUohsDocument = async ({
+  input,
+  part,
+  url,
+}: ReadCzUohsDocumentOptions): Promise<ReadOutcome<Uint8Array> | null> => {
+  const target = restrictOutboundUrl({ hostPolicy: HOST_POLICY, rawUrl: url });
+  if (target === null) {
+    return null;
+  }
+  switch (input.type) {
+    case "publisher":
+      return await readPublisherBytes(target, {
+        ...publisherReadOptions("document", input.signal),
+        redirect: "error",
+      });
+    case "stored":
+      return {
+        type: "present",
+        value:
+          input.documents.get(part) ??
+          panic(`Stored ÚOHS document not loaded: ${part}`),
+      };
+    default:
+      input satisfies never;
+      return panic(`Unhandled ÚOHS document input: ${String(input)}`);
+  }
+};
+
+type AssembleCzUohsDecisionOptions = {
+  record: CzUohsRecord;
+  identity: CzUohsKeyedIdentity;
+  read: CzUohsDocumentRead;
+};
+
+const assembleCzUohsDecision = async ({
+  record,
+  identity: { sourceDocumentId, repairAliases },
+  read,
+}: AssembleCzUohsDecisionOptions): Promise<IngestionResult> => {
   const collection = czUohsCollectionOf(record);
   const primaryDocumentUrl = record.dokument.at(0)?.url;
   const rawObjectEntries: [
@@ -596,11 +650,12 @@ const readCzUohsDecision = async (
   for (const [index, document] of record.dokument.entries()) {
     const part = index === 0 ? "document" : `document-${index}`;
     const documentUrl = document.url;
-    const target = restrictOutboundUrl({
-      hostPolicy: HOST_POLICY,
-      rawUrl: documentUrl,
+    const outcome = await readCzUohsDocument({
+      input: read,
+      part,
+      url: documentUrl,
     });
-    if (target === null) {
+    if (outcome === null) {
       documentFailures.push({
         index,
         type: "fetch-failed",
@@ -609,10 +664,6 @@ const readCzUohsDecision = async (
       });
       continue;
     }
-    const outcome = await readPublisherBytes(target, {
-      ...publisherReadOptions("document", signal),
-      redirect: "error",
-    });
     if (outcome.type !== "present") {
       if (outcome.type === "unavailable") {
         documentReadOutcome = storedReadUnavailable({
@@ -822,7 +873,11 @@ export const buildCzUohsDecision = async (
   const identity = czUohsRecordIdentity(record);
   switch (identity.type) {
     case "keyed":
-      return await readCzUohsDecision(record, identity, signal);
+      return await assembleCzUohsDecision({
+        record,
+        identity,
+        read: { type: "publisher", signal },
+      });
     case "quarantined":
       return quarantinedCzUohsDecision(record, identity);
     case "no-stable-field":
@@ -834,6 +889,77 @@ export const buildCzUohsDecision = async (
       return panic(`Unhandled ÚOHS identity: ${JSON.stringify(identity)}`);
     }
   }
+};
+
+const reparseCzUohsStoredRaw = async (
+  stored: StoredRawReparseInput,
+): Promise<StoredRawReparseValue> => {
+  const read = readStoredRawListing({
+    stored,
+    part: "listing",
+    identityOf: (listing) =>
+      typeof listing["iri"] === "string" ? listing["iri"] : undefined,
+  });
+  if (read.type === "rejected") {
+    return read;
+  }
+  const parsed = v.safeParse(recordSchema, read.listing);
+  if (!parsed.success) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the stored listing does not contain a complete ÚOHS record",
+    };
+  }
+  const identity = czUohsRecordIdentity(parsed.output);
+  if (identity.type !== "keyed") {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail: "the stored listing has no usable publisher IRI",
+    };
+  }
+  const documents = new Map<string, Uint8Array>();
+  for (const [index, document] of parsed.output.dokument.entries()) {
+    if (
+      restrictOutboundUrl({ hostPolicy: HOST_POLICY, rawUrl: document.url }) ===
+      null
+    ) {
+      continue;
+    }
+    const part = index === 0 ? "document" : `document-${index}`;
+    const readObject = await readStoredDocumentObject(stored, part);
+    if (Result.isError(readObject)) {
+      return readObject;
+    }
+    const bytes = readObject.value;
+    if (bytes === null) {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+        detail: `the stored record has no document object for ${part}`,
+      };
+    }
+    documents.set(part, bytes);
+  }
+  if (documents.size === 0) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail: "the stored record names no document object",
+    };
+  }
+  return {
+    type: "parsed",
+    result: await assembleCzUohsDecision({
+      record: parsed.output,
+      identity,
+      read: { type: "stored", documents },
+    }),
+  };
 };
 
 type CzUohsRecordKey = {
@@ -1016,6 +1142,7 @@ const listingForCursor = async (
 
 export const czUohsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_UOHS,
+  reparseStoredRaw: reparseCzUohsStoredRaw,
   documentStage: "inline",
   language: "cs",
   minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.CZ_UOHS),

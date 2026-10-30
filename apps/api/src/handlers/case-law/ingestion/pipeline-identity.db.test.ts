@@ -1238,6 +1238,11 @@ if (!databaseUrl || !runPostgresTests) {
         const retained = rows.find(({ id }) => id === before.id);
         expect(retained?.sourceDocumentId).toBe(first.sourceDocumentId);
         expect(retained?.sourceRawS3Key).toBe(before.sourceRawS3Key);
+        expect(retained?.metadata).toEqual(before.metadata);
+        expect(before.metadata).toMatchObject({
+          identityQuarantined: true,
+          listedOnly: true,
+        });
         expect(
           [...fake.objects].find(([key]) =>
             key.endsWith(`/${before.sourceRawS3Key}`),
