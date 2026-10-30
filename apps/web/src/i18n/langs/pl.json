@@ -1091,7 +1091,9 @@
     },
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
-      "remove": "Usuń filtr {filter}"
+      "countryMismatch": "Usunięto filtry, które nie dotyczą kraju {country}: {filters}.",
+      "remove": "Usuń filtr {filter}",
+      "showInCountry": "Pokaż {filter} dla kraju {country}"
     },
     "languages": {
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
@@ -1347,6 +1349,7 @@
       "toastTitle": "Pełny widok niedostępny"
     },
     "activity": {
+      "newerVersion": "Ta treść jest wyświetlana w nowszej wersji.",
       "review": "Aktualizacja przeglądu"
     },
     "aiPrompt": "Pole wiadomości AI",

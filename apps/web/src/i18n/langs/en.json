@@ -1091,7 +1091,9 @@
     },
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
     "filters": {
-      "remove": "Remove filter {filter}"
+      "countryMismatch": "Filters removed because they do not belong to {country}: {filters}.",
+      "remove": "Remove filter {filter}",
+      "showInCountry": "Show {filter} in {country}"
     },
     "languages": {
       "count": "{count, plural, one {# language} other {# languages}}",
@@ -1347,6 +1349,7 @@
       "toastTitle": "Full view not yet available"
     },
     "activity": {
+      "newerVersion": "This content is shown in a newer version.",
       "review": "Review update"
     },
     "aiPrompt": "AI message composer",
