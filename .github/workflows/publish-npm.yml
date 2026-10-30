@@ -754,10 +754,12 @@ jobs:
           no-cache: true
 
       - name: Install locked build dependencies
+        shell: bash
         timeout-minutes: 20
         run: bash scripts/retry.sh bun ci --ignore-scripts
 
       - name: Compile standalone CLI
+        shell: bash
         timeout-minutes: 10
         env:
           CLI_TARGET: ${{ matrix.target }}
@@ -779,6 +781,7 @@ jobs:
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
       - name: Sign and notarize macOS CLI
+        shell: bash
         if: startsWith(matrix.platform, 'darwin-')
         timeout-minutes: 25
         env:
@@ -809,8 +812,10 @@ jobs:
 
       - name: Ensure PSGallery is registered for Windows signing
         if: matrix.platform == 'windows-x64'
-        shell: pwsh
+        shell: bash
         run: |
+          pwsh -NoProfile -NonInteractive -Command - <<'POWERSHELL'
+          $ErrorActionPreference = "Stop"
           $expectedSourceLocation = "https://www.powershellgallery.com/api/v2"
           $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
           if (-not $repository) {
@@ -820,6 +825,8 @@ jobs:
           if ($repository.SourceLocation.TrimEnd("/") -ne $expectedSourceLocation) {
             throw "PSGallery has an unexpected source location"
           }
+
+          POWERSHELL
 
       - name: Sign Windows CLI via Azure Trusted Signing
         if: matrix.platform == 'windows-x64'
@@ -839,6 +846,7 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Smoke test standalone CLI
+        shell: bash
         # macOS x64 runs under Rosetta on the signing runner.
         env:
           CLI_ASSET: stella-${{ matrix.platform }}${{ matrix.extension }}

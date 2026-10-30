@@ -7,6 +7,7 @@ import {
   checkWorkflowShells,
   checkWorkflowSource,
 } from "./check-workflow-shells";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dir, "..");
 const defaults = "defaults:\n  run:\n    shell: bash\n";
@@ -181,4 +182,48 @@ describe("workflow shell policy", () => {
       ]);
     },
   );
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const includesWindowsRunner = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return /^windows-/u.test(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some(includesWindowsRunner);
+  }
+  if (isRecord(value)) {
+    return Object.values(value).some(includesWindowsRunner);
+  }
+  return false;
+};
+
+test("npm release Windows matrix run steps explicitly declare Bash", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(path.join(root, ".github/workflows/publish-npm.yml"), "utf-8"),
+  );
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+    throw new TypeError("Expected npm release workflow jobs");
+  }
+  const inspectedJobs: string[] = [];
+  const offenders: string[] = [];
+  for (const [name, job] of Object.entries(workflow["jobs"])) {
+    if (
+      !isRecord(job) ||
+      !isRecord(job["strategy"]) ||
+      !includesWindowsRunner(job["strategy"]["matrix"])
+    ) {
+      continue;
+    }
+    inspectedJobs.push(name);
+    for (const step of flattenWorkflowSteps(job["steps"])) {
+      if (typeof step["run"] === "string" && step["shell"] !== "bash") {
+        offenders.push(`${name}: ${String(step["name"])}`);
+      }
+    }
+  }
+  expect(inspectedJobs).toContain("cli-native-build");
+  expect(offenders).toEqual([]);
 });
