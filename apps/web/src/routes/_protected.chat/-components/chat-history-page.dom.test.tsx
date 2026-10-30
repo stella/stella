@@ -545,9 +545,7 @@ describe("chat history page", () => {
 
     expect(inputValue(field)).toBe("claim");
     expect(searchChanges).toEqual([]);
-    await testing.waitFor(() =>
-      expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
-    );
+    expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined();
     expect(ui.queryByText(OLDER_IN_B.title)).toBeNull();
     expect(
       listRequests.map((url) => url.searchParams.get("search")),

@@ -1031,6 +1031,31 @@ export default eslintCompatPlugin({
           calls.findLast(
             (call) => isInside(call, container) && startsBefore(call, node),
           );
+        const isDirectStatement = (call: AstNode, callback: AstNode) => {
+          let current = call;
+          while (
+            isAstNode(current.parent) &&
+            (current.parent.type === "AwaitExpression" ||
+              current.parent.type === "ChainExpression")
+          ) {
+            current = current.parent;
+          }
+          if (callback.body === current) {
+            return true;
+          }
+          const statement = current.parent;
+          return (
+            isAstNode(statement) &&
+            statement.type === "ExpressionStatement" &&
+            isAstNode(statement.parent) &&
+            statement.parent === callback.body
+          );
+        };
+        const directRestorations = (callback: AstNode) =>
+          realTimerCalls.filter(
+            (call) =>
+              isInside(call, callback) && isDirectStatement(call, callback),
+          );
         const startsAfter = (
           left: AstNode | undefined,
           right: AstNode | undefined,
@@ -1133,23 +1158,25 @@ export default eslintCompatPlugin({
               const topLevelFake = fakeTimerCalls.findLast(
                 (call) => containingFunction(call) === null,
               );
-              const topLevelReal = realTimerCalls.findLast(
-                (call) => containingFunction(call) === null,
-              );
-              let inheritedFakeTimers = startsAfter(topLevelFake, topLevelReal);
-              for (const { callback: hookCallback } of applicableHooks) {
+              let inheritedFakeTimers = topLevelFake !== undefined;
+              for (const { callback: hookCallback, kind } of applicableHooks) {
                 const fake = fakeTimerCalls.findLast((call) =>
                   isInside(call, hookCallback),
                 );
-                const real = realTimerCalls.findLast((call) =>
-                  isInside(call, hookCallback),
-                );
+                const real =
+                  kind === "beforeEach"
+                    ? directRestorations(hookCallback).at(-1)
+                    : undefined;
                 if (fake !== undefined || real !== undefined) {
                   inheritedFakeTimers = startsAfter(fake, real);
                 }
               }
               const fake = lastBefore(fakeTimerCalls, wait, callback);
-              const real = lastBefore(realTimerCalls, wait, callback);
+              const real = lastBefore(
+                directRestorations(callback),
+                wait,
+                callback,
+              );
               const localTimerState =
                 fake === undefined && real === undefined
                   ? inheritedFakeTimers

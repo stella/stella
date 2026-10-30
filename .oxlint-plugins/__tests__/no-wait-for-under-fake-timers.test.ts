@@ -102,6 +102,57 @@ test("accepts a wait after real timers are restored", async () => {
   ).toEqual([]);
 });
 
+test("does not let an uncalled nested helper restore real timers", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useFakeTimers();",
+      "  const restore = () => jest.useRealTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([5]);
+});
+
+test("does not let a conditional branch restore real timers", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useFakeTimers();",
+      "  if (condition) jest.useRealTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([5]);
+});
+
+test("accepts a direct useRealTimers statement before a wait", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("safe", async () => {',
+      "  jest.useFakeTimers();",
+      "  jest.useRealTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([]);
+});
+
+test("treats fake timers in a nested helper as possibly active", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  const install = () => jest.useFakeTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([4]);
+});
+
 test("does not apply a sibling suite's beforeEach", async () => {
   expect(
     await lint([
