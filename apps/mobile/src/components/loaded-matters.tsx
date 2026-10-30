@@ -4,12 +4,13 @@ import { Result } from "better-result";
 import { FlatList, Pressable, RefreshControl, SectionList } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
 import { MatterRow } from "@/components/matter-row";
 import { useMattersView } from "@/components/matters-view";
 import { RetryButton } from "@/components/retry-button";
-import { Text } from "@/components/ui/text";
 import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { MattersLoad, MatterSummary } from "@/state/matters";
 import { groupByClient } from "@/state/matters-groups";

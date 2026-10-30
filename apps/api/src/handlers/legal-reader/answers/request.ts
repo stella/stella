@@ -28,18 +28,21 @@ type ReaderAnswerRequestOptions = Pick<
 };
 
 /** All generation routes share provider policy and the existing chat admission lane. */
-export const readerAnswerRequest = ({
-  session,
-  user,
-  safeDb,
-  recordAuditEvent,
-  scopedDb,
-  orgAIConfig,
-  orgAIConfigStatus,
-  managedAIResidency,
-  request,
-  usageLane,
-}: ReaderAnswerRequestOptions) => {
+export const readerAnswerRequest = (
+  {
+    session,
+    user,
+    safeDb,
+    recordAuditEvent,
+    scopedDb,
+    orgAIConfig,
+    orgAIConfigStatus,
+    managedAIResidency,
+    request,
+    usageLane,
+  }: ReaderAnswerRequestOptions,
+  streamAnswer = streamReaderAnswer,
+) => {
   const available = requireTanStackAIAvailableForTask({
     task: "chat",
     orgConfig: orgAIConfig,
@@ -61,7 +64,7 @@ export const readerAnswerRequest = ({
   return Result.ok({
     scope,
     stream: (prepared: PreparedReaderAnswer) =>
-      streamReaderAnswer({
+      streamAnswer({
         ...scope,
         prepared: {
           ...prepared,
