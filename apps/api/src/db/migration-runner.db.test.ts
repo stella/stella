@@ -389,6 +389,12 @@ const FAST_LOCK_WAIT_RETRY = {
   },
 } as const;
 
+// Gate tests hold an advisory lock while exercising pause expiry and renewal.
+const SCHEMA_GATE_LOCK_WAIT_RETRY = {
+  ...FAST_LOCK_WAIT_RETRY,
+  lockTimeoutsMs: [30_000],
+};
+
 /** A drain whose clock moves only when it sleeps, so the deadline costs no time. */
 const virtualDrainRuntime = (
   deadlineMs: number,
@@ -479,7 +485,8 @@ const waitForSchemaGateWaiter = async (observer: SQL) => {
     description: "the schema phase waits on the test gate",
     read: async () => {
       const [row] = await observer.unsafe<{ waiting: number }[]>(
-        "SELECT count(*)::int AS waiting FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+        "SELECT count(*)::int AS waiting FROM pg_locks WHERE locktype = 'advisory' AND classid = 0 AND objid = $1 AND objsubid = 1 AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+        [SCHEMA_GATE_KEY],
       );
       return (row?.waiting ?? 0) > 0;
     },
@@ -520,11 +527,13 @@ const attemptRun = async ({
   scratchUrl,
   folder,
   schedulerDrain,
+  lockWaitRetry = FAST_LOCK_WAIT_RETRY,
 }: {
   openClient: () => SQL;
   scratchUrl: string;
   folder: string;
   schedulerDrain: SchedulerDrainRuntime;
+  lockWaitRetry?: Parameters<typeof runMigrations>[0]["lockWaitRetry"];
 }): Promise<AttemptedRun> => {
   const connection = await openClient().reserve();
   const timings: MigrationTimingRecord[] = [];
@@ -543,7 +552,7 @@ const attemptRun = async ({
               timings.push(record);
             },
           },
-          lockWaitRetry: FAST_LOCK_WAIT_RETRY,
+          lockWaitRetry,
           schedulerDrain,
         }),
     );
@@ -1638,14 +1647,14 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 {
                   event: "migrate.scheduler_drain",
                   outcome: "drained",
-                  pausedCount: 3,
+                  pausedCount: 2,
                   leasedCount: 0,
                 },
                 {
                   event: "migrate.scheduler_resume",
                   outcome: "resumed",
-                  pausedCount: 3,
-                  resumedCount: 3,
+                  pausedCount: 2,
+                  resumedCount: 2,
                 },
               ]);
             } finally {
@@ -1657,11 +1666,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
               "reissued",
             ]);
             const after = await schedulerRows(observer);
-            for (const id of ["job.reader", "job.other", "job.expired"]) {
+            for (const id of ["job.reader", "job.other"]) {
               expect(rowOf(after, id)?.paused_until, id).toBeNull();
             }
-            // The operator pause and the pause audit are never written.
-            for (const id of ["job.operator", "scheduler.pauseAudit.hourly"]) {
+            // Operator pauses retain their metadata, even after expiry.
+            for (const id of [
+              "job.operator",
+              "job.expired",
+              "scheduler.pauseAudit.hourly",
+            ]) {
               expect(rowOf(after, id), id).toEqual(rowOf(before, id));
             }
           },
@@ -1692,14 +1705,14 @@ if (!runPostgresTests || databaseUrl === undefined) {
               {
                 event: "migrate.scheduler_drain",
                 outcome: "timed_out",
-                pausedCount: 3,
+                pausedCount: 2,
                 leasedCount: 1,
                 drainWaitMs: 5000,
               },
               {
                 event: "migrate.scheduler_resume",
                 outcome: "resumed",
-                resumedCount: 3,
+                resumedCount: 2,
               },
             ]);
             // Nothing ran: the ledger and the table are as they were.
@@ -1708,9 +1721,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
             ]);
             expect(await lockProbeColumns(observer)).toEqual(["id"]);
             const after = await schedulerRows(observer);
-            expect(after.filter((row) => row.paused_by === "migrate")).toEqual(
-              [],
-            );
+            expect(
+              after.filter(
+                (row) =>
+                  row.paused_by === "migrate" && row.paused_until !== null,
+              ),
+            ).toEqual([]);
             expect(rowOf(after, "job.operator")).toEqual(
               rowOf(before, "job.operator"),
             );
@@ -1737,18 +1753,18 @@ if (!runPostgresTests || databaseUrl === undefined) {
               {
                 event: "migrate.scheduler_drain",
                 outcome: "drained",
-                pausedCount: 3,
+                pausedCount: 2,
               },
               {
                 event: "migrate.scheduler_resume",
                 outcome: "resumed",
-                resumedCount: 3,
+                resumedCount: 2,
               },
             ]);
             const paused = (await schedulerRows(observer))
               .filter(({ paused_until }) => paused_until !== null)
               .map(({ id }) => id);
-            expect(paused).toEqual(["job.operator"]);
+            expect(paused).toEqual(["job.expired", "job.operator"]);
           },
         );
       });
@@ -1869,9 +1885,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
             expect(rowOf(after, "job.operator")).toEqual(
               rowOf(before, "job.operator"),
             );
-            expect(after.filter((row) => row.paused_by === "migrate")).toEqual(
-              [],
-            );
+            expect(
+              after.filter(
+                (row) =>
+                  row.paused_by === "migrate" && row.paused_until !== null,
+              ),
+            ).toEqual([]);
           },
         );
       });
@@ -1894,6 +1913,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               openClient,
               scratchUrl,
               folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
               schedulerDrain: {
                 ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
                 pollMs: 10,
@@ -1921,8 +1941,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const { error, timings } = await run;
               expect(error).toBeNull();
               expect(schedulerEvents(timings)).toMatchObject([
-                { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
-                { outcome: "resumed", resumedCount: 2, restoredCount: 1 },
+                { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
+                { outcome: "resumed", resumedCount: 1, restoredCount: 2 },
               ]);
             } finally {
               await gate.unsafe(RELEASE_SCHEMA_GATE);
@@ -1960,8 +1980,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
             });
             expect(error).toBeNull();
             expect(schedulerEvents(timings)).toMatchObject([
-              { takenOverCount: 1 },
-              { restoredCount: 1 },
+              { takenOverCount: 2 },
+              { restoredCount: 2 },
             ]);
             const after = rowOf(await schedulerRows(observer), "job.other");
             expect(after).toMatchObject({
@@ -1988,8 +2008,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
             });
             expect(error).toBeNull();
             expect(schedulerEvents(timings)).toMatchObject([
-              { takenOverCount: 0 },
-              { restoredCount: 0 },
+              { takenOverCount: 1 },
+              { restoredCount: 1 },
             ]);
             expect(
               rowOf(await schedulerRows(observer), "job.operator"),
@@ -2015,6 +2035,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               openClient,
               scratchUrl,
               folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
               schedulerDrain: {
                 ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
                 pollMs: 10,
@@ -2033,8 +2054,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const { error, timings } = await run;
               expect(error).toBeNull();
               expect(schedulerEvents(timings)).toMatchObject([
-                { takenOverCount: 1 },
-                { restoredCount: 0 },
+                { takenOverCount: 2 },
+                { restoredCount: 1 },
               ]);
             } finally {
               await gate.unsafe(RELEASE_SCHEMA_GATE);
@@ -2092,8 +2113,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
             await runner;
             expect(second.error).toBeNull();
             expect(schedulerEvents(second.timings)).toMatchObject([
-              { outcome: "drained", pausedCount: 3 },
-              { outcome: "resumed", resumedCount: 3 },
+              { outcome: "drained", pausedCount: 2 },
+              { outcome: "resumed", resumedCount: 2 },
             ]);
             expect(await lockProbeColumns(observer)).toEqual([
               "id",
@@ -2132,8 +2153,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
             await runner;
             expect(error).toBeNull();
             expect(schedulerEvents(timings)).toMatchObject([
-              { outcome: "drained", pausedCount: 3, takenOverCount: 0 },
-              { outcome: "resumed", resumedCount: 3 },
+              { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+              { outcome: "resumed", resumedCount: 2 },
             ]);
           },
         );
@@ -2157,6 +2178,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               openClient,
               scratchUrl,
               folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
               schedulerDrain: {
                 ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
                 pollMs: 10,
@@ -2183,8 +2205,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const { error, timings } = await run;
               expect(error).toBeNull();
               expect(schedulerEvents(timings)).toMatchObject([
-                { outcome: "drained", pausedCount: 3, takenOverCount: 0 },
-                { outcome: "resumed", resumedCount: 3, restoredCount: 0 },
+                { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+                { outcome: "resumed", resumedCount: 2, restoredCount: 1 },
               ]);
             } finally {
               await gate.unsafe(RELEASE_SCHEMA_GATE);
@@ -2242,8 +2264,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
             await holder;
             expect(error).toBeNull();
             expect(schedulerEvents(timings)).toMatchObject([
-              { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
-              { outcome: "resumed", resumedCount: 2, restoredCount: 1 },
+              { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
+              { outcome: "resumed", resumedCount: 1, restoredCount: 2 },
             ]);
             expect(
               rowOf(await schedulerRows(observer), "job.other"),
@@ -2368,8 +2390,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
             });
             expect(error).toBeNull();
             expect(schedulerEvents(timings)).toMatchObject([
-              { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
-              { outcome: "resumed", resumedCount: 2, restoredCount: 1 },
+              { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
+              { outcome: "resumed", resumedCount: 1, restoredCount: 2 },
             ]);
             const after = rowOf(await schedulerRows(observer), "job.other");
             expect(after).toMatchObject({
@@ -2406,6 +2428,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               openClient,
               scratchUrl,
               folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
               schedulerDrain: {
                 ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
                 pollMs: 10,
@@ -2442,12 +2465,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const { error, timings } = await run;
               expect(error).toBeNull();
               expect(schedulerEvents(timings)).toMatchObject([
-                { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+                { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
                 {
                   outcome: "resumed",
                   renewalCount: 1,
                   renewalFailureCount: 0,
-                  restoredCount: 1,
+                  restoredCount: 2,
                 },
               ]);
             } finally {
@@ -2487,6 +2510,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               openClient,
               scratchUrl,
               folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
               schedulerDrain: {
                 ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
                 pollMs: 10,
@@ -2528,8 +2552,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const { error, timings } = await run;
               expect(error).toBeNull();
               expect(schedulerEvents(timings)).toMatchObject([
-                { outcome: "drained", takenOverCount: 0 },
-                { outcome: "resumed", renewalCount: 1, restoredCount: 1 },
+                { outcome: "drained", takenOverCount: 1 },
+                { outcome: "resumed", renewalCount: 1, restoredCount: 2 },
               ]);
             } finally {
               await gate.unsafe(RELEASE_SCHEMA_GATE);

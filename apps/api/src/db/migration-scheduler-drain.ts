@@ -36,8 +36,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import type { ReservedSQL } from "bun";
 
-import { declareFingerprintFields } from "@stll/errors";
-
 import {
   DEFAULT_LEASE_MS,
   DEFAULT_MAX_RUNTIME_MS,
@@ -120,11 +118,7 @@ export class SchedulerDrainTimeoutError extends TaggedError(
   message: string;
   leased: readonly LeasedSchedulerJob[];
   waitedMs: number;
-}> {
-  static {
-    declareFingerprintFields(this, ["waitedMs"]);
-  }
-}
+}> {}
 
 export type SchedulerDrainRuntime = {
   now: () => number;
@@ -264,8 +258,9 @@ type PausedRow = {
 
 /**
  * One statement pauses every eligible job and returns the pauses it replaced.
- * An unpaused or expired job is paused; a pause of this step ending sooner is
- * adopted (extended, cleared on resume, there is no other state to restore);
+ * An unpaused job is paused; an elapsed operator pause is restored too,
+ * since it may have elapsed during schema work. A pause of this step ending
+ * sooner is adopted (extended, cleared on resume, there is no other state to restore);
  * another actor's pause ending sooner is taken over and restored exactly.
  * `paused_since` is kept by the database trigger, which preserves it while one
  * active pause replaces another. A row changed after the scan fails the
@@ -278,7 +273,7 @@ const pauseOnce = async (
   const rows = await query(
     `WITH targets AS (
        SELECT id, paused_by, pause_reason, paused_until AS raw_paused_until,
-              coalesce(paused_until > now() AND paused_by <> $2, false) AS taken_over,
+              coalesce(paused_until IS NOT NULL AND paused_by <> $2, false) AS taken_over,
               paused_until::text AS paused_until_text
        FROM scheduler_jobs
        WHERE ${eligibleSql("$4", "$5")}
