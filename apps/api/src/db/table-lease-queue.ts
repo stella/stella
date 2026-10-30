@@ -5,7 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
-import type { SafeId } from "../lib/branded-types";
 import { TABLE_LEASE_QUEUE_LOCK_QUERY } from "../lib/db/aggregate-lock";
 import { executedRows } from "../lib/db/executed-rows";
 import {
@@ -17,9 +16,6 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 export const TABLE_LEASE_MIGRATION = "20261030213017_scheduler_table_leases";
 const HOLDER_REPORT_LIMIT = 100;
-// Completion retains execution identity beyond its last live lease for recent-run checks.
-export const SCHEDULER_EXECUTION_EVIDENCE_MS = 10 * 60_000;
-const EXPIRED_EXECUTION_PRUNE_LIMIT = 100;
 export const MIGRATION_TABLE_LEASE_WAIT_MS =
   DEFAULT_LEASE_MS + defaultHeartbeatIntervalMs(DEFAULT_LEASE_MS);
 
@@ -32,12 +28,12 @@ export const tableLeaseClaimLock = async (tx: TableLeaseExecutor) => {
 
 export const jobTableLeasesAvailable = (tables: readonly string[]) =>
   tables.length === 0
-    ? sql`true`
-    : sql`NOT EXISTS (
+    ? sql<boolean>`true`
+    : sql<boolean>`NOT EXISTS (
     SELECT 1 FROM scheduler_table_leases
     WHERE (table_name = '*' OR ${
       tables.includes("*")
-        ? sql`true`
+        ? sql<boolean>`true`
         : sql`table_name IN (${sql.join(
             tables.map((table) => sql`${table}`),
             sql`, `,
@@ -46,25 +42,10 @@ export const jobTableLeasesAvailable = (tables: readonly string[]) =>
       AND mode = 'exclusive' AND expires_at > clock_timestamp()
   )`;
 
-type AcquireJobTableLeasesOptions = {
-  tx: TableLeaseExecutor;
-  tables: readonly string[];
-  holderId: string;
-  leaseMs: number;
-  execution: { token: string; jobId: string; runId: SafeId<"schedulerJobRun"> };
-};
-
-export const acquireJobTableLeases = async ({
-  tx,
-  tables,
-  holderId,
-  leaseMs,
-  execution,
-}: AcquireJobTableLeasesOptions) => {
-  if (tables.length === 0) {
-    return true;
-  }
-  await tableLeaseClaimLock(tx);
+export const canAcquireJobTableLeases = async (
+  tx: TableLeaseExecutor,
+  tables: readonly string[],
+) => {
   const rows = await tx.execute(
     sql`SELECT ${jobTableLeasesAvailable(tables)} AS available`,
   );
@@ -72,6 +53,27 @@ export const acquireJobTableLeases = async ({
     v.tuple([v.object({ available: v.boolean() })]),
     executedRows(rows),
   );
+  return available;
+};
+
+type AcquireJobTableLeasesOptions = {
+  tx: TableLeaseExecutor;
+  tables: readonly string[];
+  holderId: string;
+  leaseMs: number;
+};
+
+export const acquireJobTableLeases = async ({
+  tx,
+  tables,
+  holderId,
+  leaseMs,
+}: AcquireJobTableLeasesOptions) => {
+  if (tables.length === 0) {
+    return true;
+  }
+  await tableLeaseClaimLock(tx);
+  const available = await canAcquireJobTableLeases(tx, tables);
   if (!available) {
     return false;
   }
@@ -86,14 +88,6 @@ export const acquireJobTableLeases = async ({
       [...new Set(tables)].toSorted().map((table) => sql`${table}`),
       sql`, `,
     )}]::text[]) AS table_name`);
-  await tx.execute(sql`DELETE FROM scheduler_table_lease_activity
-    WHERE execution_token IN (SELECT execution_token FROM scheduler_table_lease_activity
-      WHERE expires_at <= clock_timestamp() ORDER BY expires_at
-      LIMIT ${EXPIRED_EXECUTION_PRUNE_LIMIT})`);
-  await tx.execute(sql`INSERT INTO scheduler_table_lease_activity
-    (execution_token, holder_id, job_id, run_id, claimed_at, expires_at)
-    VALUES (${execution.token}, ${holderId}, ${execution.jobId}, ${execution.runId},
-      clock_timestamp(), clock_timestamp() + ${leaseMs + SCHEDULER_EXECUTION_EVIDENCE_MS}::integer * interval '1 millisecond')`);
   return true;
 };
 
@@ -105,9 +99,6 @@ export const renewJobTableLeases = async (
   const rows = await tx.execute(sql`UPDATE scheduler_table_leases
     SET expires_at = now() + ${leaseMs}::integer * interval '1 millisecond'
     WHERE holder_kind = 'job' AND holder_id = ${holderId} AND expires_at > clock_timestamp() RETURNING table_name`);
-  await tx.execute(sql`UPDATE scheduler_table_lease_activity
-    SET expires_at = clock_timestamp() + ${leaseMs + SCHEDULER_EXECUTION_EVIDENCE_MS}::integer * interval '1 millisecond'
-    WHERE holder_id = ${holderId} AND expires_at > clock_timestamp()`);
   return executedRows(rows).length;
 };
 
@@ -124,34 +115,41 @@ export const releaseJobTableLeases = async (
 export const ensureTableLeaseQueue = async ({
   connection,
   migrationsFolder = fileURLToPath(new URL("../../drizzle", import.meta.url)),
+  transaction = "owned",
 }: {
   connection: OnlineMigrationConnection;
   migrationsFolder?: string;
+  transaction?: "owned" | "caller";
 }) => {
-  const [{ exists }] = v.parse(
-    v.tuple([v.object({ exists: v.boolean() })]),
-    await connection.query(
-      "SELECT to_regclass('public.scheduler_table_leases') IS NOT NULL AND to_regclass('public.scheduler_table_lease_activity') IS NOT NULL AS exists",
-    ),
-  );
-  if (exists) {
-    return;
+  if (transaction === "owned") {
+    await connection.execute("BEGIN");
   }
-  const migration = await readFile(
-    path.join(migrationsFolder, TABLE_LEASE_MIGRATION, "migration.sql"),
-    "utf-8",
-  );
-  await connection.execute("BEGIN");
   try {
     await connection.execute(TABLE_LEASE_QUEUE_LOCK_QUERY);
-    for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) {
-        await connection.execute(statement);
+    const [{ exists }] = v.parse(
+      v.tuple([v.object({ exists: v.boolean() })]),
+      await connection.query(
+        "SELECT to_regclass('public.scheduler_table_leases') IS NOT NULL AND to_regclass('public.scheduler_table_lease_protocol') IS NOT NULL AS exists",
+      ),
+    );
+    if (!exists) {
+      const migration = await readFile(
+        path.join(migrationsFolder, TABLE_LEASE_MIGRATION, "migration.sql"),
+        "utf-8",
+      );
+      for (const statement of migration.split("--> statement-breakpoint")) {
+        if (statement.trim()) {
+          await connection.execute(statement);
+        }
       }
     }
-    await connection.execute("COMMIT");
+    if (transaction === "owned") {
+      await connection.execute("COMMIT");
+    }
   } catch (error) {
-    await connection.execute("ROLLBACK");
+    if (transaction === "owned") {
+      await connection.execute("ROLLBACK");
+    }
     throw error;
   }
 };

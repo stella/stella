@@ -11,6 +11,7 @@ import type { MigrationDrainConfirmation } from "../env-migration";
 import {
   MIGRATION_SCHEMA_RUN_LOCK_QUERY,
   MIGRATION_SCHEMA_RUN_UNLOCK_QUERY,
+  withAggregateTransaction,
 } from "../lib/db/aggregate-lock";
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
@@ -66,10 +67,12 @@ import {
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
+import { recordTableLeaseProtocol } from "./table-lease-protocol";
 import {
   acquireMigrationTableLeases,
   ensureTableLeaseQueue,
   TABLE_LEASE_MIGRATION,
+  tableLeaseClaimLock,
 } from "./table-lease-queue";
 
 type LedgerRow = {
@@ -949,7 +952,9 @@ const assertPendingMigrationCutover = async ({
   migrationsSchema,
   migrationsTable,
   confirmation,
-  emit,
+  emit = (event) => {
+    process.stdout.write(`${JSON.stringify(event)}\n`);
+  },
 }: PendingMigrationCutoverOptions) => {
   const database = createDatabase({ client: connection });
   const [table] = await database.execute<{ exists: boolean }>(sql`
@@ -978,15 +983,35 @@ const assertPendingMigrationCutover = async ({
   const pendingNames = migrations
     .filter(({ name }) => !appliedNames.has(name))
     .map(({ name }) => name);
-  await assertMigrationCutover({
-    connection: {
-      query: async (query, params = []) =>
-        await connection.unsafe(query, [...params]),
+  const coordinator = {
+    execute: async (query, params = []) => {
+      await connection.unsafe(query, [...params]);
     },
-    tables: pendingMigrationLockTables(manifest, pendingNames),
-    confirmation,
-    emit,
+    query: async (query, params = []) =>
+      await connection.unsafe<unknown[]>(query, [...params]),
+    release: () => connection.release(),
+  } satisfies OnlineMigrationConnection;
+  const events: MigrationCutoverEvent[] = [];
+  await withAggregateTransaction(database, async (tx) => {
+    await tableLeaseClaimLock(tx);
+    await assertMigrationCutover({
+      connection: coordinator,
+      tables: pendingMigrationLockTables(manifest, pendingNames),
+      confirmation,
+      bootstrapProtocol: async () => {
+        await connection.unsafe(bootstrapRoleSql);
+        await ensureTableLeaseQueue({
+          connection: coordinator,
+          transaction: "caller",
+        });
+        await recordTableLeaseProtocol(tx);
+      },
+      emit: (event) => events.push(event),
+    });
   });
+  for (const event of events) {
+    emit(event);
+  }
 };
 
 type MigrationRunResultOptions = {
@@ -1021,12 +1046,13 @@ const schemaMigrationStatements = (
   migrations.map((migration) => ({
     ...migration,
     // The coordinator already applied this DDL atomically before table admission.
-    sql:
-      migration.name === TABLE_LEASE_MIGRATION
-        ? []
-        : migration.sql.map((statement) =>
-            withMigrationLockTimeout(statement, lockTimeoutMs),
-          ),
+    sql: (migration.name === TABLE_LEASE_MIGRATION
+      ? // Bootstrap owns control DDL; replay its ACLs after historical blanket grants.
+        migration.sql.filter((statement) =>
+          statement.trimStart().startsWith("REVOKE "),
+        )
+      : migration.sql
+    ).map((statement) => withMigrationLockTimeout(statement, lockTimeoutMs)),
   }));
 
 export const runMigrations = async ({

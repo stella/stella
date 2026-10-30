@@ -26,15 +26,15 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import {
-  schedulerTableLeaseActivity,
+  schedulerTableLeaseProtocol,
   schedulerTableLeases,
 } from "../../db/schema/table-leases";
+import { TABLE_LEASE_PROTOCOL } from "../../db/table-lease-protocol";
 import {
   acquireNextDueJob,
   finishRunFailure,
   finishRunSkipped,
   finishRunSuccess,
-  runJob,
   runSchedulerOnce,
   type SchedulerDb,
   startLeaseHeartbeat,
@@ -365,6 +365,35 @@ const abortSignalWhenRunInserted = (
     },
   });
 
+test("the first claim attempt activates the protocol even with no runnable work", async () => {
+  await testDb.delete(schedulerTableLeaseProtocol);
+  const emptyRegistry: SchedulerTaskRegistry = new Map();
+  expect(
+    await acquireNextDueJob({
+      db,
+      leaseMs: LEASE_MS,
+      registry: emptyRegistry,
+      runnerId: "idle-protocol-runner",
+    }),
+  ).toBeNull();
+  const first =
+    (await testDb.select().from(schedulerTableLeaseProtocol)).at(0) ??
+    panic("Expected the protocol marker");
+  expect(first.protocol).toBe(TABLE_LEASE_PROTOCOL);
+  expect(first.firstSeenAt).toBeInstanceOf(Date);
+  expect(
+    await acquireNextDueJob({
+      db,
+      leaseMs: LEASE_MS,
+      registry: emptyRegistry,
+      runnerId: "another-idle-runner",
+    }),
+  ).toBeNull();
+  expect(await testDb.select().from(schedulerTableLeaseProtocol)).toEqual([
+    first,
+  ]);
+});
+
 test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
   "execution reservations include lifecycle tables once for $taskTables",
   async ({ taskTables }) => {
@@ -379,20 +408,6 @@ test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
       })) ?? panic("Expected a scheduler claim");
     const holderId = `${id}:${job.lockedBy}`;
     try {
-      const [claim] = await testDb
-        .select()
-        .from(schedulerTableLeaseActivity)
-        .where(
-          eq(
-            schedulerTableLeaseActivity.executionToken,
-            job.lockedBy ?? panic("Expected token"),
-          ),
-        );
-      expect(claim).toMatchObject({
-        holderId,
-        jobId: id,
-        executionToken: job.lockedBy,
-      });
       const leases = await testDb
         .select({ tableName: schedulerTableLeases.tableName })
         .from(schedulerTableLeases)
@@ -401,32 +416,9 @@ test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
         [
           getTableName(schedulerJobs),
           getTableName(schedulerJobRuns),
-          getTableName(schedulerTableLeaseActivity),
+          getTableName(schedulerTableLeaseProtocol),
         ].toSorted(),
       );
-      await runJob({
-        db,
-        job,
-        registry: noopRegistry,
-        runnerId: "infrastructure-reservation",
-        leaseMs: LEASE_MS,
-        heartbeatIntervalMs: LEASE_MS / 3,
-        maxRuntimeMs: LEASE_MS,
-        signal: undefined,
-      });
-      const run = await readLatestRun(id);
-      expect(run.id).toBe(claim?.runId);
-      expect(
-        await testDb
-          .select()
-          .from(schedulerTableLeaseActivity)
-          .where(
-            eq(
-              schedulerTableLeaseActivity.executionToken,
-              job.lockedBy ?? panic("Expected token"),
-            ),
-          ),
-      ).toHaveLength(1);
     } finally {
       await testDb
         .delete(schedulerTableLeases)
@@ -801,7 +793,7 @@ describe("per-job runtime ceiling", () => {
       [
         getTableName(schedulerJobs),
         getTableName(schedulerJobRuns),
-        getTableName(schedulerTableLeaseActivity),
+        getTableName(schedulerTableLeaseProtocol),
       ].toSorted(),
     );
 

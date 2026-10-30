@@ -26,19 +26,14 @@ CREATE POLICY "scheduler_table_leases_owner_access" ON "scheduler_table_leases" 
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_leases'::regclass));--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "scheduler_table_leases" FROM stella, PUBLIC;
 --> statement-breakpoint
-CREATE TABLE "scheduler_table_lease_activity" (
-  "execution_token" text PRIMARY KEY,
-  "holder_id" text NOT NULL,
-  "job_id" text NOT NULL,
-  "run_id" uuid NOT NULL UNIQUE,
-  "claimed_at" timestamptz DEFAULT clock_timestamp() NOT NULL,
-  "expires_at" timestamptz NOT NULL
+CREATE TABLE "scheduler_table_lease_protocol" (
+  "protocol" text PRIMARY KEY,
+  "first_seen_at" timestamptz DEFAULT clock_timestamp() NOT NULL,
+  CONSTRAINT "scheduler_table_lease_protocol_singleton" CHECK ("protocol" = 'scheduler-table-leases-v1')
 );--> statement-breakpoint
-CREATE INDEX "scheduler_table_lease_activity_holder_idx" ON "scheduler_table_lease_activity" ("holder_id");--> statement-breakpoint
-CREATE INDEX "scheduler_table_lease_activity_expiry_idx" ON "scheduler_table_lease_activity" ("expires_at");--> statement-breakpoint
-ALTER TABLE "scheduler_table_lease_activity" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scheduler_table_lease_activity" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE POLICY "scheduler_table_lease_activity_owner_access" ON "scheduler_table_lease_activity" FOR ALL TO public
-  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_activity'::regclass))
-  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_activity'::regclass));--> statement-breakpoint
-REVOKE ALL PRIVILEGES ON TABLE "scheduler_table_lease_activity" FROM stella, PUBLIC;
+ALTER TABLE "scheduler_table_lease_protocol" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "scheduler_table_lease_protocol" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "scheduler_table_lease_protocol_owner_access" ON "scheduler_table_lease_protocol" FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_protocol'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_protocol'::regclass));--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "scheduler_table_lease_protocol" FROM stella, PUBLIC;

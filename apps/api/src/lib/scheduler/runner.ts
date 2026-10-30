@@ -18,7 +18,7 @@ import { Temporal } from "@stll/time";
 import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError, detached } from "@/api/lib/analytics/capture";
-import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   ConfigurationError,
   SchedulerJobTimeoutError,
@@ -35,9 +35,10 @@ import type {
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
-import { schedulerTableLeaseActivity } from "../../db/schema/table-leases";
+import { recordTableLeaseProtocol } from "../../db/table-lease-protocol";
 import {
   acquireJobTableLeases,
+  canAcquireJobTableLeases,
   jobTableLeasesAvailable,
   releaseJobTableLeases,
   renewJobTableLeases,
@@ -59,7 +60,7 @@ import type { SchedulerTableName } from "./table-declarations";
 export const SCHEDULER_INFRASTRUCTURE_TABLES = [
   "scheduler_jobs",
   "scheduler_job_runs",
-  "scheduler_table_lease_activity",
+  "scheduler_table_lease_protocol",
 ] as const satisfies readonly SchedulerTableName[];
 
 const executionTableNames = (taskTables: readonly string[]) => [
@@ -370,10 +371,6 @@ export const acquireNextDueJob = async ({
   // The claim filter is derived from the very registry `runJob` resolves the
   // task against, so the two can never disagree about what this build can run.
   const runnableTasks = [...registry.keys()];
-  if (runnableTasks.length === 0) {
-    return null;
-  }
-
   const eligibilityTime = now
     ? sql`${new Date(now())}::timestamptz`
     : sql`now()`;
@@ -383,6 +380,16 @@ export const acquireNextDueJob = async ({
   }));
   return await withAggregateTransaction(db, async (tx) => {
     await tableLeaseClaimLock(tx);
+    // Defer activation too when schema admission owns the coordination tables.
+    if (
+      !(await canAcquireJobTableLeases(tx, SCHEDULER_INFRASTRUCTURE_TABLES))
+    ) {
+      return null;
+    }
+    await recordTableLeaseProtocol(tx);
+    if (runnableTasks.length === 0) {
+      return null;
+    }
     const [candidate] = await lockSchedulerClaimCandidate(
       tx
         .select()
@@ -410,12 +417,11 @@ export const acquireNextDueJob = async ({
       return null;
     }
 
-    const { leaseToken, runId } = acquireExecutionIdentity(runnerId);
+    const leaseToken = acquireLeaseToken(runnerId);
     const admitted = await acquireJobTableLeases({
       tx,
       tables: executionTableNames(tablesForTask(candidate.task)),
       holderId: tableLeaseHolderId(candidate.id, leaseToken),
-      execution: { token: leaseToken, jobId: candidate.id, runId },
       leaseMs,
     });
     if (!admitted) {
@@ -1178,24 +1184,9 @@ const createRun = async ({
   runnerId,
   startedAt,
 }: CreateRunOptions): Promise<SafeId<"schedulerJobRun">> => {
-  const [claim] = await db
-    .select({ runId: schedulerTableLeaseActivity.runId })
-    .from(schedulerTableLeaseActivity)
-    .where(
-      and(
-        eq(schedulerTableLeaseActivity.executionToken, leaseTokenOf(job)),
-        eq(schedulerTableLeaseActivity.jobId, job.id),
-        sql`${schedulerTableLeaseActivity.expiresAt} > clock_timestamp()`,
-      ),
-    )
-    .limit(1);
-  if (!claim) {
-    return panic("Scheduler execution has no unexpired table-lease claim");
-  }
   const [run] = await db
     .insert(schedulerJobRuns)
     .values({
-      id: claim.runId,
       jobId: job.id,
       runnerId,
       startedAt,
@@ -1405,11 +1396,10 @@ const defaultRunnerId = (): string => {
 // fits the column.
 const LEASE_TOKEN_COLUMN_LENGTH = 128;
 
-const acquireExecutionIdentity = (runnerId: string) => {
-  const runId = createSafeId<"schedulerJobRun">();
-  const suffix = `#${runId}`;
+const acquireLeaseToken = (runnerId: string): string => {
+  const suffix = `#${Bun.randomUUIDv7()}`;
   const prefix = runnerId.slice(0, LEASE_TOKEN_COLUMN_LENGTH - suffix.length);
-  return { leaseToken: `${prefix}${suffix}`, runId };
+  return `${prefix}${suffix}`;
 };
 
 // After a successful claim the acquired row carries its lease token in

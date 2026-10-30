@@ -14804,19 +14804,15 @@
       ]
     },
     "20261030213017_scheduler_table_leases": {
-      "hash": "0a283c3f7602995fba0b916a95ebc906780847486c5cc6eed8bafe42fe262dd9",
+      "hash": "3a1767d06e812066c41d1fad9576a25cd488f499b7244a861d7b294433627608",
       "locks": [
         {
           "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "scheduler_table_lease_activity",
+          "relation": "scheduler_table_lease_protocol",
           "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "scheduler_table_lease_activity",
-          "mode": "SHARE"
         },
         {
           "relation": "scheduler_table_leases",
