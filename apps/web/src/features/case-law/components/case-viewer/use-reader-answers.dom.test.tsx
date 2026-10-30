@@ -1305,9 +1305,17 @@ test("persisted streaming answers poll to completion and release mutations", asy
 });
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are test server behaviors, not API domain values.
-test.each(["never", "hanging"] as const)(
-  "persisted claims stop polling at timeout when the server is %s",
-  async (settlement) => {
+for (const { settlement, name } of [
+  {
+    settlement: "never",
+    name: "persisted claims stop polling at timeout when the server is never",
+  },
+  {
+    settlement: "hanging",
+    name: "persisted claims stop polling at timeout when the server is hanging",
+  },
+] as const) {
+  test(name, async () => {
     const server = pollingServer(settlement);
     const { wrapper } = setup();
     jest.useFakeTimers();
@@ -1362,8 +1370,8 @@ test.each(["never", "hanging"] as const)(
       await hook.result.current.remove("answer-1");
     });
     expect(server.deletions()).toBe(1);
-  },
-);
+  });
+}
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.
 test.each([
