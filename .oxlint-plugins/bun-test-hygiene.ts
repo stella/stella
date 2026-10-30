@@ -992,7 +992,9 @@ export default eslintCompatPlugin({
         const fakeTimerCalls: AstNode[] = [];
         const realTimerCalls: AstNode[] = [];
         const waits: AstNode[] = [];
-        const beforeEachCallbacks: AstNode[] = [];
+        const hooks: { callback: AstNode; kind: "beforeAll" | "beforeEach" }[] =
+          [];
+        const suiteCallbacks: AstNode[] = [];
 
         const callbackOf = (node: AstNode) => {
           const args = Array.isArray(node.arguments) ? node.arguments : [];
@@ -1041,7 +1043,8 @@ export default eslintCompatPlugin({
             fakeTimerCalls.length = 0;
             realTimerCalls.length = 0;
             waits.length = 0;
-            beforeEachCallbacks.length = 0;
+            hooks.length = 0;
+            suiteCallbacks.length = 0;
             return /(?:useFakeTimers|waitFor|findBy)/u.test(
               context.sourceCode.text,
             );
@@ -1063,10 +1066,17 @@ export default eslintCompatPlugin({
               realTimerCalls.push(node);
               return;
             }
-            if (calleeName === "beforeEach") {
+            if (calleeName === "beforeEach" || calleeName === "beforeAll") {
               const callback = callbackOf(node);
               if (callback !== undefined) {
-                beforeEachCallbacks.push(callback);
+                hooks.push({ callback, kind: calleeName });
+              }
+              return;
+            }
+            if (testRegistration(context, node)?.kind === TEST_KIND.describe) {
+              const callback = callbackOf(node);
+              if (callback !== undefined) {
+                suiteCallbacks.push(callback);
               }
               return;
             }
@@ -1085,50 +1095,66 @@ export default eslintCompatPlugin({
               if (callback === null) {
                 continue;
               }
-              const inheritedFakeTimers = beforeEachCallbacks.some(
-                (hookCallback) => {
-                  const fake = fakeTimerCalls.findLast((call) =>
-                    isInside(call, hookCallback),
-                  );
-                  const real = realTimerCalls.findLast((call) =>
-                    isInside(call, hookCallback),
-                  );
+              const enclosingSuites = suiteCallbacks
+                .filter((suite) => isInside(wait, suite))
+                .toSorted(
+                  (left, right) =>
+                    right.range[1] -
+                    right.range[0] -
+                    (left.range[1] - left.range[0]),
+                );
+              const applicableHooks = hooks
+                .filter(({ callback: hookCallback }) => {
                   const suiteCallback = containingFunction(hookCallback);
                   return (
-                    startsAfter(fake, real) &&
-                    (suiteCallback === null || isInside(wait, suiteCallback))
+                    suiteCallback === null ||
+                    enclosingSuites.includes(suiteCallback)
                   );
-                },
+                })
+                .toSorted((left, right) => {
+                  const leftSuite = containingFunction(left.callback);
+                  const rightSuite = containingFunction(right.callback);
+                  const leftDepth =
+                    leftSuite === null
+                      ? -1
+                      : enclosingSuites.indexOf(leftSuite);
+                  const rightDepth =
+                    rightSuite === null
+                      ? -1
+                      : enclosingSuites.indexOf(rightSuite);
+                  if (left.kind !== right.kind) {
+                    return left.kind === "beforeAll" ? -1 : 1;
+                  }
+                  if (leftDepth !== rightDepth) {
+                    return leftDepth - rightDepth;
+                  }
+                  return left.callback.range[0] - right.callback.range[0];
+                });
+              const topLevelFake = fakeTimerCalls.findLast(
+                (call) => containingFunction(call) === null,
               );
+              const topLevelReal = realTimerCalls.findLast(
+                (call) => containingFunction(call) === null,
+              );
+              let inheritedFakeTimers = startsAfter(topLevelFake, topLevelReal);
+              for (const { callback: hookCallback } of applicableHooks) {
+                const fake = fakeTimerCalls.findLast((call) =>
+                  isInside(call, hookCallback),
+                );
+                const real = realTimerCalls.findLast((call) =>
+                  isInside(call, hookCallback),
+                );
+                if (fake !== undefined || real !== undefined) {
+                  inheritedFakeTimers = startsAfter(fake, real);
+                }
+              }
               const fake = lastBefore(fakeTimerCalls, wait, callback);
               const real = lastBefore(realTimerCalls, wait, callback);
-              const precedingText = context.sourceCode.text.slice(
-                callback.range[0],
-                wait.range[0],
-              );
-              const restoredInCallback =
-                Math.max(
-                  precedingText.lastIndexOf("restoreRealTimers("),
-                  precedingText.lastIndexOf("useRealTimers("),
-                ) > precedingText.lastIndexOf("useFakeTimers(") ||
-                Math.max(
-                  context.sourceCode.text.lastIndexOf(
-                    "restoreRealTimers(",
-                    wait.range[0],
-                  ),
-                  context.sourceCode.text.lastIndexOf(
-                    "useRealTimers(",
-                    wait.range[0],
-                  ),
-                ) >
-                  context.sourceCode.text.lastIndexOf(
-                    "useFakeTimers(",
-                    wait.range[0],
-                  );
-              if (
-                (startsAfter(fake, real) && !restoredInCallback) ||
-                (inheritedFakeTimers && !restoredInCallback)
-              ) {
+              const localTimerState =
+                fake === undefined && real === undefined
+                  ? inheritedFakeTimers
+                  : startsAfter(fake, real);
+              if (localTimerState) {
                 context.report({ node: wait, messageId: "fakeTimerWait" });
               }
             }

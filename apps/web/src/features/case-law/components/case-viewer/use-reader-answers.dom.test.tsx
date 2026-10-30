@@ -1327,7 +1327,8 @@ test.each(["never", "hanging"] as const)(
         }),
       { wrapper },
     );
-    // Flush the mounted query without advancing the 5000 ms recovery deadline.
+    // Flush the mounted query and its notification without advancing the 5000 ms recovery deadline.
+    await advanceClock(0);
     await advanceClock(0);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
       "streaming",

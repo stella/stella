@@ -34,6 +34,48 @@ test("reports waits covered by a fake-timer beforeEach", async () => {
   ).toEqual([4]);
 });
 
+test("does not treat afterEach restoration as preceding the test", async () => {
+  expect(
+    await lint([
+      'import { afterEach, beforeEach, jest, test } from "bun:test";',
+      "beforeEach(() => jest.useFakeTimers());",
+      "afterEach(() => jest.useRealTimers());",
+      'test("race", async () => {',
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([5]);
+});
+
+test("inherits fake timers through nested describe scopes", async () => {
+  expect(
+    await lint([
+      'import { beforeEach, describe, jest, test } from "bun:test";',
+      'describe("outer", () => {',
+      "  beforeEach(() => jest.useFakeTimers());",
+      '  describe("inner", () => {',
+      '    test("race", async () => {',
+      "      await waitFor(() => true);",
+      "    });",
+      "  });",
+      "});",
+    ]),
+  ).toEqual([6]);
+});
+
+test("uses hook execution order when a later beforeEach restores timers", async () => {
+  expect(
+    await lint([
+      'import { beforeEach, jest, test } from "bun:test";',
+      "beforeEach(() => jest.useFakeTimers());",
+      "beforeEach(() => jest.useRealTimers());",
+      'test("real again", async () => {',
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([]);
+});
+
 test("accepts synchronous assertions after explicitly driving the clock", async () => {
   expect(
     await lint([
