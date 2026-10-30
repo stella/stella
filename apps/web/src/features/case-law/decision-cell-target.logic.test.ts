@@ -19,6 +19,7 @@ const monolingual: Decision = {
   languageAlternates: [],
   decisionDate: "2006-03-09",
   decisionType: "nález",
+  decisionTypeKind: null,
   headnote: { type: "absent", reason: "not_published" },
   citationCount: 0,
 };
