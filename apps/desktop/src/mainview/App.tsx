@@ -704,10 +704,13 @@ const App = () => {
   const accountGeneration = useRef(0);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
   const activityAvailability = useActivityAvailability();
+  // A requested Activity tab stays shown while availability loads, so opening
+  // it does not flash General first; it falls back only once activity is off.
+  const showActivityTab =
+    activityAvailability === "enabled" ||
+    (activityAvailability === "loading" && activeTab === "activity");
   const shownTab =
-    activeTab === "activity" && activityAvailability !== "enabled"
-      ? "general"
-      : activeTab;
+    activeTab === "activity" && !showActivityTab ? "general" : activeTab;
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -981,7 +984,7 @@ const App = () => {
               <TabsTab className="h-8 px-2 text-sm" value="general">
                 {t("general")}
               </TabsTab>
-              {activityAvailability === "enabled" ? (
+              {showActivityTab ? (
                 <TabsTab className="h-8 px-2 text-sm" value="activity">
                   {tActivity("title")}
                 </TabsTab>
@@ -1043,11 +1046,14 @@ const App = () => {
                 </div>
               </ScrollArea>
             </TabsPanel>
-            {activityAvailability === "enabled" ? (
+            {showActivityTab ? (
               <TabsPanel className="h-full min-h-0" value="activity">
                 <ScrollArea className="h-full">
                   <div className="p-4">
-                    <ActivitySettingsPane />
+                    {/* Activity reads nothing until its access is confirmed. */}
+                    {activityAvailability === "enabled" ? (
+                      <ActivitySettingsPane />
+                    ) : null}
                   </div>
                 </ScrollArea>
               </TabsPanel>
