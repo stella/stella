@@ -89,7 +89,7 @@ describe("day calendar bounds", () => {
 });
 
 describe("day calendar grid", () => {
-  test("maps time to pixels and back", () => {
+  test("day calendar grid maps time to pixels and back", () => {
     assertProperty(
       "day calendar grid maps time to pixels and back",
       fc.property(
@@ -103,7 +103,7 @@ describe("day calendar grid", () => {
     );
   });
 
-  test("snapping is idempotent and stays inside the day", () => {
+  test("day calendar snapping is idempotent and stays inside the day", () => {
     assertProperty(
       "day calendar snapping is idempotent and stays inside the day",
       fc.property(
@@ -129,7 +129,7 @@ describe("day calendar grid", () => {
     );
   });
 
-  test("a drag yields a clamped, snapped range covering both ends", () => {
+  test("day calendar drag yields a clamped snapped range covering both ends", () => {
     assertProperty(
       "day calendar drag yields a clamped snapped range covering both ends",
       fc.property(
@@ -170,7 +170,7 @@ describe("day calendar grid", () => {
     );
   });
 
-  test("keyboard moves keep the duration and the day", () => {
+  test("day calendar keyboard moves keep the duration and the day", () => {
     assertProperty(
       "day calendar keyboard moves keep the duration and the day",
       fc.property(
@@ -241,7 +241,7 @@ const coveredMs = (ranges: readonly DayCalendarRange[]): number => {
 };
 
 describe("day calendar segment merging", () => {
-  test("merging conserves total duration and places every segment once", () => {
+  test("day calendar merging conserves total duration and places every segment once", () => {
     assertProperty(
       "day calendar merging conserves total duration and places every segment once",
       fc.property(
@@ -322,7 +322,7 @@ describe("day calendar segment merging", () => {
 });
 
 describe("day calendar overlap layout", () => {
-  test("overlapping blocks never share a lane", () => {
+  test("day calendar overlapping blocks never share a lane", () => {
     assertProperty(
       "day calendar overlapping blocks never share a lane",
       fc.property(
