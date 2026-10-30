@@ -145,11 +145,14 @@ export const inspectPathInstallations = async ({
       if (inspected.value === undefined) {
         return Result.ok(undefined);
       }
-      const channel =
-        inspected.value === nativeTarget
-          ? "native"
-          : (channelForPath(inspected.value) ?? "unknown");
-      return Result.ok({ path: candidate, target: inspected.value, channel });
+      return Result.ok({
+        path: candidate,
+        target: inspected.value,
+        channel:
+          inspected.value === nativeTarget
+            ? "native"
+            : (channelForPath(inspected.value) ?? "unknown"),
+      } satisfies PathInstallation);
     }),
   );
   const installations: PathInstallation[] = [];
