@@ -262,6 +262,7 @@ const chatContentV3Index = ({ table: tableName }: ChatContentV3IndexSource) =>
   ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
     definitionBody: `ON public.${tableName} USING btree (id) WHERE ((content -> 'version'::text) IS DISTINCT FROM '3'::jsonb)`,
+    introducedBy: CHAT_CONTENT_V3_REPAIR.introducedBy,
     isUnique: false,
     name: `${tableName}_content_v3_pending_idx` as const,
     tableName,
@@ -1903,7 +1904,7 @@ const reportOnlineReplacements = async ({
     return;
   }
   const index = ONLINE_MIGRATION_INDEXES.find(({ name }) =>
-    replacement.replacementNames.includes(name),
+    replacement.replacementNames.some((candidate) => candidate === name),
   );
   if (!index) {
     panic(

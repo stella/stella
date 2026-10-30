@@ -3,6 +3,10 @@ import { existsSync, readdirSync } from "node:fs";
 
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import {
+  CHAT_CONTENT_V3_REPAIR,
+  CHAT_CONTENT_V3_SOURCES,
+} from "./chat-content-v3-backfill";
+import {
   ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
@@ -38,7 +42,7 @@ test("every online step identifies its existing migration or code owner", () => 
     ...ONLINE_MIGRATION_REPAIRS,
   ];
   expect(steps.length).toBeGreaterThan(0);
-  expectTypeOf<undefined>().not.toExtend<
+  expectTypeOf(undefined).not.toExtend<
     (typeof steps)[number]["introducedBy"]
   >();
   expect(
@@ -52,6 +56,22 @@ test("every online step identifies its existing migration or code owner", () => 
       )
       .map(({ name, introducedBy }) => ({ name, introducedBy })),
   ).toEqual([]);
+});
+
+test("every chat content v3 index carries the repair's introduction", () => {
+  const sources = Object.values(CHAT_CONTENT_V3_SOURCES);
+  const names = new Set(
+    sources.map(({ table }) => `${table}_content_v3_pending_idx`),
+  );
+  const indexes = ONLINE_MIGRATION_INDEXES.filter(({ name }) =>
+    names.has(name),
+  );
+  expect(indexes.map(({ name }) => name).toSorted()).toEqual(
+    [...names].toSorted(),
+  );
+  for (const { introducedBy } of indexes) {
+    expect(introducedBy).toEqual(CHAT_CONTENT_V3_REPAIR.introducedBy);
+  }
 });
 
 test("every unique online index has exactly one exported dependency name", () => {

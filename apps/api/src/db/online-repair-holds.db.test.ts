@@ -26,7 +26,7 @@ import {
   reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
   runOnlineMigrations,
 } from "./online-migrations";
-import { FINALIZED } from "./online-work-lifecycle";
+import { FINALIZED, PENDING } from "./online-work-lifecycle";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
   caseLawCitations,
@@ -526,12 +526,20 @@ describe.skipIf(!enabled)(
             ).at(0)?.count;
             expect(cursorCount).toBe(fixture.firstBatch);
           }
-          const startup = await reportOnlineMigrations(pool, runnerOptions);
+          const startup = await reportOnlineMigrations(pool, {
+            ...runnerOptions,
+            lifecycle: {
+              ...allFinalizedOnlineWork(),
+              [repair.name]: PENDING,
+            },
+          });
           expect(startup.pending).toEqual([
             {
               kind: "repair",
               name: repair.name,
               introducedBy: repair.introducedBy,
+              lifecycle: "pending",
+              age: "newest",
             },
           ]);
           expect(events).toHaveLength(1);

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import { readMigrationFiles } from "drizzle-orm/migrator";
@@ -875,9 +876,14 @@ if (!runPostgresTests || databaseUrl === undefined) {
         expect(migrations.length).toBeGreaterThan(0);
         // build_finalized walks finalized work only, so a pending entry at the
         // head of the list is not the first step.
-        const firstIndex = ONLINE_MIGRATION_INDEXES.find(
-          ({ name }) => ONLINE_WORK_LIFECYCLE[name].state === "finalized",
-        );
+        const lifecycle = new Map(Object.entries(ONLINE_WORK_LIFECYCLE));
+        const firstIndex = ONLINE_MIGRATION_INDEXES.find(({ name }) => {
+          const state = lifecycle.get(name);
+          if (state === undefined) {
+            panic(`Online work ${name} has no lifecycle`);
+          }
+          return state.state === "finalized";
+        });
         if (firstIndex === undefined) {
           throw new TypeError("Expected a finalized online index");
         }

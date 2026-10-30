@@ -397,7 +397,7 @@ export const createChatContentV3Repair = (
       }
       return validated.value;
     },
-  }) as const satisfies OnlineRepair;
+  }) as const satisfies MigrationOwnedOnlineRepair;
 export const CHAT_CONTENT_V3_REPAIR = createChatContentV3Repair();
 
 export const countChatContentVersions = async (

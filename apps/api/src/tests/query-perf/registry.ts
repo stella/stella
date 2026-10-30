@@ -96,7 +96,12 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
 > = {
   "onlineWork.runPending.minutely": {
     task: ONLINE_WORK_RUNNER_TASK,
-    scenarios: Object.values(CASE_LAW_SCENARIOS),
+    scenarios: Object.values(CASE_LAW_SCENARIOS).map((scenario) => ({
+      size: { type: "case-law", served: scenario.size },
+      ...("double" in scenario
+        ? { double: { type: "case-law" as const, served: scenario.double } }
+        : {}),
+    })),
   },
   "caseLaw.refreshSitemapShards.hourly": {
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,

@@ -25,8 +25,8 @@ export const onlineWorkState = p.pgTable(
     p.pgPolicy("online_work_state_owner_access", {
       for: "all",
       to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass)`,
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass)`,
     }),
   ],
 );

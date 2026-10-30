@@ -671,20 +671,26 @@ describe("online migrations", () => {
     ).toEqual({
       newestAppliedMigration: introducedBy,
       pending: [
-        ...missingIndexes.map((name) => ({
-          kind: "index" as const,
-          name,
-          introducedBy,
-          lifecycle: "pending",
-          age: "newest",
-        })),
-        ...legacyNames.map((name) => ({
-          kind: "replacement_drop" as const,
-          name,
-          introducedBy,
-          lifecycle: "pending",
-          age: "newest",
-        })),
+        ...missingIndexes.map(
+          (name) =>
+            ({
+              kind: "index",
+              name,
+              introducedBy,
+              lifecycle: "pending",
+              age: "newest",
+            }) as const,
+        ),
+        ...legacyNames.map(
+          (name) =>
+            ({
+              kind: "replacement_drop",
+              name,
+              introducedBy,
+              lifecycle: "pending",
+              age: "newest",
+            }) as const,
+        ),
       ],
     });
   });
@@ -2416,7 +2422,7 @@ const createHarness = ({
   const retiredIndexDefinitions = ONLINE_INDEX_REPLACEMENTS.map(
     ({ legacyName, replacementNames }) => {
       const index = onlineIndexes.find(({ name }) =>
-        replacementNames.includes(name),
+        replacementNames.some((candidate) => candidate === name),
       );
       if (!index) {
         throw new TypeError("Expected replacement index");
