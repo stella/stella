@@ -41,7 +41,10 @@ import {
 } from "@/i18n/page-language";
 import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
-import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
+import {
+  getBrowserPresentationPrefs,
+  PresentationPrefsProvider,
+} from "@/lib/account/presentation-prefs/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
@@ -91,9 +94,7 @@ export const Route = createRootRouteWithContext<{
     }
     // Development fixtures supply their own auth providers without an API.
     if (isDev && location.pathname === "/dev") {
-      return {
-        presentationPrefs: await loadDocumentPresentation(context.queryClient),
-      };
+      return { presentationPrefs: getBrowserPresentationPrefs() };
     }
     await requireProfessionalUseForSignedInRoute({
       queryClient: context.queryClient,
@@ -186,6 +187,9 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const queryClient = Route.useRouteContext({
     select: (context) => context.queryClient,
   });
@@ -235,7 +239,9 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
           <script src="/prepaint-init.js" />
         </head>
         <body>
-          <ClientDocumentPresentationBoot queryClient={queryClient} />
+          {!(isDev && pathname === "/dev") && (
+            <ClientDocumentPresentationBoot queryClient={queryClient} />
+          )}
           <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
             <RouteProviderScopeBoundary>
               <PresentationPrefsProvider initialPrefs={prefs}>
