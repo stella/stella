@@ -2519,9 +2519,16 @@
       "value": "Valeur du champ"
     },
     "datePrecision": "Précision de la date",
+    "deleteBlockedByMattersCount": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
+    "deleteBlockedCount": "Contacts non supprimés : {count}",
     "deleteContact": "Supprimer le contact",
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
+    "deleteNotFoundCount": "Contacts introuvables : {count}.",
+    "deleteSelected": "Supprimer {count, plural, one {# contact} other {# contacts}}",
+    "deleteSelectedConfirm": "Supprimer définitivement {count, plural, one {ce contact} other {ces # contacts}} ? Cette action est irréversible.",
+    "deleteSelectedLimit": "Sélectionnez au maximum {limit} contacts à supprimer à la fois.",
+    "deletedCount": "{count, plural, one {# contact supprimé} other {# contacts supprimés}}",
     "editContact": "Modifier le contact",
     "emailTypes": {
       "other": "Autre",
@@ -2651,6 +2658,7 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brésilien (somme de contrôle)",
       "taxIdSchemeNone": "Aucune validation du numéro fiscal",
       "title": "Importer des contacts",
+      "undoImport": "Annuler l’importation ({count})",
       "validateFailed": "Impossible de vérifier ces contacts.",
       "warning": {
         "ignored_populated_column": "La colonne « {column} » contient des données, mais elle est ignorée.",
@@ -2680,6 +2688,7 @@
     "saved": "Les coordonnées du contact ont été enregistrées.",
     "search": "Rechercher des contacts...",
     "searchCountries": "Rechercher des pays",
+    "selectContact": "Sélectionner {name}",
     "title": "Clients",
     "type": {
       "organization": "Organisation",

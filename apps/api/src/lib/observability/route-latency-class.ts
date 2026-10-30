@@ -8,6 +8,7 @@ import type { RequestClass } from "@/api/lib/observability/request-metrics";
 // latency SLO. Stream setup does not measure the duration of the stream.
 export const ROUTE_LATENCY_CLASSES = {
   "DELETE /mcp": "search",
+  "DELETE /v1/contacts": "batch",
   "DELETE /mcp-anonymized": "search",
   "DELETE /mcp-documents": "search",
   "DELETE /mcp-law": "search",

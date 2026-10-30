@@ -55,6 +55,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/contacts": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/contacts/:contactId": {
     type: "non-replay",
     reason: "current-state",
