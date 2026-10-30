@@ -235,6 +235,10 @@ const Screens = () => {
             options={pushedScreen}
           />
           <Stack.Screen
+            name="document/[workspaceId]/[entityId]"
+            options={pushedScreen}
+          />
+          <Stack.Screen
             name="matter/[workspaceId]/[entityId]"
             options={{
               contentStyle: { backgroundColor: colors.card },
