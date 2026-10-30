@@ -91,6 +91,28 @@ describe(RULE, () => {
     ).toEqual([]);
   });
 
+  test("recognises the fixture by package name and by relative path inside its package", async () => {
+    const concurrentFixture = (specifier: string) =>
+      `import { test } from "bun:test";\nimport { createTestState } from "${specifier}";\ncreateTestState({ file: import.meta.path, config: {} });\ntest.concurrent("shared state", () => {});`;
+    const [byPackage, byRelativePath, outsidePackage] = await Promise.all([
+      lintSingleRule(RULE, concurrentFixture("@stll/test-state"), {
+        sourcePath: "packages/test-state/src/consumer.test.ts",
+        cwd: "scratch",
+      }),
+      lintSingleRule(RULE, concurrentFixture("./test-state"), {
+        sourcePath: "packages/test-state/src/consumer.test.ts",
+        cwd: "scratch",
+      }),
+      lintSingleRule(RULE, concurrentFixture("./test-state"), {
+        sourcePath: "packages/other/src/consumer.test.ts",
+        cwd: "scratch",
+      }),
+    ]);
+    expect(byPackage).toEqual([4]);
+    expect(byRelativePath).toEqual([4]);
+    expect(outsidePackage).toEqual([]);
+  });
+
   test("rejects setup registered before the fixture, including aliased hooks", async () => {
     expect(
       await lint(
