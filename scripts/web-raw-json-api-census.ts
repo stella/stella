@@ -3,7 +3,14 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import type { Expression, Node } from "../packages/scripts/src/syntax-tree";
+import type {
+  BindingPattern,
+  BindingRestElement,
+  Expression,
+  FormalParameterRest,
+  Node,
+  TSParameterProperty,
+} from "../packages/scripts/src/syntax-tree";
 import { staticPropertyName, walk } from "../packages/scripts/src/syntax-tree";
 import { parseSyntax } from "./parse-memo";
 
@@ -57,21 +64,55 @@ const resolvesToJsonStringify = (
 ): boolean =>
   isJsonStringify(expression) ||
   (expression?.type === "Identifier" &&
-    isJsonStringify(resolveLexicalBinding(expression.name, ancestors)));
+    isJsonStringify(
+      resolveLexicalBinding(expression.name, ancestors)?.expression,
+    ));
+
+const bindingNames = (
+  binding:
+    | BindingPattern
+    | BindingRestElement
+    | FormalParameterRest
+    | TSParameterProperty,
+): string[] => {
+  if (binding.type === "TSParameterProperty") {
+    return bindingNames(binding.parameter);
+  }
+  if (binding.type === "Identifier") {
+    return [binding.name];
+  }
+  if (binding.type === "AssignmentPattern") {
+    return bindingNames(binding.left);
+  }
+  if (binding.type === "RestElement") {
+    return bindingNames(binding.argument);
+  }
+  if (binding.type === "ArrayPattern") {
+    return binding.elements.flatMap((element) =>
+      element === null ? [] : bindingNames(element),
+    );
+  }
+  return binding.properties.flatMap((property) =>
+    bindingNames(
+      property.type === "RestElement" ? property.argument : property.value,
+    ),
+  );
+};
 
 const resolveLexicalBinding = (
   name: string,
   ancestors: readonly Node[],
-): Expression | undefined => {
-  for (const scope of ancestors.toReversed()) {
+): { expression: Expression; ancestors: readonly Node[] } | undefined => {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const scope = ancestors[index];
+    if (scope === undefined) {
+      continue;
+    }
     if (
       (scope.type === "FunctionDeclaration" ||
         scope.type === "FunctionExpression" ||
         scope.type === "ArrowFunctionExpression") &&
-      scope.params.some(
-        (parameter) =>
-          parameter.type === "Identifier" && parameter.name === name,
-      )
+      scope.params.some((parameter) => bindingNames(parameter).includes(name))
     ) {
       return undefined;
     }
@@ -88,7 +129,12 @@ const resolveLexicalBinding = (
           declaration.id.type === "Identifier" &&
           declaration.id.name === name
         ) {
-          return declaration.init ?? undefined;
+          return declaration.init === null
+            ? undefined
+            : {
+                expression: declaration.init,
+                ancestors: ancestors.slice(0, index + 1),
+              };
         }
       }
     }
@@ -119,19 +165,31 @@ export const censusRawJsonApiCalls = async (
           node.callee.name !== "fetchWithTimeout") ||
         node.arguments[0]?.type !== "CallExpression" ||
         node.arguments[0].callee.type !== "Identifier" ||
-        node.arguments[0].callee.name !== "apiUrl" ||
-        node.arguments[1]?.type !== "ObjectExpression"
+        node.arguments[0].callee.name !== "apiUrl"
       ) {
         return;
       }
-      const body = node.arguments[1].properties.find(
+      const optionsArgument = node.arguments[1];
+      let options: Expression | undefined;
+      let optionsAncestors = ancestors;
+      if (optionsArgument?.type === "ObjectExpression") {
+        options = optionsArgument;
+      } else if (optionsArgument?.type === "Identifier") {
+        const binding = resolveLexicalBinding(optionsArgument.name, ancestors);
+        options = binding?.expression;
+        optionsAncestors = binding?.ancestors ?? ancestors;
+      }
+      if (options?.type !== "ObjectExpression") {
+        return;
+      }
+      const body = options.properties.find(
         (property) =>
           property.type === "Property" &&
           staticPropertyName(property) === "body",
       );
       if (
         body?.type !== "Property" ||
-        !resolvesToJsonStringify(body.value, ancestors)
+        !resolvesToJsonStringify(body.value, optionsAncestors)
       ) {
         return;
       }
