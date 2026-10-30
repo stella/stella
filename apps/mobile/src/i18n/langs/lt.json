@@ -127,6 +127,22 @@
     "currentVersion": "Dabartinė versija",
     "loadFailed": "Nepavyko įkelti šio įrašo."
   },
+  "document": {
+    "title": "Dokumentas",
+    "failedTitle": "Nepavyko atidaryti šio dokumento",
+    "failure": {
+      "offline": "Esate neprisijungę. Prisijunkite prie interneto ir bandykite dar kartą.",
+      "noFile": "Šis dokumentas dar neturi failo.",
+      "failed": "Atidarant kažkas nepavyko. Po akimirkos bandykite dar kartą.",
+      "unsupported": "Atnaujinkite programėlę, kad galėtumėte atidaryti dokumentus.",
+      "android": "Android programėlėje dokumentų dar negalima atidaryti."
+    },
+    "retry": "Bandyti dar kartą",
+    "preview": "Atidaryti peržiūrą",
+    "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
+    "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
+    "details": "Išsami informacija"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Aiškumas kiekvienai bylai.",
