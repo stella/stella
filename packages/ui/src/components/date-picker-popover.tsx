@@ -47,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./select";
+import { TruncatedText } from "./truncated-text";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities
@@ -860,12 +861,12 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
         }
       >
         {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
-        <span
-          className="min-w-0 flex-1 truncate text-start"
+        <TruncatedText
+          className="flex-1 text-start"
           id={labelledBy ? displayValueId : undefined}
         >
           {displayLabel}
-        </span>
+        </TruncatedText>
         {isOverdue && overdueLabel && (
           <span className="text-destructive text-xs">{overdueLabel}</span>
         )}

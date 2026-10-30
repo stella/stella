@@ -10,6 +10,7 @@ import type {
 import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
+import { TruncatedText } from "../components/truncated-text";
 import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
@@ -388,11 +389,11 @@ export const DayCalendar = ({
           data-slot="day-calendar-column-header"
           key={column.id}
         >
-          <span className="min-w-0 shrink-0 truncate">{column.label}</span>
+          <TruncatedText className="shrink-0">{column.label}</TruncatedText>
           {column.badge === undefined ? null : (
-            <span className="bg-muted text-muted-foreground text-2xs min-w-0 truncate rounded-full px-2 py-0.5">
+            <TruncatedText className="bg-muted text-muted-foreground text-2xs rounded-full px-2 py-0.5">
               {column.badge}
-            </span>
+            </TruncatedText>
           )}
         </header>
       ))}
@@ -608,13 +609,18 @@ const DayCalendarBlockView = ({
         data-slot="day-calendar-block"
         style={blockSurfaceStyle(block)}
       >
-        <span className="min-w-0 shrink-0 truncate font-medium">
+        {/* The block takes no pointer and carries its whole text as its
+            accessible name, so a cut line adds no hint. */}
+        <TruncatedText className="shrink-0 font-medium" hint={false}>
           {block.title}
-        </span>
+        </TruncatedText>
         {block.detail === undefined ? null : (
-          <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+          <TruncatedText
+            className="text-muted-foreground tabular-nums"
+            hint={false}
+          >
             {block.detail}
-          </span>
+          </TruncatedText>
         )}
       </article>
     </div>

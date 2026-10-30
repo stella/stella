@@ -12,6 +12,7 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "./menu";
+import { TruncatedText } from "./truncated-text";
 
 export {
   COMPOSER_CONTROL_BUTTON_SIZE,
@@ -129,7 +130,7 @@ export const ComposerPicker = <Value extends string>({
         <span className="flex size-3 shrink-0 items-center justify-center [&>svg]:size-3">
           {icon}
         </span>
-        <span className="truncate">{current?.label ?? value}</span>
+        <TruncatedText hint={false}>{current?.label ?? value}</TruncatedText>
         <ChevronDownIcon
           aria-hidden="true"
           className="size-3 shrink-0 opacity-70"

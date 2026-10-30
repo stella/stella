@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from "react";
 import { cn } from "../lib/utils";
 import { BidiText } from "./bidi-text";
 import { ScrollArea } from "./scroll-area";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * A home screen's one shape: a greeting and a box in the upper fold, three
@@ -163,16 +164,16 @@ export const LandingItemText = ({
       <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
     )}
     <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className="text-foreground block truncate text-sm font-medium"
+      <TruncatedText
+        className="text-foreground text-sm font-medium"
+        render={<BidiText as="span" />}
       >
         {title}
-      </BidiText>
+      </TruncatedText>
       {meta !== undefined && meta !== null ? (
-        <span className="text-muted-foreground block truncate text-xs">
+        <TruncatedText className="text-muted-foreground text-xs">
           {meta}
-        </span>
+        </TruncatedText>
       ) : null}
     </span>
   </span>

@@ -4,6 +4,7 @@ import { Temporal } from "temporal-polyfill/full";
 
 import { BidiText } from "../components/bidi-text";
 import { Button } from "../components/button";
+import { TruncatedText } from "../components/truncated-text";
 import { CheckIcon, RotateCcwIcon, Trash2Icon } from "../icons";
 import { cn } from "../lib/utils";
 import { ReviewAuthorAvatar } from "./review-author-avatar";
@@ -71,12 +72,12 @@ export const ReviewCommentCard = ({
     />
     <div className="min-w-0 flex-1">
       <p className="text-muted-foreground text-2xs flex min-w-0 items-baseline gap-1.5">
-        <BidiText
-          as="span"
-          className="text-foreground-strong-muted truncate font-medium"
+        <TruncatedText
+          className="text-foreground-strong-muted font-medium"
+          render={<BidiText as="span" />}
         >
           {author.name}
-        </BidiText>
+        </TruncatedText>
         <time
           className="shrink-0 tabular-nums"
           dateTime={toIsoInstant(timestamp)}
@@ -88,12 +89,12 @@ export const ReviewCommentCard = ({
         {body}
       </BidiText>
       {anchorText === undefined || anchorText === "" ? null : (
-        <BidiText
-          as="p"
-          className="text-muted-foreground text-2xs mt-0.5 truncate italic"
+        <TruncatedText
+          className="text-muted-foreground text-2xs mt-0.5 italic"
+          render={<BidiText as="p" />}
         >
           {anchorText}
-        </BidiText>
+        </TruncatedText>
       )}
       {isStale && staleLabel !== undefined ? (
         <p className="text-muted-foreground text-2xs mt-0.5">{staleLabel}</p>

@@ -2492,7 +2492,38 @@ const config = defineConfig({
             // Primitives that style text their callers render. Each entry
             // names the exact token, so another truncation in the same file
             // still fails.
-            allowedFiles: [],
+            allowedFiles: [
+              {
+                path: "packages/ui/src/components/select.tsx",
+                reason:
+                  "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
+                utilities: ["truncate"],
+              },
+              {
+                path: "packages/ui/src/components/sidebar.tsx",
+                reason:
+                  "Menu buttons style the label span their callers render as children.",
+                utilities: ["[&>span:last-child]:truncate"],
+              },
+              {
+                path: "packages/ui/src/components/tooltip.tsx",
+                reason:
+                  "The viewport cuts the outgoing content to one line while the popup morphs to the incoming content's size.",
+                utilities: ["**:data-previous:truncate"],
+              },
+              {
+                path: "packages/ui/src/components/identity-text.tsx",
+                reason:
+                  "Pending: IdentityText discloses a cut name when its owning control takes focus, which TruncatedText does not yet do.",
+                utilities: ["truncate"],
+              },
+              {
+                path: "packages/ui/src/components/composer-tokens.ts",
+                reason:
+                  "Pending: the placeholder token is applied to elements in apps/web; it moves to TruncatedText with those callers.",
+                utilities: ["truncate"],
+              },
+            ],
           },
         ],
       },

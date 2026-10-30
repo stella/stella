@@ -10,6 +10,7 @@ import { Input } from "./input";
 import type { InputProps } from "./input";
 import { Textarea } from "./textarea";
 import type { TextareaProps } from "./textarea";
+import { TruncatedText } from "./truncated-text";
 
 const InputGroup = ({ className, ...props }: React.ComponentProps<"div">) => (
   <div
@@ -83,9 +84,9 @@ const InputGroupText = ({
   className,
   ...props
 }: React.ComponentProps<"span">) => (
-  <span
+  <TruncatedText
     className={cn(
-      "text-muted-foreground flex items-center gap-2 truncate leading-none [&_svg]:pointer-events-none [&_svg]:-mx-0.5 in-[[data-slot=input-group]:has([data-slot=input-control],[data-slot=textarea-control])]:[&_svg:not([class*='size-'])]:size-4.5 sm:in-[[data-slot=input-group]:has([data-slot=input-control],[data-slot=textarea-control])]:[&_svg:not([class*='size-'])]:size-4",
+      "text-muted-foreground flex items-center gap-2 leading-none [&_svg]:pointer-events-none [&_svg]:-mx-0.5 in-[[data-slot=input-group]:has([data-slot=input-control],[data-slot=textarea-control])]:[&_svg:not([class*='size-'])]:size-4.5 sm:in-[[data-slot=input-group]:has([data-slot=input-control],[data-slot=textarea-control])]:[&_svg:not([class*='size-'])]:size-4",
       className,
     )}
     {...props}

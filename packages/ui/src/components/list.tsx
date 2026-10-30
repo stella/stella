@@ -9,6 +9,8 @@ import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
 import { AnimatedCount } from "./animated-count";
+import { TruncatedText } from "./truncated-text";
+import type { TruncatedTextLines } from "./truncated-text";
 
 /**
  * Grouped list: a titled section holding one surface of hairline-divided
@@ -198,8 +200,8 @@ const ListItemTitle = ({
   className,
   ...props
 }: React.ComponentProps<"span">) => (
-  <span
-    className={cn("text-foreground truncate text-sm font-medium", className)}
+  <TruncatedText
+    className={cn("text-foreground text-sm font-medium", className)}
     data-slot="list-item-title"
     dir="auto"
     {...props}
@@ -210,28 +212,32 @@ const listItemDescriptionVariants = cva("text-muted-foreground text-xs", {
   defaultVariants: { variant: "text" },
   variants: {
     variant: {
-      /** Prose, clamped to one line so long provider copy cannot widen the row. */
-      text: "line-clamp-1 wrap-break-word",
-      /** A URL or command: monospace, left-to-right, truncated at the end. */
-      code: "truncate font-mono",
+      /** Prose, cut to one line so long provider copy cannot widen the row. */
+      text: "wrap-break-word",
+      /** A URL or command: monospace, left-to-right, cut at the end. */
+      code: "font-mono",
     },
   },
 });
 
 /**
- * Secondary line. Pass `line-clamp-2` when two lines are genuinely needed;
- * never `whitespace-nowrap`.
+ * Secondary line, one line by default. Pass `lines={2}` when two lines are
+ * genuinely needed; never `whitespace-nowrap`.
  */
 const ListItemDescription = ({
   className,
+  lines = 1,
   variant,
   ...props
 }: React.ComponentProps<"span"> &
-  VariantProps<typeof listItemDescriptionVariants>) => (
-  <span
+  VariantProps<typeof listItemDescriptionVariants> & {
+    lines?: TruncatedTextLines;
+  }) => (
+  <TruncatedText
     className={cn(listItemDescriptionVariants({ variant }), className)}
     data-slot="list-item-description"
     dir={variant === "code" ? "ltr" : "auto"}
+    lines={lines}
     {...props}
   />
 );

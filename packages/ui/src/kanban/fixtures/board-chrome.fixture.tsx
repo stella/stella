@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { TruncatedText } from "../../components/truncated-text";
 import { KanbanCardShell } from "../card-shell";
 import { KanbanColumnHeader } from "../column-header";
 import { resolveKanbanGrouping } from "../grouping";
@@ -115,7 +116,9 @@ const BoardChromeFixture = () => {
                 }
                 meta="1"
                 title={
-                  <span className="truncate text-sm font-medium">{label}</span>
+                  <TruncatedText className="text-sm font-medium" hint={false}>
+                    {label}
+                  </TruncatedText>
                 }
               />
             </div>
