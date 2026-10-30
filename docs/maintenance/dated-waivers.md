@@ -15,8 +15,7 @@ expired entry fails a pull request or merge group only when the change touches
 that entry’s identity or fields relative to the merge base; adding a sibling
 to the same file or shifting line numbers only warns about the elapsed entry.
 New entries and edits to expired entries require a future expiry. Time alone
-never fails an unrelated change. The
-daily `dated-waiver-healing.yml` run checks every entry on the default branch,
+never fails an unrelated change. The daily `dated-waiver-healing.yml` run checks every entry on the default branch,
 so an expiry nobody touches still fails there and alerts its owner. Ownership
 comes from the entry's recorded owner or originating PR where available;
 otherwise, use `git blame` on the entry's identity in its source file to find
@@ -119,7 +118,7 @@ signal to its designated recipient. Repeated runs reuse the task and label.
 
 At expiry the waiver lapses. Kinds that fail the gate (`EXPIRY_AT_CHANGE_GATE`)
 fail the default-branch check and every change that adds or edits that entry
-until the entry is removed or renewed. An elapsed temporary release-age
+until the entry is removed or renewed. An unchanged elapsed temporary release-age
 exclusion only annotates; `quarantine-prune.yml` proposes its removal, and the
 lockfile release-age guard stops exempting new pins of its package. Healing
 never renews a lapsed entry or grants a grace period after expiry.
@@ -131,6 +130,6 @@ receipts cannot pass. Unregistered dated owners fail the inventory census.
 
 Entries in `scripts/flaky-test-quarantine.json` are inventoried as
 `flaky-test-quarantine`. Their probe runs the test without its entry; an
-elapsed entry only annotates pull requests and merge groups, because the
+unchanged elapsed entry only annotates pull requests and merge groups, because the
 scheduled flaky-test quarantine workflow enforces it on main (see
 [flaky-test-quarantine.md](flaky-test-quarantine.md)).
