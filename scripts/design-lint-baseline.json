@@ -894,6 +894,8 @@
     "apps/desktop/src/registry/RegistrySearch.tsx": 1,
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
     "apps/landing/src/components/react/EditorLiveDemo.tsx": 1,
+    "apps/web/src/components/catalogue/catalogue-row.tsx": 1,
+    "apps/web/src/components/file-tree/file-tree.tsx": 1,
     "apps/web/src/components/legal-reader/citation-copy-options.tsx": 1,
     "apps/web/src/components/legal-reader/margin-notes.tsx": 4,
     "apps/web/src/components/matter-target-picker.tsx": 8,
@@ -1036,6 +1038,7 @@
     "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx": 5
   },
   "no-native-ui/no-native-dialog": {
+    "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-edit-panel.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-format-panel.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-format-proposal.tsx": 5

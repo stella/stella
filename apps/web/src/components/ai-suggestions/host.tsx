@@ -428,7 +428,6 @@ export const ChatThreadCard = ({
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
         )}
         ref={watchOutsidePresses}
-        // oxlint-disable-next-line no-native-ui/no-native-dialog -- a non-modal thread card docked in place in the composer column; Dialog is a portalled modal overlay with a backdrop and focus trap, which would lift the card off the composer it sits on
         role="dialog"
       >
         {/* The header is its own opaque row with a hairline under it, so the
