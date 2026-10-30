@@ -6,6 +6,7 @@
     "activityRecording": "Aktivität: Aufzeichnung · heute {hours} h",
     "activityPaused": "Aktivität: Pausiert · heute {hours} h",
     "activityOff": "Aktivität: Aus",
+    "openActivity": "Aktivität öffnen",
     "activityNow": "Jetzt: {name}",
     "activityPause": "Aufzeichnung pausieren",
     "activityResume": "Aufzeichnung fortsetzen",

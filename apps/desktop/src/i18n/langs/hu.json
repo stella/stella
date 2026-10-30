@@ -6,6 +6,7 @@
     "activityRecording": "Tevékenység: Rögzítés · ma {hours} ó",
     "activityPaused": "Tevékenység: Szünetel · ma {hours} ó",
     "activityOff": "Tevékenység: Kikapcsolva",
+    "openActivity": "Tevékenység megnyitása",
     "activityNow": "Most: {name}",
     "activityPause": "Rögzítés szüneteltetése",
     "activityResume": "Rögzítés folytatása",
