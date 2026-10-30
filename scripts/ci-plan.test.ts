@@ -6311,7 +6311,10 @@ test("workflow and planner changes run every planner test as a merge-group gate"
   );
   const gated = new Set<string>();
   for (const file of plannerTests) {
-    const selected = owners.get(file) ?? [];
+    // Shared quick-check steps also appear in the PR-only carrier.
+    const selected = (owners.get(file) ?? []).filter(({ job }) =>
+      admitted.includes(job),
+    );
     expect(selected.length, file).toBeGreaterThan(0);
     for (const { job, step } of selected) {
       expect(admitted, file).toContain(job);
