@@ -374,23 +374,20 @@ const fixture = () => {
   const root = manifest.nodes.find((node) => node.id === "root");
   if (root?.type === "metadata") {
     const actionDigest = parseDocument(action);
-    const calleeDigest = parseDocument(callee);
     const parsedRoot = parseDocument(workflow);
-    if (actionDigest.isErr() || calleeDigest.isErr() || parsedRoot.isErr()) {
+    if (actionDigest.isErr() || parsedRoot.isErr()) {
       throw new AdmissionError({ message: "fixture digest parsing failed" });
     }
+    // A reusable-workflow call job binds its call surface alone; only the
+    // job that runs the local action binds that action's document.
     root.jobs = root.jobs.map((job) => {
       const definition = parsedRoot.value.jobs[job.id];
-      if (!definition) {
+      if (!definition || job.id !== "caller") {
         return job;
       }
-      const dependencies =
-        job.id === "caller"
-          ? { "$/.github/actions/local": actionDigest.value.digest }
-          : {
-              "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":
-                calleeDigest.value.digest,
-            };
+      const dependencies = {
+        "$/.github/actions/local": actionDigest.value.digest,
+      };
       return {
         ...job,
         digest: sha256(
@@ -1102,6 +1099,12 @@ const fixtureGenerationOptions = (f: ReturnType<typeof fixture>) => {
             qualifier: "Reviewed checks",
             approvedDigests: [
               (() => {
+                // A reusable-workflow call binds its call surface alone.
+                if (
+                  Object.values(job.dependencies).includes("reusable-workflow")
+                ) {
+                  return job.digest;
+                }
                 const dependencies = Object.fromEntries(
                   Object.keys(job.dependencies)
                     .toSorted()
@@ -1116,11 +1119,6 @@ const fixtureGenerationOptions = (f: ReturnType<typeof fixture>) => {
                         job.dependencies[reference] === "action"
                       ) {
                         target = "action";
-                      } else if (
-                        !target &&
-                        job.dependencies[reference] === "reusable-workflow"
-                      ) {
-                        target = "callee";
                       }
                       return target && nodes.get(target)?.type === "metadata"
                         ? [[reference, documentDigest(target)]]
@@ -2550,30 +2548,13 @@ test("decisions for removed jobs fail without changing sibling job digests", () 
   if (parsed.isErr()) {
     throw parsed.error;
   }
-  const callee = parseDocument(
-    f.reader.read(
-      "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      ".github/workflows/reusable.yml",
-    ),
-  );
-  if (callee.isErr()) {
-    throw callee.error;
-  }
   const reusableDecision = options.decisions[`${key}/reusable`];
   if (!reusableDecision) {
     throw new AdmissionError({ message: "reusable decision missing" });
   }
-  expect([
-    sha256(
-      JSON.stringify({
-        digest: parsed.value.jobs["reusable"]?.digest,
-        dependencies: {
-          "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":
-            callee.value.digest,
-        },
-      }),
-    ),
-  ]).toEqual(reusableDecision.approvedDigests);
+  expect([parsed.value.jobs["reusable"]?.digest]).toEqual(
+    reusableDecision.approvedDigests,
+  );
   const result = generateClassification(options);
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
