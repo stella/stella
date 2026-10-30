@@ -28,6 +28,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "audit_logs.changes",
   "cell_metadata.metadata",
   "chat_messages.content",
+  "request_idempotency_receipts.response_body",
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
   "chat_run_logs.reference_summary",
@@ -60,6 +61,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
   "case_law_decisions.document_ast",
+  "case_law_decisions.extraction_warnings",
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
   "case_law_judges.external_refs",
@@ -82,6 +84,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
   "chat_threads.active_skill",
+  // Generator identifiers and corpus decision IDs contain no member identifiers.
+  "chat_threads.generation_provenance",
   "clause_variants.body",
   "clause_versions.body",
   "clauses.body",
@@ -359,6 +363,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_reviews.reviewer_id":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_item_source_decisions.actor_id":
+    "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.verified_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.created_by":
@@ -501,6 +507,10 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "request_idempotency_receipts.user_id":
+    "Organization-owned request coordination: retain through the bounded replay window so retries in other matters remain single-execution. Replay still passes the route's current authorization; organization removal clears the rows and account deletion cascades.",
+  "request_idempotency_receipts.response_body":
+    "Historical response cache, not membership or write authority. Current route authorization gates replay; organization removal erases the cache, while retention bounds matter-removal history without reopening creates in other matters.",
   "mcp_web_handoff.user_id":
     "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":

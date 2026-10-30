@@ -46,6 +46,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   ARTEFACT_SOURCE_DECISION_LIMIT,
+  type ArtefactOrigin,
   authorArtefact,
   generateArtefact,
   readArtefactOrigin,
@@ -859,7 +860,7 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       generator,
       decisionIds: [sourceId],
       coverage: "complete",
-    } as const;
+    } satisfies ArtefactOrigin;
     await db.execute(
       sql`UPDATE chat_threads SET generation_provenance = ${JSON.stringify({ version: 1, slots: { recap } })}::text::jsonb WHERE id = ${validationId}`,
     );

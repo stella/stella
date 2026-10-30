@@ -401,7 +401,7 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       return;
     }
     for (
-      let parent = node.parent;
+      let parent: ts.Node = node.parent;
       !ts.isSourceFile(parent);
       parent = parent.parent
     ) {

@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { getModelDefaultReasoningEffort } from "@stll/ai-catalog";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -22,7 +23,6 @@ import {
   streamCarrying,
 } from "@/api/tests/helpers/provider-wire-answer";
 import { loadProviderWireCassettes } from "@/api/tests/helpers/provider-wire-cassette";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The expansion's own model call, with the organization's real model

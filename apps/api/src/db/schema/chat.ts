@@ -5,6 +5,7 @@ import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
 
+import { chatContentJsonb } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   CHAT_TURN_CANCELLATION_REASONS,
@@ -372,7 +373,7 @@ export const chatMessages = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
-    content: jsonb().notNull().$type<PersistedChatMessageContent>(),
+    content: chatContentJsonb().notNull().$type<PersistedChatMessageContent>(),
     /** Number of accepted edits; zero denotes the original answer. */
     revision: p.integer().notNull().default(0),
     // Captured when content is written. Compactions spanning an opted-out
@@ -485,7 +486,7 @@ export const chatMessageRevisions = p.pgTable(
     ),
     /** Revision of the replaced content; revision zero is the original. */
     revision: p.integer().notNull(),
-    content: jsonb().notNull().$type<PersistedChatMessageContent>(),
+    content: chatContentJsonb().notNull().$type<PersistedChatMessageContent>(),
     edit: jsonb().notNull().$type<ChatMessageRevisionEdit>(),
     createdBy: p
       .text("created_by")

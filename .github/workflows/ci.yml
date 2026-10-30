@@ -217,6 +217,8 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
+      ui_playground_specs: ${{ steps.ui-playground-plan.outputs.specs || '[]' }}
+      ui_playground_matrix: ${{ steps.ui-playground-plan.outputs.matrix || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
@@ -224,7 +226,7 @@ jobs:
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
         && steps.changed-files.outputs.ci_browser_scope_required == 'true'
-        && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
+        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]'))
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
         || (github.event_name == 'merge_group'
@@ -996,6 +998,30 @@ jobs:
           ARMED: ${{ steps.completed-depth.outputs.armed }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: bun scripts/ci-plan-scope.ts
+
+      - name: Plan UI playground geometry specs
+        id: ui-playground-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
+        env:
+          UI_PLAYGROUND_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          EVENT_NAME: ${{ github.event_name }}
+          DESKTOP_REQUIRED: ${{ steps.changed-files.outputs.desktop_browser_required }}
+        run: |
+          if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
+            echo "::warning::Changed files are unknown; running every geometry spec."
+            specs=""
+          else
+            specs=$(bun scripts/ui-playground-selection.ts) || specs=""
+          fi
+          if ! jq -e 'type == "array" and all(.[]; type == "string")' <<< "$specs" >/dev/null; then
+            [[ "$SCOPE_UNKNOWN" == "true" ]] || echo "::warning::UI playground selection failed; running every geometry spec."
+            specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          fi
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          all_specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          matrix=$(UI_PLAYGROUND_SELECTED_SPECS="$specs" UI_PLAYGROUND_ALL_SPECS="$all_specs" bun scripts/ui-playground-shards.ts)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Plan query performance scope
         id: query-perf-scope
@@ -2097,10 +2123,13 @@ jobs:
 
       - name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
@@ -2439,14 +2468,16 @@ jobs:
           cp .env.example .env
 
       - name: Download generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -2766,14 +2797,16 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -2913,11 +2946,13 @@ jobs:
 
       - name: Download planned API test durations
         if: startsWith(matrix.shard, 'api-') && needs.ci-plan.outputs.api_test_durations_hash != 'missing'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: api-test-durations-plan
-          # A directory: the single-file artifact lands as api-test-durations.json.
-          path: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # A directory: the single-file artifact lands as api-test-durations.json.
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name api-test-durations-plan
+          --path "$RUNNER_TEMP"
 
       - name: Verify planned API test durations
         if: startsWith(matrix.shard, 'api-')
@@ -3219,11 +3254,13 @@ jobs:
           retention-days: 7
 
       - name: Download API test timings
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: api-test-timings-api-*
-          path: ${{ runner.temp }}/api-test-timings
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --pattern 'api-test-timings-api-*'
+          --merge
+          --path "$RUNNER_TEMP/api-test-timings"
 
       - name: Restore previous API test durations
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -3247,11 +3284,13 @@ jobs:
 
       - name: Download Postgres test timings
         if: needs.postgres-service-suites.result == 'success'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: postgres-test-timings-*
-          path: ${{ runner.temp }}/postgres-test-timings
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --pattern 'postgres-test-timings-*'
+          --merge
+          --path "$RUNNER_TEMP/postgres-test-timings"
 
       - name: Restore previous Postgres test durations
         if: needs.postgres-service-suites.result == 'success'
@@ -3292,9 +3331,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The UI playground suite runs alone in six Playwright shards: on one
-        # runner its dev-server page loads made it the longest merge-group job.
-        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3","playground-4","playground-5","playground-6"]') }}
+        include: ${{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
@@ -3321,13 +3358,18 @@ jobs:
         run: echo "required=$REQUIRED" >> "$GITHUB_OUTPUT"
 
       - name: Check UI browser test scope
-        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: ui-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
+          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
         run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            [[ "$SELECTED_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "${HEAVY_ONLY:-false}" == true ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
@@ -3459,7 +3501,8 @@ jobs:
           dependency-mode: preinstalled
 
       - name: Test UI browser interactions
-        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
+        # On a pull request the UI leg runs only the selected playground specs.
+        if: matrix.suite == 'ui' && github.event_name != 'pull_request' && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
         run: bun --filter @stll/ui test:browser
@@ -3482,13 +3525,16 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: (matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true'
+        if: startsWith(matrix.suite, 'playground-') && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
-          SUITE: ${{ matrix.suite }}
+          SELECTED_SPECS: ${{ toJSON(matrix.specs) }}
         run: |
           cd apps/web
-          bun run test:e2e:ui-playground --shard="${SUITE#playground-}/6"
+          # Selected specs are repository paths; Playwright matches them
+          # against each test file's absolute path.
+          mapfile -t specs < <(bun -e 'for (const spec of JSON.parse(process.env.SELECTED_SPECS ?? "[]")) console.log(spec)')
+          bun run test:e2e:ui-playground "${specs[@]}"
 
       - name: Test extension browser boundary
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
@@ -3569,10 +3615,13 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
@@ -3728,10 +3777,13 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
@@ -3892,11 +3944,13 @@ jobs:
 
       - name: Download planned Postgres test durations
         if: needs.ci-plan.outputs.postgres_test_durations_hash != 'missing'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: postgres-test-durations-plan
-          # A directory: the single-file artifact lands as postgres-test-durations.json.
-          path: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # A directory: the single-file artifact lands as postgres-test-durations.json.
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name postgres-test-durations-plan
+          --path "$RUNNER_TEMP"
 
       - name: Verify planned Postgres test durations
         env:
@@ -5399,6 +5453,9 @@ jobs:
           E2E_EXECUTION_PROFILE: standard
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
+          # The shard's main run writes report-<shard>.zip; e2e-report merges
+          # both blob artifacts into one directory, so this one has its own name.
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-${{ matrix.shard }}.zip
         run: >-
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
@@ -5982,11 +6039,13 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download Playwright blob reports
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: playwright-blob-*
-          path: apps/web/all-blob-reports
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --pattern 'playwright-blob-*'
+          --merge
+          --path apps/web/all-blob-reports
 
       - name: Merge Playwright reports
         run: bun --filter @stll/playwright-tools report
@@ -7328,6 +7387,11 @@ jobs:
           # every exit, so its verdict is this step's exit status.
           RECORDED_NEEDS="$NEEDS"
           required_jobs='[]'
+          # The unmet checks the full-depth verdict found, published beside
+          # (never inside) the required-jobs record as `ci-required-violations`
+          # so a reader can tell a failure it may excuse from one it may not.
+          violations=""
+          violations_evaluated=false
           reused_from_run_id=""
           # Set by each exit that passes without evaluating any job.
           pass_through_reason=""
@@ -7365,6 +7429,13 @@ jobs:
                 not_required: ([keys[] | select(. != "ci-plan")] - $counted),
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
+            violations_record=$(jq -nce --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
+              --arg head "${HEAD_SHA:-}" --arg evaluated "$violations_evaluated" --arg violations "${violations:-}" '
+              def nonempty: if . == "" then null else . end;
+              def count: if test("^[1-9][0-9]*$") then tonumber else null end;
+              {run_id: ($run | count), run_attempt: ($attempt | count), head_sha: ($head | nonempty),
+                evaluated: ($evaluated == "true"), violations: ($violations | nonempty)}') || return 1
+            echo "required_violations=$violations_record" >> "${GITHUB_OUTPUT:-}"
           }
           trap 'record_required_jobs "$?" || echo "::error::The required-jobs record could not be written."' EXIT
           # The required-jobs record a CI run uploaded, checked against its id.
@@ -7826,6 +7897,7 @@ jobs:
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
+              violations_evaluated=true
               if [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
@@ -8016,6 +8088,34 @@ jobs:
           name: ci-required-summary
           overwrite: true
           path: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
+          retention-days: 90
+          if-no-files-found: error
+
+      # The unmet checks behind the verdict, as an artifact of their own: the
+      # required-jobs record above has a fixed key set that other readers
+      # parse strictly. The release health gate reads both.
+      - name: Write required-violations record
+        if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          REQUIRED_VIOLATIONS: ${{ steps.outcome.outputs.required_violations }}
+          RECORD_PATH: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
+        run: |
+          if [[ -z "$REQUIRED_VIOLATIONS" ]]; then
+            echo "::error::Evaluate CI outcome wrote no required-violations record."
+            exit 1
+          fi
+          mkdir -p "$(dirname "$RECORD_PATH")"
+          printf '%s\n' "$REQUIRED_VIOLATIONS" > "$RECORD_PATH"
+
+      - name: Upload required-violations record
+        if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-required-violations
+          overwrite: true
+          path: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
           retention-days: 90
           if-no-files-found: error
 
