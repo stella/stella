@@ -785,6 +785,7 @@
     "SHA-256 migration ledger": ["**"],
     "Custom lint rule coverage": ["**"],
     "Custom lint test timeout policy": ["**"],
+    "Guard rollout scope tests": ["**"],
     "Dated waiver lifecycle guards": ["**"],
     "Documentation source policy rule": ["**"],
     "Instruction references": ["**"],

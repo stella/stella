@@ -161,9 +161,12 @@ describe("a UOKiK decision PDF", () => {
     const parsed = await parsePlUokikDocument(
       inputOf([await bytesOf(DOK_9_2011)]),
     );
-    const [first] = parsed?.documentAst.blocks ?? [];
-    expect(first?.type).toBe("heading");
-    expect(first?.plainText).toBe("DECYZJA");
+    const blocks = parsed?.documentAst.blocks ?? [];
+    const titleIndex = blocks.findIndex(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    );
+    expect(blocks.at(titleIndex)?.plainText).toBe("DECYZJA nr DOK-9/2011");
+    expect(titleIndex).toBeGreaterThan(0);
   });
 
   test("records the register as the document's source", async () => {
