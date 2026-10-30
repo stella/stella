@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Leidmata kontaktid: {count}.",
     "deleteSelected": "Kustuta {count, plural, one {# kontakt} other {# kontakti}}",
     "deleteSelectedConfirm": "Kas kustutada {count, plural, one {see kontakt} other {need # kontakti}} jäädavalt? Seda toimingut ei saa tagasi võtta.",
+    "deleteSelectedLimit": "Valige korraga kustutamiseks kuni {limit} kontakti.",
     "deletedCount": "Kustutati {count, plural, one {# kontakt} other {# kontakti}}",
     "editContact": "Muuda kontakti",
     "emailTypes": {

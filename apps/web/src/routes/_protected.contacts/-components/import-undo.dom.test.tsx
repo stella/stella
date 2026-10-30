@@ -17,6 +17,14 @@ const deleteContacts = async (contactIds: readonly string[]) => {
   return [{ contactId: "contact-two", status: "deleted" as const }];
 };
 
+const deleteContactsWithMissing = async (contactIds: readonly string[]) => {
+  receivedBatches.push([...contactIds]);
+  return [
+    { contactId: "contact-one", status: "deleted" as const },
+    { contactId: "contact-two", status: "not_found" as const },
+  ];
+};
+
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts/import" });
 const { act, cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
@@ -75,4 +83,33 @@ test("keeps blocked imported contacts available for a focused retry", async () =
     ["contact-one", "contact-two"],
     ["contact-two"],
   ]);
+});
+
+test("clears undo when imported contacts are deleted or already missing", async () => {
+  const queryClient = new QueryClient();
+  await act(async () => {
+    render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <QueryClientProvider client={queryClient}>
+          <ImportUndoContacts
+            contactIds={["contact-one", "contact-two"]}
+            deleteContacts={deleteContactsWithMissing}
+            organizationId="organization-one"
+          />
+          <ToastProvider />
+        </QueryClientProvider>
+      </IntlProvider>,
+    );
+  });
+
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Undo import (2)" })),
+  );
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Delete" })),
+  );
+
+  expect(await screen.findByText("Contacts not removed: 1")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Undo import/u })).toBeNull();
+  expect(receivedBatches).toEqual([["contact-one", "contact-two"]]);
 });

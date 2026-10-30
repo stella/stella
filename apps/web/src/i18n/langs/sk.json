@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Nenájdené kontakty: {count}.",
     "deleteSelected": "Odstrániť {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov}}",
     "deleteSelectedConfirm": "Natrvalo odstrániť {count, plural, one {tento kontakt} few {tieto # kontakty} other {týchto # kontaktov}}? Túto akciu nemožno vrátiť späť.",
+    "deleteSelectedLimit": "Vyberte najviac {limit} kontaktov, ktoré chcete odstrániť naraz.",
     "deletedCount": "Odstránené: {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov}}",
     "editContact": "Upraviť kontakt",
     "emailTypes": {

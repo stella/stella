@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Nem található névjegyek: {count}.",
     "deleteSelected": "{count, plural, one {# névjegy törlése} other {# névjegy törlése}}",
     "deleteSelectedConfirm": "Véglegesen töröl {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+    "deleteSelectedLimit": "Egyszerre legfeljebb {limit} törlendő névjegyet válasszon ki.",
     "deletedCount": "{count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
     "editContact": "Kapcsolat szerkesztése",
     "emailTypes": {

@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Neatrastās kontaktpersonas: {count}.",
     "deleteSelected": "Dzēst {count, plural, zero {# kontaktpersonu} one {# kontaktpersonu} other {# kontaktpersonas}}",
     "deleteSelectedConfirm": "Neatgriezeniski dzēst {count, plural, zero {# kontaktpersonu} one {# kontaktpersonu} other {# kontaktpersonas}}? Šo darbību nevar atsaukt.",
+    "deleteSelectedLimit": "Vienlaikus dzēšanai atlasiet ne vairāk kā {limit} kontaktpersonas.",
     "deletedCount": "Izdzēstas {count, plural, zero {# kontaktpersonas} one {# kontaktpersona} other {# kontaktpersonas}}",
     "editContact": "Rediģēt kontaktpersonu",
     "emailTypes": {

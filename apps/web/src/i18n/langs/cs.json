@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Nenalezené kontakty: {count}.",
     "deleteSelected": "Smazat {count, plural, one {# kontakt} few {# kontakty} other {# kontaktů}}",
     "deleteSelectedConfirm": "Trvale smazat {count, plural, one {tento kontakt} few {tyto # kontakty} other {těchto # kontaktů}}? Tuto akci nelze vrátit zpět.",
+    "deleteSelectedLimit": "Vyberte nejvýše {limit} kontaktů, které chcete smazat najednou.",
     "deletedCount": "Smazáno {count, plural, one {# kontakt} few {# kontakty} other {# kontaktů}}",
     "editContact": "Upravit kontakt",
     "emailTypes": {

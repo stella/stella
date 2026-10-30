@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Nerasti kontaktai: {count}.",
     "deleteSelected": "Ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}",
     "deleteSelectedConfirm": "Visam laikui ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}? Šio veiksmo anuliuoti negalima.",
+    "deleteSelectedLimit": "Vienu metu pasirinkite ištrinti ne daugiau kaip {limit} kontaktų.",
     "deletedCount": "Ištrinta {count, plural, one {# kontaktas} few {# kontaktai} many {# kontakto} other {# kontaktų}}",
     "editContact": "Redaguoti kontaktą",
     "emailTypes": {

@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Contacts not found: {count}.",
     "deleteSelected": "Delete {count, plural, one {# contact} other {# contacts}}",
     "deleteSelectedConfirm": "Permanently delete {count, plural, one {this contact} other {these # contacts}}? This action cannot be undone.",
+    "deleteSelectedLimit": "Select no more than {limit} contacts to delete at once.",
     "deletedCount": "Deleted {count, plural, one {# contact} other {# contacts}}",
     "editContact": "Edit contact",
     "emailTypes": {

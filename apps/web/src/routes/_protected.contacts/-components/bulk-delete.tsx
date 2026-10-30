@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -47,21 +48,25 @@ export function BulkDeleteContacts({
   contactIds,
   deleteContacts = requestBulkDelete,
   organizationId,
-  onDeleted,
+  onResolved,
   labelKey = "contacts.deleteSelected",
 }: {
   contactIds: readonly string[];
   deleteContacts?: DeleteContacts | undefined;
   organizationId: string;
-  onDeleted: (deletedIds: readonly string[]) => void;
+  onResolved: (resolvedIds: readonly string[]) => void;
   labelKey?: "contacts.deleteSelected" | "contacts.importStudio.undoImport";
 }) {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const exceedsLimit = contactIds.length > CONTACT_BULK_DELETE_LIMIT;
 
   const handleDelete = async () => {
+    if (exceedsLimit) {
+      return;
+    }
     setPending(true);
     const outcomes = await deleteContacts(contactIds);
     const deletedIds = outcomes.flatMap((outcome) =>
@@ -77,7 +82,10 @@ export function BulkDeleteContacts({
     });
     setPending(false);
     setOpen(false);
-    onDeleted(deletedIds);
+    const resolvedIds = outcomes.flatMap((outcome) =>
+      outcome.status === "blocked" ? [] : [outcome.contactId],
+    );
+    onResolved(resolvedIds);
     const blockedCount = outcomes.filter(
       ({ status }) => status === "blocked",
     ).length;
@@ -115,14 +123,28 @@ export function BulkDeleteContacts({
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} size="sm" variant="destructive">
-        <Trash2Icon />
-        {labelKey === "contacts.deleteSelected"
-          ? t("contacts.deleteSelected", { count: contactIds.length })
-          : t("contacts.importStudio.undoImport", {
-              count: String(contactIds.length),
+      <div>
+        <Button
+          disabled={exceedsLimit}
+          onClick={() => setOpen(true)}
+          size="sm"
+          variant="destructive"
+        >
+          <Trash2Icon />
+          {labelKey === "contacts.deleteSelected"
+            ? t("contacts.deleteSelected", { count: contactIds.length })
+            : t("contacts.importStudio.undoImport", {
+                count: String(contactIds.length),
+              })}
+        </Button>
+        {exceedsLimit ? (
+          <p className="text-muted-foreground mt-1 text-xs">
+            {t("contacts.deleteSelectedLimit", {
+              limit: String(CONTACT_BULK_DELETE_LIMIT),
             })}
-      </Button>
+          </p>
+        ) : null}
+      </div>
       <AlertDialog onOpenChange={setOpen} open={open}>
         <AlertDialogPopup>
           <AlertDialogHeader>
@@ -140,6 +162,7 @@ export function BulkDeleteContacts({
               {t("common.cancel")}
             </AlertDialogClose>
             <Button
+              disabled={exceedsLimit}
               loading={pending}
               onClick={() => {
                 detached(
@@ -177,9 +200,9 @@ export function ImportUndoContacts({
       contactIds={remainingIds}
       deleteContacts={deleteContacts}
       labelKey="contacts.importStudio.undoImport"
-      onDeleted={(deletedIds) =>
+      onResolved={(resolvedIds) =>
         setRemainingIds((currentIds) =>
-          currentIds.filter((contactId) => !deletedIds.includes(contactId)),
+          currentIds.filter((contactId) => !resolvedIds.includes(contactId)),
         )
       }
       organizationId={organizationId}

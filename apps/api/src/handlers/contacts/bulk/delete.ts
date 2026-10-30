@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
+import { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
+
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -13,7 +15,7 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-export const CONTACT_BULK_DELETE_LIMIT = 500;
+export { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
 
 export const bulkDeleteContactsBodySchema = v.strictObject({
   contactIds: v.pipe(

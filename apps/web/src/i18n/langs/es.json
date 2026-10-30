@@ -2524,6 +2524,7 @@
     "deleteNotFoundCount": "Contactos no encontrados: {count}.",
     "deleteSelected": "Eliminar {count, plural, one {# contacto} other {# contactos}}",
     "deleteSelectedConfirm": "¿Eliminar permanentemente {count, plural, one {este contacto} other {estos # contactos}}? Esta acción no se puede deshacer.",
+    "deleteSelectedLimit": "Selecciona como máximo {limit} contactos para eliminarlos a la vez.",
     "deletedCount": "Se eliminaron {count, plural, one {# contacto} other {# contactos}}",
     "editContact": "Editar contacto",
     "emailTypes": {

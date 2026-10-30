@@ -218,6 +218,7 @@ export type {
   ChatSourceCitationTarget,
 } from "./chat-source-citations";
 export {
+  CONTACT_BULK_DELETE_LIMIT,
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
   CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_IGNORE_DESTINATION,
