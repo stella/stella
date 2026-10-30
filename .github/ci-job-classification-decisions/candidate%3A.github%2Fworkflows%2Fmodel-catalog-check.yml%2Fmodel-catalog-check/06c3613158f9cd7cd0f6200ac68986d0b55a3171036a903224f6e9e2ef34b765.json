@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes refreshed model catalog snapshots as a signed-commit pull request.",
+  "reviewedDigest": "06c3613158f9cd7cd0f6200ac68986d0b55a3171036a903224f6e9e2ef34b765"
+}

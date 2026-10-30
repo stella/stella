@@ -503,6 +503,7 @@ describe("detect-e2e-changes", () => {
     expect(workflow).not.toContain("needs.ci-changes");
   });
 
+  // timeout: evaluates five repository scope plans with real subprocess detectors.
   test("runs Redis collaboration checks for every owning boundary", () => {
     const plan = workflowJob("ci-plan");
     const serviceSuites = workflowJob("service-suites");
@@ -541,7 +542,7 @@ describe("detect-e2e-changes", () => {
     const result = workflowJob("ci-result");
     expect(result).toContain("service-suites,");
     expect(result).toContain('"service-suites": "service_suites_required"');
-  });
+  }, 30_000);
 
   test("keeps production, Vite canary, and landing work parallel", () => {
     const production = workflowJob("e2e-production-shard");

@@ -47,7 +47,7 @@ const observation = (overrides: ObservationOverrides): IngestionResult =>
       documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
       ...overrides,
     }),
-  );
+  ).unwrap();
 
 const stored = (result: IngestionResult): ExistingDecision => ({
   id: createSafeId<"caseLawDecision">(),

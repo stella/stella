@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { timeEntries } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -18,7 +20,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopMatterCandidatesEndpoint } from "./candidates";

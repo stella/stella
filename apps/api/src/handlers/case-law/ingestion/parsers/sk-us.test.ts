@@ -66,8 +66,8 @@ describe("the document the court renders as markup", () => {
     );
     expect(headings.map((block) => block.plainText.trim())).toEqual([
       "OPRAVNÉ UZNESENIE",
-      "rozh od ol :",
-      "O d ôvod n eni e:",
+      "rozhodol:",
+      "Odôvodnenie:",
     ]);
     expect(headings.at(0)).toMatchObject({ role: "decision-title" });
     expect(

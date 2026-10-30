@@ -103,6 +103,62 @@ test("final release declares no build, smoke, or web-image work", () => {
     `web="$(jq -r '.webImage.digest' release-manifest.json)"`,
   );
   expect(alias).not.toContain(".productionWebImage.digest");
+});
+
+test("the final release attests the aliased web image under its own ref", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/release.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const { jobs } = v.parse(
+    v.object({ jobs: v.record(v.string(), v.unknown()) }),
+    workflow,
+  );
+  const job = v.parse(
+    v.object({
+      permissions: v.record(v.string(), v.string()),
+      steps: v.array(v.record(v.string(), v.unknown())),
+    }),
+    jobs["alias-manifest"],
+  );
+  expect(job.permissions["id-token"]).toBe("write");
+  expect(job.permissions["attestations"]).toBe("write");
+  const names = job.steps.map((step) => step["name"]);
+  const attests = job.steps.filter(
+    (step) =>
+      typeof step["uses"] === "string" &&
+      step["uses"].startsWith("actions/attest@"),
+  );
+  // One publication attestation per aliased image the promotion verifies,
+  // retried, never skipped on the first attempt.
+  expect(attests.length).toBe(3);
+  for (const step of attests) {
+    expect(step["with"]).toEqual({
+      "subject-name": `\${{ env.REGISTRY }}/\${{ env.WEB_IMAGE_NAME }}`,
+      "subject-digest": `\${{ steps.alias.outputs.web }}`,
+      "predicate-type": `\${{ env.WEB_PUBLICATION_PREDICATE }}`,
+      "predicate-path": "web-image-publication.json",
+      "push-to-registry": true,
+    });
+  }
+  expect(attests.at(0)?.["if"]).toBeUndefined();
+  const predicate = job.steps.find(
+    (step) => step["name"] === "Write web image publication predicate",
+  );
+  expect(predicate?.["env"]).toEqual({
+    RELEASE_REF: `\${{ needs.resolve.outputs.release_ref }}`,
+    RELEASE_SHA: `\${{ needs.resolve.outputs.release_sha }}`,
+    TARGET_ENV: `\${{ steps.alias.outputs.web_target }}`,
+  });
+  // Attested before the job logs out of the registry the attestation goes to.
+  expect(names.indexOf("Attest web image publication")).toBeGreaterThan(
+    names.indexOf("Alias RC digests and release assets"),
+  );
+  expect(names.indexOf("Log out of GitHub Container Registry")).toBeGreaterThan(
+    names.indexOf("Attest web image publication (final retry)"),
+  );
   for (const name of [
     "publish-release",
     "publish-latest",

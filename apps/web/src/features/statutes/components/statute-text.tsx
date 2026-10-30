@@ -23,6 +23,7 @@ import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline"
 import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
@@ -151,7 +152,10 @@ export const StatuteText = ({
     const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
     return (
       <article
-        className="reader-statute text-card-foreground text-start"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground text-start",
+        )}
         lang={language}
         ref={articleRef}
         style={READER_STYLE}
@@ -202,7 +206,10 @@ export const StatuteText = ({
   if (fulltext) {
     return (
       <article
-        className="reader-statute text-card-foreground text-start"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground text-start",
+        )}
         lang={language}
         style={READER_STYLE}
       >
