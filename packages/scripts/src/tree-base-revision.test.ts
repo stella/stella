@@ -35,7 +35,41 @@ const withRepository = (
   }
 };
 
-const localEnv = () => ({ ...process.env, RATCHET_BASE_REF: undefined });
+const localEnv = () => ({
+  ...process.env,
+  RATCHET_BASE_REF: undefined,
+  MERGE_GROUP_BASE_SHA: undefined,
+  GITHUB_EVENT_NAME: undefined,
+  GITHUB_EVENT_PATH: undefined,
+});
+
+type AdvancedMain = { fork: string; payloadBase: string; tip: string };
+
+/** A branch forked before main advanced to the event's base and past it. */
+const advanceMainPastPayloadBase = (
+  root: string,
+  git: (...args: string[]) => string,
+): AdvancedMain => {
+  const fork = git("rev-parse", "HEAD");
+  git("switch", "-qc", "feature");
+  writeFileSync(path.join(root, "feature.txt"), "feature");
+  git("add", "feature.txt");
+  git("commit", "-qm", "feature");
+  git("switch", "-q", "main");
+  git("commit", "-q", "--allow-empty", "-m", "queued base");
+  const payloadBase = git("rev-parse", "HEAD");
+  git("commit", "-q", "--allow-empty", "-m", "main advances");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  const tip = git("rev-parse", "HEAD");
+  git("switch", "-q", "feature");
+  return { fork, payloadBase, tip };
+};
+
+const writeEvent = (root: string, payload: unknown) => {
+  const eventPath = path.join(root, "event.json");
+  writeFileSync(eventPath, JSON.stringify(payload));
+  return eventPath;
+};
 
 test("a baseline stays in the tree's format as main advances beyond its fork", () => {
   withRepository((repoRoot, git) => {
@@ -112,5 +146,106 @@ test("repository selectors from a hook cannot redirect the base lookup", () => {
         env: { ...localEnv(), GIT_DIR: path.join(repoRoot, "absent") },
       }),
     ).toBe(git("rev-parse", "HEAD"));
+  });
+});
+
+test("a merge group without an override compares against its payload base, not the advanced main", () => {
+  withRepository((repoRoot, git) => {
+    const { fork, payloadBase, tip } = advanceMainPastPayloadBase(
+      repoRoot,
+      git,
+    );
+    // The live merge base is another commit, so the fixture reaches the fault.
+    expect(git("merge-base", "origin/main", "HEAD")).toBe(fork);
+    expect(new Set([fork, payloadBase, tip]).size).toBe(3);
+    const env = {
+      ...localEnv(),
+      GITHUB_EVENT_NAME: "merge_group",
+      GITHUB_EVENT_PATH: writeEvent(repoRoot, {
+        merge_group: { base_sha: payloadBase, head_sha: "b".repeat(40) },
+      }),
+    };
+    expect(treeBaseRevision({ repoRoot, env })).toBe(payloadBase);
+    // The workflow's exported group base and an explicit override still win.
+    expect(
+      treeBaseRevision({
+        repoRoot,
+        env: { ...env, MERGE_GROUP_BASE_SHA: tip },
+      }),
+    ).toBe(tip);
+    expect(
+      treeBaseRevision({ repoRoot, env: { ...env, RATCHET_BASE_REF: fork } }),
+    ).toBe(fork);
+    // The payload describes the checked-out tree, not another named head.
+    expect(treeBaseRevision({ repoRoot, headRef: "HEAD", env })).toBe(fork);
+  });
+});
+
+test("a pull request compares against its payload base", () => {
+  withRepository((repoRoot, git) => {
+    const { payloadBase } = advanceMainPastPayloadBase(repoRoot, git);
+    expect(
+      treeBaseRevision({
+        repoRoot,
+        env: {
+          ...localEnv(),
+          GITHUB_EVENT_NAME: "pull_request",
+          // The workflow exports an empty group base outside merge groups.
+          MERGE_GROUP_BASE_SHA: "",
+          GITHUB_EVENT_PATH: writeEvent(repoRoot, {
+            pull_request: { base: { sha: payloadBase }, head: { sha: "c" } },
+          }),
+        },
+      }),
+    ).toBe(payloadBase);
+  });
+});
+
+test("events without a base use the merge base without reading a payload", () => {
+  withRepository((repoRoot, git) => {
+    const { fork } = advanceMainPastPayloadBase(repoRoot, git);
+    for (const event of ["push", "workflow_dispatch"]) {
+      expect(
+        treeBaseRevision({
+          repoRoot,
+          env: {
+            ...localEnv(),
+            GITHUB_EVENT_NAME: event,
+            GITHUB_EVENT_PATH: path.join(repoRoot, "absent.json"),
+          },
+        }),
+      ).toBe(fork);
+    }
+  });
+});
+
+test("a base event without a readable base fails instead of using the merge base", () => {
+  withRepository((repoRoot) => {
+    const cases = [
+      { name: "merge_group", eventPath: undefined },
+      { name: "merge_group", eventPath: path.join(repoRoot, "absent.json") },
+      {
+        name: "merge_group",
+        eventPath: writeEvent(repoRoot, { merge_group: {} }),
+      },
+      {
+        name: "pull_request",
+        eventPath: writeEvent(repoRoot, {
+          pull_request: { base: { sha: "main" } },
+        }),
+      },
+    ];
+    for (const { name, eventPath } of cases) {
+      expect(() =>
+        treeBaseRevision({
+          repoRoot,
+          env: {
+            ...localEnv(),
+            GITHUB_EVENT_NAME: name,
+            GITHUB_EVENT_PATH: eventPath,
+          },
+        }),
+      ).toThrow("Tree comparison base unavailable");
+    }
   });
 });
