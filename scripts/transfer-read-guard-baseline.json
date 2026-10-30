@@ -518,13 +518,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/chat/threads/delete.ts",
-    "function": "module/deleteThread/createSafeRootHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/clauses/export.ts",
     "function": "module/exportHandler",
     "kind": "constant-limit",
