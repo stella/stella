@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   answerSchemaForContent,
   answerShapeHint,
@@ -393,7 +394,9 @@ export const parseStoredAnswerContent = (value: unknown): FieldContent => {
     new DatabaseError({
       message: "Stored research answer is not field content",
     }),
-    { source: "case-law-research-answers" },
+    handlerErrorContext("caselaw.parseStoredAnswerContent", {
+      source: "case-law-research-answers",
+    }),
   );
   return { version: 1, type: "error" };
 };

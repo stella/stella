@@ -39,6 +39,7 @@ import type {
   ChatSendRequest,
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRouteKey } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   isProgressFrame,
@@ -162,7 +163,7 @@ export const evaluateChatStreamContentType = (
       ? contentType.trim()
       : "missing";
   return {
-    name: "POST /v1/chat/ (stream content-type)",
+    name: `${"POST /v1/chat" satisfies ApiRouteKey}/ (stream content-type)`,
     ok: isChatStreamContentType(contentType),
     detail: `${observed} (expected ${CHAT_STREAM_CONTENT_TYPE})`,
   };
@@ -185,7 +186,7 @@ export const streamPrefixHasMeaningfulFrame = (prefix: string): boolean =>
 export const evaluateChatStreamPrefix = (prefix: string): EvaluatedCheck => {
   if (!streamPrefixHasDataFrame(prefix)) {
     return {
-      name: "POST /v1/chat/ (stream)",
+      name: `${"POST /v1/chat" satisfies ApiRouteKey}/ (stream)`,
       ok: false,
       detail: "stream closed before emitting a data frame",
     };
@@ -193,7 +194,7 @@ export const evaluateChatStreamPrefix = (prefix: string): EvaluatedCheck => {
 
   if (streamPrefixHasError(prefix)) {
     return {
-      name: "POST /v1/chat/ (stream)",
+      name: `${"POST /v1/chat" satisfies ApiRouteKey}/ (stream)`,
       ok: false,
       detail: "stream emitted an error frame",
     };
@@ -201,14 +202,14 @@ export const evaluateChatStreamPrefix = (prefix: string): EvaluatedCheck => {
 
   if (!streamPrefixHasMeaningfulFrame(prefix)) {
     return {
-      name: "POST /v1/chat/ (stream)",
+      name: `${"POST /v1/chat" satisfies ApiRouteKey}/ (stream)`,
       ok: false,
       detail: "stream closed before assistant progress or finish",
     };
   }
 
   return {
-    name: "POST /v1/chat/ (stream)",
+    name: `${"POST /v1/chat" satisfies ApiRouteKey}/ (stream)`,
     ok: true,
     detail: "stream made assistant progress without an error frame",
   };
@@ -244,7 +245,7 @@ export const evaluateHealthRevision = ({
   status,
 }: HealthRevisionInput): EvaluatedCheck => {
   const httpCheck = evaluateHttpCheck({
-    name: "GET /health",
+    name: "GET /health" satisfies ApiRouteKey,
     status,
     mode: CHECK_MODE.okOnly,
   });
@@ -255,14 +256,14 @@ export const evaluateHealthRevision = ({
   const commit = getCommitFromHealthBody(body);
   if (commit === expectedCommit) {
     return {
-      name: "GET /health",
+      name: "GET /health" satisfies ApiRouteKey,
       ok: true,
       detail: `${String(status)} serving ${commit}`,
     };
   }
 
   return {
-    name: "GET /health",
+    name: "GET /health" satisfies ApiRouteKey,
     ok: false,
     detail: commit
       ? `${String(status)} serving stale commit ${commit}`
@@ -350,7 +351,7 @@ const mintSmokeSession = async (
     timeoutMs: SMOKE_SESSION_TIMEOUT_MS,
   });
   const evaluated = evaluateHttpCheck({
-    name: "POST /smoke/session",
+    name: "POST /smoke/session" satisfies ApiRouteKey,
     status: response.status,
     mode: CHECK_MODE.okOnly,
   });
@@ -421,7 +422,7 @@ const waitForApiRevision = async (baseUrl: string): Promise<void> => {
       check = await readHealth(baseUrl);
     } catch (error) {
       check = {
-        name: "GET /health",
+        name: "GET /health" satisfies ApiRouteKey,
         ok: false,
         detail: `request failed: ${errorMessage(error)}`,
       };
@@ -517,7 +518,7 @@ const sendChat = async (
   });
 
   const httpCheck = evaluateHttpCheck({
-    name: "POST /v1/chat/",
+    name: `${"POST /v1/chat" satisfies ApiRouteKey}/`,
     status: response.status,
     mode: CHECK_MODE.chatSend,
     body: isSuccess(response.status) ? "" : await response.text(),
@@ -544,7 +545,7 @@ const sendChat = async (
     streamCheck = evaluateChatStreamPrefix(prefix);
   } catch (error) {
     streamCheck = {
-      name: "POST /v1/chat/ (stream)",
+      name: `${"POST /v1/chat" satisfies ApiRouteKey}/ (stream)`,
       ok: false,
       detail: `stream read failed: ${errorMessage(error)}`,
     };

@@ -49,7 +49,9 @@ describe("details fact sheets", () => {
   test("chooses up to three pair columns from container width", () => {
     const markup = renderToStaticMarkup(<DetailsGrid />);
 
-    expect(markup).toContain('class="@container min-w-0"');
+    expect(markup).toContain(
+      'class="@container min-w-0 [contain-intrinsic-inline-size:20rem]"',
+    );
     expect(markup).toContain(
       "grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]",
     );

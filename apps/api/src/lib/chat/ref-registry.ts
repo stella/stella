@@ -135,9 +135,13 @@ const REF_TELEMETRY_OUTCOME = {
 
 const reportRefTelemetry = ({
   kind,
+  fingerprintKey,
+  scope,
   outcome,
   ref,
 }: {
+  fingerprintKey: `chat.${string}`;
+  scope: Parameters<typeof captureError>[1]["scope"];
   kind: string;
   outcome: keyof typeof REF_TELEMETRY_OUTCOME;
   ref: string;
@@ -153,9 +157,13 @@ const reportRefTelemetry = ({
     });
   }
   captureError(error, {
-    source: "chat-ref-registry",
-    kind,
-    ...description,
+    fingerprintKey,
+    scope,
+    context: {
+      source: "chat-ref-registry",
+      kind,
+      ...description,
+    },
   });
 };
 
@@ -629,8 +637,20 @@ export const createChatRefRegistry = (
   const toSourceCitationRefHref = (target: ChatSourceCitationTarget) =>
     `${CHAT_SOURCE_CITATION_REF_PREFIX}${toSourceCitationRef(target)}`;
 
-  const reportUnknownAssistantRef = (kind: string, ref: string) => {
-    reportRefTelemetry({ kind, outcome: "unminted", ref });
+  const reportUnknownAssistantRef = (
+    kind: "source-citation" | "matter" | "entity",
+    ref: string,
+  ) => {
+    reportRefTelemetry({
+      scope: {
+        type: "handler",
+        handlerId: `chat.resolveAssistantTextRefs.${kind}`,
+      },
+      fingerprintKey: `chat.resolveAssistantTextRefs.${kind}`,
+      kind,
+      outcome: "unminted",
+      ref,
+    });
   };
 
   const resolveAssistantTextRefs = (text: string) => {
@@ -912,6 +932,22 @@ export const createChatRefRegistry = (
     return [...ids];
   };
 
+  const reportRestoreFailure = (
+    binding: ChatRefBinding,
+    outcome: Exclude<RestoreRefOutcome, "restored">,
+  ) => {
+    reportRefTelemetry({
+      scope: {
+        type: "handler",
+        handlerId: `chat.restoreRefBinding.${binding.kind}.${outcome}`,
+      },
+      fingerprintKey: `chat.restoreRefBinding.${binding.kind}.${outcome}`,
+      kind: binding.kind,
+      outcome,
+      ref: binding.ref,
+    });
+  };
+
   const restoreRefBinding = (binding: ChatRefBinding): RestoreRefOutcome => {
     switch (binding.kind) {
       case "contact": {
@@ -996,7 +1032,7 @@ export const createChatRefRegistry = (
   for (const binding of restoredBindings) {
     const outcome = restoreRefBinding(binding);
     if (outcome !== "restored") {
-      reportRefTelemetry({ kind: binding.kind, outcome, ref: binding.ref });
+      reportRestoreFailure(binding, outcome);
     }
   }
 

@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { currentQueryCount } from "@/api/lib/db-query-counter";
 import { emitMcpRequestMetric } from "@/api/lib/observability/request-metrics";
 import type { McpMode } from "@/api/mcp/constants";
-import { classifyMcpMetricToolName } from "@/api/mcp/observe-tool-call";
+import { classifyMcpMetricToolName } from "@/api/mcp/metric-tool-name";
 
 const MCP_METHODS = [
   "initialize",
@@ -40,6 +40,8 @@ type McpRequestMetricState = {
   activePhase: McpMetricPhase | undefined;
   overlap: boolean;
 };
+
+export type McpTransport = McpRequestMetricState["path"];
 
 const phaseStore = new AsyncLocalStorage<McpRequestMetricState>();
 
@@ -91,6 +93,10 @@ export const setMcpMetricProtocolPath = (path: "legacy" | "modern"): void => {
     state.path = path;
   }
 };
+
+/** The request-local protocol leg, when tool execution is inside HTTP admission. */
+export const currentMcpMetricTransport = (): McpTransport =>
+  phaseStore.getStore()?.path ?? "unknown";
 
 export const setMcpMetricParsedMethod = (method: string): void => {
   const state = phaseStore.getStore();

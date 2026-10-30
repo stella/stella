@@ -10,6 +10,7 @@ import {
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -412,7 +413,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveMatterTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_MATTER_PROJECTION, {
@@ -482,7 +486,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(updated)) {
-      return internalFailureResult(updated.error);
+      return internalFailureResult(
+        updated.error,
+        "mcp.handleSaveMatterTool.updated_error",
+      );
     }
   }
 
@@ -495,7 +502,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(archived)) {
-      return internalFailureResult(archived.error);
+      return internalFailureResult(
+        archived.error,
+        "mcp.handleSaveMatterTool.archived_error",
+      );
     }
   } else if (input.status === "active") {
     const unarchived = await Result.gen(() =>
@@ -506,7 +516,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(unarchived)) {
-      return internalFailureResult(unarchived.error);
+      return internalFailureResult(
+        unarchived.error,
+        "mcp.handleSaveMatterTool.unarchived_error",
+      );
     }
   }
 
@@ -566,7 +579,10 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteMatterTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -632,7 +648,10 @@ const handleListContactsTool: TypedMcpToolHandler<
     },
   });
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListContactsTool.listed_error",
+    );
   }
   const page = projectionPayload(LIST_CONTACTS_PROJECTION, {
     ...listed.value,
@@ -648,30 +667,12 @@ const handleListContactsTool: TypedMcpToolHandler<
 
 // --- save_contact -------------------------------------------------------
 
-const birthYearSchema = () =>
-  v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999));
-const birthMonthSchema = () =>
-  v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12));
-
 /**
  * A date of birth at the precision known, as contacts store it: a year, a
  * year and month, or a full date. Shared by save_contact and
  * check_counterparty, so a date read back from a contact is accepted as is.
  */
-const dateOfBirthInputSchema = v.variant("precision", [
-  v.strictObject({ precision: v.literal("year"), year: birthYearSchema() }),
-  v.strictObject({
-    precision: v.literal("month"),
-    year: birthYearSchema(),
-    month: birthMonthSchema(),
-  }),
-  v.strictObject({
-    precision: v.literal("day"),
-    year: birthYearSchema(),
-    month: birthMonthSchema(),
-    day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(31)),
-  }),
-]);
+const dateOfBirthInputSchema = contactBirthDateSchema;
 
 type ContactNameParts = {
   display_name?: string | undefined;
@@ -834,7 +835,9 @@ const handleSaveContactTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveContactArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+    return validationErrorResult(parsed.issues, undefined, {
+      date_of_birth: "dateOfBirth",
+    });
   }
   const input = parsed.output;
 
@@ -854,7 +857,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
       nationalityCodes: input.nationality_codes,
     });
     if (detailsError) {
-      return internalFailureResult(detailsError);
+      return internalFailureResult(
+        detailsError,
+        "mcp.handleSaveContactTool.detailsError",
+      );
     }
     const created = await Result.gen(() =>
       createContactHandler({
@@ -889,7 +895,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveContactTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_CONTACT_PROJECTION, {
@@ -932,7 +941,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveContactTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(SAVE_CONTACT_PROJECTION, {
@@ -979,7 +991,10 @@ const handleDeleteContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteContactTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -1060,7 +1075,10 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     },
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleLookupBusinessRegistryTool.result_error",
+    );
   }
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction. Forwarded
@@ -1258,7 +1276,10 @@ const handleCheckCounterpartyTool = withThirdPartyOutbound<
 
   const subject = toCounterpartyCheckSubject(parsed.output.subject);
   if (Result.isError(subject)) {
-    return internalFailureResult(subject.error);
+    return internalFailureResult(
+      subject.error,
+      "mcp.handleCheckCounterpartyTool.subject_error",
+    );
   }
   const observer = actionRequestObserver(
     context.organizationId,
@@ -1278,7 +1299,10 @@ const handleCheckCounterpartyTool = withThirdPartyOutbound<
     },
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleCheckCounterpartyTool.result_error",
+    );
   }
   // Passthrough: public-register and public-list data about a subject the
   // caller named.
@@ -1593,7 +1617,10 @@ const handleListTasksTool: TypedMcpToolHandler<
     },
   });
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListTasksTool.listed_error",
+    );
   }
 
   const tasks = listed.value.items;
@@ -1965,6 +1992,8 @@ const validateSaveTaskTargets = async ({
   return null;
 };
 
+const SAVE_TASK_CREATE_KEY = "mcp.handleSaveTaskTool.created_error";
+
 const handleSaveTaskTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_TASK_PROJECTION>
 > = async ({ args, context }) => {
@@ -2017,7 +2046,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(created.error, SAVE_TASK_CREATE_KEY);
     }
     return toolDataResult(
       projectionPayload(SAVE_TASK_PROJECTION, {
@@ -2087,7 +2116,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(updated)) {
-      return internalFailureResult(updated.error);
+      return internalFailureResult(
+        updated.error,
+        "mcp.handleSaveTaskTool.updated_error",
+      );
     }
   }
 
@@ -2102,7 +2134,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(added)) {
-      return internalFailureResult(added.error);
+      return internalFailureResult(
+        added.error,
+        "mcp.handleSaveTaskTool.added_error",
+      );
     }
   }
 
@@ -2117,7 +2152,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(removed)) {
-      return internalFailureResult(removed.error);
+      return internalFailureResult(
+        removed.error,
+        "mcp.handleSaveTaskTool.removed_error",
+      );
     }
   }
 
@@ -2138,7 +2176,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(linked)) {
-      return internalFailureResult(linked.error);
+      return internalFailureResult(
+        linked.error,
+        "mcp.handleSaveTaskTool.linked_error",
+      );
     }
   }
 
@@ -2153,7 +2194,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(unlinked)) {
-      return internalFailureResult(unlinked.error);
+      return internalFailureResult(
+        unlinked.error,
+        "mcp.handleSaveTaskTool.unlinked_error",
+      );
     }
   }
 
@@ -2216,7 +2260,10 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTaskTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -2359,7 +2406,10 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(removed)) {
-      return internalFailureResult(removed.error);
+      return internalFailureResult(
+        removed.error,
+        "mcp.handleLinkMatterContactTool.removed_error",
+      );
     }
     return toolDataResult(
       projectionPayload(LINK_MATTER_CONTACT_UNLINK_PROJECTION, {
@@ -2385,7 +2435,10 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.handleLinkMatterContactTool.created_error",
+    );
   }
   return toolDataResult(
     projectionPayload(LINK_MATTER_CONTACT_LINK_PROJECTION, {
@@ -2407,7 +2460,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "'active' to archive or unarchive it. Returns the matter ID.",
     inputSchema: saveMatterArgsSchema,
     jsonSchemaProjectionWaiver: {
-      ignoreActions: ["partial_check"],
+      ignoreActions: ["check", "partial_check"],
       reason:
         "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
     },
@@ -2446,8 +2499,9 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     description:
-      "Permanently delete a matter and all its documents, tasks, fields, and " +
-      "chat history. This is irreversible.",
+      "Permanently delete a matter with its documents, tasks, fields and " +
+      "chat history; irreversible. Refused (409) when it has time, expenses " +
+      "or invoices: archive it instead.",
     inputSchema: deleteMatterArgsSchema,
     access: "write",
     accountAccess: "sandbox",
@@ -2497,7 +2551,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     jsonSchemaProjectionWaiver: {
-      ignoreActions: ["partial_check"],
+      ignoreActions: ["check", "partial_check"],
       reason:
         "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
     },
@@ -2597,6 +2651,11 @@ export const MATTER_TOOL_DEFINITIONS = [
         spelling: "alpha-2",
         tool: "check_counterparty",
       }),
+    },
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["check"],
+      reason:
+        "Birth-date chronology is enforced at runtime because JSON Schema cannot compare a partial date with today.",
     },
     access: "read",
     permissions: { type: "all", permissions: { workspace: ["read"] } },

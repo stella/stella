@@ -12,7 +12,8 @@ import { SearchField } from "@stll/ui/search-field";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { filterVisibleDocuments } from "@/components/workspaces/matter-document-picker.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type MatterDocumentPickerProps = {
@@ -37,8 +38,8 @@ export const MatterDocumentPicker = ({
   const [search, setSearch] = useState("");
   const [initialPickedEntityIds] = useState(() => [...pickedEntityIds]);
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  const filesView = queryView(filesQuery);
+  useQueryViewError(filesView, "MatterDocumentPicker:query");
   const files = filesView.type === "items" ? filesView.items : undefined;
 
   const documents = filterVisibleDocuments(files ?? [], search);

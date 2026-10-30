@@ -81,7 +81,14 @@ export const capabilityRequestGuard = (
         declared,
         routeCapability,
       }),
-      { request: ctx.request },
+      {
+        request: ctx.request,
+        fingerprintKey: "capabilityRequestGuard.mismatch",
+        scope: {
+          type: "handler",
+          handlerId: "capabilityRequestGuard.mismatch",
+        },
+      },
     );
     return toResponse(
       status(

@@ -24,7 +24,6 @@ const SNAPSHOT = {
   manualAssignments: [],
   pendingBatch: null,
   deletionStatus: "available",
-  timeBillingEnabled: true,
   earliestDate: "2026-10-01",
   latestDate: "2026-10-07",
   excludedApps: [],
@@ -76,7 +75,14 @@ type InstallNativeBoundaryOptions = {
   batchReceipt?: "save" | "fail-first" | "keep-pending";
   historyDeletion?:
     "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
+  /** How long the first paint may take; the default suits small fixtures. */
+  firstRenderTimeoutMs?: number;
 };
+
+// timeout: A review of 101 matters with 101 timeline segments renders every
+// row before its heading paints; on a loaded CI runner that has taken just over
+// the 5 s expectation default.
+const LARGE_REVIEW_FIRST_RENDER_TIMEOUT_MS = 15_000;
 
 const installNativeBoundary = async ({
   page,
@@ -86,6 +92,7 @@ const installNativeBoundary = async ({
   batchValidation = "accept",
   batchReceipt = "save",
   historyDeletion = "available",
+  firstRenderTimeoutMs,
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
@@ -273,22 +280,6 @@ const installNativeBoundary = async ({
               },
             },
           ] satisfies DesktopTimeEntryMatterCandidate[],
-        time_entry_discard_pending_batch_confirmed: (args) => {
-          if (
-            activitySnapshot.timeBillingEnabled ||
-            activitySnapshot.pendingBatch?.idempotencyKey !==
-              args["idempotencyKey"]
-          ) {
-            throw new TypeError("Pending discard is unavailable");
-          }
-          activitySnapshot = {
-            ...activitySnapshot,
-            pendingBatch: null,
-            deletionStatus: "available",
-          };
-          emitActivityChanged();
-          return undefined;
-        },
         time_entry_submit_batch_confirmed: async () => {
           batchAttempts += 1;
           if (validation === "hold-first" && batchAttempts === 1) {
@@ -356,7 +347,11 @@ const installNativeBoundary = async ({
       }),
     ).toBeVisible();
   } else {
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible(
+      firstRenderTimeoutMs === undefined
+        ? {}
+        : { timeout: firstRenderTimeoutMs },
+    );
   }
   if (
     (snapshot.recordingStatus !== "off" ||
@@ -622,6 +617,7 @@ test("more than 100 selected matters keep the review editable until the selectio
   }));
   await installNativeBoundary({
     page,
+    firstRenderTimeoutMs: LARGE_REVIEW_FIRST_RENDER_TIMEOUT_MS,
     snapshot: {
       ...SNAPSHOT,
       manualAssignments,
@@ -992,43 +988,6 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
   ).toBeDisabled();
 });
 
-test("stored pending drafts remain visible without billing capability and cannot be submitted", async ({
-  page,
-}) => {
-  await installNativeBoundary({
-    page,
-    snapshot: {
-      ...SNAPSHOT,
-      segments: [],
-      pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
-      deletionStatus: "pending",
-    },
-  });
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
-      exact: true,
-    }),
-  ).toBeDisabled();
-  await expect(page.getByRole("status")).toContainText(
-    enMessages.activity.batchUnavailable,
-  );
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
-  );
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.previousDay }),
-  ).toBeEnabled();
-  await page
-    .getByRole("button", { name: enMessages.activity.previousDay })
-    .click();
-  expect(await tauriInvocations(page)).toContainEqual({
-    command: "activity_get_day",
-    args: { date: "2026-10-06" },
-  });
-});
-
 test("empty recovery keeps its saved receipt visible until navigating to another day", async ({
   page,
 }) => {
@@ -1189,54 +1148,6 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
   });
 }
 
-test("billing-disabled pending recovery can be discarded locally only after confirmation", async ({
-  page,
-}) => {
-  await installNativeBoundary({
-    page,
-    snapshot: {
-      ...SNAPSHOT,
-      segments: [],
-      pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
-      deletionStatus: "pending",
-    },
-  });
-  const discard = page.getByRole("button", {
-    name: enMessages.activity.discardPendingRecovery,
-    exact: true,
-  });
-  await discard.click();
-  await expect(page.getByRole("dialog")).toContainText(
-    enMessages.activity.discardPendingConfirmation,
-  );
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_discard_pending_batch_confirmed",
-    }),
-  );
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: enMessages.activity.cancel, exact: true })
-    .click();
-  await expect(discard).toBeVisible();
-  await discard.click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: enMessages.activity.delete, exact: true })
-    .click();
-  await expect(
-    page.getByText(enMessages.activity.empty, { exact: true }),
-  ).toBeVisible();
-  expect(await tauriInvocations(page)).toContainEqual({
-    command: "time_entry_discard_pending_batch_confirmed",
-    args: { date: SNAPSHOT.date, idempotencyKey: PENDING_BATCH.idempotencyKey },
-  });
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
-  );
-});
-
 test("pending drafts dated after today remain reachable after the clock moves backward", async ({
   page,
 }) => {
@@ -1282,116 +1193,6 @@ test("pending drafts dated after today remain reachable after the clock moves ba
   await expect(next).toBeDisabled();
 });
 
-test("discarding an old recovery key cannot unlock a later uncertain batch", async ({
-  page,
-}) => {
-  await installNativeBoundary({
-    page,
-    batchValidation: "hold-first",
-    snapshot: {
-      ...SNAPSHOT,
-      pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
-      deletionStatus: "pending",
-    },
-  });
-  await page
-    .getByRole("button", {
-      name: enMessages.activity.discardPendingRecovery,
-      exact: true,
-    })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: enMessages.activity.delete, exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await page.evaluate((next) => {
-    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
-    if (typeof update !== "function") {
-      throw new TypeError("Snapshot control is missing");
-    }
-    update(next);
-  }, SNAPSHOT);
-  await page
-    .getByRole("button", { name: "Create 1 draft", exact: true })
-    .click();
-  await page.evaluate(() => {
-    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
-    if (typeof reject !== "function") {
-      throw new TypeError("Pending batch control is missing");
-    }
-    reject();
-  });
-  await expect(page.getByRole("alert")).toContainText(
-    enMessages.activity.batchFailed,
-  );
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
-      exact: true,
-    }),
-  ).toBeEnabled();
-  await expect(
-    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
-  ).toBeDisabled();
-  expect(await tauriInvocations(page)).toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_submit_batch_confirmed",
-      args: expect.objectContaining({
-        request: expect.objectContaining({
-          idempotencyKey: expect.not.stringContaining(
-            PENDING_BATCH.idempotencyKey,
-          ),
-        }),
-      }),
-    }),
-  );
-});
-
-test("pending discard confirmation becomes unavailable when billing capability returns", async ({
-  page,
-}) => {
-  const snapshot = {
-    ...SNAPSHOT,
-    pendingBatch: PENDING_BATCH,
-    timeBillingEnabled: false,
-    deletionStatus: "pending",
-  } satisfies ActivityDaySnapshot;
-  await installNativeBoundary({ page, snapshot });
-  await page
-    .getByRole("button", {
-      name: enMessages.activity.discardPendingRecovery,
-      exact: true,
-    })
-    .click();
-  await page.evaluate(
-    (next) => {
-      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
-      if (typeof update !== "function") {
-        throw new TypeError("Snapshot control is missing");
-      }
-      update(next);
-    },
-    { ...snapshot, timeBillingEnabled: true },
-  );
-  await expect(
-    page
-      .getByRole("dialog")
-      .getByRole("button", { name: enMessages.activity.delete, exact: true }),
-  ).toBeDisabled();
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_discard_pending_batch_confirmed",
-    }),
-  );
-});
-
 test("stored pending retry permits confirmed unreadable repair while ordinary deletion stays blocked", async ({
   page,
 }) => {
@@ -1401,17 +1202,10 @@ test("stored pending retry permits confirmed unreadable repair while ordinary de
       ...SNAPSHOT,
       segments: [],
       pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
       unreadable: true,
       deletionStatus: "unreadable",
     },
   });
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.discardPendingRecovery,
-      exact: true,
-    }),
-  ).toHaveCount(0);
   await expect(
     page.getByRole("button", {
       name: enMessages.activity.deleteDay,
@@ -1444,11 +1238,6 @@ test("stored pending retry permits confirmed unreadable repair while ordinary de
     command: "activity_delete_all",
     args: { recovery: "discardUnreadable" },
   });
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_discard_pending_batch_confirmed",
-    }),
-  );
 });
 
 test("unreadable activity erase requires confirmation of lost pending recovery", async ({

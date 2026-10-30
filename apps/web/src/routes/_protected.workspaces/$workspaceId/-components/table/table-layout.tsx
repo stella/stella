@@ -106,7 +106,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     : ["folder", "task"];
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const columns = useTableColumns({ properties, view });
+  const columns = useTableColumns({ properties, view, workspaceId });
   // Deferred alongside the window key (`useListPage` defers its own), so the
   // marks and the empty state describe the rows on screen, not the term whose
   // fetch is still in flight.

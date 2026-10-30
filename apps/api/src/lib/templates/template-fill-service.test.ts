@@ -12,6 +12,7 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { discoverHandler } from "@/api/handlers/templates/discover";
 import discoverEndpoint from "@/api/handlers/templates/discover";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { decodeRequestInput } from "@/api/http/input";
 import { routes } from "@/api/http/route";
@@ -2049,7 +2050,7 @@ test("stored web discovery, description and effective fill declarations agree fo
                       await readBody(),
                     ),
                     request: ctx.request,
-                    route: "/templates/discover",
+                    route: "/v1/templates/discover" satisfies ApiRoutePath,
                   }),
                 ),
             },

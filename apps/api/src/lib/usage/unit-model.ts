@@ -16,6 +16,7 @@ import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   ACTION_WEIGHTS,
   computeUsageUnitCost,
@@ -68,7 +69,10 @@ const getModelRateOrFallback = (modelId: string): ModelRate => {
       new TelemetryError({
         message: "Usage rate lookup missed catalog; billing at fallback rate",
       }),
-      { source: "usage-unit-model", modelId },
+      handlerErrorContext("usage.getModelRateOrFallback", {
+        source: "usage-unit-model",
+        modelId,
+      }),
     );
   }
 
@@ -90,9 +94,19 @@ const MAX_TOKEN_COUNT = 2 ** 40;
 // telemetry on the hot metering path.
 const reportedUsageShapeAnomalies = new Set<string>();
 
+type UsageTokenField = Extract<
+  | keyof NormalizeProviderPromptTokensOptions
+  | keyof UsageInput
+  | keyof DecisionUsageInput,
+  `${string}Tokens`
+>;
+
+type UsageShapeAnomaly =
+  `invalid-${UsageTokenField}` | "cache-tokens-exceed-included-prompt";
+
 type UsageShapeAnomalyOptions = {
   modelId: string;
-  anomaly: string;
+  anomaly: UsageShapeAnomaly;
   context: Record<string, string>;
 };
 
@@ -110,13 +124,18 @@ const reportUsageShapeAnomaly = ({
     new TelemetryError({
       message: `Provider usage shape anomaly (${anomaly}); metering fell back to a conservative value`,
     }),
-    { source: "usage-unit-model", modelId, anomaly, ...context },
+    handlerErrorContext(`usage.shape.${anomaly}`, {
+      source: "usage-unit-model",
+      modelId,
+      anomaly,
+      ...context,
+    }),
   );
 };
 
 type SanitizeTokenCountOptions = {
   modelId: string;
-  field: string;
+  field: UsageTokenField;
   value: number;
 };
 

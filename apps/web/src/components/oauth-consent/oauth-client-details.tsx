@@ -29,7 +29,13 @@ export const OAuthClientDetails = ({
     <Popover>
       <PopoverTrigger
         aria-label={t("destinationDetails")}
-        render={<Button variant="ghost" className="size-11 shrink-0" />}
+        render={
+          <Button
+            className="size-11 shrink-0"
+            tooltip={t("destinationDetails")}
+            variant="ghost"
+          />
+        }
       >
         <InfoIcon className="size-4" aria-hidden="true" />
       </PopoverTrigger>

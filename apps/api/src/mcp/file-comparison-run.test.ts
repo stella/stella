@@ -35,8 +35,7 @@ const TARGET_BYTES = new Uint8Array([5, 6, 7, 8, 9]);
 const sha256Of = (bytes: Uint8Array): string =>
   createSha256().update(bytes).digest("hex");
 
-const hexToBase64 = (hex: string): string =>
-  Buffer.from(hex, "hex").toString("base64");
+const hexToBase64 = (hex: string): string => Buffer.from(hex, "hex").toBase64();
 
 type Row = {
   declaredName: string;

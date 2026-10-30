@@ -1,3 +1,4 @@
+import { UnhandledException } from "better-result";
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import fc from "fast-check";
 
@@ -12,6 +13,7 @@ import {
   captureError,
   captureObservedError,
   captureRequestError,
+  createErrorCapture,
   resetCaptureWindows,
 } from "@/api/lib/analytics/capture";
 import { setAnalyticsForTesting } from "@/api/lib/analytics/client";
@@ -22,6 +24,9 @@ import {
   HandlerError,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import { ConversionInputError } from "@/api/lib/files/gotenberg";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
@@ -30,7 +35,6 @@ import {
   openRequestContext,
   runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
-import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 
 const captured: {
   groups?: Record<string, string>;
@@ -65,17 +69,21 @@ setAnalyticsForTesting({
 });
 
 /**
- * Both helpers construct their error on a single source line, so every
- * occurrence from one helper shares a `error.frame` and therefore a
- * suppression key — the shape of a loop that keeps failing at the same site.
- * The two helpers sit on different lines, so they are different defects.
+ * Each helper supplies its own symbolic owner, so line moves cannot change
+ * grouping while failures from distinct paths remain separate.
  */
 const captureFromSiteA = (context?: Record<string, string>): void => {
-  captureError(new Error("boom"), context);
+  captureError(
+    new Error("boom"),
+    handlerErrorContext("analytics.captureFromSiteA", context),
+  );
 };
 
 const captureFromSiteB = (): void => {
-  captureError(new Error("boom"));
+  captureError(
+    new Error("boom"),
+    handlerErrorContext("analytics.captureFromSiteB"),
+  );
 };
 
 /**
@@ -88,7 +96,10 @@ const captureFromSiteB = (): void => {
 const captureQueryFailure = (sqlState: string): void => {
   const driverError = new Error("driver rejected the statement");
   Reflect.set(driverError, "errno", sqlState);
-  captureError(new Error("query failed", { cause: driverError }));
+  captureError(
+    new Error("query failed", { cause: driverError }),
+    handlerErrorContext("analytics.captureQueryFailure"),
+  );
 };
 
 const errorAt = (className: "Error" | "TypeError", location: string): Error => {
@@ -126,9 +137,40 @@ beforeEach(() => {
   resetCaptureWindows();
 });
 
+test("bound capture callbacks preserve each caller identity and context", () => {
+  const error = new TypeError("callback unavailable");
+  const firstOptions = handlerErrorContext("callbacks.first", {
+    phase: "read",
+  });
+  const secondOptions = handlerErrorContext("callbacks.second", {
+    phase: "write",
+  });
+  const first = createErrorCapture(firstOptions);
+  const second = createErrorCapture(secondOptions);
+  first(error);
+  first(error);
+  second(error);
+  expect(captured).toHaveLength(2);
+  expect(
+    captured.map(({ properties }) => properties["$exception_fingerprint"]),
+  ).toEqual([
+    exceptionFingerprint(readEvidence(error), firstOptions),
+    exceptionFingerprint(readEvidence(error), secondOptions),
+  ]);
+  expect(captured.map(({ properties }) => properties["phase"])).toEqual([
+    "read",
+    "write",
+  ]);
+});
+
 test("error capture redacts handoff credentials from diagnostic context", () => {
   const code = `sh1_${"a".repeat(43)}`;
-  captureError(new Error(`Request ${code} refused`), { requestId: code });
+  captureError(
+    new Error(`Request ${code} refused`),
+    handlerErrorContext("analytics.redactsHandoffCredentials", {
+      requestId: code,
+    }),
+  );
   expect(captured).toHaveLength(1);
   expect(captured.at(0)?.properties["requestId"]).toBe("[redacted]");
   expect(JSON.stringify(captured)).not.toContain(code);
@@ -200,6 +242,44 @@ describe("captureError repeat suppression", () => {
 });
 
 describe("captureError issue grouping", () => {
+  test("line shifts share suppression while retaining structural exception values", () => {
+    const options = handlerErrorContext("analytics.captureShifted");
+    const before = errorAt(
+      "Error",
+      "apps/api/src/lib/analytics/capture.test.ts:100:2",
+    );
+    const after = errorAt(
+      "Error",
+      "apps/api/src/lib/analytics/capture.test.ts:101:2",
+    );
+    expect(before.stack).not.toBe(after.stack);
+    captureError(before, options);
+    captureError(after, options);
+    expect(captured).toHaveLength(1);
+    expect(firstExceptionValue()).toBe(
+      "Error unclassified defect at apps/api/src/lib/analytics/capture.test.ts:100:2",
+    );
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).toBe(
+      exceptionFingerprint(readEvidence(after), options),
+    );
+  });
+
+  test("UnhandledException preserves distinct cause classes before repeat suppression", () => {
+    const options = handlerErrorContext("analytics.captureWrappedFailure");
+    captureError(
+      new UnhandledException({ cause: new TypeError("failure") }),
+      options,
+    );
+    captureError(
+      new UnhandledException({ cause: new ReferenceError("failure") }),
+      options,
+    );
+    expect(captured).toHaveLength(2);
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
+  });
+
   // PostHog groups issues from `$exception_list`; with the message and stack
   // redacted, every event of one class would collapse into a single issue and
   // first-seen automations would never fire again for that class. The
@@ -236,7 +316,10 @@ describe("captureError issue grouping", () => {
   });
 
   test("the grouping fingerprint never carries the error message", () => {
-    captureError(new Error("Privileged client matter detail"));
+    captureError(
+      new Error("Privileged client matter detail"),
+      handlerErrorContext("analytics.capture"),
+    );
 
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
@@ -250,6 +333,7 @@ describe("captureError issue grouping", () => {
         message: "Alex Doe <alex@example.test> privileged document text",
         status: 502,
       }),
+      handlerErrorContext("analytics.captureStructural"),
     );
 
     expect(firstExceptionValue()).toMatch(
@@ -270,14 +354,18 @@ describe("captureError issue grouping", () => {
       },
     };
     classifyFailure(providerBody, "provider_request_rejected");
-    captureError(providerBody);
-    captureError({
-      status: 429,
-      error: {
-        code: "rate_limit_exceeded",
-        type: "requests",
+    const options = handlerErrorContext("analytics.captureProviderBody");
+    captureError(providerBody, options);
+    captureError(
+      {
+        status: 429,
+        error: {
+          code: "rate_limit_exceeded",
+          type: "requests",
+        },
       },
-    });
+      options,
+    );
 
     const properties = captured.at(0)?.properties;
     expect(captured).toHaveLength(2);
@@ -285,14 +373,18 @@ describe("captureError issue grouping", () => {
       "UnknownError[invalid_value] 400 provider_request_rejected defect",
     );
     expect(properties).toMatchObject({
-      $exception_fingerprint: "UnknownError|||||invalid_value|400",
       "error.provider.code": "invalid_value",
       "error.provider.param": "input[3].call_id",
       "error.provider.status": "400",
       "error.provider.type": "invalid_request_error",
     });
-    expect(captured.at(1)?.properties["$exception_fingerprint"]).toBe(
-      "UnknownError|||||rate_limit_exceeded|429",
+    expect(properties?.["$exception_fingerprint"]).toContain("invalid_value");
+    expect(properties?.["$exception_fingerprint"]).toContain("400");
+    expect(captured.at(1)?.properties["$exception_fingerprint"]).toContain(
+      "rate_limit_exceeded",
+    );
+    expect(captured.at(1)?.properties["$exception_fingerprint"]).toContain(
+      "429",
     );
     expect(properties?.["$exception_fingerprint"]).not.toBe(
       captured.at(1)?.properties["$exception_fingerprint"],
@@ -311,10 +403,14 @@ describe("captureError issue grouping", () => {
       },
     };
 
-    expect(() => captureError(providerBody)).not.toThrow();
+    expect(() =>
+      captureError(
+        providerBody,
+        handlerErrorContext("analytics.captureProviderGetter"),
+      ),
+    ).not.toThrow();
     expect(captured).toHaveLength(1);
     expect(captured.at(0)?.properties).toMatchObject({
-      $exception_fingerprint: "UnknownError|||||invalid_request_error|400",
       "error.provider.status": "400",
       "error.provider.type": "invalid_request_error",
     });
@@ -325,7 +421,10 @@ describe("captureError issue grouping", () => {
     "/app/apps/api/src/lib/analytics/capture.ts:319:17",
     "/home/runner/work/stella/stella/apps/api/src/lib/analytics/capture.ts:319:17",
   ])("keeps recognized absolute repository frames from %s", (location) => {
-    captureError(errorAt("Error", location));
+    captureError(
+      errorAt("Error", location),
+      handlerErrorContext("analytics.captureFrame"),
+    );
 
     expect(firstExceptionValue()).toBe(
       "Error unclassified defect at apps/api/src/lib/analytics/capture.ts:319:17",
@@ -337,6 +436,7 @@ describe("captureError issue grouping", () => {
     (className) => {
       captureError(
         errorAt(className, "apps/api/src/lib/analytics/capture.test.ts:1:2"),
+        handlerErrorContext("analytics.captureClass"),
       );
 
       const value = firstExceptionValue();
@@ -363,6 +463,7 @@ describe("captureError issue grouping", () => {
             }),
             { unknownField: privateMessage },
           ),
+          handlerErrorContext("analytics.capturePrivate"),
         );
 
         const properties = captured.at(0)?.properties;
@@ -380,7 +481,15 @@ describe("captureRequestError organization attribution", () => {
       openRequestContext();
       enrichRequestContext({ organizationId });
 
-      captureRequestError(new Error("boom"), { request });
+      captureRequestError(new Error("boom"), {
+        request,
+        scope: {
+          type: "request",
+          method: request.method,
+          routeTemplate: "/capture-test",
+        },
+        fingerprintKey: "analytics.capture",
+      });
     });
 
     // The group is what PostHog's organization breakdown reads; losing it
@@ -393,7 +502,15 @@ describe("captureRequestError organization attribution", () => {
     runWithRequestIdScope(() => {
       openRequestContext();
 
-      captureRequestError(new Error("boom"), { request });
+      captureRequestError(new Error("boom"), {
+        request,
+        scope: {
+          type: "request",
+          method: request.method,
+          routeTemplate: "/capture-test",
+        },
+        fingerprintKey: "analytics.capture",
+      });
     });
 
     expect(captured.at(0)?.groups).toBeUndefined();
@@ -411,7 +528,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
-      { runId: "run-1" },
+      handlerErrorContext("analytics.capture", { runId: "run-1" }),
     );
 
     const properties = captured.at(0)?.properties;
@@ -433,6 +550,7 @@ describe("captureError extraction diagnostics", () => {
         message: "parser failed",
         termination: null,
       }),
+      handlerErrorContext("analytics.capture"),
     );
     captureError(
       extractionError({
@@ -443,6 +561,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
+      handlerErrorContext("analytics.capture"),
     );
 
     expect(captured).toHaveLength(2);
@@ -463,6 +582,7 @@ describe("captureError extraction diagnostics", () => {
         termination: null,
         workerErrorClass: "PdfParseError",
       }),
+      handlerErrorContext("analytics.capture"),
     );
     captureError(
       extractionError({
@@ -471,6 +591,7 @@ describe("captureError extraction diagnostics", () => {
         termination: null,
         workerErrorClass: "RangeError",
       }),
+      handlerErrorContext("analytics.capture"),
     );
 
     expect(captured).toHaveLength(2);
@@ -485,17 +606,20 @@ describe("captureError extraction diagnostics", () => {
 });
 
 describe("captureError owned fields", () => {
-  test("groups by the identity the legacy fields produced", () => {
+  test("groups and suppresses by the stable identity", () => {
     const driverError = Object.assign(new Error("driver"), {
       errno: "23505",
       constraint: "users_email_key",
     });
     const error = new Error("query failed", { cause: driverError });
 
-    captureError(error);
+    captureError(error, handlerErrorContext("analytics.capture"));
 
     expect(captured.at(0)?.properties["$exception_fingerprint"]).toBe(
-      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+      exceptionFingerprint(readEvidence(error), {
+        fingerprintKey: "analytics.capture",
+        scope: { type: "handler", handlerId: "analytics.capture" },
+      }),
     );
   });
 
@@ -533,7 +657,15 @@ describe("captureError owned fields", () => {
 
       captureRequestError(
         Object.assign(new Error("reset"), { code: "ECONNRESET" }),
-        { request },
+        {
+          request,
+          scope: {
+            type: "request",
+            method: request.method,
+            routeTemplate: "/capture-test",
+          },
+          fingerprintKey: "analytics.capture",
+        },
       );
       return getRequestFailure();
     });
@@ -558,12 +690,18 @@ describe("exception capture follows the declared grade", () => {
       const grading = gradeFailure(readEvidence(error), sink);
       expect(grading.grade).toBe(grade);
       const capturePaths = [
-        () => captureError(error),
+        () =>
+          captureError(error, handlerErrorContext("analytics.gradeContract")),
         () =>
           captureRequestError(error, {
+            ...handlerErrorContext("analytics.gradeContract"),
             request: new Request("http://localhost/"),
           }),
-        () => captureObservedError(error, { observation: grading }),
+        () =>
+          captureObservedError(error, {
+            ...handlerErrorContext("analytics.gradeContract"),
+            observation: grading,
+          }),
       ];
       for (const capture of capturePaths) {
         captured.length = 0;
@@ -573,4 +711,118 @@ describe("exception capture follows the declared grade", () => {
       }
     });
   }
+});
+
+test("capture preserves finite dimensions when fingerprint metadata is unreadable", () => {
+  class MetadataError extends Error {
+    override readonly name = "MetadataError";
+    readonly reason = "decode";
+    static readonly stellaExceptionFingerprintFields = new Proxy(
+      ["reason", "stage"],
+      {
+        get: (target, key, receiver): unknown => {
+          if (key === "1") {
+            throw new TypeError("unreadable metadata");
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      },
+    );
+  }
+  const error = new MetadataError("private metadata sentinel");
+  captureError(error, handlerErrorContext("analytics.metadata"));
+  expect(captured).toHaveLength(1);
+  expect(readEvidence(error).truncation).toBe("read_failed");
+  expect(captured[0]?.properties["$exception_fingerprint"]).toContain("decode");
+  expect(JSON.stringify(captured[0]?.properties)).not.toContain(
+    "private metadata sentinel",
+  );
+});
+
+test("conversion refusal fingerprints depend on kind rather than variable details", () => {
+  assertProperty(
+    "conversion refusal fingerprints depend on kind rather than variable details",
+    fc.property(fc.string(), (detail) => {
+      captured.length = 0;
+      resetCaptureWindows();
+      const privateDetail = `PRIVATE_CONVERSION_SENTINEL:${detail}`;
+      const reference = new ConversionInputError({
+        message: privateDetail,
+        reason: {
+          kind: "unsupported_reference",
+          format: privateDetail,
+          element: privateDetail,
+          attribute: privateDetail,
+        },
+      });
+      expect(readEvidence(reference).nodes.at(0)?.discriminators).toEqual({
+        "reason.kind": "unsupported_reference",
+      });
+      for (const error of [
+        reference,
+        new ConversionInputError({
+          message: "Another message",
+          reason: {
+            kind: "unsupported_reference",
+            format: "another format",
+            element: "another element",
+            attribute: "another attribute",
+          },
+        }),
+        new ConversionInputError({
+          message: privateDetail,
+          reason: { kind: "unsupported_encoding", encoding: privateDetail },
+        }),
+      ]) {
+        captureError(error, handlerErrorContext("analytics.conversionRefusal"));
+      }
+      expect(captured).toHaveLength(2);
+      expect(
+        new Set(
+          captured.map(
+            ({ properties }) => properties["$exception_fingerprint"],
+          ),
+        ).size,
+      ).toBe(2);
+      expect(JSON.stringify(captured)).not.toContain(
+        "PRIVATE_CONVERSION_SENTINEL",
+      );
+    }),
+  );
+});
+
+test("request values cannot change declared or unmatched exception fingerprints", () => {
+  assertProperty(
+    "request values cannot change declared or unmatched exception fingerprints",
+    fc.property(fc.uuid(), fc.uuid(), (beforeId, afterId) => {
+      const scopes = [
+        { type: "request", method: "GET", routeTemplate: "/files/:fileId" },
+        { type: "request", method: "GET", routeTemplate: "unmatched" },
+        { type: "handler", handlerId: "analytics.contextlessRequest" },
+      ] as const;
+      for (const scope of scopes) {
+        const fingerprint = (id: string) =>
+          runWithRequestIdScope(() => {
+            captured.length = 0;
+            resetCaptureWindows();
+            const request = new Request(
+              `https://api.test/files/${id}?token=${id}`,
+            );
+            openRequestContext();
+            captureRequestError(new Error("fixture failure"), {
+              scope,
+              fingerprintKey: "analytics.requestValueInvariant",
+              request,
+            });
+            const identity =
+              captured.at(0)?.properties["$exception_fingerprint"];
+            expect(typeof identity).toBe("string");
+            expect(String(identity)).not.toContain(id);
+            expect(String(identity)).not.toContain("token=");
+            return identity;
+          });
+        expect(fingerprint(beforeId)).toBe(fingerprint(afterId));
+      }
+    }),
+  );
 });

@@ -11,6 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   apiResolvedTypecheckInputs,
   nativeProgramSpansWorkspaces as spansWorkspaces,
@@ -151,7 +154,7 @@ test("full lock hashing follows resolved workspace boundaries", () => {
   ).toContain("must explicitly enable caching");
 });
 
-test("native discovery binds multi-project commands and single-workspace lock policy", () => {
+test("native discovery binds multi-project commands and single-workspace lock policy", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "typecheck-native-lock-"));
   const app = path.join(directory, "apps/fixture");
   const write = (file: string, text: string) => {
@@ -214,16 +217,16 @@ test("native discovery binds multi-project commands and single-workspace lock po
       path.join(app, "multi.json"),
     ]);
     expect(projects.has("@stll/fixture#typecheck:aggregate")).toBe(false);
-    expect(typecheckCacheContractIssues(directory)).toEqual([]);
+    expect(await typecheckCacheContractIssues(directory)).toEqual([]);
     expect(
-      apiResolvedTypecheckInputs(path.join(app, "single.json")),
+      await apiResolvedTypecheckInputs(path.join(app, "single.json")),
     ).not.toContain("$TURBO_ROOT$/bun.lock");
-    expect(apiResolvedTypecheckInputs(path.join(app, "multi.json"))).toContain(
-      "$TURBO_ROOT$/bun.lock",
-    );
+    expect(
+      await apiResolvedTypecheckInputs(path.join(app, "multi.json")),
+    ).toContain("$TURBO_ROOT$/bun.lock");
     tasks["@stll/fixture#typecheck"].inputs = requiredInputs;
     writeTasks();
-    expect(typecheckCacheContractIssues(directory)).toContain(
+    expect(await typecheckCacheContractIssues(directory)).toContain(
       "@stll/fixture#typecheck: root and cross-workspace programs must hash the full lockfile",
     );
     tasks["@stll/fixture#typecheck"].inputs = [
@@ -235,7 +238,7 @@ test("native discovery binds multi-project commands and single-workspace lock po
       inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
     };
     writeTasks();
-    expect(typecheckCacheContractIssues(directory)).toContain(
+    expect(await typecheckCacheContractIssues(directory)).toContain(
       "@stll/fixture#typecheck:single: must let Turbo hash relevant lock entries",
     );
   } finally {
@@ -453,3 +456,86 @@ test("cache input exclusions cannot impersonate dependency inputs", () => {
     "missing input $TURBO_DEFAULT$",
   );
 });
+
+for (const fixture of [
+  { extension: "js", output: "dist/value.d.ts", mode: "individual" },
+  { extension: "jsx", output: "dist/value.d.ts", mode: "individual" },
+  { extension: "mjs", output: "dist/value.d.mts", mode: "individual" },
+  { extension: "cjs", output: "dist/value.d.cts", mode: "individual" },
+  { extension: "ts", output: "dist/value.d.ts", mode: "common-root" },
+]) {
+  // timeout: each case starts compilers for the consumer and its referenced producer configs.
+  test(`reference declaration preparation checks ${fixture.extension} ${fixture.mode} output`, async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "reference-output-"));
+    const externalDirectory =
+      fixture.mode === "common-root"
+        ? mkdtempSync(path.join(root, ".declaration-root-"))
+        : undefined;
+    const write = (filename: string, value: unknown) => {
+      const target = path.join(directory, filename);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(
+        target,
+        typeof value === "string" ? value : JSON.stringify(value),
+      );
+    };
+    try {
+      write("turbo.json", { tasks: { "@stll/consumer#typecheck": {} } });
+      write("packages/consumer/package.json", {
+        name: "@stll/consumer",
+        scripts: { typecheck: "bun check --project=tsconfig.json" },
+      });
+      write("packages/consumer/entry.ts", "export {};\n");
+      write("packages/consumer/tsconfig.json", {
+        files: ["entry.ts"],
+        references: [{ path: "../producer" }],
+        compilerOptions: { disableSourceOfProjectReferenceRedirect: true },
+      });
+      write(
+        `packages/producer/value.${fixture.extension}`,
+        "export const value = 1;\n",
+      );
+      const externalSource = externalDirectory
+        ? path.join(externalDirectory, "external.ts")
+        : undefined;
+      if (externalSource) {
+        writeFileSync(externalSource, "export const external = 1;\n");
+      }
+      write("packages/producer/tsconfig.json", {
+        files: [
+          `value.${fixture.extension}`,
+          ...(externalSource ? [externalSource] : []),
+        ],
+        compilerOptions: {
+          composite: true,
+          declaration: true,
+          rootDir: externalSource ? path.parse(directory).root : undefined,
+          allowJs: fixture.extension !== "ts",
+          outDir: "dist",
+        },
+      });
+      const output = externalSource
+        ? path
+            .join(
+              directory,
+              "packages/producer/dist",
+              repoRelativePath(
+                path.parse(directory).root,
+                path.join(directory, "packages/producer/value.ts"),
+              ),
+            )
+            .replace(/\.ts$/u, ".d.ts")
+        : path.join(directory, "packages/producer", fixture.output);
+      expect(
+        await rejectionOf(typecheckCacheContractIssues(directory)),
+      ).toMatchObject({
+        message: `Prepare declaration output before native cache audit: ${output}`,
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+      if (externalDirectory) {
+        rmSync(externalDirectory, { recursive: true, force: true });
+      }
+    }
+  }, 30_000);
+}

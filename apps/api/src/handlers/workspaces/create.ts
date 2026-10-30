@@ -13,7 +13,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -34,6 +34,7 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -326,7 +327,11 @@ export const createWorkspaceHandler = async function* ({
     }),
   );
 
-  flushWorkspaceSearchRepairs([txResult.id]).catch(captureError);
+  flushWorkspaceSearchRepairs([txResult.id]).catch(
+    createErrorCapture(
+      handlerErrorContext("createWorkspaceHandler.flushWorkspaceSearchRepairs"),
+    ),
+  );
 
   return Result.ok({ id: txResult.id });
 };

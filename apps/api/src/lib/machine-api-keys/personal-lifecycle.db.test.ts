@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/machine-api-key-config";
 import {
   createPersonalApiKey,
+  issueMachineApiKey,
   listPersonalApiKeys,
   readPersonalApiKeyPolicy,
   revokePersonalApiKey,
@@ -44,6 +45,7 @@ import {
 } from "@/api/lib/machine-api-keys/personal-lifecycle";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { logger } from "@/api/lib/observability/logger";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 import {
@@ -85,6 +87,10 @@ const withFixture = async (
     slug: organizationId,
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
+  });
   await db.insert(user).values(
     ids.map((id) => ({
       id,
@@ -102,9 +108,20 @@ const withFixture = async (
       createdAt: new Date(),
     })),
   );
+  await db.insert(session).values(
+    ids.map((id) => ({
+      id: `session-${id}`,
+      token: `token-${id}`,
+      userId: id,
+      activeOrganizationId: organizationId,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      updatedAt: new Date(),
+    })),
+  );
   const principal = (userId: typeof ownerId) => ({
     organizationId,
     userId,
+    sessionId: `session-${userId}`,
     database,
     name: "Personal key fixture",
     recordAuditEvent: createBackgroundAuditRecorder({
@@ -249,6 +266,27 @@ describe("personal key persistence and receipts", () => {
           .from(auditLogs)
           .where(eq(auditLogs.organizationId, own.organizationId)),
       ).toEqual(eventsBefore);
+    });
+  });
+
+  test("a credential without a browser session can neither mint nor rotate a key", async () => {
+    await withFixture(async ({ own }) => {
+      const key = requireKey(await createPersonalApiKey(own));
+      const sessionless = { ...own, sessionId: null };
+
+      const minted = await createPersonalApiKey(sessionless);
+      const rotated = await rotatePersonalApiKey({
+        ...sessionless,
+        keyId: key.id,
+      });
+
+      expect(minted.isErr() && minted.error.status).toBe(401);
+      expect(rotated.isErr() && rotated.error.status).toBe(401);
+      const page = await listPersonalApiKeys(
+        { ...own, access: "own", limit: 20 },
+        database,
+      );
+      expect(page.items.map((item) => item.id)).toEqual([key.id]);
     });
   });
 
@@ -469,6 +507,48 @@ describe("personal key persistence and receipts", () => {
     },
   );
 
+  test("a machine key carries only what the role locked at issuance grants", async () => {
+    await withFixture(async ({ admin }) => {
+      const issue = async () =>
+        await issueMachineApiKey({
+          ...admin,
+          name: "Settings key",
+          scopes: ["stella:read"],
+          permissions: { organizationSettings: ["update"] },
+          expiresInDays: undefined,
+          audience: undefined,
+          auditEvent: (key) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+            resourceId: key.id,
+            metadata: { name: key.name },
+          }),
+        });
+      expect((await issue()).isOk()).toBe(true);
+
+      // The handler validated the request for an administrator; the caller is
+      // demoted before issuance takes its locks.
+      await db
+        .update(member)
+        .set({ role: "member" })
+        .where(
+          and(
+            eq(member.organizationId, admin.organizationId),
+            eq(member.userId, admin.userId),
+          ),
+        );
+      const demoted = await issue();
+
+      expect(demoted.isErr() && demoted.error.status).toBe(403);
+      expect(
+        await db
+          .select({ id: apikey.id })
+          .from(apikey)
+          .where(eq(apikey.referenceId, admin.userId)),
+      ).toHaveLength(1);
+    });
+  });
+
   test("rotation retains the persisted permission ceiling after an owner is promoted", async () => {
     await withFixture(async ({ own }) => {
       const membership = and(
@@ -614,6 +694,7 @@ describe("personal key persistence and receipts", () => {
           const sharedOwner = {
             ...unrelatedOwner,
             userId: own.userId,
+            sessionId: own.sessionId,
             recordAuditEvent: createBackgroundAuditRecorder({
               organizationId: unrelatedOwner.organizationId,
               userId: own.userId,

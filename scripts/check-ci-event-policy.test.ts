@@ -21,11 +21,8 @@ const policy = JSON.parse(
   ),
 );
 
-test("compiler parity and seeded probes require dispatch-only policy in every workflow", () => {
+test("seeded compiler probes require dispatch-only policy in every workflow", () => {
   for (const command of [
-    "bun run check:typecheck-parity",
-    "bun scripts/typecheck-parity.ts",
-    "bunx --no-install stll-typecheck-parity --project=tsconfig.json",
     "bash scripts/typecheck-command-probe.sh",
     "probe=packages/sha256/src/typecheck-command-probe.ts",
   ]) {
@@ -39,7 +36,7 @@ test("compiler parity and seeded probes require dispatch-only policy in every wo
         policy: { jobs: { "fixture.yml/proof": "main" } },
       }),
     ).toContain(
-      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+      "fixture.yml/proof: compiler probes require dispatch-only policy",
     );
     expect(
       checkCiEventPolicies({
@@ -52,7 +49,7 @@ test("compiler parity and seeded probes require dispatch-only policy in every wo
         policy: { jobs: { "fixture.yml/proof": "main" } },
       }),
     ).toContain(
-      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+      "fixture.yml/proof: compiler probes require dispatch-only policy",
     );
     const declared = { jobs: { "fixture.yml/proof": "dispatch-only" } };
     expect(
@@ -94,23 +91,16 @@ test("moving compiler proofs into an automatic workflow fails the real policy ce
     if (!job?.steps) {
       panic("Missing workflow steps fixture");
     }
-    for (const command of [
-      "bun run check:typecheck-parity",
-      "bash scripts/typecheck-command-probe.sh",
-    ]) {
-      job.steps.push({ run: command });
-      expect(
-        checkCiEventPolicies({
-          workflows: { ...workflows, [file]: workflow },
-          policy,
-        }),
-      ).toContainEqual(
-        expect.stringContaining(
-          "compiler parity and probes require dispatch-only policy",
-        ),
-      );
-      job.steps.pop();
-    }
+    job.steps.push({ run: "bash scripts/typecheck-command-probe.sh" });
+    expect(
+      checkCiEventPolicies({
+        workflows: { ...workflows, [file]: workflow },
+        policy,
+      }),
+    ).toContainEqual(
+      expect.stringContaining("compiler probes require dispatch-only policy"),
+    );
+    job.steps.pop();
   }
 });
 

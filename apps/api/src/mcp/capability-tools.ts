@@ -17,6 +17,10 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import {
+  hasAccountExportAuthority,
+  isAccountExportScope,
+} from "@/api/lib/auth/account-export-policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -34,6 +38,8 @@ import {
   type JsonSchema,
 } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -152,8 +158,8 @@ type CatalogEntry = {
   scope: string;
   additionalScopes?: readonly string[];
   /**
-   * When true, this capability's REST route resolves workspace access through
-   * `validateWorkspaceAccessIncludingArchived` (e.g. `matters.unarchive`), so
+   * When true, this capability's REST route admits archived matters
+   * (`workspaceStatus: "active-or-archived"`, e.g. `matters.unarchive`), so
    * the generic write gate must let it run against an archived workspace.
    */
   allowsArchivedWorkspace?: boolean;
@@ -794,6 +800,12 @@ const mapStatusResponse = (
           ? responseBody["hint"]
           : refusal.hint,
       retryable: refusal.retryable,
+      retryAfterMs:
+        typeof responseBody["retryAfterMs"] === "number" &&
+        Number.isFinite(responseBody["retryAfterMs"]) &&
+        responseBody["retryAfterMs"] >= 0
+          ? responseBody["retryAfterMs"]
+          : undefined,
       contactUrl:
         typeof responseBody["contactUrl"] === "string"
           ? responseBody["contactUrl"]
@@ -953,13 +965,18 @@ const capabilityFeatureEnabled = (
   entry: CatalogEntry,
   context: McpRequestContext,
 ) =>
-  entry.featureAccess === "conditional" ||
-  isMcpDescriptorFeatureEnabled({
-    context,
-    kind: "capabilities",
-    id: entry.id,
-    featureId: entry.featureId,
-  });
+  (!(
+    capabilityDomain(entry.id) === "account-exports" ||
+    requiredScopesOf(entry).some(isAccountExportScope)
+  ) ||
+    hasAccountExportAuthority(context, entry.access)) &&
+  (entry.featureAccess === "conditional" ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "capabilities",
+      id: entry.id,
+      featureId: entry.featureId,
+    }));
 
 export const accessibleFeatureCapabilityIds = async (
   context: McpRequestContext,
@@ -967,6 +984,7 @@ export const accessibleFeatureCapabilityIds = async (
   (await getCatalog())
     .filter(
       (entry) =>
+        capabilityFeatureEnabled(entry, context) &&
         resolveMcpDescriptorFeatureId({
           context,
           kind: "capabilities",
@@ -1266,22 +1284,35 @@ type GuardedEndpoint =
  * mapped to a structured `internal_error` envelope instead of escaping as an
  * unhandled rejection. Shared by `describe_capability` and the capability executors.
  */
-const loadEndpointGuarded = async (
-  id: string,
-  toolName: "describe_capability" | McpCapabilityExecutor,
-): Promise<GuardedEndpoint> => {
+type LoadEndpointGuardedOptions = {
+  id: string;
+  toolName: "describe_capability" | McpCapabilityExecutor;
+  loadEndpoint?: typeof loadCapabilityEndpoint | undefined;
+};
+
+const loadEndpointGuarded = async ({
+  id,
+  toolName,
+  loadEndpoint = loadCapabilityEndpoint,
+}: LoadEndpointGuardedOptions): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
-    endpoint = await loadCapabilityEndpoint(id);
+    endpoint = await loadEndpoint(id);
   } catch (error) {
-    captureError(error, { source: "mcp", toolName });
+    captureError(
+      error,
+      handlerErrorContext("mcp.loadEndpoint", { source: "mcp", toolName }),
+    );
     endpoint = null;
   }
   if (!endpoint) {
-    captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
-      source: "mcp",
-      toolName,
-    });
+    captureError(
+      new Error(`capability dispatch missing endpoint: ${id}`),
+      handlerErrorContext("mcp.missingEndpoint", {
+        source: "mcp",
+        toolName,
+      }),
+    );
     return {
       ok: false,
       result: structuredErrorResult({
@@ -1321,7 +1352,11 @@ const describeCapabilityHandler: McpToolHandler<
     return featureDisabledResult(entry.feature);
   }
 
-  const loaded = await loadEndpointGuarded(id, "describe_capability");
+  const loaded = await loadEndpointGuarded({
+    id,
+    toolName: "describe_capability",
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return loaded.result;
   }
@@ -1833,10 +1868,11 @@ export const invokedCapabilityConsumesServices = async ({
   if (typeof entry.consumesServices === "boolean") {
     return Result.ok(entry.consumesServices);
   }
-  const loaded = await loadEndpointGuarded(
-    entry.id,
-    MCP_CAPABILITY_EXECUTORS[entry.access],
-  );
+  const loaded = await loadEndpointGuarded({
+    id: entry.id,
+    toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return Result.err(loaded.result);
   }
@@ -1980,20 +2016,28 @@ const invokeCapabilityHandler = async ({
   }
 
   try {
-    return await executeInvoke({
-      context: requiresCapabilityConfirmation(entry)
-        ? bindApprovedMcpAuditContext(context)
-        : context,
-      entry,
-      id,
-      input,
-      validateOnly,
-      confirm,
-    });
+    return await withExceptionScope(
+      { type: "handler", handlerId: `mcp.capability.${entry.id}` },
+      async () =>
+        await executeInvoke({
+          context: requiresCapabilityConfirmation(entry)
+            ? bindApprovedMcpAuditContext(context)
+            : context,
+          entry,
+          id,
+          input,
+          validateOnly,
+          confirm,
+        }),
+    );
   } catch (error) {
     captureError(error, {
-      source: "mcp",
-      toolName: MCP_CAPABILITY_EXECUTORS[access],
+      fingerprintKey: "mcp.invokeCapabilityHandler",
+      scope: { type: "handler", handlerId: `mcp.capability.${entry.id}` },
+      context: {
+        source: "mcp",
+        toolName: MCP_CAPABILITY_EXECUTORS[access],
+      },
     });
     return structuredErrorResult({
       code: "internal_error",
@@ -2026,7 +2070,7 @@ const invokeCapabilityHandler = async ({
  * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
  *   per-capability `destructive` flag.
  * - Workspace access (per-tool `ensureActiveWorkspace` bridging): gate 7
- *   mirrors `validateWorkspaceAccess`(-IncludingArchived per fix-4 flag).
+ *   mirrors the route's `workspaceStatus` (archived admitted per that flag).
  * - Member permissions + usage preflight: run inside the safe-handler wrapper
  *   (`endpoint.handler`), the same code path REST uses; validateOnly
  *   additionally mirrors the permission gate explicitly (the wrapper is not
@@ -2236,6 +2280,19 @@ const capabilityReferenceRefusal = async ({
   return null;
 };
 
+/** Configs without permissions (session-kind) pass, exactly as their wrapper does. */
+const holdsConfigAuthority = (
+  context: McpRequestContext,
+  { permissions }: EndpointConfig,
+): boolean =>
+  permissions === undefined || hasEffectiveAuthority(context, permissions);
+
+const capabilityPermissionDenied = (id: string) =>
+  structuredErrorResult({
+    code: "permission_denied",
+    message: `Your member role does not permit capability "${id}"`,
+  });
+
 const executeInvoke = async ({
   context,
   entry,
@@ -2251,10 +2308,11 @@ const executeInvoke = async ({
   validateOnly: boolean;
   confirm: boolean | undefined;
 }): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded(
+  const loaded = await loadEndpointGuarded({
     id,
-    MCP_CAPABILITY_EXECUTORS[entry.access],
-  );
+    toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return loaded.result;
   }
@@ -2275,6 +2333,15 @@ const executeInvoke = async ({
     params: validatedParams,
     query: validatedQuery,
   } = validated;
+
+  // Static authority. The config's own grant needs nothing from the
+  // request, so it is checked before any step below reads tenant data
+  // (reference visibility, the feature probe, the stored upload purpose): a
+  // caller who may not perform the capability learns nothing about the rows
+  // it names.
+  if (!holdsConfigAuthority(context, endpoint.config)) {
+    return capabilityPermissionDenied(id);
+  }
 
   const referenceRefusal = await capabilityReferenceRefusal({
     context,
@@ -2364,29 +2431,18 @@ const executeInvoke = async ({
     });
   }
 
-  // 9. Authority. The safe wrapper checks the member role on its own, but only
-  // the role: a machine API key's permission set lives on the MCP session, so
-  // this is the one place the two can be ANDed. Every grant this call spends is
-  // checked here, the config's and the purpose's alike, because a handler that
-  // decides a grant from the request reads the role by itself. It runs on both
+  // 9. Purpose authority. The safe wrapper checks the member role on its own,
+  // but only the role: a machine API key's permission set lives on the MCP
+  // session, so this executor is the one place the two can be ANDed: for the
+  // config's grant (static authority, above) and for the purpose's grant here,
+  // which depends on the validated request and the stored row. It runs on both
   // paths and before the limiter below, so a caller who may not perform the
-  // capability is refused without consuming anyone else's budget. Configs
-  // without permissions (session-kind) skip the check, exactly as their wrapper
-  // does.
-  const permissions = endpoint.config.permissions;
-  const requiredPermissions = [
-    ...(permissions === undefined ? [] : [permissions]),
-    ...(purposeRequirement === null ? [] : [purposeRequirement.permission]),
-  ];
+  // capability is refused without consuming anyone else's budget.
   if (
-    requiredPermissions.some(
-      (required) => !hasEffectiveAuthority(context, required),
-    )
+    purposeRequirement !== null &&
+    !hasEffectiveAuthority(context, purposeRequirement.permission)
   ) {
-    return structuredErrorResult({
-      code: "permission_denied",
-      message: `Your member role does not permit capability "${id}"`,
-    });
+    return capabilityPermissionDenied(id);
   }
 
   if (validateOnly) {

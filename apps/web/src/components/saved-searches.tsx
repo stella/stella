@@ -52,6 +52,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -122,30 +123,42 @@ export const SavedSearches = ({
     setDialog({ type: "closed" });
     await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
   };
-  const onMutationError = (error: Error) => {
-    analytics.captureError(error);
+  const onMutationError = (
+    error: Error,
+    operation: "create" | "rename" | "delete",
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey: "SavedSearches.onMutationError:failure",
+      scope: { type: "handler", handlerId: `saved-search.${operation}` },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
+  const submitIntent = useIdempotentSubmit();
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
       const criteria = toSavedSearchCriteria({ filters, query });
       const { time, workspaceIds, ...requiredCriteria } = criteria;
       return unwrapApiResponse(
-        await api["saved-searches"].post({
-          name,
-          criteria: {
-            ...requiredCriteria,
-            workspaceIds: workspaceIds.map((workspaceId) =>
-              toSafeId<"workspace">(workspaceId),
-            ),
-            ...(time !== undefined && { time }),
+        await submitIntent.run({
+          operation: "saved-searches.create",
+          body: {
+            name,
+            criteria: {
+              ...requiredCriteria,
+              workspaceIds: workspaceIds.map((workspaceId) =>
+                toSafeId<"workspace">(workspaceId),
+              ),
+              ...(time !== undefined && { time }),
+            },
           },
+          send: async (creationPayload) =>
+            api["saved-searches"].post(creationPayload),
         }),
       );
     },
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "create"),
   });
 
   const renameMutation = useMutation({
@@ -160,7 +173,7 @@ export const SavedSearches = ({
         await api["saved-searches"]({ savedSearchId }).patch({ name }),
       ),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "rename"),
   });
 
   const deleteMutation = useMutation({
@@ -169,7 +182,7 @@ export const SavedSearches = ({
         await api["saved-searches"]({ savedSearchId }).delete(),
       ),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "delete"),
   });
 
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
@@ -186,7 +199,10 @@ export const SavedSearches = ({
     if (!showList || !savedSearchesError) {
       return;
     }
-    analytics.captureError(savedSearchesError);
+    analytics.captureError(savedSearchesError, {
+      fingerprintKey: "SavedSearches:savedSearchesError",
+      scope: { type: "handler", handlerId: "SavedSearches:savedSearchesError" },
+    });
   }, [analytics, savedSearchesError, showList]);
   const isSaving = createMutation.isPending || renameMutation.isPending;
   const isMutatingSavedSearch = isSaving || deleteMutation.isPending;

@@ -6,15 +6,18 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 // The move flash is the reader's own `[data-highlight]` animation.
@@ -154,6 +157,7 @@ export const StatuteCompareView = ({
     newer: resolved.newer,
     older: resolved.older,
     onClose: close,
+    statuteLists: statuteListSchemeFor(onScreen.country),
   };
 
   // Both consolidations are the same act from the same publisher, so its
@@ -193,6 +197,8 @@ type CompareFrame = {
   older: PublicStatuteVersion;
   newer: PublicStatuteVersion;
   onClose: () => void;
+  /** The act's publisher scheme, which both sides' anchors nest lists in. */
+  statuteLists: StatuteListScheme;
 };
 
 type OrderSidesOptions = {
@@ -649,7 +655,10 @@ const VirtualCompareGroups = ({
       viewportRef={setScrollElement}
     >
       <article
-        className="reader-statute text-card-foreground mx-auto w-full px-4 pb-16 text-start md:px-8"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground mx-auto w-full px-4 pb-16 text-start md:px-8",
+        )}
         style={READER_STYLE}
       >
         {masthead === null ? null : (
@@ -823,7 +832,11 @@ const CompareCell = ({
           {row.move === null ? null : (
             <span className="sr-only">{t("statutes.compareMoved")}</span>
           )}
-          <ReaderBlocks language={frame.language} side={wording} />
+          <ReaderBlocks
+            language={frame.language}
+            side={wording}
+            statuteLists={frame.statuteLists}
+          />
         </div>
       </div>
     );
@@ -869,10 +882,12 @@ const CompareCell = ({
 const ReaderBlocks = ({
   language,
   side,
+  statuteLists,
 }: {
   /** The act's language; the chrome around the cell is the reader's own. */
   language: string;
   side: StatuteCompareSide;
+  statuteLists: StatuteListScheme;
 }) => (
   <div
     className="flex flex-col gap-[var(--reader-paragraph-gap)] *:my-0"
@@ -884,6 +899,7 @@ const ReaderBlocks = ({
         block={block}
         key={block.id}
         rangesByPieceId={rangesByPieceId}
+        statuteLists={statuteLists}
       />
     ))}
   </div>
@@ -969,6 +985,7 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
   const wording = (
     <ReaderBlocks
       language={frame.language}
+      statuteLists={frame.statuteLists}
       side={{
         blocks: sides.blocks,
         segments: [{ type: "equal", text: compareText(sides.blocks) }],
@@ -979,7 +996,10 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
   return (
     <ScrollArea axis="vertical" className="min-h-0 flex-1">
       <article
-        className="reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 py-3 pb-16 text-start md:grid-cols-2 md:px-8"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 py-3 pb-16 text-start md:grid-cols-2 md:px-8",
+        )}
         style={READER_STYLE}
       >
         <div className="min-w-0">

@@ -70,6 +70,7 @@ import {
   writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 export { legislationSourceHash } from "@/api/handlers/legislation/revision";
@@ -389,10 +390,13 @@ const storeSourceRaw = async ({
       sourceId: input.sourceId,
       eli: input.eli,
     });
-    captureError(written.error, {
-      sourceId: input.sourceId,
-      step: "processLegislationDocument.sourceRawWrite",
-    });
+    captureError(
+      written.error,
+      handlerErrorContext("legislation.storeSourceRaw.written_error", {
+        sourceId: input.sourceId,
+        step: "processLegislationDocument.sourceRawWrite",
+      }),
+    );
     return null;
   }
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
@@ -916,11 +920,17 @@ export const processLegislationDocument = async (
   const revisionInput = revision.input;
   const amendmentObservation = revision.amendmentObservation;
   if (amendmentObservation.type === "rejected") {
-    captureError(amendmentObservation.error, {
-      reason: amendmentObservation.error.reason,
-      sourceId: revisionInput.sourceId,
-      step: "processLegislationDocument.amendmentObservation",
-    });
+    captureError(
+      amendmentObservation.error,
+      handlerErrorContext(
+        "legislation.processLegislationDocument.amendmentObservation",
+        {
+          reason: amendmentObservation.error.reason,
+          sourceId: revisionInput.sourceId,
+          step: "processLegislationDocument.amendmentObservation",
+        },
+      ),
+    );
   }
   const window = revision.window;
   const stated = statedClassification(revisionInput);
@@ -1019,32 +1029,44 @@ export const processLegislationDocument = async (
   // either way. Treating `canonical` as `dual-write` here is the scope
   // decision, not an oversight.
   if (corpus.mode !== "off") {
-    try {
-      const projection = await revision.writeCorpus({
-        documentId: id,
-        stored: existing === undefined ? null : storedCorpusWrite(existing),
-        classification,
-        write: corpus.write,
-      });
-      // An unchanged outcome means the row already records exactly these
-      // pointers; a written or skipped-empty outcome records the keys, or
-      // null pointers where the payload carried no document. The empty
-      // payload's hash is still recorded: the corpus indexer's missing and
-      // stale scans require a non-null content hash, so a row whose indexed
-      // document refreshed to empty must stay visible to them — with a null
-      // hash the previously indexed text would remain searchable forever.
-      await settleLegislationCorpusProjection({
-        documentId: id,
-        projection,
-        scopedDb,
-      });
-    } catch (error) {
+    const mirrored = (
+      await Result.tryPromise(async () => {
+        const projected = await revision.writeCorpus({
+          documentId: id,
+          stored: existing === undefined ? null : storedCorpusWrite(existing),
+          classification,
+          write: corpus.write,
+        });
+        if (projected.isErr()) {
+          return projected;
+        }
+        const projection = projected.value;
+        // An unchanged outcome means the row already records exactly these
+        // pointers; a written or skipped-empty outcome records the keys, or
+        // null pointers where the payload carried no document. The empty
+        // payload's hash is still recorded: the corpus indexer's missing and
+        // stale scans require a non-null content hash, so a row whose indexed
+        // document refreshed to empty must stay visible to them — with a null
+        // hash the previously indexed text would remain searchable forever.
+        await settleLegislationCorpusProjection({
+          documentId: id,
+          projection,
+          scopedDb,
+        });
+        return Result.ok(undefined);
+      })
+    ).andThen((outcome) => outcome);
+    if (mirrored.isErr()) {
+      const error = mirrored.error;
       corpusWriteFailed = true;
-      captureError(error, {
-        documentId: id,
-        sourceId: revisionInput.sourceId,
-        step: "processLegislationDocument.corpusWrite",
-      });
+      captureError(
+        error,
+        handlerErrorContext("legislation.processLegislationDocument", {
+          documentId: id,
+          sourceId: revisionInput.sourceId,
+          step: "processLegislationDocument.corpusWrite",
+        }),
+      );
       await preserveLegislationCorpusWriteRetry({
         documentId: id,
         previousSourceHash: existing?.sourceHash ?? null,

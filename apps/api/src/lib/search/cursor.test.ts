@@ -16,9 +16,9 @@ describe("search cursor encoding", () => {
   });
 
   test("rejects malformed cursors", () => {
-    const malformed = Buffer.from("not-a-number:ent_123").toString("base64");
-    const missingId = Buffer.from("0.5:").toString("base64");
-    const infiniteScore = Buffer.from("Infinity:ent_123").toString("base64");
+    const malformed = Buffer.from("not-a-number:ent_123").toBase64();
+    const missingId = Buffer.from("0.5:").toBase64();
+    const infiniteScore = Buffer.from("Infinity:ent_123").toBase64();
 
     expect(decodeCursor("not base64")).toBeNull();
     expect(decodeCursor(malformed)).toBeNull();

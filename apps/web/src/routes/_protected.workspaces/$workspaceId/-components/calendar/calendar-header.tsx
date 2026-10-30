@@ -6,7 +6,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 
 import { getMonthLabels } from "./calendar-utils";
 
@@ -30,7 +30,7 @@ export const CalendarHeader = ({
   onSetViewDate,
 }: CalendarHeaderProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   const monthPickerMonths = getMonthLabels(locale, year, "short");
 

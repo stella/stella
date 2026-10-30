@@ -28,7 +28,7 @@ const session = {
 };
 const resolveSessionContext = async () => ({});
 const tokenForAudience = (audience: string) =>
-  `e30.${Buffer.from(JSON.stringify({ aud: audience })).toString("base64url")}.signature`;
+  `e30.${Buffer.from(JSON.stringify({ aud: audience })).toBase64({ alphabet: "base64url", omitPadding: true })}.signature`;
 
 const authorizationRequest = (token: string) =>
   new Request("http://localhost", {

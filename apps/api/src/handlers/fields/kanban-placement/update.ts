@@ -5,7 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { kanbanPlacementRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +17,7 @@ import {
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
@@ -139,12 +140,24 @@ export const createUpdateKanbanPlacement = ({
       await Promise.all(
         completionNotices.map(
           async (notice) =>
-            await notifyFlowRunActorOfCompletion(notice).catch(captureError),
+            await notifyFlowRunActorOfCompletion(notice).catch(
+              createErrorCapture(
+                handlerErrorContext(
+                  "createUpdateKanbanPlacement.notifyFlowRunActorOfCompletion",
+                ),
+              ),
+            ),
         ),
       );
 
       if (body.fields.length > 0) {
-        flushSearchRepairs([body.entityId]).catch(captureError);
+        flushSearchRepairs([body.entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createUpdateKanbanPlacement.flushSearchRepairs",
+            ),
+          ),
+        );
       }
       return Result.ok({});
     },

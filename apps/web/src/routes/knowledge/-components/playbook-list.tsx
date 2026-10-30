@@ -36,7 +36,8 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type PlaybookListProps = {
   playbooks: PlaybookListItem[];
@@ -72,8 +73,8 @@ export const PlaybookList = ({
   const { isPending: rolePending } = useQuery(roleOptions);
   const { id: userId } = useAuthenticatedUser();
   const organizationsQuery = useQuery(organizationListOptions(userId));
-  const organizationsView = useQueryView(organizationsQuery);
-  useQueryViewError(organizationsView);
+  const organizationsView = queryView(organizationsQuery);
+  useQueryViewError(organizationsView, "PlaybookList:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
   const organizationName =

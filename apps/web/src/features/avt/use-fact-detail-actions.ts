@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useMutationState,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import {
@@ -21,6 +17,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useObservedMutationState } from "@/lib/idempotency/use-observed-mutation-state";
 import { toSafeId } from "@/lib/safe-id";
 import { legalListItemsOptions } from "@/lib/workspaces/queries/legal-lists";
 
@@ -105,7 +102,10 @@ export const useFactDetailActions = (scope: ListScope) => {
       if (context !== undefined) {
         writeDetails(itemEntityId, context.previous);
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useFactDetailActions:failure",
+        scope: { type: "handler", handlerId: "useFactDetailActions:failure" },
+      });
       notifyUserError(error, t("avt.save.failedTitle"));
     },
   });
@@ -125,11 +125,11 @@ export const useFactSaveState = (
   scope: ListScope,
   itemEntityId: ListItem["id"],
 ): SaveState => {
-  const entries = useMutationState({
+  const entries = useObservedMutationState({
     filters: { mutationKey: factDetailsMutationKey(scope) },
-    select: (mutation) => ({
-      targetIds: readTargetIds(mutation.state.variables),
-      status: mutation.state.status,
+    select: (state) => ({
+      targetIds: readTargetIds(state.variables),
+      status: state.status,
     }),
   });
   return saveStateOf(entries, itemEntityId);

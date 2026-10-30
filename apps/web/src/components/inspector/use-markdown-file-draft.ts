@@ -118,7 +118,10 @@ export const useMarkdownFileDraft = ({
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMarkdownFileDraft:failure",
+        scope: { type: "handler", handlerId: "useMarkdownFileDraft:failure" },
+      });
       notifyUserError(error, t("workspaces.files.versionUploadFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });

@@ -85,7 +85,7 @@ const mount = (emailAvailable: boolean) => {
     localPassword: false,
     reviewPasswordSignIn: false,
     bootstrap: false,
-    social: { google: false, microsoft: false },
+    social: { google: false, microsoft: false, apple: false },
     transactionalEmail: emailAvailable,
   });
   render(
@@ -209,3 +209,43 @@ test.each([400, 403, 500])(
     }
   },
 );
+
+test("TOTP enrollment renders the QR SVG as an encoded image resource", async () => {
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async () =>
+        Response.json({
+          backupCodes: ["backup-code"],
+          totpURI:
+            'otpauth://totp/stella?secret=VALUE&issuer="><svg onload="alert(1)">',
+        }),
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  try {
+    mount(false);
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.settings.account.twoFactor.enable,
+        }),
+      ),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await act(async () =>
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: messages.settings.account.twoFactor.enable,
+        }),
+      ),
+    );
+
+    const image = await within(dialog).findByRole("img", {
+      name: messages.settings.account.twoFactor.scanQrDescription,
+    });
+    expect(image.getAttribute("src")).toStartWith("data:image/svg+xml,%3Csvg");
+    expect(image.getAttribute("src")).not.toContain("<svg");
+  } finally {
+    fetch.mockRestore();
+  }
+});

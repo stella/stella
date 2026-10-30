@@ -446,7 +446,7 @@ describe("folio collaboration room snapshot generation", () => {
     expect(loaded).toEqual({
       generation: 3,
       loadOutcome: "loaded",
-      snapshotBase64: Buffer.from(snapshot).toString("base64"),
+      snapshotBase64: Buffer.from(snapshot).toBase64(),
       snapshotRevision: 5,
     });
     // The store confirming the first key is gone is what sends the read back
@@ -566,7 +566,7 @@ describe("folio collaboration room snapshot generation", () => {
             ? {
                 generation: 3,
                 loadOutcome: "loaded",
-                snapshotBase64: Buffer.from(replacement).toString("base64"),
+                snapshotBase64: Buffer.from(replacement).toBase64(),
                 snapshotRevision: 5,
               }
             : {
