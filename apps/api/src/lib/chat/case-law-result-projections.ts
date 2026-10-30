@@ -107,10 +107,7 @@ const caseLawSearchIdentityFields = {
   decisionId: passthroughId(),
   resourceName: passthroughId(),
   decisionType: v.nullable(v.string()),
-  decisionTypeKind: v.pipe(
-    v.nullable(v.picklist(DECISION_TYPE_KINDS)),
-    v.description("Normalized decision type; null when unclassified."),
-  ),
+  decisionTypeKind: v.nullable(v.picklist(DECISION_TYPE_KINDS)),
   ecli: v.nullable(v.string()),
   language: v.string(),
   // Which of the call's `queries` returned this decision, by index,
