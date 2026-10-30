@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "AT_FINDOK",
   "key": "at-findok",
-  "parserVersion": 12,
+  "parserVersion": 13,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Keep the line breaks of Findok paragraphs, emphasis, superscripts and links as inlines, so sentences either side of a break stay apart."
+    "reason": "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; retain current canonical AST and publisher metadata."
   }
 }

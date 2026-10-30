@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_NS",
   "key": "cz-ns",
-  "parserVersion": 21,
+  "parserVersion": 22,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."
+    "reason": "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; retain current canonical AST and publisher metadata."
   }
 }
