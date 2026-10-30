@@ -553,6 +553,16 @@ export const auditActivityActionSql = (columns: AuditActivityColumns) =>
     ${columns.action}
   )`;
 
+const SERVICE_PERFORMER_SQL = sql.raw(`'service'`);
+
+/**
+ * Rows a person (or an agent acting for one) performed. A literal, never a
+ * bound parameter, so the planner can match the partial index that serves the
+ * default activity-log view.
+ */
+export const auditPeoplePerformerSql = (performerType: SQLWrapper) =>
+  sql`${performerType} <> ${SERVICE_PERFORMER_SQL}`;
+
 export const auditLogs = p.pgTable(
   "audit_logs",
   {
@@ -665,6 +675,12 @@ export const auditLogs = p.pgTable(
     p
       .index("audit_logs_org_user_created_id_idx")
       .on(table.organizationId, table.userId, table.createdAt, table.id),
+    // The activity log hides background services by default; without this
+    // the newest-first page walks every service row to find people's.
+    p
+      .index("audit_logs_org_people_created_id_idx")
+      .on(table.organizationId, table.createdAt, table.id)
+      .where(auditPeoplePerformerSql(table.performerType)),
     p.pgPolicy("audit_logs_select", {
       for: "select",
       to: stella,

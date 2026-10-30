@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
-import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import {
+  AUDIT_CHANGES_STATUS,
+  AUDIT_PERFORMER_FILTER,
+} from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -148,6 +151,14 @@ const listAuditLogArgsSchema = nullAsAbsent(
           v.description("Only entries whose actor is this user"),
         ),
       ),
+      performer: v.optional(
+        v.pipe(
+          v.picklist(Object.values(AUDIT_PERFORMER_FILTER)),
+          v.description(
+            "Only entries performed by people (members and their agents), or only by automations (background services)",
+          ),
+        ),
+      ),
       from: v.optional(
         v.pipe(
           auditRangeBoundSchema,
@@ -202,8 +213,9 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
     "user id, matter, timestamp, and change detail. Filter by matter_id, " +
-    "action, resource_type (with optional resource_id), user_id, and a " +
-    "created-at range (from/to, ISO date-time). Paginate with limit and " +
+    "action, resource_type (with optional resource_id), user_id, performer " +
+    "(people or automations), and a created-at range (from/to, ISO " +
+    "date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
@@ -653,6 +665,7 @@ const handleListAuditLogTool: McpToolHandler<
     ...(input.user_id === undefined
       ? {}
       : { userId: brandPersistedUserId(input.user_id) }),
+    ...(input.performer === undefined ? {} : { performer: input.performer }),
     ...(input.from === undefined
       ? {}
       : { from: widenDateOnlyBound(input.from, "start") }),
