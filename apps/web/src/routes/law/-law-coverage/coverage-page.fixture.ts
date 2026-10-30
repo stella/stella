@@ -109,6 +109,7 @@ export const CZECHIA = {
 export const COVERAGE: CaseLawCoverage = {
   provisionProcessing: [],
   generatedAt: "2026-09-19T08:00:00.000Z",
+  freshness: { status: "current", ageSeconds: 0 },
   totals: {
     addedLastWeek: 12,
     searchable: 4_200_000,

@@ -40,6 +40,9 @@ const PURE_AUTOFIX = {
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
+  // Reads declaration syntax and committed migration inventory; writes only its owner block.
+  "online-unique-index-names":
+    "apps/api/scripts/generate-online-unique-index-names.ts",
   "schema-index": "apps/api/scripts/generate-schema-index.ts",
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
@@ -59,8 +62,9 @@ const PURE_AUTOFIX = {
   // Resolves the committed web theme against the lockfile-pinned Tailwind
   // palette with lightningcss; no network, clock or environment.
   "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
-  // Rewrites the web's icon module and wordmark for lucide's native build;
-  // reads only those committed files.
+  // Rewrites the web's icon module and wordmark for lucide's native build,
+  // and copies lucide-static's outlines, pinned by the lockfile, into the
+  // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
@@ -96,6 +100,8 @@ const PURE_AUTOFIX = {
 // A committed generator must have an explicit purity decision. Native builds
 // need toolchains outside the Bun install, and recorders need live services.
 const EXCLUDED_AUTOFIX = {
+  "request-replay-routes":
+    "Mounted handler discovery runs API module initialization under its test preload",
   "playwright-devices":
     "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":

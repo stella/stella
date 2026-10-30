@@ -325,8 +325,9 @@ const installStub = ({
   htmlDocumentStatus = documentStatus,
   legalSentence,
   search = [],
-}: StubOptions): { requests: RecordedRequest[] } => {
+}: StubOptions): { requests: RecordedRequest[]; timeouts: number[] } => {
   const requests: RecordedRequest[] = [];
+  const timeouts: number[] = [];
   let searchCalls = 0;
   let continuationCalls = 0;
 
@@ -334,6 +335,9 @@ const installStub = ({
     async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ?? "GET";
+      if (init && "timeoutMs" in init && typeof init.timeoutMs === "number") {
+        timeouts.push(init.timeoutMs);
+      }
       requests.push({
         method,
         url: url.toString(),
@@ -392,7 +396,7 @@ const installStub = ({
     },
   );
 
-  return { requests };
+  return { requests, timeouts };
 };
 
 /**
@@ -422,21 +426,22 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
   expect(invalidation.isErr()).toBe(true);
 
   const originalTimeout = AbortSignal.timeout;
-  const timeouts: number[] = [];
+  const pageDeadlines: number[] = [];
   const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
     (milliseconds) => {
-      timeouts.push(milliseconds);
+      pageDeadlines.push(milliseconds);
       return originalTimeout(milliseconds);
     },
   );
   try {
-    installStub({ search: [htmlResponse("", 503)] });
+    const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(timeouts).toEqual([90_000, 60_000, 60_000]);
-    timeouts.length = 0;
+    expect(pageDeadlines).toEqual([90_000]);
+    expect(failedStub.timeouts).toEqual([60_000, 60_000]);
+    pageDeadlines.length = 0;
 
-    installStub({
+    const pageStub = installStub({
       search: [
         htmlResponse(
           searchPage({
@@ -450,7 +455,8 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(timeouts.slice(0, 4)).toEqual([90_000, 60_000, 60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000]);
+    expect(pageStub.timeouts.slice(0, 3)).toEqual([60_000, 60_000, 60_000]);
   } finally {
     timeoutSpy.mockRestore();
   }

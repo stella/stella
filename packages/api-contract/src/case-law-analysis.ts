@@ -10,7 +10,8 @@ export const CASE_LAW_ANALYSIS_UNAVAILABLE_CODES = [
   "decision_not_found",
   "document_unparseable",
   "language_unsupported",
-  "analysis_unavailable",
+  "analysis_disabled",
+  "source_restricted",
 ] as const;
 
 export type CaseLawAnalysisUnavailableCode =
