@@ -77,6 +77,12 @@ jobs:
 
       - name: Export each platform's bundle
         working-directory: apps/mobile
+        env:
+          # The document viewer's DOM bundle must stay one file: Expo renames
+          # a DOM component's split chunks to their md5 after bundling but
+          # keeps the old names in the chunk graph, and the export then fails
+          # with "Asset not found: __common-*.js" (https://github.com/expo/expo/blob/sdk-58/packages/%40expo/cli/src/export/exportDomComponents.ts).
+          EXPO_NO_BUNDLE_SPLITTING: "1"
         run: |
           set -euo pipefail
           case "$PLATFORM_INPUT" in

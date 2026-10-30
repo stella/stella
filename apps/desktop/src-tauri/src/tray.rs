@@ -1,6 +1,6 @@
 use tauri::{
   AppHandle, Manager, Wry,
-  menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+  menu::{Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder},
 };
 
 use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
@@ -347,45 +347,14 @@ fn build_tray_menu_with_activity(
         .build(app)?,
     );
   }
-  // Activity gets its own group: status, the recording toggle and the window.
   let activity_enabled = crate::activity::is_enabled(app);
-  if activity.is_some() || activity_enabled {
+  if activity_enabled {
     if clipboard_enabled {
       builder = builder.separator();
     }
-    if let Some(activity) = activity {
-      builder = builder.item(
-        &MenuItemBuilder::with_id(
-          ACTIVITY_STATUS_ITEM,
-          activity_status_label(activity),
-        )
-        .enabled(false)
-        .build(app)?,
-      );
-      if activity.status == ActivityRecordingStatus::Recording
-        && let Some(name) = &activity.now
-      {
-        builder = builder.item(
-          &MenuItemBuilder::with_id(
-            ACTIVITY_NOW_ITEM,
-            t_fmt("tray.activityNow", &[("name", name)]),
-          )
-          .enabled(false)
-          .build(app)?,
-        );
-      }
-      if let Some((action, label)) = activity_action(activity.status) {
-        builder = builder.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
-      }
-    }
-    if activity_enabled {
-      builder = builder.item(
-        &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.activity"))
-          .build(app)?,
-      );
-    }
-    builder = builder.separator();
-  } else if clipboard_enabled {
+    builder = builder.item(&build_activity_menu(app, activity)?);
+  }
+  if clipboard_enabled || activity_enabled {
     builder = builder.separator();
   }
 
@@ -506,6 +475,42 @@ fn build_tray_menu_with_activity(
   );
 
   builder.build()
+}
+
+fn build_activity_menu(
+  app: &AppHandle,
+  activity: Option<&TrayActivitySnapshot>,
+) -> tauri::Result<Submenu<Wry>> {
+  let mut menu = SubmenuBuilder::new(app, t("tray.activity"));
+  if let Some(activity) = activity {
+    menu = menu.item(
+      &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
+        .enabled(false)
+        .build(app)?,
+    );
+    if activity.status == ActivityRecordingStatus::Recording
+      && let Some(name) = &activity.now
+    {
+      menu = menu.item(
+        &MenuItemBuilder::with_id(
+          ACTIVITY_NOW_ITEM,
+          t_fmt("tray.activityNow", &[("name", name)]),
+        )
+        .enabled(false)
+        .build(app)?,
+      );
+    }
+    menu = menu.separator();
+    if let Some((action, label)) = activity_action(activity.status) {
+      menu = menu.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+    }
+  }
+  menu
+    .item(
+      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.openActivity"))
+        .build(app)?,
+    )
+    .build()
 }
 
 pub fn get_session_id_from_action<'a>(

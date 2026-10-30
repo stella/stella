@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "SK_US",
+  "key": "sk-us",
+  "parserVersion": 18,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."
+  }
+}
