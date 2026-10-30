@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { playbookDefinitionVersions } from "@/api/db/schema";
 import { playbookDefinitionParamsSchema } from "@/api/handlers/playbooks/schema";
@@ -27,12 +29,16 @@ const config = {
   },
   access: "read",
   params: playbookDefinitionParamsSchema,
-  query: t.Object({
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.playbookDefinitionVersionsPerPlaybook,
-      }),
+  query: v.object({
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.playbookDefinitionVersionsPerPlaybook),
+        ),
+      ),
     ),
   }),
 } satisfies HandlerConfig;

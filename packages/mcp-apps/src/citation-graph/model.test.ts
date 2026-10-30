@@ -55,6 +55,7 @@ const citation = ({
   evidenceIncompleteReason: null,
   polarityEvidence: null,
   citedPart: null,
+  extractionWarnings: [],
   polarity,
   doctrine: null,
   decision: decision

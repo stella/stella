@@ -6,7 +6,11 @@ import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
 import { propertyConfig } from "@stll/property-testing";
 
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { fileSchema, uniqueItems } from "@/api/lib/custom-schema";
+import {
+  toJsonSchema,
+  toRouteJsonSchema,
+} from "@/api/lib/json-schema/valibot-to-json-schema";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
@@ -238,6 +242,68 @@ describe("toJsonSchema", () => {
       }),
       propertyConfig({ numRuns: 200 }),
     );
+  });
+});
+
+describe("toRouteJsonSchema", () => {
+  test("a literal states its JSON type beside its const", () => {
+    expect(
+      toRouteJsonSchema(
+        v.union([v.literal("draft"), v.literal(2), v.literal(true)]),
+      ),
+    ).toMatchObject({
+      anyOf: [
+        { const: "draft", type: "string" },
+        { const: 2, type: "number" },
+        { const: true, type: "boolean" },
+      ],
+    });
+  });
+
+  test("an object with no required property lists none", () => {
+    const emitted = toRouteJsonSchema(
+      v.object({
+        all: v.optional(v.string()),
+        nested: v.optional(v.looseObject({ inner: v.optional(v.string()) })),
+      }),
+    );
+    expect(emitted).not.toHaveProperty("required");
+    expect(emitted.properties?.["nested"]).not.toHaveProperty("required");
+    expect(
+      toRouteJsonSchema(
+        v.object({ id: v.string(), note: v.optional(v.string()) }),
+      ).required,
+    ).toEqual(["id"]);
+  });
+
+  test("a uniqueItems check renders as the keyword, keyed or not", () => {
+    const keyed = v.pipe(
+      v.array(v.object({ id: v.string() })),
+      uniqueItems(({ id }: { id: string }) => id),
+    );
+    expect(
+      toRouteJsonSchema(v.pipe(v.array(v.string()), uniqueItems())),
+    ).toMatchObject({
+      type: "array",
+      uniqueItems: true,
+    });
+    expect(toRouteJsonSchema(keyed)).toMatchObject({ uniqueItems: true });
+    expect(
+      toJsonSchema(v.pipe(v.array(v.string()), uniqueItems())),
+    ).toMatchObject({
+      uniqueItems: true,
+    });
+  });
+
+  test("a file states its size cap", () => {
+    // The cap is a vendor keyword the JSON Schema type does not name.
+    const schema: object = toRouteJsonSchema(fileSchema({ maxBytes: 1024 }));
+    expect(schema).toEqual({
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: "string",
+      format: "binary",
+      "x-maxBytes": 1024,
+    });
   });
 });
 

@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import {
@@ -21,39 +21,42 @@ import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { includes } from "@/api/lib/type-guards";
 
-const updateSkillParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const updateSkillParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const updateSkillBodySchema = t.Object({
-  enabled: t.Optional(t.Boolean()),
-  // Like `enabled`, a setting of the installed skill rather than its content,
-  // so it may change on any origin.
-  invocation: t.Optional(tSkillInvocation()),
-  name: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  description: t.Optional(
-    t.String({ minLength: 1, maxLength: LIMITS.agentSkillDescriptionMaxChars }),
+const updateSkillBodySchema = v.object({
+  enabled: v.optional(v.boolean()),
+  invocation: v.optional(tSkillInvocation()),
+  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+  description: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.agentSkillDescriptionMaxChars),
+    ),
   ),
-  body: t.Optional(
-    t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
+  body: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.agentSkillBodyMaxChars),
+    ),
   ),
-  version: t.Optional(
-    t.Union([
-      t.String({ maxLength: LIMITS.agentSkillVersionMaxChars }),
-      t.Null(),
+  version: v.optional(
+    v.union([
+      v.pipe(v.string(), v.maxLength(LIMITS.agentSkillVersionMaxChars)),
+      v.null(),
     ]),
   ),
-  // Optional slash-command handle. Pass `null` to clear an existing
-  // command; pass a string to set/replace it. Omitting the field
-  // leaves it untouched.
-  command: t.Optional(
-    t.Union([t.String({ minLength: 1, maxLength: 50 }), t.Null()]),
+  command: v.optional(
+    v.union([v.pipe(v.string(), v.minLength(1), v.maxLength(50)), v.null()]),
   ),
 });
 
@@ -259,6 +262,8 @@ const updateSkill = createSafeRootHandler(
             id: agentSkills.id,
             scope: agentSkills.scope,
             userId: agentSkills.userId,
+            boundClientId: agentSkills.boundClientId,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
             enabled: agentSkills.enabled,
             invocation: agentSkills.invocation,
             slug: agentSkills.slug,
@@ -283,7 +288,12 @@ const updateSkill = createSafeRootHandler(
           // The row lock follows the write policy, so a skill the caller can
           // read but not manage is missing here; refuse it as the handler would.
           const visibleRows = await tx
-            .select({ scope: agentSkills.scope, userId: agentSkills.userId })
+            .select({
+              boundClientId: agentSkills.boundClientId,
+              boundWorkspaceId: agentSkills.boundWorkspaceId,
+              scope: agentSkills.scope,
+              userId: agentSkills.userId,
+            })
             .from(agentSkills)
             .where(
               and(

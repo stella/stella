@@ -69,11 +69,12 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 import {
@@ -173,8 +174,8 @@ export const ChatHistoryPage = ({
     // Typing refines the list in place instead of blanking it per keystroke.
     placeholderData: keepPreviousData,
   });
-  const threadsView = useQueryView(threadsQuery);
-  useQueryViewError(threadsView);
+  const threadsView = queryView(threadsQuery);
+  useQueryViewError(threadsView, "ChatHistoryPage:query");
   const matterUnavailable =
     threadsView.type === "error" &&
     isMatterUnavailable({ error: threadsView.error, matter: search.matter });
@@ -186,8 +187,8 @@ export const ChatHistoryPage = ({
       userId,
     }),
   );
-  const mattersView = useQueryView(mattersQuery);
-  useQueryViewError(mattersView);
+  const mattersView = queryView(mattersQuery);
+  useQueryViewError(mattersView, "ChatHistoryPage:query-2");
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   // Base UI compares combobox props by identity; hand it one value object per
   // selection rather than a fresh copy on every render.
@@ -535,7 +536,7 @@ function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
                 : {},
           },
         );
-      unwrapEden(response);
+      unwrapApiResponse(response);
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));

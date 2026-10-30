@@ -140,7 +140,7 @@ describe("release failure counts", () => {
         handler: "summaries.generate",
         error_class: "HandlerError",
         error_code: "HandlerError",
-        failure_reason: "unclassified",
+        failure_reason: "tagged_failure",
         occurrences: 1,
       },
     ]);

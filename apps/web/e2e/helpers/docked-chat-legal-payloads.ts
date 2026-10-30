@@ -10,8 +10,10 @@ const absentText = {
   type: "absent",
 } as const;
 const decision = {
+  extractionWarnings: [],
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   citationCount: 0,
   citationsFrom: [],
   citationsNextCursor: null,
@@ -57,6 +59,7 @@ const decision = {
     name: "Synthetic fixture source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: absentText,

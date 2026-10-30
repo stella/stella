@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
 import { decisionUsageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
@@ -65,10 +66,13 @@ export const recordDecisionUsage = async ({
     return recorded;
   });
   if (Result.isError(result)) {
-    captureError(result.error, {
-      source: "usage.decision",
-      organization_id: metering.organizationId,
-      trace_id: metering.callId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("decisions.recordDecisionUsage.result_error", {
+        source: "usage.decision",
+        organization_id: metering.organizationId,
+        trace_id: metering.callId,
+      }),
+    );
   }
 };

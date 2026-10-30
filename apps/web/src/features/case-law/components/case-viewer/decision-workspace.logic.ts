@@ -4,6 +4,7 @@ import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import { MARGIN_NOTE_KIND_ATTRIBUTE } from "@/components/legal-reader/margin-notes.logic";
 
 import type { AnalysisState } from "./analysis/use-decision-analysis";
+import { READER_ASIDE_RESIZE_SLOT } from "./reader-aside-slots";
 
 /** The notes margin's mutually exclusive source filter. */
 export type NotesFilter = "all" | "ai" | "mine";
@@ -14,9 +15,6 @@ export const NOTES_FILTER_SHOWS_AI = {
   all: true,
   mine: false,
 } as const satisfies Record<NotesFilter, boolean>;
-
-/** The notes column's resize handle, which a column-wide click must skip. */
-export const READER_ASIDE_RESIZE_SLOT = "reader-aside-resize";
 
 type VisitorOfferOptions = {
   analysisStatus: AnalysisState["status"];

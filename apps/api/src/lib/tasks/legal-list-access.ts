@@ -1,5 +1,3 @@
-import { KindGuard, Type } from "@sinclair/typebox";
-
 import type { Transaction } from "@/api/db/root";
 import { isScopedFeatureEnabled } from "@/api/db/scoped-feature-access";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
@@ -21,11 +19,12 @@ const taskInputUsesLegalLists = (body: unknown): boolean =>
   ((body["listItemType"] !== undefined && body["listItemType"] !== "task") ||
     LIST_PLACEMENT_FIELDS.some((field) => body[field] !== undefined));
 
+/** What an agent without legal lists is shown: a plain task, with no list placement. */
 const projectTaskListInputSchemas = (
   schemas: AdvertisedSchemas,
 ): AdvertisedSchemas => {
   const body = schemas.body;
-  if (body === undefined || !KindGuard.IsObject(body)) {
+  if (body?.properties === undefined) {
     return schemas;
   }
   const excluded = new Set<string>(LIST_PLACEMENT_FIELDS);
@@ -33,13 +32,18 @@ const projectTaskListInputSchemas = (
     Object.entries(body.properties).filter(([name]) => !excluded.has(name)),
   );
   if (properties["listItemType"] !== undefined) {
-    properties["listItemType"] = KindGuard.IsOptional(
-      properties["listItemType"],
-    )
-      ? Type.Optional(Type.Literal("task"))
-      : Type.Literal("task");
+    properties["listItemType"] = { type: "string", const: "task" };
   }
-  return { ...schemas, body: { ...body, properties } };
+  return {
+    ...schemas,
+    body: {
+      ...body,
+      properties,
+      ...(body.required === undefined
+        ? {}
+        : { required: body.required.filter((name) => !excluded.has(name)) }),
+    },
+  };
 };
 
 export const LEGAL_LIST_TASK_FEATURE_ACCESS = {

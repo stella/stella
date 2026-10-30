@@ -22,397 +22,48 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Draft the NDA"
               }
             ],
-            "tools": [
-              {
-                "name": "use-browser",
-                "description": "Execute an approved command in the stella Chrome extension.",
-                "parameters": {
-                  "oneOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "open"
-                        },
-                        "url": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 4096
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "url"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "snapshot"
-                        },
-                        "textOffset": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 400000
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "click"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "fill"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 10000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "select"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 2000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "press-key"
-                        },
-                        "key": {
-                          "enum": [
-                            "ArrowDown",
-                            "ArrowLeft",
-                            "ArrowRight",
-                            "ArrowUp",
-                            "Backspace",
-                            "Enter",
-                            "Escape",
-                            "Space",
-                            "Tab"
-                          ],
-                          "type": "string"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "key",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "go-back"
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    }
-                  ]
-                }
-              }
-            ],
+            "tools": [],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -580,25 +231,11 @@
           "request": {
             "threadId": "00000000-0000-7000-8000-000000000002",
             "runId": "run-recorded-2",
-            "parentRunId": "run-recorded-1",
-            "resume": [
-              {
-                "interruptId": "client_tool_call-1",
-                "payload": {
-                  "answers": [
-                    {
-                      "answer": "Buyer",
-                      "question": "Which side?"
-                    }
-                  ]
-                },
-                "status": "resolved"
-              }
-            ],
             "state": {},
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:13.000Z",
@@ -614,7 +251,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
                 "toolCalls": [
                   {
                     "id": "call-1",
@@ -627,8 +263,8 @@
                 ]
               },
               {
-                "role": "tool",
                 "id": "tool-call-1",
+                "role": "tool",
                 "toolCallId": "call-1",
                 "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                 "metadata": {
@@ -638,358 +274,12 @@
                 }
               }
             ],
-            "tools": [
-              {
-                "name": "use-browser",
-                "description": "Execute an approved command in the stella Chrome extension.",
-                "parameters": {
-                  "oneOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "open"
-                        },
-                        "url": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 4096
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "url"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "snapshot"
-                        },
-                        "textOffset": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 400000
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "click"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "fill"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 10000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "select"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 2000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "press-key"
-                        },
-                        "key": {
-                          "enum": [
-                            "ArrowDown",
-                            "ArrowLeft",
-                            "ArrowRight",
-                            "ArrowUp",
-                            "Backspace",
-                            "Enter",
-                            "Escape",
-                            "Space",
-                            "Tab"
-                          ],
-                          "type": "string"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "key",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "go-back"
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    }
-                  ]
-                }
-              }
-            ],
+            "tools": [],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1007,17 +297,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "ask-user",
-                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1054,15 +333,24 @@
                     "state": "complete"
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "ask-user",
+                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:15.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "client_tool_call-1",
+                  "status": "resolved",
                   "payload": {
                     "answers": [
                       {
@@ -1070,12 +358,14 @@
                         "question": "Which side?"
                       }
                     ]
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1093,17 +383,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "ask-user",
-                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1140,15 +419,24 @@
                     "state": "complete"
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "ask-user",
+                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:17.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "client_tool_call-1",
+                  "status": "resolved",
                   "payload": {
                     "answers": [
                       {
@@ -1156,11 +444,25 @@
                         "question": "Which side?"
                       }
                     ]
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
-            }
+            },
+            "parentRunId": "run-recorded-1",
+            "resume": [
+              {
+                "interruptId": "client_tool_call-1",
+                "status": "resolved",
+                "payload": {
+                  "answers": [
+                    {
+                      "answer": "Buyer",
+                      "question": "Which side?"
+                    }
+                  ]
+                }
+              }
+            ]
           },
           "ended": "complete",
           "response": {

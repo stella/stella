@@ -1,5 +1,4 @@
-import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
 import {
@@ -8,8 +7,16 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/handlers/auth/ui-routes";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
-const app = new Elysia().use(authUiRoute);
+const server = serveForTest(
+  createHttpApp({ routes: authUiRoute, middleware: [errorBoundary] }),
+);
+afterAll(async () => {
+  await server.stop();
+});
 
 describe("OAuth UI routes", () => {
   test.each([
@@ -19,8 +26,10 @@ describe("OAuth UI routes", () => {
   ])("preserves the exact signed query for %s", async (route, frontendPath) => {
     const rawQuery =
       "client_id=test&ba_param=client_id&ba_param=scope&scope=stella%3Aread&sig=signed%2Bvalue%3D";
-    const response = await app.handle(
-      new Request(`http://localhost${route}?${rawQuery}`),
+    const response = await server.fetch(
+      new Request(`http://localhost${route}?${rawQuery}`, {
+        redirect: "manual",
+      }),
     );
 
     expect(response.status).toBe(302);

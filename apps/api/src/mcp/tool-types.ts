@@ -9,6 +9,7 @@ import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import type { WindowedReadSurface } from "@/api/lib/files/windowed-read-surface";
 import type {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,
@@ -31,11 +32,9 @@ import type {
 export type JsonSchema = JsonSchemaType;
 
 /**
- * Every MCP tool accepts one named-argument object, never a scalar root. The
- * authoring type also accepts TypeBox/Elysia's runtime schemas, which carry
- * non-enumerable symbols beyond their JSON fields. Wire projections rebuild
- * and validate the enumerable JSON recursively, so those symbols never enter
- * the protocol payload.
+ * Every MCP tool accepts one named-argument object, never a scalar root. Wire
+ * projections rebuild and validate the enumerable JSON recursively, so only
+ * JSON fields enter the protocol payload.
  */
 export type McpToolInputSchema = {
   type: "object";
@@ -317,6 +316,8 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:billing_write": "billing_write",
   "stella:admin_read": "admin_read",
   "stella:admin_write": "admin_write",
+  "stella:account_export_read": null,
+  "stella:account_export_write": null,
   "stella:feedback": "feedback",
   "stella:skills": null,
   "stella:external_mcps": null,
@@ -497,6 +498,7 @@ export type McpStructuredTextField = {
  * entity name can never be split across a window edge.
  */
 export type McpStructuredWindow = {
+  surface: WindowedReadSurface;
   apply: (window: TextWindowResult) => void;
   cursor: string | undefined;
   maxChars: number;
@@ -521,6 +523,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId?: string;
 } & (

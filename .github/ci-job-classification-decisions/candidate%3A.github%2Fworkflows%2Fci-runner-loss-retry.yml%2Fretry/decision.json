@@ -1,0 +1,4 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Retries jobs after verified runner loss and reconciles pull-request metadata mirrors after completed CI attempts; no publication or deployment."
+}

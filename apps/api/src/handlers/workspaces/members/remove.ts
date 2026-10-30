@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -25,7 +25,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockChatOwnerStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
+import { userIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -46,8 +47,8 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
   realtime: workspaceRealtimeUpdates,
   mcp: { type: "tool", name: "remove_matter_member" },
-  params: workspaceParams({ userId: tUserId }),
-  body: t.Optional(t.Object({ reassign_to: t.Optional(tUserId) })),
+  params: workspaceParams({ userId: userIdSchema }),
+  body: v.optional(v.object({ reassign_to: v.optional(userIdSchema) })),
 } satisfies WorkspaceHandlerConfig;
 
 export type RemoveWorkspaceMemberProps = {
@@ -232,6 +233,20 @@ export const removeWorkspaceMemberHandler = async function* ({
   // member rows so concurrent removals serialize.
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      const authorityRows = await tx
+        .select({ organizationId: workspaces.organizationId })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1);
+      const authority = authorityRows.at(0);
+      if (!authority) {
+        throw new HandlerError({ status: 404, message: "Member not found" });
+      }
+      await lockChatOwnerStoredContentTransitionOnTx(tx, {
+        organizationId: authority.organizationId,
+        userId,
+      });
+
       // Timer starts take this lock before inserting. Hold it through the
       // active-timer check and member deletion so removal cannot strand a
       // timer that starts concurrently.

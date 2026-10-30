@@ -22,6 +22,7 @@ import { inArray } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { documentReviewRuns } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
@@ -141,6 +142,9 @@ const readerOf = (extra: SafeId<"workspace">[]): SafeDb =>
   );
 
 const handlerContext = (safeDb: SafeDb, rest: Record<string, unknown>) => ({
+  request: new Request("http://localhost/v1/document-reviews/runs"),
+  route:
+    "/v1/workspaces/:workspaceId/document-reviews/runs/:runId" satisfies ApiRoutePath,
   memberRole: sessionMemberRole("member"),
   recordAuditEvent: auditRecorderDouble(),
   safeDb,

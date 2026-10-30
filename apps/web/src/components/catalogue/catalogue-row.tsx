@@ -8,6 +8,7 @@ import {
   FirstPartyMark,
   ManualInvocationBadge,
   SetupBadge,
+  SkillBindingBadge,
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -30,6 +31,8 @@ export type CatalogueRowDisplay = {
   jurisdictions: readonly string[];
   /** An installed skill's invocation; only `manual` shows a badge. */
   invocation?: "auto" | "manual" | null | undefined;
+  /** What an installed skill is bound to; a bound skill shows a badge. */
+  binding?: "matter" | "client" | null | undefined;
 };
 
 type CatalogueRowProps = {
@@ -129,6 +132,7 @@ export const CatalogueRow = ({
             <CostBadge cost={display.cost} />
             <SetupBadge setup={display.setup} />
             {display.invocation === "manual" && <ManualInvocationBadge />}
+            <SkillBindingBadge binding={display.binding ?? null} />
             {display.jurisdictions.length > 0 && (
               <div className="ms-auto flex flex-wrap items-center gap-1.5">
                 {display.jurisdictions.map((code) => (

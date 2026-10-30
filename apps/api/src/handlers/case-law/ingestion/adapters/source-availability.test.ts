@@ -81,10 +81,43 @@ describe("registered adapters classify source availability", () => {
     }
   }
 
+  test.each([408, 500, 503])(
+    "a failed session landing preserves availability status %i",
+    async (status) => {
+      Bun.sleep = async () => undefined;
+      let requests = 0;
+      globalThis.fetch = asFetchMock(async () => {
+        requests += 1;
+        return new Response("Publisher unavailable", { status });
+      });
+      const adapter = await ADAPTER_MODULES["pl-tk"]();
+      const page = await adapter.fetchPage(null, {
+        cacheDirectory: createCacheDirectory(),
+      });
+      expect(requests).toBeGreaterThan(0);
+      expect(page.isErr()).toBe(true);
+      if (page.isErr()) {
+        expect(page.error).toMatchObject({
+          httpStatus: status,
+          stopKind: INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+        });
+        // fetchWithRetry returns the final response; prove the session boundary ran.
+        expect(page.error.message).toContain(
+          `the portal opened no session (${status})`,
+        );
+      }
+    },
+  );
+
   test("a successful landing without the required session is an adapter error", async () => {
     // A successful response with an unexpected session shape is a contract
     // failure; availability cannot be inferred from a missing cookie.
-    globalThis.fetch = asFetchMock(async () => new Response("<html></html>"));
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(
+          "<html><body>The publisher session landing page.</body></html>",
+        ),
+    );
     const adapter = await ADAPTER_MODULES["pl-tk"]();
     const page = await adapter.fetchPage(null, {
       cacheDirectory: createCacheDirectory(),
@@ -92,6 +125,9 @@ describe("registered adapters classify source availability", () => {
     expect(page.isErr()).toBe(true);
     if (page.isErr()) {
       expect(page.error.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      expect(page.error.message).toContain(
+        "the portal opened no session (200)",
+      );
     }
   });
 });

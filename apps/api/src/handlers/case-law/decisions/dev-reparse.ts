@@ -10,7 +10,6 @@
  * is written anywhere, and a fetch that fails leaves the stored document.
  */
 
-import { fetchWithTimeout } from "@stll/fetch";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
@@ -19,6 +18,8 @@ import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const FETCH_TIMEOUT_MS = 20_000;
@@ -54,14 +55,18 @@ const reparseNss = async (
   if (documentId === undefined) {
     return null;
   }
-  const response = await fetchWithTimeout(
-    `${NSS_BASE_URL}/DokumentOriginal/Html/${documentId}`,
-    { timeoutMs: FETCH_TIMEOUT_MS },
+  const html = await withPublicReadIo(
+    "development",
+    async (io) =>
+      await io.fetch(
+        `${NSS_BASE_URL}/DokumentOriginal/Html/${documentId}`,
+        { timeoutMs: FETCH_TIMEOUT_MS },
+        async (response) => (response.ok ? await response.text() : null),
+      ),
   );
-  if (!response.ok) {
+  if (html === null) {
     return null;
   }
-  const html = await response.text();
   if (html.length < 200) {
     return null;
   }
@@ -96,15 +101,19 @@ const reparseNss = async (
  */
 export const reparseForDev = async (
   decision: DevReparseDecision,
-): Promise<DocumentAst | null> => {
-  if (decision.adapterKey !== ADAPTER_KEYS.CZ_NSS) {
-    return null;
-  }
-  return await reparseNss(decision).catch((error: unknown) => {
-    captureError(error, {
-      source: "case-law-dev-reparse",
-      decisionId: decision.id,
+): Promise<DocumentAst | null> =>
+  await withPublicReadIo("development", async () => {
+    if (decision.adapterKey !== ADAPTER_KEYS.CZ_NSS) {
+      return null;
+    }
+    return await reparseNss(decision).catch((error: unknown) => {
+      captureError(
+        error,
+        handlerErrorContext("decisions.attempt", {
+          source: "case-law-dev-reparse",
+          decisionId: decision.id,
+        }),
+      );
+      return null;
     });
-    return null;
   });
-};

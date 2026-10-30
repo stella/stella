@@ -1,12 +1,22 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads, chatTurns } from "@/api/db/schema";
+import {
+  agentSkills,
+  chatMessages,
+  chatThreads,
+  chatTurns,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createMockTextAdapter } from "@/api/dev/register-mock-ai";
+import {
+  chatMessageContentFromMessage,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
 import { planChatCompaction } from "@/api/handlers/chat/compaction";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -14,6 +24,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
+import {
+  SKILL_SUMMARY_SECRET,
+  skillSummaryMessage,
+} from "@/api/tests/helpers/skill-summary-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -22,6 +36,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { withQueryLogger } from "@/api/tests/security/test-utils";
 
 const organizationAIConfig = {
   providers: [{ provider: "openai", apiKey: "mock-compaction-test-key" }],
@@ -55,6 +70,112 @@ afterAll(async () => {
     await testDb.delete(chatThreads).where(inArray(chatThreads.id, threadIds));
   }
   await releaseRlsFixture();
+});
+
+test("accepted matter scope is resolved once and filters historical skills before compaction", async () => {
+  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  const skillId = toSafeId<"agentSkill">(Bun.randomUUIDv7());
+  threadIds.push(threadId);
+  await testDb.insert(chatThreads).values({
+    id: threadId,
+    organizationId: ids.orgA,
+    title: "Skill context before compaction",
+    userId: ids.userA1,
+    workspaceId: ids.wsA1,
+    dataWorkspaceIds: [ids.wsA1],
+  });
+  await testDb.insert(agentSkills).values({
+    id: skillId,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    scope: "private",
+    origin: "authored",
+    slug: `summary-${Bun.randomUUIDv7()}`,
+    name: "Summary fixture",
+    description: "Summary boundary fixture",
+    body: SKILL_SUMMARY_SECRET,
+    contentHash: "a".repeat(64),
+    metadata: {},
+    boundWorkspaceId: ids.wsA1,
+  });
+  const historical = skillSummaryMessage({
+    id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+    skillId,
+  });
+  await testDb.insert(chatMessages).values({
+    id: historical.id,
+    userId: ids.userA1,
+    workspaceId: ids.wsA1,
+    threadId,
+    role: historical.role,
+    content: chatMessageContentFromMessage(
+      toPersistableChatMessage(historical),
+    ),
+  });
+  const queries: string[] = [];
+  const counted = withQueryLogger(testDb, {
+    logQuery: (query) => {
+      queries.push(query);
+    },
+  });
+  const countedScoped = asTestRaw<ScopedDb>(
+    createScopedDb(counted, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+  );
+  let compactions = 0;
+  const harness = createApprovalHarness({
+    ids,
+    organizationAIConfig,
+    safeDb: toSafeDbMock(countedScoped),
+    scopedDb: countedScoped,
+    sources: { contextMatterIds: [ids.wsA2] },
+    workspaceId: ids.wsA1,
+    testDb,
+    textAdapterFactory: createMockTextAdapter,
+    compactMessages: async ({ messages }) => {
+      compactions += 1;
+      const serialized = JSON.stringify(messages);
+      expect(serialized).not.toContain(SKILL_SUMMARY_SECRET);
+      expect(serialized).toContain("skill-unavailable");
+      expect(serialized).toContain("ORDINARY OUTCOME");
+      return Result.ok({ messages, notice: null });
+    },
+  });
+  try {
+    const response = await harness.sendUnchecked(
+      harness.sendContext({
+        message: {
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          role: "user",
+          parts: [{ type: "text", content: "Continue in both matters" }],
+        },
+        runId: `run-${Bun.randomUUIDv7()}`,
+        threadId,
+      }),
+    );
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      throw new TypeError("Expected the admitted chat response");
+    }
+    expect(response.ok).toBe(true);
+    await response.text();
+    expect(await harness.awaitSettledTurns(threadId)).toEqual([]);
+    expect(compactions).toBe(1);
+    expect(
+      queries.filter((query) =>
+        /^select (?:"workspaces"\.)?"client_id", (?:"workspaces"\.)?"id" from "workspaces"/u.test(
+          query,
+        ),
+      ),
+    ).toHaveLength(1);
+    const stored = await testDb
+      .select({ content: chatMessages.content })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, historical.id));
+    expect(JSON.stringify(stored)).toContain(SKILL_SUMMARY_SECRET);
+  } finally {
+    await harness.close();
+    await testDb.delete(agentSkills).where(eq(agentSkills.id, skillId));
+  }
 });
 
 // timeout: the stalled provider case exercises the production compaction deadline before the second turn can settle.

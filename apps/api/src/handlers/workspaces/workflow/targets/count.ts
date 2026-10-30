@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { countWorkflowTargetEntities } from "@/api/lib/workflow-target-queries";
@@ -23,12 +23,12 @@ const config = {
     reason: "workflow_orchestration",
     consumesServices: false,
   },
-  body: t.Object({
-    // Bounded by what a run may actually be launched against: the same cap
-    // `matters.workflow.start` puts on its own entity list, so every set
-    // that can start a run can also be sized first.
-    entityIds: t.Optional(
-      t.Array(tSafeId("entity"), { maxItems: LIMITS.entitiesCount }),
+  body: v.object({
+    entityIds: v.optional(
+      v.pipe(
+        v.array(resourceIdSchema("entity")),
+        v.maxLength(LIMITS.entitiesCount),
+      ),
     ),
   }),
 } satisfies WorkspaceHandlerConfig;

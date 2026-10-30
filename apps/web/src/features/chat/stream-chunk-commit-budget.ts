@@ -1,5 +1,7 @@
 import type { StreamChunk } from "@tanstack/ai";
 
+import { ownEntry } from "@stll/api-contract/own-key";
+
 // How often the thread page may commit while a response streams, by the kind
 // of chunk that streams (oracle `chat.render.stream-commits-bounded`). A
 // provider can send any of these as hundreds of tiny deltas a second; the
@@ -32,7 +34,27 @@ const STREAMING_COMMITS_PER_SECOND = 45;
 /** The most components a commit may render with props equal to the last. */
 const STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT = 2;
 
+type ComposerControls = {
+  ComposerPlusMenu: { name: string };
+  ChatPromptImproveButton: { name: string };
+  ChatComposerActionButton: { name: string };
+};
+
+// Resolve names from the real imports after the DOM probe is installed. This
+// budget is also imported by e2e runners, so it cannot eagerly load the UI.
+const untouchedComposerControls = ({
+  ComposerPlusMenu,
+  ChatPromptImproveButton,
+  ChatComposerActionButton,
+}: ComposerControls) => [
+  ComposerPlusMenu.name,
+  ChatPromptImproveButton.name,
+  ChatComposerActionButton.name,
+];
+
 type StreamChunkBudget = {
+  /** Controls whose inputs are unchanged throughout the chunk burst. */
+  untouched: typeof untouchedComposerControls;
   /** The most commits per second while this kind streams. */
   commitsPerSecond: number;
   /**
@@ -54,6 +76,7 @@ type StreamChunkBudget = {
 
 export const STREAM_CHUNK_COMMIT_BUDGET = {
   reasoning: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -61,6 +84,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "reasoning deltas of a thinking block",
   },
   status: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -68,6 +92,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "step, activity, state and custom progress events",
   },
   subagent: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -75,6 +100,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "a subagent run's own text deltas, inside its card",
   },
   text: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -82,6 +108,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "text deltas of the answer",
   },
   "tool-input": {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -89,6 +116,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "argument deltas of one tool call",
   },
   "tool-output": {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -148,11 +176,14 @@ export const STREAM_EVENT_KIND = {
 /**
  * The kind a chunk streams as. A chunk a subagent's run writes carries its
  * run id, and the client's stream processor routes it into that subagent's
- * card whatever its type: it streams as the subagent.
+ * card whatever its type: it streams as the subagent. A type the installed
+ * SDK does not name (a newer server's) never reaches the page.
  */
 export const streamChunkKindOf = (
   chunk: StreamChunk,
 ): NotStreamed | StreamChunkKind =>
   "subagentRunId" in chunk && typeof chunk.subagentRunId === "string"
     ? "subagent"
-    : STREAM_EVENT_KIND[chunk.type];
+    : (ownEntry(STREAM_EVENT_KIND, chunk.type) ?? {
+        notStreamed: IGNORED_BY_CLIENT,
+      });

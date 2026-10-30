@@ -1,17 +1,17 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { getAuth } from "@/api/lib/auth";
 import type { UpdateApiKey } from "@/api/lib/auth/api-key-endpoints";
 import type { SafeId } from "@/api/lib/branded-types";
+import { uniqueItems } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
   API_KEY_POLICY,
   MACHINE_API_KEY_CONFIG_ID,
   MACHINE_API_KEY_EXPIRY,
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MACHINE_API_KEY_GRANTABLE_SCOPES,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
   machineApiKeyMetadataSchema,
@@ -20,7 +20,6 @@ import {
 } from "@/api/lib/machine-api-key-config";
 import type {
   ApiKeyKind,
-  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MachineApiKeyMetadata,
   MachineApiKeyScope,
 } from "@/api/lib/machine-api-key-config";
@@ -69,30 +68,32 @@ const reportUnreadableKey = (
  * on either endpoint so the two paths cannot drift into accepting different
  * shapes for the same credential.
  */
-export const machineApiKeyNameSchema = t.String({
-  minLength: 1,
-  maxLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
-});
+export const machineApiKeyNameSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(MACHINE_API_KEY_NAME_MAX_LENGTH),
+);
 
 /**
  * Scopes are constrained at the HTTP boundary to the grantable set, so an
  * unknown or anonymized-surface scope is a 422 before any handler code runs.
  */
-export const machineApiKeyScopesSchema = t.Array(
-  t.UnionEnum([...MACHINE_API_KEY_GRANTABLE_SCOPES]),
-  { minItems: 1, uniqueItems: true },
+export const machineApiKeyScopesSchema = v.pipe(
+  v.array(v.picklist([...MACHINE_API_KEY_GRANTABLE_SCOPES])),
+  v.minLength(1),
+  uniqueItems(),
 );
 
 /**
  * Deliberately an untyped record at the boundary: the resource/action names are
  * checked against the canonical `statements` map by
  * `validateGrantablePermissions`, which produces a far better error than a
- * TypeBox union of every resource would, and keeps this schema out of the
+ * schema union of every resource would, and keeps this schema out of the
  * type-instantiation hot path.
  */
-export const machineApiKeyPermissionsBodySchema = t.Record(
-  t.String(),
-  t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
+export const machineApiKeyPermissionsBodySchema = v.record(
+  v.string(),
+  v.pipe(v.array(v.pipe(v.string(), v.minLength(1))), v.minLength(1)),
 );
 
 /**
@@ -102,39 +103,19 @@ export const machineApiKeyPermissionsBodySchema = t.Record(
  * so a key minted for the public legal corpus cannot be replayed against the
  * default surface and reach matter data.
  */
-export const machineApiKeyAudienceSchema = t.Optional(
-  // `t.Union` of literals rather than `t.UnionEnum`: the latter coerces an
-  // absent field to its first member, which would silently bind every key that
-  // named no audience to the default one instead of leaving it unbound.
-  t.Union([
-    t.Literal("advanced"),
-    t.Literal("default"),
-    t.Literal("documents"),
-    t.Literal("law"),
-  ]),
+export const machineApiKeyAudienceSchema = v.exactOptional(
+  // No default: an absent field stays absent, so a key that named no audience
+  // is left unbound instead of silently bound to the first member.
+  v.picklist(MACHINE_API_KEY_GRANTABLE_AUDIENCES),
 );
 
-// The literal list mirrors MACHINE_API_KEY_GRANTABLE_AUDIENCES: a member on
-// one side only fails to compile here.
-type GrantableAudience = (typeof MACHINE_API_KEY_GRANTABLE_AUDIENCES)[number];
-type AudienceSchemaValue = Static<typeof machineApiKeyAudienceSchema>;
-type MissingAudienceSchemaValue = Exclude<
-  GrantableAudience,
-  AudienceSchemaValue
->;
-type UnexpectedAudienceSchemaValue = Exclude<
-  AudienceSchemaValue,
-  GrantableAudience
->;
-
-true satisfies MissingAudienceSchemaValue extends never ? true : never;
-true satisfies UnexpectedAudienceSchemaValue extends never ? true : never;
-
-export const machineApiKeyExpiresInDaysSchema = t.Optional(
-  t.Integer({
-    minimum: MACHINE_API_KEY_EXPIRY.minDays,
-    maximum: MACHINE_API_KEY_EXPIRY.maxDays,
-  }),
+export const machineApiKeyExpiresInDaysSchema = v.exactOptional(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(MACHINE_API_KEY_EXPIRY.minDays),
+    v.maxValue(MACHINE_API_KEY_EXPIRY.maxDays),
+  ),
 );
 
 /**
@@ -247,13 +228,11 @@ export type MintedMachineApiKey = {
 };
 
 /**
- * Mint a machine key.
- *
- * Called without `headers` on purpose: `permissions`, `userId`, and the rate
- * limit fields are server-only on the plugin's create endpoint and it rejects
- * them outright whenever a request or header bag is present. The ownership ids
- * are parameters rather than body fields precisely so this path cannot be
- * pointed at another user or organization.
+ * Writes a minted key. The only implementation is the key lifecycle's fenced
+ * writer, which inserts inside a transaction holding the account's credential
+ * fence, so a key cannot outlive an access reset that ran concurrently. The
+ * ownership ids are parameters rather than body fields precisely so this path
+ * cannot be pointed at another user or organization.
  */
 type CreateApiKey = (options: {
   body: {
@@ -282,7 +261,7 @@ export const mintMachineApiKey = async (
     userId,
     organizationId,
   }: MintMachineApiKeyOptions,
-  createApiKey: CreateApiKey = getAuth().api.createApiKey,
+  createApiKey: CreateApiKey,
 ): Promise<Result<MintedMachineApiKey, HandlerError>> => {
   const policy = API_KEY_POLICY[kind];
   const days = expiresInDays ?? policy.defaultDays;

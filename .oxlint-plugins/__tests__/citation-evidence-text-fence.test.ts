@@ -76,7 +76,7 @@ test("nested fence declarations do not certify graph writes", async () => {
     ].join("\n"),
   );
   const reports = await Promise.all(
-    sources.map((source) =>
+    sources.map(async (source) =>
       lintSingleRule("citation-evidence-text-fence", source, {
         sourcePath: "apps/api/src/handlers/case-law/polarity/example.ts",
       }),
@@ -134,7 +134,7 @@ test("synthetic citation fixtures stay outside the production writer guard", asy
     "apps/api/src/tests/query-plans/seed.ts",
   ];
   const reports = await Promise.all(
-    sourcePaths.map((sourcePath) =>
+    sourcePaths.map(async (sourcePath) =>
       lintSingleRule("citation-evidence-text-fence", source, { sourcePath }),
     ),
   );

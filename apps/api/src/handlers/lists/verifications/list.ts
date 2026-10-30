@@ -9,13 +9,15 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -50,15 +52,19 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({}),
-  query: t.Object({
-    entityId: tSafeId("entity"),
-    fileFieldId: tSafeId("field"),
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.legalListVerificationRunsPageSizeMax,
-      }),
+  query: v.object({
+    entityId: resourceIdSchema("entity"),
+    fileFieldId: resourceIdSchema("field"),
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.legalListVerificationRunsPageSizeMax),
+        ),
+      ),
     ),
   }),
 } satisfies WorkspaceHandlerConfig;

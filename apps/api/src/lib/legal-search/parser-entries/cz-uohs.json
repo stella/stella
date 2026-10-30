@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_UOHS",
+  "key": "cz-uohs",
+  "parserVersion": 8,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; retain current canonical AST and publisher metadata."
+  }
+}

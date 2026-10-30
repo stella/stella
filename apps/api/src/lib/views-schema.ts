@@ -1,5 +1,3 @@
-import { Type } from "@sinclair/typebox";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -15,14 +13,15 @@ import {
   propertyContentSchema,
 } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { logger } from "@/api/lib/observability/logger";
 import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
 import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
 
 const v1 = v.literal(1);
-
-const strictObjectOptions = { additionalProperties: false } as const;
 
 const viewSortSchema = v.strictObject({
   propertyId: v.pipe(v.string(), v.minLength(1)),
@@ -31,13 +30,10 @@ const viewSortSchema = v.strictObject({
 
 export type ViewSort = v.InferOutput<typeof viewSortSchema>;
 
-export const tViewSortSchema = t.Object(
-  {
-    propertyId: t.String({ minLength: 1 }),
-    desc: t.Boolean(),
-  },
-  strictObjectOptions,
-);
+export const tViewSortSchema = v.strictObject({
+  propertyId: v.pipe(v.string(), v.minLength(1)),
+  desc: v.boolean(),
+});
 
 /**
  * A calculation a view shows for one property: the board renders it in every
@@ -49,13 +45,10 @@ const viewCalculationSchema = v.strictObject({
   kind: v.picklist(CALCULATION_KINDS),
 });
 
-const tViewCalculationSchema = t.Object(
-  {
-    propertyId: t.String({ minLength: 1 }),
-    kind: t.UnionEnum([...CALCULATION_KINDS]),
-  },
-  strictObjectOptions,
-);
+const tViewCalculationSchema = v.strictObject({
+  propertyId: v.pipe(v.string(), v.minLength(1)),
+  kind: v.picklist([...CALCULATION_KINDS]),
+});
 
 const baseLayoutSchema = {
   // Bounded here as well as at the request boundary: a stored layout is
@@ -287,155 +280,117 @@ export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
 };
 
 const tBaseLayoutSchema = {
-  filters: t.Array(tConditionNode, { maxItems: VIEW_FILTERS_MAX }),
-  sorts: t.Array(tViewSortSchema, { maxItems: VIEW_SORTS_MAX }),
-  hiddenProperties: t.Array(t.String()),
-  calculations: t.Optional(t.Array(tViewCalculationSchema)),
+  filters: v.pipe(v.array(tConditionNode), v.maxLength(VIEW_FILTERS_MAX)),
+  sorts: v.pipe(v.array(tViewSortSchema), v.maxLength(VIEW_SORTS_MAX)),
+  hiddenProperties: v.array(v.string()),
+  calculations: v.optional(v.array(tViewCalculationSchema)),
 };
 
 const tVersionedBaseLayoutSchema = {
-  version: t.Literal(1),
+  version: v.literal(1),
   ...tBaseLayoutSchema,
 };
 
-const tViewLayoutDefinition = t.Union([
-  t.Object(
-    {
-      type: t.Literal("overview"),
-      ...tVersionedBaseLayoutSchema,
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      type: t.Literal("table"),
-      columnOrder: t.Array(t.String()),
-      columnPinning: t.Array(t.String()),
-      ...tVersionedBaseLayoutSchema,
-      groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      type: t.Literal("filesystem"),
-      ...tVersionedBaseLayoutSchema,
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      type: t.Literal("kanban"),
-      ...tVersionedBaseLayoutSchema,
-      groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
-      subgroupByPropertyId: t.Optional(t.String({ minLength: 1 })),
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      type: t.Literal("calendar"),
-      ...tVersionedBaseLayoutSchema,
-      datePropertyId: t.String({ minLength: 1 }),
-      endDatePropertyId: t.Optional(t.String({ minLength: 1 })),
-      additionalDatePropertyIds: t.Optional(
-        t.Array(t.String({ minLength: 1 })),
-      ),
-      mode: t.Union([t.Literal("month"), t.Literal("week"), t.Literal("year")]),
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      type: t.Literal("timeline"),
-      ...tVersionedBaseLayoutSchema,
-      startDatePropertyId: t.String({ minLength: 1 }),
-      endDatePropertyId: t.String({ minLength: 1 }),
-      zoom: t.Union([
-        t.Literal("day"),
-        t.Literal("week"),
-        t.Literal("month"),
-        t.Literal("quarter"),
-      ]),
-      groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
-      showTable: t.Boolean(),
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      type: t.Literal("avt"),
-      ...tVersionedBaseLayoutSchema,
-      listId: t.Union([tSafeId("legalList"), t.Null()]),
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      type: t.Literal("correspondence"),
-      ...tVersionedBaseLayoutSchema,
-    },
-    strictObjectOptions,
-  ),
+/**
+ * A layout as a request carries it. Handlers read it through
+ * `parseViewLayout`, which applies the stored schema's defaults and brands,
+ * so the route contract states what a client sends rather than `ViewLayout`.
+ */
+export const tViewLayoutSchema = v.union([
+  v.strictObject({
+    type: v.literal("overview"),
+    ...tVersionedBaseLayoutSchema,
+  }),
+  v.strictObject({
+    type: v.literal("table"),
+    columnOrder: v.array(v.string()),
+    columnPinning: v.array(v.string()),
+    ...tVersionedBaseLayoutSchema,
+    groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  }),
+  v.strictObject({
+    type: v.literal("filesystem"),
+    ...tVersionedBaseLayoutSchema,
+  }),
+  v.strictObject({
+    type: v.literal("kanban"),
+    ...tVersionedBaseLayoutSchema,
+    groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+    subgroupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  }),
+  v.strictObject({
+    type: v.literal("calendar"),
+    ...tVersionedBaseLayoutSchema,
+    datePropertyId: v.pipe(v.string(), v.minLength(1)),
+    endDatePropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+    additionalDatePropertyIds: v.optional(
+      v.array(v.pipe(v.string(), v.minLength(1))),
+    ),
+    mode: v.picklist(["month", "week", "year"]),
+  }),
+  v.strictObject({
+    type: v.literal("timeline"),
+    ...tVersionedBaseLayoutSchema,
+    startDatePropertyId: v.pipe(v.string(), v.minLength(1)),
+    endDatePropertyId: v.pipe(v.string(), v.minLength(1)),
+    zoom: v.picklist(["day", "week", "month", "quarter"]),
+    groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+    showTable: v.boolean(),
+  }),
+  v.strictObject({
+    type: v.literal("avt"),
+    ...tVersionedBaseLayoutSchema,
+    listId: v.union([resourceIdSchema("legalList"), v.null()]),
+  }),
+  v.strictObject({
+    type: v.literal("correspondence"),
+    ...tVersionedBaseLayoutSchema,
+  }),
 ]);
 
-export const tViewLayoutSchema = Type.Unsafe<ViewLayout>({
-  ...tViewLayoutDefinition,
-});
-
-const tViewTemplatePropertyToolSchema = t.Union([
-  t.Object({
-    version: t.Literal(1),
-    type: t.Literal("ai-model"),
-    prompt: t.String({ maxLength: 1000 }),
+const tViewTemplatePropertyToolSchema = v.union([
+  v.object({
+    version: v.literal(1),
+    type: v.literal("ai-model"),
+    prompt: v.pipe(v.string(), v.maxLength(1000)),
   }),
   manualInputToolSchema,
 ]);
 
-export const tViewTemplatePropertySchema = t.Object(
-  {
-    version: t.Literal(1),
-    sourceId: t.String({ minLength: 1 }),
-    name: tDefaultVarchar,
-    content: propertyContentSchema,
-    tool: tViewTemplatePropertyToolSchema,
-    role: t.Optional(
-      t.Union([t.Literal("document-type-classifier"), t.Null()]),
-    ),
-    createIfMissing: t.Boolean(),
-    dependencies: t.Optional(
-      t.Array(
-        t.Object(
-          {
-            dependsOnSourceId: t.String({ minLength: 1 }),
-            condition: t.Union([tConditionNode, t.Null()]),
-          },
-          strictObjectOptions,
-        ),
-        { maxItems: PROPERTY_DEPENDENCY_LIMITS.perProperty },
+export const tViewTemplatePropertySchema = v.strictObject({
+  version: v.literal(1),
+  sourceId: v.pipe(v.string(), v.minLength(1)),
+  name: defaultVarcharSchema,
+  content: propertyContentSchema,
+  tool: tViewTemplatePropertyToolSchema,
+  role: v.optional(v.union([v.literal("document-type-classifier"), v.null()])),
+  createIfMissing: v.boolean(),
+  dependencies: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          dependsOnSourceId: v.pipe(v.string(), v.minLength(1)),
+          condition: v.union([tConditionNode, v.null()]),
+        }),
       ),
+      v.maxLength(PROPERTY_DEPENDENCY_LIMITS.perProperty),
     ),
-  },
-  strictObjectOptions,
-);
+  ),
+});
 
-export type ViewTemplateProperty = typeof tViewTemplatePropertySchema.static;
+export type ViewTemplateProperty = v.InferOutput<
+  typeof tViewTemplatePropertySchema
+>;
 
-export const tCreateViewInputSchema = t.Object(
-  {
-    id: tSafeId("workspaceView"),
-    name: tDefaultVarchar,
-    layout: tViewLayoutSchema,
-    templateProperties: t.Optional(t.Array(tViewTemplatePropertySchema)),
-  },
-  strictObjectOptions,
-);
+export const tCreateViewInputSchema = v.strictObject({
+  id: resourceIdSchema("workspaceView"),
+  name: defaultVarcharSchema,
+  layout: tViewLayoutSchema,
+  templateProperties: v.optional(v.array(tViewTemplatePropertySchema)),
+});
 
-export const tUpdateViewBodySchema = t.Object(
-  {
-    name: t.Optional(tDefaultVarchar),
-    layout: t.Optional(tViewLayoutSchema),
-    templateProperties: t.Optional(t.Array(tViewTemplatePropertySchema)),
-  },
-  strictObjectOptions,
-);
+export const tUpdateViewBodySchema = v.strictObject({
+  name: v.optional(defaultVarcharSchema),
+  layout: v.optional(tViewLayoutSchema),
+  templateProperties: v.optional(v.array(tViewTemplatePropertySchema)),
+});

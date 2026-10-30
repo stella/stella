@@ -49,6 +49,7 @@ import type {
   CitationPolaritySource,
   CitedPart,
 } from "@/api/lib/case-law/citation-vocabulary";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
@@ -168,7 +169,12 @@ export const classifyCitation = async ({
         ruleId: ruleMatch.ruleId,
         scopedDb,
       }).catch((error: unknown) => {
-        captureError(error, { ruleId: ruleMatch.ruleId });
+        captureError(
+          error,
+          handlerErrorContext("polarity.persistRuleMatch", {
+            ruleId: ruleMatch.ruleId,
+          }),
+        );
       });
     }
     return {
@@ -225,7 +231,13 @@ export const classifyCitation = async ({
       observedAt,
       scopedDb,
     }).catch((error: unknown) => {
-      captureError(error, { language, polarity });
+      captureError(
+        error,
+        handlerErrorContext("polarity.persistModelMatch", {
+          language,
+          polarity,
+        }),
+      );
     });
   }
 

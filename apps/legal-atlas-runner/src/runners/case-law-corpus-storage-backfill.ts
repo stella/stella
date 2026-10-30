@@ -2,6 +2,7 @@ import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { handlerErrorContext } from "@stll/errors/exception-context";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
@@ -134,6 +135,16 @@ const parseArgs = (argv: readonly string[]): ParseResult => {
 const backfillRow = async (
   row: BackfillRow,
 ): Promise<"written" | "skipped" | "failed"> => {
+  const reportFailure = (error: unknown) => {
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillRow", {
+        decisionId: row.id,
+        step: "caseLawCorpusStorageBackfill",
+      }),
+    );
+    return "failed" as const;
+  };
   try {
     // The batch snapshot can go stale while earlier rows in it write.
     // Re-check the compare-and-set precondition first, so a row whose
@@ -158,7 +169,7 @@ const backfillRow = async (
       return "skipped";
     }
 
-    const outcome = await writeCorpusDocument({
+    const written = await writeCorpusDocument({
       documentId: row.id,
       jurisdiction: row.country,
       text: row.fulltext,
@@ -167,6 +178,10 @@ const backfillRow = async (
       // The scan admits only rows with no recorded corpus write.
       stored: null,
     });
+    if (written.isErr()) {
+      return reportFailure(written.error);
+    }
+    const outcome = written.value;
     if (outcome.type === "skipped-empty") {
       // Nothing readable to store; null pointers already represent it.
       return "skipped";
@@ -203,17 +218,23 @@ const backfillRow = async (
     // points nowhere, and only the recording makes the work durable.
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(error, {
-      decisionId: row.id,
-      step: "caseLawCorpusStorageBackfill",
-    });
-    return "failed";
+    return reportFailure(error);
   }
 };
 
 const backfillLegislationRow = async (
   row: LegislationBackfillRow,
 ): Promise<"written" | "skipped" | "failed"> => {
+  const reportFailure = (error: unknown) => {
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillLegislationRow", {
+        documentId: row.id,
+        step: "legislationCorpusStorageBackfill",
+      }),
+    );
+    return "failed" as const;
+  };
   try {
     // Same shape as the case-law pass: refuse the PUTs when the recording
     // compare-and-set below would already refuse the row.
@@ -237,7 +258,7 @@ const backfillLegislationRow = async (
       return "skipped";
     }
 
-    const outcome = await writeCorpusDocument({
+    const written = await writeCorpusDocument({
       documentId: row.id,
       jurisdiction: row.country,
       text: row.fulltext,
@@ -246,6 +267,10 @@ const backfillLegislationRow = async (
       // The scan admits only rows with no recorded corpus write.
       stored: null,
     });
+    if (written.isErr()) {
+      return reportFailure(written.error);
+    }
+    const outcome = written.value;
     if (outcome.type === "skipped-empty") {
       // Nothing readable to store; null pointers already represent it.
       return "skipped";
@@ -280,11 +305,7 @@ const backfillLegislationRow = async (
 
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(error, {
-      documentId: row.id,
-      step: "legislationCorpusStorageBackfill",
-    });
-    return "failed";
+    return reportFailure(error);
   }
 };
 

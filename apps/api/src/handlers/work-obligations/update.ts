@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import {
   entities,
@@ -19,45 +20,48 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 const updateWorkObligationParams = workspaceParams({
-  entityId: tSafeId("entity"),
+  entityId: resourceIdSchema("entity"),
 });
 
-const updateWorkObligationBody = t.Object({
-  ownerUserId: t.Optional(t.Nullable(tSafeId("user"))),
-  type: t.Optional(
-    t.Union([
-      t.Literal(WORK_OBLIGATION_TYPE.TASK),
-      t.Literal(WORK_OBLIGATION_TYPE.DEADLINE),
+const updateWorkObligationBody = v.object({
+  ownerUserId: v.optional(v.nullable(resourceIdSchema("user"))),
+  type: v.optional(
+    v.union([
+      v.literal(WORK_OBLIGATION_TYPE.TASK),
+      v.literal(WORK_OBLIGATION_TYPE.DEADLINE),
     ]),
   ),
-  workingTargetDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  hardDeadlineDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  sourceType: t.Optional(
-    t.Union([
-      t.Literal(WORK_OBLIGATION_SOURCE.MANUAL),
-      t.Literal(WORK_OBLIGATION_SOURCE.CALENDAR),
-      t.Literal(WORK_OBLIGATION_SOURCE.EMAIL),
-      t.Literal(WORK_OBLIGATION_SOURCE.DOCUMENT),
-      t.Literal(WORK_OBLIGATION_SOURCE.COURT),
-      t.Literal(WORK_OBLIGATION_SOURCE.IMPORT),
-      t.Literal(WORK_OBLIGATION_SOURCE.API),
+  workingTargetDate: v.optional(v.nullable(apiDateSchema)),
+  hardDeadlineDate: v.optional(v.nullable(apiDateSchema)),
+  sourceType: v.optional(
+    v.union([
+      v.literal(WORK_OBLIGATION_SOURCE.MANUAL),
+      v.literal(WORK_OBLIGATION_SOURCE.CALENDAR),
+      v.literal(WORK_OBLIGATION_SOURCE.EMAIL),
+      v.literal(WORK_OBLIGATION_SOURCE.DOCUMENT),
+      v.literal(WORK_OBLIGATION_SOURCE.COURT),
+      v.literal(WORK_OBLIGATION_SOURCE.IMPORT),
+      v.literal(WORK_OBLIGATION_SOURCE.API),
     ]),
   ),
-  sourceEntityId: t.Optional(t.Nullable(tSafeId("entity"))),
-  sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
-  reason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
+  sourceEntityId: v.optional(v.nullable(resourceIdSchema("entity"))),
+  sourceDescription: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(1000))),
+  ),
+  reason: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(1000))),
 });
 
-type UpdateWorkObligationBody = Static<typeof updateWorkObligationBody>;
+type UpdateWorkObligationBody = v.InferOutput<typeof updateWorkObligationBody>;
 type LockedWorkObligation = NonNullable<
   Awaited<ReturnType<typeof lockWorkObligation>>
 >;
@@ -509,7 +513,7 @@ const updateWorkObligation = createSafeHandler(
               and(
                 eq(entities.id, params.entityId),
                 eq(entities.workspaceId, workspaceId),
-                eq(entities.kind, "task"),
+                workTask(entities),
               ),
             );
         }

@@ -14,6 +14,8 @@ import type { AnyRelations, EmptyRelations } from "drizzle-orm";
 import { bunSqlPgCodecs, drizzle } from "drizzle-orm/bun-sql/postgres";
 import type { DrizzlePgConfig } from "drizzle-orm/pg-core";
 
+import { instrumentQueryOrigins } from "@/api/lib/db-query-counter";
+
 /** Options of a Postgres client; `bigint` is always on and cannot be turned off. */
 export type SqlClientOptions = Omit<SQL.PostgresOrMySQLOptions, "bigint">;
 
@@ -67,7 +69,15 @@ export const createDatabase = <
   TClient extends SQL = SQL,
 >(
   config: Omit<DrizzlePgConfig<TRelations>, "codecs"> & { client: TClient },
-) => drizzle<TRelations, TClient>({ ...config, codecs: stellaPgCodecs });
+) => {
+  const database = drizzle<TRelations, TClient>({
+    ...config,
+    codecs: stellaPgCodecs,
+  });
+  return config.logger === undefined || config.logger === false
+    ? database
+    : instrumentQueryOrigins(database);
+};
 
 /** A client-less drizzle database for building and inspecting queries, with the same codecs. */
 export const createMockDatabase = <

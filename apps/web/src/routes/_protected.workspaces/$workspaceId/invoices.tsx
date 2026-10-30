@@ -23,6 +23,7 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { detached } from "@/lib/detached";
 import { invoicesInfiniteOptions } from "@/lib/workspaces/queries/invoices";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
+import { isPartiallyPaid } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -128,7 +129,12 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
     {
       id: "status",
       header: () => t("common.status"),
-      cell: (invoice) => <InvoiceStatusBadge status={invoice.status} />,
+      cell: (invoice) => (
+        <InvoiceStatusBadge
+          partiallyPaid={isPartiallyPaid(invoice)}
+          status={invoice.status}
+        />
+      ),
       skeletonCell: () => <Skeleton className="h-5 w-16 rounded-md" />,
     },
     {
@@ -149,7 +155,7 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
       id: "totalAmount",
       header: () => t("billing.invoices.totalAmount"),
       cell: (invoice) =>
-        formatCurrencyAmount(invoice.totalAmount, invoice.currency),
+        formatCurrencyAmount(invoice.matterShare, invoice.currency),
       headClassName: "text-end",
       cellClassName: "text-end tabular-nums",
       skeletonCell: () => <Skeleton className="ms-auto h-4 w-20" />,

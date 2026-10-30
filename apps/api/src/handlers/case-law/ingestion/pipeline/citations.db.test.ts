@@ -51,6 +51,7 @@ const decisionId = createSafeId<"caseLawDecision">();
 const ruleId = createSafeId<"caseLawPolarityRule">();
 const confidence = 0.923456789;
 
+// timeout: PGlite initializes the full schema before inserting the citation fixtures.
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });

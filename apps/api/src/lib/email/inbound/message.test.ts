@@ -71,14 +71,14 @@ describe("inbound MIME normalization", () => {
           "Content-Type: text/html; charset=utf-8",
           "Content-Transfer-Encoding: base64",
           "",
-          Buffer.from("<p>Přiložený návrh.</p>").toString("base64"),
+          Buffer.from("<p>Přiložený návrh.</p>").toBase64(),
           "--alternative--",
           "--mixed",
           "Content-Type: application/pdf",
           `Content-Disposition: ${disposition}; filename*=utf-8''n%C3%A1vrh.pdf`,
           "Content-Transfer-Encoding: base64",
           "",
-          Buffer.from("%PDF-1.7\nfixture\n").toString("base64"),
+          Buffer.from("%PDF-1.7\nfixture\n").toBase64(),
           "--mixed--",
           "",
         ].join("\r\n"),
@@ -317,7 +317,7 @@ describe("inbound MIME normalization", () => {
         'Content-Disposition: attachment; filename="forward.eml"',
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.from(original).toString("base64"),
+        Buffer.from(original).toBase64(),
         "--outer--",
       ].join("\r\n"),
     );
@@ -552,9 +552,7 @@ describe("inbound MIME normalization", () => {
         'Content-Disposition: attachment; filename="large.pdf"',
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.alloc(INBOUND_MAIL_LIMITS.attachmentBytes + 1, 0x41).toString(
-          "base64",
-        ),
+        Buffer.alloc(INBOUND_MAIL_LIMITS.attachmentBytes + 1, 0x41).toBase64(),
         "--outer--",
       ].join("\r\n"),
     );
@@ -580,7 +578,7 @@ describe("inbound MIME normalization", () => {
         'Content-Disposition: attachment; filename="brief.pdf"',
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.from([0x4d, 0x5a, 0, 0]).toString("base64"),
+        Buffer.from([0x4d, 0x5a, 0, 0]).toBase64(),
         "--outer--",
       ].join("\r\n"),
     );
@@ -636,7 +634,7 @@ describe("inbound MIME normalization", () => {
           'Content-Disposition: attachment; filename="original.eml"',
           "Content-Transfer-Encoding: base64",
           "",
-          Buffer.from(original).toString("base64"),
+          Buffer.from(original).toBase64(),
           "--outer--",
         ].join("\r\n"),
       );
@@ -779,7 +777,7 @@ describe("inbound MIME normalization", () => {
         `Content-Disposition: attachment; filename="${fileName}"`,
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.from(content).toString("base64"),
+        Buffer.from(content).toBase64(),
       ].join("\r\n");
     const email = (parts: string[]) =>
       message(

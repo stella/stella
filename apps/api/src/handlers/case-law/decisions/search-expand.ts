@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -17,6 +16,7 @@ import { Temporal } from "@stll/time";
 import type { SafeDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -273,8 +273,12 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
-  body: t.Object({
-    query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
+  body: v.object({
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+    ),
     country: tPublicLawCountry,
   }),
   requiresUsage: { actionType: "chat", modelTask: "search-expand" },
@@ -294,6 +298,10 @@ const expandCaseLawSearch = createSafeRootHandler(
     session,
     user,
   }): SafeHandlerGenerator<ExpansionAnswer | PublicCountryUnavailableAnswer> {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.ok(NO_ALTERNATIVES);
+    }
+
     const countryRead = readPublicLawCountry(body.country, {
       domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,

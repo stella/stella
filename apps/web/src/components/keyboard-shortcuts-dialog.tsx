@@ -208,7 +208,10 @@ const RebindableBinding = ({
       }
       setPending(null);
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RebindableBinding.save:failure",
+        scope: { type: "handler", handlerId: "RebindableBinding.save:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);
@@ -220,7 +223,13 @@ const RebindableBinding = ({
     try {
       await onReset(id);
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RebindableBinding.resetToDefault:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RebindableBinding.resetToDefault:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);
@@ -295,14 +304,12 @@ const RebindableBinding = ({
         {formatShortcutBinding({ type: "hotkey", hotkey }, hotkeyPlatform)}
       </kbd>
       <Button
-        // Quiet entry affordance: hidden until the row is hovered or receives
-        // keyboard focus. `focus-visible:opacity-100` keeps it reachable by
-        // Tab even when the pointer never touches the row (a11y), so it is not
-        // hover-only.
+        // Coarse pointers show the edit action at rest; mouse and keyboard
+        // users reveal it through hover or focus.
         aria-label={t("navigation.shortcutsDialog.editShortcut")}
         className={cn(
           "text-muted-foreground opacity-0 transition-opacity",
-          "group-focus-within:opacity-100 group-hover:opacity-100",
+          "group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100",
           "focus-visible:opacity-100",
         )}
         disabled={isBusy}

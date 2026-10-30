@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -13,17 +13,17 @@ import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const updateSkillResourceParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const updateSkillResourceParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const updateSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: 512 }),
-  content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
+const updateSkillResourceBodySchema = v.object({
+  path: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  content: v.pipe(v.string(), v.maxLength(LIMITS.agentSkillResourceMaxChars)),
 });
 
 const config = {

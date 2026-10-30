@@ -32,7 +32,7 @@ test.beforeAll(() => {
       "--outfile",
       output,
     ],
-    { stdio: "pipe" },
+    { maxBuffer: 2 ** 30, stdio: "pipe" },
   );
   fixture.bundle = readFileSync(output, "utf-8");
 });

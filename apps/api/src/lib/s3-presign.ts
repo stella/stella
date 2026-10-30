@@ -1,3 +1,10 @@
+import {
+  CopyObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client as AwsS3Client,
+} from "@aws-sdk/client-s3";
 /**
  * AWS SDK v3 wrapper for presigned PUT uploads and the matching
  * post-upload verification calls.
@@ -20,14 +27,6 @@
  * presigned URLs can then be issued through an STS session policy
  * scoped to one organization/workspace key prefix.
  */
-
-import {
-  CopyObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client as AwsS3Client,
-} from "@aws-sdk/client-s3";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
@@ -37,16 +36,17 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   isMissingS3ObjectError,
   resolveS3Credentials,
   TEMP_UPLOAD_TAGGING,
 } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
-import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
 import {
   issueSessionBoundCredentialTtl,
   requireSessionCredentialIssuer,
@@ -718,6 +718,7 @@ export const readTenantS3ArrayBuffer = async ({
       ),
     scope,
   });
+  recordReadWork("storageReadBytes", bytes.byteLength);
   if (bytes.buffer instanceof ArrayBuffer) {
     return bytes.buffer.slice(
       bytes.byteOffset,
@@ -973,6 +974,20 @@ export const presignUploadUrl = async ({
 export type SignedDownloadSource =
   | { kind: "request"; sessionId: string }
   | { kind: "background"; reason: string };
+
+/**
+ * The source of a download a caller asked for: bound to their browser session,
+ * or, for a credential that has none (an MCP session), not bound to a session.
+ */
+export const callerDownloadSource = (session: {
+  readonly id: string | null;
+}): SignedDownloadSource =>
+  session.id === null
+    ? {
+        kind: "background",
+        reason: "requested with a credential that has no browser session",
+      }
+    : { kind: "request", sessionId: session.id };
 
 export type PresignDownloadOptions = {
   userId: string | null;

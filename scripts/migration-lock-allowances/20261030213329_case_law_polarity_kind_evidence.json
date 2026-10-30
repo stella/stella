@@ -1,0 +1,4 @@
+{
+  "add-column": "The kind and cited_part columns use non-volatile literal defaults on PostgreSQL's fast-default catalog path; the four provenance columns are nullable and default-free. No existing rows are rewritten, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The six CHECKs are added NOT VALID without scanning existing polarity rules or citations, under 1s lock_timeout and 5s statement_timeout; the registered online-DDL owner validates them after the schema lock is released."
+}

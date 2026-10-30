@@ -1,22 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   citationPassageIn,
   citationTextFields,
-  completeDecisionCitations,
+  CitationTextGateError,
   polarityExcerptIn,
-  readCitationDecisionText,
-  readDecisionTextByDecision,
 } from "@/api/handlers/case-law/decisions/citation-passages";
 import { decisionTextCompletionOf } from "@/api/handlers/case-law/decisions/text-completion";
-import type { DecisionTextCompletionSnapshot } from "@/api/handlers/case-law/decisions/text-completion";
-import { createSafeId } from "@/api/lib/branded-types";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -56,7 +50,6 @@ describe("the excerpt a citation travels with", () => {
     const passage = citationPassageIn({
       ast: astOf([{ anchorId: "p1", text: blockText }]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage).toEqual({
@@ -75,7 +68,6 @@ describe("the excerpt a citation travels with", () => {
         { anchorId: "p4", text: `${filler} ${citationText} ${filler}` },
       ]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage?.text.length).toBe(LIMITS.caseLawCitationPassageChars);
@@ -94,7 +86,6 @@ describe("the excerpt a citation travels with", () => {
         },
       ]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage?.text).toEndWith(citationText);
@@ -110,7 +101,6 @@ describe("the excerpt a citation travels with", () => {
         },
       ]),
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
     });
 
     expect(passage?.anchorId).toBe("p9");
@@ -120,21 +110,13 @@ describe("the excerpt a citation travels with", () => {
   test("keeps the review quote verbatim beside the canonical citation excerpt", () => {
     const evidenceQuote = "The earlier decision concerns different facts.";
     const classified = "The court cites 21 Cdo 500/2019.";
-    const { passage } = citationTextFields({
-      text: {
-        type: "eligible",
-        ast: astOf([
-          { anchorId: "p1", text: classified },
-          { anchorId: "p2", text: `21 Cdo 500/2019: ${evidenceQuote}` },
-        ]),
-        sections: [
-          { index: 0, text: classified, type: "argumentation", title: null },
-        ],
-      },
-      textWithheldReason: null,
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: classified },
+        { anchorId: "p2", text: `21 Cdo 500/2019: ${evidenceQuote}` },
+      ]),
       citationText: "21 Cdo 500/2019",
-      sectionIndex: 0,
-      evidenceWindows: null,
+      classifiedBlockIds: ["b0"],
       evidenceQuote,
     });
     expect(passage).toEqual({
@@ -156,7 +138,6 @@ describe("the excerpt a citation travels with", () => {
         { anchorId: "p2", text: `However, ${evidenceQuote}` },
       ]),
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
       evidenceQuote,
     });
     expect(passage).toMatchObject({
@@ -170,7 +151,6 @@ describe("the excerpt a citation travels with", () => {
     const passage = citationPassageIn({
       ast: astOf([{ anchorId: "p1", text: "21 Cdo 500/2019 is cited." }]),
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
       evidenceQuote: "Different facts.",
     });
     expect(passage).not.toHaveProperty("evidenceQuote");
@@ -181,7 +161,6 @@ describe("the excerpt a citation travels with", () => {
       citationPassageIn({
         ast: astOf([{ anchorId: "p1", text: "Nic k věci." }]),
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       }),
     ).toBeNull();
   });
@@ -293,375 +272,26 @@ test("every long evidence window stays bounded and preserves both recorded ends"
 
 test("a text-eligibility failure returns no citation text and an incomplete reason", async () => {
   const citationText = "21 Cdo 500/2019";
-  const paragraph = `Synthetic reasoning in ${citationText}.`;
-  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
-  const text = await readCitationDecisionText({
-    pointer: {
-      id: createSafeId<"caseLawDecision">(),
-      astS3Key: "synthetic/ast",
-      contentHash: "synthetic-hash",
-      textEligibilityFingerprint: "synthetic-revision",
-    },
-    columns: {
-      textIncompleteReason: null,
-      textWithheldReason: null,
-      contentHash: "synthetic-hash",
-      textRevisionFingerprint: "synthetic-revision-content",
-      textEligibilityFingerprint: "synthetic-revision",
-      documentAst: ast,
-      sections: [
-        { index: 0, text: paragraph, type: "argumentation", title: null },
-      ],
-    },
-    readAst: async () =>
-      await Promise.reject(new TypeError("Synthetic read failure")),
-  });
+  const text = {
+    type: "gate-failed",
+    error: new CitationTextGateError({
+      message: "Synthetic read failure",
+      reason: "gate_failed",
+    }),
+  } as const;
   expect(
     citationTextFields({
       text,
       textWithheldReason: null,
       citationText,
       sectionIndex: 0,
-      evidenceWindows: [{ start: 0, end: paragraph.length }],
+      evidenceWindows: [{ start: 0, end: 10 }],
     }),
   ).toEqual({
     citationText: null,
     passage: null,
     evidenceExcerpt: null,
     textIncompleteReason: "gate_failed",
-  });
-});
-
-const citationFieldsAfterCompletionChangesDuringAstRead = async (
-  currentAfterRead: DecisionTextCompletionSnapshot,
-) => {
-  const id = createSafeId<"caseLawDecision">();
-  const citationText = "21 Cdo 500/2019";
-  const paragraph = `Synthetic reasoning in ${citationText}.`;
-  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
-  const pointer = {
-    id,
-    astS3Key: "synthetic/ast",
-    contentHash: "synthetic-hash",
-    textEligibilityFingerprint: "eligible-revision",
-  };
-  const eligible = {
-    textEligibilityFingerprint: pointer.textEligibilityFingerprint,
-    textWithheldReason: null,
-    textIncompleteReason: null,
-    textRevisionFingerprint: "synthetic-revision",
-  };
-  let current: DecisionTextCompletionSnapshot = eligible;
-  const textByDecision = await readDecisionTextByDecision({
-    caseLawDb: caseLawPublicReadDb,
-    pointers: [pointer],
-    countries: ["CZE"],
-    readColumns: async () =>
-      new Map([
-        [
-          String(id),
-          {
-            ...eligible,
-            contentHash: pointer.contentHash,
-            documentAst: ast,
-            sections: [
-              { index: 0, text: paragraph, type: "argumentation", title: null },
-            ],
-          },
-        ],
-      ]),
-    readAst: async () => {
-      current = currentAfterRead;
-      return ast;
-    },
-    readTombstones: async () => new Set(),
-    readCurrentCompletions: async () => new Map([[String(id), current]]),
-  });
-
-  const text = textByDecision.get(String(id));
-  const fields = citationTextFields({
-    text,
-    textWithheldReason: text?.type === "withheld" ? text.reason : null,
-    citationText,
-    sectionIndex: 0,
-    evidenceWindows: [{ start: 0, end: paragraph.length }],
-  });
-  return fields;
-};
-
-test("a descriptor change during the AST read suppresses citation text and excerpts", async () => {
-  expect(
-    await citationFieldsAfterCompletionChangesDuringAstRead({
-      textEligibilityFingerprint: "withheld-revision",
-      textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
-      textIncompleteReason: null,
-      textRevisionFingerprint: "synthetic-revision",
-    }),
-  ).toEqual({
-    citationText: null,
-    passage: null,
-    evidenceExcerpt: null,
-    textIncompleteReason: null,
-  });
-});
-
-test("a text revision change during the AST read suppresses citation text and excerpts", async () => {
-  expect(
-    await citationFieldsAfterCompletionChangesDuringAstRead({
-      textEligibilityFingerprint: "changed-text-revision",
-      textWithheldReason: null,
-      textIncompleteReason: null,
-      textRevisionFingerprint: "changed-revision",
-    }),
-  ).toEqual({
-    citationText: null,
-    passage: null,
-    evidenceExcerpt: null,
-    textIncompleteReason: "text_changed",
-  });
-});
-
-test("an unchanged completion during the AST read retains citation text and excerpts", async () => {
-  const citationText = "21 Cdo 500/2019";
-  const paragraph = `Synthetic reasoning in ${citationText}.`;
-  const fields = await citationFieldsAfterCompletionChangesDuringAstRead({
-    textEligibilityFingerprint: "eligible-revision",
-    textWithheldReason: null,
-    textIncompleteReason: null,
-    textRevisionFingerprint: "synthetic-revision",
-  });
-  expect(fields).toEqual({
-    citationText,
-    passage: {
-      anchorId: "p1",
-      text: paragraph,
-      truncated: false,
-      mention: "sole",
-    },
-    evidenceExcerpt: paragraph,
-    textIncompleteReason: null,
-  });
-});
-
-test("a later AST batch changes the first decision before the page completion", async () => {
-  const citationText = "21 Cdo 500/2019";
-  const paragraph = `Synthetic reasoning in ${citationText}.`;
-  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
-  const pointer = () => ({
-    id: createSafeId<"caseLawDecision">(),
-    astS3Key: "synthetic/ast",
-    contentHash: "synthetic-hash",
-    textEligibilityFingerprint: "eligible-revision",
-  });
-  const first = pointer();
-  const last = pointer();
-  const pointers = [
-    first,
-    ...Array.from(
-      { length: LIMITS.caseLawCitationPassageConcurrency - 1 },
-      pointer,
-    ),
-    last,
-  ];
-  const eligible = {
-    textEligibilityFingerprint: "eligible-revision",
-    textWithheldReason: null,
-    textIncompleteReason: null,
-    textRevisionFingerprint: "synthetic-revision",
-  };
-  let firstCompletion: DecisionTextCompletionSnapshot = eligible;
-  let astReads = 0;
-  const completions: {
-    ids: readonly string[];
-    astReads: number;
-    countries: readonly string[];
-  }[] = [];
-  const textByDecision = await readDecisionTextByDecision({
-    caseLawDb: caseLawPublicReadDb,
-    pointers,
-    countries: ["CZE"],
-    readColumns: async ({ ids }) =>
-      new Map(
-        ids.map((id) => [
-          String(id),
-          {
-            ...eligible,
-            contentHash: "synthetic-hash",
-            documentAst: ast,
-            sections: null,
-          },
-        ]),
-      ),
-    readAst: async (source) => {
-      astReads += 1;
-      if (source.id === last.id) {
-        firstCompletion = {
-          textEligibilityFingerprint: "withheld-revision",
-          textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
-          textIncompleteReason: null,
-          textRevisionFingerprint: "synthetic-revision",
-        };
-      }
-      return ast;
-    },
-    readTombstones: async () => new Set(),
-    readCurrentCompletions: async ({ ids, countries }) => {
-      completions.push({ ids, astReads, countries });
-      return new Map(
-        ids.map((id) => [
-          String(id),
-          id === first.id ? firstCompletion : eligible,
-        ]),
-      );
-    },
-  });
-  const text = textByDecision.get(String(first.id));
-  expect(text).toEqual({
-    type: "withheld",
-    reason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
-  });
-  expect(
-    citationTextFields({
-      text,
-      textWithheldReason: text?.type === "withheld" ? text.reason : null,
-      citationText,
-      sectionIndex: 0,
-      evidenceWindows: [{ start: 0, end: paragraph.length }],
-    }),
-  ).toEqual({
-    citationText: null,
-    passage: null,
-    evidenceExcerpt: null,
-    textIncompleteReason: null,
-  });
-  for (const other of pointers.slice(1)) {
-    expect(textByDecision.get(String(other.id))?.type).toBe("eligible");
-  }
-  expect(completions).toEqual([
-    {
-      ids: pointers.map(({ id }) => id),
-      astReads: pointers.length,
-      countries: ["CZE"],
-    },
-  ]);
-});
-
-test("a completion read failure retains citation metadata with gate_failed", async () => {
-  const decisionId = createSafeId<"caseLawDecision">();
-  const citationId = createSafeId<"caseLawCitation">();
-  const ruleId = createSafeId<"caseLawPolarityRule">();
-  const citationText = "21 Cdo 500/2019";
-  const paragraph = `Synthetic reasoning in ${citationText}.`;
-  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
-  const pointer = {
-    id: decisionId,
-    astS3Key: "synthetic/ast",
-    contentHash: "synthetic-hash",
-    textEligibilityFingerprint: "eligible-revision",
-  };
-  let astReads = 0;
-  const result = await completeDecisionCitations({
-    caseLawDb: caseLawPublicReadDb,
-    prepared: {
-      type: "page",
-      direction: "cites",
-      resolvedDecisionId: decisionId,
-      sources: [pointer],
-      countries: ["CZE"],
-      page: {
-        doctrineAvailability: "available",
-        items: [
-          {
-            id: citationId,
-            citationText,
-            sectionIndex: 0,
-            treatment: "mixed",
-            doctrine: "unread",
-            evidenceQuote: null,
-            decision: null,
-          },
-        ],
-        limit: 1,
-        nextCursor: "next-page",
-      },
-      evidence: {
-        type: "ready",
-        rows: [
-          {
-            id: citationId,
-            source: "rule",
-            ruleId,
-            classifierVersion: "synthetic-version",
-            evidenceWindows: [{ start: 0, end: paragraph.length }],
-            citedPart: "majority",
-          },
-        ],
-      },
-    },
-    readText: async (options) =>
-      await readDecisionTextByDecision({
-        ...options,
-        readColumns: async () =>
-          new Map([
-            [
-              String(decisionId),
-              {
-                textEligibilityFingerprint: pointer.textEligibilityFingerprint,
-                textRevisionFingerprint: "synthetic-revision",
-                textIncompleteReason: null,
-                textWithheldReason: null,
-                contentHash: pointer.contentHash,
-                documentAst: ast,
-                sections: [
-                  {
-                    index: 0,
-                    text: paragraph,
-                    type: "argumentation",
-                    title: null,
-                  },
-                ],
-              },
-            ],
-          ]),
-        readAst: async () => {
-          astReads += 1;
-          return ast;
-        },
-        readTombstones: async () => new Set(),
-        readCurrentCompletions: async () =>
-          await Promise.reject(
-            new TypeError("Synthetic completion read failure"),
-          ),
-      }),
-  });
-  expect(astReads).toBe(1);
-  expect(result).toEqual({
-    type: "page",
-    page: {
-      doctrineAvailability: "available",
-      nextCursor: "next-page",
-      items: [
-        {
-          id: citationId,
-          citationText: null,
-          sectionIndex: 0,
-          treatment: "mixed",
-          doctrine: "unread",
-          decision: null,
-          evidenceIncompleteReason: null,
-          citedPart: "majority",
-          polarityEvidence: {
-            source: "rule",
-            ruleId,
-            classifierVersion: "synthetic-version",
-            excerpt: null,
-          },
-          textIncompleteReason: "gate_failed",
-          textWithheldReason: null,
-          passage: null,
-        },
-      ],
-    },
   });
 });
 
@@ -721,39 +351,4 @@ test("a citing decision country change invalidates text even within the admitted
   expect(changed.textEligibilityFingerprint).not.toBe(
     original.textEligibilityFingerprint,
   );
-  let astReads = 0;
-  const text = await readCitationDecisionText({
-    pointer: {
-      id: createSafeId<"caseLawDecision">(),
-      astS3Key: null,
-      contentHash: "same-content-hash",
-      textEligibilityFingerprint: original.textEligibilityFingerprint,
-    },
-    columns: {
-      ...changed,
-      contentHash: "same-content-hash",
-      documentAst: null,
-      sections: null,
-    },
-    readAst: async () => {
-      astReads += 1;
-      return await Promise.resolve(null);
-    },
-  });
-  expect(astReads).toBe(0);
-  expect(
-    citationTextFields({
-      text,
-      citationText: "21 Cdo 500/2019",
-      sectionIndex: null,
-      textWithheldReason: null,
-      evidenceWindows: null,
-      evidenceQuote: "Synthetic doctrine evidence.",
-    }),
-  ).toEqual({
-    citationText: null,
-    passage: null,
-    evidenceExcerpt: null,
-    textIncompleteReason: "text_changed",
-  });
 });

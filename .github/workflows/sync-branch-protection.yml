@@ -32,6 +32,9 @@ permissions: {}
 
 jobs:
   sync:
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -69,6 +72,7 @@ jobs:
         with:
           client-id: ${{ vars.BRANCH_PROTECTION_APP_CLIENT_ID }}
           private-key: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
+          permission-administration: write
 
       - name: Apply ruleset
         # On push, the `on.push.paths` filter already established that

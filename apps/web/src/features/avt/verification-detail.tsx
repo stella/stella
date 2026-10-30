@@ -1,9 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 /**
  * One verification of one document: waiting while it runs, the reason when it
  * failed, and the claims to review once it completed.
  */
-
-import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -25,8 +24,9 @@ import { VerificationView } from "@/features/avt/verification-view";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type VerificationDetailProps = {
@@ -52,8 +52,8 @@ export const VerificationDetail = ({
     isError,
   } = useQuery(verificationRunOptions(workspaceId, runId));
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  const filesView = queryView(filesQuery);
+  useQueryViewError(filesView, "VerificationDetail:query");
   const files = filesView.type === "items" ? filesView.items : undefined;
   // The document as it stands now: an earlier run may pin a file field a
   // newer version replaced, and history and re-verification follow the

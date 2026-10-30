@@ -267,7 +267,6 @@ describe("content delivery declarations follow reachable runtime definitions", (
       discoveryFailures({
         files: [],
         endpoints: [],
-        routeFiles: [],
         importErrors: [{ id: "route.ts", message: "failed" }],
       }),
     ).toContain("Import failed route.ts: failed");
@@ -278,7 +277,6 @@ describe("content delivery declarations follow reachable runtime definitions", (
       discoveryFailures({
         endpoints: [],
         importErrors: [],
-        routeFiles: [],
         files: [
           {
             id: "route.ts",

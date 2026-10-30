@@ -45,7 +45,10 @@ const hydrate = async () => {
             return;
           }
           reportErrorOnce(error, (caughtError) => {
-            getAnalytics().captureError(caughtError);
+            getAnalytics().captureError(caughtError, {
+              fingerprintKey: "hydrate:onCaughtError",
+              scope: { type: "handler", handlerId: "hydrate:onCaughtError" },
+            });
           });
         },
       },

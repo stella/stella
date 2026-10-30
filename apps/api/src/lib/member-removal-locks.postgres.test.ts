@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user, verification } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -25,6 +27,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   type GatedTestDb,
   withGatedTestClients,
@@ -41,17 +44,17 @@ setDefaultTimeout(120_000);
 
 /** Polls lock state, never elapsed time: proceeds once Postgres reports the wait. */
 const waitUntilBlocked = async (db: GatedTestDb, blockedPid: number) => {
-  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    const [row] = await db.execute<{ blocked: boolean }>(
-      sql`SELECT cardinality(pg_blocking_pids(${blockedPid})) > 0 AS blocked`,
-    );
-    if (row?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
-  }
-  throw new Error("The transaction did not reach its lock wait");
+  await waitForExternalState({
+    description: "the transaction reaches its lock wait",
+    intervalMs: BLOCK_OBSERVATION_INTERVAL_MS,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: async () => {
+      const [row] = await db.execute<{ blocked: boolean }>(
+        sql`SELECT cardinality(pg_blocking_pids(${blockedPid})) > 0 AS blocked`,
+      );
+      return row?.blocked === true;
+    },
+  });
 };
 
 /**
@@ -60,26 +63,26 @@ const waitUntilBlocked = async (db: GatedTestDb, blockedPid: number) => {
  * locks, so the ordering under test was inverted and waiting cannot help.
  */
 const waitUntilHolding = async (db: GatedTestDb, holderPid: number) => {
-  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    const [row] = await db.execute<{ blocking: boolean; waiting: boolean }>(
-      sql`SELECT EXISTS (
-        SELECT 1 FROM pg_stat_activity
-        WHERE ${holderPid} = ANY(pg_blocking_pids(pid))
-      ) AS blocking,
-      cardinality(pg_blocking_pids(${holderPid})) > 0 AS waiting`,
-    );
-    if (row?.blocking === true) {
-      return;
-    }
-    if (row?.waiting === true) {
-      throw new Error(
-        "The holder is itself waiting on a lock: signal it only after it holds",
+  await waitForExternalState({
+    description: "a backend reaches the held lock",
+    intervalMs: BLOCK_OBSERVATION_INTERVAL_MS,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: async () => {
+      const [row] = await db.execute<{ blocking: boolean; waiting: boolean }>(
+        sql`SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity
+          WHERE ${holderPid} = ANY(pg_blocking_pids(pid))
+        ) AS blocking,
+        cardinality(pg_blocking_pids(${holderPid})) > 0 AS waiting`,
       );
-    }
-    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
-  }
-  throw new Error("Nothing reached the held lock");
+      if (row?.waiting === true && !row.blocking) {
+        throw new Error(
+          "The holder is itself waiting on a lock: signal it only after it holds",
+        );
+      }
+      return row?.blocking === true;
+    },
+  });
 };
 
 const backendPid = async (tx: { execute: GatedTestDb["execute"] }) => {
@@ -126,6 +129,10 @@ const fixture = async (db: GatedTestDb) => {
     name: "Erasure",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(member).values([
     {
@@ -724,6 +731,10 @@ const movableMatter = async (db: GatedTestDb, data: Fixture) => {
     name: "Target",
     slug: targetOrganizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: targetOrganizationId,
+    now: new Date(),
   });
   await db.insert(workspaces).values({
     id: workspaceId,

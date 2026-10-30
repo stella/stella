@@ -1,6 +1,9 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import {
   playbookPositionsSchema,
@@ -8,13 +11,13 @@ import {
 } from "@/api/lib/workflow/playbook-positions";
 
 const playbookDefinitionFields = {
-  name: tDefaultVarchar,
-  description: t.Optional(t.String({ maxLength: 2000 })),
-  scope: t.Optional(playbookScopeSchema),
+  name: defaultVarcharSchema,
+  description: v.exactOptional(v.pipe(v.string(), v.maxLength(2000))),
+  scope: v.exactOptional(playbookScopeSchema),
   positions: playbookPositionsSchema,
 };
 
-export const playbookDefinitionBodySchema = t.Object(playbookDefinitionFields);
+export const playbookDefinitionBodySchema = v.object(playbookDefinitionFields);
 
 /**
  * Create's body plus the concurrency token. `expectedUpdatedAt` is optional
@@ -23,15 +26,15 @@ export const playbookDefinitionBodySchema = t.Object(playbookDefinitionFields);
  * stale-overwrite guard. Drop the optionality once every writer is an editor
  * round-trip.
  */
-export const updatePlaybookDefinitionBodySchema = t.Object({
+export const updatePlaybookDefinitionBodySchema = v.object({
   ...playbookDefinitionFields,
-  expectedUpdatedAt: t.Optional(expectedUpdatedAtSchema),
+  expectedUpdatedAt: v.exactOptional(expectedUpdatedAtSchema),
 });
 
-export const approvePlaybookDefinitionBodySchema = t.Object({
+export const approvePlaybookDefinitionBodySchema = v.object({
   expectedUpdatedAt: expectedUpdatedAtSchema,
 });
 
-export const playbookDefinitionParamsSchema = t.Object({
-  playbookId: tSafeId("playbookDefinition"),
+export const playbookDefinitionParamsSchema = v.object({
+  playbookId: resourceIdSchema("playbookDefinition"),
 });

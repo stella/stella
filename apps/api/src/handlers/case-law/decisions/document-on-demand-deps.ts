@@ -14,6 +14,7 @@ import {
 import { DEFERRED_DOCUMENT_READERS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   recordDocumentFetchRequest,
@@ -26,21 +27,32 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
     // and an abandoned recording must not sit on a stalled pool forever.
     await withTimeout(
       async () =>
-        await recordDocumentFetchRequest({
-          ...request,
-          scopedDb: getCaseLawIngestionDb(),
-        }),
+        await withPublicReadIo(
+          "hydration",
+          async () =>
+            await recordDocumentFetchRequest({
+              ...request,
+              scopedDb: getCaseLawIngestionDb(),
+            }),
+        ),
       { label: "caseLaw.recordDocumentFetchRequest", timeoutMs: 15_000 },
     ),
   recordPacingOutcome: recordDocumentPacingOutcome,
   withFetchBudget: async (adapterKey, operation) =>
     await withImmediatePublisherSlot({ adapterKey, operation }),
   fetchDocument: async (decision, adapterKey) => {
-    const document = await DEFERRED_DOCUMENT_READERS[adapterKey]({
-      decision,
-      // The unit races its own wall-clock budget; the signal aborts the download.
-      signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-    });
+    const document = await withPublicReadIo(
+      "hydration",
+      async (io) =>
+        await DEFERRED_DOCUMENT_READERS[adapterKey]({
+          decision,
+          // The unit races its own wall-clock budget; the signal aborts the download.
+          signal: AbortSignal.any([
+            AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+            ...(io.signal === undefined ? [] : [io.signal]),
+          ]),
+        }),
+    );
     return document === null
       ? { status: "unavailable" }
       : { status: "filled", document };

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -61,7 +62,7 @@ describe("exportAuditLogs", () => {
         auditCallCount += 1;
       }),
       request: new Request("https://example.test/v1/audit-logs/export"),
-      route: "/v1/audit-logs/export",
+      route: "/v1/audit-logs/export" satisfies ApiRoutePath,
       safeDb,
       session: {
         activeOrganizationId: toSafeId<"organization">("organization_test"),
@@ -105,7 +106,7 @@ describe("exportAuditLogs", () => {
         auditCallCount += 1;
       }),
       request: new Request("https://example.test/v1/audit-logs/export"),
-      route: "/v1/audit-logs/export",
+      route: "/v1/audit-logs/export" satisfies ApiRoutePath,
       safeDb,
       session: {
         activeOrganizationId: toSafeId<"organization">("organization_test"),

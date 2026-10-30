@@ -27,7 +27,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 const SEED_STATUS_POLL_INTERVAL_MS = 1000;
 const SEED_STATUS_MAX_POLLS = 180;
@@ -43,8 +43,8 @@ type PollSeedJobOptions = {
   /**
    * Reads the job's current status, or null when there is nothing to act on:
    * a failed request, or the raw Response the endpoint answers an
-   * unauthenticated caller with. Callers inspect Eden's error channel here so
-   * this helper never handles a half-checked response.
+   * unauthenticated caller with. Callers inspect the API client's error
+   * channel here so this helper never handles a half-checked response.
    */
   poll: () => Promise<SeedJobStatus | null>;
   onSucceeded: () => void;
@@ -98,8 +98,6 @@ export const DevSidebarGroup = () => {
       setTanstackDevtools: s.setTanstackDevtools,
       sourceInspector: s.sourceInspector,
       setSourceInspector: s.setSourceInspector,
-      publicLawPreview: s.publicLawPreview,
-      setPublicLawPreview: s.setPublicLawPreview,
       simulateSlowLoad: s.simulateSlowLoad,
       setSimulateSlowLoad: s.setSimulateSlowLoad,
     })),
@@ -124,7 +122,7 @@ export const DevSidebarGroup = () => {
       },
       onFailed: (message) => {
         setSeeding(false);
-        notifyUserError(undefined, "Seed failed", {
+        notifyUserProblem("Seed failed", {
           ...(message === undefined ? {} : { description: message }),
         });
       },
@@ -156,7 +154,7 @@ export const DevSidebarGroup = () => {
 
     if (start.data instanceof Response) {
       setSeedingFirmKnowledge(false);
-      notifyUserError(undefined, "Firm-knowledge seed failed");
+      notifyUserProblem("Firm-knowledge seed failed");
       return;
     }
     const jobId = start.data.jobId;
@@ -174,7 +172,7 @@ export const DevSidebarGroup = () => {
       },
       onFailed: (message) => {
         setSeedingFirmKnowledge(false);
-        notifyUserError(undefined, "Firm-knowledge seed failed", {
+        notifyUserProblem("Firm-knowledge seed failed", {
           ...(message === undefined ? {} : { description: message }),
         });
       },
@@ -248,13 +246,6 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           Source Inspector
-        </MenuCheckboxItem>
-        <MenuCheckboxItem
-          checked={dev.publicLawPreview}
-          onClick={() => dev.setPublicLawPreview(!dev.publicLawPreview)}
-          variant="switch"
-        >
-          Public law preview
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.simulateSlowLoad}
