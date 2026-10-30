@@ -188,9 +188,12 @@ export const checkMigrationRequirement = async (
   // Both the changed-file list and the baseline schema come from the merge
   // base: a base branch that moved on must not judge this branch's schema.
   const mergeBase = runGit(root, ["merge-base", baseRef, "HEAD"]).trim();
+  // Only an added or modified migration provides one; a deleted migration
+  // must not satisfy the check.
   const changedFiles = runGit(root, [
     "diff",
     "--name-only",
+    "--diff-filter=AM",
     `${mergeBase}..HEAD`,
   ])
     .trim()

@@ -111,6 +111,31 @@ test("a column change with a migration folder passes", () => {
   expect(runGuard(root).exitCode).toBe(0);
 });
 
+test("deleting an existing migration does not count as providing one", () => {
+  const { root, git } = createFixture();
+  mkdirSync(path.join(root, "apps/api/drizzle/20261029000000_existing"), {
+    recursive: true,
+  });
+  writeFileSync(
+    path.join(root, "apps/api/drizzle/20261029000000_existing/migration.sql"),
+    "CREATE TABLE items (value text);\n",
+  );
+  git("add", ".");
+  git("commit", "-m", "existing migration");
+  git("tag", "-f", "base");
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    table("integer"),
+  );
+  rmSync(path.join(root, "apps/api/drizzle/20261029000000_existing"), {
+    recursive: true,
+    force: true,
+  });
+  git("add", "-A", ".");
+  git("commit", "-m", "change table and drop a migration");
+  expect(runGuard(root).exitCode).toBe(1);
+});
+
 test("a non-SQL file in a migration folder does not hide a schema change", () => {
   const { root, git } = createFixture();
   writeFileSync(
