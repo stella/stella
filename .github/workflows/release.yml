@@ -1505,6 +1505,7 @@ jobs:
             scripts/api-health.ts
             apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -1524,6 +1525,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/bullmq-queue-hosts.ts" "$RUNNER_TEMP/apps/api/src/bullmq-queue-hosts.ts"
 
       - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1546,7 +1548,7 @@ jobs:
             scripts/check-deploy-env-contract.ts
             apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
-            apps/api/src/lib/bullmq-queue-hosts.ts
+            apps/api/src/bullmq-queue-hosts.ts
           sparse-checkout-cone-mode: false
 
       - name: Setup Bun for the deploy contract gate
