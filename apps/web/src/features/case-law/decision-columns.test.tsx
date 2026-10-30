@@ -6,6 +6,8 @@ import { IntlProvider } from "use-intl";
 import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
+import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import type {
   Decision,
   DecisionRenderContext,
@@ -39,10 +41,15 @@ const context = {
   onToggleHeadnote: () => undefined,
 } satisfies DecisionRenderContext;
 
-const typeCell = (row: Decision): string =>
+const typeCell = (
+  row: Decision,
+  highlight: TableFindHighlight | null = null,
+): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {renderDecisionCell({ column: "type", decision: row, context })}
+      <FindHighlightScope highlight={highlight}>
+        {renderDecisionCell({ column: "type", decision: row, context })}
+      </FindHighlightScope>
     </IntlProvider>,
   );
 
@@ -51,6 +58,16 @@ describe("the decision type column", () => {
     const markup = typeCell(decision);
     expect(markup).toContain("Finding");
     expect(markup).toContain("nález");
+  });
+
+  test("highlights a table search match in the publisher wording", () => {
+    const markup = typeCell(decision, {
+      columnIds: new Set(["type"]),
+      matchesName: false,
+      term: "nález",
+    });
+    expect(markup).toContain("<mark");
+    expect(markup).toContain(">nález</mark>");
   });
 
   test("shows the publisher wording when the API could not classify it", () => {

@@ -85,7 +85,10 @@ const DecisionTypeCell = ({ decision }: { decision: Decision }) => {
   return (
     <span>
       <HighlightedText columnId="type" text={label} />
-      <span className="text-muted-foreground"> · {source}</span>
+      <span className="text-muted-foreground">
+        {" · "}
+        <HighlightedText columnId="type" text={source} />
+      </span>
     </span>
   );
 };
