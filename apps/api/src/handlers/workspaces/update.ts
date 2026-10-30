@@ -1,10 +1,14 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
-import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+import {
+  API_VERSION_CONFLICT_ERROR_CODE,
+  MATTER_REFERENCE_RETIRED_CODE,
+} from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   contacts,
@@ -34,6 +38,7 @@ import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repai
 const updateWorkspaceBodySchema = v.object({
   name: v.optional(defaultVarcharSchema),
   clientId: v.optional(resourceIdSchema("contact")),
+  expectedClientId: v.optional(v.nullable(resourceIdSchema("contact"))),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
   billingReference: v.optional(
     v.nullable(v.pipe(v.string(), v.maxLength(128))),
@@ -48,7 +53,9 @@ const config = {
     "Change a matter: its name, client, reference, billing reference, colour, " +
     "or lead (who must already be a member of it). Only the fields you pass " +
     "are written. clientId attaches a client to a personal matter or replaces " +
-    "the client of a client matter; members are managed separately.",
+    "the client of a client matter; members are managed separately. " +
+    "Pass expectedClientId (null for a personal matter) to change the client " +
+    `only if its current assignment still matches; otherwise returns ${API_VERSION_CONFLICT_ERROR_CODE}.`,
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
@@ -239,7 +246,14 @@ export const updateWorkspaceHandler = async function* ({
       }
     }
 
-    await tx
+    const conditions = [eq(workspaces.id, workspaceId)];
+    if (body.expectedClientId === null) {
+      conditions.push(isNull(workspaces.clientId));
+    } else if (body.expectedClientId !== undefined) {
+      conditions.push(eq(workspaces.clientId, body.expectedClientId));
+    }
+
+    const updated = await tx
       .update(workspaces)
       .set({
         ...pickDefined(body, [
@@ -251,7 +265,19 @@ export const updateWorkspaceHandler = async function* ({
           "leadUserId",
         ]),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(...conditions))
+      .returning({ id: workspaces.id });
+
+    if (updated.length === 0) {
+      return abortTransaction(
+        new HandlerError({
+          status: 409,
+          code: API_VERSION_CONFLICT_ERROR_CODE,
+          message:
+            "Matter client has changed; refresh the matter before retrying",
+        }),
+      );
+    }
 
     const changes: Record<string, { old: unknown; new: unknown }> = {};
     if (body.name !== undefined && body.name !== workspace.name) {
@@ -304,15 +330,13 @@ export const updateWorkspaceHandler = async function* ({
   });
 
   if (Result.isError(txResult)) {
-    if (
-      DatabaseError.is(txResult.error) &&
-      txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
-    ) {
+    const error = transactionAbortError(txResult.error);
+    if (DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION) {
       return yield* Result.err(
         new HandlerError({ status: 409, message: "Duplicate value" }),
       );
     }
-    return yield* Result.err(txResult.error);
+    return yield* Result.err(error);
   }
 
   const failure = txResult.value;
@@ -321,8 +345,6 @@ export const updateWorkspaceHandler = async function* ({
       new HandlerError({
         status: failure.status,
         message: failure.message,
-        // Only the retired-reference refusal carries a code; the status is its
-        // discriminator, so a branch without one cannot reach this spread.
         ...(failure.status === 409 ? { code: failure.code } : {}),
       }),
     );

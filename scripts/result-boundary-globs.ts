@@ -27,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
@@ -41,9 +42,12 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/app/law/**/*.{ts,tsx}",
   "apps/mobile/src/app/task/**/*.{ts,tsx}",
   "apps/mobile/src/app/timers/**/*.{ts,tsx}",
+  "apps/mobile/src/app/scan/**/*.{ts,tsx}",
   "apps/mobile/src/components/ui/**/*.{ts,tsx}",
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
+  "apps/mobile/src/app/document/**/*.{ts,tsx}",
+  "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
@@ -229,6 +233,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
+  "packages/test-state/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/transcript/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",

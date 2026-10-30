@@ -174,11 +174,11 @@ describe("reading the recorded II CSKP 1456/22 decision", () => {
     for (const [opening, continuation] of [
       [
         "Zdaniem Sądu Okręgowego",
-        "jest nieważne, jako sprzeczne z art. 1097 § 1 k.c.",
+        "jest nieważne, jako sprzeczne z art. 109^7 § 1 k.c.",
       ],
       [
         "Sąd Apelacyjny przyjął",
-        "Pozwana nie kwestionowała bowiem sposobu wykładani art. 1097 k.c.",
+        "Pozwana nie kwestionowała bowiem sposobu wykładani art. 109^7 k.c.",
       ],
     ] as const) {
       const paragraph = documentAst.blocks

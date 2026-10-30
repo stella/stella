@@ -211,7 +211,7 @@ type OnlineMigrationMode =
   | { operation: "validate"; report: OnlineMigrationStartupReport };
 
 type OnlineMigrationOptions = {
-  repairs?: readonly OnlineRepair[];
+  repairs: readonly OnlineRepair[];
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -264,7 +264,7 @@ export type OnlineMigrationStartupReport = {
  */
 export const reportOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  options: OnlineMigrationOptions = {},
+  options: OnlineMigrationOptions,
 ): Promise<
   | { type: "validated"; report: OnlineMigrationStartupReport }
   | { type: "migrator_active" }
@@ -405,7 +405,7 @@ const walkOnlineMigrations = async ({
   return await processOnlineRepairAt({
     connection,
     mode,
-    repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+    repairs: options.repairs,
     log:
       options.log ??
       ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),

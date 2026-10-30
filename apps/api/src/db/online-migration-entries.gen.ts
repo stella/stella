@@ -24,8 +24,6 @@ export { default as indexes_agent_skills_bound_workspace_idx } from "./online-mi
 export { default as indexes_apikey_personal_owner_keyset_idx } from "./online-migration-entries/indexes-apikey-personal-owner-keyset-idx";
 export { default as indexes_case_law_citations_doctrine_cited_idx } from "./online-migration-entries/indexes-case-law-citations-doctrine-cited-idx";
 export { default as indexes_case_law_court_date_published_index } from "./online-migration-entries/indexes-case-law-court-date-published-index";
-export { default as indexes_case_law_coverage_court_index } from "./online-migration-entries/indexes-case-law-coverage-court-index";
-export { default as indexes_case_law_coverage_filing_date_index } from "./online-migration-entries/indexes-case-law-coverage-filing-date-index";
 export { default as indexes_case_law_coverage_index } from "./online-migration-entries/indexes-case-law-coverage-index";
 export { default as indexes_case_law_decisions_citation_candidate_published_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-candidate-published-idx";
 export { default as indexes_case_law_decisions_country_date_published_idx } from "./online-migration-entries/indexes-case-law-decisions-country-date-published-idx";
@@ -100,6 +98,7 @@ export { default as repairs_better_auth_oauth_resource_repair } from "./online-m
 export { default as repairs_billing_activity_hour_cap_constraint_validations } from "./online-migration-entries/repairs-billing-activity-hour-cap-constraint-validations";
 export { default as repairs_case_law_identifier_retry_constraint_validation } from "./online-migration-entries/repairs-case-law-identifier-retry-constraint-validation";
 export { default as repairs_case_law_parsed_source_validation } from "./online-migration-entries/repairs-case-law-parsed-source-validation";
+export { default as repairs_case_law_sitemap_packing_enrollment } from "./online-migration-entries/repairs-case-law-sitemap-packing-enrollment";
 export { default as repairs_chat_content_v3_repair } from "./online-migration-entries/repairs-chat-content-v3-repair";
 export { default as repairs_chat_run_text_boundaries } from "./online-migration-entries/repairs-chat-run-text-boundaries";
 export { default as repairs_client_invoice_backfill } from "./online-migration-entries/repairs-client-invoice-backfill";
@@ -116,6 +115,7 @@ export { default as repairs_function_dependent_index_reindexes } from "./online-
 export { default as repairs_invoice_language_constraint_validations } from "./online-migration-entries/repairs-invoice-language-constraint-validations";
 export { default as repairs_invoice_legacy_payment_backfill } from "./online-migration-entries/repairs-invoice-legacy-payment-backfill";
 export { default as repairs_invoice_sent_at_backfill } from "./online-migration-entries/repairs-invoice-sent-at-backfill";
+export { default as repairs_legal_list_source_decision_backfill } from "./online-migration-entries/repairs-legal-list-source-decision-backfill";
 export { default as repairs_list_verification_constraint_validation } from "./online-migration-entries/repairs-list-verification-constraint-validation";
 export { default as repairs_matter_time_expense_retention_validations } from "./online-migration-entries/repairs-matter-time-expense-retention-validations";
 export { default as repairs_organization_access_state_constraint_validations } from "./online-migration-entries/repairs-organization-access-state-constraint-validations";
