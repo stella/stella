@@ -14,6 +14,7 @@ import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 
@@ -158,7 +159,11 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
         ),
       ).toBe(true);
       expect(sourceScan).toBeDefined();
-      expect(sourceScan?.nodeType).toBe("Index Scan");
+      expect(
+        indexedAccessPaths(root, "case_law_sources").some(({ indexNames }) =>
+          indexNames.some((name) => name.includes("pkey")),
+        ),
+      ).toBe(true);
       expect(sourceScan?.index).toContain("pkey");
       expect(sourceScan?.rows).toBeLessThanOrEqual(1);
       expect(root["Total Cost"]).toBeLessThan(100);
@@ -178,14 +183,17 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
     assertNotExecuted(root);
     expect(root["Node Type"]).toBe("Aggregate");
     expect(root["Total Cost"]).toBeLessThan(50_000);
-    const corpus = scanOccurrences(root).filter(
+    // This is a covering-index proof: the aggregate must not visit heap rows.
+    const corpus = indexedAccessPaths(root, "case_law_decisions", {
+      accessKind: "index-only",
+    });
+    expect(corpus).toHaveLength(1);
+    expect(corpus.at(0)?.indexConditions.join(" ")).toContain("source_id");
+    expect(corpus.at(0)?.indexNames).not.toEqual([]);
+    const corpusEstimate = scanOccurrences(root).find(
       ({ relation }) => relation === "case_law_decisions",
     );
-    expect(corpus).toHaveLength(1);
-    expect(corpus.at(0)?.nodeType).toBe("Index Only Scan");
-    expect(corpus.at(0)?.indexCond).toContain("source_id");
-    expect(corpus.at(0)?.index).toBeDefined();
-    expect(corpus.at(0)?.rows).toBeGreaterThan(6000);
-    expect(corpus.at(0)?.rows).toBeLessThan(8000);
+    expect(corpusEstimate?.rows).toBeGreaterThan(6000);
+    expect(corpusEstimate?.rows).toBeLessThan(8000);
   });
 });

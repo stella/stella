@@ -1,14 +1,80 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   accessPathViolations,
   explainRoot,
   heapFetchRiskViolations,
+  indexedAccessPaths,
   scanOccurrences,
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
 import workspaceRlsPlan from "@/api/tests/query-plans/workspace-rls-plan.fixture.json" with { type: "json" };
+
+const INDEXED_PATH_PROPERTY_ID =
+  "equivalent index and bitmap plans preserve indexed access bounds";
+
+test(INDEXED_PATH_PROPERTY_ID, () => {
+  assertProperty(
+    INDEXED_PATH_PROPERTY_ID,
+    fc.property(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.integer({ min: 0, max: 100 }),
+      fc.integer({ min: 0, max: 100 }),
+      fc.boolean(),
+      (indexName, column, loops, rows, bitmapAnd) => {
+        const relation = "bounded_relation";
+        const condition = `(${column} = 1)`;
+        const direct = (nodeType: "Index Scan" | "Index Only Scan") => ({
+          "Node Type": nodeType,
+          "Relation Name": relation,
+          "Index Name": indexName,
+          "Index Cond": condition,
+          "Actual Loops": loops,
+          "Actual Rows": rows,
+        });
+        const bitmapIndex = {
+          "Node Type": "Bitmap Index Scan",
+          "Index Name": indexName,
+          "Index Cond": condition,
+        };
+        const bitmap = {
+          "Node Type": "Bitmap Heap Scan",
+          "Relation Name": relation,
+          "Recheck Cond": condition,
+          "Actual Loops": loops,
+          "Actual Rows": rows,
+          Plans: bitmapAnd
+            ? [{ "Node Type": "BitmapAnd", Plans: [bitmapIndex] }]
+            : [bitmapIndex],
+        };
+        const projection = (root: Record<string, unknown>) =>
+          indexedAccessPaths(root, relation).map(
+            ({ indexNames, indexConditions, actualLoops, actualRows }) => ({
+              indexNames,
+              indexConditions,
+              actualLoops,
+              actualRows,
+            }),
+          );
+        expect(projection(direct("Index Scan"))).toEqual(projection(bitmap));
+        expect(projection(direct("Index Only Scan"))).toEqual(
+          projection(bitmap),
+        );
+        expect(
+          indexedAccessPaths(
+            { "Node Type": "Seq Scan", "Relation Name": relation },
+            relation,
+          ),
+        ).toEqual([]);
+      },
+    ),
+  );
+});
 
 test("keeps repeated relation scans distinct by structural position", () => {
   const root = explainRoot([

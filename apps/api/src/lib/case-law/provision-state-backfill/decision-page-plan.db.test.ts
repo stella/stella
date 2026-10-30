@@ -30,9 +30,9 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
-import type { ScanOccurrence } from "@/api/tests/query-plans/plan-walker";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const PRIMARY_KEY = "case_law_decisions_pkey";
@@ -104,10 +104,7 @@ afterAll(async () => {
  * The decision scans of `text` prepared and explained under a generic plan,
  * with `cursor` bound when the statement takes one.
  */
-const genericPlanScans = async (
-  text: string,
-  cursor: string | null,
-): Promise<ScanOccurrence[]> => {
+const genericPlanScans = async (text: string, cursor: string | null) => {
   const takesCursor = text.includes("$1");
   const takesSize = text.includes("$2");
   const types = [
@@ -126,9 +123,11 @@ const genericPlanScans = async (
     const explained = await client.query(
       `EXPLAIN (FORMAT JSON) EXECUTE decision_page${values.length > 0 ? `(${values.join(", ")})` : ""}`,
     );
-    return scanOccurrences(explainRoot(explained)).filter(
+    const root = explainRoot(explained);
+    const scans = scanOccurrences(root).filter(
       ({ relation }) => relation === "case_law_decisions",
     );
+    return { root, scans };
   } finally {
     await client.exec("DEALLOCATE decision_page");
     await client.exec("RESET plan_cache_mode");
@@ -140,9 +139,12 @@ const genericPlanScans = async (
  * primary key, in key order (no sort above it), with nothing filtered out.
  */
 const pageWalk = async (text: string, cursor: string | null) => {
-  const scans = await genericPlanScans(text, cursor);
-  return scans.map(({ nodeType, index, indexCond, filter, position }) => ({
-    indexScan: nodeType === "Index Scan" || nodeType === "Index Only Scan",
+  const { root, scans } = await genericPlanScans(text, cursor);
+  const indexed = indexedAccessPaths(root, "case_law_decisions");
+  return scans.map(({ index, indexCond, filter, position }) => ({
+    indexScan: indexed.some(({ indexNames }) =>
+      indexNames.includes(index ?? ""),
+    ),
     index,
     boundedOnId: indexCond !== null && /\bid > /u.test(indexCond),
     filter,

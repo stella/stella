@@ -22,7 +22,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import {
+  explainRoot,
+  indexedAccessPaths,
+} from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const COVERAGE_INDEX = CASE_LAW_COVERAGE_FILING_DATE_INDEX.name;
@@ -263,44 +266,41 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           null,
           2,
         );
-        const facetProbes = planNodes(root).filter(
-          (node) =>
-            node["Relation Name"] === "case_law_browse_facet_counts" &&
-            node["Actual Loops"] !== 0,
-        );
+        const facetProbes = indexedAccessPaths(
+          root,
+          "case_law_browse_facet_counts",
+        ).filter(({ actualLoops }) => actualLoops !== 0);
         expect(facetProbes, planEvidence).toHaveLength(2);
         for (const probe of facetProbes) {
-          expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
-            String(probe["Node Type"]),
+          expect(probe.indexNames, planEvidence).toContain(FACET_INDEX);
+          expect(probe.indexConditions.join(" "), planEvidence).toContain(
+            "source_id",
           );
-          expect(probe["Index Name"], planEvidence).toBe(FACET_INDEX);
-          expect(probe["Index Cond"], planEvidence).toContain("source_id");
-          expect(probe["Index Cond"], planEvidence).toContain("court");
-          expect(probe["Actual Loops"], planEvidence).toBe(SOURCES);
+          expect(probe.indexConditions.join(" "), planEvidence).toContain(
+            "court",
+          );
+          expect(probe.actualLoops, planEvidence).toBe(SOURCES);
         }
-        const probes = planNodes(root).filter(
-          (node) =>
-            node["Relation Name"] === "case_law_decisions" &&
-            node["Index Name"] === COVERAGE_INDEX &&
-            node["Actual Loops"] !== 0,
+        const probes = indexedAccessPaths(root, "case_law_decisions").filter(
+          ({ actualLoops, indexNames }) =>
+            actualLoops !== 0 && indexNames.includes(COVERAGE_INDEX),
         );
         expect(probes, planEvidence).toHaveLength(2);
         for (const probe of probes) {
-          expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
-            String(probe["Node Type"]),
-          );
           // The endpoint limits and actual scan work are asserted below.
-          expect(probe["Index Name"], planEvidence).toBe(COVERAGE_INDEX);
-          expect(probe["Index Cond"], planEvidence).toContain("source_id");
-          expect(probe["Index Cond"], planEvidence).toContain(
+          expect(probe.indexNames, planEvidence).toContain(COVERAGE_INDEX);
+          expect(probe.indexConditions.join(" "), planEvidence).toContain(
+            "source_id",
+          );
+          expect(probe.indexConditions.join(" "), planEvidence).toContain(
             "decision_date IS NOT NULL",
           );
         }
         const endpointLimits = planNodes(root).filter(
           (node) =>
             node["Node Type"] === "Limit" &&
-            planNodes(node).some(
-              (child) => child["Index Name"] === COVERAGE_INDEX,
+            indexedAccessPaths(node, "case_law_decisions").some(
+              ({ indexNames }) => indexNames.includes(COVERAGE_INDEX),
             ),
         );
         // Exclude the outer page limit, which owns both correlated probes.

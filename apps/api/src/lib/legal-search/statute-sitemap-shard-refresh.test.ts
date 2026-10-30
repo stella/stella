@@ -29,6 +29,7 @@ import {
 } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import {
@@ -159,17 +160,22 @@ const explainWorkGrouping = async () => {
     const lines = planLines(
       await tx.query(`EXPLAIN (COSTS OFF) ${query.sql}`, [...query.params]),
     );
-    const scans = scanOccurrences(
-      explainRoot(
-        await tx.query(`EXPLAIN (FORMAT JSON) ${query.sql}`, [...query.params]),
-      ),
-    ).filter(({ relation }) => relation === "legislation_documents");
-    return { lines, scans };
+    const root = explainRoot(
+      await tx.query(`EXPLAIN (FORMAT JSON) ${query.sql}`, [...query.params]),
+    );
+    const scans = scanOccurrences(root).filter(
+      ({ relation }) => relation === "legislation_documents",
+    );
+    // This proves the partial index covers the grouping without heap access.
+    const indexed = indexedAccessPaths(root, "legislation_documents", {
+      accessKind: "index-only",
+    });
+    return { indexed, lines, scans };
   });
 };
 
 const expectListedCoveringPath = async () => {
-  const { lines, scans } = await explainWorkGrouping();
+  const { indexed, lines, scans } = await explainWorkGrouping();
   const plan = lines.join("\n");
   expect(plan).toMatch(
     new RegExp(
@@ -177,9 +183,7 @@ const expectListedCoveringPath = async () => {
       "u",
     ),
   );
-  expect(scans.map(({ nodeType, index }) => ({ nodeType, index }))).toEqual([
-    { nodeType: "Index Only Scan", index: LISTED_INDEX },
-  ]);
+  expect(indexed.map(({ indexNames }) => indexNames)).toEqual([[LISTED_INDEX]]);
   // The index predicate implies the withdrawn filter, so no row is rechecked.
   expect(scans[0]?.filter ?? "").not.toContain("window_disposition");
   expect(plan).not.toMatch(/Seq Scan on legislation_documents/u);

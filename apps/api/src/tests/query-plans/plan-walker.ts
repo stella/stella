@@ -6,6 +6,21 @@ import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
 type PlanNode = Record<string, unknown>;
 
+export type IndexedAccessPath = {
+  relation: string;
+  accessKind: "index" | "index-only" | "bitmap";
+  indexNames: readonly string[];
+  indexConditions: readonly string[];
+  recheckCondition: string | null;
+  actualLoops: number | null;
+  actualRows: number | null;
+};
+
+type IndexedAccessPathOptions = {
+  /** Reserve this for covering-index proofs that also verify heap fetches. */
+  accessKind?: IndexedAccessPath["accessKind"];
+};
+
 export type ScanOccurrence = {
   position: string;
   alias: string | null;
@@ -91,6 +106,77 @@ const attachedDescendants = (node: PlanNode): PlanNode[] => {
     found.push(child, ...attachedDescendants(child));
   }
   return found;
+};
+
+const numberField = (node: PlanNode, name: string): number | null => {
+  const value = node[name];
+  return typeof value === "number" ? value : null;
+};
+
+/**
+ * Normalize every indexed access to a relation. Bitmap index descendants are
+ * attributed to their heap scan, including descendants of BitmapAnd/BitmapOr.
+ */
+export const indexedAccessPaths = (
+  root: PlanNode,
+  relation: string,
+  options: IndexedAccessPathOptions = {},
+): IndexedAccessPath[] => {
+  const paths: IndexedAccessPath[] = [];
+  const visit = (node: PlanNode) => {
+    const nodeType = field(node, "Node Type");
+    const nodeRelation = field(node, "Relation Name");
+    let path: IndexedAccessPath | null = null;
+    if (
+      nodeRelation === relation &&
+      (nodeType === "Index Scan" || nodeType === "Index Only Scan")
+    ) {
+      path = {
+        relation,
+        accessKind: nodeType === "Index Only Scan" ? "index-only" : "index",
+        indexNames: [field(node, "Index Name")].filter(
+          (name): name is string => name !== null,
+        ),
+        indexConditions: [field(node, "Index Cond")].filter(
+          (condition): condition is string => condition !== null,
+        ),
+        recheckCondition: null,
+        actualLoops: numberField(node, "Actual Loops"),
+        actualRows: numberField(node, "Actual Rows"),
+      };
+    } else if (nodeRelation === relation && nodeType === "Bitmap Heap Scan") {
+      const indexes = attachedDescendants(node).filter(
+        (candidate) => field(candidate, "Node Type") === "Bitmap Index Scan",
+      );
+      if (indexes.length > 0) {
+        path = {
+          relation,
+          accessKind: "bitmap",
+          indexNames: indexes.flatMap((candidate) => {
+            const name = field(candidate, "Index Name");
+            return name === null ? [] : [name];
+          }),
+          indexConditions: indexes.flatMap((candidate) => {
+            const condition = field(candidate, "Index Cond");
+            return condition === null ? [] : [condition];
+          }),
+          recheckCondition: field(node, "Recheck Cond"),
+          actualLoops: numberField(node, "Actual Loops"),
+          actualRows: numberField(node, "Actual Rows"),
+        };
+      }
+    }
+    if (path !== null && options.accessKind === undefined) {
+      paths.push(path);
+    } else if (path !== null && path.accessKind === options.accessKind) {
+      paths.push(path);
+    }
+    for (const child of childPlans(node)) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return paths;
 };
 
 const subplansOf = (node: PlanNode, position: string) => {

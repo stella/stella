@@ -19,6 +19,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
@@ -148,14 +149,15 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
               vocabulary.params,
             ),
           );
-          const vocabularyScans = scanOccurrences(vocabularyPlan).filter(
-            ({ relation }) => relation === "case_law_decisions",
+          // This is a covering-index proof paired with the heap-fetch check.
+          const vocabularyScans = indexedAccessPaths(
+            vocabularyPlan,
+            "case_law_decisions",
+            { accessKind: "index-only" },
           );
           expect(vocabularyScans).toHaveLength(2);
           for (const scan of vocabularyScans) {
-            expect(scan.index).toBe(PUBLISHED_INDEX);
-            expect(scan.nodeType).toBe("Index Only Scan");
-            expect(scan.filter).toBeNull();
+            expect(scan.indexNames).toEqual([PUBLISHED_INDEX]);
           }
           for (const scan of indexScans(vocabularyPlan)) {
             expect(scan["Actual Rows"]).toBeLessThanOrEqual(1);
