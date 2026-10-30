@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, jest, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
+
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { APIError } from "@/lib/errors/api";
 import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
@@ -151,8 +153,6 @@ class ScriptedUploader {
   }
 }
 
-afterEach(() => jest.useRealTimers());
-
 const exhaustUploadRetries = async (
   uploader: ScriptedUploader,
   name: string,
@@ -217,7 +217,7 @@ test("a local empty-file rejection fails once without automatic or manual retry"
     expect(uploader.callCount("empty.pdf")).toBe(1);
   } finally {
     queue.cancel();
-    jest.useRealTimers();
+    restoreRealTimers();
   }
 });
 
@@ -358,7 +358,7 @@ describe("no double upload", () => {
         expect(doneEvents.at(0)?.completed).toHaveLength(1);
         expect(uploader.sawConcurrentDoubleUpload).toBe(false);
       } finally {
-        jest.useRealTimers();
+        restoreRealTimers();
       }
     },
   );
@@ -392,7 +392,7 @@ describe("no double upload", () => {
       expect(uploader.callCount("doomed")).toBe(4);
       expect(uploader.sawConcurrentDoubleUpload).toBe(false);
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 });
@@ -492,7 +492,7 @@ describe("rate limiting (429)", () => {
       expect(uploader.sawConcurrentDoubleUpload).toBe(false);
       expect(jest.getTimerCount()).toBe(0);
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 
@@ -521,7 +521,7 @@ describe("rate limiting (429)", () => {
       expect(doneEvents).toHaveLength(1);
       expect(queue.getState()).toBe("cancelled");
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 });
@@ -642,7 +642,7 @@ describe("progress and drain", () => {
       expect(uploader.liveNamesList()).toHaveLength(0);
       expect(jest.getTimerCount()).toBe(0);
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 });
@@ -751,7 +751,7 @@ describe("retry re-injection respects the concurrency cap", () => {
       expect(queue.getState()).toBe("done");
       expect(uploader.maxActive).toBe(cap);
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 });
@@ -817,7 +817,7 @@ describe("a stale retry does not leak across runs", () => {
       expect(doneEvents[1]!.failed).toHaveLength(0);
       expect(uploader.sawConcurrentDoubleUpload).toBe(false);
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 
@@ -859,7 +859,7 @@ describe("a stale retry does not leak across runs", () => {
       expect(doneEvents).toHaveLength(2);
       expect(uploader.callCount("flaky")).toBe(1);
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 
@@ -927,7 +927,7 @@ describe("a stale retry does not leak across runs", () => {
       expect(doneEvents).toHaveLength(3);
       expect(doneEvents[2]!.completed).toEqual(["ok:third"]);
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 });

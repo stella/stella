@@ -31,6 +31,7 @@ import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 
 import { InlineEdit } from "@/components/inline-edit";
+import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
 import {
   GroupByControl,
   KanbanGroupingSettings,
@@ -46,6 +47,7 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
 import type { InboxView } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -75,6 +77,7 @@ const isUnsavedViewId = (id: string) =>
 type EntityViewsProps = { organizationId: string; scope: EntityViewScope };
 
 export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
@@ -141,9 +144,13 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       const id = savedIds.current.get(view.id) ?? view.id;
       const result = isUnsavedViewId(id)
         ? unwrapApiResponse(
-            await api["entity-views"].put({
-              name: view.name,
-              layout: view.layout,
+            await idempotentSubmit.run({
+              operation: JSON.stringify(['api["entity-views"]']),
+              body: {
+                name: view.name,
+                layout: view.layout,
+              },
+              send: api["entity-views"].put,
             }),
           )
         : unwrapApiResponse(
@@ -405,7 +412,11 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
               sorts={activeView.layout.sorts}
               properties={sortProperties}
               maxSorts={VIEW_SORTS_MAX}
-              labels={{ add: t("common.add"), remove: t("common.remove") }}
+              labels={{
+                addSort: t("common.sort"),
+                remove: t("common.remove"),
+                directions: sortDirectionLabels((key) => t(key)),
+              }}
               onUpdate={(sorts) =>
                 onLayoutChange(mergeLayout(activeView.layout, { sorts }))
               }

@@ -39,6 +39,7 @@ import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -77,6 +78,13 @@ let requests: RecordedRequest[];
 let responseBody: unknown;
 let responseBodyForUrl: ((url: URL) => unknown) | null;
 let responseStatus: number;
+const abortReason = (signal: AbortSignal): Error => {
+  const reason: unknown = signal.reason;
+  return reason instanceof Error
+    ? reason
+    : panic("Test cancellation needs an Error reason");
+};
+
 const originalFetch = globalThis.fetch;
 const originalQ09Endpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
 const originalQ09SearchEndpoint = envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
@@ -676,7 +684,10 @@ test("search rejects a malformed object response", async () => {
   }
 });
 
-const readSortedPage = async (order: CorpusSearchOrder) => {
+const readSortedPage = async (
+  order: CorpusSearchOrder,
+  signal?: AbortSignal,
+) => {
   responseBody = {
     num_hits: 1,
     hits: [
@@ -687,6 +698,7 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
 
   await readCorpusIndexSearchPage({
     scanTransport: NATIVE_SCAN_TRANSPORT,
+    signal,
     observer: "unobserved",
     cluster: "q09",
     indexId: "legal_corpus_v1_cze",
@@ -732,6 +744,45 @@ const requestedSortOrders = (): unknown[] =>
     const body: unknown = JSON.parse(request.body);
     return isRecord(body) ? body["sort_by"] : null;
   });
+
+test.each(["scan", "highlight"] as const)(
+  "a page cancels its %s request when the caller aborts",
+  async (phase) => {
+    const controller = new AbortController();
+    const entered = Promise.withResolvers<AbortSignal>();
+    let calls = 0;
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      calls += 1;
+      if (phase === "highlight" && calls === 1) {
+        return new Response(JSON.stringify(responseBody));
+      }
+      const signal =
+        init?.signal ?? panic("Page requests require an abort signal");
+      entered.resolve(signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const page = readSortedPage(RELEVANCE_ORDER, controller.signal);
+    const failure = page.catch((error: unknown) => error);
+    const transportSignal = await entered.promise;
+    controller.abort(new DOMException("Client cancelled page", "AbortError"));
+    expect(transportSignal.aborted).toBe(true);
+    expect(await failure).toMatchObject({
+      message:
+        "The case-law and legislation search index is temporarily unavailable; retry shortly.",
+    });
+    expect(calls).toBe(phase === "scan" ? 1 : 2);
+  },
+);
 
 test("a relevance scan requests BM25 order on every call", async () => {
   await readSortedPage(RELEVANCE_ORDER);
@@ -2073,6 +2124,160 @@ test("a search inside a tool call gives up at the tool's budget, not its own", a
     expect(Number(named?.[1])).toBeLessThanOrEqual(40);
   }
 });
+test.each(["search", "scoredSearch", "aggregate", "scopedAggregate"] as const)(
+  "%s cancels its HTTP request when the caller aborts",
+  async (operation) => {
+    const controller = new AbortController();
+    const entered = Promise.withResolvers<AbortSignal>();
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal = init?.signal ?? panic("Search requires an abort signal");
+      entered.resolve(signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const client = getCorpusIndexClient("q09");
+    const input = {
+      observer: "unobserved" as const,
+      indexId: "case_law_v8_cs_sk",
+      query: "text:smlouva",
+      signal: controller.signal,
+    };
+    const request = (async () => {
+      switch (operation) {
+        case "search":
+          return client.search({ ...input, maxHits: 1 });
+        case "scoredSearch":
+          return client.scoredSearch({
+            ...input,
+            from: 0,
+            size: 1,
+            fields: ["document_id"],
+            requiredFields: ["document_id"],
+          });
+        case "aggregate":
+        case "scopedAggregate":
+          return client.aggregate({
+            ...input,
+            aggs: { total: { cardinality: { field: "document_id" } } },
+            filter:
+              operation === "scopedAggregate" ? "jurisdiction:CZE" : undefined,
+          });
+        default:
+          operation satisfies never;
+          return panic("Unhandled cancellation test operation");
+      }
+    })();
+    const transportSignal = await entered.promise;
+    expect(transportSignal.aborted).toBe(false);
+    const reason = new DOMException("Client cancelled search", "AbortError");
+    controller.abort(reason);
+    expect(transportSignal.aborted).toBe(true);
+    expect(transportSignal.reason).toBe(reason);
+    const result = await request;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.cause).toBe(reason);
+    }
+  },
+);
+
+test.each(["search", "scoredSearch"] as const)(
+  "%s cancels its HTTP request when the public-read lease aborts",
+  async (operation) => {
+    const requestController = new AbortController();
+    const leaseController = new AbortController();
+    const entered = Promise.withResolvers<AbortSignal>();
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal = init?.signal ?? panic("Search requires an abort signal");
+      entered.resolve(signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const client = getCorpusIndexClient("q09");
+    const input = {
+      observer: "unobserved" as const,
+      indexId: "case_law_v8_cs_sk",
+      query: "text:smlouva",
+      signal: requestController.signal,
+    };
+    const request = runWithPublicReadStatementTimeout(
+      { budgetMs: 30_000, signal: leaseController.signal },
+      async () =>
+        operation === "search"
+          ? await client.search({ ...input, maxHits: 1 })
+          : await client.scoredSearch({
+              ...input,
+              from: 0,
+              size: 1,
+              fields: ["document_id"],
+              requiredFields: ["document_id"],
+            }),
+    );
+    const transportSignal = await entered.promise;
+    expect(transportSignal.aborted).toBe(false);
+    const reason = new DOMException("Public-read lease lost", "AbortError");
+    leaseController.abort(reason);
+    expect(transportSignal.aborted).toBe(true);
+    expect(transportSignal.reason).toBe(reason);
+    const result = await request;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.cause).toBe(reason);
+    }
+  },
+);
+
+test.each([undefined, "jurisdiction:CZE"])(
+  "aggregation transport uses its remaining budget with filter %s",
+  async (filter) => {
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal =
+        init?.signal ?? panic("Aggregation requires a timeout signal");
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const result = await getCorpusIndexClient("q09").aggregate({
+      observer: "unobserved",
+      indexId: "case_law_v8_cs_sk",
+      query: "text:smlouva",
+      filter,
+      aggs: { total: { cardinality: { field: "document_id" } } },
+      timeoutMs: 20, // timeout under test
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain("within its 20ms budget");
+      expect(result.error.reach).toBe("unreachable");
+    }
+  },
+);
 
 test("each request reports its own budget, not a shared one", async () => {
   rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));

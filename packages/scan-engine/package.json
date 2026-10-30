@@ -1,6 +1,6 @@
 {
   "name": "@stll/scan-engine",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Document scan cleanup engine (Rust, WebAssembly): deskew, content crop and binarization off the main thread, plus a per-page review state machine",
   "keywords": [
     "binarization",

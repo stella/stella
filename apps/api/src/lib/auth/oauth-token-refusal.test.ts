@@ -2,7 +2,9 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthMiddleware } from "better-auth/api";
+import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -286,10 +288,16 @@ describe("OAuth token refusal observations", () => {
   });
 });
 
-const providerFile = async (name: string) =>
-  Bun.file(
-    new URL(name, import.meta.resolve("@better-auth/oauth-provider")),
-  ).text();
+const providerFile = async (pattern: string) => {
+  const directory = new URL(
+    ".",
+    import.meta.resolve("@better-auth/oauth-provider"),
+  );
+  const matches = [...new Bun.Glob(pattern).scanSync(fileURLToPath(directory))];
+  expect(matches).toHaveLength(1);
+  const name = matches.at(0) ?? panic("Missing OAuth provider bundle");
+  return Bun.file(new URL(name, directory)).text();
+};
 
 const providerFunction = (source: string, name: string) => {
   const start = source.indexOf(`function ${name}(`);
@@ -313,7 +321,7 @@ const directRefusalsClassified = (source: string) =>
   );
 
 test("the pinned provider assigns every direct grant refusal and shared protocol error", async () => {
-  const source = await providerFile("introspect-CbYi2MJT.mjs");
+  const source = await providerFile("introspect-*.mjs");
   for (const name of [
     "checkVerificationValue",
     "handleAuthorizationCodeGrant",
@@ -333,7 +341,7 @@ test("the pinned provider assigns every direct grant refusal and shared protocol
       directRefusalsClassified(body.replaceAll('"expired"', '"new_refusal"')),
     ).toBe(!body.includes('"expired"'));
   }
-  const utils = await providerFile("utils-CoqjzHuU.mjs");
+  const utils = await providerFile("utils-*.mjs");
   for (const [file, names] of [
     [
       source,

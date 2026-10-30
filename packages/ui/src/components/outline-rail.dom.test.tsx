@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
 import { type OutlineItem, OutlineRail } from "./outline-rail";
 
 const items = [
@@ -222,7 +224,7 @@ test("the tick strip opens the panel only when the pointer rests on it", async (
     });
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
   } finally {
-    jest.useRealTimers();
+    restoreRealTimers();
     outside.remove();
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
   }
@@ -251,7 +253,7 @@ test("focus inside a hover-opened panel holds it open after the pointer leaves",
         jest.advanceTimersByTime(200);
       });
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
     expect(panel?.hasAttribute("inert")).toBe(false);

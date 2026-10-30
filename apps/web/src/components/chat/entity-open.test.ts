@@ -1,12 +1,7 @@
 /**
- * Tests for `isEntityActiveInMainRoute` — the route-detection
- * guard that decides whether a chat-mention click should open a
- * duplicate file lane or surface metadata in the inspector.
- *
- * The previous implementation matched `${entityId}` as a path
- * segment but the actual route uses `viewId` (typically "all")
- * with the entity in the search param, so the guard was dead in
- * practice.
+ * Tests for `isEntityActiveInMainRoute` — the guard that decides whether a
+ * chat-mention click should open a duplicate file lane or surface metadata
+ * in the inspector.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -21,6 +16,7 @@ import {
 } from "@/components/chat/entity-route-detect";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { toSafeId } from "@/lib/safe-id";
+import type { CurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 afterEach(() => {
   useInspectorTabsStore.setState({
@@ -30,107 +26,39 @@ afterEach(() => {
   });
 });
 
-const at = (pathname: string, search = "") => ({ pathname, search });
+// The document page on screen, as `getCurrentWorkspaceDocument` reads it from
+// the route matches.
+const shown = {
+  workspaceId: "ws_1",
+  entityId: "ent_1",
+  fieldId: "field_1",
+} satisfies CurrentWorkspaceDocument;
+const entity = { entityId: "ent_1", workspaceId: "ws_1" };
 
 describe("isEntityActiveInMainRoute", () => {
-  test("matches the document route under any viewId when search.entity is set", () => {
-    expect(
-      isEntityActiveInMainRoute(
-        "ent_1",
-        "ws_1",
-        at("/workspaces/ws_1/all/document", "?entity=ent_1&field=f_2"),
-      ),
-    ).toBe(true);
+  test("matches the entity the document page shows in its matter", () => {
+    expect(isEntityActiveInMainRoute(entity, shown)).toBe(true);
   });
 
-  test("matches when viewId is a custom view, not just 'all'", () => {
+  test("does not match another entity, another matter, or no document page", () => {
     expect(
-      isEntityActiveInMainRoute(
-        "ent_1",
-        "ws_1",
-        at("/workspaces/ws_1/contracts/document", "?entity=ent_1"),
-      ),
-    ).toBe(true);
-  });
-
-  test("does not match when the entity search param targets a different entity", () => {
-    expect(
-      isEntityActiveInMainRoute(
-        "ent_1",
-        "ws_1",
-        at("/workspaces/ws_1/all/document", "?entity=ent_2"),
-      ),
-    ).toBe(false);
-  });
-
-  test("does not match a non-document route", () => {
-    expect(
-      isEntityActiveInMainRoute(
-        "ent_1",
-        "ws_1",
-        at("/workspaces/ws_1/all", "?entity=ent_1"),
-      ),
-    ).toBe(false);
-  });
-
-  test("does not match a different workspace", () => {
-    expect(
-      isEntityActiveInMainRoute(
-        "ent_1",
-        "ws_1",
-        at("/workspaces/ws_2/all/document", "?entity=ent_1"),
-      ),
-    ).toBe(false);
-  });
-
-  test("does not match when the entity search param is missing", () => {
-    expect(
-      isEntityActiveInMainRoute(
-        "ent_1",
-        "ws_1",
-        at("/workspaces/ws_1/all/document", ""),
-      ),
-    ).toBe(false);
-  });
-
-  test("matches with extra path segments after /document", () => {
-    expect(
-      isEntityActiveInMainRoute(
-        "ent_1",
-        "ws_1",
-        at("/workspaces/ws_1/all/document/edit", "?entity=ent_1"),
-      ),
-    ).toBe(true);
-  });
-
-  test("returns false when no location is available (server-side render)", () => {
-    expect(isEntityActiveInMainRoute("ent_1", "ws_1", null)).toBe(false);
+      [
+        { ...shown, entityId: "ent_2" },
+        { ...shown, workspaceId: "ws_2" },
+        { ...shown, entityId: undefined },
+        undefined,
+      ].map((document) => isEntityActiveInMainRoute(entity, document)),
+    ).toEqual([false, false, false, false]);
   });
 });
 
 describe("isFileActiveInMainRoute", () => {
   test("matches only the file field rendered in the main route", () => {
-    const location = at(
-      "/workspaces/ws_1/all/document",
-      "?entity=ent_1&field=field_1",
-    );
-
     expect(
-      isFileActiveInMainRoute({
-        entityId: "ent_1",
-        fieldId: "field_1",
-        location,
-        workspaceId: "ws_1",
-      }),
-    ).toBe(true);
-    expect(
-      isFileActiveInMainRoute({
-        entityId: "ent_1",
-        fieldId: "field_2",
-        location,
-        workspaceId: "ws_1",
-      }),
-    ).toBe(false);
+      ["field_1", "field_2"].map((fieldId) =>
+        isFileActiveInMainRoute({ ...entity, fieldId }, shown),
+      ),
+    ).toEqual([true, false]);
   });
 });
 
@@ -164,7 +92,11 @@ test("opening an email citation switches an existing tab to preview", () => {
     useInspectorTabsStore.getState().setFileFacet(source.fieldId, facet);
     useInspectorTabsStore.getState().setMinimized(true);
 
-    openEmailCitationSource({ source, workspaceId: "workspace-1" });
+    openEmailCitationSource({
+      documentOnScreen: undefined,
+      source,
+      workspaceId: "workspace-1",
+    });
 
     expect(useInspectorTabsStore.getState()).toMatchObject({
       activeId: source.fieldId,
@@ -176,6 +108,40 @@ test("opening an email citation switches an existing tab to preview", () => {
         .tabs.find((tab) => tab.id === source.fieldId),
     ).toMatchObject({ facet: "preview", type: "pdf" });
   }
+});
+
+test("an email citation the document page already shows opens on its metadata", () => {
+  const source = {
+    entityId: "entity-1",
+    entityName: "Message",
+    fieldId: "field-email",
+    fileName: "message.eml",
+    mimeType: "message/rfc822",
+    pdfFileId: null,
+    propertyId: "property-1",
+  };
+  const lanes = [source.fieldId, "field-other"].map((fieldId) => {
+    useInspectorTabsStore.setState({
+      activeId: null,
+      minimized: true,
+      tabs: [],
+    });
+    openEmailCitationSource({
+      documentOnScreen: {
+        workspaceId: "workspace-1",
+        entityId: source.entityId,
+        fieldId,
+      },
+      source,
+      workspaceId: "workspace-1",
+    });
+    return useInspectorTabsStore
+      .getState()
+      .tabs.find((tab) => tab.id === source.fieldId);
+  });
+
+  expect(lanes.at(0)).toMatchObject({ metadataLane: "expanded" });
+  expect(lanes.at(1)).not.toMatchObject({ metadataLane: "expanded" });
 });
 
 test("a source-bound citation opens its exact field, not the first file", () => {

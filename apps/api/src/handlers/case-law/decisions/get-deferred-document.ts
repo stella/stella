@@ -12,6 +12,7 @@
  */
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
 import {
@@ -164,19 +165,19 @@ const hydrate = async (
     return decision;
   }
 
+  // Match the stored read: serve the fetched text when structure was rejected.
+  const projection = isDocumentAst(document.documentAst)
+    ? await transientDecisionAstProjection({
+        resolvedAst: document.documentAst,
+        plainText: "omit",
+      })
+    : { documentAst: null, projectionDigest: null, documentAstSource: null };
   return {
     ...decision,
-    // Same omission the read applies to a stored AST: a document fetched
-    // on demand must not answer with a fatter payload than a cached one.
-    ...(await transientDecisionAstProjection({
-      resolvedAst: document.documentAst,
-      plainText: "omit",
-    })),
+    ...projection,
     documentPending: false,
     hasDocument: true,
-    // Mirrors the read: text is the fallback for a decision without a
-    // usable AST, and a parsed document always has one.
-    fulltext: null,
+    fulltext: projection.documentAst === null ? document.fulltext : null,
   };
 };
 

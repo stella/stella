@@ -3,8 +3,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
 
@@ -24,7 +24,7 @@ export const isTimeBillingRouteEnabled = isTimeBillingPreviewEnabled;
 
 export const useTimeBillingPreviewEnabled = (): boolean => {
   const user = useAuthenticatedUser();
-  const view = useQueryView(
+  const view = queryView(
     useQuery(
       workspacesNavigationOptions({
         userId: user.id,

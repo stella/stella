@@ -164,6 +164,7 @@ describe("show visual", () => {
     })[VISUAL_PREVIEW_TOOL_NAME];
     expect(tool.description).toEndWith(VISUAL_SHOWCASE_GUIDANCE);
     expect(tool.description).toContain("facets.courtYear");
+    expect(tool.description).toContain('facets: ["courtYear"]');
     for (const intent of [
       "visualise",
       "chart",

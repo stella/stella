@@ -72,9 +72,9 @@ type InspectorPanelProps = {
   /**
    * Matter context the pane was mounted under. `undefined` means
    * the pane is mounted on a non-workspace route (e.g. the global
-   * /chat surface) — only chat tabs are meaningful in that mode;
-   * matter-bound affordances (originating-matter ribbon, "New
-   * matter chat" rail button) hide themselves.
+   * /chat surface). Tabs retain their own matter context; shell-bound
+   * affordances (originating-matter ribbon, "New matter chat" rail
+   * button) hide themselves.
    */
   workspaceId?: string | undefined;
 };
@@ -411,6 +411,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // and we avoid calling hooks inside the pdfTabs.map.
   const ribbonContextMenu = useTabContextMenu({
     tabId: activeTab?.id ?? "",
+    tabLabel: activeTab?.label ?? "",
     onClose: () => {
       if (activeTab) {
         handleCloseTab(activeTab.id);
@@ -460,11 +461,12 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         </div>
 
         {/* Task content */}
-        {!minimized &&
-          activeTab?.type === "task" &&
-          workspaceId !== undefined && (
-            <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
-          )}
+        {!minimized && activeTab?.type === "task" && (
+          <TaskDetailPanel
+            taskId={activeTab.id}
+            workspaceId={activeTab.workspaceId}
+          />
+        )}
 
         {/* Chat content — sidepeek chat tab. Mounts ChatTabPanel, whose
           transcript + docked composer fill the panel instead of
@@ -540,6 +542,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         {!minimized && activeTab && isGenericInspectorTab(activeTab) && (
           <GenericInspectorView
             onClose={() => handleCloseTab(activeTab.id)}
+            onMoveToMain={() =>
+              useInspectorTabsStore
+                .getState()
+                .closeTab(activeTab.id, { movedToMain: true })
+            }
             tab={activeTab}
           />
         )}
@@ -708,6 +715,7 @@ const CurrentFileFieldSync = ({
 type GenericInspectorViewProps = {
   tab: GenericTab;
   onClose: () => void;
+  onMoveToMain: () => void;
 };
 
 /**
@@ -719,7 +727,11 @@ type GenericInspectorViewProps = {
  * synced in from a peer browser tab where the registering route
  * hasn't been visited yet.
  */
-const GenericInspectorView = ({ tab, onClose }: GenericInspectorViewProps) => {
+const GenericInspectorView = ({
+  tab,
+  onClose,
+  onMoveToMain,
+}: GenericInspectorViewProps) => {
   const registration = getInspectorView(tab.viewType);
   if (registration === undefined) {
     return null;
@@ -735,6 +747,7 @@ const GenericInspectorView = ({ tab, onClose }: GenericInspectorViewProps) => {
   return (
     <Renderer
       onClose={onClose}
+      onMoveToMain={onMoveToMain}
       tab={{
         id: tab.id,
         label: tab.label,

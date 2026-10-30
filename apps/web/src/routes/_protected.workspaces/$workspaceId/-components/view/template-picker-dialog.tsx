@@ -51,7 +51,7 @@ import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { createUuid } from "@/lib/uuid";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
@@ -108,7 +108,7 @@ export const TemplatePickerDialog = ({
     enabled: open,
   });
   const { isPending } = templatesQuery;
-  const templatesView = useQueryView(templatesQuery);
+  const templatesView = queryView(templatesQuery);
   const templates =
     templatesView.type === "items" ? templatesView.items : undefined;
   const visibleTemplates = templates?.filter(
@@ -134,21 +134,20 @@ export const TemplatePickerDialog = ({
     template: WorkspaceViewTemplate,
     settled: () => void,
   ) => {
-    const newId = createUuid();
     const hasAITemplateProperty = template.templateProperties.some(
       (p) => p.createIfMissing && p.tool.type === "ai-model",
     );
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: template.name,
         layout: template.layout,
         templateProperties: template.templateProperties,
       },
       {
         onSettled: settled,
-        onSuccess: () => {
-          onCreated(newId);
+        onSuccess: (view) => {
+          onCreated(view.id);
           onOpenChange(false);
           if (hasAITemplateProperty) {
             detached(startWorkflow(), "template-picker-dialog.start-workflow");
@@ -162,17 +161,16 @@ export const TemplatePickerDialog = ({
   };
 
   const createAvt = (settled: () => void) => {
-    const newId = createUuid();
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: t("workspaces.views.layouts.avt"),
         layout: EMPTY_AVT_LAYOUT,
       },
       {
         onSettled: settled,
-        onSuccess: () => {
-          onCreated(newId);
+        onSuccess: (view) => {
+          onCreated(view.id);
           onOpenChange(false);
         },
         onError: (error) => {

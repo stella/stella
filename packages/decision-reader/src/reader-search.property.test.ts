@@ -10,13 +10,19 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { queryHighlightTokens, wordPrefixMatchEnd } from "./query-marks";
+import { textAnchorSegmentOwnsRange } from "./document-ast-text";
+import {
+  queryFindTokens,
+  queryMarkRanges,
+  wordPrefixMatchEnd,
+} from "./query-marks";
 import { createReaderSearchIndex, searchReaderIndex } from "./reader-search";
 import type { ReaderSearchMatchRange, SearchResults } from "./reader-search";
 
 /**
- * Letters the reader folds (case, diacritics, Greek final sigma, Arabic
- * variants and digits, an astral letter, a decomposed mark), next to the
+ * Letters the reader folds (case, diacritics, letters that fold to two,
+ * ligatures, Greek final sigma, Arabic variants and digits, an astral letter,
+ * a decomposed mark, a character that folds around a separator), next to the
  * separators it splits on.
  */
 const CHARACTERS = [
@@ -32,6 +38,11 @@ const CHARACTERS = [
   "Č",
   "é",
   "ß",
+  "ẞ",
+  "ﬁ",
+  "Æ",
+  "ł",
+  "½",
   "İ",
   "Σ",
   "σ",
@@ -64,6 +75,10 @@ const WORDS = [
   "Ábčd",
   "e\u0301abc",
   "\u{10348}abc",
+  "Straße",
+  "STRASSE",
+  "ﬁnále",
+  "Łódź",
   "ΣΟΦΟΣ",
   "σοφος",
   "أحمد",
@@ -99,7 +114,7 @@ const queryArb = fc.oneof(
   fc
     .array(
       fc
-        .tuple(fc.constantFrom(...WORDS), fc.integer({ min: 2, max: 12 }))
+        .tuple(fc.constantFrom(...WORDS), fc.integer({ min: 1, max: 12 }))
         .map(([word, length]) => word.slice(0, length)),
       { minLength: 1, maxLength: 3 },
     )
@@ -112,17 +127,14 @@ const scanResults = (
   index: ReturnType<typeof createReaderSearchIndex>,
   query: string,
 ): SearchResults => {
-  const [foldedQuery] = createReaderSearchIndex([
-    { id: "q", text: query },
-  ]).pieces;
-  const tokens = queryHighlightTokens(foldedQuery?.normalized.text ?? "");
+  const tokens = queryFindTokens(query);
   const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
   let matchCount = 0;
   if (tokens.length === 0) {
     return { matchCount, rangesByPieceId };
   }
   for (const piece of index.pieces) {
-    const { endMap, startMap, text } = piece.normalized;
+    const { endMap, startMap, text } = piece.folded;
     let position = 0;
     while (position < text.length) {
       const end = wordPrefixMatchEnd(text, position, tokens);
@@ -150,6 +162,36 @@ const scanResults = (
 };
 
 describe("indexed reader search", () => {
+  test("random citation run splits preserve its text and choose one badge owner", () => {
+    const citation = "sp.\u00a0zn. II. ÚS 1852/22";
+    assertProperty(
+      "random citation run splits preserve its text and choose one badge owner",
+      fc.property(
+        fc.uniqueArray(fc.integer({ min: 1, max: citation.length - 1 }), {
+          maxLength: citation.length - 1,
+        }),
+        (generatedCuts) => {
+          const cuts = [
+            0,
+            ...generatedCuts.toSorted((a, b) => a - b),
+            citation.length,
+          ];
+          const runs = cuts.slice(0, -1).map((start, index) => ({
+            start,
+            text: citation.slice(start, cuts[index + 1]),
+          }));
+
+          expect(runs.map(({ text }) => text).join("")).toBe(citation);
+          expect(
+            runs.filter(({ start }) =>
+              textAnchorSegmentOwnsRange({ start: 0 }, start),
+            ),
+          ).toHaveLength(1);
+        },
+      ),
+    );
+  });
+
   test("indexed search marks exactly what a scan of the folded text marks", () => {
     assertProperty(
       "indexed search marks exactly what a scan of the folded text marks",
@@ -158,6 +200,31 @@ describe("indexed reader search", () => {
         expect(searchReaderIndex(index, query)).toEqual(
           scanResults(index, query),
         );
+      }),
+    );
+  });
+
+  /**
+   * The results table marks a headnote with `queryMarkRanges`; the reader
+   * marks the decision with its index. Same text, same query, same runs.
+   */
+  test("the reader's find marks exactly what a headnote mark marks", () => {
+    assertProperty(
+      "the reader's find marks exactly what a headnote mark marks",
+      fc.property(piecesArb, queryArb, (pieces, query) => {
+        const { rangesByPieceId } = searchReaderIndex(
+          createReaderSearchIndex(pieces),
+          query,
+        );
+        const tokens = queryFindTokens(query);
+        for (const piece of pieces) {
+          expect(
+            (rangesByPieceId[piece.id] ?? []).map(({ end, start }) => ({
+              end,
+              start,
+            })),
+          ).toEqual(queryMarkRanges(piece.text, tokens));
+        }
       }),
     );
   });

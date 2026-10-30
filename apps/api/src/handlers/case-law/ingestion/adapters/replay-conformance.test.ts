@@ -7,11 +7,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import {
+  headMatterPrecedesBody,
+  withUniqueBlockIdentities,
+} from "@stll/legal-ast/document-ast";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import parserFingerprints from "@/api/handlers/case-law/ingestion/adapters/replay-parser-fingerprints.json";
+import { loadParserFingerprint } from "@/api/handlers/case-law/ingestion/adapters/replay-parser-fingerprints";
 import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
@@ -110,6 +114,14 @@ describe("every case-law adapter is replay safe", () => {
       const originalFetch = globalThis.fetch;
       const first = await buildCaseLawFixture(fixture());
       const replay = await buildCaseLawFixture(fixture());
+      for (const decision of [first, replay]) {
+        if ("blocks" in decision.documentAst) {
+          expect(
+            headMatterPrecedesBody(decision.documentAst.blocks),
+            `${adapter.key}: head matter follows the decision body`,
+          ).toBe(true);
+        }
+      }
       expect(globalThis.fetch).toBe(originalFetch);
 
       expect(identityOf(replay), "replay changed the durable identity").toBe(
@@ -148,7 +160,20 @@ describe("every case-law adapter is replay safe", () => {
       });
       expect(snapshotOf(interrupted)).toEqual(snapshotOf(uninterrupted));
 
-      const parserSnapshot = parserFingerprints[adapter.key];
+      // A parser's own output repeats no block identity. Where one can (the
+      // Slovak parsers read a title set over two lines as two title
+      // headings), `sanitizeResult` re-keys the repeat before storage and the
+      // parser's version says so; any other parser repeating one here would
+      // need the same version decision.
+      const blocks =
+        "blocks" in first.documentAst ? first.documentAst.blocks : [];
+      expect(
+        withUniqueBlockIdentities(blocks),
+        "parser output repeats a block identity",
+      ).toEqual(blocks);
+
+      const parserSnapshot = await loadParserFingerprint(adapter.key);
+
       expect(parserSnapshot).toEqual({
         version: PARSER_VERSIONS[adapter.key],
         fingerprint: fingerprint(first),

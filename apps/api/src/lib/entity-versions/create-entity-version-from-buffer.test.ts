@@ -38,6 +38,18 @@ import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+beforeEach(() => {
+  broadcastMock.mockReset();
+  diffStatsMock.mockReset();
+  enqueueSearchRepairsMock.mockReset();
+  flushSearchRepairsMock.mockReset();
+  pdfDerivativeMock.mockReset();
+  processExtractionMock.mockReset();
+  requestNativeExtractionRunMock.mockReset();
+  thumbnailDerivativeMock.mockReset();
+  writeFileVersionMock.mockReset();
+});
+
 const writeFileVersionMock = mock();
 const processExtractionMock = mock();
 const requestNativeExtractionRunMock = mock();

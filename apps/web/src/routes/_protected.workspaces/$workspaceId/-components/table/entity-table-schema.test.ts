@@ -214,8 +214,8 @@ describe("decisionTableSchema", () => {
     expect(visibleColumnIds(schema, ["headnote"])).toContain("summary");
   });
 
-  test("nothing sorts: the search decides the order", () => {
-    expect(sortableColumnIds(decisionSchema())).toEqual([]);
+  test("only the decision date sorts; the search decides every other order", () => {
+    expect(sortableColumnIds(decisionSchema())).toEqual(["date"]);
   });
 
   test("every column carries the reader's label and a starting width", () => {

@@ -84,6 +84,7 @@ export const ClaimComments = ({
       );
     },
     startAnchorId: anchorId,
+    targetType: "verification-claim",
     text: comment.body ?? "",
     updatedAt: comment.updatedAt,
     visibility: comment.visibility,
@@ -99,6 +100,7 @@ export const ClaimComments = ({
             setComposing(false);
           },
           startAnchorId: anchorId,
+          targetType: "verification-claim",
         },
       ]
     : [];

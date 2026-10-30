@@ -17,6 +17,12 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  readOverviewHandlerMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+});
+
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const readWorkspaceHandlerMock = mock();
@@ -532,6 +538,7 @@ describe("empty-result onboarding next step", () => {
           textWithheldReason: null,
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
+          textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
           sourceUrl: "https://example.test",

@@ -49,26 +49,55 @@ export const fitCaseLawDecisionSlug = ({
   return `${trimmed || UNKNOWN_SLUG}${suffix}`;
 };
 
+const CASE_LAW_SLUG_OPTIONS = {
+  charset: "ascii",
+  fallback: UNKNOWN_SLUG,
+  maxLength: Number.MAX_SAFE_INTEGER,
+  separator: "-",
+} as const;
+
 /**
  * The case-law slug fold: persisted slugs and every URL segment that
- * addresses them. NFKD strip is single-homed in stripDiacriticsForSlug; case
- * folding and the [a-z0-9] filter run in the order existing persisted slugs
- * were generated with, so they are reproduced byte-for-byte.
+ * addresses them. NFKD strip is single-homed in stripDiacriticsForSlug, so a
+ * spacing diacritic is removed rather than splitting a word; slugify then
+ * transliterates the Latin letters no decomposition reaches (`Łd` is `ld`).
  */
-export const createCaseLawDecisionSlug = (value: string): string => {
-  const slug = slugify(stripDiacriticsForSlug(value), {
-    charset: "ascii",
-    fallback: UNKNOWN_SLUG,
-    maxLength: Number.MAX_SAFE_INTEGER,
-    separator: "-",
+export const createCaseLawDecisionSlug = (value: string): string =>
+  fitCaseLawDecisionSlug({
+    baseSlug: slugify(stripDiacriticsForSlug(value), CASE_LAW_SLUG_OPTIONS),
   });
 
-  return fitCaseLawDecisionSlug({ baseSlug: slug });
-};
+const NON_ASCII_ALPHANUMERIC = /[^a-z0-9]/gu;
+
+/**
+ * The fold before transliteration, which turned every letter NFKD cannot
+ * strip (`Ł`, `ø`, `ß`) into a separator: `III SA/Łd 223/21` was
+ * `iii-sa-d-223-21`. Only for recognising the court segments and id-form
+ * prefixes it published, which are recomputed per request, so their links
+ * redirect permanently instead of temporarily; stored slugs are never
+ * re-derived and need no legacy form.
+ *
+ * Remove once request logs show no old-fold segment for 90 days. Links that
+ * still carry one keep working afterwards, through the temporary canonical
+ * redirect every other non-canonical decision path gets.
+ */
+export const legacyCaseLawSlug = (value: string): string =>
+  fitCaseLawDecisionSlug({
+    baseSlug: slugify(
+      stripDiacriticsForSlug(value)
+        .toLowerCase()
+        .replaceAll(NON_ASCII_ALPHANUMERIC, " "),
+      CASE_LAW_SLUG_OPTIONS,
+    ),
+  });
+
+/** One of the two folds above; route params are built under either. */
+type CaseLawSlugFold = (value: string) => string;
 
 const normalizeCaseLawStoredSlug = (
   slug: string | null | undefined,
-): string | null => (slug?.trim() ? createCaseLawDecisionSlug(slug) : null);
+  fold: CaseLawSlugFold,
+): string | null => (slug?.trim() ? fold(slug) : null);
 
 export const isCaseLawDecisionId = (value: string): boolean =>
   isUuid(value.trim());
@@ -96,12 +125,11 @@ type CaseLawDecisionRouteIdentity =
   | { kind: "slug"; slug: string }
   | { kind: "id"; caseNumber: string; decisionId: string };
 
-const resolveCaseLawDecisionRouteIdentity = ({
-  caseNumber,
-  decisionId,
-  slug,
-}: CaseLawDecisionRouteIdentityInput): CaseLawDecisionRouteIdentity => {
-  const storedSlug = normalizeCaseLawStoredSlug(slug);
+const resolveCaseLawDecisionRouteIdentity = (
+  { caseNumber, decisionId, slug }: CaseLawDecisionRouteIdentityInput,
+  fold: CaseLawSlugFold,
+): CaseLawDecisionRouteIdentity => {
+  const storedSlug = normalizeCaseLawStoredSlug(slug, fold);
   return storedSlug === null
     ? { kind: "id", caseNumber, decisionId }
     : { kind: "slug", slug: storedSlug };
@@ -109,13 +137,14 @@ const resolveCaseLawDecisionRouteIdentity = ({
 
 const createCaseLawDecisionRouteParam = (
   input: CaseLawDecisionRouteIdentityInput,
+  fold: CaseLawSlugFold,
 ): string => {
-  const identity = resolveCaseLawDecisionRouteIdentity(input);
+  const identity = resolveCaseLawDecisionRouteIdentity(input, fold);
   switch (identity.kind) {
     case "slug":
       return identity.slug;
     case "id":
-      return `${createCaseLawDecisionSlug(identity.caseNumber)}${ID_ROUTE_PARAM_SEPARATOR}${encodeCaseLawDecisionIdForRoute(identity.decisionId)}`;
+      return `${fold(identity.caseNumber)}${ID_ROUTE_PARAM_SEPARATOR}${encodeCaseLawDecisionIdForRoute(identity.decisionId)}`;
     default: {
       identity satisfies never;
       return panic(`Unhandled identity: ${String(identity)}`);
@@ -186,23 +215,25 @@ export type CaseLawDecisionRouteInput = CaseLawDecisionRouteIdentityInput & {
   languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null;
 };
 
-/** A language segment only for decisions published in several languages. */
-export const createCaseLawDecisionRouteParams = ({
-  caseNumber,
-  country,
-  court,
-  decisionId,
-  language,
-  languageAlternates,
-  slug,
-}: CaseLawDecisionRouteInput): CaseLawDecisionRouteParams => {
+const createRouteParamsUnderFold = (
+  {
+    caseNumber,
+    country,
+    court,
+    decisionId,
+    language,
+    languageAlternates,
+    slug,
+  }: CaseLawDecisionRouteInput,
+  fold: CaseLawSlugFold,
+): CaseLawDecisionRouteParams => {
   const baseParams = {
     country: country.toLowerCase(),
-    court:
-      court.trim().length > 0
-        ? createCaseLawDecisionSlug(court)
-        : UNKNOWN_COURT_SEGMENT,
-    slug: createCaseLawDecisionRouteParam({ caseNumber, decisionId, slug }),
+    court: court.trim().length > 0 ? fold(court) : UNKNOWN_COURT_SEGMENT,
+    slug: createCaseLawDecisionRouteParam(
+      { caseNumber, decisionId, slug },
+      fold,
+    ),
   };
 
   const languageSegment = normalizeCaseLawLanguageSegment(language);
@@ -215,6 +246,12 @@ export const createCaseLawDecisionRouteParams = ({
 
   return { ...baseParams, language: languageSegment };
 };
+
+/** A language segment only for decisions published in several languages. */
+export const createCaseLawDecisionRouteParams = (
+  input: CaseLawDecisionRouteInput,
+): CaseLawDecisionRouteParams =>
+  createRouteParamsUnderFold(input, createCaseLawDecisionSlug);
 
 export const createCaseLawDecisionPath = ({
   country,
@@ -265,4 +302,50 @@ export const parseCaseLawDecisionPath = (
   }
 
   return { country, court, language: fourth, slug: fifth };
+};
+
+/** How a requested decision path relates to the decision's canonical path. */
+export const CASE_LAW_DECISION_PATH_MATCH = {
+  /** The canonical path itself. */
+  CANONICAL: "canonical",
+  /** The path the pre-transliteration fold published for this decision. */
+  LEGACY_FOLD: "legacy-fold",
+  /** Any other path that reached the decision: id form, stale segment. */
+  OTHER: "other",
+} as const;
+
+export type CaseLawDecisionPathMatch =
+  | { type: typeof CASE_LAW_DECISION_PATH_MATCH.CANONICAL }
+  | {
+      type:
+        | typeof CASE_LAW_DECISION_PATH_MATCH.LEGACY_FOLD
+        | typeof CASE_LAW_DECISION_PATH_MATCH.OTHER;
+      canonical: CaseLawDecisionRouteParams;
+    };
+
+type MatchCaseLawDecisionPathOptions = {
+  decision: CaseLawDecisionRouteInput;
+  requested: CaseLawDecisionRouteParams;
+};
+
+/**
+ * Whether a request reached the decision at its canonical path, at the path
+ * the old fold published for it (`legacyCaseLawSlug`), or elsewhere. A
+ * non-canonical answer carries the canonical params, derived from the
+ * decision alone, so a redirect built from them cannot be steered by the
+ * request.
+ */
+export const matchCaseLawDecisionPath = ({
+  decision,
+  requested,
+}: MatchCaseLawDecisionPathOptions): CaseLawDecisionPathMatch => {
+  const requestedPath = createCaseLawDecisionPath(requested);
+  const canonical = createCaseLawDecisionRouteParams(decision);
+  if (requestedPath === createCaseLawDecisionPath(canonical)) {
+    return { type: CASE_LAW_DECISION_PATH_MATCH.CANONICAL };
+  }
+  const legacy = createRouteParamsUnderFold(decision, legacyCaseLawSlug);
+  return requestedPath === createCaseLawDecisionPath(legacy)
+    ? { type: CASE_LAW_DECISION_PATH_MATCH.LEGACY_FOLD, canonical }
+    : { type: CASE_LAW_DECISION_PATH_MATCH.OTHER, canonical };
 };

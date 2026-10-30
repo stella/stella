@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
+import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution-sql";
 import { groupableSql } from "@/api/lib/groupable-sql";
 
 /**
@@ -8,11 +10,35 @@ import { groupableSql } from "@/api/lib/groupable-sql";
  * undated decisions, and a split month's hashed buckets. Shared by the refresh
  * that lists the shards and the shard read that serves one.
  */
-const SITEMAP_SHARD_BUCKET_COUNT = 64;
+export const SITEMAP_SHARD_BUCKET_COUNT = 64;
 const SITEMAP_SHARD_BUCKET_WIDTH = 2;
 export const SITEMAP_UNDATED_YEAR = "undated";
 export const SITEMAP_UNDATED_MONTH = "00";
 export const SITEMAP_ALL_BUCKET = "all";
+
+/**
+ * One stable eligible row per document, chosen across all dates and buckets.
+ * Filtering a shard's rows afterwards would repeat documents whose language
+ * versions have different ids (and therefore different hashed buckets).
+ * A scalar, capped sibling probe keeps the language-group index condition;
+ * null group keys match no sibling and therefore remain representatives.
+ * Callers pass a published row, so the probe compares published siblings only.
+ */
+export const sitemapDocumentRepresentativeFor = (decision: {
+  id: SQLWrapper;
+  country: SQLWrapper;
+  languageGroupKey: SQLWrapper;
+}) => sql`(
+    SELECT 1
+    FROM ${publishedCaseLawDecisions} AS sitemap_sibling
+    INNER JOIN ${caseLawSources} AS sitemap_sibling_source
+      ON sitemap_sibling_source.id = sitemap_sibling.source_id
+    WHERE sitemap_sibling.country = ${decision.country}
+      AND sitemap_sibling.language_group_key = ${decision.languageGroupKey}
+      AND sitemap_sibling.id < ${decision.id}
+      AND ${sql.raw(redistributableCaseLawSourceSqlFor("sitemap_sibling_source"))}
+    LIMIT 1
+) IS NULL`;
 
 // These fragments are rendered into both the SELECT list and the GROUP BY of
 // the refresh's grouped read. Postgres identifies a grouped SELECT expression

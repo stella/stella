@@ -54,9 +54,9 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   PARTY_ROLE_LABEL_KEYS,
@@ -85,19 +85,18 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
     type: ContactType,
     settled: () => void,
   ) => {
-    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
         onSettled: settled,
-        onSuccess: () => {
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          handleSetClient({ id, displayName: name });
+          handleSetClient({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -115,10 +114,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   };
 
   const handleSetClient = (contact: { id: string; displayName: string }) => {
+    if (!workspace) {
+      return;
+    }
     updateWorkspace.mutate(
       {
         workspaceId,
-        update: { type: "clientId", value: contact.id },
+        update: {
+          type: "clientId",
+          value: contact.id,
+          expectedClientId: workspace.client?.id ?? null,
+        },
       },
       {
         onSuccess: () => {
@@ -226,7 +232,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
 
 const PartiesList = ({ workspaceId }: PartiesSectionProps) => {
   const t = useTranslations();
-  const view = useQueryView(useQuery(workspaceContactsOptions(workspaceId)), {
+  const view = queryView(useQuery(workspaceContactsOptions(workspaceId)), {
     isEmpty: ({ contacts, overflow }) => contacts.length === 0 && !overflow,
   });
   switch (view.type) {
@@ -388,19 +394,18 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
     type: ContactType,
     settled: () => void,
   ) => {
-    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
         onSettled: settled,
-        onSuccess: () => {
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          setSelectedContact({ id, displayName: name });
+          setSelectedContact({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -428,6 +433,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
         update: {
           type: "clientId",
           value: selectedContact.id,
+          expectedClientId: null,
         },
       },
       {
@@ -658,6 +664,7 @@ const AddPartyDialog = ({
   workspaceId,
   showTriggerLabel = true,
 }: AddPartyDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
@@ -672,12 +679,18 @@ const AddPartyDialog = ({
       isPrimary?: boolean;
       notes?: string | null;
     }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(ws) })
-        .contacts.put({
+      const response = await idempotentSubmit.run({
+        operation: JSON.stringify([
+          'api.workspaces({workspaceId:toSafeId<"workspace">(ws)}).contacts',
+          { workspaceId: toSafeId<"workspace">(ws) },
+        ]),
+        body: {
           ...body,
           contactId: toSafeId<"contact">(body.contactId),
-        });
+        },
+        send: api.workspaces({ workspaceId: toSafeId<"workspace">(ws) })
+          .contacts.put,
+      });
 
       return unwrapApiResponse(response);
     },

@@ -77,7 +77,7 @@ if (!databaseUrl || !runPostgres) {
           try: async () =>
             await withTimeout(async () => await pending, {
               label: "observe_public_read_pool_deadline",
-              timeoutMs: 200 + DEADLINE_SLACK_MS,
+              timeoutMs: 200 + DEADLINE_SLACK_MS, // timeout under test
             }),
           catch: (cause) => cause,
         });

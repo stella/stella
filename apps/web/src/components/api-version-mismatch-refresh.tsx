@@ -12,8 +12,8 @@ import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { hasUnsavedWork } from "@/hooks/use-unsaved-work";
 import { browserApiRootUrl } from "@/lib/api-url";
+import { queryView } from "@/lib/query-view.logic";
 import { compareSemver } from "@/lib/semver-compare";
-import { useQueryView } from "@/lib/use-query-view";
 
 import {
   shouldRefreshAfterNavigation,
@@ -85,7 +85,7 @@ const useAvailableServerVersion = (): string | null => {
     },
   });
 
-  const versionView = useQueryView(versionQuery);
+  const versionView = queryView(versionQuery);
   // The health-version hint only schedules an opportunistic refresh; failures leave the app usable.
   const serverVersion = versionView.type === "items" ? versionView.items : null;
   if (!enabled || !serverVersion) {

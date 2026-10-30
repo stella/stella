@@ -139,14 +139,16 @@ const ingest = async (
   input: IngestionResult,
 ) => {
   order += 1n;
-  const outcome = await processDecision({
-    input,
-    observationOrder: order,
-    sourceId,
-    scopedDb,
-    observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
-    corpus: postgresOnly,
-  });
+  const outcome = (
+    await processDecision({
+      input,
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
+      corpus: postgresOnly,
+    })
+  ).unwrap();
   expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 
