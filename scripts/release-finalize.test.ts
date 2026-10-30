@@ -101,13 +101,23 @@ const requiredRecord =
     head_sha: sha,
     basis: "evaluated",
     depth: "heavy",
+    run_attempt: 1,
     verdict: "failure",
-    violations_evaluated: true,
-    violations: "marketing-screenshots (planned, failure)",
     required: [
       { job: "e2e-production-shard", conclusion: "success" },
       { job: "marketing-screenshots", conclusion: "failure" },
     ],
+    ...overrides,
+  });
+
+const requiredViolations =
+  (overrides: Record<string, unknown> = {}) =>
+  (sha: string) => ({
+    run_id: HEAVY_RUN_ID,
+    run_attempt: 1,
+    head_sha: sha,
+    evaluated: true,
+    violations: "marketing-screenshots (planned, failure)",
     ...overrides,
   });
 
@@ -116,12 +126,14 @@ type FailedHeavyOptions = {
   conclusion?: string;
   total?: number;
   record?: ((sha: string) => unknown) | null;
+  violations?: ((sha: string) => unknown) | null;
 };
 const failedHeavy = ({
   jobs,
   conclusion = "failure",
   total,
   record = requiredRecord(),
+  violations = requiredViolations(),
 }: FailedHeavyOptions) =>
   finalize({
     states: { "main/heavy": "failure" },
@@ -130,6 +142,7 @@ const failedHeavy = ({
       jobs,
       ...(total === undefined ? {} : { total }),
       ...(record === null ? {} : { record }),
+      ...(violations === null ? {} : { violations }),
     },
   });
 
@@ -189,7 +202,7 @@ test("a screenshot failure beside a skipped planned required job refuses", () =>
 test("a screenshot failure beside an unmet folded sub-suite refuses", () => {
   refusedHeavy({
     jobs: [marketingJob(), ...ROLLUP_JOBS],
-    record: requiredRecord({
+    violations: requiredViolations({
       violations:
         "marketing-screenshots (planned, failure), api-image-deps (planned, failure)",
     }),
@@ -198,6 +211,25 @@ test("a screenshot failure beside an unmet folded sub-suite refuses", () => {
 
 test("an unreadable required-jobs record refuses", () => {
   refusedHeavy({ jobs: [marketingJob(), ...ROLLUP_JOBS], record: null });
+});
+
+test("an absent or unevaluated violations artifact refuses", () => {
+  refusedHeavy({ jobs: [marketingJob(), ...ROLLUP_JOBS], violations: null });
+  refusedHeavy({
+    jobs: [marketingJob(), ...ROLLUP_JOBS],
+    violations: requiredViolations({ evaluated: false }),
+  });
+});
+
+test("a violations artifact of another run or commit refuses", () => {
+  refusedHeavy({
+    jobs: [marketingJob(), ...ROLLUP_JOBS],
+    violations: requiredViolations({ run_id: HEAVY_RUN_ID + 1 }),
+  });
+  refusedHeavy({
+    jobs: [marketingJob(), ...ROLLUP_JOBS],
+    violations: requiredViolations({ head_sha: "f".repeat(40) }),
+  });
 });
 
 test("a record of another commit refuses", () => {

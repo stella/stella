@@ -75,17 +75,26 @@ const MARKETING_VIOLATION = "marketing-screenshots (planned, failure)";
 const record = (overrides: Record<string, unknown> = {}) => ({
   version: 1,
   run_id: RUN_ID,
+  run_attempt: 1,
   head_sha: HEAD,
   basis: "evaluated",
   depth: "heavy",
   verdict: "failure",
-  violations_evaluated: true,
-  violations: MARKETING_VIOLATION,
   required: [
     { job: "ci-tests", conclusion: "success" },
     { job: "e2e-production-shard", conclusion: "success" },
     { job: "marketing-screenshots", conclusion: "failure" },
   ],
+  ...overrides,
+});
+
+// The separate `ci-required-violations` artifact.
+const violationsRecord = (overrides: Record<string, unknown> = {}) => ({
+  run_id: RUN_ID,
+  run_attempt: 1,
+  head_sha: HEAD,
+  evaluated: true,
+  violations: MARKETING_VIOLATION,
   ...overrides,
 });
 
@@ -99,6 +108,7 @@ const verdictOf = (overrides: Partial<HeavyVerdictInput> = {}) => {
     jobs,
     total: Array.isArray(jobs) ? jobs.length : 0,
     record: record(),
+    violations: violationsRecord(),
     runId: RUN_ID,
     head: HEAD,
     ...overrides,
@@ -160,23 +170,61 @@ test("the comparison step and its marker are the steps the workflows define", ()
     "utf-8",
   );
   const started = action.indexOf("marketing-comparison-started");
-  const capture = action.indexOf(`name: ${CAPTURE_STEP}`);
+  const capture = action.indexOf(`- name: ${CAPTURE_STEP}`);
   const cleared = action.indexOf("rm -f", capture);
   expect(started).toBeGreaterThan(-1);
   expect(started).toBeLessThan(capture);
   expect(cleared).toBeGreaterThan(capture);
 });
 
-test("ci-result records the unmet checks the verdict reads", () => {
+test("ci-result publishes the unmet checks as an artifact of its own", () => {
   const ci = readFileSync(
     nodePath.join(repoRoot, ".github/workflows/ci.yml"),
     "utf-8",
   );
-  expect(ci).toContain("violations_evaluated: ($violations_evaluated");
-  expect(ci).toContain("violations: ($violations | nonempty)");
+  expect(ci).toContain("name: ci-required-violations");
+  expect(ci).toContain("ci-required-violations/ci-required-violations.json");
   // The violation text the filter expects is the one ci-result renders.
   expect(ci).toContain('"\\($suite) (planned, \\($result))"');
   expect(ci).toContain('"\\($job) (planned, \\($result))"');
+});
+
+// merge-bar parses the record with a closed key set, so the verdict must
+// travel in its own artifact. This is the key set on main.
+const REQUIRED_SUMMARY_KEYS = [
+  "version",
+  "event",
+  "head_sha",
+  "base_sha",
+  "run_id",
+  "run_attempt",
+  "depth",
+  "coverage_profile",
+  "reused_from_run_id",
+  "basis",
+  "pass_through_reason",
+  "required",
+  "not_required",
+  "verdict",
+];
+
+test("the required-jobs record keeps exactly its established key set", () => {
+  const ci = readFileSync(
+    nodePath.join(repoRoot, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const start = ci.indexOf("| {version: 1, event: $event,");
+  const end = ci.indexOf('<<< "$RECORDED_NEEDS")', start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const literal = ci
+    .slice(start, end)
+    // The nested {job, conclusion} entries are not top-level keys.
+    .replace(/\{job: \., conclusion: [^}]*\}/gu, "");
+  const keys = [...literal.matchAll(/(?:\{|,|\s)([a-z_]+):/gu)].map(
+    ([, key]) => key,
+  );
+  expect(keys).toEqual(REQUIRED_SUMMARY_KEYS);
 });
 
 test("a comparison-only screenshot failure with every other entry green is advisory", () => {
@@ -188,54 +236,91 @@ test("a comparison-only screenshot failure with every other entry green is advis
 test.each([
   [
     "a skipped planned required job",
-    record({
-      required: [
-        { job: "e2e-production-shard", conclusion: "skipped" },
-        { job: "marketing-screenshots", conclusion: "failure" },
-      ],
-    }),
+    {
+      record: record({
+        required: [
+          { job: "e2e-production-shard", conclusion: "skipped" },
+          { job: "marketing-screenshots", conclusion: "failure" },
+        ],
+      }),
+    },
     "e2e-production-shard (skipped)",
   ],
   [
     "a folded sub-suite that is not success",
-    record({
-      violations: `${MARKETING_VIOLATION}, api-image-deps (planned, failure)`,
-    }),
+    {
+      violations: violationsRecord({
+        violations: `${MARKETING_VIOLATION}, api-image-deps (planned, failure)`,
+      }),
+    },
     "unmet checks",
   ],
   [
     "a job missing from JOB_SCOPES",
-    record({
-      violations: `${MARKETING_VIOLATION}, new-suite (no entry in JOB_SCOPES)`,
-    }),
+    {
+      violations: violationsRecord({
+        violations: `${MARKETING_VIOLATION}, new-suite (no entry in JOB_SCOPES)`,
+      }),
+    },
     "unmet checks",
   ],
   [
-    "a record that never evaluated the unmet checks",
-    record({ violations_evaluated: false }),
+    "violations that were never evaluated",
+    { violations: violationsRecord({ evaluated: false }) },
     "did not evaluate",
   ],
   [
+    "a violations record of another run",
+    { violations: violationsRecord({ run_id: RUN_ID + 1 }) },
+    "another run, attempt or commit",
+  ],
+  [
+    "a violations record of another commit",
+    { violations: violationsRecord({ head_sha: "e".repeat(40) }) },
+    "another run, attempt or commit",
+  ],
+  [
+    "a violations record of another attempt",
+    { violations: violationsRecord({ run_attempt: 2 }) },
+    "another run, attempt or commit",
+  ],
+  [
+    "an absent violations record",
+    { violations: null },
+    "required-violations record unreadable",
+  ],
+  [
+    "a violations record that is not an object",
+    { violations: [] },
+    "required-violations record unreadable",
+  ],
+  [
     "a record of another run",
-    record({ run_id: RUN_ID + 1 }),
+    { record: record({ run_id: RUN_ID + 1 }) },
     "another run or commit",
   ],
   [
     "a record of another commit",
-    record({ head_sha: "e".repeat(40) }),
+    { record: record({ head_sha: "e".repeat(40) }) },
     "another run or commit",
   ],
   [
     "a record without a failed screenshots entry",
-    record({
-      required: [{ job: "marketing-screenshots", conclusion: "success" }],
-    }),
+    {
+      record: record({
+        required: [{ job: "marketing-screenshots", conclusion: "success" }],
+      }),
+    },
     "no failed marketing-screenshots",
   ],
-  ["an unreadable record", null, "unreadable"],
-  ["a record that is not an object", [], "unreadable"],
-])("%s is not advisory-only", (_label, recorded, reason) => {
-  const verdict = verdictOf({ record: recorded });
+  ["an unreadable record", { record: null }, "required-jobs record unreadable"],
+  [
+    "a record that is not an object",
+    { record: [] },
+    "required-jobs record unreadable",
+  ],
+])("%s is not advisory-only", (_label, overrides, reason) => {
+  const verdict = verdictOf(overrides);
   expect(verdict.advisoryOnly).toBe(false);
   expect(verdict.blocking.join("\n")).toContain(reason);
 });

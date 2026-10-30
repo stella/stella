@@ -1076,10 +1076,14 @@ const STATUS_STATES: Record<string, ReleaseCutGate["state"]> = {
 
 const HEAVY_RUN_EVENTS = new Set(["push", "workflow_dispatch", "schedule"]);
 
-/** The `ci-required-summary` record the run's ci-result uploaded. */
-export type RequiredRecordReader = (runId: string) => Promise<unknown>;
+/** The two artifacts ci-result uploads; each holds `<name>.json`. */
+export type RequiredArtifact = "ci-required-summary" | "ci-required-violations";
+export type RequiredRecordReader = (
+  runId: string,
+  artifact: RequiredArtifact,
+) => Promise<unknown>;
 
-const readRequiredRecord: RequiredRecordReader = async (runId) => {
+const readRequiredRecord: RequiredRecordReader = async (runId, artifact) => {
   const directory = mkdtempSync(
     nodePath.join(tmpdir(), "stella-required-record-"),
   );
@@ -1094,7 +1098,7 @@ const readRequiredRecord: RequiredRecordReader = async (runId) => {
         "-R",
         "stella/stella",
         "-n",
-        "ci-required-summary",
+        artifact,
         "-D",
         directory,
       ],
@@ -1106,11 +1110,11 @@ const readRequiredRecord: RequiredRecordReader = async (runId) => {
     );
     if (!download.success) {
       throw new MaintenanceReleaseError(
-        `Could not download the required-jobs record of run ${runId}`,
+        `Could not download ${artifact} of run ${runId}`,
       );
     }
     const text = readFileSync(
-      nodePath.join(directory, "ci-required-summary.json"),
+      nodePath.join(directory, `${artifact}.json`),
       "utf-8",
     );
     const record: unknown = JSON.parse(text);
@@ -1209,14 +1213,19 @@ const gateFromStatus = async ({
     read.kind === "jobs" &&
     (await failedHeavyRunMatches(runUrl, sha, readJson))
   ) {
+    const runId = String(runIdFromUrl(runUrl));
     const recordResult = await Result.tryPromise(async () =>
-      readRecord(String(runIdFromUrl(runUrl))),
+      readRecord(runId, "ci-required-summary"),
+    );
+    const violationsResult = await Result.tryPromise(async () =>
+      readRecord(runId, "ci-required-violations"),
     );
     const verdict = heavyVerdict({
       jobs: read.jobs,
       total: read.total,
       record: Result.isOk(recordResult) ? recordResult.value : null,
-      runId: Number(runIdFromUrl(runUrl)),
+      violations: Result.isOk(violationsResult) ? violationsResult.value : null,
+      runId: Number(runId),
       head: sha,
     });
     if (verdict.advisoryOnly) {

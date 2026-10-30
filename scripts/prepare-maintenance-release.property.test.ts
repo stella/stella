@@ -1397,24 +1397,38 @@ const fakeGitHub = (responses: Record<string, unknown>) => {
   return Object.assign(read, { paths });
 };
 
-// The required-jobs record ci-result uploads; null stands for unreadable.
-const fakeRecord = (record: unknown) => async (): Promise<unknown> => {
-  if (record === null) {
-    throw new Error("no ci-required-summary artifact");
-  }
-  return record;
-};
+// The unmet checks ci-result publishes beside the required-jobs record.
+const heavyViolations = (overrides: Record<string, unknown> = {}) => ({
+  run_id: 11,
+  run_attempt: 1,
+  head_sha: CUT_SHA,
+  evaluated: true,
+  violations: "marketing-screenshots (planned, failure)",
+  ...overrides,
+});
+
+// The two artifacts ci-result uploads; null stands for unreadable.
+const fakeRecord =
+  (record: unknown, violations: unknown = heavyViolations()) =>
+  async (_runId: string, artifact: string): Promise<unknown> => {
+    const found = artifact === "ci-required-summary" ? record : violations;
+    if (found === null) {
+      throw new Error(`no ${artifact} artifact`);
+    }
+    return found;
+  };
 
 const cutRefusal = async (
   responses: Record<string, unknown>,
   record: unknown = null,
+  violations: unknown = heavyViolations(),
 ): Promise<string> => {
   const written: string[] = [];
   try {
     await assertReleaseCutReady(
       CUT_SHA,
       false,
-      { json: fakeGitHub(responses), record: fakeRecord(record) },
+      { json: fakeGitHub(responses), record: fakeRecord(record, violations) },
       (text) => {
         written.push(text);
       },
@@ -1493,9 +1507,8 @@ describe("release cut readiness", () => {
     head_sha: CUT_SHA,
     basis: "evaluated",
     depth: "heavy",
+    run_attempt: 1,
     verdict: "failure",
-    violations_evaluated: true,
-    violations: "marketing-screenshots (planned, failure)",
     required: [
       { job: "ci-tests", conclusion: "success" },
       { job: "marketing-screenshots", conclusion: "failure" },
@@ -1578,23 +1591,45 @@ describe("release cut readiness", () => {
           { job: "marketing-screenshots", conclusion: "failure" },
         ],
       }),
+      heavyViolations(),
     ],
     [
       "a folded sub-suite that is not success",
-      heavyRecord({
+      heavyRecord(),
+      heavyViolations({
         violations:
           "marketing-screenshots (planned, failure), api-image-deps (planned, failure)",
       }),
     ],
-    ["an unreadable required-jobs record", null],
-    ["a record of another run", heavyRecord({ run_id: 12 })],
-  ])("refuses an advisory failure beside %s", async (_label, record) => {
-    const message = await cutRefusal(
-      heavyFailure([marketingJob(), ...rollups]),
-      record,
-    );
-    expect(message).toContain("main/heavy: failure");
-  });
+    [
+      "unevaluated violations",
+      heavyRecord(),
+      heavyViolations({ evaluated: false }),
+    ],
+    ["an absent violations artifact", heavyRecord(), null],
+    [
+      "a violations artifact of another run",
+      heavyRecord(),
+      heavyViolations({ run_id: 12 }),
+    ],
+    [
+      "a violations artifact of another commit",
+      heavyRecord(),
+      heavyViolations({ head_sha: "e".repeat(40) }),
+    ],
+    ["an unreadable required-jobs record", null, heavyViolations()],
+    ["a record of another run", heavyRecord({ run_id: 12 }), heavyViolations()],
+  ])(
+    "refuses an advisory failure beside %s",
+    async (_label, record, violations) => {
+      const message = await cutRefusal(
+        heavyFailure([marketingJob(), ...rollups]),
+        record,
+        violations,
+      );
+      expect(message).toContain("main/heavy: failure");
+    },
+  );
 
   test.each([
     [

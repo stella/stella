@@ -39,12 +39,23 @@ status_run_matches() {
     .status == "completed" and .conclusion == $conclusion
   ' <<< "$run" >/dev/null
 }
+# Prints the JSON of run $1's artifact $2 (<name>.json inside), or null.
+download_ci_record() {
+  local run_id="$1" artifact="$2" dir
+  dir=$(mktemp -d)
+  if bash "$gh_retry_script" run download "$run_id" -R "$repo" -n "$artifact" -D "$dir" >/dev/null 2>&1; then
+    jq -ce . "$dir/$artifact.json" 2>/dev/null || echo null
+  else
+    echo null
+  fi
+  rm -rf "$dir"
+}
 # Exit 0, with a warning naming the run, when main/heavy status $1 on commit $2
 # is a plain failure of a trusted, well-formed run whose only unsuccessful jobs
 # are advisory (marketing screenshots never gate a release). Any other state,
 # conclusion, unreadable job list or unclassified job stays a refusal.
 heavy_failed_only_in_advisory_jobs() {
-  local status="$1" commit="$2" url run_id jobs total record record_dir verdict
+  local status="$1" commit="$2" url run_id jobs total record violations verdict
   jq -e '.state == "failure" and .creator.login == "github-actions[bot]" and .creator.type == "Bot"' <<< "$status" >/dev/null || return 1
   status_run_matches "$status" ".github/workflows/main-heavy.yml" "$commit" "Main heavy suites" failure || return 1
   url=$(jq -r '.target_url' <<< "$status")
@@ -54,13 +65,10 @@ heavy_failed_only_in_advisory_jobs() {
   total=$(jq -ce '.[0].total_count' <<< "$jobs") || return 1
   jobs=$(jq -c '[.[].jobs[]]' <<< "$jobs") || return 1
   # ci-result's required-jobs record: the only evidence of why it failed.
-  record_dir=$(mktemp -d)
-  record=null
-  if bash "$gh_retry_script" run download "$run_id" -R "$repo" -n ci-required-summary -D "$record_dir" >/dev/null 2>&1; then
-    record=$(jq -ce . "$record_dir/ci-required-summary.json" 2>/dev/null) || record=null
-  fi
-  rm -rf "$record_dir"
-  verdict=$(jq -nc --argjson jobs "$jobs" --argjson total "$total" --argjson record "$record" --argjson run_id "$run_id" --arg head "$commit" -f "$heavy_verdict_filter") || return 1
+  # and the unmet checks it published beside it; an absent one is null.
+  record=$(download_ci_record "$run_id" ci-required-summary)
+  violations=$(download_ci_record "$run_id" ci-required-violations)
+  verdict=$(jq -nc --argjson jobs "$jobs" --argjson total "$total" --argjson record "$record" --argjson violations "$violations" --argjson run_id "$run_id" --arg head "$commit" -f "$heavy_verdict_filter") || return 1
   jq -e '.advisoryOnly' <<< "$verdict" >/dev/null || {
     echo "main/heavy failing jobs: $(jq -r '.blocking | join(", ")' <<< "$verdict")" >&2
     return 1

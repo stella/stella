@@ -32,6 +32,8 @@ export type HeavyVerdictInput = {
   total: unknown;
   /** The run's `ci-required-summary` record; null when unreadable. */
   record: unknown;
+  /** The run's `ci-required-violations` record; null when unreadable. */
+  violations: unknown;
   runId: number;
   head: string;
 };
@@ -40,6 +42,7 @@ export const heavyVerdict = ({
   jobs,
   total,
   record,
+  violations,
   runId,
   head,
 }: HeavyVerdictInput): HeavyVerdict => {
@@ -56,6 +59,9 @@ export const heavyVerdict = ({
       "--argjson",
       "record",
       JSON.stringify(record ?? null),
+      "--argjson",
+      "violations",
+      JSON.stringify(violations ?? null),
       "--argjson",
       "run_id",
       String(runId),

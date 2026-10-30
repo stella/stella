@@ -1,7 +1,9 @@
 # Owner of "main/heavy is green for release purposes" when the run itself
 # failed. Called as
 #   jq -n --argjson jobs <latest-attempt jobs, with steps> --argjson total <API total_count> \
-#         --argjson record <ci-required-summary record or null> --argjson run_id <n> --arg head <sha> -f this
+#         --argjson record <ci-required-summary record or null> \
+#         --argjson violations <ci-required-violations record or null> \
+#         --argjson run_id <n> --arg head <sha> -f this
 # by check-release-main-health.sh and, through release-heavy-verdict.ts, by
 # prepare-maintenance-release.ts.
 #
@@ -9,10 +11,12 @@
 # the release proceeds. A red heavy run is therefore green here only when
 #   1. the ci-result required-jobs record (the `ci-required-summary` artifact
 #      of the run) shows every required job but marketing-screenshots as
-#      success, marketing-screenshots as failure, and no other unmet check
-#      (folded sub-suites, jobs missing from JOB_SCOPES): ci-result fails for
-#      reasons that are not a failed job, so the job list alone cannot excuse
-#      it;
+#      success and marketing-screenshots as failure, and the run's
+#      `ci-required-violations` artifact (a separate artifact: the summary's
+#      key set is parsed strictly elsewhere) lists no unmet check besides
+#      that one (folded sub-suites, jobs missing from JOB_SCOPES): ci-result
+#      fails for reasons that are not a failed job, so the job list alone
+#      cannot excuse it;
 #   2. the screenshots job failed only in the comparison step, after every
 #      earlier step succeeded (marketing-screenshots.yml records that with a
 #      marker step); a failure in install, seed, migrate or API boot blocks;
@@ -52,8 +56,11 @@ def record_blocking:
         (if .run_id != $run_id or .head_sha != $head then "required-jobs record belongs to another run or commit" else empty end),
         (if .basis != "evaluated" or .verdict != "failure" or .depth != "heavy" then "required-jobs record is not an evaluated heavy failure" else empty end),
         (if ($required | length) == 0 then "required-jobs record lists no required job" else empty end),
-        (if .violations_evaluated != true then "required-jobs record did not evaluate the unmet checks" else empty end),
-        (if (.violations // advisory_violation) != advisory_violation then "unmet checks: \(.violations)" else empty end),
+        (if ($violations | type) != "object" then "required-violations record unreadable"
+          elif $violations.run_id != $run_id or $violations.head_sha != $head or $violations.run_attempt != .run_attempt then "required-violations record belongs to another run, attempt or commit"
+          elif $violations.evaluated != true then "required-violations record did not evaluate the unmet checks"
+          elif ($violations.violations // advisory_violation) != advisory_violation then "unmet checks: \($violations.violations)"
+          else empty end),
         (if ([$required[] | select(type == "object" and .job == advisory_required_job and .conclusion == "failure")] | length) != 1 then "required-jobs record has no failed \(advisory_required_job)" else empty end),
         ($required[] | if type != "object" then "a malformed required-jobs entry"
           elif .job != advisory_required_job and .conclusion != "success" then "\(.job) (\(.conclusion))"
