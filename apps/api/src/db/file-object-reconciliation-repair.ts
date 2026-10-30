@@ -106,7 +106,6 @@ const scheduleUntilEmpty = async (
   { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
 ) => {
   const runtime = createBackfillRuntime({
-    introducedBy: "20261030180334_file_reservation_reconciliation_state",
     name: REPAIR_NAME,
     tableName: TABLE_NAME,
     initialSize: BATCH,
