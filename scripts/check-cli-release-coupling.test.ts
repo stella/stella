@@ -797,16 +797,16 @@ test("a squash merge group fetches a PR head absent from the checkout", () => {
   }
 });
 
-test("merge groups fail closed for unrelated tags, malformed refs, and missing PR heads", () => {
-  for (const failure of [
-    "unrelated-tag",
-    "malformed-ref",
-    "trailing-newline",
-    "zero-pr",
-    "short-sha",
-    "missing-pr-head",
-    "lookup-failure",
-  ] as const) {
+for (const failure of [
+  "unrelated-tag",
+  "malformed-ref",
+  "trailing-newline",
+  "zero-pr",
+  "short-sha",
+  "missing-pr-head",
+  "lookup-failure",
+] as const) {
+  test(`merge groups fail closed for ${failure}`, () => {
     const { root, env, git } = mergeGroupFixture(
       failure === "unrelated-tag" ? "elsewhere" : "release",
     );
@@ -844,5 +844,5 @@ test("merge groups fail closed for unrelated tags, malformed refs, and missing P
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  }
-});
+  });
+}
