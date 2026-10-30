@@ -409,6 +409,49 @@ describe("groupActivityItems", () => {
     expect(groups).toHaveLength(2);
   });
 
+  test("keeps a move visible when a rename follows it", () => {
+    const performer = {
+      deletedAt: null,
+      id: "user-1",
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } satisfies MatterActivityItem["performer"];
+    const folder = { id: "folder-1", kind: "folder", mimeType: null } as const;
+    // Newest first: the rename and the move fold into one update group,
+    // which must not then disappear into the creation.
+    const groups = groupActivityItems([
+      item("3", {
+        activityAt: new Date(LOCAL_NOON + 8000).toISOString(),
+        performer,
+        changedFields: ["name"],
+        runId: null,
+        target: folder,
+      }),
+      item("2", {
+        activityAt: new Date(LOCAL_NOON + 5000).toISOString(),
+        performer,
+        changedFields: ["parentFolder"],
+        runId: null,
+        target: folder,
+      }),
+      item("1", {
+        action: "create",
+        activityAt: new Date(LOCAL_NOON).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(
+      groups.flatMap((group) =>
+        group.items.flatMap(({ changedFields }) => changedFields),
+      ),
+    ).toContain("parentFolder");
+  });
+
   test("keeps folder updates that are not part of the creation", () => {
     const performer = {
       deletedAt: null,

@@ -218,17 +218,22 @@ const isUserFolderAction = (
   item.target.kind === "folder" &&
   item.performer.type === "user";
 
+// A group can hold several folded updates; it folds into the creation only
+// when every one of them is a rename, so a move or other edit stays visible.
 const isFoldableFolderRename = (
   candidate: ActivityGroup | undefined,
   createItem: MatterActivityItem,
 ) =>
   candidate?.type === "single" &&
-  isUserFolderAction(candidate.items[0], "update") &&
-  candidate.items[0].changedFields.length === 1 &&
-  candidate.items[0].changedFields[0] === "name" &&
-  candidate.items[0].target.id === createItem.target.id &&
-  hasSamePerformer(candidate.items[0], createItem) &&
-  isWithinActivityFoldWindow(candidate.items[0], createItem);
+  candidate.items.every(
+    (item) =>
+      isUserFolderAction(item, "update") &&
+      item.changedFields.length === 1 &&
+      item.changedFields[0] === "name" &&
+      item.target.id === createItem.target.id &&
+      hasSamePerformer(item, createItem) &&
+      isWithinActivityFoldWindow(item, createItem),
+  );
 
 const hasSameActivityDay = (
   left: MatterActivityItem,
