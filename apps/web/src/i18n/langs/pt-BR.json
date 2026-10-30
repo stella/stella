@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
-      "remove": "Remover o filtro {filter}"
+      "countryMismatch": "Filtros removidos porque não correspondem a {country}: {filters}.",
+      "remove": "Remover o filtro {filter}",
+      "showInCountry": "Mostrar {filter} em {country}"
     },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "Visualização completa ainda não disponível"
     },
     "activity": {
+      "newerVersion": "Este conteúdo é exibido em uma versão mais recente.",
       "review": "Atualização da revisão"
     },
     "aiPrompt": "Campo de mensagem de IA",
@@ -2359,6 +2362,7 @@
     "unknownUser": "Usuário desconhecido",
     "unpin": "Desafixar",
     "unsavedChanges": "Alterações não salvas",
+    "unsavedChangesClose": "Alterações não salvas. Feche novamente para descartá-las",
     "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las",
     "unsavedLeaveConfirm": "Você tem alterações não salvas. Sair sem salvar?",
     "unverified": "Não verificado",
@@ -2400,6 +2404,8 @@
     "returnToAgent": "Volte ao seu agente para continuar.",
     "returnsLocally": "Você voltará para {clientName} neste computador",
     "returnsTo": "Você voltará para {clientName}",
+    "scopeAccountExportRead": "Ler suas exportações de dados pessoais",
+    "scopeAccountExportWrite": "Solicitar exportações dos seus dados pessoais",
     "scopeAdminRead": "Ler o registro de auditoria da sua organização",
     "scopeAdminWrite": "Gerenciar membros e configurações da organização",
     "scopeBillingWrite": "Criar, editar e excluir seus lançamentos de horas",
@@ -5051,6 +5057,8 @@
       "desktopCardConnectedTitle": "stella desktop está vinculado",
       "desktopCardMissingDetail": "Instale-o, ou conecte-o se já estiver instalado neste computador.",
       "desktopCardMissingTitle": "stella desktop ainda não está vinculado",
+      "desktopCardOpeningDetail": "Vinculando este computador a <bdi>{identity}</bdi> em {host}. Se o navegador pedir, permita que ele abra o stella desktop.",
+      "desktopCardOpeningTitle": "Abrindo stella desktop...",
       "desktopCardOutdatedDetail": "A versão {version} está vinculada a <bdi>{identity}</bdi>. Instale a versão mais recente para que documentos e atividade continuem funcionando.",
       "desktopCardOutdatedTitle": "stella desktop precisa de atualização",
       "desktopClipboardDescription": "Abra, pesquise, organize e reutilize textos copiados de qualquer aplicativo.",
@@ -5070,6 +5078,7 @@
       "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
       "desktopInstallTitle": "Instalar e abrir",
       "desktopInstallWindowsStep": "Execute o instalador e siga as instruções.",
+      "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "O histórico da área de transferência é criptografado e armazenado neste dispositivo.",
       "desktopPrivacyTitle": "Privado por padrão",
       "desktopSelfHostDescription": "Confie nesta URL da stella no app desktop assinado para abrir localmente os documentos desta instalação.",
@@ -5079,6 +5088,15 @@
       "displayNameSaved": "Nome de exibição atualizado",
       "enterOtp": "Código de verificação",
       "otpSentSuccess": "Código de verificação enviado para o seu e-mail.",
+      "personalDataExportDescription": "Solicite uma cópia para download dos dados pessoais armazenados na sua conta. O download ficará disponível por uma hora.",
+      "personalDataExportExpired": "Esta exportação expirou.",
+      "personalDataExportExpiresAt": "Disponível até {expiresAt}.",
+      "personalDataExportFailed": "Não foi possível preparar a exportação.",
+      "personalDataExportReady": "Sua exportação está pronta.",
+      "personalDataExportRequest": "Solicitar exportação",
+      "personalDataExportRequestNew": "Solicitar nova exportação",
+      "personalDataExportTitle": "Exportar meus dados",
+      "personalDataExportWorking": "Preparando sua exportação…",
       "preferredName": "Nome preferido",
       "preferredNameDescription": "Usado como autor de alterações e comentários rastreados em DOCX.",
       "preferredNamePlaceholder": "Seu nome",
@@ -5421,6 +5439,7 @@
     "showCitedPartOnly": "Mostrar apenas a parte citada",
     "showFullProvision": "Mostrar o dispositivo completo",
     "showInText": "Mostrar no texto",
+    "sortNeedsYear": "Escolha um ano nos filtros para ordenar por esta coluna.",
     "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
       "current": "Em vigor",
@@ -6518,6 +6537,14 @@
           "started": "Iniciou uma revisão de"
         },
         "empty": "Ainda não há atividade neste caso.",
+        "fields": {
+          "dueDate": "data de vencimento",
+          "parentFolder": "pasta principal",
+          "priority": "prioridade",
+          "property": "propriedade",
+          "schedule": "programação",
+          "sortOrder": "ordem"
+        },
         "filterLabel": "Filtrar atividade",
         "filters": {
           "all": "Toda a atividade",
@@ -6567,6 +6594,7 @@
           "translation": "tradução"
         },
         "title": "Atividade",
+        "updatedFields": "Atualizado: {fields}",
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"

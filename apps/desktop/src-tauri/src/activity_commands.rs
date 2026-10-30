@@ -5,7 +5,7 @@
 //! `activity_get_day`.
 
 use chrono::Utc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::{
   activity::{
@@ -37,7 +37,7 @@ fn update<E: From<String>>(
   manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
   drop(manager);
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(app);
   Ok(())
 }
 
@@ -46,7 +46,6 @@ pub fn activity_get_day(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-  gates: State<'_, crate::feature_gate::FeatureGates>,
   date: Option<String>,
 ) -> Result<ActivityDaySnapshot, String> {
   let now = Utc::now();
@@ -74,8 +73,6 @@ pub fn activity_get_day(
   );
   drop(manager);
   snapshot.resolve_app_visuals();
-  snapshot.time_billing_enabled =
-    gates.is_enabled(crate::feature_gate::DesktopFeature::TimeBilling);
   Ok(snapshot)
 }
 
@@ -207,7 +204,7 @@ pub fn activity_set_capture_details(
     caller.require_current(&app)?;
     activity_details::request_permission();
   }
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(&app);
   Ok(())
 }
 
@@ -224,7 +221,7 @@ pub fn activity_set_detect_calls(
     manager.require_caller(&caller)?;
     manager.set_detect_calls(enabled, Utc::now())?;
   }
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(&app);
   Ok(())
 }
 

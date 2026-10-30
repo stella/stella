@@ -21808,14 +21808,6 @@
         "job": "measure-1"
       }
     },
-    "src/tests/helpers/test-state.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
-      }
-    },
     "src/tests/helpers/transaction-interleaving.postgres.test.ts": {
       "peakMb": 218,
       "baselineMb": 218,

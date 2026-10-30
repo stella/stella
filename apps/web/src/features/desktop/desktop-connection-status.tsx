@@ -6,6 +6,7 @@ import { Button } from "@stll/ui/button";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import type { DesktopConnectionState } from "@/features/desktop/desktop-connection-store.logic";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
+import { openDesktopUrl } from "@/lib/desktop-bridge";
 
 type DesktopConnectionStatusProps = {
   /** Omitted where the surface already offers its own connect control. */
@@ -30,6 +31,24 @@ export const DesktopConnectionStatus = ({
     case "connecting":
       return (
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      );
+    case "opening":
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-muted-foreground text-sm">
+            {t("settings.account.desktopCardOpeningTitle")}
+          </p>
+          <Button
+            onClick={() => {
+              openDesktopUrl(state.desktopUrl);
+            }}
+            size="xs"
+            type="button"
+            variant="link"
+          >
+            {t("settings.account.desktopOpenApp")}
+          </Button>
+        </div>
       );
     case "connected":
       return (
