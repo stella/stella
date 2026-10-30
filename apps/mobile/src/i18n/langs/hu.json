@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Fiók",
     "server": "Szerver",
-    "signOut": "Kijelentkezés"
+    "signOut": "Kijelentkezés",
+    "deleteAccount": "Fiók törlése",
+    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné."
   },
   "header": {
     "search": "Keresés"
@@ -199,7 +201,8 @@
     "retry": "Újra",
     "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
     "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
-    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra.",
+    "more": "{count, plural, other {még # időmérő}}"
   },
   "scan": {
     "title": "Dokumentum szkennelése",

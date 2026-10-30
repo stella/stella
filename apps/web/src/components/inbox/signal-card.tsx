@@ -31,21 +31,14 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
-  acceptSignal,
-  assignSignal,
   type ClientSignalAcceptanceResult,
-  dismissSignal,
   openSignalChat,
-  snoozeSignal,
+  openSignalEvidence,
+  useIdempotentSignalActions,
 } from "@/components/inbox/signal-actions";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
-import {
-  INBOX_SIGNAL_VIEW,
-  inboxSignalTabId,
-} from "@/features/inbox/signal-inspector.logic";
 import {
   ORIGIN_LABEL_KEY,
   scoutLabelKey,
@@ -98,6 +91,7 @@ export const SignalCard = ({
   presentation = "card",
   onChanged,
 }: SignalCardProps) => {
+  const signalActions = useIdempotentSignalActions();
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
@@ -144,14 +138,7 @@ export const SignalCard = ({
 
   const mutationArgs = { signalId: signal.id };
 
-  const openEvidence = () => {
-    useInspectorTabsStore.getState().openView({
-      type: INBOX_SIGNAL_VIEW,
-      id: inboxSignalTabId(signal.id),
-      label: signal.title,
-      payload: { signalId: signal.id },
-    });
-  };
+  const openEvidence = () => openSignalEvidence(signal);
 
   const askAboutThis = () => {
     openSignalChat(
@@ -166,7 +153,7 @@ export const SignalCard = ({
   ) =>
     await run(
       async () =>
-        await acceptSignal({
+        await signalActions.acceptSignal({
           ...mutationArgs,
           suggestionKind,
           ...(result ? { result } : {}),
@@ -181,14 +168,14 @@ export const SignalCard = ({
   const assign = async (assigneeUserId: string) =>
     await run(
       async () => {
-        const assigned = await assignSignal({
+        const assigned = await signalActions.assignSignal({
           ...mutationArgs,
           assigneeUserId,
         });
         if (Result.isError(assigned)) {
           return assigned;
         }
-        return acceptSignal({
+        return signalActions.acceptSignal({
           ...mutationArgs,
           suggestionKind: SUGGESTION_KIND.ASSIGN,
         });
@@ -200,15 +187,22 @@ export const SignalCard = ({
     );
 
   const dismiss = async (reason: string | null) =>
-    await run(async () => await dismissSignal({ ...mutationArgs, reason }), {
-      scope: { type: "handler", handlerId: "inbox.dismiss" },
-      successMessage: null,
-    });
+    await run(
+      async () =>
+        await signalActions.dismissSignal({ ...mutationArgs, reason }),
+      {
+        scope: { type: "handler", handlerId: "inbox.dismiss" },
+        successMessage: null,
+      },
+    );
 
   const snooze = async (period: "tomorrow" | "next-week") =>
     await run(
       async () =>
-        await snoozeSignal({ ...mutationArgs, until: snoozeUntil(period) }),
+        await signalActions.snoozeSignal({
+          ...mutationArgs,
+          until: snoozeUntil(period),
+        }),
       {
         scope: { type: "handler", handlerId: `inbox.snooze.${period}` },
         successMessage: null,

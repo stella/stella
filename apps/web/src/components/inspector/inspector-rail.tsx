@@ -590,6 +590,7 @@ const VerticalTabCell = ({
   const contextMenu = useTabContextMenu({
     canRename: tab.type !== "matter",
     tabId: tab.id,
+    tabLabel: tab.label,
     onClose,
     onMaximize: buildMaximizeTabAction(tab, {
       activeOrganizationId,

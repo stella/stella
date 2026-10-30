@@ -79,6 +79,7 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clauseDetailOptions,
   invalidateTemplateClauseSources,
@@ -1500,6 +1501,7 @@ const VariantFormDialogBody = ({
   onSaved: () => void;
   variant: VariantItem | undefined;
 }) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const isEdit = !!variant;
   const [label, setLabel] = useState(() => variant?.label ?? "");
@@ -1524,7 +1526,12 @@ const VariantFormDialogBody = ({
             .clauses({ clauseId })
             .variants({ variantId: variant.id })
             .post(payload)
-        : await api.clauses({ clauseId }).variants.put(payload);
+        : await idempotentSubmit.run({
+            operation: `clauses.${clauseId}.variants.create`,
+            body: payload,
+            send: async (creationPayload) =>
+              api.clauses({ clauseId }).variants.put(creationPayload),
+          });
 
     setSaving(false);
 

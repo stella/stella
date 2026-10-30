@@ -37,6 +37,7 @@ const bodySchema = v.strictObject({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   realtime: noResourceSetUpdates(
     "Claim comments refresh through the claim's own comment query; no listed resource set changes",
   ),

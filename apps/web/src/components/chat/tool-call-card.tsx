@@ -756,8 +756,8 @@ const ToolCallHeaderLabel = ({
   </span>
 );
 
-/** Shows on the row's hover or its own focus; the wrapper carries the fade so
- *  the button keeps its own surface. */
+/** Shows on the row's hover, its own focus, or always on touch; the wrapper
+ *  carries the fade so the button keeps its own surface. */
 const ToolCallExpandToggle = ({
   expanded,
   onToggle,
@@ -769,7 +769,7 @@ const ToolCallExpandToggle = ({
   return (
     <span
       className={cn(
-        "flex shrink-0 opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-within:opacity-100",
+        "flex shrink-0 opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100",
         expanded && "opacity-100",
       )}
     >
