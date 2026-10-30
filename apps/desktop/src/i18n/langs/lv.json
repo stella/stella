@@ -299,7 +299,7 @@
     "moreOptions": "Vairāk iespēju",
     "moreItemActions": "Vairāk darbību vienumam {number}",
     "noResults": "Nav atbilstošu izgriezumu",
-    "noResultsDescription": "Vai tā vietā meklēt “{query}” reģistros?",
+    "noResultsSearchRegistries": "Meklēt “{query}” reģistros",
     "noGroup": "Bez grupas",
     "newGroupOption": "Jauna grupa…",
     "copyItem": "Kopēt vienumu {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Nospiediet {shortcut}, lai pārlūkotu vēsturi un izvēlētos izgriezumu.",
     "welcomeShortcutTitle": "Atveriet to jebkur.",
     "welcomeStart": "Sākt kopēšanu",
-    "welcomeTitle": "Iepazīstiet savu starpliktuvi"
+    "welcomeTitle": "Iepazīstiet savu starpliktuvi",
+    "registryIdentifierSearchHint": "Ievadiet {identifiers}."
   },
   "activity": {
     "title": "Darbība",
@@ -618,5 +619,46 @@
       "fullDiskAccess": "Pilna piekļuve diskam",
       "administrator": "Administratora tiesības"
     }
+  },
+  "agentSubscriptions": {
+    "title": "MI abonementi",
+    "chatGpt": "ChatGPT",
+    "description": "Izmantojiet savu ChatGPT plānu MI pieprasījumiem stellā. Lietojums tiek uzskaitīts jūsu ChatGPT plānā, atsevišķi no stellas abonementa.",
+    "continueWithChatGpt": "Turpināt ar ChatGPT",
+    "continueAs": "Turpināt kā {email}",
+    "useDifferentAccount": "Izmantot citu kontu",
+    "signingIn": "Pabeidziet pierakstīšanos pārlūkprogrammā.",
+    "cancel": "Atcelt",
+    "pasteDescription": "Ja pēc pierakstīšanās pārlūkprogramma parāda kļūdas lapu, nokopējiet tās adresi un ielīmējiet to šeit.",
+    "pasteSubmit": "Pabeigt pierakstīšanos",
+    "connected": "ChatGPT savienots",
+    "connectedAs": "ChatGPT savienots · {email}",
+    "manageUsage": "Pārvaldīt lietojumu",
+    "disconnect": "Atvienot",
+    "needsReconnect": "Jūsu ChatGPT savienojums ir beidzies. Pierakstieties vēlreiz, lai turpinātu izmantot savu plānu.",
+    "notice": {
+      "actionFailed": "Neizdevās. Mēģiniet vēlreiz.",
+      "pasteRejected": "Šī adrese nav no pašreizējās pierakstīšanās. Nokopējiet pilnu adresi no atvērtās pārlūkprogrammas cilnes.",
+      "revocationUnconfirmed": "Atvienots šajā datorā, bet ChatGPT to neapstiprināja. Stellu varat noņemt arī ChatGPT iestatījumos."
+    },
+    "failure": {
+      "declined": "Pierakstīšanās pārlūkprogrammā tika noraidīta.",
+      "planUsageNotGranted": "Stella nesaņēma atļauju izmantot jūsu ChatGPT plānu. Pierakstieties vēlreiz un atļaujiet to.",
+      "differentAccount": "Jūs pierakstījāties ar citu ChatGPT kontu. Saglabātais savienojums nav mainīts.",
+      "stateMismatch": "Pierakstīšanos neizdevās pārbaudīt. Mēģiniet vēlreiz.",
+      "timedOut": "Pierakstīšanās ilga pārāk ilgi. Mēģiniet vēlreiz.",
+      "browserUnavailable": "Pārlūkprogrammu neizdevās atvērt. Mēģiniet vēlreiz.",
+      "callbackUnavailable": "Pierakstīšanos šajā datorā neizdevās sagatavot. Mēģiniet vēlreiz.",
+      "registrationIncomplete": "ChatGPT nepabeidza stellas savienošanu. Mēģiniet vēlreiz.",
+      "codeExpired": "Pierakstīšanās derīgums beidzās, pirms tā tika pabeigta. Mēģiniet vēlreiz.",
+      "verification": "ChatGPT atbildi neizdevās pārbaudīt. Mēģiniet vēlreiz.",
+      "clientRejected": "ChatGPT vairs nepieņem šo savienojumu. Savienojiet to vēlreiz ar citu kontu.",
+      "unreachable": "ChatGPT pierakstīšanās nav sasniedzama. Pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
+      "storage": "Savienojumu šajā datorā neizdevās nolasīt vai saglabāt."
+    },
+    "callbackConnectedTitle": "ChatGPT ir savienots",
+    "callbackConnectedBody": "Varat aizvērt šo cilni un atgriezties stellā.",
+    "callbackNotConnectedTitle": "ChatGPT netika savienots",
+    "callbackNotConnectedBody": "Atgriezieties stellā, lai redzētu, kas notika, un mēģiniet vēlreiz."
   }
 }

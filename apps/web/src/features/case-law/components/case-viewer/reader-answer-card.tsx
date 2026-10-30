@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -21,6 +22,7 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 import { AnnotationVisibilityToggle } from "./analysis/annotation-visibility-toggle";
 import type { ReaderAnswerCitationTarget } from "./reader-answer-citation.logic";
+import { ReaderAnswerMarkdown } from "./reader-answer-markdown";
 
 type ReaderAnswerCitationChipProps = {
   citation: ReaderAnswerCitation;
@@ -93,6 +95,7 @@ export type ReaderAnswerCardProps = {
   language: string;
   onOpen: () => void;
   busy: boolean;
+  languagePicker?: ReactNode;
 };
 
 export const ReaderAnswerCard = ({
@@ -109,6 +112,7 @@ export const ReaderAnswerCard = ({
   language,
   onOpen,
   busy,
+  languagePicker,
 }: ReaderAnswerCardProps) => {
   const t = useTranslations();
   const [display, setDisplay] = useState<"expanded" | "minimised">("expanded");
@@ -240,25 +244,37 @@ export const ReaderAnswerCard = ({
                     : "text-foreground",
                 )}
               >
-                <p className="wrap-break-word whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                {message.content !== "" &&
+                  (message.role === "assistant" ? (
+                    <ReaderAnswerMarkdown
+                      content={message.content}
+                      status={message.status}
+                      citations={message.citations}
+                      renderCitation={(citation) => (
+                        <ReaderAnswerCitationChip
+                          citation={citation}
+                          language={language}
+                          onCitation={onCitation}
+                          target={citationTarget(citation)}
+                        />
+                      )}
+                    />
+                  ) : (
+                    <p className="wrap-break-word whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  ))}
                 {message.status === "streaming" && message.content === "" && (
-                  <div role="status" aria-label={t("readerAnswers.loading")}>
-                    <Skeleton className="h-12 rounded-sm" />
+                  <div
+                    role="status"
+                    aria-label={t("readerAnswers.loading")}
+                    className="space-y-2 py-1"
+                  >
+                    <Skeleton className="h-3 w-full rounded-sm" />
+                    <Skeleton className="h-3 w-5/6 rounded-sm" />
+                    <Skeleton className="h-3 w-2/3 rounded-sm" />
                   </div>
                 )}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {message.citations.map((citation) => (
-                    <ReaderAnswerCitationChip
-                      key={`${citation.decisionId}:${citation.paragraphId}`}
-                      citation={citation}
-                      language={language}
-                      onCitation={onCitation}
-                      target={citationTarget(citation)}
-                    />
-                  ))}
-                </div>
               </div>
             ))}
           </div>
@@ -269,8 +285,11 @@ export const ReaderAnswerCard = ({
               })}
             </p>
           )}
+          {languagePicker}
           <div className="flex flex-wrap items-center gap-1">
             <CopyActionButton
+              variant="ghost"
+              size="sm"
               text={answer.messages
                 .map((message) => message.content)
                 .join("\n\n")}

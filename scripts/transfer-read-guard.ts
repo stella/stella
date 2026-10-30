@@ -293,6 +293,11 @@ class TransferReadInspector {
     if (value.type !== "ObjectExpression") {
       return [];
     }
+    const hasExplicitPolicy = value.properties.some(
+      (property) =>
+        property.type === "Property" &&
+        this.propertyKey(property) === "timeout",
+    );
     const found: Node[] = [];
     for (const property of value.properties) {
       if (property.type === "SpreadElement") {
@@ -302,7 +307,8 @@ class TransferReadInspector {
           !property.method &&
           property.kind === "init") ||
           property.shorthand) &&
-        this.propertyKey(property) === "timeoutMs"
+        this.propertyKey(property) === "timeoutMs" &&
+        !hasExplicitPolicy
       ) {
         found.push(property);
       }

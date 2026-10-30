@@ -1,4 +1,7 @@
-import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import type {
+  AiCellSettlement,
+  ApiFileSecurityRejectionDetails,
+} from "@stll/api-contract";
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
@@ -1497,6 +1500,8 @@ export const fields = p.pgTable(
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
     content: jsonb().$type<FieldContent>().notNull(),
+    /** Durable terminal outcome of the latest AI run for this cell. */
+    aiSettlement: jsonb("ai_settlement").$type<AiCellSettlement>(),
     /** Workflow run that currently owns this non-terminal cell. */
     ownerRunId: p.text("owner_run_id"),
     /** Batch within the workflow run that currently owns this cell. */

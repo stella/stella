@@ -110,6 +110,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-run";
 import type {
   ChatTurnObservation,
+  ChatTurnOwnership,
   ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
 import {
@@ -238,6 +239,8 @@ import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -509,6 +512,7 @@ type ClaimedChatTurnOwnership =
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
+  ownership?: ChatTurnOwnership;
   startAdmission?: typeof startExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
@@ -680,6 +684,7 @@ const CHAT_SEND_ACTION_KIND = "chat.send";
  */
 export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
+  private readonly ownership: ChatTurnOwnership;
   private admission: ExecutionAdmission | undefined;
   private checkpoint: PersistableChatMessage | undefined;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
@@ -695,6 +700,7 @@ export class ChatSendLifecycle {
 
   constructor(options: ChatSendLifecycleOptions) {
     this.options = options;
+    this.ownership = options.ownership ?? processChatTurnOwnership;
   }
 
   /** Once accepted durably, a turn belongs to its lease rather than a viewer. */
@@ -758,7 +764,7 @@ export class ChatSendLifecycle {
         ? {}
         : { owningAssistantMessage }),
     };
-    this.releaseClaim = processChatTurnOwnership.holdClaim({
+    this.releaseClaim = this.ownership.holdClaim({
       execution,
       safeDb: this.options.safeDb,
     });
@@ -888,6 +894,7 @@ export class ChatSendLifecycle {
       return panic("Cannot start a run for a turn this send does not hold");
     }
     const run = new ChatTurnRun({
+      ownership: this.ownership,
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
@@ -1684,6 +1691,7 @@ type ChatToolsInput = Parameters<typeof getChatTools>[0];
 
 type PrepareValidatedIncomingMessageOptions = {
   dependencies: {
+    caseLawDb?: SendMessageDependencies["caseLawDb"];
     loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
     uploadMessageFiles: typeof uploadMessageFilesWithRollback;
   };
@@ -1736,7 +1744,7 @@ type PrepareValidatedIncomingMessageOptions = {
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
 const prepareValidatedIncomingMessage = async ({
-  dependencies: { loadWebSearchProviders, uploadMessageFiles },
+  dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
     accessibleWorkspaceIds,
     memberRole,
@@ -1907,6 +1915,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const thread = yield* Result.await(
       loadThread({
+        caseLawDb,
         initialDataWorkspaceIds:
           activeDraftContext === null
             ? []
@@ -2270,6 +2279,10 @@ export const createSendMessage = (
       usageLane,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const body = transportBody.forwardedProps;
       const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
       const resume = "resume" in body ? body.resume : undefined;
@@ -2492,6 +2505,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          caseLawDb: dependencies.caseLawDb,
           initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
@@ -2581,9 +2595,10 @@ export const createSendMessage = (
             userId: user.id,
           }),
         );
-        const preparedIncomingMessageResult =
-          await prepareValidatedIncomingMessage({
+        const preparedIncomingMessage = yield* Result.await(
+          prepareValidatedIncomingMessage({
             dependencies: {
+              caseLawDb: dependencies.caseLawDb,
               loadWebSearchProviders: dependencies.loadWebSearchProviders,
               uploadMessageFiles: dependencies.uploadMessageFiles,
             },
@@ -2624,10 +2639,8 @@ export const createSendMessage = (
               usageLane,
               validationActiveSkillContext,
             },
-          });
-        if (Result.isError(preparedIncomingMessageResult)) {
-          return Result.err(preparedIncomingMessageResult.error);
-        }
+          }),
+        );
         const {
           chatModelOverride,
           chatReasoningEffort,
@@ -2638,7 +2651,7 @@ export const createSendMessage = (
           turnLane,
           uploadedMessage,
           webSearchProviders,
-        } = preparedIncomingMessageResult.value;
+        } = preparedIncomingMessage;
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -2789,6 +2802,7 @@ export const createSendMessage = (
           ),
         );
         const messagesForContextInput = await selectMessagesForContextInput({
+          caseLawDb: dependencies.caseLawDb,
           messages: authorizedHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,

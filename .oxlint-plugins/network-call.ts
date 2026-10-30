@@ -18,6 +18,7 @@ type RuleContext = ImportedFromOptions["context"];
 const FETCH_MODULES = new Set([
   "@stll/fetch",
   "@/api/lib/auth/authorized-outbound-fetch",
+  "@/api/lib/observability/operator-endpoint-fetch",
   "@/api/lib/redirect-fetch",
 ]);
 

@@ -24,6 +24,11 @@ import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  meterStorageRead,
+  meterStorageReadStream,
+  recordReadWork,
+} from "@/api/lib/observability/request-work";
+import {
   createS3CredentialGuard,
   type S3CredentialGuard,
   type S3CredentialRefreshOptions,
@@ -841,6 +846,14 @@ export const writeS3ObjectWithRetry = async (
   throw lastError;
 };
 
+export const S3_OBJECT_CREATE_STATUS = {
+  WRITTEN: "written",
+  EXISTING: "existing",
+} as const;
+
+type S3ObjectCreateStatus =
+  (typeof S3_OBJECT_CREATE_STATUS)[keyof typeof S3_OBJECT_CREATE_STATUS];
+
 /**
  * Write one object only when its key holds none, through the same deadline
  * and retry as {@link writeS3ObjectWithRetry}.
@@ -854,8 +867,9 @@ export const writeS3ObjectWithRetry = async (
  */
 export const createS3ObjectIfAbsent = async (
   object: S3ObjectWrite,
-): Promise<void> => {
+): Promise<S3ObjectCreateStatus> => {
   let conditional = true;
+  let status: S3ObjectCreateStatus = S3_OBJECT_CREATE_STATUS.WRITTEN;
   await writeS3ObjectWithRetry(
     object,
     {
@@ -902,6 +916,7 @@ export const createS3ObjectIfAbsent = async (
       const code =
         failure instanceof Error ? safeErrorCode(failure) : undefined;
       if (code === "PreconditionFailed") {
+        status = S3_OBJECT_CREATE_STATUS.EXISTING;
         return;
       }
       if (code === "NotImplemented") {
@@ -921,6 +936,7 @@ export const createS3ObjectIfAbsent = async (
       throw failure;
     },
   );
+  return status;
 };
 
 export class S3ObjectBudgetError extends TaggedError("S3ObjectBudgetError")<{
@@ -988,7 +1004,7 @@ export const getS3ObjectWithSignal = async (
         message: "S3 returned an object without a response body",
       });
     }
-    const bytes = await response.Body.transformToByteArray();
+    const bytes = meterStorageRead(await response.Body.transformToByteArray());
     if (bytes.buffer instanceof ArrayBuffer) {
       return bytes.buffer.slice(
         bytes.byteOffset,
@@ -1037,6 +1053,7 @@ export const hashS3ObjectSha256WithSignal = async (
                   }),
                 );
               }
+              recordReadWork("storageReadBytes", value.byteLength);
               hasher.update(value);
             }
           } finally {
@@ -1210,7 +1227,7 @@ export const openS3ObjectStreamWithSignal = async (
     const body =
       response.Body ?? panic("S3 returned an object without a response body");
     return {
-      body: body.transformToWebStream(),
+      body: meterStorageReadStream(body.transformToWebStream()),
       contentLength: response.ContentLength,
     };
   });
@@ -1380,7 +1397,7 @@ export const readS3ObjectBounded = async ({
         message: "S3 returned an object without a response body",
       });
     }
-    return await response.Body.transformToByteArray();
+    return meterStorageRead(await response.Body.transformToByteArray());
   }, s3Policy);
 
 /**
@@ -1584,7 +1601,7 @@ export const readCorpusS3Bytes = async (
     store: corpusStore,
     key,
     signal,
-    consume: async (response) => await response.bytes(),
+    consume: async (response) => meterStorageRead(await response.bytes()),
   });
 
 type BoundedCorpusReadOptions = {
@@ -1643,9 +1660,8 @@ const boundedCorpusResponse = async <T>(
 export const readCorpusS3BytesBounded = async (
   options: BoundedCorpusReadOptions,
 ): Promise<Uint8Array> =>
-  await boundedCorpusResponse(
-    options,
-    async (response) => await response.bytes(),
+  await boundedCorpusResponse(options, async (response) =>
+    meterStorageRead(await response.bytes()),
   );
 
 /** A bounded corpus read together with the store's own validator. */
@@ -1663,7 +1679,7 @@ export const readCorpusS3ObjectBounded = async (
   options: BoundedCorpusReadOptions,
 ): Promise<BoundedCorpusObject> =>
   await boundedCorpusResponse(options, async (response) => ({
-    bytes: new Uint8Array(await response.arrayBuffer()),
+    bytes: meterStorageRead(new Uint8Array(await response.arrayBuffer())),
     etag: response.headers.get("etag"),
   }));
 
@@ -1760,7 +1776,7 @@ export const readCorpusS3Range = async ({
                   message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
                 });
               }
-              const bytes = await served.bytes();
+              const bytes = meterStorageRead(await served.bytes());
               if (bytes.byteLength !== length) {
                 throw new S3ObjectReadError({
                   message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
@@ -1789,7 +1805,7 @@ export const readS3ArrayBuffer = async (
     store: documentsStore,
     key,
     signal,
-    consume: async (response) => await response.arrayBuffer(),
+    consume: async (response) => meterStorageRead(await response.arrayBuffer()),
   });
 
 /**
