@@ -270,7 +270,7 @@ describe("a server error answer", () => {
     expect(captured.at(0)?.groups).toEqual({
       organization: CAPTURE_ORGANIZATION_ID,
     });
-    expect(captured.at(0)?.properties["organization_id"]).toBe(
+    expect(captured.at(0)?.properties.organization_id).toBe(
       CAPTURE_ORGANIZATION_ID,
     );
   });
