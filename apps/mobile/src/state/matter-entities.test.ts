@@ -15,6 +15,7 @@ import {
   EMPTY_ENTITIES_LOAD,
   ENTITY_PAGE_SIZE,
   entitySections,
+  fileTypeOf,
   listMatterEntities,
   type MatterEntity,
 } from "./matter-entities";
@@ -96,6 +97,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(fetch),
       workspaceId: "matter 1",
       cursor: "cursor-0",
+      fileFieldId: null,
     });
     expect(result.isOk() ? result.value : result.error._tag).toEqual({
       items: [row("e1", "document")],
@@ -116,6 +118,68 @@ describe("listing a matter's entities", () => {
     ]);
   });
 
+  test("asks for the documents column and names each file's format", async () => {
+    const { fetch, calls } = server(() =>
+      Response.json({
+        items: [
+          {
+            ...row("pdf", "document"),
+            fields: [
+              {
+                propertyId: "files",
+                content: {
+                  type: "file",
+                  mimeType: "application/pdf",
+                  fileName: "smlouva",
+                },
+              },
+            ],
+          },
+          {
+            ...row("docx", "document"),
+            fields: [
+              {
+                propertyId: "files",
+                content: {
+                  type: "file",
+                  mimeType:
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  fileName: "Dodatek 1",
+                },
+              },
+            ],
+          },
+          { ...row("f1", "folder"), fields: [] },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await listMatterEntities({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "m",
+      cursor: null,
+      fileFieldId: "files",
+    });
+    expect(
+      result.isOk()
+        ? result.value.items.map((entity) => entity.fileType)
+        : result.error._tag,
+    ).toEqual(["PDF", "DOCX", undefined]);
+    const [call] = calls;
+    expect(call !== "token" && call?.body).toMatchObject({
+      fieldIds: ["files"],
+    });
+  });
+
+  test("a format is the media type's name, else the file name's extension", () => {
+    expect(fileTypeOf("application/pdf; charset=binary", undefined)).toBe(
+      "PDF",
+    );
+    expect(fileTypeOf("application/octet-stream", "výpis.Xlsx")).toBe("XLSX");
+    expect(fileTypeOf(undefined, "bez přípony")).toBeUndefined();
+  });
+
   test("the first page carries no cursor", async () => {
     const { fetch, calls } = server(() =>
       Response.json({ items: [], limit: 50, nextCursor: null }),
@@ -125,6 +189,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(fetch),
       workspaceId: "m",
       cursor: null,
+      fileFieldId: null,
     });
     const [call] = calls;
     expect(call !== "token" && call?.body).not.toHaveProperty("cursor");
@@ -137,6 +202,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(refused.fetch),
       workspaceId: "m",
       cursor: null,
+      fileFieldId: null,
     });
     expect(result.isErr() && result.error._tag).toBe("ApiRequestError");
     expect(refused.calls).toHaveLength(3);
@@ -150,6 +216,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(fetch),
       workspaceId: "m",
       cursor: null,
+      fileFieldId: null,
     });
     expect(result.isErr() && result.error._tag).toBe("ApiRequestError");
   });

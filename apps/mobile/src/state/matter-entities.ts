@@ -1,4 +1,4 @@
-import type { Result } from "better-result";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { Fetch } from "@/connection/http";
@@ -30,6 +30,22 @@ const entityRowSchema = v.object({
   createdBy: v.nullish(v.string()),
   /** The folder it sits in, or none at the matter's top level. */
   parentId: v.nullish(v.string()),
+  /** The one column asked for: the documents column, whose file names the type. */
+  fields: v.optional(
+    v.array(
+      v.object({
+        propertyId: v.string(),
+        content: v.nullish(
+          v.looseObject({
+            type: v.string(),
+            mimeType: v.optional(v.string()),
+            fileName: v.optional(v.string()),
+          }),
+        ),
+      }),
+    ),
+    [],
+  ),
 });
 
 const entityPageSchema = v.object({
@@ -37,7 +53,65 @@ const entityPageSchema = v.object({
   nextCursor: v.nullable(v.string()),
 });
 
-export type MatterEntity = v.InferOutput<typeof entityRowSchema>;
+type EntityRow = v.InferOutput<typeof entityRowSchema>;
+
+/**
+ * A row as the screen shows it: a document carries its file's format
+ * ("PDF", "DOCX"), read from the matter's documents column.
+ */
+export type MatterEntity = Omit<EntityRow, "fields"> & {
+  readonly fileType?: string | undefined;
+};
+
+/** Formats named by their media type; any other is named by its extension. */
+const FILE_TYPE_OF_MIME: Readonly<Record<string, string>> = {
+  "application/pdf": "PDF",
+  "application/msword": "DOC",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "DOCX",
+  "application/vnd.ms-excel": "XLS",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+  "application/vnd.ms-powerpoint": "PPT",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+    "PPTX",
+  "application/rtf": "RTF",
+  "text/plain": "TXT",
+  "text/csv": "CSV",
+  "message/rfc822": "EML",
+  "application/vnd.ms-outlook": "MSG",
+};
+
+/**
+ * A file's format as a short tag: the known name of its media type, else
+ * its name's extension in capitals, else none. Formats are not translated.
+ */
+export const fileTypeOf = (
+  mimeType: string | undefined,
+  fileName: string | undefined,
+): string | undefined => {
+  const media = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
+  const known = media === undefined ? undefined : FILE_TYPE_OF_MIME[media];
+  if (known !== undefined) {
+    return known;
+  }
+  const extension = fileName?.match(/\.([a-z0-9]{1,5})$/iu)?.[1];
+  return extension?.toUpperCase();
+};
+
+const toMatterEntity = (
+  { fields, ...row }: EntityRow,
+  fileFieldId: string | null,
+): MatterEntity => {
+  const file =
+    fileFieldId === null
+      ? undefined
+      : fields.find((field) => field.propertyId === fileFieldId)?.content;
+  const fileType =
+    file?.type === "file"
+      ? fileTypeOf(file.mimeType, file.fileName)
+      : undefined;
+  return fileType === undefined ? row : { ...row, fileType };
+};
 
 export type KnownEntityKind = "folder" | "document" | "task";
 
@@ -45,7 +119,10 @@ export type KnownEntityKind = "folder" | "document" | "task";
 export const isKnownEntityKind = (kind: string): kind is KnownEntityKind =>
   kind === "folder" || kind === "document" || kind === "task";
 
-export type EntityPage = v.InferOutput<typeof entityPageSchema>;
+export type EntityPage = {
+  readonly items: MatterEntity[];
+  readonly nextCursor: string | null;
+};
 
 /**
  * One page of a matter's documents, folders and tasks, in the matter's own
@@ -56,25 +133,36 @@ export const listMatterEntities = async ({
   source,
   workspaceId,
   cursor,
+  fileFieldId,
 }: {
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
   readonly workspaceId: string;
   readonly cursor: string | null;
+  /** The matter's documents column, when known: the one column asked for. */
+  readonly fileFieldId: string | null;
 }): Promise<Result<EntityPage, ApiError>> =>
-  await requestApi({
-    fetch,
-    source,
-    path: entitiesPath(workspaceId),
-    schema: entityPageSchema,
-    body: {
-      limit: ENTITY_PAGE_SIZE,
-      excludedKinds: ["message", "link"],
-      // No property columns: the rows show built-in fields only.
-      fieldMode: "visible",
-      fieldIds: [],
-      ...(cursor === null ? {} : { cursor }),
-    },
+  await Result.gen(async function* () {
+    const page = yield* Result.await(
+      requestApi({
+        fetch,
+        source,
+        path: entitiesPath(workspaceId),
+        schema: entityPageSchema,
+        body: {
+          limit: ENTITY_PAGE_SIZE,
+          excludedKinds: ["message", "link"],
+          // The built-in fields, and the documents column for each file's type.
+          fieldMode: "visible",
+          fieldIds: fileFieldId === null ? [] : [fileFieldId],
+          ...(cursor === null ? {} : { cursor }),
+        },
+      }),
+    );
+    return Result.ok({
+      items: page.items.map((row) => toMatterEntity(row, fileFieldId)),
+      nextCursor: page.nextCursor,
+    });
   });
 
 /** Pages joined in order; a row a later page repeats keeps its first place. */
