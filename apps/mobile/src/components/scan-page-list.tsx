@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
+
 import { GripVerticalIcon, MinusIcon, RotateCwIcon } from "@/icons.gen";
 import { dropIndex, rowShift } from "@/state/scan-pages";
 import type { ReviewPage } from "@/state/scan-pages";

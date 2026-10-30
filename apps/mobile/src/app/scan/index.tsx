@@ -12,11 +12,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { screenStyles } from "@/components/empty-state-screen";
-import { ScanPageList } from "@/components/scan-page-list";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
+
+import { screenStyles } from "@/components/empty-state-screen";
+import { ScanPageList } from "@/components/scan-page-list";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import { epochMilliseconds } from "@/connection/clock";
 import { buildPdf, discardScans, scanPages } from "@/native/document-scanner";
