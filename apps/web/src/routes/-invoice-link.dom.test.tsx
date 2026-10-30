@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, setSystemTime, test } from "bun:test";
 import * as v from "valibot";
 
 import { cents } from "@stll/money";
@@ -18,7 +18,8 @@ const { QueryClient, QueryClientProvider } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { default: messages } = await import("@/i18n/langs/en.json");
-const { InvoiceSummary } = await import("./invoice-link");
+const { InvoiceSummary, invoiceLinkViewOptions } =
+  await import("./invoice-link");
 
 const invoice = {
   title: "Invoice 2026-18",
@@ -85,5 +86,48 @@ test("the amount-due label and value are emphasised without changing fact order"
   );
   for (const row of rows.slice(0, -1)) {
     expect(row.querySelector(".font-semibold")).toBeNull();
+  }
+});
+
+test("a revisit after the freshness window shows the current balance and payment request", async () => {
+  const client = new QueryClient();
+  const opened = {
+    ...invoice,
+    payment: {
+      label: "Payment",
+      fields: [{ label: "Amount", value: "EUR 120.00" }],
+      accountNumber: null,
+      qrSvg: "<svg>120</svg>",
+    },
+  } satisfies ComponentProps<typeof InvoiceSummary>["invoice"];
+  const partlyPaid = {
+    ...opened,
+    outstandingAmount: cents(2000),
+    payment: {
+      ...opened.payment,
+      fields: [{ label: "Amount", value: "EUR 20.00" }],
+      qrSvg: "<svg>20</svg>",
+    },
+  } satisfies ComponentProps<typeof InvoiceSummary>["invoice"];
+  let current: ComponentProps<typeof InvoiceSummary>["invoice"] = opened;
+  let views = 0;
+  const options = invoiceLinkViewOptions("0f".repeat(32), async () => {
+    views += 1;
+    return await Promise.resolve(current);
+  });
+  try {
+    setSystemTime(new Date("2026-10-30T10:00:00Z"));
+    expect(await client.fetchQuery(options)).toEqual(opened);
+    current = partlyPaid;
+    // Repeat renders inside the window reuse the audited view.
+    setSystemTime(new Date("2026-10-30T10:00:30Z"));
+    expect(await client.fetchQuery(options)).toEqual(opened);
+    expect(views).toBe(1);
+    setSystemTime(new Date("2026-10-30T10:01:01Z"));
+    expect(await client.fetchQuery(options)).toEqual(partlyPaid);
+    expect(views).toBe(2);
+  } finally {
+    setSystemTime();
+    client.clear();
   }
 });

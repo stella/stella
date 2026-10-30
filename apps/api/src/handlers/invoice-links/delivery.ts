@@ -13,6 +13,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resolveClientIp } from "@/api/lib/client-ip";
 import { recordGatedAuditEvent } from "@/api/lib/db/audit-recording";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isOrganizationFeatureEnabled } from "@/api/lib/feature-access/organization";
 
 type InvoiceLinkDelivery =
   | { type: "view" }
@@ -60,6 +61,16 @@ export const deliverInvoiceLink = async <
         return panic("Unhandled invoice link delivery kind");
     }
   })();
+  // Authority can end while the document is prepared; the final gate rechecks
+  // deployment and the organization's grant before anything is recorded.
+  if (
+    !isOrganizationFeatureEnabled({
+      featureId: "invoice-links",
+      organizationId: caller.organizationId,
+    })
+  ) {
+    return Result.err(linkUnavailable());
+  }
   const live = await caller.scopedDb(
     async (tx) =>
       await recordGatedAuditEvent({

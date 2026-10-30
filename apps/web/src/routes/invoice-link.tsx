@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { createFileRoute, useLocation } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -20,6 +20,7 @@ import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { invoiceLinkDownload, invoiceLinkView } from "@/lib/api";
+import { STALE_TIME } from "@/lib/consts";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
@@ -55,6 +56,23 @@ const viewInvoice = invoiceLinkView.open;
 
 type InvoiceLinkView = Awaited<ReturnType<typeof viewInvoice>>;
 
+/**
+ * The link's summary, amount due and payment request. Each view is audited and
+ * rate limited, so repeat renders reuse it for a minute; a later revisit or
+ * refocus reads the current balance instead of a cached one.
+ */
+export const invoiceLinkViewOptions = (
+  token: string | null,
+  view: typeof viewInvoice = viewInvoice,
+) =>
+  queryOptions({
+    queryKey: ["invoice-link", token],
+    enabled: token !== null,
+    retry: false,
+    staleTime: STALE_TIME.ONE.MINUTE,
+    queryFn: async () => (token === null ? null : await view(token)),
+  });
+
 const downloadInvoiceFile = async (
   token: string,
   file: InvoiceLinkFile,
@@ -79,13 +97,7 @@ function InvoiceLinkPage() {
   const token = useLocation({
     select: (location) => invoiceLinkTokenFromHash(location.hash),
   });
-  const invoice = useQuery({
-    queryKey: ["invoice-link", token],
-    enabled: token !== null,
-    retry: false,
-    staleTime: Number.POSITIVE_INFINITY,
-    queryFn: async () => (token === null ? null : await viewInvoice(token)),
-  });
+  const invoice = useQuery(invoiceLinkViewOptions(token));
 
   return (
     <div className="flex min-h-full flex-1 justify-center px-4 py-10">

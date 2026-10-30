@@ -2445,6 +2445,12 @@ describe("opening an invoice link", () => {
     ["pdf", "expired"],
     ["e_invoice", "revoked"],
     ["e_invoice", "expired"],
+    ["view", "undeployed"],
+    ["pdf", "undeployed"],
+    ["e_invoice", "undeployed"],
+    ["view", "ungranted"],
+    ["pdf", "ungranted"],
+    ["e_invoice", "ungranted"],
   ] as const)(
     "%s refuses delivery and access audit when the link becomes %s after its work",
     async (responseKind, invalidation) => {
@@ -2455,7 +2461,11 @@ describe("opening an invoice link", () => {
       const { token } = await createStandaloneLink(invoiceId, { expiresAt });
       let completedWork = false;
       const invalidate = async () => {
-        if (invalidation === "revoked") {
+        if (invalidation === "undeployed") {
+          testState.setConfig("FEATURE_INVOICE_LINKS", false);
+        } else if (invalidation === "ungranted") {
+          testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+        } else if (invalidation === "revoked") {
           await testDb
             .update(invoiceSends)
             .set({ revokedAt: new Date() })
