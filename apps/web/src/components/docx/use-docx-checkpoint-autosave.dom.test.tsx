@@ -3,6 +3,8 @@ import { afterAll, afterEach, expect, jest, mock, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import type { EditSession } from "./use-edit-session";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
 
 const { act, cleanup, renderHook } = await import("@testing-library/react");
@@ -28,7 +30,12 @@ test("a settled edit checkpoints without requestIdleCallback", async () => {
   try {
     const buffer = new ArrayBuffer(4);
     const save = mock(async () => buffer);
-    const saveCheckpoint = mock(async () => "saved" as const);
+    const saveCheckpoint = mock(
+      async () =>
+        ({ type: "saved" }) satisfies Awaited<
+          ReturnType<EditSession["saveCheckpoint"]>
+        >,
+    );
     const setAutosaveStatus = mock(() => {});
     const hasSessionChangesRef = { current: false };
     const { result } = renderHook(() =>
@@ -40,7 +47,7 @@ test("a settled edit checkpoints without requestIdleCallback", async () => {
         markDirty: mock(() => {}),
         saveCheckpoint,
         setAutosaveStatus,
-        timingSurface: "fullView",
+        timingSurface: "full-view",
       }),
     );
     act(() => result.current.handleChange());

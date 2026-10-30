@@ -11,7 +11,7 @@ import { startKeyActionTimer } from "@/lib/analytics/key-action-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { DocumentTimingSurface } from "@/lib/analytics/types";
 import { detached } from "@/lib/detached";
-import { scheduleIdle } from "@/lib/schedule-idle";
+import { scheduleIdle } from "@/lib/platform/schedule-idle";
 
 import {
   createTrailingSingleFlight,

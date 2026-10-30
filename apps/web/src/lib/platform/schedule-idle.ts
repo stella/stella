@@ -8,7 +8,10 @@ export const scheduleIdle = (
   { browser = window, timeout }: ScheduleIdleOptions = {},
 ): (() => void) => {
   if (typeof browser.requestIdleCallback === "function") {
-    const handle = browser.requestIdleCallback(callback, { timeout });
+    const handle = browser.requestIdleCallback(
+      callback,
+      timeout === undefined ? undefined : { timeout },
+    );
     return () => browser.cancelIdleCallback(handle);
   }
 

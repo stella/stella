@@ -88,7 +88,7 @@ test.each([
 test("the scheduler owns the native idle APIs", async () => {
   expect(
     await lintIdleCalls(
-      "apps/web/src/lib/schedule-idle.ts",
+      "apps/web/src/lib/platform/schedule-idle.ts",
       "window.requestIdleCallback(work); window.cancelIdleCallback(handle);",
     ),
   ).toEqual([]);

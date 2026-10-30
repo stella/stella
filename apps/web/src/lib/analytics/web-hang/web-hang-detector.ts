@@ -13,7 +13,7 @@ import {
   resetPersistedUiState,
 } from "@/lib/analytics/web-hang/persisted-ui-state";
 import { resolveWebRouteTemplate } from "@/lib/analytics/web-hang/web-route-template";
-import { scheduleIdle } from "@/lib/schedule-idle";
+import { scheduleIdle } from "@/lib/platform/schedule-idle";
 import { createEphemeralId } from "@/lib/uuid";
 
 export const HANG_HEARTBEAT_MS = 3000;

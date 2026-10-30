@@ -86,7 +86,7 @@ const nonAnonymousHandlerFactories = factoriesWhere(
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
   "Public SSR modules must use a hydration-safe adapter with a deterministic server snapshot.";
 const IDLE_SCHEDULER_MESSAGE =
-  "Use scheduleIdle from '@/lib/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
+  "Use scheduleIdle from '@/lib/platform/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
 const idleCallbackGlobals = ["requestIdleCallback", "cancelIdleCallback"].map(
   (name) => ({ name, message: IDLE_SCHEDULER_MESSAGE }),
 );
@@ -2351,7 +2351,7 @@ const config = defineConfig({
     ...libraryOverrides,
     {
       files: ["apps/web/src/**/*.{ts,tsx}"],
-      excludeFiles: ["apps/web/src/lib/schedule-idle.ts"],
+      excludeFiles: ["apps/web/src/lib/platform/schedule-idle.ts"],
       rules: {
         "no-restricted-globals": [
           "error",

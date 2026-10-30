@@ -30,7 +30,7 @@ import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
-import { scheduleIdle } from "@/lib/schedule-idle";
+import { scheduleIdle } from "@/lib/platform/schedule-idle";
 import "@/components/inspector/inspector-persistence-references";
 import {
   decisionChatKey,

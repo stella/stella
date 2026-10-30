@@ -83,8 +83,8 @@ for (const timeout of [undefined, 250]) {
     try {
       const callback = mock(() => {});
       const cancelled = mock(() => {});
-      scheduleIdle(callback, { timeout });
-      scheduleIdle(cancelled, { timeout })();
+      scheduleIdle(callback, timeout === undefined ? {} : { timeout });
+      scheduleIdle(cancelled, timeout === undefined ? {} : { timeout })();
       expect(callback).not.toHaveBeenCalled();
       if (timeout !== undefined) {
         jest.advanceTimersByTime(timeout - 1);
