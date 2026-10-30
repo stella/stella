@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "إنشاء ذكريات المساعد وتحديثها",
     "scopeOfflineAccess": "إبقاء تسجيل دخولك نشطًا دون الحاجة إلى موافقة متكررة",
     "scopeOnboarding": "ضبط الولايات القضائية للممارسة لمؤسستك",
+    "scopeOrganizationCreate": "إنشاء مؤسسات جديدة ستكون مالكها",
     "scopeProfile": "الوصول إلى معلومات ملفك الشخصي",
     "scopeRead": "قراءة مستنداتك وملفاتك القانونية وجهات اتصالك",
     "scopeReadAnonymized": "قراءة النسخ المُخفاة الهوية من مستنداتك وملفاتك القانونية",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "تعذّر التحقق من الرمز",
     "matterNotFound": "لم يتم العثور على الملف القانوني",
     "partyAlreadyExists": "جهة الاتصال لديها هذا الدور في الملف القانوني بالفعل",
-    "slugAlreadyTaken": "هذا المعرّف مستخدم بالفعل",
     "uploadFailed": "فشل الرفع"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "اكتب {email} للتأكيد",
       "updateRole": "تحديث الدور"
     },
+    "newOrganization": "مؤسسة جديدة",
+    "newOrganizationDescription": "أنشئ مؤسسة ستكون مالكها.",
     "roles": {
       "admin": "المسؤول",
       "descriptions": {

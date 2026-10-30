@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Assistendi mälestuste loomine ja muutmine",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
+    "scopeOrganizationCreate": "Luua uusi organisatsioone, mille omanikuks saad sina",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
     "scopeRead": "Lugeda teie dokumente, toimikuid ja kontakte",
     "scopeReadAnonymized": "Lugeda teie dokumentide ja toimikute anonüümitud versioone",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Koodi kinnitamine ebaõnnestus",
     "matterNotFound": "Toimikut ei leitud",
     "partyAlreadyExists": "Kontaktil on selles toimikus juba see roll",
-    "slugAlreadyTaken": "See slug on juba kasutusel",
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Kinnitamiseks tippige {email}",
       "updateRole": "Uuenda roll"
     },
+    "newOrganization": "Uus organisatsioon",
+    "newOrganizationDescription": "Loo organisatsioon, mille omanikuks saad sina.",
     "roles": {
       "admin": "Administraator",
       "descriptions": {

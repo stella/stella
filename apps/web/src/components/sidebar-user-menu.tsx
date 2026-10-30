@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -30,6 +32,7 @@ import {
 } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
+import { CreateOrganizationDialog } from "@/components/create-organization-dialog";
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
@@ -79,6 +82,7 @@ type SidebarUserMenuProps = {
  * stays identical on both surfaces. */
 export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const t = useTranslations();
+  const [createOpen, setCreateOpen] = useState(false);
   const navigate = useNavigate();
   const signOut = useSignOut();
   const sidebarLayout = useSidebarLayout();
@@ -165,6 +169,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
         </Tooltip>
         <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
           <OrganizationMenuSection
+            onCreate={() => setCreateOpen(true)}
             activeOrganizationId={user.activeOrganizationId}
             role={role}
             userId={user.id}
@@ -287,11 +292,19 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           </MenuItem>
         </MenuPopup>
       </Menu>
+      {createOpen && (
+        <CreateOrganizationDialog
+          open
+          onOpenChange={setCreateOpen}
+          userId={user.id}
+        />
+      )}
     </SidebarMenuItem>
   );
 };
 
 type OrganizationMenuSectionProps = {
+  onCreate: () => void;
   activeOrganizationId: string;
   role: Role | undefined;
   userId: string;
@@ -304,6 +317,7 @@ type OrganizationMenuSectionProps = {
  * sidebar reads the active organization and the switchable ones from one cache
  * entry, and therefore one `organization/list` request per route. */
 const OrganizationMenuSection = ({
+  onCreate,
   activeOrganizationId,
   role,
   userId,
@@ -364,6 +378,10 @@ const OrganizationMenuSection = ({
             <OrganizationRoleBadge role={role} />
           </MenuGroupLabel>
         </MenuGroup>
+        <MenuItem onClick={onCreate}>
+          <BuildingIcon />
+          {t("organization.newOrganization")}
+        </MenuItem>
         <MenuSeparator />
       </>
     );
@@ -406,6 +424,10 @@ const OrganizationMenuSection = ({
           </MenuGroup>
         </MenuSubPopup>
       </MenuSub>
+      <MenuItem onClick={onCreate}>
+        <BuildingIcon />
+        {t("organization.newOrganization")}
+      </MenuItem>
       <MenuSeparator />
     </>
   );

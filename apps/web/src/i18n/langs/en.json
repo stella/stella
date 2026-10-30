@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Create and update assistant memories",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
+    "scopeOrganizationCreate": "Create new organizations that you will own",
     "scopeProfile": "Access your profile information",
     "scopeRead": "Read your documents, matters, and contacts",
     "scopeReadAnonymized": "Read anonymized versions of your documents and matters",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Failed to verify code",
     "matterNotFound": "Matter not found",
     "partyAlreadyExists": "Contact already has this role on the matter",
-    "slugAlreadyTaken": "This slug is already taken",
     "uploadFailed": "Upload failed"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Type {email} to confirm",
       "updateRole": "Update role"
     },
+    "newOrganization": "New organization",
+    "newOrganizationDescription": "Create an organization that you will own.",
     "roles": {
       "admin": "Admin",
       "descriptions": {

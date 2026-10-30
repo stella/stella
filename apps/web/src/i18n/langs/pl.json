@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Tworzenie i aktualizowanie pamięci asystenta",
     "scopeOfflineAccess": "Utrzymywanie Cię zalogowanym bez konieczności ponownej zgody",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
+    "scopeOrganizationCreate": "Tworzenie nowych organizacji, których będziesz właścicielem",
     "scopeProfile": "Dostęp do Twoich danych profilowych",
     "scopeRead": "Odczyt Twoich dokumentów, spraw i kontaktów",
     "scopeReadAnonymized": "Odczyt zanonimizowanych wersji Twoich dokumentów i spraw",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Nie udało się zweryfikować kodu",
     "matterNotFound": "Sprawa nie została znaleziona",
     "partyAlreadyExists": "Kontakt ma już tę rolę w sprawie",
-    "slugAlreadyTaken": "Ten slug jest już zajęty",
     "uploadFailed": "Przesyłanie nie powiodło się"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Wpisz {email}, aby potwierdzić",
       "updateRole": "Zaktualizuj rolę"
     },
+    "newOrganization": "Nowa organizacja",
+    "newOrganizationDescription": "Utwórz organizację, której będziesz właścicielem.",
     "roles": {
       "admin": "Administrator",
       "descriptions": {

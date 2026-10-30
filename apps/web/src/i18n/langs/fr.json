@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Créer et modifier les souvenirs de l’assistant",
     "scopeOfflineAccess": "Vous garder connecté sans approbation répétée",
     "scopeOnboarding": "Configurer les juridictions d’exercice de votre organisation",
+    "scopeOrganizationCreate": "Créer de nouvelles organisations dont vous serez propriétaire",
     "scopeProfile": "Accéder aux informations de votre profil",
     "scopeRead": "Lire vos documents, dossiers et contacts",
     "scopeReadAnonymized": "Lire les versions anonymisées de vos documents et dossiers",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Impossible de vérifier le code",
     "matterNotFound": "Dossier introuvable",
     "partyAlreadyExists": "Ce contact a déjà ce rôle dans le dossier",
-    "slugAlreadyTaken": "Ce slug est déjà utilisé",
     "uploadFailed": "Échec de l'import"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Saisissez {email} pour confirmer",
       "updateRole": "Mettre à jour le rôle"
     },
+    "newOrganization": "Nouvelle organisation",
+    "newOrganizationDescription": "Créez une organisation dont vous serez propriétaire.",
     "roles": {
       "admin": "Administrateur",
       "descriptions": {

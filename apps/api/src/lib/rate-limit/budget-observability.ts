@@ -45,6 +45,7 @@ export const BUDGET_NAMES = [
   "mcp.translate.user",
   "mcp.upload.user",
   "mcp.gateway.user_client",
+  "organizations.create.user",
   "skills.source.user",
   "skills.source.address",
 ] as const;

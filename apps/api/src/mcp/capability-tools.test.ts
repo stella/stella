@@ -1032,12 +1032,22 @@ describe("account export capability authority", () => {
   };
 
   test("catalog binds session capabilities to explicit account grants", () => {
-    expect(entries.map(({ id }) => id).toSorted()).toEqual([
-      "account-exports.create",
-      "account-exports.download.get",
-      "account-exports.get",
-      "account-exports.status.get",
-    ]);
+    const accountEntries = capabilityCatalog.filter(
+      (entry) => entry.accountScope !== undefined,
+    );
+    expect(accountEntries.map(({ id }) => id).toSorted()).toEqual(
+      capabilityCatalog
+        .filter((entry) => entry.handlerKind === "session")
+        .map(({ id }) => id)
+        .toSorted(),
+    );
+    expect(
+      accountEntries.find(({ id }) => id === "organizations.create")
+        ?.accountScope,
+    ).toBe("stella:organization_create");
+    for (const entry of accountEntries) {
+      expect(entry.scope).toBe(entry.accountScope);
+    }
     expect(
       entries.filter(({ access }) => access === "write").map(({ id }) => id),
     ).toEqual(["account-exports.create"]);
@@ -1755,7 +1765,9 @@ describe("describe_capability", () => {
       credential: { type: "oauth_client", clientId: "catalog-schema-probe" },
       grantedScopes: [
         ...baseContext.grantedScopes,
-        ...Object.values(ACCOUNT_EXPORT_SCOPES),
+        ...capabilityCatalog.flatMap((entry) =>
+          entry.accountScope === undefined ? [] : [entry.accountScope],
+        ),
       ],
     } satisfies AuthorizedMcpRequestContext;
     const drift: string[] = [];
@@ -3767,9 +3779,9 @@ describe("capability executor deployment feature gate", () => {
           !isFeatureEnabled(snapshot, entry.featureId, context),
       )
       .map(({ id }) => id);
-    // Account exports also require account consent, which this caller lacks.
+    // Account capabilities require their declared consent, which this caller lacks.
     const accountConsentIds = capabilityCatalog
-      .filter((entry) => entry.id.startsWith("account-exports."))
+      .filter((entry) => entry.accountScope !== undefined)
       .map(({ id }) => id);
     expect(
       [

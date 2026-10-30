@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Erinnerungen des Assistenten erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
+    "scopeOrganizationCreate": "Neue Organisationen erstellen, deren Eigentümer Sie sind",
     "scopeProfile": "Auf Ihre Profilinformationen zugreifen",
     "scopeRead": "Ihre Dokumente, Akten und Kontakte lesen",
     "scopeReadAnonymized": "Anonymisierte Versionen Ihrer Dokumente und Akten lesen",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Code konnte nicht verifiziert werden",
     "matterNotFound": "Akte nicht gefunden",
     "partyAlreadyExists": "Kontakt hat bereits diese Rolle in der Akte",
-    "slugAlreadyTaken": "Dieser Slug ist bereits vergeben",
     "uploadFailed": "Upload fehlgeschlagen"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Geben Sie zur Bestätigung {email} ein",
       "updateRole": "Rolle aktualisieren"
     },
+    "newOrganization": "Neue Organisation",
+    "newOrganizationDescription": "Erstellen Sie eine Organisation, deren Eigentümer Sie sind.",
     "roles": {
       "admin": "Administrator",
       "descriptions": {

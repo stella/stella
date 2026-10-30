@@ -107,6 +107,55 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     ).toBe(true);
   });
 
+  test("organization creation shares one user budget across organizations", async () => {
+    expect(resolveInvokeRateLimit("organizations.create")).toEqual({
+      windowMs: 3_600_000,
+      max: 10,
+    });
+    const counts = new Map<string, number>();
+    const consumeOrganizationCreate = async ({
+      userId,
+    }: {
+      userId: ReturnType<typeof user>;
+    }) => {
+      const count = (counts.get(userId) ?? 0) + 1;
+      counts.set(userId, count);
+      return { ok: count <= 10, retryAfterSeconds: 3600 };
+    };
+    for (let index = 0; index < 10; index += 1) {
+      expect(
+        (
+          await consumeInvokeCapabilityRateLimit({
+            capabilityId: "organizations.create",
+            organizationId: org(`org_${index}`),
+            userId: user("creator"),
+            consumeOrganizationCreate,
+          })
+        ).ok,
+      ).toBe(true);
+    }
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId: "organizations.create",
+          organizationId: org("another_org"),
+          userId: user("creator"),
+          consumeOrganizationCreate,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId: "organizations.create",
+          organizationId: org("another_org"),
+          userId: user("other_creator"),
+          consumeOrganizationCreate,
+        })
+      ).ok,
+    ).toBe(true);
+  });
+
   test("skill source capabilities share one per-user budget across organizations", async () => {
     const max = resolveInvokeRateLimit("skills.discover").max;
     const counts = new Map<string, number>();

@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Vytváření a úprava paměti asistenta",
     "scopeOfflineAccess": "Udržení vašeho přihlášení bez nutnosti opakovaného souhlasu",
     "scopeOnboarding": "Nastavit jurisdikce, ve kterých vaše organizace působí",
+    "scopeOrganizationCreate": "Vytvářet nové organizace, jejichž vlastníkem budete",
     "scopeProfile": "Přístup k informacím vašeho profilu",
     "scopeRead": "Čtení vašich dokumentů, spisů a kontaktů",
     "scopeReadAnonymized": "Čtení anonymizovaných verzí vašich dokumentů a spisů",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Nepodařilo se ověřit kód",
     "matterNotFound": "Spis nenalezen",
     "partyAlreadyExists": "Kontakt již má tuto roli ve spisu",
-    "slugAlreadyTaken": "Tento slug je již obsazený",
     "uploadFailed": "Nahrávání selhalo"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Pro potvrzení napište {email}",
       "updateRole": "Aktualizovat roli"
     },
+    "newOrganization": "Nová organizace",
+    "newOrganizationDescription": "Vytvořte organizaci, jejímž vlastníkem budete.",
     "roles": {
       "admin": "Administrátor",
       "descriptions": {

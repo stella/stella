@@ -1270,7 +1270,7 @@ const hasReplayConfig = (source: string) => {
     if (
       !ts.isCallExpression(node) ||
       !ts.isIdentifier(node.expression) ||
-      !/^createSafe(?:Root)?Handler$/u.test(node.expression.text)
+      !/^createSafe(?:Root|Session)?Handler$/u.test(node.expression.text)
     ) {
       return;
     }
@@ -1317,6 +1317,12 @@ test("every create route and capability declares JSON request replay or a reason
     path: "/v1/api-keys",
     file: "src/handlers/api-keys/create.ts",
     replay: false,
+  });
+  expect(mounted).toContainEqual({
+    method: "POST",
+    path: "/v1/organizations",
+    file: "src/handlers/organizations/create.ts",
+    replay: true,
   });
   const creates = new Set(mounted.map(({ file }) => file));
   for (const file of new Bun.Glob(

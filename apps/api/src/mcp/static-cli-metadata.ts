@@ -443,6 +443,10 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["matter", "remove-member"],
       scope: "admin_write",
     },
+    create_organization: {
+      command: ["organization", "create"],
+      scope: "organization_create",
+    },
     update_organization_settings: {
       command: ["organization", "update-settings"],
       scope: "admin_write",

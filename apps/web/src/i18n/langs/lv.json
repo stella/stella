@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Izveidot un atjaunināt asistenta atmiņu",
     "scopeOfflineAccess": "Paturēt jūs pieslēgtu bez atkārtotas apstiprināšanas",
     "scopeOnboarding": "Konfigurēt jūsu organizācijas prakses jurisdikcijas",
+    "scopeOrganizationCreate": "Veidot jaunas organizācijas, kuru īpašnieks būsiet jūs",
     "scopeProfile": "Piekļūt jūsu profila informācijai",
     "scopeRead": "Lasīt jūsu dokumentus, lietas un kontaktus",
     "scopeReadAnonymized": "Lasīt jūsu dokumentu un lietu anonimizētās versijas",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Neizdevās verificēt kodu",
     "matterNotFound": "Lieta nav atrasta",
     "partyAlreadyExists": "Kontaktam jau ir šī loma lietā",
-    "slugAlreadyTaken": "Šis slug jau ir aizņemts",
     "uploadFailed": "Augšupielāde neizdevās"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Ierakstiet {email}, lai apstiprinātu",
       "updateRole": "Atjaunināt lomu"
     },
+    "newOrganization": "Jauna organizācija",
+    "newOrganizationDescription": "Izveidojiet organizāciju, kuras īpašnieks būsiet jūs.",
     "roles": {
       "admin": "Administrators",
       "descriptions": {

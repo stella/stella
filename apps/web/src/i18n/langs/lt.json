@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Kurti ir atnaujinti asistento atmintį",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
+    "scopeOrganizationCreate": "Kurti naujas organizacijas, kurių savininkas būsite jūs",
     "scopeProfile": "Pasiekti jūsų profilio informaciją",
     "scopeRead": "Skaityti jūsų dokumentus, bylas ir kontaktus",
     "scopeReadAnonymized": "Skaityti anonimizuotas jūsų dokumentų ir bylų versijas",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Nepavyko patvirtinti kodo",
     "matterNotFound": "Byla nerasta",
     "partyAlreadyExists": "Kontaktas jau turi šią rolę byloje",
-    "slugAlreadyTaken": "Šis slug jau užimtas",
     "uploadFailed": "Įkėlimas nepavyko"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "Įveskite {email}, kad patvirtintumėte",
       "updateRole": "Atnaujinti rolę"
     },
+    "newOrganization": "Nauja organizacija",
+    "newOrganizationDescription": "Sukurkite organizaciją, kurios savininkas būsite jūs.",
     "roles": {
       "admin": "Administratorius",
       "descriptions": {

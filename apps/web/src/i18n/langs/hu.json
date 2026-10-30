@@ -2420,6 +2420,7 @@
     "scopeMemoryWrite": "Az asszisztens emlékeinek létrehozása és módosítása",
     "scopeOfflineAccess": "A bejelentkezés fenntartása ismételt jóváhagyás nélkül",
     "scopeOnboarding": "A szervezet praxisának joghatóságainak beállítása",
+    "scopeOrganizationCreate": "Új szervezetek létrehozása, amelyeknek Ön lesz a tulajdonosa",
     "scopeProfile": "Hozzáférés a profiladataihoz",
     "scopeRead": "A dokumentumok, ügyek és kapcsolatok olvasása",
     "scopeReadAnonymized": "A dokumentumok és ügyek anonimizált változatainak olvasása",
@@ -2945,7 +2946,6 @@
     "failedToVerifyOtp": "Nem sikerült ellenőrizni a kódot",
     "matterNotFound": "Ügy nem található",
     "partyAlreadyExists": "A kontakt már rendelkezik ezzel a szereppel az ügyben",
-    "slugAlreadyTaken": "Ez a slug már foglalt",
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
@@ -4743,6 +4743,8 @@
       "typeEmailToConfirm": "A megerősítéshez írja be ezt: {email}",
       "updateRole": "Szerepkör frissítése"
     },
+    "newOrganization": "Új szervezet",
+    "newOrganizationDescription": "Hozzon létre egy szervezetet, amelynek Ön lesz a tulajdonosa.",
     "roles": {
       "admin": "Adminisztrátor",
       "descriptions": {

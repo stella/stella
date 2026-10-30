@@ -12,9 +12,10 @@ import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth-client";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -151,14 +152,23 @@ const createOrganization = async (identity: DevQuickStartIdentity) => {
       return listed.data;
     },
     createOrganization: async ({ organizationName, organizationSlug }) => {
-      const created = await authClient.organization.create({
-        name: organizationName,
-        slug: organizationSlug,
-      });
-      if (created.error) {
-        throw toAuthClientError(created.error);
-      }
-      return created.data.id;
+      const created = await invokeCapability(
+        "organizations.create",
+        async (request) =>
+          unwrapApiResponse(
+            await api.organizations.post(
+              { name: organizationName, slug: organizationSlug },
+              {
+                ...request,
+                headers: {
+                  "Idempotency-Key": organizationSlug,
+                  ...request.headers,
+                },
+              },
+            ),
+          ),
+      );
+      return created.organizationId;
     },
   });
   if (Result.isError(resolved)) {

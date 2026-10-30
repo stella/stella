@@ -46,6 +46,14 @@
       "estimatedTokens": 2316
     },
     {
+      "name": "create_organization",
+      "nameChars": 19,
+      "descriptionChars": 105,
+      "inputSchemaChars": 340,
+      "totalChars": 464,
+      "estimatedTokens": 184
+    },
+    {
       "name": "create_reader_annotation",
       "nameChars": 24,
       "descriptionChars": 327,
@@ -161,9 +169,9 @@
       "name": "list_audit_log",
       "nameChars": 14,
       "descriptionChars": 389,
-      "inputSchemaChars": 1256,
-      "totalChars": 1659,
-      "estimatedTokens": 658
+      "inputSchemaChars": 1052,
+      "totalChars": 1455,
+      "estimatedTokens": 573
     },
     {
       "name": "list_capabilities",
@@ -545,9 +553,9 @@
       "name": "search_boe_legislation",
       "nameChars": 22,
       "descriptionChars": 547,
-      "inputSchemaChars": 1849,
-      "totalChars": 2418,
-      "estimatedTokens": 961
+      "inputSchemaChars": 1591,
+      "totalChars": 2160,
+      "estimatedTokens": 853
     },
     {
       "name": "search_case_law",
@@ -623,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 127396,
-    "estimatedTokens": 50508
+    "characters": 127398,
+    "estimatedTokens": 50499
   }
 }

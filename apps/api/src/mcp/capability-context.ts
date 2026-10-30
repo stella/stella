@@ -6,6 +6,7 @@ import type { RawHeaders } from "@/api/http/route-input";
 import { status } from "@/api/http/status";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type {
   AuditRecorderFactory,
   MemberCaller,
@@ -33,7 +34,7 @@ export type CapabilityHandlerContext = HandlerContext<
   RawHeaders
 > &
   MemberCaller &
-  Partial<WorkspaceCaller>;
+  Partial<WorkspaceCaller> & { accountAuthority: AccountCapabilityAuthority };
 
 const recorderFactory =
   (
@@ -180,6 +181,10 @@ export const capabilityHandlerContext = async ({
     headers: {},
     status,
     ...member,
+    accountAuthority: {
+      credential: context.credential,
+      grantedScopes: context.grantedScopes,
+    },
     ...workspace,
   };
 };

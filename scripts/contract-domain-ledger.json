@@ -2096,14 +2096,6 @@
     "reason": "Existing DOWNLOAD_TARGETS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx::OrganizationStep::maxLength:50::1",
-    "reason": "Existing OrganizationStep UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx::makeSchema::maxLength:50::1",
-    "reason": "Existing makeSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
     "id": "apps/web/src/routes/onboarding/-queries.ts::onboardingKeys::domain:[\"onboarding\",\"native-tool-deploy-availability\"]::1",
     "reason": "Existing onboardingKeys domain; contract ownership pending migration."
   },

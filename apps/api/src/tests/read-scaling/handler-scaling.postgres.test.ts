@@ -11,12 +11,27 @@ import {
   readScalingViolations,
   writeScalingViolations,
 } from "@/api/tests/read-scaling/measurement";
+import { organizationCreateScalingScenario } from "@/api/tests/read-scaling/organization-create";
 import { readScalingScenarios } from "@/api/tests/read-scaling/scenarios";
 import { writeScalingScenarios } from "@/api/tests/read-scaling/write-scenarios";
 
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "registered handler scaling",
   () => {
+    test("organization creation keeps the same work as account receipt history grows", async () => {
+      const small = await organizationCreateScalingScenario.measure({
+        size: 10,
+      });
+      const large = await organizationCreateScalingScenario.measure({
+        size: 200,
+      });
+      expect(small.rows).toBe(1);
+      expect(large.rows).toBe(1);
+      expect(small.statements).toBeGreaterThan(0);
+      expect(small.transactionRoundTrips).toBeGreaterThan(0);
+      expect(writeScalingViolations({ small, large })).toEqual([]);
+    });
+
     test("every registered case measures production handlers at both cardinalities", async () => {
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
