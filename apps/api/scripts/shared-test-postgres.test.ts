@@ -23,6 +23,7 @@ import { withGatedTestClients } from "../src/tests/gated-test-database";
 describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
   "shared test Postgres lifecycle",
   () => {
+    // timeout: cold container startup and full migrations for three isolated worker histories exceed the unit-test budget.
     test("worker migration histories share matching templates and preserve isolated schemas", async () => {
       const repo = path.resolve(import.meta.dir, "../../..");
       const canonical = mkdtempSync(
@@ -79,6 +80,11 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
         symlinkSync(
           path.join(repo, entrypoint),
           path.join(canonical, entrypoint),
+        );
+        symlinkSync(
+          path.join(repo, "apps/api/src"),
+          path.join(canonical, "apps/api/src"),
+          "dir",
         );
         mkdirSync(path.join(canonical, "docker"));
         cpSync(

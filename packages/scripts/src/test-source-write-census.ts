@@ -525,6 +525,7 @@ export const runSourceWriteCensus = ({
   const child = spawnSync(process.execPath, ["--no-env-file", entrypoint], {
     cwd: repositoryRoot,
     encoding: "utf-8",
+    maxBuffer: 1024 * 1024,
     timeout: budgetMs,
   });
   if (

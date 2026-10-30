@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { type ReservedSQL, SQL } from "bun";
+import type { ReservedSQL } from "bun";
 import { randomBytes } from "node:crypto";
 import {
   existsSync,
@@ -21,6 +21,7 @@ import path from "node:path";
 import { sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
+import { createSqlClient } from "../../../apps/api/src/db/sql-client";
 import {
   resolveDockerTarget,
   resolveInstalledDevDockerKeeper,
@@ -371,13 +372,13 @@ export const withSharedTestPostgresConnection = async <T>(
   url: string,
   work: (connection: ReservedSQL) => Promise<T>,
 ) => {
-  const client = new SQL({ url, max: 1 });
+  const client = createSqlClient({ url, max: 1 });
   try {
     const connection = await client.reserve();
     try {
       return await work(connection);
     } finally {
-      connection.release();
+      await connection.release();
     }
   } finally {
     await client.close();

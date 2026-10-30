@@ -221,6 +221,7 @@ export const TAGGED_FAILURE_REASON = {
   FreeTierPolicyMissingError: "tagged_failure",
   FreshLoginDeadlineError: "tagged_failure",
   GeneratedFileWriteError: "tagged_failure",
+  GenerationLockTimeoutError: "tagged_failure",
   GithubDeliveryError: "tagged_failure",
   GithubWriteError: "tagged_failure",
   GoldenQueryFileError: "tagged_failure",
