@@ -68,6 +68,6 @@ export type OwnershipEntry = {
   readonly group?: "root-connection";
   readonly capability: string;
   readonly owner: readonly string[];
-  readonly summary: string;
+  readonly summary: string | (() => string);
   readonly enforcement: OwnershipEnforcement;
 };

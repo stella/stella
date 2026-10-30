@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
@@ -107,12 +107,20 @@ export const latestAssistantTurnAwaitsUser = (
   });
 };
 
-// Budget for the visible output only: a few short lines, well under 100
-// tokens. The fast role requests reasoning off (see the OpenRouter role
-// defaults); if a model forces reasoning anyway, the reasoning-fallback
-// middleware tops this cap up by a flat allowance so thinking tokens don't
-// eat into the lines. Re-capped at MAX_SUGGESTIONS in `cleanSuggestionsText`.
-const SUGGESTIONS_MAX_OUTPUT_TOKENS = 256;
+// Budget for the visible output: up to MAX_SUGGESTIONS single-sentence
+// lines. A Czech or Slovak line of 150 characters runs to about 60 tokens, so
+// four of them overran the former 256 and the run stopped mid-line. The fast
+// role requests reasoning off (see the OpenRouter role defaults); if a model
+// forces reasoning anyway, the reasoning-fallback middleware tops this cap up
+// by a flat allowance so thinking tokens don't eat into the lines.
+const SUGGESTIONS_MAX_OUTPUT_TOKENS = 512;
+
+/**
+ * The longest line kept as a suggestion. A chip is one sentence the user
+ * sends verbatim; a longer line is a paragraph the prompt did not ask for, so
+ * it is dropped whole, never cut to fit.
+ */
+export const MAX_SUGGESTION_LENGTH = 240;
 
 const SUGGEST_CLEANUP_STEPS = [
   /^\d+[.\-)]\s*/u, // Numbered list: "1. " or "2) " at start (optional trailing space)
@@ -130,14 +138,85 @@ const cleanLine = (line: string): string => {
   return result.trim();
 };
 
-export const cleanSuggestionsText = (text: string): string[] => {
-  const lines = text
-    .split("\n")
-    .map((line) => line.trim())
-    .map(cleanLine)
-    .filter((line) => line.length > 0);
+/**
+ * What one line of model output became. A suggestion is inserted verbatim as
+ * the user's next message, so a line is either kept whole or dropped; nothing
+ * shortens it.
+ */
+export type SuggestionLine =
+  | { type: "complete"; prompt: string }
+  | { type: "dropped"; reason: "blank" | "over-length" };
 
-  return Array.from(new Set(lines)).slice(0, MAX_SUGGESTIONS);
+export const parseSuggestionLine = (line: string): SuggestionLine => {
+  const prompt = cleanLine(line.trim());
+  if (prompt.length === 0) {
+    return { type: "dropped", reason: "blank" };
+  }
+  if (prompt.length > MAX_SUGGESTION_LENGTH) {
+    return { type: "dropped", reason: "over-length" };
+  }
+  return { type: "complete", prompt };
+};
+
+export const cleanSuggestionsText = (text: string): string[] => {
+  const prompts = text.split("\n").flatMap((line) => {
+    const parsed = parseSuggestionLine(line);
+    switch (parsed.type) {
+      case "complete":
+        return [parsed.prompt];
+      case "dropped":
+        return [];
+      default:
+        parsed satisfies never;
+        return panic(`Unhandled suggestion line: ${String(parsed)}`);
+    }
+  });
+
+  return Array.from(new Set(prompts)).slice(0, MAX_SUGGESTIONS);
+};
+
+/** The request fields this module owns, so no caller can loosen them. */
+type SuggestionRequestKey =
+  | "finishPolicy"
+  | "maxOutputTokens"
+  | "messages"
+  | "prompt"
+  | "system"
+  | "systemPromptOrigin"
+  | "task"
+  | "temperature";
+
+// Distributes over the dispatch-scope union, so an organization's admission
+// stays paired with its organization id.
+type WithoutSuggestionRequest<T> = T extends unknown
+  ? Omit<T, SuggestionRequestKey>
+  : never;
+
+type SuggestedPromptsDispatch = WithoutSuggestionRequest<
+  Parameters<typeof generateTanStackTextForTask>[0]
+>;
+
+/**
+ * Generate the follow-up prompts for a transcript. Only a run that stopped on
+ * its own counts: a run cut at the output ceiling (or moderated, or never
+ * finished) ends mid-line, and its last line would reach the user as a chip
+ * that stops mid-word, so it is refused whole and the caller shows none.
+ */
+export const generateSuggestedPrompts = async (
+  transcript: string,
+  options: SuggestedPromptsDispatch,
+): Promise<string[]> => {
+  const text = await generateTanStackTextForTask({
+    ...options,
+    finishPolicy: "require-complete",
+    maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
+    prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
+    system: SUGGESTIONS_SYSTEM_PROMPT,
+    systemPromptOrigin: "server-built",
+    task: "short-text",
+    temperature: 0.3,
+  });
+  return cleanSuggestionsText(text);
 };
 
 const getSuggestedPrompts = createSafeRootHandler(
@@ -294,11 +373,9 @@ const getSuggestedPrompts = createSafeRootHandler(
           });
 
           try {
-            const text = await generateTanStackTextForTask({
+            const prompts = await generateSuggestedPrompts(checked.transcript, {
               userId: modelAdmission.userId,
               dataClass: "customer",
-              finishPolicy: "allow-incomplete",
-              task: "short-text",
               orgAIConfig: checked.orgAIConfig,
               managedAIResidency: checked.managedAIResidency,
               organizationId: checked.organizationId,
@@ -312,16 +389,11 @@ const getSuggestedPrompts = createSafeRootHandler(
               tenantWorkspaceIds: checked.workspaceId
                 ? [checked.workspaceId]
                 : [],
-              system: SUGGESTIONS_SYSTEM_PROMPT,
-              systemPromptOrigin: "server-built",
-              prompt: `Conversation transcript:\n\n${checked.transcript}\n\nSuggested follow-up prompts:`,
-              maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
-              temperature: 0.3,
               serviceTier: "standard",
               abortSignal: actionSignal,
               deadlineMs: 15_000,
             });
-            return Result.ok({ prompts: cleanSuggestionsText(text) });
+            return Result.ok({ prompts });
           } catch (error) {
             aiAnalytics.captureError(error);
             if (isUnanticipatedAIFailure(error)) {
