@@ -536,16 +536,26 @@ export const projectReleaseDates = ({
  * never be the reference; any other failure stops the cut.
  */
 export const refreshUnpromotedReleases = async ({
+  cutVersion,
   dates,
   previousTag,
   readRelease,
 }: {
+  /** The release being cut: the reference is always strictly below it. */
+  cutVersion: string;
   dates: ReleaseDates;
   previousTag: string;
   readRelease: (tag: string) => Promise<PreviousRelease>;
 }): Promise<Record<string, string>> => {
+  // The previous final is read by the cut itself and may be promoted without
+  // being recorded, so it never sets the bound.
   const newestPromoted = Object.entries(dates)
-    .filter(([, publishedAt]) => publishedAt !== null)
+    .filter(
+      ([tag, publishedAt]) =>
+        publishedAt !== null &&
+        tag !== previousTag &&
+        Bun.semver.order(tag.slice(1), cutVersion) < 0,
+    )
     .map(([tag]) => tag.slice(1))
     .toSorted((left, right) => Bun.semver.order(right, left))
     .at(0);
@@ -1567,6 +1577,7 @@ export const cutMaintenanceRelease = async (
   const previousRelease = await effects.readPreviousRelease(previousFinalTag);
   const recordedDates = readReleaseDates(rootDir);
   const refreshedReleases = await refreshUnpromotedReleases({
+    cutVersion: nextPatchVersion(current).value,
     dates: recordedDates,
     previousTag: previousFinalTag,
     readRelease: effects.readPreviousRelease,

@@ -62,6 +62,22 @@ const PUBLISHED = {
 } as const;
 const UNPROMOTED = { kind: "unpromoted" } as const;
 
+const failingRead = async (): Promise<typeof UNPROMOTED> => {
+  throw new MaintenanceReleaseError("GitHub is unreachable");
+};
+
+/** What the refresh rejects with; null when it completes. */
+const refreshFailure = async (
+  options: Parameters<typeof refreshUnpromotedReleases>[0],
+): Promise<unknown> => {
+  try {
+    await refreshUnpromotedReleases(options);
+  } catch (error) {
+    return error;
+  }
+  return null;
+};
+
 const failureMessage = async (tag: string): Promise<string> => {
   let previous: unknown;
   try {
@@ -874,6 +890,7 @@ describe("maintenance release preparation", () => {
     };
     const asked: string[] = [];
     const refreshed = await refreshUnpromotedReleases({
+      cutVersion: "1.2.4",
       dates,
       previousTag: "v1.2.3",
       readRelease: async (tag) => {
@@ -901,27 +918,47 @@ describe("maintenance release preparation", () => {
 
   test("a failed lookup stops the cut unless the tag is older than the newest promoted release", async () => {
     const dates = { "v1.2.0": "2026-01-01T00:00:00Z", "v1.1.0": null };
-    const failing = async (): Promise<typeof UNPROMOTED> => {
-      throw new MaintenanceReleaseError("GitHub is unreachable");
-    };
+    const failing = failingRead;
     expect(
       await refreshUnpromotedReleases({
+        cutVersion: "1.2.4",
         dates,
         previousTag: "v1.2.3",
         readRelease: failing,
       }),
     ).toEqual({});
-    let rejected: unknown = null;
-    try {
-      await refreshUnpromotedReleases({
+    expect(
+      await refreshFailure({
+        cutVersion: "1.2.4",
         dates: { ...dates, "v1.2.1": null },
         previousTag: "v1.2.3",
         readRelease: failing,
-      });
-    } catch (error) {
-      rejected = error;
-    }
-    expect(rejected).toBeInstanceOf(MaintenanceReleaseError);
+      }),
+    ).toBeInstanceOf(MaintenanceReleaseError);
+  });
+
+  test("the previous final never sets the bound for tolerated lookup failures", async () => {
+    // v1.2.3 is recorded as promoted, but the cut reads it itself: v1.1.0 is
+    // not older than a release that can be trusted, so its failure stops the cut.
+    expect(
+      await refreshFailure({
+        cutVersion: "1.2.4",
+        dates: { "v1.1.0": null, "v1.2.3": "2026-02-01T00:00:00Z" },
+        previousTag: "v1.2.3",
+        readRelease: failingRead,
+      }),
+    ).toBeInstanceOf(MaintenanceReleaseError);
+  });
+
+  test("a release at or above the cut version never sets the bound", async () => {
+    expect(
+      await refreshFailure({
+        cutVersion: "1.2.4",
+        dates: { "v1.1.0": null, "v1.3.0": "2026-02-01T00:00:00Z" },
+        previousTag: "v1.2.3",
+        readRelease: failingRead,
+      }),
+    ).toBeInstanceOf(MaintenanceReleaseError);
   });
 
   test("reads the publication date of a published release", async () => {
