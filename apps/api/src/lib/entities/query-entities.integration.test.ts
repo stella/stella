@@ -24,6 +24,7 @@ import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import {
   buildFilterConditions,
@@ -54,7 +55,12 @@ beforeAll(async () => {
   ids = fixture.ids;
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
 });

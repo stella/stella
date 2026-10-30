@@ -14,6 +14,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
@@ -42,12 +43,12 @@ beforeAll(
     // Tenant search runs as the request role; public case law is readable
     // under it without any workspace in scope.
     scopedDb = executeRowsScopedDb(
-      createScopedDb(
-        markRlsDatabase(db),
-        [],
-        toSafeId<"organization">("org_1"),
-        toSafeId<"user">("user_1"),
-      ),
+      createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: toSafeId<"organization">("org_1"),
+        userId: toSafeId<"user">("user_1"),
+      }),
     );
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,

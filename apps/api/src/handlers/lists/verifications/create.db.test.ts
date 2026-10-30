@@ -16,6 +16,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   createTestHandlerContext,
   NO_AUDIT,
@@ -73,7 +74,12 @@ describe("verification creation requires complete AI admission", () => {
           { type: "organization", organizationId: ids.orgA },
         ],
       };
-      const scoped = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+      const scoped = createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      });
       let transactions = 0;
       const safeDb: typeof scoped = async (operation) => {
         transactions++;

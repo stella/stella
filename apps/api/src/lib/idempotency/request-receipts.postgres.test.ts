@@ -11,6 +11,7 @@ import { contacts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   claimRequestReceipt,
@@ -88,12 +89,12 @@ const receiptFixture = ({ openClient }: Fixture) => {
     organizationId,
     userId,
   });
-  const otherScopedDb = createScopedDb(
-    database,
-    [],
-    otherOrganizationId,
+  const otherScopedDb = createScopedDb(database, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId: otherOrganizationId,
     userId,
-  );
+  });
   const claim = async (body: unknown = ORIGINAL_BODY, now?: Date) =>
     await claimRequestReceipt({
       scopedDb,

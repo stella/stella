@@ -25,6 +25,7 @@ import type {
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
@@ -115,7 +116,12 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   safeDb = toSafeDbMock(scopedDb);
   await testDb

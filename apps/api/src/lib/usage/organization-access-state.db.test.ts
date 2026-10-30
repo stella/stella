@@ -1,11 +1,10 @@
+import { Result } from "better-result";
 /**
  * The access state decides whether an organization without its own AI config
  * may fall through to the instance provider. The loaders read it under the
  * request scope (role `stella`), so each probe runs under the
  * membership-scoped factory request authentication builds.
  */
-
-import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
@@ -36,6 +35,7 @@ import {
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -93,6 +93,7 @@ const fixtureOrgIds = [
 const requestScope = (organizationId: SafeId<"organization">): ScopedDb =>
   asTestRaw<ScopedDb>(
     createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId: ids.userA1,

@@ -9,6 +9,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
@@ -227,6 +228,7 @@ export const authorizeDesktopEditSessionWithDb = async (
       fileType: session.fileType,
       organizationId: session.organizationId,
       scopedDb: createRootScopedDb({
+        budget: BUDGETS.scopedRequest,
         organizationId: session.organizationId,
         userId,
         workspaceIds: [session.workspaceId],

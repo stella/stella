@@ -23,6 +23,7 @@ import { isAccountDeletionActiveTaskStatus } from "@/api/lib/account-deletion-re
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -116,6 +117,7 @@ test.each([
         });
         const safeDb = asTestRaw<SafeDb>(
           createMembershipSafeDb(markRlsDatabase(tx), {
+            budget: BUDGETS.scopedRequest,
             organizationId: ids.orgA,
             serverValidatedWorkspaceIds: [ids.wsA2],
             userId: ids.userA2,
@@ -325,6 +327,7 @@ test("membership-removal.task-preservation", async () => {
               });
               const safeDb = asTestRaw<SafeDb>(
                 createMembershipSafeDb(markRlsDatabase(tx), {
+                  budget: BUDGETS.scopedRequest,
                   organizationId: ids.orgA,
                   serverValidatedWorkspaceIds: [ids.wsA2],
                   userId: ids.userA2,
@@ -434,6 +437,7 @@ test("matter removal returns only that matter's pending approvals to the pool", 
           .values([pending, approved, elsewhere, internal]);
         const safeDb = asTestRaw<SafeDb>(
           createMembershipSafeDb(markRlsDatabase(tx), {
+            budget: BUDGETS.scopedRequest,
             organizationId: ids.orgA,
             serverValidatedWorkspaceIds: [ids.wsA2],
             userId: ids.userA2,
@@ -529,6 +533,7 @@ test("member cleanup drains more than one bounded assignment batch", async () =>
         );
         const safeDb = asTestRaw<SafeDb>(
           createMembershipSafeDb(markRlsDatabase(tx), {
+            budget: BUDGETS.scopedRequest,
             organizationId: ids.orgA,
             serverValidatedWorkspaceIds: [ids.wsA2],
             userId: ids.userA2,

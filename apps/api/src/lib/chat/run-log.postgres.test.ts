@@ -19,6 +19,7 @@ import {
   createChatRunLog,
   createChatRunLogReplay,
 } from "@/api/lib/chat/run-log";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -73,12 +74,12 @@ if (!databaseUrl || !runPostgresTests) {
     const messageId = createSafeId<"chatMessage">();
     const runId = Bun.randomUUIDv7();
     const executionId = Bun.randomUUIDv7();
-    const scopedDb = createScopedDb(
-      markRlsDatabase(db),
-      [],
+    const scopedDb = createScopedDb(markRlsDatabase(db), {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
       organizationId,
       userId,
-    );
+    });
     beforeAll(async () => {
       await db.insert(user).values({
         id: userId,

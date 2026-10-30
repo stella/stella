@@ -15,6 +15,7 @@ import {
 } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { TASK_ASSIGNEE_FILTER } from "@/api/lib/tasks/assigned";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
@@ -110,9 +111,17 @@ const createContext = async ({
 }: ContextOptions): Promise<AuthorizedMcpRequestContext> => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   const scopedDb = asTestRaw<ScopedDb>(
-    createMembershipScopedDb(testDb, identity),
+    createMembershipScopedDb(testDb, {
+      ...identity,
+      budget: BUDGETS.scopedRequest,
+    }),
   );
-  const safeDb = asTestRaw<SafeDb>(createMembershipSafeDb(testDb, identity));
+  const safeDb = asTestRaw<SafeDb>(
+    createMembershipSafeDb(testDb, {
+      ...identity,
+      budget: BUDGETS.scopedRequest,
+    }),
+  );
   const usable = filterUsableMcpWorkspaces({
     accessibleWorkspaces: await loadAccessibleMcpWorkspaces({
       organizationId,

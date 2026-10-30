@@ -19,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-inputs";
 import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -85,6 +86,7 @@ const inputs = {
 };
 const scopedDb = createRootMembershipScopedDb(
   {
+    budget: BUDGETS.scopedRequest,
     organizationId: ids.orgA,
     userId: ids.userA1,
   },
@@ -194,6 +196,7 @@ describe("document review run inputs", () => {
   test("resolves pins only within the current organization", async () => {
     const otherOrganizationScope = createRootMembershipScopedDb(
       {
+        budget: BUDGETS.scopedRequest,
         organizationId: ids.orgB,
         userId: ids.userB1,
       },

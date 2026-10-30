@@ -34,6 +34,7 @@ import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   buildDocumentReviewFindingRow,
   recountDocumentReviewFindingProgress,
@@ -447,7 +448,10 @@ type DocumentReviewRunActor = RootRunActor<"documentReviewRun">;
 type RunActor = DocumentReviewRunActor;
 
 const brandActor = (data: DocumentReviewRunJobDataV1): RunActor =>
-  createRootRunActor(data, brandPersistedDocumentReviewRunId);
+  createRootRunActor(
+    { ...data, budget: BUDGETS.scopedWorkerPendingMeasurement },
+    brandPersistedDocumentReviewRunId,
+  );
 
 /** The run fields the worker executes from, read at claim time. */
 type ClaimedRun = {

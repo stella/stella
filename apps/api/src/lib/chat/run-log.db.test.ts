@@ -59,6 +59,7 @@ import {
   sweepClosedChatRunLogs,
 } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -85,7 +86,12 @@ beforeAll(async () => {
   ids = fixture.ids;
   rawDb = asTestRaw<Pick<typeof rootDb, "transaction">>(testDb);
   scopedDbA = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 });
 
@@ -132,7 +138,12 @@ const seedRunningTurn = async (): Promise<{
   });
   const scopedDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
   const inserted = await scopedDb(

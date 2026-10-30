@@ -10,6 +10,7 @@ import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import {
@@ -97,7 +98,12 @@ const seedDocument = async ({ readOnly }: { readOnly: boolean }) => {
     .set({ currentVersionId })
     .where(eq(entities.id, entityId));
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(db, [workspaceId], organizationId, userId),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId,
+      userId,
+    }),
   );
   return { entityId, olderVersionId, safeDb, userId, workspaceId };
 };

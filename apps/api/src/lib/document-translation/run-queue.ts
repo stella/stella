@@ -49,6 +49,7 @@ import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { translateDocument, translateTextBatches } from "@/api/lib/deepl/deepl";
 import { translateTaggedSegments } from "@/api/lib/document-translation/ai";
 import { runBilingualTranslationBatches } from "@/api/lib/document-translation/bilingual-batch-runner";
@@ -219,7 +220,10 @@ const enqueueDocumentTranslationRuns = async (
 type RunActor = RootRunActor<"documentTranslationRun">;
 
 const brandActor = (data: DocumentTranslationRunJobData): RunActor =>
-  createRootRunActor(data, brandPersistedDocumentTranslationRunId);
+  createRootRunActor(
+    { ...data, budget: BUDGETS.scopedWorkerPendingMeasurement },
+    brandPersistedDocumentTranslationRunId,
+  );
 
 type ClaimedRun = {
   entityId: SafeId<"entity">;

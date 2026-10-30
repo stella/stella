@@ -20,6 +20,7 @@ import {
   queryCountLogger,
   runWithMeasuredQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -190,7 +191,12 @@ const listFor = async ({
         route: "/time-entries/me/suggestions",
         // The scoped transaction and the request's matter authorization agree,
         // as they do in production: the timekeeper belongs to these matters.
-        safeDb: createSafeDb(database, matters, ids.orgA, ids.userA1),
+        safeDb: createSafeDb(database, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: matters,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
         getActiveWorkspaceIds: async () => matters,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -276,12 +282,12 @@ describe("my suggestion range", () => {
     // The fixture must reach the boundary: row-level security alone lets the
     // timekeeper's scoped transaction read the unlisted matter's audit row,
     // so only the range loader's matter filter keeps it out.
-    const visibleToOrganization = await createSafeDb(
-      testDb,
-      [ids.wsA1, ids.wsA2],
-      ids.orgA,
-      ids.userA1,
-    )((tx) =>
+    const visibleToOrganization = await createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })((tx) =>
       tx
         .select({ id: auditLogs.id })
         .from(auditLogs)

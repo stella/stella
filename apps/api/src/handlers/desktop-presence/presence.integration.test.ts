@@ -16,6 +16,7 @@ import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -57,7 +58,12 @@ beforeAll(
     fixture = await getRlsFixture();
     const { testDb, ids } = fixture;
     scopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
   },
   { timeout: 30_000 },
@@ -135,7 +141,12 @@ test.each([
       eq(desktopPresence.organizationId, ids.orgA),
     );
     const ownerScoped = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [], ids.orgA, ids.userA2),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+      }),
     );
     const installations = Array.from(
       { length: count },
@@ -215,7 +226,12 @@ test("app-role presence access is confined to the owner for reads, inserts, and 
     protocol: 0,
   });
   const otherScoped = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [], ids.orgA, ids.userA2),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    }),
   );
   await reportDesktopPresence({
     scopedDb: otherScoped,

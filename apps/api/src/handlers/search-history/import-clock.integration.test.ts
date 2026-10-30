@@ -23,6 +23,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
@@ -108,7 +109,12 @@ const identity = (fixture: HistoryFixture) => ({
     },
   }),
   scopedDb: NO_DB,
-  safeDb: createSafeDb(fixture.db, [], fixture.organizationId, fixture.userId),
+  safeDb: createSafeDb(fixture.db, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [],
+    organizationId: fixture.organizationId,
+    userId: fixture.userId,
+  }),
   session: { activeOrganizationId: fixture.organizationId },
   user: { id: fixture.userId },
 });

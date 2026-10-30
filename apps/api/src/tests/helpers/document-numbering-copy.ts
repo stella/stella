@@ -7,6 +7,7 @@ import { createCopyToWorkspace } from "@/api/handlers/entities/copy";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -38,12 +39,12 @@ export const runNumberingCopy = async ({
   targetWorkspaceId,
 }: RunNumberingCopyOptions) => {
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(
-      testDb,
-      [sourceWorkspaceId, targetWorkspaceId],
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [sourceWorkspaceId, targetWorkspaceId],
       organizationId,
       userId,
-    ),
+    }),
   );
   const recordAuditEvent = async () => await Promise.resolve();
   const created = await Result.gen(() =>

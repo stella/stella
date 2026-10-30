@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailAuthentication } from "@/api/lib/email/inbound/authentication";
 import type {
@@ -109,7 +110,12 @@ const candidate = (sender: string): Candidate => {
 
 let db: GatedTestDb;
 const fixtureScoped = () =>
-  createScopedDb(markRlsDatabase(db), [wsA1, wsA2], orgA, adminA);
+  createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    workspaceScope: [wsA1, wsA2],
+    organizationId: orgA,
+    userId: adminA,
+  });
 let persist: InboundDeliveryStore;
 let filings: {
   workspaceId: string;
@@ -308,12 +314,12 @@ if (!databaseUrl || !runPostgresTests) {
             },
           ]),
       );
-      await createScopedDb(
-        markRlsDatabase(db),
-        [wsB1],
-        orgB,
-        memberB,
-      )(
+      await createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceScope: [wsB1],
+        organizationId: orgB,
+        userId: memberB,
+      })(
         async (tx) =>
           await tx.insert(matterInboundAddresses).values([
             {
@@ -363,12 +369,12 @@ if (!databaseUrl || !runPostgresTests) {
             },
           ]),
       );
-      await createScopedDb(
-        markRlsDatabase(db),
-        [wsB1],
-        orgB,
-        memberB,
-      )(
+      await createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceScope: [wsB1],
+        organizationId: orgB,
+        userId: memberB,
+      })(
         async (tx) =>
           await tx.insert(correspondenceAllowedSenders).values([
             {
@@ -455,12 +461,12 @@ if (!databaseUrl || !runPostgresTests) {
       const failingStore = createInboundMailStore({
         database: db,
         fileCandidate: async ({ tx, workspaceId, organizationId }) => {
-          await createScopedDb(
-            markRlsDatabase(tx),
-            [workspaceId],
+          await createScopedDb(markRlsDatabase(tx), {
+            budget: BUDGETS.scopedWorkerPendingMeasurement,
+            workspaceScope: [workspaceId],
             organizationId,
-            memberA,
-          )(
+            userId: memberA,
+          })(
             async (scopedTx) =>
               await scopedTx.insert(correspondenceDropLogs).values({
                 id: insertedId,
@@ -713,12 +719,12 @@ if (!databaseUrl || !runPostgresTests) {
         organizationId: SafeId<"organization">;
         userId: SafeId<"user">;
       }) =>
-        await createScopedDb(
-          markRlsDatabase(db),
-          [workspaceId],
+        await createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [workspaceId],
           organizationId,
           userId,
-        )(
+        })(
           async (tx) =>
             await tx
               .select({ senderAddress: correspondenceDropLogs.senderAddress })

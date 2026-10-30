@@ -3490,8 +3490,14 @@ export const createAuthDatabases = (
     typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
   >[1],
 ): { scopedDb: AuthScopedDb; safeDb: AuthSafeDb } => ({
-  scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
-  safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
+  scopedDb: createMembershipScopedDb(rlsDb, {
+    ...databaseIdentity,
+    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+  }),
+  safeDb: createMembershipSafeDb(rlsDb, {
+    ...databaseIdentity,
+    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+  }),
 });
 
 type AuthWorkspaceAccessOptions = {

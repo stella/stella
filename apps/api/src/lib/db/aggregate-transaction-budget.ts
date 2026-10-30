@@ -67,10 +67,20 @@ export const AGGREGATE_TRANSACTION_BUDGETS = {
     reason: "strictly below the 120-second online-DDL lock retry ladder",
   },
   corpusSliceExport: {
-    kind: "aggregate",
-    milliseconds: 119_000,
+    kind: "uncapped-pending-measurement",
+    owner: "apps/api/src/lib/case-law/corpus-slice-transfer-execution.ts",
+    entryPoint: "exportCorpusSliceFromDatabase",
+    callers: ["apps/api/src/scripts/export-corpus-slice.ts"],
     reason:
-      "read-only repeatable corpus snapshot; total cap below the migration ladder, publish manifest only after commit",
+      "retain the consistent export snapshot until realistic corpus and storage runtimes justify a total deadline",
+  },
+  scopedWorkerPendingMeasurement: {
+    kind: "uncapped-pending-measurement",
+    owner: "apps/api/src/db/scoped.ts",
+    entryPoint: "runScopedTransaction",
+    callers: ["apps/api/src/db/scoped.ts"],
+    reason:
+      "worker-scoped transactions retain their existing uncapped policy until measured production runtimes justify a deadline",
   },
   sitemapRefresh: {
     kind: "lease-coordinated",
@@ -182,3 +192,7 @@ export class AggregateTransactionTimeoutError extends TaggedError(
   budget: Extract<AggregateTransactionBudget, { kind: "aggregate" }>;
   reason: string;
 }> {}
+
+export type ScopedTransactionBudget =
+  | typeof AGGREGATE_TRANSACTION_BUDGETS.scopedRequest
+  | typeof AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement;

@@ -16,6 +16,7 @@ import {
 import { markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   completeVerificationRun,
@@ -61,7 +62,13 @@ describe.skipIf(!enabled)("list verification row security", () => {
           await db.transaction(fn),
       });
       const actor = createRootRunActor(
-        { organizationId, workspaceId, userId, runId },
+        {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          organizationId,
+          workspaceId,
+          userId,
+          runId,
+        },
         brandPersistedListVerificationRunId,
         scopedDatabase,
       );

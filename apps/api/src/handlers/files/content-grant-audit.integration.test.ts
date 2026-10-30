@@ -35,6 +35,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -170,7 +171,14 @@ const seedFile = async (
 };
 
 const scopedDbA = (): ScopedDb =>
-  asTestRaw<ScopedDb>(createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<ScopedDb>(
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 const recorderA = (): AuditRecorder =>
   createAuditRecorder({
@@ -359,7 +367,12 @@ const setupDedicatedDownload = async () => {
   );
 
   const scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [workspaceId], organizationId, userId),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
+      organizationId,
+      userId,
+    }),
   );
   const recordAuditEvent = createAuditRecorder({
     organizationId,
@@ -680,7 +693,12 @@ const readAttachment = async ({
       route:
         "/v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId" satisfies ApiRoutePath,
       scopedDb: scopedDbA(),
-      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       workspaceId: ids.wsA1,

@@ -1,11 +1,10 @@
+import { panic } from "better-result";
 /**
  * A list verification resolves its pinned document under its requester's
  * current access, so nothing from a matter the requester can no longer open
  * is read. Driven against a real (PGlite) database; the document reader is a
  * fake that reports no text, which ends the run before any model call.
  */
-
-import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -26,6 +25,7 @@ import { legalListVerificationRuns, workspaceMembers } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import * as documentText from "@/api/lib/lists/verification/document-text";
 import { processListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
@@ -66,6 +66,7 @@ if (!originalOrganizationMember || originalMatterMembers.length === 0) {
 const runId = createSafeId<"legalListVerificationRun">();
 const actor = createRootRunActor(
   {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
     userId: ids.userA1,

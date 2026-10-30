@@ -27,6 +27,7 @@ import { UPLOAD_ENTITY_ORIGIN } from "@/api/handlers/entities/upload-origin";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { reconcileBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { extractStamp, injectStamp } from "@/api/lib/docx-stamp";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
@@ -60,7 +61,14 @@ const assignmentId = createSafeId<"usageSeatAssignment">();
 const acceptedAudit: AuditRecorder = async () => await Promise.resolve();
 
 const memberSafeDb = () =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 const fileUsageDb = () =>
   asTestRaw<NonNullable<Parameters<typeof writeOrganizationFile>[0]["db"]>>(
     testDb,

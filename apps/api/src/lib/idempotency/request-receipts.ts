@@ -34,6 +34,7 @@ import {
   withAggregateSavepoint,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -542,12 +543,12 @@ export const sweepExpiredRequestReceipts = async ({
       row.organizationId === first.organizationId &&
       row.userId === first.userId,
   );
-  const scopedDb = createScopedDb(
-    markRlsDatabase(db),
-    [],
-    first.organizationId,
-    brandPersistedUserId(first.userId),
-  );
+  const scopedDb = createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    workspaceScope: [],
+    organizationId: first.organizationId,
+    userId: brandPersistedUserId(first.userId),
+  });
   const rows = await withSkipLockedBatch({
     database: { transaction: scopedDb },
     prepare: prepareRetention,

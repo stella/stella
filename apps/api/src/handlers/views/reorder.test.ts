@@ -12,6 +12,7 @@ import { workspaceViews } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ViewLayout } from "@/api/lib/views-schema";
@@ -69,7 +70,12 @@ const seedView = async (
 const runReorder = async (
   viewIds: SafeId<"workspaceView">[],
 ): Promise<unknown> => {
-  const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
 
   const context = asTestRaw<ReorderCtx>({
     featureAccessSnapshot: createFeatureAccessSnapshot({
@@ -77,7 +83,12 @@ const runReorder = async (
       userId: ids.userA1,
       decisions: new Map(),
     }),
-    scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     body: { viewIds },
     createAuditRecorder: () => async () => undefined,
     memberRole: sessionMemberRole("owner"),

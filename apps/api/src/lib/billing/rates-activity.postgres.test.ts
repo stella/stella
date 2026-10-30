@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
@@ -104,12 +105,12 @@ if (!databaseUrl || !runPostgres) {
         effectiveTo: "2026-12-31",
       }));
       await db.insert(rateEntries).values(entries);
-      const safeDb = createSafeDb(
-        markRlsDatabase(db),
-        [workspaceId],
+      const safeDb = createSafeDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [workspaceId],
         organizationId,
         userId,
-      );
+      });
       const resolve = async (dateWorked: string) => {
         const result = await Result.gen(async function* () {
           return Result.ok(

@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
@@ -571,6 +572,7 @@ export const authorizePdfSigningSession = async (
       propertyId: session.propertyId,
       reason: session.reason,
       safeDb: createRootSafeDb({
+        budget: BUDGETS.scopedRequest,
         organizationId: session.organizationId,
         userId,
         workspaceIds: [session.workspaceId],

@@ -14,6 +14,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { isRecord } from "@/api/lib/type-guards";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
@@ -440,9 +441,17 @@ const requestContext = async ({
 }: Caller): Promise<AuthorizedMcpRequestContext> => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   const scopedDb = asTestRaw<ScopedDb>(
-    createMembershipScopedDb(testDb, identity),
+    createMembershipScopedDb(testDb, {
+      ...identity,
+      budget: BUDGETS.scopedRequest,
+    }),
   );
-  const safeDb = asTestRaw<SafeDb>(createMembershipSafeDb(testDb, identity));
+  const safeDb = asTestRaw<SafeDb>(
+    createMembershipSafeDb(testDb, {
+      ...identity,
+      budget: BUDGETS.scopedRequest,
+    }),
+  );
   const usable = filterUsableMcpWorkspaces({
     accessibleWorkspaces: await loadAccessibleMcpWorkspaces({
       organizationId,

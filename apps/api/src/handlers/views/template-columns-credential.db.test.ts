@@ -9,6 +9,7 @@ import createView from "@/api/handlers/views/create";
 import updateView from "@/api/handlers/views/update";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   authorizedMemberRole,
   sessionMemberRole,
@@ -97,7 +98,12 @@ const tableLayout = (column: ViewTemplateProperty): ViewLayout => ({
 });
 
 const ownerSafeDb = () =>
-  createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin);
+  createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userAdmin,
+  });
 
 const createViewAs = async (
   memberRole: AuthorizedMemberRole,
@@ -113,7 +119,12 @@ const createViewAs = async (
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       safeDb: ownerSafeDb(),
-      scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
+      scopedDb: createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+      }),
       body: {
         id: viewId,
         name: `Credential view ${viewId}`,
@@ -194,7 +205,12 @@ describe("template columns on a view", () => {
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userAdmin },
           safeDb: ownerSafeDb(),
-          scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
+          scopedDb: createScopedDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: ids.userAdmin,
+          }),
           params: { workspaceId: ids.wsA1, viewId },
           body: { layout: tableLayout(column), templateProperties: [column] },
         }),

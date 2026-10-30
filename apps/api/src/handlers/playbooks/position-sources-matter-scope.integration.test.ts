@@ -35,6 +35,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type {
   PlaybookPositions,
@@ -71,8 +72,18 @@ const membershipDbs = () => {
     userId: ids.userA1,
   };
   return {
-    safeDb: asTestRaw<SafeDb>(createMembershipSafeDb(testDb, identity)),
-    scopedDb: asTestRaw<ScopedDb>(createMembershipScopedDb(testDb, identity)),
+    safeDb: asTestRaw<SafeDb>(
+      createMembershipSafeDb(testDb, {
+        ...identity,
+        budget: BUDGETS.scopedRequest,
+      }),
+    ),
+    scopedDb: asTestRaw<ScopedDb>(
+      createMembershipScopedDb(testDb, {
+        ...identity,
+        budget: BUDGETS.scopedRequest,
+      }),
+    ),
   };
 };
 

@@ -12,6 +12,7 @@ import {
   queryCountLogger,
   runWithMeasuredQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -104,12 +105,12 @@ export const myOpenTasksScalingScenario = {
           query: { limit: PAGE_SIZE },
           request: new Request("https://example.test/v1/tasks"),
           route: "/v1/tasks",
-          safeDb: createSafeDb(
-            fixture.database,
-            fixture.matters,
-            fixture.organizationId,
-            fixture.userId,
-          ),
+          safeDb: createSafeDb(fixture.database, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: fixture.matters,
+            organizationId: fixture.organizationId,
+            userId: fixture.userId,
+          }),
           getActiveWorkspaceIds: async () =>
             await Promise.resolve(fixture.matters),
           session: { activeOrganizationId: fixture.organizationId },

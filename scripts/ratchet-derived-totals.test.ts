@@ -217,6 +217,38 @@ test("the definition paths list the guard's whole import closure", () => {
   ).toEqual([]);
 });
 
+// timeout: exercises two complete checks in an isolated Git clone.
+test("the CLI rejects expired debt ceilings even when head equals its measured base", () => {
+  withClone((root) => {
+    const script = path.join(root, "scripts/ratchet.ts");
+    const futurePolicy = readFileSync(script, "utf-8")
+      .replaceAll("2026-11-13T00:00:00.000Z", "2999-11-13T00:00:00.000Z")
+      .replaceAll("2026-11-27T00:00:00.000Z", "2999-11-27T00:00:00.000Z")
+      .replaceAll("2026-12-11T00:00:00.000Z", "2999-12-11T00:00:00.000Z");
+    writeFileSync(script, futurePolicy);
+    write({
+      root,
+      relative: FIRST,
+      contents: "db.transaction(work); client.begin(work);\n",
+    });
+    commit(root, "raw transaction fixture base");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    expect(ratchet(root, "--check")).toContain("ratchet --check: OK");
+    writeFileSync(script, futurePolicy.replaceAll("2999-", "2000-"));
+    const expired = run(root, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--check",
+    ]);
+    expect(expired.code).toBe(1);
+    expect(expired.output).toContain(
+      "raw-api-transaction-boundaries: 2 exceeds dated ceiling 0",
+    );
+    expect(expired.output).toContain("dated debt ceilings exceeded");
+    expect(expired.output).not.toContain("invalid increase allowances");
+  });
+}, 30_000);
+
 test("a metric increase fails even with a forged committed budget", () => {
   withClone((root) => {
     write({ root, relative: FIRST, contents: casts(3) });

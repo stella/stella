@@ -28,6 +28,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   brandActorSessionIdentity,
@@ -275,6 +276,7 @@ describe("a matter's event stream when a member is removed", () => {
     const removal = await Result.gen(() =>
       removeWorkspaceMemberHandler({
         safeDb: createMembershipSafeDb(rlsDb, {
+          budget: BUDGETS.scopedRequest,
           ...identity,
           serverValidatedWorkspaceIds: [workspaceId],
         }),

@@ -14,6 +14,7 @@ import { getAuth } from "@/api/lib/auth";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { verifyAndDeleteUser } from "@/api/lib/delete-account";
 import {
   mapMembershipInvariantError,
@@ -102,12 +103,12 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     ),
   );
   for (const { userId, entryId, timerId } of owners) {
-    await createScopedDb(
-      markRlsDatabase(db),
-      [],
+    await createScopedDb(markRlsDatabase(db), {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
       organizationId,
       userId,
-    )(async (tx) => {
+    })(async (tx) => {
       await tx.insert(timeTimers).values({
         id: timerId,
         userId,
@@ -296,12 +297,12 @@ if (!databaseUrl || !runPostgresTests) {
                 .select()
                 .from(timeEntries)
                 .where(eq(timeEntries.id, secondTarget.entryId));
-              const [timer] = await createScopedDb(
-                markRlsDatabase(setup.db),
-                [],
-                data.organizationId,
-                secondTarget.userId,
-              )(
+              const [timer] = await createScopedDb(markRlsDatabase(setup.db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceScope: [],
+                organizationId: data.organizationId,
+                userId: secondTarget.userId,
+              })(
                 async (tx) =>
                   await tx
                     .select()
@@ -498,12 +499,12 @@ if (!databaseUrl || !runPostgresTests) {
               .select()
               .from(timeEntries)
               .where(eq(timeEntries.id, secondTarget.entryId));
-            const [timer] = await createScopedDb(
-              markRlsDatabase(setup.db),
-              [],
-              data.organizationId,
-              secondTarget.userId,
-            )(
+            const [timer] = await createScopedDb(markRlsDatabase(setup.db), {
+              budget: BUDGETS.scopedRequest,
+              workspaceScope: [],
+              organizationId: data.organizationId,
+              userId: secondTarget.userId,
+            })(
               async (tx) =>
                 await tx
                   .select()

@@ -33,6 +33,7 @@ import updateCorrespondence from "@/api/handlers/workspaces/correspondence/updat
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { eraseCorrespondenceActorDisplays } from "@/api/lib/email/correspondence/offboarding";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -76,7 +77,14 @@ afterAll(async () => {
 });
 
 const safeDbFor = (userId: TestIds["userA1"], workspaceId: TestIds["wsA1"]) =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [workspaceId], ids.orgA, userId));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId,
+    }),
+  );
 
 const recorderFor = (
   userId: TestIds["userA1"],
@@ -278,7 +286,12 @@ describe("matter correspondence", () => {
       asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
         ...common,
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(testDb, [ids.wsA1], ids.orgB, ids.userB1),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [ids.wsA1],
+            organizationId: ids.orgB,
+            userId: ids.userB1,
+          }),
         ),
         session: { activeOrganizationId: ids.orgB },
         user: { id: ids.userB1 },
@@ -344,7 +357,12 @@ describe("matter correspondence", () => {
       allowedList.items.find(({ id }) => id === senderId)?.matterIds,
     ).toEqual([ids.wsA1]);
     const foreignSenders = await asTestRaw<SafeDb>(
-      createSafeDb(testDb, [ids.wsA1], ids.orgB, ids.userB1),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+      }),
     )(
       async (tx) =>
         await tx
@@ -869,7 +887,12 @@ describe("matter correspondence", () => {
           expect(unrelatedMatter.value).toEqual([]);
         }
         const foreignOrganization = await asTestRaw<SafeDb>(
-          createSafeDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [ids.wsB1],
+            organizationId: ids.orgB,
+            userId: ids.userB1,
+          }),
         )((tx) =>
           tx
             .select({ id: user.id })

@@ -44,6 +44,7 @@ import {
   withAggregateLock,
   withAggregateRowQuery,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -530,6 +531,7 @@ export const authorizeFolioCollabRoom = async ({
       propertyId: row.propertyId,
       roomId,
       scopedDb: createScopedDb({
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
         organizationId: row.organizationId,
         userId: brandPersistedUserId(row.userId),
         workspaceIds: [row.workspaceId],

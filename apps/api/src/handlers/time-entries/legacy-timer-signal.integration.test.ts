@@ -19,6 +19,7 @@ import {
 import { createScopedDb } from "@/api/db/scoped";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import {
   createTestIds,
@@ -104,12 +105,12 @@ const signal = async (entryId: typeof timeEntries.$inferSelect.id) =>
       .limit(1)
   ).at(0)?.state;
 const memberGuard = async (entryId: typeof timeEntries.$inferSelect.id) =>
-  await createScopedDb(
-    db,
-    [ids.wsA2],
-    ids.orgA,
-    ids.userA2,
-  )(
+  await createScopedDb(db, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA2],
+    organizationId: ids.orgA,
+    userId: ids.userA2,
+  })(
     async (tx) =>
       await guardRunningTimeEntries({
         tx,
@@ -119,7 +120,13 @@ const memberGuard = async (entryId: typeof timeEntries.$inferSelect.id) =>
       }),
   );
 
-const ownerDb = () => createScopedDb(db, [], ids.orgA, ids.userA1);
+const ownerDb = () =>
+  createScopedDb(db, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
 
 const expectForbidden = async (operation: Promise<unknown>) => {
   const outcome = await Result.tryPromise(async () => await operation);
@@ -132,7 +139,12 @@ const expectForbidden = async (operation: Promise<unknown>) => {
 test("members see the running signal even when the linked timer is private", async () => {
   const entryId = await createEntry();
   await createLinkedTimer(entryId);
-  const otherMember = createScopedDb(db, [ids.wsA2], ids.orgA, ids.userA2);
+  const otherMember = createScopedDb(db, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA2],
+    organizationId: ids.orgA,
+    userId: ids.userA2,
+  });
   expect(await otherMember((tx) => tx.select().from(timeTimers))).toEqual([]);
   expect(await signal(entryId)).toBe("running");
   expect(await memberGuard(entryId)).toMatchObject({
@@ -227,7 +239,12 @@ test("a direct legacy entry without a projection keeps the timestamp definition"
 test("signal writes cannot hide a running clock or expose another organization's signal", async () => {
   const entryId = await createEntry();
   await createLinkedTimer(entryId);
-  const anotherMember = createScopedDb(db, [], ids.orgA, ids.userA2);
+  const anotherMember = createScopedDb(db, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId: ids.orgA,
+    userId: ids.userA2,
+  });
   expect(
     await anotherMember((tx) =>
       tx
@@ -252,12 +269,12 @@ test("signal writes cannot hide a running clock or expose another organization's
   ).toEqual([]);
   expect(await signal(entryId)).toBe("running");
   await expectForbidden(
-    createScopedDb(
-      db,
-      [ids.wsA2],
-      ids.orgA,
-      ids.userA2,
-    )((tx) =>
+    createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    })((tx) =>
       tx
         .update(timeEntryTimerStates)
         .set({ state: "paused" })
@@ -273,12 +290,12 @@ test("signal writes cannot hide a running clock or expose another organization's
   );
   expect(await signal(entryId)).toBe("running");
   expect(
-    await createScopedDb(
-      db,
-      [],
-      ids.orgB,
-      ids.userB1,
-    )((tx) => tx.select().from(timeEntryTimerStates)),
+    await createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    })((tx) => tx.select().from(timeEntryTimerStates)),
   ).toEqual([]);
 });
 
@@ -325,28 +342,28 @@ test("foreign projections are visible only with access to their legacy entry", a
   const entryId = await createEntry();
   await createLinkedTimer(entryId);
   expect(
-    await createScopedDb(
-      db,
-      [],
-      ids.orgA,
-      ids.userA2,
-    )((tx) => tx.select().from(timeEntryTimerStates)),
+    await createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    })((tx) => tx.select().from(timeEntryTimerStates)),
   ).toEqual([]);
   expect(
-    await createScopedDb(
-      db,
-      [],
-      ids.orgA,
-      ids.userA1,
-    )((tx) => tx.select().from(timeEntryTimerStates)),
+    await createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })((tx) => tx.select().from(timeEntryTimerStates)),
   ).toHaveLength(1);
   expect(
-    await createScopedDb(
-      db,
-      [ids.wsA2],
-      ids.orgA,
-      ids.userA2,
-    )((tx) => tx.select().from(timeEntryTimerStates)),
+    await createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    })((tx) => tx.select().from(timeEntryTimerStates)),
   ).toHaveLength(1);
 });
 

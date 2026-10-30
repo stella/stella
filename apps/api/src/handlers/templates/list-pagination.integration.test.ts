@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/templates/list";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -48,12 +49,22 @@ beforeAll(async () => {
   ids = fixture.ids;
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
   safeDbOrgB = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsB1],
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+      }),
     ),
   );
 });

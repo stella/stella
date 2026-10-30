@@ -1,4 +1,5 @@
 import { rlsDb } from "@/api/db/root";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ingestInboundMail } from "@/api/lib/email/inbound/ingest";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
 import { receiveAndDeleteSesInboundMail as receiveSesDelivery } from "@/api/lib/email/inbound/ses";
@@ -14,6 +15,7 @@ const createPersistence = () =>
     database: rlsDb,
     scopedDbForMatter: (scope) =>
       createRootScopedDb({
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
         organizationId: scope.organizationId,
         userId: scope.userId,
         workspaceIds: [scope.workspaceId],

@@ -23,6 +23,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { collectNodePropertyIds } from "@/api/lib/conditions/ast-utils";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
@@ -68,7 +69,12 @@ const createOrgContext = (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ) => {
-  const safeDb = createSafeDb(testDb, [], organizationId, userId);
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [],
+    organizationId,
+    userId,
+  });
 
   return {
     createAuditRecorder: () => noopAuditRecorder,

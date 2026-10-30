@@ -43,6 +43,7 @@ import {
   EXPORTED_ACCOUNT_TABLE_NAMES,
 } from "@/api/lib/account-export/registry";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -182,12 +183,12 @@ describe.skipIf(!enabled)("account export personal data", () => {
           status: "completed",
           entityFeatureGate: "open",
         });
-        await createScopedDb(
-          scopedDatabase,
-          [workspaceId],
+        await createScopedDb(scopedDatabase, {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [workspaceId],
           organizationId,
-          exportingUserId,
-        )(
+          userId: exportingUserId,
+        })(
           async (tx) =>
             await tx.insert(legalListClaims).values({
               id: verificationClaimId,
@@ -230,12 +231,12 @@ describe.skipIf(!enabled)("account export personal data", () => {
           createdAt,
           updatedAt,
         });
-        await createScopedDb(
-          scopedDatabase,
-          [workspaceId],
+        await createScopedDb(scopedDatabase, {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [workspaceId],
           organizationId,
-          exportingUserId,
-        )(
+          userId: exportingUserId,
+        })(
           async (tx) =>
             await tx
               .insert(legalReaderAnnotations)
@@ -245,12 +246,12 @@ describe.skipIf(!enabled)("account export personal data", () => {
                 ),
               ),
         );
-        await createScopedDb(
-          scopedDatabase,
-          [workspaceId],
+        await createScopedDb(scopedDatabase, {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [workspaceId],
           organizationId,
-          otherUserId,
-        )(
+          userId: otherUserId,
+        })(
           async (tx) =>
             await tx
               .insert(legalReaderAnnotations)
@@ -273,6 +274,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
         const annotationsOutsideExport = await createMembershipScopedDb(
           scopedDatabase,
           {
+            budget: BUDGETS.scopedWorkerPendingMeasurement,
             organizationId,
             serverValidatedWorkspaceIds: [],
             userId: exportingUserId,
@@ -289,6 +291,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
         const annotationsWithAppExportSettings = await createMembershipScopedDb(
           scopedDatabase,
           {
+            budget: BUDGETS.scopedWorkerPendingMeasurement,
             organizationId,
             serverValidatedWorkspaceIds: [],
             userId: exportingUserId,
@@ -327,12 +330,14 @@ describe.skipIf(!enabled)("account export personal data", () => {
           updatedAt,
         }));
         for (const note of privateNotes) {
-          await createScopedDb(
-            scopedDatabase,
-            [],
+          await createScopedDb(scopedDatabase, {
+            budget: BUDGETS.scopedWorkerPendingMeasurement,
+            workspaceScope: [],
             organizationId,
-            note.userId,
-          )(async (tx) => await tx.insert(legalReaderAnnotations).values(note));
+            userId: note.userId,
+          })(
+            async (tx) => await tx.insert(legalReaderAnnotations).values(note),
+          );
         }
         const ownPrivateNote =
           privateNotes.at(0) ?? panic("Own private note required");

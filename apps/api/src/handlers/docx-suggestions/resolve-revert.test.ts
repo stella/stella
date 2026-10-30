@@ -18,6 +18,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -257,13 +258,18 @@ const createWorkspaceContext = ({
       `https://example.test/docx-suggestions/${workspaceId}`,
     ),
     route,
-    safeDb: createSafeDb(testDb, activeWorkspaceIds, organizationId, userId),
-    scopedDb: createScopedDb(
-      testDb,
-      activeWorkspaceIds,
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: activeWorkspaceIds,
       organizationId,
       userId,
-    ),
+    }),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: activeWorkspaceIds,
+      organizationId,
+      userId,
+    }),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,

@@ -22,6 +22,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -144,8 +145,18 @@ const context = (
       headers: { "Accept-Language": "en" },
     }),
     route: "/v1/invoices/:workspaceId/:invoiceId/pdf" satisfies ApiRoutePath,
-    safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
-    scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId,
+      userId,
+    }),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
+      organizationId,
+      userId,
+    }),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,

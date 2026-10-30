@@ -23,6 +23,7 @@ import {
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import * as preparation from "@/api/lib/document-review/prepare-review-files";
 import {
@@ -52,7 +53,10 @@ import {
 const { testDb, ids } = await getRlsFixture();
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
 const scope = { organizationId: ids.orgA, userId: ids.userA1 };
-const inputDb = createRootMembershipScopedDb(scope, database);
+const inputDb = createRootMembershipScopedDb(
+  { ...scope, budget: BUDGETS.scopedRequest },
+  database,
+);
 const runId = createSafeId<"documentReviewRun">();
 const originalField = await testDb.query.fields.findFirst({
   where: { id: { eq: ids.fieldA2 } },
@@ -120,7 +124,12 @@ const basis = {
 } satisfies DocumentReviewRunBasis;
 
 const actor = createRootRunActor(
-  { ...scope, runId, workspaceId: ids.wsA1 },
+  {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    ...scope,
+    runId,
+    workspaceId: ids.wsA1,
+  },
   brandPersistedDocumentReviewRunId,
   database,
 );
@@ -321,7 +330,7 @@ describe("document review input readiness", () => {
       {
         ...actor,
         inputDb: createRootMembershipScopedDb(
-          scope,
+          { ...scope, budget: BUDGETS.scopedRequest },
           asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
         ),
       },

@@ -17,6 +17,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { getDefaultViews } from "@/api/lib/views";
@@ -77,7 +78,14 @@ const correspondenceViewIds = async (): Promise<SafeId<"workspaceView">[]> =>
 // The handler's SafeDb is typed over the production driver's transaction;
 // the shared test database runs the same schema on PGlite.
 const scopedSafeDb = (): SafeDb =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 const runCreate = async (
   safeDb: CreateCtx["safeDb"],
@@ -91,7 +99,12 @@ const runCreate = async (
     request: new Request(`https://example.test/workspaces/${ids.wsA1}/views`),
     route: "/v1/views/:workspaceId" satisfies ApiRoutePath,
     safeDb,
-    scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     workspaceId: ids.wsA1,

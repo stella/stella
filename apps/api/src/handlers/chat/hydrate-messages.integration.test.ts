@@ -20,6 +20,7 @@ import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createUserFileKey } from "@/api/lib/file-key";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
@@ -95,7 +96,12 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 
   const ownFileKey = createUserFileKey({

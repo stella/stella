@@ -9,6 +9,7 @@ import type { PropertyContent } from "@/api/db/schema-validators";
 import { createSafeDb } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   createTestIds,
   setupRlsTestData,
@@ -90,12 +91,12 @@ test.each([
           ask: { question: "", content: { version: 1, type: "text" } },
         });
       }
-      return await createSafeDb(
-        db,
-        [ids.wsA1],
-        ids.orgA,
-        ids.userA1,
-      )(
+      return await createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      })(
         async (tx) =>
           await materializePlaybookRun({
             tx,

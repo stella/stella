@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { scheduledMeasurementDatabase } from "@/api/tests/query-perf/scheduled-run";
@@ -27,7 +28,12 @@ afterAll(releaseRlsFixture);
 
 test("state-specific retention drains bounded mixed expiry batches and leaves the replay window intact", async () => {
   const { testDb, ids } = fixture;
-  const scopedDb = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   const now = new Date("2026-01-10T12:00:00Z");
   const rows = ["completed", "pending"].flatMap((state) =>
     Array.from(

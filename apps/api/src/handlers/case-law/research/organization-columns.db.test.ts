@@ -37,6 +37,7 @@ import type {
   CaseLawResearchAnswerRun,
   CaseLawResearchColumnContent,
 } from "@/api/lib/case-law/research-answers";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -83,8 +84,18 @@ const contextFor = (
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/research/columns"),
   route: "/v1/case/research/columns" satisfies ApiRoutePath,
-  safeDb: createSafeDb(testDb, [], organizationId, userId),
-  scopedDb: createScopedDb(testDb, [], organizationId, userId),
+  safeDb: createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [],
+    organizationId,
+    userId,
+  }),
+  scopedDb: createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId,
+    userId,
+  }),
   session: { activeOrganizationId: organizationId },
   user: { id: userId },
 });
@@ -448,7 +459,12 @@ describe("a run answers only the cells that need it", () => {
     expect(newer.cells).toHaveLength(stalled.cells.length);
 
     const deps = {
-      safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       // Nothing in the corpus answers these ids, so every cell this run does
       // own ends `failed`; that is the write the claim has to gate.
       caseLawDb: async (fn: (tx: unknown) => Promise<unknown>) =>

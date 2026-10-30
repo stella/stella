@@ -51,6 +51,7 @@ import {
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
 import { completeRequestReceipt } from "@/api/lib/idempotency/request-receipts";
 import {
@@ -159,12 +160,12 @@ if (!databaseUrl || !runPostgresTests) {
             [userId, actorUserId].map((id) => ({ workspaceId, userId: id })),
           );
         const seedReceipt = async (principal: typeof departingPrincipal) =>
-          await createScopedDb(
-            markRlsDatabase(db),
-            [],
-            principal.organizationId,
-            principal.userId,
-          )(
+          await createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
+            organizationId: principal.organizationId,
+            userId: principal.userId,
+          })(
             async (tx) =>
               await tx.insert(requestIdempotencyReceipts).values({
                 ...principal,
@@ -199,12 +200,12 @@ if (!databaseUrl || !runPostgresTests) {
           );
         const holding = Promise.withResolvers<undefined>();
         const release = Promise.withResolvers<undefined>();
-        const original = createScopedDb(
-          markRlsDatabase(owningDb),
-          [],
+        const original = createScopedDb(markRlsDatabase(owningDb), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [],
           organizationId,
           userId,
-        )(async (tx) => {
+        })(async (tx) => {
           const locked = await tx
             .select({ id: requestIdempotencyReceipts.id })
             .from(requestIdempotencyReceipts)
@@ -293,12 +294,12 @@ if (!databaseUrl || !runPostgresTests) {
       const userId = mintAuthProviderId<"user">();
       const memberId = Bun.randomUUIDv7();
       const desktopId = Bun.randomUUIDv7();
-      const scopedDb = createScopedDb(
-        markRlsDatabase(db),
-        [],
+      const scopedDb = createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
         organizationId,
         userId,
-      );
+      });
       await db.insert(user).values(
         [actorUserId, userId].map((id) => ({
           id,
@@ -357,12 +358,12 @@ if (!databaseUrl || !runPostgresTests) {
           ].map(
             async (owner) =>
               await reportDesktopPresence({
-                scopedDb: createScopedDb(
-                  markRlsDatabase(db),
-                  [],
-                  owner.organizationId,
-                  owner.userId,
-                ),
+                scopedDb: createScopedDb(markRlsDatabase(db), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceScope: [],
+                  organizationId: owner.organizationId,
+                  userId: owner.userId,
+                }),
                 ...owner,
                 report,
               }),
@@ -415,12 +416,12 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         ).toBe(0);
         expect(
-          await createScopedDb(
-            markRlsDatabase(db),
-            [],
+          await createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
             organizationId,
-            actorUserId,
-          )(
+            userId: actorUserId,
+          })(
             async (tx) =>
               await tx.$count(
                 desktopPresence,
@@ -429,12 +430,12 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         ).toBe(1);
         expect(
-          await createScopedDb(
-            markRlsDatabase(db),
-            [],
-            otherOrganizationId,
+          await createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
+            organizationId: otherOrganizationId,
             userId,
-          )(
+          })(
             async (tx) =>
               await tx.$count(
                 desktopPresence,
@@ -1053,12 +1054,12 @@ if (!databaseUrl || !runPostgresTests) {
           apiBaseUrl: "https://example.test",
           expiresAt: new Date(Date.now() + 3_600_000),
         });
-        await createScopedDb(
-          markRlsDatabase(db),
-          [workspaceId],
+        await createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [workspaceId],
           organizationId,
-          brandPersistedUserId(leaver.userId),
-        )(
+          userId: brandPersistedUserId(leaver.userId),
+        })(
           async (tx) =>
             await tx.insert(pdfSigningSessions).values({
               id: signingId,
@@ -1448,12 +1449,12 @@ if (!databaseUrl || !runPostgresTests) {
               expiresAt: future,
             })),
           );
-          await createScopedDb(
-            markRlsDatabase(db),
-            [workspaceId],
+          await createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [workspaceId],
             organizationId,
-            actorUserId,
-          )(
+            userId: actorUserId,
+          })(
             async (tx) =>
               await tx.insert(pdfSigningSessions).values(
                 [actorUserId, userId].map((id, index) => ({
@@ -1512,12 +1513,12 @@ if (!databaseUrl || !runPostgresTests) {
             }
             const ready = Promise.withResolvers<undefined>();
             const release = Promise.withResolvers<undefined>();
-            const closing = createScopedDb(
-              markRlsDatabase(closingDb),
-              [workspaceId],
+            const closing = createScopedDb(markRlsDatabase(closingDb), {
+              budget: BUDGETS.scopedRequest,
+              workspaceScope: [workspaceId],
               organizationId,
               userId,
-            )(async (tx) => {
+            })(async (tx) => {
               await tx
                 .update(pdfSigningSessions)
                 .set({

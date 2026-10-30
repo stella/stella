@@ -49,6 +49,7 @@ import {
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -384,12 +385,12 @@ describe("resolveMemberAuthorization", () => {
         workspaceId: target,
       };
       const authorization = await resolveMemberAuthorization(lookup, testDb);
-      const workspace = await createScopedDb(
-        testDb,
-        [target],
-        orgFull,
-        actor,
-      )(async (tx) => await resolveWorkspaceMemberAccess(lookup, tx));
+      const workspace = await createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [target],
+        organizationId: orgFull,
+        userId: actor,
+      })(async (tx) => await resolveWorkspaceMemberAccess(lookup, tx));
       expect(workspace?.id ?? null).toBe(expected);
       expect(workspace).toEqual(authorization?.workspace ?? null);
     },

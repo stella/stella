@@ -20,6 +20,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { listAnnouncementRecipients } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -61,6 +62,7 @@ const readAudience = async (
 ): Promise<string[]> =>
   (
     await createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId,
@@ -198,8 +200,14 @@ describe("announcement endpoint", () => {
         recordAuditEvent,
         request: new Request("https://example.test/v1/notifications/announce"),
         route: "/v1/notifications/announcements" satisfies ApiRoutePath,
-        safeDb: createMembershipSafeDb(testDb, identity),
-        scopedDb: createMembershipScopedDb(testDb, identity),
+        safeDb: createMembershipSafeDb(testDb, {
+          ...identity,
+          budget: BUDGETS.scopedRequest,
+        }),
+        scopedDb: createMembershipScopedDb(testDb, {
+          ...identity,
+          budget: BUDGETS.scopedRequest,
+        }),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA2 },
       }),

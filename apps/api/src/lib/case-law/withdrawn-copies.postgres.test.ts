@@ -17,6 +17,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -42,7 +43,12 @@ describe.skipIf(!enabled)("withdrawn copies (postgres)", () => {
   ];
   const orgId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
-  const tenantDb = createScopedDb(markRlsDatabase(db), [], orgId, userId);
+  const tenantDb = createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId: orgId,
+    userId,
+  });
   const annotationId = createSafeId<"legalReaderAnnotation">();
   const scopedDb = asTestRaw<ScopedDb>(
     async (read: (tx: typeof db) => Promise<unknown>) =>

@@ -35,6 +35,7 @@ import {
   LEGACY_PAYMENT_NOTE,
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { effectiveOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -207,8 +208,18 @@ const run = async (
       recordAuditEvent,
       request: new Request(`https://example.test/workspaces/${workspaceId}`),
       route,
-      safeDb: createSafeDb(testDb, [workspaceId], ids.orgA, userId),
-      scopedDb: createScopedDb(testDb, [workspaceId], ids.orgA, userId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [workspaceId],
+        organizationId: ids.orgA,
+        userId,
+      }),
+      scopedDb: createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [workspaceId],
+        organizationId: ids.orgA,
+        userId,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: userId },
       workspaceId,
@@ -756,12 +767,12 @@ describe("invoice payments", () => {
           set: { timeZone, practiceJurisdictions: [...practiceJurisdictions] },
         });
       const exportDate = async () => {
-        const scopedDb = createScopedDb(
-          testDb,
-          [ids.wsA1],
-          ids.orgA,
-          ids.userA1,
-        );
+        const scopedDb = createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA1],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        });
         return await scopedDb(async (tx) => {
           const invoice =
             (await tx.query.invoices.findFirst({
@@ -905,7 +916,12 @@ describe("invoice payments", () => {
   test("a member without the invoice's matter sees none of its payments", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
     await record(invoiceId, { amount: 1000 });
-    const outsider = createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2);
+    const outsider = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    });
     const visible = await outsider(
       async (tx) =>
         await tx
@@ -914,7 +930,12 @@ describe("invoice payments", () => {
           .where(eq(invoicePayments.invoiceId, invoiceId)),
     );
     expect(visible.unwrap()).toEqual([]);
-    const owner = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const owner = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const own = await owner(
       async (tx) =>
         await tx
@@ -927,12 +948,12 @@ describe("invoice payments", () => {
 
   test("another organization cannot attach a payment to the invoice", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
-    const otherOrganization = createSafeDb(
-      testDb,
-      [ids.wsB1],
-      ids.orgB,
-      ids.userB1,
-    );
+    const otherOrganization = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsB1],
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    });
     const insert = await otherOrganization(
       async (tx) =>
         await tx.insert(invoicePayments).values({
@@ -952,7 +973,12 @@ describe("invoice payments", () => {
   test("the request role cannot delete a payment", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
     await record(invoiceId, { amount: 1000 });
-    const owner = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const owner = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const removed = await owner(
       async (tx) =>
         await tx

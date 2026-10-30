@@ -22,6 +22,7 @@ import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -111,8 +112,18 @@ const handlerContext = (route: ApiRoutePath) => {
     request: new Request(`https://example.test/docx-suggestions/${ids.wsA1}`),
     route,
     recordAuditEvent: async () => {},
-    safeDb: createSafeDb(testDb, activeWorkspaceIds, ids.orgA, ids.userA1),
-    scopedDb: createScopedDb(testDb, activeWorkspaceIds, ids.orgA, ids.userA1),
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: activeWorkspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: activeWorkspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     workspaceId: ids.wsA1,

@@ -26,6 +26,7 @@ import {
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   APPROVAL_TOOL_NAME,
@@ -83,7 +84,12 @@ beforeAll(
       testDb = withQueryLogger(fixture.testDb, profile.logger);
       ids = fixture.ids;
       scopedDb = asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA1, ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
       );
       safeDb = toSafeDbMock(scopedDb);
       await testDb.insert(mcpConnectors).values({

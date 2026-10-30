@@ -12,6 +12,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
@@ -60,12 +61,12 @@ test("an exhausted scanned template write remains owned by recovery", async () =
         await Result.gen(() =>
           createStoredTemplate({
             safeDb: asTestRaw<SafeDb>(
-              createSafeDb(
-                fixture.testDb,
-                [],
-                fixture.ids.orgA,
-                fixture.ids.userA1,
-              ),
+              createSafeDb(fixture.testDb, {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [],
+                organizationId: fixture.ids.orgA,
+                userId: fixture.ids.userA1,
+              }),
             ),
             organizationId: fixture.ids.orgA,
             userId: fixture.ids.userA1,
@@ -99,7 +100,12 @@ test("an exhausted scanned template write remains owned by recovery", async () =
 test("a committed template refusal cleans its candidate and keeps the published template", async () => {
   const fake = startFakeS3();
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(fixture.testDb, [], fixture.ids.orgA, fixture.ids.userA1),
+    createSafeDb(fixture.testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: fixture.ids.orgA,
+      userId: fixture.ids.userA1,
+    }),
   );
   const scanned = await scanUpload({
     bytes: await docxWithMarkers(["name"]),

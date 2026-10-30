@@ -14,6 +14,7 @@ import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -105,7 +106,12 @@ const exportContext = () => ({
   organizationId: ids.orgA,
   workspaceId: ids.wsA2,
   scopedDb: asTestRaw<ScopedDb>(
-    createScopedDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
+    createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
   ),
   query: { dateFrom: DAY, dateTo: DAY },
 });
@@ -121,8 +127,18 @@ test("a mixed client/internal invoice request refuses before claiming either row
       user: { id: ids.userAdmin },
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
-      safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
-      scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
+      safeDb: createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA2],
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+      }),
+      scopedDb: createScopedDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA2],
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+      }),
       recordAuditEvent: async () => undefined,
       body: {
         invoiceNumber,

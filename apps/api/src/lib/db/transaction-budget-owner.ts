@@ -14,6 +14,10 @@ export const withTransactionBudgetContext = <T>(
 
 export const getPendingTransactionBudget = () => pendingBudget.getStore();
 
+/** The pending policy belongs to transaction admission, not later transactions opened by its work. */
+export const withoutPendingTransactionBudget = <T>(run: () => T): T =>
+  pendingBudget.exit(run);
+
 export const getTransactionBudget = (tx: object) => transactionBudgets.get(tx);
 
 type TransactionBudgetExecutor = {

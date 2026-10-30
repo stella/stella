@@ -9,6 +9,7 @@ import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
@@ -44,7 +45,14 @@ afterAll(async () => {
 });
 
 const memberSafeDb = (): SafeDb =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 const upload = async (file: File) =>
   await uploadSkill.handler(

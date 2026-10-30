@@ -13,6 +13,7 @@ import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -51,12 +52,12 @@ test.each(["copy", "write"] as const)(
     try {
       const result = await promoteTmpObjectWithUsage({
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(
-            fixture.testDb,
-            [fixture.ids.wsA1],
-            fixture.ids.orgA,
-            fixture.ids.userA1,
-          ),
+          createSafeDb(fixture.testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [fixture.ids.wsA1],
+            organizationId: fixture.ids.orgA,
+            userId: fixture.ids.userA1,
+          }),
         ),
         organizationId: fixture.ids.orgA,
         workspaceId: fixture.ids.wsA1,
@@ -101,7 +102,12 @@ test.each([
     const fake = startFakeS3();
     const { ids, testDb } = fixture;
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const uploadId = createSafeId<"pendingUpload">();
     const requestId = Bun.randomUUIDv7();

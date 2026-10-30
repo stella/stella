@@ -28,6 +28,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { VatRateUnavailableError } from "@/api/lib/billing/vat-exchange-rates";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -961,8 +962,18 @@ const createContext = ({
   auditEvents: AuditEvent[];
   invoiceId: SafeId<"invoice">;
 }): TransitionCtx => {
-  const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
-  const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   const recordAuditEvent: TransitionCtx["recordAuditEvent"] = async (
     _tx,
     events,

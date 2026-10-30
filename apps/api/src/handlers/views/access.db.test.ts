@@ -23,6 +23,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
@@ -86,8 +87,18 @@ const context = () => ({
   workspaceId: ids.wsA1,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
-  safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-  scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+  safeDb: createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  }),
+  scopedDb: createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  }),
 });
 
 const withAccess = async <T>(

@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A workflow run reads its fields under its requester's current access, so a
  * requester who lost the matter or left the organization gets no model call,
@@ -8,8 +9,6 @@
  * The `workflow` and `workflow-flex` workers hand every job to the same
  * `processWorkflowEntityRun`; each case runs once per queue class.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -36,6 +35,7 @@ import type { RlsDatabase } from "@/api/db/scoped";
 import * as aiConfigLoader from "@/api/lib/ai-config-loader";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createExtractionRunStore } from "@/api/lib/extraction-runs/store";
 import type { ExtractionRunDb } from "@/api/lib/extraction-runs/store";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
@@ -227,6 +227,7 @@ const queueRun = async (
   );
   const actor = createRootRunActor(
     {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
       organizationId: ids.orgA,
       workspaceId: ids.wsA1,
       userId: ids.userA1,

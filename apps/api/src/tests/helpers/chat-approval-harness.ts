@@ -55,6 +55,7 @@ import {
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
@@ -457,7 +458,10 @@ export const createApprovalHarness = ({
         userId: executionUserId,
       };
       const executionScopedDb = asTestRaw<ScopedDb>(
-        createMembershipScopedDb(testDb, databaseIdentity),
+        createMembershipScopedDb(testDb, {
+          ...databaseIdentity,
+          budget: BUDGETS.scopedRequest,
+        }),
       );
       const workspaces = await executionScopedDb(
         async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
@@ -478,7 +482,10 @@ export const createApprovalHarness = ({
           accessibleIds.has(workspaceId),
         role: authorization.role,
         safeDb: asTestRaw<SafeDb>(
-          createMembershipSafeDb(testDb, databaseIdentity),
+          createMembershipSafeDb(testDb, {
+            ...databaseIdentity,
+            budget: BUDGETS.scopedRequest,
+          }),
         ),
         scopedDb: executionScopedDb,
         userEmail: authorization.email,

@@ -7,6 +7,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,
@@ -85,6 +86,7 @@ const executeAdmittedFlowStep = async ({
     organizationId: workspace.organizationId,
     userId: actor,
     organizationStateDb: createRootMembershipScopedDb({
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
       organizationId: workspace.organizationId,
       userId: actor,
     }),

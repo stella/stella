@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import {
   authorizeFolioCollabRoom,
@@ -212,12 +213,12 @@ const setup = async () => {
   expect(renewed?.tokenExpiresAt).toEqual(source.expiresAt);
 
   const scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(
-      testDb,
-      [workspaceId],
-      brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id),
-      brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
-    ),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
+      organizationId: brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id),
+      userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+    }),
   );
   const recordAuditEvent = createAuditRecorder({
     organizationId: brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id),

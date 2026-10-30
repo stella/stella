@@ -5,6 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { billingCodes, rateEntries } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
@@ -62,7 +63,12 @@ test("referenced activity codes remain until their rate entries are removed", as
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           safeDb: asTestRaw<SafeDb>(
-            createSafeDb(db, [ids.wsA1], ids.orgA, ids.userA1),
+            createSafeDb(db, {
+              budget: BUDGETS.scopedRequest,
+              workspaceIds: [ids.wsA1],
+              organizationId: ids.orgA,
+              userId: ids.userA1,
+            }),
           ),
           body: { id: activityCodeId },
         }),

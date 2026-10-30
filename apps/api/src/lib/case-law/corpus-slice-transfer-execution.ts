@@ -274,10 +274,12 @@ const executeCorpusSliceExport = async ({
   };
 };
 
-/** Streams every shard from one bounded, read-only, repeatable snapshot. */
+/** Streams every shard from one read-only, repeatable snapshot. */
 export const exportCorpusSliceFromDatabase = async (
   options: ExportExecutionOptions,
 ): Promise<CorpusSliceExportResult> => {
+  // Total duration depends on corpus size and storage I/O; retain the existing
+  // uncapped snapshot until production measurements support a total deadline.
   const manifest = await withAggregateTransaction(
     options.database,
     AGGREGATE_TRANSACTION_BUDGETS.corpusSliceExport,

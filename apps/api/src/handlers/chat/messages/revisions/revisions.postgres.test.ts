@@ -56,6 +56,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { decodePaginationCursor } from "@/api/lib/pagination";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -159,12 +160,12 @@ const seedFixture = async (db: GatedTestDb) => {
     server: null,
   });
   const scoped = (database: GatedTestDb) =>
-    createScopedDb(
-      markRlsDatabase(database),
-      [workspaceId],
+    createScopedDb(markRlsDatabase(database), {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
       organizationId,
       userId,
-    );
+    });
   const write = async (
     database: GatedTestDb,
     change: ChatMessageRevisionChange,

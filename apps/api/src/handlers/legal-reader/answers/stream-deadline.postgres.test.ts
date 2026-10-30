@@ -25,6 +25,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -82,12 +83,12 @@ const seedFixture = async (db: GatedTestDb) => {
     name: "Reader deadline fixture",
     email: `${userId}@example.test`,
   });
-  const scopedDb = createScopedDb(
-    markRlsDatabase(db),
-    [],
+  const scopedDb = createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
     organizationId,
     userId,
-  );
+  });
   const prepared = await scopedDb(async (tx) => {
     const answer =
       (
@@ -227,18 +228,18 @@ if (!databaseUrl || !runPostgres) {
           let holding: Promise<void> | undefined;
           let consumed: Promise<string> | undefined;
           try {
-            const scopedWriter = createScopedDb(
-              markRlsDatabase(writer),
-              [],
+            const scopedWriter = createScopedDb(markRlsDatabase(writer), {
+              budget: BUDGETS.scopedRequest,
+              workspaceScope: [],
               organizationId,
               userId,
-            );
-            const scopedHolder = createScopedDb(
-              markRlsDatabase(holder),
-              [],
+            });
+            const scopedHolder = createScopedDb(markRlsDatabase(holder), {
+              budget: BUDGETS.scopedRequest,
+              workspaceScope: [],
               organizationId,
               userId,
-            );
+            });
             const writerPid =
               (
                 await scopedWriter(
@@ -282,12 +283,12 @@ if (!databaseUrl || !runPostgres) {
               organizationId,
               userId,
               prepared,
-              safeDb: createSafeDb(
-                markRlsDatabase(writer),
-                [],
+              safeDb: createSafeDb(markRlsDatabase(writer), {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [],
                 organizationId,
                 userId,
-              ),
+              }),
               recordAuditEvent: createAuditRecorder({
                 organizationId,
                 userId,

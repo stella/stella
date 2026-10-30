@@ -29,6 +29,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import {
   fanOutNotifications,
@@ -107,11 +108,13 @@ const contextFor = ({
     // Membership mode, as request authentication builds it: notification
     // visibility depends on the recipient's live matter access.
     safeDb: createMembershipSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId,
     }),
     scopedDb: createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId,
@@ -252,12 +255,12 @@ describe("notification list scoping", () => {
   test("RLS refuses a row addressed to somebody else", async () => {
     const foreignInsert = await Result.tryPromise(
       async () =>
-        await createScopedDb(
-          testDb,
-          [],
-          ids.orgA,
-          ids.userA1,
-        )(async (tx) => {
+        await createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        })(async (tx) => {
           await tx.insert(notifications).values({
             id: createSafeId<"notification">(),
             userId: ids.userA2,
@@ -282,12 +285,12 @@ describe("notification list scoping", () => {
   test("RLS hides the caller's own rows from another organization's scope", async () => {
     // Not the handler's organization filter: this reads the row by primary key
     // through a scoped connection, so only the policy can be hiding it.
-    const rows = await createScopedDb(
-      testDb,
-      [],
-      ids.orgA,
-      ids.userA1,
-    )(
+    const rows = await createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })(
       async (tx) =>
         await tx
           .select({ id: notifications.id })
@@ -301,12 +304,12 @@ describe("notification list scoping", () => {
   test("RLS refuses a row filed against another organization", async () => {
     const foreignOrgInsert = await Result.tryPromise(
       async () =>
-        await createScopedDb(
-          testDb,
-          [],
-          ids.orgA,
-          ids.userA1,
-        )(async (tx) => {
+        await createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        })(async (tx) => {
           await tx.insert(notifications).values({
             id: createSafeId<"notification">(),
             userId: ids.userA1,

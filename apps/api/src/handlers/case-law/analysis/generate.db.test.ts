@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Analysis generation for a decision whose language has no analysis prompt.
  *
@@ -7,8 +8,6 @@
  * hermetic test points at the counting sentinel, so a claim is observable
  * as a sentinel connection.
  */
-
-import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
@@ -20,6 +19,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -126,7 +126,12 @@ describe("generating an analysis for a decision in a language with no prompt", (
         panic("Unsupported languages must not start a model action"),
       decisionId,
       scopedDb: executeRowsScopedDb(
-        createScopedDb(db, [], ORGANIZATION_ID, USER_ID),
+        createScopedDb(db, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [],
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+        }),
       ),
       organizationId: ORGANIZATION_ID,
       orgAIConfig,

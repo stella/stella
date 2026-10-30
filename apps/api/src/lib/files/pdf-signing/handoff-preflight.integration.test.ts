@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { preflightPdfSigning } from "@/api/lib/files/pdf-signing/handoff-preflight";
 import { executeRowsSafeDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
@@ -29,7 +30,12 @@ afterAll(async () => {
 
 test("rejects the saved field when a newer same-entity version is current", async () => {
   const safeDb = executeRowsSafeDb(
-    createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   const savedField = (
     await testDb

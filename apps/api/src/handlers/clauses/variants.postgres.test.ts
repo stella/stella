@@ -15,6 +15,7 @@ import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { AUDIT_RESOURCE_TYPE, createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -71,13 +72,18 @@ const seedFixture = async ({
     organizationId,
     otherOrganizationId,
     userId,
-    safeDb: createSafeDb(markRlsDatabase(db), [], organizationId, userId),
-    secondSafeDb: createSafeDb(
-      markRlsDatabase(secondDb),
-      [],
+    safeDb: createSafeDb(markRlsDatabase(db), {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
       organizationId,
       userId,
-    ),
+    }),
+    secondSafeDb: createSafeDb(markRlsDatabase(secondDb), {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId,
+      userId,
+    }),
     recordAuditEvent: createAuditRecorder({
       organizationId,
       userId,

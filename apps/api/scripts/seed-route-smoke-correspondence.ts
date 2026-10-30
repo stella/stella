@@ -69,6 +69,7 @@ await runScriptWithErrorOutput(async () => {
     return seededFiler;
   });
   const scopedDb = createRootMembershipScopedDb({
+    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: DEFAULT_ORG_ID,
     userId: toSafeId<"user">(filer.id),
   });

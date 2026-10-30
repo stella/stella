@@ -19,6 +19,7 @@ import {
   reserveBufferIntent,
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DocumentSource } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
@@ -492,6 +493,7 @@ export const createEntityVersionFromBuffer = async ({
       versionId: entityVersionId,
       entityId,
       scopedDb: dependencies.createRootScopedDb({
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
         organizationId,
         userId,
         workspaceIds: [workspaceId],

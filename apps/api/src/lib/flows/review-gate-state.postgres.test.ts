@@ -7,6 +7,7 @@ import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createDatabase } from "@/api/db/sql-client";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
@@ -32,12 +33,12 @@ if (!databaseUrl || !runPostgresTests) {
                 intermediate,
                 governed: true,
               });
-              const firstDb = createSafeDb(
-                markRlsDatabase(db),
-                [f.workspaceId],
-                f.organizationId,
-                f.userId,
-              );
+              const firstDb = createSafeDb(markRlsDatabase(db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [f.workspaceId],
+                organizationId: f.organizationId,
+                userId: f.userId,
+              });
               const written = Promise.withResolvers<undefined>();
               const release = Promise.withResolvers<undefined>();
               const otherDb = createDatabase({
@@ -57,12 +58,12 @@ if (!databaseUrl || !runPostgresTests) {
                   },
                 },
               });
-              const secondDb = createSafeDb(
-                markRlsDatabase(otherDb),
-                [f.workspaceId],
-                f.organizationId,
-                f.userId,
-              );
+              const secondDb = createSafeDb(markRlsDatabase(otherDb), {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [f.workspaceId],
+                organizationId: f.organizationId,
+                userId: f.userId,
+              });
               const gatedFirst: SafeDb = async (work, retry) =>
                 await firstDb(async (tx) => {
                   const value = await work(tx);
@@ -166,12 +167,12 @@ if (!databaseUrl || !runPostgresTests) {
                 intermediate: false,
                 governed: true,
               });
-              const safeDb = createSafeDb(
-                markRlsDatabase(db),
-                [f.workspaceId],
-                f.organizationId,
-                f.userId,
-              );
+              const safeDb = createSafeDb(markRlsDatabase(db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [f.workspaceId],
+                organizationId: f.organizationId,
+                userId: f.userId,
+              });
               try {
                 const first = actions.at(0);
                 if (!first) {

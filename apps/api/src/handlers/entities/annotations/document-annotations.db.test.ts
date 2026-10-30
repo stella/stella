@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   pdfPageTextSha256,
   readPdfPageTexts,
@@ -269,12 +270,12 @@ const contextFor = (
   workspaceId,
   session: { activeOrganizationId: organizationId },
   user: { id: userId },
-  safeDb: createSafeDb(
-    markRlsDatabase(db),
-    visibleWorkspaceIds,
+  safeDb: createSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: visibleWorkspaceIds,
     organizationId,
     userId,
-  ),
+  }),
   audit: createAuditRecorder({
     organizationId,
     workspaceId,
@@ -710,12 +711,12 @@ describe.skipIf(!enabled)("marks on a matter document's PDF", () => {
         organizationId = tenant.organizationId,
         userId = tenant.author,
       ) =>
-        await createScopedDb(
-          markRlsDatabase(db),
-          visibleWorkspaceIds,
+        await createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: visibleWorkspaceIds,
           organizationId,
           userId,
-        )(
+        })(
           async (tx) =>
             await tx
               .select({ id: legalReaderAnnotations.id })
@@ -758,12 +759,12 @@ describe.skipIf(!enabled)("marks on a matter document's PDF", () => {
         // Even a session pinned to the tenant's matter reads none of its
         // marks: the row policy holds each mark to its organization.
         expect(
-          await createScopedDb(
-            markRlsDatabase(db),
-            [tenant.workspaceId],
-            outsider.organizationId,
-            outsider.author,
-          )(
+          await createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [tenant.workspaceId],
+            organizationId: outsider.organizationId,
+            userId: outsider.author,
+          })(
             async (tx) =>
               await tx
                 .select({ id: legalReaderAnnotations.id })

@@ -23,6 +23,7 @@ import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/au
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import type { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { ScanResult } from "@/api/lib/file-scan/types";
@@ -144,7 +145,12 @@ beforeAll(async () => {
   // check, not matter access, keeps the other matter's file out.
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1, ids.wsA2],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
   docx = Result.unwrap(await markdownToStellaDocx(ORIGINAL_TEXT));

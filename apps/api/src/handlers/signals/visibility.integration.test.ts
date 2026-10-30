@@ -26,6 +26,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import {
@@ -140,8 +141,18 @@ const runListAs = async ({
   credential?: CredentialAuthority;
   query?: ListContext["query"];
 }) => {
-  const scopedDb = createScopedDb(testDb, workspaceIds, organizationId, userId);
-  const safeDb = createSafeDb(testDb, workspaceIds, organizationId, userId);
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: workspaceIds,
+    organizationId,
+    userId,
+  });
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds,
+    organizationId,
+    userId,
+  });
   const recordAuditEvent: ListContext["recordAuditEvent"] = async () =>
     undefined;
   const result = await listSignals.handler(
@@ -267,8 +278,18 @@ describe("signal visibility", () => {
         asTestRaw<Parameters<typeof getSignal.handler>[0]>({
           memberRole: authorizedMemberRole({ role: "owner", credential }),
           params: { signalId: unscopedSignalA },
-          safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-          scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          safeDb: createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+          scopedDb: createScopedDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           request: new Request("https://example.test/signals/get"),
@@ -317,12 +338,12 @@ describe("signal visibility", () => {
       throw new Error("Expected the scoped signal fixture");
     }
 
-    const countVisibleToA2 = await createScopedDb(
-      testDb,
-      [ids.wsA2],
-      ids.orgA,
-      ids.userA2,
-    )(
+    const countVisibleToA2 = await createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    })(
       async (tx) =>
         await tx.$count(signalEvents, eq(signalEvents.signalId, signalId)),
     );
@@ -330,12 +351,12 @@ describe("signal visibility", () => {
 
     const hiddenParentInsert = await Result.tryPromise(
       async () =>
-        await createScopedDb(
-          testDb,
-          [ids.wsA2],
-          ids.orgA,
-          ids.userA2,
-        )(async (tx) => {
+        await createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        })(async (tx) => {
           await tx.insert(signalEvents).values({
             id: createSafeId<"signalEvent">(),
             organizationId: ids.orgA,
@@ -346,12 +367,12 @@ describe("signal visibility", () => {
     );
     expect(Result.isError(hiddenParentInsert)).toBe(true);
 
-    await createScopedDb(
-      testDb,
-      [ids.wsA1],
-      ids.orgA,
-      ids.userA1,
-    )(async (tx) => {
+    await createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })(async (tx) => {
       await tx.insert(signalEvents).values({
         id: createSafeId<"signalEvent">(),
         organizationId: ids.orgA,
@@ -360,12 +381,12 @@ describe("signal visibility", () => {
       });
     });
 
-    const countVisibleToA1 = await createScopedDb(
-      testDb,
-      [ids.wsA1],
-      ids.orgA,
-      ids.userA1,
-    )(
+    const countVisibleToA1 = await createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })(
       async (tx) =>
         await tx.$count(signalEvents, eq(signalEvents.signalId, signalId)),
     );

@@ -9,6 +9,7 @@ import { createMembershipSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
@@ -119,7 +120,12 @@ const listAs = async (userId: SafeId<"user">, query: ListCtx["query"] = {}) => {
       query,
       request: new Request("https://example.test/v1/tasks"),
       route: "/v1/tasks" satisfies ApiRoutePath,
-      safeDb: asTestRaw<SafeDb>(createMembershipSafeDb(testDb, identity)),
+      safeDb: asTestRaw<SafeDb>(
+        createMembershipSafeDb(testDb, {
+          ...identity,
+          budget: BUDGETS.scopedRequest,
+        }),
+      ),
       // Org A's matters only, as the access map would hand them over.
       getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
       session: { activeOrganizationId: ids.orgA },

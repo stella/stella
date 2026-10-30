@@ -24,6 +24,7 @@ import { timeEntryIsRunning } from "@/api/lib/billing/time-entry-running";
 import { submitTimeEntries } from "@/api/lib/billing/time-entry-submission";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -137,12 +138,12 @@ const withFixture = async (
         billable: true,
         ...entry,
       });
-      const asApp = createScopedDb(
-        markRlsDatabase(db),
-        [workspaceId],
+      const asApp = createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [workspaceId],
         organizationId,
         userId,
-      );
+      });
       await run({
         db,
         actors,
@@ -175,12 +176,12 @@ const appParticipant = (
   actor: "a" | "b",
   steps: readonly Step[],
 ) => {
-  const safeDb = createSafeDb(
-    markRlsDatabase(fixture.actors[actor]),
-    [fixture.workspaceId],
-    fixture.organizationId,
-    fixture.userId,
-  );
+  const safeDb = createSafeDb(markRlsDatabase(fixture.actors[actor]), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [fixture.workspaceId],
+    organizationId: fixture.organizationId,
+    userId: fixture.userId,
+  });
   return {
     steps,
     transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>

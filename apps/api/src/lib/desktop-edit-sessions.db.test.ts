@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * Desktop edit session event reads and liveness renewals run in the session's
  * own scope: role `stella`, pinned to the session's workspace, exactly as
@@ -5,8 +6,6 @@
  * rows are reachable; the membership joins and token predicates still decide
  * the answer inside that bound.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -22,6 +21,7 @@ import {
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   authorizeDesktopEditSessionWithDb,
   hashDesktopEditSessionToken,
@@ -135,12 +135,12 @@ const sessionScope = async <T>(
   session: SeededSession,
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> =>
-  await createScopedDb(
-    testDb,
-    [session.workspaceId],
-    session.organizationId,
-    session.createdBy,
-  )(async (tx) => await fn(asTestRaw<Transaction>(tx)));
+  await createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [session.workspaceId],
+    organizationId: session.organizationId,
+    userId: session.createdBy,
+  })(async (tx) => await fn(asTestRaw<Transaction>(tx)));
 
 const readTokenExpiry = async (sessionId: SafeId<"desktopEditSession">) =>
   (

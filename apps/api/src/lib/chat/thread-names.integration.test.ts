@@ -10,6 +10,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -28,7 +29,12 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   scoped = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 });
 

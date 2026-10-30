@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 import type { VerificationRunCaps } from "@/api/lib/lists/verification/run-cap-config";
 import {
@@ -69,12 +70,12 @@ const createFixture = async ({ db, connect, schema }: CreateFixtureArgs) => {
           return await fn(tx);
         }),
     });
-    return createScopedDb(
-      database,
-      [scope.workspaceId],
-      scope.organizationId,
-      toSafeId<"user">("verification_user"),
-    );
+    return createScopedDb(database, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [scope.workspaceId],
+      organizationId: scope.organizationId,
+      userId: toSafeId<"user">("verification_user"),
+    });
   };
   const start = async (
     candidate: ReturnType<typeof run>,

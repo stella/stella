@@ -12,6 +12,7 @@ import {
   instrumentQueryOrigins,
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const allRelations = {
@@ -123,7 +124,13 @@ export const createScopedQuery = (testDb: TestDatabase) => {
     orgId: SafeId<"organization">,
     fn: (tx: TestDatabaseTransaction) => Promise<T>,
     userId: SafeId<"user"> = DEFAULT_TEST_USER_ID,
-  ) => await createScopedDb(testDb, wsIds, orgId, userId)(fn);
+  ) =>
+    await createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: wsIds,
+      organizationId: orgId,
+      userId,
+    })(fn);
 
   return scopedQuery;
 };

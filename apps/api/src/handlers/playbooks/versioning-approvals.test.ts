@@ -21,6 +21,7 @@ import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -51,7 +52,12 @@ const createOrgContext = (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ) => {
-  const safeDb = createSafeDb(testDb, [], organizationId, userId);
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [],
+    organizationId,
+    userId,
+  });
 
   return {
     createAuditRecorder: () => noopAuditRecorder,

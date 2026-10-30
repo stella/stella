@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The isolation a reference passage's words depend on: `document_review_
  * reference_passages` is owned by the matter the reference document belongs
@@ -7,8 +8,6 @@
  * Only PostgreSQL enforces this (row security), so it is exercised against a
  * real schema rather than asserted about the query builder.
  */
-
-import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
@@ -19,6 +18,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   readableReferencePassageIds,
   readReferencePassageTexts,
@@ -129,7 +129,12 @@ afterAll(async () => {
 
 describe("reference passage isolation", () => {
   test("readReferencePassageTexts answers only the readable matter through a scoped transaction", async () => {
-    const scopedSafeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const scopedSafeDb = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
 
     const scopedResult = await scopedSafeDb(
       async (tx) =>
@@ -152,7 +157,12 @@ describe("reference passage isolation", () => {
   });
 
   test("readableReferencePassageIds reports only what the scoped transaction can open", async () => {
-    const scopedSafeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const scopedSafeDb = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
 
     const scopedResult = await scopedSafeDb(
       async (tx) =>
@@ -173,7 +183,12 @@ describe("reference passage isolation", () => {
   });
 
   test("the passages endpoint answers only the caller's own matter", async () => {
-    const scopedSafeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const scopedSafeDb = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
 
     const result = await readDocumentReviewPassages.handler(
       asTestRaw<Parameters<typeof readDocumentReviewPassages.handler>[0]>({
@@ -220,12 +235,12 @@ describe("reference passage isolation", () => {
     });
 
     test("accepts a position pinning a passage the caller's matter owns", async () => {
-      const scopedSafeDb = createSafeDb(
-        testDb,
-        [ids.wsA1],
-        ids.orgA,
-        ids.userA1,
-      );
+      const scopedSafeDb = createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      });
 
       const result = await assertPositionsValid(
         asTestRaw<Parameters<typeof assertPositionsValid>[0]>({
@@ -245,12 +260,12 @@ describe("reference passage isolation", () => {
     // author's own transaction cannot open, or the grader would describe a
     // matter's own words back through someone else's checklist.
     test("refuses a position pinning a passage from a matter the caller cannot open", async () => {
-      const scopedSafeDb = createSafeDb(
-        testDb,
-        [ids.wsA1],
-        ids.orgA,
-        ids.userA1,
-      );
+      const scopedSafeDb = createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      });
 
       const result = await assertPositionsValid(
         asTestRaw<Parameters<typeof assertPositionsValid>[0]>({

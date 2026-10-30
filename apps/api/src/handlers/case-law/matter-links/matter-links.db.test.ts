@@ -26,6 +26,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
@@ -74,8 +75,18 @@ const workspaceContext = () => ({
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/matter-links"),
   route: "/v1/case/matter-links/:workspaceId" satisfies ApiRoutePath,
-  safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-  scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+  safeDb: createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  }),
+  scopedDb: createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  }),
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
   workspaceId: ids.wsA1,
@@ -97,8 +108,18 @@ const call = async (
 };
 
 const modelCapabilityContext = (): AuthorizedMcpRequestContext => {
-  const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
-  const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   return asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [ids.wsA1],
     accessibleWorkspaceIdSet: new Set([ids.wsA1]),

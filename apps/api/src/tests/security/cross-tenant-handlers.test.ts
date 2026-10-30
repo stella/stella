@@ -185,6 +185,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -3504,18 +3505,18 @@ const createWorkspaceContext = ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 }): TestHandlerContext => {
-  const scopedDb = createScopedDb(
-    testDb,
-    activeWorkspaceIds,
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: activeWorkspaceIds,
     organizationId,
     userId,
-  );
-  const safeDb = createSafeDb(
-    testDb,
-    activeWorkspaceIds,
+  });
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: activeWorkspaceIds,
     organizationId,
     userId,
-  );
+  });
 
   return {
     createAuditRecorder: () => noopAuditRecorder,

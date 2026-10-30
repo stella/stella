@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * The read budget of a decision whose analysis is already stored or in
  * flight.
@@ -10,8 +11,6 @@
  * sentinel). The statement count is the fixed plan: the scoped transaction's
  * settings and the one decision read, the same on every call.
  */
-
-import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -34,6 +33,7 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
@@ -131,6 +131,7 @@ describe("answering a stored or in-flight analysis", () => {
   const scopedDbOf = (database: TestDatabase) =>
     executeRowsScopedDb(
       createMembershipScopedDb(database, {
+        budget: BUDGETS.scopedRequest,
         organizationId: ORGANIZATION_ID,
         userId: USER_ID,
         serverValidatedWorkspaceIds: [],

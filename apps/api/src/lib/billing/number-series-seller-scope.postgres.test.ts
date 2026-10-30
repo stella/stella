@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/billing/number-series";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -50,7 +51,12 @@ if (!databaseUrl || !runPostgresTests) {
       const sellerB = createSafeId<"sellerProfile">();
       const sellerC = createSafeId<"sellerProfile">();
       const archivedSeller = createSafeId<"sellerProfile">();
-      const scopedDb = createScopedDb(rlsDb, [], orgId, userId);
+      const scopedDb = createScopedDb(rlsDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: orgId,
+        userId,
+      });
       cleanUp(async () => {
         // The seller FK restricts deletion; remove series before profiles.
         await scopedDb(
@@ -98,7 +104,12 @@ if (!databaseUrl || !runPostgresTests) {
         ]);
       });
       const contextFor = (database: GatedTestDb) => ({
-        safeDb: createSafeDb(markRlsDatabase(database), [], orgId, userId),
+        safeDb: createSafeDb(markRlsDatabase(database), {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [],
+          organizationId: orgId,
+          userId,
+        }),
         session: { activeOrganizationId: orgId },
         user: { id: userId, email: `${userId}@example.test` },
         memberRole: sessionMemberRole("owner"),

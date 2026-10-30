@@ -17,6 +17,7 @@ import {
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { lockDesktopEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -546,12 +547,12 @@ if (!databaseUrl || !runPostgresTests) {
                     organizationId,
                     recordAuditEvent: noAudit,
                     safeDb: asTestRaw<SafeDb>(
-                      createSafeDb(
-                        markRlsDatabase(sessionDb),
-                        [sourceWorkspaceId],
+                      createSafeDb(markRlsDatabase(sessionDb), {
+                        budget: BUDGETS.scopedRequest,
+                        workspaceIds: [sourceWorkspaceId],
                         organizationId,
                         userId,
-                      ),
+                      }),
                     ),
                     source: {
                       kind: "background",

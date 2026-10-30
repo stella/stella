@@ -20,6 +20,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { resolveVatRate } from "@/api/lib/billing/vat-rates";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -52,19 +53,24 @@ describe.skipIf(!runPostgresTests)("VAT rates on Postgres", () => {
     code: string;
     on: string;
   }) =>
-    await createScopedDb(
-      testDb,
-      [],
-      options.organizationId,
-      ids.userA1,
-    )(async (tx) => await resolveVatRate(asTestRaw<Transaction>(tx), options));
+    await createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: options.organizationId,
+      userId: ids.userA1,
+    })(async (tx) => await resolveVatRate(asTestRaw<Transaction>(tx), options));
 
   const requestContext = () => ({
     request: new Request("https://example.test/v1/vat-rates", {
       method: "POST",
     }),
     route: "/v1/vat-rates" satisfies ApiRoutePath,
-    safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     scopedDb: createOrganizationScopedTestDb(testDb, {
       organizationId: ids.orgA,
       userId: ids.userA1,
@@ -222,12 +228,12 @@ describe.skipIf(!runPostgresTests)("VAT rates on Postgres", () => {
           })
         ).isErr(),
       ).toBe(true);
-      const visible = await createScopedDb(
-        testDb,
-        [],
-        ids.orgA,
-        ids.userA1,
-      )(
+      const visible = await createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      })(
         async (tx) =>
           await tx
             .select({ id: vatRates.id })
@@ -235,12 +241,12 @@ describe.skipIf(!runPostgresTests)("VAT rates on Postgres", () => {
             .where(inArray(vatRates.id, [ownId, foreignId])),
       );
       expect(visible).toEqual([{ id: ownId }]);
-      const forgedOrganization = await createScopedDb(
-        testDb,
-        [],
-        ids.orgA,
-        ids.userA1,
-      )(
+      const forgedOrganization = await createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      })(
         async (tx) =>
           await resolveVatRate(asTestRaw<Transaction>(tx), {
             organizationId: ids.orgB,

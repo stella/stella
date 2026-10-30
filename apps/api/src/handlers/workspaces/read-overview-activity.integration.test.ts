@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -207,7 +208,12 @@ const readActivityOfWorkspaceA1 = async (
         "/v1/workspaces/:workspaceId/overview/activity" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       query,
-      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       workspaceId: ids.wsA1,
@@ -223,7 +229,12 @@ describe("matter overview activity", () => {
       organizationId: ids.orgA,
       userId: ids.userA1,
       featureAccessSnapshot: undefined,
-      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       workspaceId: ids.wsA1,
     };
     const complete = (
@@ -322,7 +333,12 @@ describe("matter overview activity", () => {
     const context = {
       memberRole: sessionMemberRole("owner"),
       recordAuditEvent: auditRecorderDouble(),
-      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       workspaceId: ids.wsA1,
@@ -471,7 +487,12 @@ describe("matter overview activity", () => {
             "/v1/workspaces/:workspaceId/overview/activity" satisfies ApiRoutePath,
           memberRole: sessionMemberRole("owner"),
           query: {},
-          safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          safeDb: createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           workspaceId: ids.wsA1,

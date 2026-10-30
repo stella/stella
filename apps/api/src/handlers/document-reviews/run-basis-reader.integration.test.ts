@@ -1,3 +1,11 @@
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 /**
  * A run's pinned positions as each reader sees them. A reference position's
  * prose was written from another matter's document, so it reaches a reader
@@ -8,15 +16,6 @@
  * Whole responses are searched for the marker, not one field, so a copy of the
  * prose anywhere in the payload fails the test.
  */
-
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
 import { inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -25,6 +24,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
@@ -138,7 +138,12 @@ const seedRun = async (
 /** A reader of the run's matter who can also open `extra` matters. */
 const readerOf = (extra: SafeId<"workspace">[]): SafeDb =>
   asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1, ...extra], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1, ...extra],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 
 const handlerContext = (safeDb: SafeDb, rest: Record<string, unknown>) => ({

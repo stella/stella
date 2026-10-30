@@ -142,6 +142,7 @@ const requestScope = (
 ): ScopedDb =>
   asTestRaw<ScopedDb>(
     createMembershipScopedDb(testDb, {
+      budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId,

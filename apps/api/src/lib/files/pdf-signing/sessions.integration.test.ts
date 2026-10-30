@@ -24,6 +24,7 @@ import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
 import {
@@ -129,12 +130,12 @@ const testTokenDb = (): TokenScopedDatabase => ({
   scoped:
     ({ organizationId, userId, workspaceIds }) =>
     async <T>(callback: (tx: Transaction) => Promise<T>) =>
-      createScopedDb(
-        testDb,
-        workspaceIds,
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: workspaceIds,
         organizationId,
         userId,
-      )(async (tx) => {
+      })(async (tx) => {
         // Transition statements use Bun SQL's array result; PGlite wraps those rows.
         const bunRowsTx = new Proxy(tx, {
           get(target, key, receiver) {
@@ -147,7 +148,7 @@ const testTokenDb = (): TokenScopedDatabase => ({
         return callback(asTestRaw<Transaction>(bunRowsTx));
       }),
   tenantless: asTestRaw<TokenScopedDatabase["tenantless"]>(
-    createTenantlessDb(testDb),
+    createTenantlessDb(testDb, BUDGETS.scopedRequest),
   ),
 });
 let tokenDb: TokenScopedDatabase;

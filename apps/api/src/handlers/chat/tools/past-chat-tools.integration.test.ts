@@ -27,6 +27,7 @@ import {
   CHAT_REF_ENCODING,
   type ChatRefBinding,
 } from "@/api/lib/chat/ref-token";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -105,12 +106,12 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  const scoped = createScopedDb(
-    testDb,
-    [ids.wsA1, ids.wsA2],
-    ids.orgA,
-    ids.userA1,
-  );
+  const scoped = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1, ids.wsA2],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   // Production's Bun SQL driver resolves `execute` to the rows themselves with
   // `timestamptz` as `Date`; drizzle's PGlite driver resolves to `{ rows }`
   // with timestamps as strings. Present the production shape.

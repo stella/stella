@@ -10,6 +10,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -72,8 +73,18 @@ export const runNumberingUpload = async ({
     managedAIResidency: "eu",
     promptCachingEnabled: false,
     request,
-    safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
-    scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId,
+      userId,
+    }),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
+      organizationId,
+      userId,
+    }),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,

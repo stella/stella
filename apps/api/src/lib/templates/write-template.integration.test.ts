@@ -16,6 +16,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { reconcileBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -40,7 +41,14 @@ let recordAuditEvent: AuditRecorder;
 
 beforeAll(async () => {
   ({ testDb, ids } = await getRlsFixture());
-  safeDb = asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1));
+  safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
   recordAuditEvent = createAuditRecorder({
     organizationId: ids.orgA,
     workspaceId: null,
@@ -423,7 +431,14 @@ test("cross-tenant writers cannot prepare or upload a hidden template", async ()
   const result = await Result.gen(() =>
     writeStoredTemplate({
       ...f.options,
-      safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgB, ids.userB1)),
+      safeDb: asTestRaw<SafeDb>(
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [],
+          organizationId: ids.orgB,
+          userId: ids.userB1,
+        }),
+      ),
       organizationId: ids.orgB,
       mode: { type: "current-version" },
       async prepare() {

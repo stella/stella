@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -113,18 +114,18 @@ if (!databaseUrl || !runPostgres) {
           .from(sql`(SELECT 1) AS backend_identity`);
         const pid =
           pidRows.at(0)?.pid ?? panic("Second backend identity missing");
-        const firstSafe = createSafeDb(
-          markRlsDatabase(firstDb),
-          [workspaceId],
+        const firstSafe = createSafeDb(markRlsDatabase(firstDb), {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [workspaceId],
           organizationId,
           userId,
-        );
-        const secondSafe = createSafeDb(
-          markRlsDatabase(secondDb),
-          [workspaceId],
+        });
+        const secondSafe = createSafeDb(markRlsDatabase(secondDb), {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [workspaceId],
           organizationId,
           userId,
-        );
+        });
 
         const compete = async (
           first: (gatedRecord: AuditRecorder) => Promise<unknown>,

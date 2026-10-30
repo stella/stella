@@ -16,6 +16,7 @@ import {
   cleanupObjectAfterWriter,
   lockObjectCleanupIntentsForWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -33,7 +34,12 @@ beforeAll(async () => {
   ids = createTestIds();
   await setupRlsTestData(db, ids);
   safeDb = asTestRaw<SafeDb>(
-    createSafeDb(db, [ids.wsA1], ids.orgA, ids.userA1),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 });
 afterAll(async () => await releaseTestDb());

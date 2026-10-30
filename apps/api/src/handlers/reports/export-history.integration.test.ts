@@ -21,6 +21,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { readReportExportHistory } from "@/api/handlers/reports/export-history";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -72,7 +73,12 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+  const scoped = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   safeDb = toSafeDbMock(asTestRaw<ScopedDb>(scoped));
 
   await testDb.insert(properties).values({

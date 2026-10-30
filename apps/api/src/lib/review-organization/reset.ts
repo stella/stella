@@ -742,7 +742,11 @@ export const resetReviewOrganization = async ({
     target: target.value,
     db,
     safeDb: createRootMembershipSafeDb(
-      { organizationId, userId },
+      {
+        budget: AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement,
+        organizationId,
+        userId,
+      },
       fencedDatabase,
     ),
     fence,
@@ -812,7 +816,11 @@ export const resetReviewOrganization = async ({
       memberAuthority: sessionMemberRole(target.value.role),
       safeDb: scope.safeDb,
       scopedDb: createRootMembershipScopedDb(
-        { organizationId, userId },
+        {
+          budget: AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement,
+          organizationId,
+          userId,
+        },
         fencedDatabase,
       ),
       recorderFor,

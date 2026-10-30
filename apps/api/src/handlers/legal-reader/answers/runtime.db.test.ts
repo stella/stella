@@ -38,6 +38,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -94,7 +95,12 @@ const scope = (activeDatabase = database) => ({
   userId,
   recordAuditEvent: async () => undefined,
   safeDb: asTestRaw<SafeDb>(
-    createSafeDb(activeDatabase, [], organizationId, userId),
+    createSafeDb(activeDatabase, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId,
+      userId,
+    }),
   ),
 });
 const prepare = async (
@@ -1500,7 +1506,12 @@ describe("reader answer turn lifecycle", () => {
         safeDb,
         recordAuditEvent,
         scopedDb: asTestRaw<ScopedDb>(
-          createScopedDb(markRlsDatabase(database), [], organizationId, userId),
+          createScopedDb(markRlsDatabase(database), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
+            organizationId,
+            userId,
+          }),
         ),
         orgAIConfig: {
           providers: [{ provider: "openai", apiKey: "fixture-key" }],

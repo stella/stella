@@ -38,6 +38,7 @@ import {
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
@@ -231,6 +232,7 @@ export const executeFlowStep = async (
   }
   const actorUserId = scope.actorUserId;
   const scopedDb = makeScopedDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: scope.organizationId,
     userId: actorUserId,
     workspaceIds: [run.workspaceId],
@@ -312,6 +314,7 @@ export const executeFlowStep = async (
         actorUserId,
         scopedDb,
         safeDb: makeSafeDb({
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
           organizationId: scope.organizationId,
           userId: actorUserId,
           workspaceIds: [run.workspaceId],
@@ -1335,6 +1338,7 @@ export const failFlowRunFromWorker = async (
     scope.actorUserId === null
       ? await database.transaction(writeFailure)
       : await makeScopedDb({
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
           organizationId: scope.organizationId,
           userId: scope.actorUserId,
           workspaceIds: [run.workspaceId],

@@ -24,6 +24,7 @@ import transitionInvoice from "@/api/handlers/invoices/transition";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -162,8 +163,18 @@ const context = <TContext extends SafeHandlerLogContext>(
     body,
     params,
     workspaceId: matterIds.at(0),
-    safeDb: createSafeDb(db, scopeMatterIds, ids.orgA, ids.userAdmin),
-    scopedDb: createScopedDb(db, scopeMatterIds, ids.orgA, ids.userAdmin),
+    safeDb: createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: scopeMatterIds,
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
+    scopedDb: createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: scopeMatterIds,
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userAdmin },
     memberRole: sessionMemberRole("owner"),
@@ -379,12 +390,12 @@ describe("client invoice release and running time", () => {
 
 describe("client invoice matter quota", () => {
   const quota = async () =>
-    await createScopedDb(
-      db,
-      scopeMatterIds,
-      ids.orgA,
-      ids.userAdmin,
-    )(async (tx) => {
+    await createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: scopeMatterIds,
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    })(async (tx) => {
       const [row] = await tx
         .select({
           count: sql<number>`public.stella_matter_invoice_count(${quotaMatterId})::int`,

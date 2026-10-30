@@ -19,6 +19,7 @@ import myWork from "@/api/handlers/work-obligations/queues/list";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -170,8 +171,18 @@ const queuePage = async ({
   limit: number;
   cursor?: string;
 }) => {
-  const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
-  const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   const page = await myWork.handler(
     asTestRaw<MyWorkContext>({
       getActiveWorkspaceIds: async () => [ids.wsA1],

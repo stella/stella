@@ -46,6 +46,7 @@ import {
 } from "@/api/lib/chat/ref-token";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { recordChatThreadNamesOnTx } from "@/api/lib/chat/thread-names";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -125,7 +126,12 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   safeDb = toSafeDbMock(scopedDb);
 });

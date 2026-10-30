@@ -24,6 +24,7 @@ import type { createStellaMcpToolSource } from "@/api/handlers/chat/tools/extern
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   promptCachingUsesBreakpoints,
   PROVIDER_PROMPT_CACHING,
@@ -155,7 +156,12 @@ const memberOf = (
   context?: IncomingUserContext,
 ): Member => {
   const memberScopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, id),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: id,
+    }),
   );
   return {
     context,
@@ -170,7 +176,12 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   safeDb = toSafeDbMock(scopedDb);
   firstMember = { id: ids.userA1, safeDb, scopedDb };

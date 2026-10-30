@@ -16,6 +16,7 @@ import { createMembershipSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   mintAuthProviderId,
@@ -87,6 +88,7 @@ const listPreviewsAs = async ({
     asTestRaw<Parameters<typeof listWorkspaceMemberPreviews.handler>[0]>({
       memberRole: sessionMemberRole("member"),
       safeDb: createMembershipSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
         organizationId,
         serverValidatedWorkspaceIds: [],
         userId,

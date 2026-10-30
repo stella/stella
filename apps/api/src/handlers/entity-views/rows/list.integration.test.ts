@@ -35,6 +35,7 @@ import listRows from "@/api/handlers/entity-views/rows/list";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -273,8 +274,18 @@ const readWindow = async ({
       memberRole: sessionMemberRole(role),
       request: new Request("https://example.test/entity-views/query-window"),
       route: "/v1/entity-views/query-window" satisfies ApiRoutePath,
-      safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
-      scopedDb: createScopedDb(testDb, workspaceIds, organizationId, userId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds,
+        organizationId,
+        userId,
+      }),
+      scopedDb: createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: workspaceIds,
+        organizationId,
+        userId,
+      }),
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
       body: { scope: { type: "organization" }, ...body },

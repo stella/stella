@@ -1,12 +1,3 @@
-/**
- * The decision overlay: what an organization has actually done with a position,
- * counted from the findings themselves.
- *
- * Exercised against the real schema because the whole point is one grouped
- * statement — the counts, the run denominator, and the pick of the latest
- * accepted fix text all come out of SQL, so nothing here is provable in memory.
- */
-
 import {
   afterAll,
   beforeAll,
@@ -15,6 +6,14 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+/**
+ * The decision overlay: what an organization has actually done with a position,
+ * counted from the findings themselves.
+ *
+ * Exercised against the real schema because the whole point is one grouped
+ * statement — the counts, the run denominator, and the pick of the latest
+ * accepted fix text all come out of SQL, so nothing here is provable in memory.
+ */
 import { inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -22,6 +21,7 @@ import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readPositionDecisionOverlay } from "@/api/lib/document-review/position-decisions";
 import type { ReviewFix } from "@/api/lib/document-review/review-grade";
 import type {
@@ -326,6 +326,7 @@ describe("position decision overlay", () => {
     const overlayFor = async (userId: SafeId<"user">) =>
       (
         await createMembershipScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
           organizationId: ids.orgA,
           serverValidatedWorkspaceIds: [],
           userId,

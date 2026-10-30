@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   REVIEW_RESET_CLEARED_TABLES,
   sweepReviewOrganization,
@@ -69,12 +70,12 @@ describe.skipIf(!enabled)(
               await client.unsafe(statement);
             }
           }
-          const scopedDb = createScopedDb(
-            markRlsDatabase(db),
-            [],
+          const scopedDb = createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
             organizationId,
             userId,
-          );
+          });
           await scopedDb(
             async (tx) =>
               await tx.insert(timeTimers).values({
@@ -165,12 +166,12 @@ describe.skipIf(!enabled)(
             }
           }
           await client`INSERT INTO workspaces VALUES (${firstWorkspaceId}, ${organizationId}), (${secondWorkspaceId}, ${organizationId})`;
-          await createScopedDb(
-            markRlsDatabase(db),
-            workspaceIds,
+          await createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: workspaceIds,
             organizationId,
             userId,
-          )(
+          })(
             async (tx) =>
               await tx.insert(billingArrangements).values(
                 workspaceIds.map((workspaceId) => ({

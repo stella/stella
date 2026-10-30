@@ -65,6 +65,7 @@ import {
   getTransactionBudget,
   inheritTransactionBudget,
   initializeTransactionBudget,
+  withoutPendingTransactionBudget,
   withTransactionBudgetContext,
 } from "@/api/lib/db/transaction-budget-owner";
 import { LIMITS } from "@/api/lib/limits";
@@ -774,7 +775,9 @@ export const withAggregateTransaction = async <Tx extends object, T>(
             const history = lockHistory(tx);
             assertAggregateLevelAvailable(history);
             try {
-              const value = await run(tx);
+              const value = await withoutPendingTransactionBudget(
+                async () => await run(tx),
+              );
               assertAggregateLevelAvailable(history);
               return value;
             } finally {

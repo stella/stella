@@ -25,6 +25,7 @@ import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/cont
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { readPdfPageTexts } from "@/api/lib/files/pdf-page-text";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -72,6 +73,7 @@ const handlerContext = (db: GatedTestDb, tenant: DocumentAnnotationTenant) => ({
   user: { id: tenant.userId },
   featureAccessSnapshot: tenant.featureAccessSnapshot,
   safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
     organizationId: tenant.organizationId,
     serverValidatedWorkspaceIds: [tenant.workspaceId],
     userId: tenant.userId,
@@ -248,12 +250,12 @@ export const seedDocumentAnnotationScaling = async ({
       endOffset: startOffset + QUOTE.length,
       quote: QUOTE,
     },
-    featureAccessSnapshot: await createScopedDb(
-      markRlsDatabase(db),
-      [ids.workspaceId],
-      ids.organizationId,
-      ids.userId,
-    )(
+    featureAccessSnapshot: await createScopedDb(markRlsDatabase(db), {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.workspaceId],
+      organizationId: ids.organizationId,
+      userId: ids.userId,
+    })(
       async (tx) =>
         await resolveFeatureAccessSnapshot({
           tx,

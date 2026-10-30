@@ -10,6 +10,7 @@ import type { SafeDb, SafeDbRetryConfig } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -390,12 +391,12 @@ if (!databaseUrl || !runPostgresTests) {
           } satisfies SafeDbRetryConfig;
           const passedRetry: (SafeDbRetryConfig | undefined)[] = [];
           const runner = () => {
-            const configured = createSafeDb(
-              markRlsDatabase(openClient().db),
-              [workspaceId],
-              orgId,
+            const configured = createSafeDb(markRlsDatabase(openClient().db), {
+              budget: BUDGETS.scopedRequest,
+              workspaceIds: [workspaceId],
+              organizationId: orgId,
               userId,
-            );
+            });
             const observed: SafeDb = async (work, options) => {
               passedRetry.push(options);
               return await configured(work, options);

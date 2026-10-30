@@ -16,6 +16,7 @@ import { resolveActiveSkillContext } from "@/api/lib/agent-skills/skills";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -169,7 +170,12 @@ describe("bound agent skill RLS", () => {
       memberRole: sessionMemberRole("member"),
       organizationId: ids.orgA,
       safeDb: asTestRaw<SafeDb>(
-        createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        }),
       ),
       userId: ids.userA2,
     });
@@ -194,7 +200,12 @@ describe("bound agent skill RLS", () => {
       memberRole: sessionMemberRole("member"),
       organizationId: ids.orgA,
       safeDb: asTestRaw<SafeDb>(
-        createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA2),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [ids.wsA1],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        }),
       ),
       userId: ids.userA2,
     });
@@ -222,12 +233,12 @@ describe("bound agent skill RLS", () => {
         memberRole: sessionMemberRole("member"),
         organizationId: ids.orgA,
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(
-            testDb,
-            reach === "no-reach" ? [] : [ids.wsA2],
-            ids.orgA,
-            ids.userA2,
-          ),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: reach === "no-reach" ? [] : [ids.wsA2],
+            organizationId: ids.orgA,
+            userId: ids.userA2,
+          }),
         ),
         userId: ids.userA2,
       });
@@ -391,7 +402,12 @@ describe("bound agent skill RLS", () => {
       }
       // The outsider works in wsA2 and reaches only that matter.
       const outsiderDb = asTestRaw<SafeDb>(
-        createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        }),
       );
       const matterScope = await resolveSkillBindingScope({
         homeWorkspaceId: ids.wsA2,
@@ -448,7 +464,12 @@ describe("bound agent skill RLS", () => {
           workspaceId: null,
         }),
         safeDb: outsiderDb,
-        scopedDb: createScopedDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+        scopedDb: createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        }),
         userId: ids.userA2,
       });
       const toolName = namespaceSkillToolName(skill.slug);

@@ -26,6 +26,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { TimeSubmitOutcome } from "@/api/lib/billing/time-entry-submission";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -139,8 +140,18 @@ const context = (actor: SafeId<"user">, role: Role = "member") => {
       userId: actor,
       organizationId: ids.orgA,
     }),
-    safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, actor),
-    scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, actor),
+    safeDb: createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: actor,
+    }),
+    scopedDb: createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: actor,
+    }),
     getActiveWorkspaceIds: async () => [ids.wsA2],
     recordAuditEvent: recorder(null),
     createAuditRecorder: (options?: {
@@ -288,7 +299,12 @@ const safeDbEditingBeforeWrite = (
   actor: SafeId<"user">,
   edit: (tx: TestDatabaseTransaction) => Promise<unknown>,
 ) => {
-  const base = createSafeDb(db, [ids.wsA2], ids.orgA, actor);
+  const base = createSafeDb(db, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA2],
+    organizationId: ids.orgA,
+    userId: actor,
+  });
   const dialect = new PgDialect();
   let pending = true;
   const isSubmitWrite = (query: unknown) =>

@@ -13,6 +13,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
 import type { EntitiesWindowCursorValues } from "@/api/lib/entities/window-cursor";
@@ -53,7 +54,12 @@ const readScope = async ({
   const result = await queryEntities({
     textMode: "full",
     safeDb: asTestRaw<SafeDb>(
-      createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
     scope,
     currentUserId: ids.userA1,

@@ -4,7 +4,15 @@ The database aggregate owner (`apps/api/src/lib/db/aggregate-lock.ts`) owns this
 
 The starting source census for this change is 257 raw API transaction occurrences: 254 `.transaction` calls and three native `.begin` calls (two pool-reservation adapters and one database-census command). Counting baseline reason prefixes reported 238 because reviewed rekeys replace some reasons with explanatory prose. Source occurrences, not reason text, are the debt measure.
 
-The first review checkpoint is at most 200 raw boundaries (57 fewer than this starting census), then at most 100, then zero unregistered callers. These are migration targets, not new editable CI allowances. Native driver adapters that necessarily open physical transactions must delegate to the canonical budget owner; registering an adapter requires a distinct owner contract and tests, not a generic exception.
+The ratchet enforces these absolute UTC checkpoints, in addition to the per-file shrink-only rule:
+
+| Effective at UTC | Maximum raw boundaries |
+| ---------------- | ---------------------: |
+| 2026-11-13 00:00 |                    200 |
+| 2026-11-27 00:00 |                    100 |
+| 2026-12-11 00:00 |                      0 |
+
+The first checkpoint removes at least 57 occurrences from the starting census. These ceilings apply even when a branch introduces no growth, reduces debt relative to its base, or adds allowance files. Native driver adapters that necessarily open physical transactions must delegate to the canonical budget owner; registering an adapter requires a distinct owner contract and tests, not a generic exception.
 
 At this checkpoint, scoped/public request transactions use 30,000 ms and the largest ordinary transaction budget is 119,000 ms, strictly below the 120,000 ms migration ladder. The registry is authoritative. Lease-coordinated scheduler owners and background helpers awaiting measured runtimes remain explicitly classified; a shorter deadline is not inferred from a request caller.
 

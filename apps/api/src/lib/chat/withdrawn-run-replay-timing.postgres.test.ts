@@ -22,6 +22,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { createSafeId } from "@/api/lib/branded-types";
 import labels from "@/api/lib/case-law/withdrawn-decision-labels.gen.json";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
@@ -42,12 +43,12 @@ describe.skipIf(!enabled)("withdrawn replay timing (postgres)", () => {
   const userId = mintAuthProviderId<"user">();
   const sourceId = createSafeId<"caseLawSource">();
   const decisionId = createSafeId<"caseLawDecision">();
-  const scopedDb = createScopedDb(
-    markRlsDatabase(db),
-    [],
+  const scopedDb = createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
     organizationId,
     userId,
-  );
+  });
   const timing = {
     status: "finished",
     durationMs: 4250,

@@ -12,6 +12,7 @@ import type { AnyDrizzle } from "@/api/db/scoped";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 
 describe("branded types", () => {
   describe("toSafeId", () => {
@@ -131,19 +132,22 @@ describe("branded types", () => {
           }),
       } satisfies AnyDrizzle);
 
-      createScopedDb(
-        fakeDb,
-        [toSafeId<"workspace">("ws_test")],
-        toSafeId<"organization">("org_test"),
-        toSafeId<"user">("user_test"),
-      );
+      createScopedDb(fakeDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [toSafeId<"workspace">("ws_test")],
+        organizationId: toSafeId<"organization">("org_test"),
+        userId: toSafeId<"user">("user_test"),
+      });
 
       createScopedDb(
         fakeDb,
         // @ts-expect-error - plain strings must not satisfy the RLS workspace boundary
-        ["ws_test"],
-        toSafeId<"organization">("org_test"),
-        toSafeId<"user">("user_test"),
+        {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: ["ws_test"],
+          organizationId: toSafeId<"organization">("org_test"),
+          userId: toSafeId<"user">("user_test"),
+        },
       );
     });
   });

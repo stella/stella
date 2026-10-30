@@ -22,6 +22,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import {
@@ -60,7 +61,12 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   safeDb = toSafeDbMock(scopedDb);
 });
@@ -119,7 +125,12 @@ test("accepted matter scope is resolved once and filters historical skills befor
     },
   });
   const countedScoped = asTestRaw<ScopedDb>(
-    createScopedDb(counted, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createScopedDb(counted, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   let compactions = 0;
   const harness = createApprovalHarness({

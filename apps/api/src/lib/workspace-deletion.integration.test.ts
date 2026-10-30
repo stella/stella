@@ -40,6 +40,7 @@ import {
   reserveObjectCleanupIntent,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createFileKey, createUserFileKey } from "@/api/lib/file-key";
 import type { FileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
@@ -228,12 +229,12 @@ beforeAll(async () => {
     },
   ]);
   writerSafeDb = asTestRaw<SafeDb>(
-    createSafeDb(
-      testDb,
-      [targetWorkspaceId, retainedWorkspaceId],
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [targetWorkspaceId, retainedWorkspaceId],
       organizationId,
-      actorUserId,
-    ),
+      userId: actorUserId,
+    }),
   );
   const reserveTargetWriter = async (suffix: string) => {
     const intent = await reserveObjectCleanupIntent({

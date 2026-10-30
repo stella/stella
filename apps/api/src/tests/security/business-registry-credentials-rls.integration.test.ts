@@ -11,6 +11,7 @@ import {
   readBusinessRegistryCredentials,
   saveBusinessRegistryCredential,
 } from "@/api/handlers/organization-settings/business-registry-credentials";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -67,7 +68,12 @@ describe("business registry credential organization isolation", () => {
       [ids.orgA, ids.userA2, 1],
       [ids.orgB, ids.userB1, 2],
     ] as const) {
-      const scoped = createScopedDb(testDb, [], organizationId, userId);
+      const scoped = createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId,
+        userId,
+      });
       const rows = await scoped((tx) =>
         tx.select().from(businessRegistryCredentials),
       );
@@ -79,7 +85,12 @@ describe("business registry credential organization isolation", () => {
   });
 
   test("cross-organization updates and deletes cannot modify provider credentials", async () => {
-    const scoped = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const target = and(
       eq(businessRegistryCredentials.organizationId, ids.orgB),
       eq(businessRegistryCredentials.registry, "companies-house"),
@@ -109,7 +120,12 @@ describe("business registry credential organization isolation", () => {
       [ids.orgB, ids.userB1, ["companies-house", "denue"]],
     ] as const) {
       const scopedDb = asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [], organizationId, userId),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [],
+          organizationId,
+          userId,
+        }),
       );
       const result = await readBusinessRegistryCredentials.handler(
         createTestHandlerContext<

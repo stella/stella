@@ -33,6 +33,7 @@ import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
 import { withThreadStoredContentEgress } from "@/api/lib/chat/thread-stored-content-egress";
 import type { WithThreadStoredContentEgress } from "@/api/lib/chat/thread-stored-content-egress";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -329,7 +330,11 @@ const compactThread = async ({
   withStoredContentEgress,
 }: CompactThreadOptions): Promise<CompactThreadResult> => {
   const memberDb = createRootMembershipSafeDb(
-    { organizationId: thread.organizationId, userId: thread.userId },
+    {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
+      organizationId: thread.organizationId,
+      userId: thread.userId,
+    },
     database,
   );
   const safeDb = holdOwnerAccess({ safeDb: memberDb, thread });
@@ -375,7 +380,11 @@ const compactThread = async ({
     organizationId: thread.organizationId,
     userId: thread.userId,
     organizationStateDb: createRootMembershipScopedDb(
-      { organizationId: thread.organizationId, userId: thread.userId },
+      {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        organizationId: thread.organizationId,
+        userId: thread.userId,
+      },
       database,
     ),
     run: async (leaseSignal, admission) => {

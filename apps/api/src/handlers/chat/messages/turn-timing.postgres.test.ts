@@ -14,6 +14,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -62,12 +63,12 @@ const seedFixture = async (db: GatedTestDb) => {
       reference: id,
     })),
   );
-  const safeDb = createSafeDb(
-    markRlsDatabase(db),
-    [workspaceId],
+  const safeDb = createSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [workspaceId],
     organizationId,
     userId,
-  );
+  });
   return { db, organizationId, userId, workspaceId, otherWorkspaceId, safeDb };
 };
 

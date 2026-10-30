@@ -22,6 +22,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
 import {
@@ -104,7 +105,12 @@ const notification = ({
 
 let db: GatedTestDb;
 const fixtureScoped = () =>
-  createScopedDb(markRlsDatabase(db), [workspaceId], organizationId, memberId);
+  createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    workspaceScope: [workspaceId],
+    organizationId,
+    userId: memberId,
+  });
 let s3: FakeS3;
 
 const records = async () =>
@@ -158,12 +164,12 @@ const drainHarness = ({
         }),
     },
     scopedDbForMatter: (scope) =>
-      createScopedDb(
-        markRlsDatabase(db),
-        [scope.workspaceId],
-        scope.organizationId,
-        scope.userId,
-      ),
+      createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceScope: [scope.workspaceId],
+        organizationId: scope.organizationId,
+        userId: scope.userId,
+      }),
   });
   const drain = async () =>
     await drainInboundMailQueue({

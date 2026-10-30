@@ -32,6 +32,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -153,8 +154,18 @@ const context = <TContext extends SafeHandlerLogContext>(
     memberRole: sessionMemberRole(actor),
     session: { activeOrganizationId: ids.orgA },
     user: { id: actorId },
-    safeDb: createSafeDb(db, [workspaceId], ids.orgA, actorId),
-    scopedDb: createScopedDb(db, [workspaceId], ids.orgA, actorId),
+    safeDb: createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId: actorId,
+    }),
+    scopedDb: createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
+      organizationId: ids.orgA,
+      userId: actorId,
+    }),
     recordAuditEvent,
     createAuditRecorder: () => recordAuditEvent,
     request: new Request("https://example.test/invoices/running-time"),
@@ -645,7 +656,12 @@ test("concurrent invoice creation respects the final available matter slot", asy
   const bothStarted = Promise.withResolvers();
   let startedCount = 0;
   const realSafeDb = asTestRaw<SafeDb>(
-    createSafeDb(db, [workspaceId], ids.orgA, ids.userAdmin),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
   );
   // Synchronize competing requests at transaction admission, since eligibility
   // is now checked inside the guarded transaction rather than in a preflight.

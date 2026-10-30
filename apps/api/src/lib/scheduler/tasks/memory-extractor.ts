@@ -31,6 +31,7 @@ import {
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -200,6 +201,7 @@ const runMemoryExtraction = async ({
 
     const actor = createRootRunActor(
       {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
         organizationId: compaction.threadOrganizationId,
         workspaceId: compaction.threadWorkspaceId,
         userId: compaction.threadUserId,

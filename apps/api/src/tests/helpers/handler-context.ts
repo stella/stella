@@ -14,6 +14,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
@@ -29,7 +30,15 @@ type OrganizationTestPrincipal = {
 export const createOrganizationScopedTestDb = (
   database: RlsDatabase,
   { organizationId, userId }: OrganizationTestPrincipal,
-) => executeRowsScopedDb(createScopedDb(database, [], organizationId, userId));
+) =>
+  executeRowsScopedDb(
+    createScopedDb(database, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId,
+      userId,
+    }),
+  );
 
 /**
  * Assert that this path must not record audit events. The recorder panics, but

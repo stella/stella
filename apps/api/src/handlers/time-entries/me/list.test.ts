@@ -9,6 +9,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -230,12 +231,17 @@ const listFor = async (query: ListCtx["query"]) =>
         query,
         request: new Request("https://example.test/time-entries/me"),
         route: "/v1/time-entries/me" satisfies ApiRoutePath,
-        safeDb: createSafeDb(
-          testDb,
-          [ids.wsA1, ids.wsA2, deletingWorkspaceId, internalWorkspaceId],
-          ids.orgA,
-          ids.userA1,
-        ),
+        safeDb: createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [
+            ids.wsA1,
+            ids.wsA2,
+            deletingWorkspaceId,
+            internalWorkspaceId,
+          ],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         memberRole: sessionMemberRole("member"),
@@ -530,7 +536,12 @@ test("my day includes the owner's internal work without exposing other members o
           query: { date: DAY },
           request: new Request("https://example.test/time-entries/me"),
           route: "/v1/time-entries/me" satisfies ApiRoutePath,
-          safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+          safeDb: createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           memberRole: sessionMemberRole("member"),

@@ -18,6 +18,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -94,6 +95,7 @@ export const seedInvoicePaymentScaling = async (
     userId,
   });
   const safeDb = createMembershipSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
     organizationId,
     serverValidatedWorkspaceIds: [workspaceId],
     userId,

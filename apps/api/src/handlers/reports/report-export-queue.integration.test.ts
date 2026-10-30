@@ -1,10 +1,9 @@
+import { panic } from "better-result";
 /**
  * A report export reads the view it reports on under its requester's current
  * access, so the run builds nothing from a matter the requester can no longer
  * open. Driven against a real (PGlite) database and an in-process object store.
  */
-
-import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -36,6 +35,7 @@ import { processReportExport } from "@/api/handlers/reports/report-export-queue"
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import * as chatRuntime from "@/api/lib/chat/tanstack-chat-runtime";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
@@ -87,6 +87,7 @@ const exportId = brandPersistedReportExportId(Bun.randomUUIDv7());
 const actor = {
   ...createRootRunActor(
     {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
       organizationId: ids.orgA,
       workspaceId: ids.wsA1,
       userId: ids.userA1,

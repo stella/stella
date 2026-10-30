@@ -35,6 +35,7 @@ import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -63,13 +64,23 @@ beforeAll(async () => {
   ids = fixture.ids;
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
   otherMember = {
     safeDb: toSafeDbMock(
       asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        }),
       ),
     ),
     userId: ids.userA2,

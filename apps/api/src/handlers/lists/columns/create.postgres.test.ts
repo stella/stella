@@ -16,6 +16,7 @@ import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -138,7 +139,12 @@ if (!databaseUrl || !runPostgres) {
             createTestHandlerContext<Parameters<typeof readList.handler>[0]>({
               scopedDb: NO_DB,
               ...baseContext,
-              safeDb: createSafeDb(db, [workspaceId], organizationId, userId),
+              safeDb: createSafeDb(db, {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [workspaceId],
+                organizationId,
+                userId,
+              }),
               params: { listId, workspaceId },
             }),
           );
@@ -169,12 +175,12 @@ if (!databaseUrl || !runPostgres) {
                   >({
                     scopedDb: NO_DB,
                     ...baseContext,
-                    safeDb: createSafeDb(
-                      workerDb,
-                      [workspaceId],
+                    safeDb: createSafeDb(workerDb, {
+                      budget: BUDGETS.scopedRequest,
+                      workspaceIds: [workspaceId],
                       organizationId,
                       userId,
-                    ),
+                    }),
                     body: { listId, propertyId },
                   }),
                 ),

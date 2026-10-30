@@ -59,6 +59,7 @@ import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/
 import { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import {
@@ -134,12 +135,22 @@ type RootScopeArgs = {
 const makeScopedDb = asTestRaw<
   NonNullable<ExecuteFlowStepDependencies["makeScopedDb"]>
 >(({ organizationId, userId, workspaceIds }: RootScopeArgs) =>
-  createScopedDb(testDb, workspaceIds, organizationId, userId),
+  createScopedDb(testDb, {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    workspaceScope: workspaceIds,
+    organizationId,
+    userId,
+  }),
 );
 const makeSafeDb = asTestRaw<
   NonNullable<ExecuteFlowStepDependencies["makeSafeDb"]>
 >(({ organizationId, userId, workspaceIds }: RootScopeArgs) =>
-  createSafeDb(testDb, workspaceIds, organizationId, userId),
+  createSafeDb(testDb, {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    workspaceIds,
+    organizationId,
+    userId,
+  }),
 );
 
 // The BullMQ queue is the only piece that would otherwise need live Redis.
@@ -366,7 +377,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdByUserId: userId,
     });
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>
@@ -454,7 +470,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     const context = createTestHandlerContext({
       safeDb,
       scopedDb: asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [workspaceId], organizationId, userId),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [workspaceId],
+          organizationId,
+          userId,
+        }),
       ),
       workspaceId,
       user: { id: userId },
@@ -1217,7 +1238,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
 
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
 
     const started = await startFlowRun({
@@ -1425,7 +1451,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdByUserId: userId,
     });
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>
@@ -1509,7 +1540,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
 
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>
@@ -1606,7 +1642,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         createdByUserId: reviewer,
       });
       const reviewerDb = asTestRaw<SafeDb>(
-        createSafeDb(testDb, [workspaceId], organizationId, reviewer),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceIds: [workspaceId],
+          organizationId,
+          userId: reviewer,
+        }),
       );
       const started = await startFlowRun({
         admit: async () =>
@@ -1641,7 +1682,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         await testDb.$count(taskAssignees, eq(taskAssignees.userId, reviewer)),
       ).toBe(1);
       const safeDb = asTestRaw<SafeDb>(
-        createSafeDb(testDb, [workspaceId], organizationId, userId),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceIds: [workspaceId],
+          organizationId,
+          userId,
+        }),
       );
       const removed = await Result.gen(() =>
         removeWorkspaceMemberHandler({
@@ -1743,7 +1789,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdByUserId: departed,
     });
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>
@@ -1800,7 +1851,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
 
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>
@@ -1889,7 +1945,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
 
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>
@@ -1985,7 +2046,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         createdByUserId: userId,
       });
       const safeDb = asTestRaw<SafeDb>(
-        createSafeDb(testDb, [workspaceId], organizationId, userId),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceIds: [workspaceId],
+          organizationId,
+          userId,
+        }),
       );
       const started = await startFlowRun({
         admit: async () =>
@@ -2123,7 +2189,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdByUserId: userId,
     });
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>
@@ -2236,7 +2307,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdByUserId: userId,
     });
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [workspaceId], organizationId, userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const started = await startFlowRun({
       admit: async () =>

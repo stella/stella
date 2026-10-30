@@ -679,15 +679,15 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "3da3b880903771a6e8bc39026f2bf09fc2f2bd37fb8d84df46897e230d0a8c07",
+    "fingerprint": "5bc05d7a3b76004c322638216c4b0a9329b710bd84624ce2388acc6bf8b04c91",
     "count": 1,
-    "reason": "Initialize the existing runScopedTransaction physical transaction through the canonical budget owner before feature, role, and tenant settings; the transaction count and scope are unchanged."
+    "reason": "Initialize the existing runScopedTransaction physical transaction with its required typed budget through the canonical budget owner before feature, role, and tenant settings; the transaction count and scope are unchanged."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "b871cf989bdcf70dc991f0a0252d738ccb7f45ee9377aebe446f70787822e1f2",
+    "fingerprint": "7a4ab67c3ce6f3d9a60c2f14d6806633da95f0082cbfa88dc90032bbce974f0c",
     "count": 1,
-    "reason": "Initialize the existing createTenantlessDb physical transaction through the canonical budget owner before its role setting; the transaction count and deny-by-default tenantless scope are unchanged."
+    "reason": "Initialize the existing createTenantlessDb physical transaction with its required typed budget through the canonical budget owner before its role setting; the transaction count and deny-by-default tenantless scope are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/citation-authority.ts",

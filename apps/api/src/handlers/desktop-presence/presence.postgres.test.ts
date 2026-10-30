@@ -9,6 +9,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -46,10 +47,20 @@ if (!databaseUrl || !runPostgres) {
         const organizationId = mintAuthProviderId<"organization">();
         const userId = mintAuthProviderId<"user">();
         const firstScoped = asTestRaw<ScopedDb>(
-          createScopedDb(markRlsDatabase(firstDb), [], organizationId, userId),
+          createScopedDb(markRlsDatabase(firstDb), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
+            organizationId,
+            userId,
+          }),
         );
         const secondScoped = asTestRaw<ScopedDb>(
-          createScopedDb(markRlsDatabase(secondDb), [], organizationId, userId),
+          createScopedDb(markRlsDatabase(secondDb), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
+            organizationId,
+            userId,
+          }),
         );
         const report = {
           version: "0.9.48",
@@ -205,12 +216,12 @@ if (!databaseUrl || !runPostgres) {
         const actorUserId = mintAuthProviderId<"user">();
         const memberId = mintAuthProviderIdValue();
         const scopedDb = asTestRaw<ScopedDb>(
-          createScopedDb(
-            markRlsDatabase(reportingDb),
-            [],
+          createScopedDb(markRlsDatabase(reportingDb), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
             organizationId,
             userId,
-          ),
+          }),
         );
         const reached = Promise.withResolvers<undefined>();
         const release = Promise.withResolvers<undefined>();

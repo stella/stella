@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * A review's fixes and the document's suggestion list are one thing, exercised
  * end to end against the real schema because the link that makes them one is a
@@ -7,8 +8,6 @@
  *  - re-completing it stages nothing (the partial unique key converges),
  *  - resolving the suggestion resolves the finding, and reverting reopens it.
  */
-
-import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -35,6 +34,7 @@ import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
@@ -259,8 +259,18 @@ const workspaceContext = (): WorkspaceTestContext => ({
   recordAuditEvent,
   request: new Request("https://example.test/docx-suggestions"),
   route: "/document-review/suggestion-staging",
-  safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-  scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+  safeDb: createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  }),
+  scopedDb: createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  }),
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
   workspaceId: ids.wsA1,

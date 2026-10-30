@@ -13,6 +13,7 @@ import {
 import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
@@ -273,14 +274,22 @@ test("request transactions reuse their authenticated feature snapshot", async ()
       );
       const dialect = new PgDialect();
       let queries = 0;
-      const tx = {
+      let deadlineQueries = 0;
+      const createTx = () => ({
         execute: async (query: SQLWrapper | string) => {
-          queries += 1;
           expect(typeof query).not.toBe("string");
           if (typeof query === "string") {
             return [];
           }
           const rendered = dialect.sqlToQuery(query.getSQL());
+          if (rendered.sql.startsWith("SET LOCAL transaction_timeout")) {
+            expect(rendered.sql).toBe(
+              `SET LOCAL transaction_timeout = ${BUDGETS.scopedRequest.milliseconds}`,
+            );
+            deadlineQueries += 1;
+            return [];
+          }
+          queries += 1;
           const setting =
             /set_config\('app\.enabled_features', \$(\d+), true\)/u.exec(
               rendered.sql,
@@ -291,10 +300,11 @@ test("request transactions reuse their authenticated feature snapshot", async ()
           );
           return [];
         },
-      };
+      });
       const database = markRlsDatabase({
-        transaction: async <T>(fn: (transaction: typeof tx) => Promise<T>) =>
-          await fn(tx),
+        transaction: async <T>(
+          fn: (transaction: ReturnType<typeof createTx>) => Promise<T>,
+        ) => await fn(createTx()),
       });
       const options = {
         organizationId,
@@ -302,13 +312,20 @@ test("request transactions reuse their authenticated feature snapshot", async ()
         serverValidatedWorkspaceIds: [],
         featureAccessSnapshot,
       };
-      const scoped = createMembershipScopedDb(database, options);
-      const safe = createMembershipSafeDb(database, options);
+      const scoped = createMembershipScopedDb(database, {
+        ...options,
+        budget: BUDGETS.scopedRequest,
+      });
+      const safe = createMembershipSafeDb(database, {
+        ...options,
+        budget: BUDGETS.scopedRequest,
+      });
       await scoped(async () => undefined);
       await scoped(async () => undefined);
       const result = await safe(async () => undefined);
       expect(result.isOk()).toBe(true);
       expect(queries).toBe(3);
+      expect(deadlineQueries).toBe(3);
     },
   );
 });

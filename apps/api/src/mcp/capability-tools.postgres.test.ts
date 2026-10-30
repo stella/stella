@@ -13,6 +13,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
@@ -127,8 +128,14 @@ describe.skipIf(!postgresTestsEnabled)(
         serverValidatedWorkspaceIds: [],
         userId,
       };
-      const scopedDb = createMembershipScopedDb(rlsDb, identity);
-      const safeDb = createMembershipSafeDb(rlsDb, identity);
+      const scopedDb = createMembershipScopedDb(rlsDb, {
+        ...identity,
+        budget: BUDGETS.scopedRequest,
+      });
+      const safeDb = createMembershipSafeDb(rlsDb, {
+        ...identity,
+        budget: BUDGETS.scopedRequest,
+      });
       context = asTestRaw<McpRequestResources>({
         accessibleWorkspaceIds: [],
         accessibleWorkspaceIdSet: new Set(),

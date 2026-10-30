@@ -26,6 +26,7 @@ import {
 } from "@/api/handlers/hosted-usage-webhook/receive";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { DEFAULT_POLAR_API_VERSION } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -259,7 +260,12 @@ const withRolledBackFixture = async (
 };
 
 const scopedSafeDb = (tx: Transaction, fixture: Fixture) =>
-  createSafeDb(markRlsDatabase(tx), [], fixture.organizationId, fixture.userId);
+  createSafeDb(markRlsDatabase(tx), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [],
+    organizationId: fixture.organizationId,
+    userId: fixture.userId,
+  });
 
 const insertEntitlement = async ({
   tx,
@@ -385,12 +391,12 @@ if (!databaseUrl || !runPostgresTests) {
           try {
             const responsePromise = startCheckout({
               fixture,
-              safeDb: createSafeDb(
-                markRlsDatabase(openClient().db),
-                [],
-                fixture.organizationId,
-                fixture.userId,
-              ),
+              safeDb: createSafeDb(markRlsDatabase(openClient().db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [],
+                organizationId: fixture.organizationId,
+                userId: fixture.userId,
+              }),
             });
             await providerStarted.promise;
             await setup.db
@@ -465,9 +471,12 @@ if (!databaseUrl || !runPostgresTests) {
                       Array.from({ length: starters }, async () => {
                         const scoped = createSafeDb(
                           markRlsDatabase(openClient().db),
-                          [],
-                          fixture.organizationId,
-                          fixture.userId,
+                          {
+                            budget: BUDGETS.scopedRequest,
+                            workspaceIds: [],
+                            organizationId: fixture.organizationId,
+                            userId: fixture.userId,
+                          },
                         );
                         let firstTransaction = true;
                         const gated: SafeDb = async (work, retry) =>

@@ -21,7 +21,7 @@ import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
+import type { ScopedTransactionBudget } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   getPendingTransactionBudget,
@@ -100,6 +100,7 @@ type RunScopedTransactionOptions<
   T,
 > = {
   database: RlsDatabase<TTransaction>;
+  budget: ScopedTransactionBudget;
   fn: (tx: TTransaction) => Promise<T>;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
@@ -220,23 +221,19 @@ export type CurrentMembershipScope = {
   serverValidatedWorkspaceIds: readonly [];
 };
 
-type ScopedDbArgs =
-  | [
-      workspaceIds: SafeId<"workspace">[],
-      organizationId: SafeId<"organization">,
-      userId: SafeId<"user"> | null,
-    ]
-  | [
-      workspaceScope: CurrentMembershipScope,
-      organizationId: SafeId<"organization">,
-      userId: SafeId<"user"> | null,
-    ];
+type ScopedDbOptions = {
+  budget: ScopedTransactionBudget;
+  workspaceScope: SafeId<"workspace">[] | CurrentMembershipScope;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+};
 
 const runScopedTransaction = async <
   TTransaction extends ScopedTransactionBase,
   T,
 >({
   database,
+  budget,
   fn,
   organizationId,
   userId,
@@ -246,8 +243,7 @@ const runScopedTransaction = async <
   await database.transaction(async (tx: TTransaction) => {
     await initializeTransactionBudget(
       tx,
-      getPendingTransactionBudget() ??
-        AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+      getPendingTransactionBudget() ?? budget,
     );
     if (
       featureAccessSnapshot !== undefined &&
@@ -280,11 +276,12 @@ const runScopedTransaction = async <
 export const createScopedDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    ...[workspaceScope, organizationId, userId]: ScopedDbArgs
+    { budget, workspaceScope, organizationId, userId }: ScopedDbOptions,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
       database,
+      budget,
       workspaceScope: Array.isArray(workspaceScope)
         ? { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: workspaceScope }
         : workspaceScope,
@@ -301,13 +298,13 @@ export const createScopedDb =
 export const createTenantlessDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
+    budget: ScopedTransactionBudget,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await database.transaction(async (tx: TTransaction) => {
       await initializeTransactionBudget(
         tx,
-        getPendingTransactionBudget() ??
-          AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+        getPendingTransactionBudget() ?? budget,
       );
       await tx.execute(
         sql`SELECT set_config('role', '${sql.raw(stella.name)}', true)`,
@@ -316,6 +313,7 @@ export const createTenantlessDb =
     });
 
 type MembershipScopedDbOptions = {
+  budget: ScopedTransactionBudget;
   /** Authenticated request decisions reused for that request only. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   organizationId: SafeId<"organization">;
@@ -337,6 +335,7 @@ export const createMembershipScopedDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
     {
+      budget,
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
@@ -346,6 +345,7 @@ export const createMembershipScopedDb =
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
       database,
+      budget,
       workspaceScope: {
         type: WORKSPACE_ACCESS_MODE.membership,
         serverValidatedWorkspaceIds,
@@ -465,13 +465,18 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
   return new UnhandledException({ cause });
 };
 
+type SafeDbOptions = {
+  budget: ScopedTransactionBudget;
+  workspaceIds: SafeId<"workspace">[];
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+};
+
 /** Result-wrapped form of createScopedDb for an explicit workspace scope. */
 export const createSafeDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    workspaceIds: SafeId<"workspace">[],
-    organizationId: SafeId<"organization">,
-    userId: SafeId<"user"> | null,
+    { budget, workspaceIds, organizationId, userId }: SafeDbOptions,
   ) =>
   async <T>(
     fn: (tx: TTransaction) => Promise<T>,
@@ -482,6 +487,7 @@ export const createSafeDb =
         try: async () =>
           await runScopedTransaction({
             database,
+            budget,
             workspaceScope: {
               type: WORKSPACE_ACCESS_MODE.explicit,
               workspaceIds,
@@ -500,6 +506,7 @@ export const createMembershipSafeDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
     {
+      budget,
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
@@ -515,6 +522,7 @@ export const createMembershipSafeDb =
         try: async () =>
           await runScopedTransaction({
             database,
+            budget,
             workspaceScope: {
               type: WORKSPACE_ACCESS_MODE.membership,
               serverValidatedWorkspaceIds,

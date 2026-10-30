@@ -9,6 +9,7 @@ import { mcpConnectors } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createConnectorTools } from "@/api/handlers/chat/tools/connector-tools";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/connections";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -39,7 +40,14 @@ test("the catalog continuation expands through the tool in stable slug order", a
   // Insertion order must not determine the prompt or its continuation.
   await testDb.insert(mcpConnectors).values(rows.toReversed());
   const safeDb = toSafeDbMock(
-    asTestRaw<ScopedDb>(createScopedDb(testDb, [], ids.orgA, ids.userA1)),
+    asTestRaw<ScopedDb>(
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    ),
   );
   const context = { safeDb, organizationId: ids.orgA, userId: ids.userA1 };
   const first = await loadConnectableMcpConnectorsForUser(context);

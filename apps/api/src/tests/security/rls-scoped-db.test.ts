@@ -17,6 +17,7 @@ import {
 } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -108,7 +109,12 @@ afterAll(async () => {
 
 describe("createScopedDb", () => {
   test("scoped to wsA1 → only wsA1 entities", async () => {
-    const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const rows = await scoped((tx) =>
       tx.select({ id: entities.id }).from(entities),
     );
@@ -117,12 +123,12 @@ describe("createScopedDb", () => {
   });
 
   test("scoped to wsA1 + wsA2 → both entities", async () => {
-    const scoped = createScopedDb(
-      testDb,
-      [ids.wsA1, ids.wsA2],
-      ids.orgA,
-      ids.userA1,
-    );
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const rows = await scoped((tx) =>
       tx.select({ id: entities.id }).from(entities).orderBy(entities.id),
     );
@@ -130,7 +136,12 @@ describe("createScopedDb", () => {
   });
 
   test("scoped to [] → zero rows", async () => {
-    const scoped = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const c = await scoped((tx) => tx.$count(entities));
     expect(c).toBe(0);
   });
@@ -138,13 +149,23 @@ describe("createScopedDb", () => {
   test("scoped to wsB1 with orgA → sees wsB1 entities (ws policy only)", async () => {
     // Documents this behavior: ws policy checks wsIds,
     // not org. Safe because wsIds are server-set.
-    const scoped = createScopedDb(testDb, [ids.wsB1], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsB1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const c = await scoped((tx) => tx.$count(entities));
     expect(c).toBeGreaterThan(0);
   });
 
   test("nested queries in same tx respect RLS", async () => {
-    const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const result = await scoped(async (tx) => {
       const [e, p, f] = await Promise.all([
         tx.$count(entities),
@@ -162,7 +183,12 @@ describe("createScopedDb", () => {
 
 describe("service-owned explicit scopes", () => {
   test("uses an empty actor setting and reads only the pinned matter", async () => {
-    const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, null);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: null,
+    });
     const result = await scoped(async (tx) => ({
       actor: await tx
         .select({
@@ -181,18 +207,33 @@ describe("service-owned explicit scopes", () => {
   });
 
   test("discards explicit workspace IDs outside the stated organization", async () => {
-    const mixed = createScopedDb(testDb, [ids.wsA1, ids.wsB1], ids.orgA, null);
+    const mixed = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1, ids.wsB1],
+      organizationId: ids.orgA,
+      userId: null,
+    });
     const mixedRows = await mixed((tx) =>
       tx.select({ workspaceId: entities.workspaceId }).from(entities),
     );
     expect(mixedRows.map(({ workspaceId }) => workspaceId)).toEqual([ids.wsA1]);
 
-    const foreignOnly = createScopedDb(testDb, [ids.wsB1], ids.orgA, null);
+    const foreignOnly = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsB1],
+      organizationId: ids.orgA,
+      userId: null,
+    });
     expect(await foreignOnly((tx) => tx.$count(entities))).toBe(0);
   });
 
   test("safe service scopes retain the same matter and organization boundary", async () => {
-    const safe = createSafeDb(testDb, [ids.wsA2, ids.wsB1], ids.orgA, null);
+    const safe = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA2, ids.wsB1],
+      organizationId: ids.orgA,
+      userId: null,
+    });
     const result = await safe((tx) =>
       tx.select({ workspaceId: entities.workspaceId }).from(entities),
     );
@@ -208,6 +249,7 @@ describe("service-owned explicit scopes", () => {
 describe("createMembershipScopedDb", () => {
   test("derives a regular member's workspace scope from scalar identity settings", async () => {
     const scoped = createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       serverValidatedWorkspaceIds: [],
       userId: ids.userA2,
@@ -221,6 +263,7 @@ describe("createMembershipScopedDb", () => {
 
   test("owner bypass reaches client matters only inside the active organization", async () => {
     const scoped = createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       serverValidatedWorkspaceIds: [],
       userId: ids.userAdmin,
@@ -239,6 +282,7 @@ describe("createMembershipScopedDb", () => {
 
   test("owner bypass does not expose another user's personal workspace", async () => {
     const scoped = createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       serverValidatedWorkspaceIds: [],
       userId: ids.userAdmin,
@@ -254,6 +298,7 @@ describe("createMembershipScopedDb", () => {
 
   test("keeps a server-validated workspace authorized after self-removal", async () => {
     const scoped = createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       serverValidatedWorkspaceIds: [scopedAuthorizationLifetimeWorkspaceId],
       userId: ids.userA2,
@@ -294,6 +339,7 @@ describe("createMembershipScopedDb", () => {
   test("safe membership scope keeps the bounded authorization snapshot", async () => {
     const serverValidatedWorkspaceIds: SafeId<"workspace">[] = [];
     const safeDb = createMembershipSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       serverValidatedWorkspaceIds,
       userId: ids.userA2,

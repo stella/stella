@@ -14,6 +14,7 @@ import {
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   cancelFlowRun,
   resolveFlowReviewGate,
@@ -189,12 +190,12 @@ export const flowReviewGateFixture = async (
     }),
   });
   const safeDb = (database: GatedTestDb) =>
-    createSafeDb(
-      markRlsDatabase(database),
-      [workspaceId],
+    createSafeDb(markRlsDatabase(database), {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
       organizationId,
       userId,
-    );
+    });
   return {
     organizationId,
     userId,

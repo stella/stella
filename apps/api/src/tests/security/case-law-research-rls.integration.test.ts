@@ -7,6 +7,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -83,7 +84,12 @@ afterAll(async () => {
 
 describe("case-law research columns and answers RLS", () => {
   test("question columns and answers stay inside their organization", async () => {
-    const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA2);
+    const scopedA = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    });
     const columns = await scopedA((tx) =>
       tx.select({ id: caseLawResearchColumns.id }).from(caseLawResearchColumns),
     );
@@ -96,7 +102,12 @@ describe("case-law research columns and answers RLS", () => {
     expect(answers).toEqual([{ columnId: orgAColumnId }]);
 
     // Org B cannot reword org A's question nor write into its cells.
-    const scopedB = createScopedDb(testDb, [], ids.orgB, ids.userB1);
+    const scopedB = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    });
     const reworded = await scopedB((tx) =>
       tx
         .update(caseLawResearchColumns)
@@ -123,7 +134,12 @@ describe("case-law research columns and answers RLS", () => {
   });
 
   test("a cell holds an answer exactly when it is answered", async () => {
-    const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const scopedA = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const emptyAnswered: unknown = await scopedA((tx) =>
       tx.insert(caseLawResearchAnswers).values({
         columnId: orgAColumnId,
@@ -168,7 +184,12 @@ describe("case-law research columns and answers RLS", () => {
   });
 
   test("a cell cannot hold a value that is not field content", async () => {
-    const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const scopedA = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     // Raw SQL on purpose: the typed insert cannot express the pre-property
     // shape, and the guard under test is the database's, not TypeScript's.
     const legacyShape: unknown = await scopedA((tx) =>

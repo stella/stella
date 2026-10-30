@@ -28,6 +28,7 @@ import {
   DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
 } from "@/api/lib/business-registries/desktop/request-contract";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
@@ -235,6 +236,7 @@ export const createDesktopCredentialAuthorizers = ({
       memberRole: memberRole.value,
       consumedProof: consumed.value,
       scopedDb: createMembershipScopedDb(membershipDb, {
+        budget: BUDGETS.scopedRequest,
         ...identity,
         serverValidatedWorkspaceIds: [],
       }),

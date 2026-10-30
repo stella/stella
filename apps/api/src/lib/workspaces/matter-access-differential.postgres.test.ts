@@ -12,6 +12,7 @@ import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { canUseFolioCollabWorkspace } from "@/api/lib/folio-collab-rooms";
@@ -193,6 +194,7 @@ const readViewSet = async (
   pinned: SafeId<"workspace">[],
 ) => {
   const scopedDb = createMembershipScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
     organizationId: seeded.organizationId,
     serverValidatedWorkspaceIds: pinned,
     userId,

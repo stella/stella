@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -175,7 +176,12 @@ const defineCalendarRangeSuite = ({ label, connect }: CalendarSuiteDatabase) =>
       );
       safeDb = toSafeDbMock(
         asTestRaw<ScopedDb>(
-          createScopedDb(testDb, [workspaceId], organizationId, userId),
+          createScopedDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [workspaceId],
+            organizationId,
+            userId,
+          }),
         ),
       );
       const created = await seedTask({
