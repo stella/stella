@@ -31,6 +31,7 @@ import Tooltip from "@/components/tooltip";
 import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
+import { decisionCaseListLink } from "@/features/case-law/decision-case-list-link";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -204,13 +205,7 @@ export function PublicDecisionViewer({
       );
       return;
     }
-    detached(
-      navigate({
-        to: "/law/cases",
-        search: { country: decision.country.toLowerCase() },
-      }),
-      "case-law.move-to-side",
-    );
+    detached(navigate(decisionCaseListLink(decision)), "case-law.move-to-side");
   };
 
   return (

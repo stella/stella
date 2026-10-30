@@ -17,6 +17,7 @@ import {
 import type { ModelOverrideGroup } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import { assertProperty } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { resolveOrgAIModelForTask } from "@/api/lib/ai-config";
@@ -32,7 +33,6 @@ import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-ad
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
