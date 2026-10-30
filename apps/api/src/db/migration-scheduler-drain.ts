@@ -20,6 +20,13 @@
  * The step's pause carries a deadline, so a migrate task that dies leaves no
  * job paused for long.
  *
+ * What "drained" means: no job STARTS, and every leased run has settled or hit
+ * its runtime ceiling. It means no live lease, not no open transaction. A task
+ * that ignores the abort past its ceiling can still hold a transaction; the
+ * schema phase's lock-wait ladder then refuses within its budget and the
+ * migration rolls back with the blockers named. The outcome is fail-safe, not
+ * silent.
+ *
  * Scope: this covers scheduler jobs only. Application request reads are not
  * drained; they still rely on the lock-wait ladder.
  *
