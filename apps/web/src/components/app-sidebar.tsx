@@ -63,6 +63,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -1524,14 +1525,14 @@ export const MatterItem = ({
               <Tooltip
                 content={formatFullTimestamp(ws.lastActivityAt)}
                 render={
-                  <span className="text-muted-foreground text-3xs truncate leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                  <span className="text-muted-foreground text-3xs min-w-0 leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
                 }
               >
-                <BidiText>
+                <TruncatedText render={<BidiText />}>
                   {ws.client
                     ? ws.client.displayName
                     : t("workspaces.parties.personalLabel")}
-                </BidiText>
+                </TruncatedText>
                 {relTime ? ` · ${relTime}` : ""}
               </Tooltip>
             </span>
@@ -1619,9 +1620,9 @@ export const MatterItem = ({
                               to="/workspaces/$workspaceId/timesheets"
                             >
                               <Clock3Icon className="text-muted-foreground size-3.5 shrink-0" />
-                              <span className="truncate">
+                              <TruncatedText>
                                 {t("billing.timesheets")}
-                              </span>
+                              </TruncatedText>
                             </Link>
                           </MatterActivityRow>
                         </SidebarMenuSubItem>
@@ -1636,9 +1637,9 @@ export const MatterItem = ({
                               to="/workspaces/$workspaceId/invoices"
                             >
                               <FileTextIcon className="text-muted-foreground size-3.5 shrink-0" />
-                              <span className="truncate">
+                              <TruncatedText>
                                 {t("common.invoices")}
-                              </span>
+                              </TruncatedText>
                             </Link>
                           </MatterActivityRow>
                         </SidebarMenuSubItem>

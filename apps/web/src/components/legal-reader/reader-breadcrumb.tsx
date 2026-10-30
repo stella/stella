@@ -11,6 +11,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -408,7 +409,7 @@ export const ReaderBreadcrumb = ({
                 title={segment.title}
                 variant="ghost"
               >
-                <bdi className="truncate">{segment.title}</bdi>
+                <TruncatedText render={<bdi />}>{segment.title}</TruncatedText>
               </Button>
               {index === 0 &&
                 hidden.length > 0 &&
@@ -482,9 +483,9 @@ export const ReaderBreadcrumb = ({
                       {currentNumber ?? current.title}
                     </bdi>
                     {currentNumber !== null && (
-                      <bdi className="ms-1 truncate">
+                      <TruncatedText className="ms-1" render={<bdi />}>
                         {current.title.replace(currentNumber, "").trim()}
-                      </bdi>
+                      </TruncatedText>
                     )}
                   </span>
                 ),

@@ -9,6 +9,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { Input } from "@stll/ui/input";
 import { MenuSection } from "@stll/ui/menu-section";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -107,9 +108,9 @@ export const TimeFacetGroup = ({
             variant="ghost"
           >
             <Checkbox checked={isActive} tabIndex={-1} />
-            <span className="min-w-0 flex-1 truncate">
+            <TruncatedText className="flex-1">
               {t(TIME_PRESET_TRANSLATION_KEYS[preset])}
-            </span>
+            </TruncatedText>
           </Button>
         );
       })}
@@ -125,9 +126,9 @@ export const TimeFacetGroup = ({
         variant="ghost"
       >
         <Checkbox checked={isCustom} tabIndex={-1} />
-        <span className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1">
           {t("search.timeFilterCustom")}
-        </span>
+        </TruncatedText>
       </Button>
       {isCustom && (
         <div className="px-2">
@@ -182,9 +183,9 @@ const FacetBucketList = ({
           variant="ghost"
         >
           <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
-          <span className="min-w-0 flex-1 truncate">
+          <TruncatedText className="flex-1">
             {bucket.label ?? bucket.value}
-          </span>
+          </TruncatedText>
           <span className="text-muted-foreground tabular-nums">
             {bucket.countLabel ?? format.number(bucket.count)}
           </span>

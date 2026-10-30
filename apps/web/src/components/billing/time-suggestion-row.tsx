@@ -4,6 +4,7 @@ import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 
 import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
@@ -89,19 +90,22 @@ export const TimeSuggestionRow = ({
         <CheckIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="min-w-0 flex-1">
           {matterName !== undefined && (
-            <BidiText
-              as="span"
-              className="text-muted-foreground block truncate text-xs"
+            <TruncatedText
+              className="text-muted-foreground text-xs"
+              render={<BidiText as="span" />}
             >
               {matterName}
-            </BidiText>
+            </TruncatedText>
           )}
-          <BidiText as="span" className="block truncate text-sm font-medium">
+          <TruncatedText
+            className="text-sm font-medium"
+            render={<BidiText as="span" />}
+          >
             {narrative}
-          </BidiText>
-          <BidiText
-            as="span"
-            className="text-muted-foreground block truncate text-xs"
+          </TruncatedText>
+          <TruncatedText
+            className="text-muted-foreground text-xs"
+            render={<BidiText as="span" />}
           >
             {format.dateTime(new Date(suggestion.startedAt), {
               timeStyle: "short",
@@ -112,7 +116,7 @@ export const TimeSuggestionRow = ({
             })}
             {EVIDENCE_SEPARATOR}
             {evidence}
-          </BidiText>
+          </TruncatedText>
           <span className="text-muted-foreground block text-xs tabular-nums">
             {suggestion.alreadyCovered
               ? t("alreadyCovered")

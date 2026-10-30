@@ -50,6 +50,7 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
@@ -914,7 +915,7 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">{t("chat.thinking")}</span>
+            <TruncatedText>{t("chat.thinking")}</TruncatedText>
           </div>
         )}
         {isEmpty && !busy && isSendBlocked && (
@@ -929,11 +930,11 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">
+            <TruncatedText>
               {sendDisabledReason === "editor-loading"
                 ? t("chat.editorLoading")
                 : t("folio.savingDocument")}
-            </span>
+            </TruncatedText>
           </div>
         )}
         {isEmpty &&
@@ -1289,7 +1290,7 @@ const ValueKindChip = ({ valueKind }: { valueKind: string }) => {
   return (
     <span className="text-foreground inline-flex min-w-0 items-center gap-1 font-medium">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };

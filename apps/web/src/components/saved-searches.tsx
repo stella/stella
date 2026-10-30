@@ -36,6 +36,7 @@ import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import {
@@ -286,9 +287,9 @@ export const SavedSearches = ({
                 variant="ghost"
               >
                 <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {savedSearch.name}
-                </BidiText>
+                </TruncatedText>
               </Button>
               <Button
                 aria-label={t("common.rename")}

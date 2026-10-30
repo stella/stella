@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ReviewDelta } from "@/components/ai-suggestions/review-delta";
@@ -82,15 +83,12 @@ export const ReviewTermTable = ({
 );
 
 /** A column heading that names a document: truncated to its column, with the
- *  full name on the element itself so a long reference name stays readable. */
+ *  full name shown when it is cut so a long reference name stays readable. */
 export const ColumnHeader = ({ label }: { label: string }) => (
   <th
     className={cn(REVIEW_SECTION_LABEL_CLASS, "py-1 pe-3 text-end font-medium")}
     scope="col"
-    title={label}
   >
-    <BidiText as="span" className="block truncate">
-      {label}
-    </BidiText>
+    <TruncatedText render={<BidiText as="span" />}>{label}</TruncatedText>
   </th>
 );

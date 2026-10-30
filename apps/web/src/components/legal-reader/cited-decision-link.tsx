@@ -18,6 +18,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PopoverClose } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
@@ -372,9 +373,13 @@ export const CitedDecisionCard = ({
               />
             )}
           </div>
-          <BidiText as="p" className="line-clamp-6 text-sm leading-relaxed">
+          <TruncatedText
+            className="text-sm leading-relaxed"
+            lines={6}
+            render={<BidiText as="p" />}
+          >
             {headnote}
-          </BidiText>
+          </TruncatedText>
         </div>
       )}
       <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">

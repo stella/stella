@@ -13,6 +13,7 @@ import { Loader } from "@stll/ui/loader";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { FeedbackCommunityItems } from "@/components/feedback-community-items";
@@ -284,11 +285,11 @@ const RegistryCountryGroup = ({
             className={cn("size-4 shrink-0", group.expanded && "rotate-90")}
           />
           <span>{format.displayName(group.country, { type: "region" })}</span>
-          <span className="text-muted-foreground ms-auto truncate text-xs font-normal">
+          <TruncatedText className="text-muted-foreground ms-auto text-xs font-normal">
             <bdi>
               {group.registries.map((entry) => entry.registry.name).join(", ")}
             </bdi>
-          </span>
+          </TruncatedText>
         </Button>
         {group.registries.map((entry) =>
           isBusinessRegistryCredentialSlug(entry.registry.slug) &&
@@ -391,10 +392,10 @@ const RegistrySearchResults = ({
             onFocus={select}
           >
             <span className="min-w-0 flex-1 space-y-1">
-              <span className="block truncate font-medium" dir="auto">
+              <TruncatedText className="font-medium" dir="auto">
                 {hit.name}
-              </span>
-              <span className="text-muted-foreground block truncate text-xs font-normal">
+              </TruncatedText>
+              <TruncatedText className="text-muted-foreground text-xs font-normal">
                 <bdi>{hit.id}</bdi>
                 {hit.address?.textAddress && (
                   <>
@@ -402,7 +403,7 @@ const RegistrySearchResults = ({
                     · <bdi>{hit.address.textAddress}</bdi>
                   </>
                 )}
-              </span>
+              </TruncatedText>
             </span>
           </Button>
         );

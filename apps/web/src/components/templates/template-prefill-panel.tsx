@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { MatterDocumentPicker } from "@/components/workspaces/matter-document-picker";
@@ -191,7 +192,7 @@ export const TemplatePrefillPanel = ({
           ) : (
             <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
               <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{file.name}</span>
+              <TruncatedText className="flex-1">{file.name}</TruncatedText>
               <Button
                 aria-label={t("common.remove")}
                 onClick={() => setFile(null)}

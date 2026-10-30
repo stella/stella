@@ -28,6 +28,7 @@ import {
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -330,12 +331,13 @@ export const SignalCard = ({
           >
             <UserText>{signal.title}</UserText>
           </button>
-          <UserText
-            as="p"
-            className="text-muted-foreground line-clamp-3 text-xs leading-5 text-pretty wrap-anywhere"
+          <TruncatedText
+            className="text-muted-foreground text-xs leading-5 text-pretty wrap-anywhere"
+            lines={3}
+            render={<UserText as="p" />}
           >
             {signal.summary}
-          </UserText>
+          </TruncatedText>
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <OriginChip
               createdByUserId={signal.createdByUserId}
@@ -455,10 +457,10 @@ const WorkspaceName = ({
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
   return (
     <MatterRefLink
-      className="hover:text-foreground truncate underline-offset-2 hover:underline"
+      className="hover:text-foreground min-w-0 underline-offset-2 hover:underline"
       workspaceId={workspaceId}
     >
-      <UserText>{name ?? workspaceId}</UserText>
+      <TruncatedText render={<UserText />}>{name ?? workspaceId}</TruncatedText>
     </MatterRefLink>
   );
 };

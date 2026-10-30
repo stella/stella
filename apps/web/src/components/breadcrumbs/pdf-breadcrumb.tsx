@@ -8,6 +8,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   canRenameDocumentCrumb,
@@ -125,12 +126,12 @@ export const PdfBreadcrumb = () => {
           if (pendingName !== null) {
             return (
               <BreadcrumbPage>
-                <BidiText
-                  as="span"
-                  className="max-w-64 overflow-hidden text-ellipsis whitespace-pre"
+                <TruncatedText
+                  className="max-w-64 whitespace-pre"
+                  render={<BidiText as="span" />}
                 >
                   {pendingName}
-                </BidiText>
+                </TruncatedText>
               </BreadcrumbPage>
             );
           }
@@ -143,7 +144,7 @@ export const PdfBreadcrumb = () => {
                 explicitUndefined: true,
               }}
               activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-64 overflow-hidden text-ellipsis whitespace-pre"
+              className="hover:text-foreground max-w-64 min-w-0"
               params={{ workspaceId, viewId }}
               onDoubleClick={(event) => {
                 if (!isRenameable) {
@@ -168,7 +169,9 @@ export const PdfBreadcrumb = () => {
               to="/workspaces/$workspaceId/$viewId/document"
               {...(isRenameable ? { "aria-keyshortcuts": "F2" } : {})}
             >
-              <BidiText>{storedName}</BidiText>
+              <TruncatedText className="whitespace-pre" render={<BidiText />}>
+                {storedName}
+              </TruncatedText>
             </Link>
           );
 

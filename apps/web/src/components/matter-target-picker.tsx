@@ -26,6 +26,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -332,9 +333,9 @@ const FolderDragDropRow = ({
                   }
                 >
                   <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-                  <BidiText as="span" className="truncate">
+                  <TruncatedText render={<BidiText as="span" />}>
                     {destination.name}
-                  </BidiText>
+                  </TruncatedText>
                 </MenuItem>
               ))}
         </MenuPopup>
@@ -364,9 +365,7 @@ const FolderSelectionButton = ({
     type="button"
   >
     <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-    <BidiText as="span" className="truncate">
-      {name}
-    </BidiText>
+    <TruncatedText render={<BidiText as="span" />}>{name}</TruncatedText>
   </button>
 );
 
@@ -524,16 +523,19 @@ export const MatterTargetPicker = ({
                       className="size-4 shrink-0"
                       matter={{ id: workspace.id, color: workspace.color }}
                     />
-                    <BidiText as="span" className="min-w-0 flex-1 truncate">
+                    <TruncatedText
+                      className="flex-1"
+                      render={<BidiText as="span" />}
+                    >
                       {workspace.name}
-                    </BidiText>
+                    </TruncatedText>
                     {workspace.client?.displayName !== undefined && (
-                      <BidiText
-                        as="span"
-                        className="text-muted-foreground max-w-32 shrink-0 truncate text-xs"
+                      <TruncatedText
+                        className="text-muted-foreground max-w-32 shrink-0 text-xs"
+                        render={<BidiText as="span" />}
                       >
                         {workspace.client.displayName}
-                      </BidiText>
+                      </TruncatedText>
                     )}
                   </button>
                 );
@@ -871,7 +873,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
         type="button"
       >
         <FolderPlusIcon className="size-4 shrink-0" />
-        <span className="truncate">{t("workspaces.newFolder")}</span>
+        <TruncatedText>{t("workspaces.newFolder")}</TruncatedText>
       </button>
     ) : null;
 
