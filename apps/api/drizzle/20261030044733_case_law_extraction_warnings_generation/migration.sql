@@ -1,5 +1,5 @@
 -- requires: 20261022120000_case_law_batch_slots
--- requires: 20261029211628_case_law_extraction_warnings
+-- requires: 20261030044633_case_law_extraction_warnings
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '30s';--> statement-breakpoint
 

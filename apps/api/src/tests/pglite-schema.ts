@@ -1116,7 +1116,7 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
   const replacements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261029211728_case_law_extraction_warnings_generation",
+      "20261030044733_case_law_extraction_warnings_generation",
       "migration.sql",
     ),
   ).filter((statement) =>
