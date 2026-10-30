@@ -38,6 +38,7 @@ import {
   billingArrangements,
   billingCodes,
   caseLawReplayBatches,
+  contacts,
   entities,
   entityVersions,
   fields,
@@ -3332,6 +3333,33 @@ export const lockBillingCode = async (
       .limit(1)
       .for("update")
   ).at(0);
+
+/** Fence matter-client assignments while a bulk delete classifies contacts. */
+export const lockOwnedContactsForBulkDelete = async ({
+  tx,
+  organizationId,
+  contactIds,
+  cap,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  contactIds: readonly SafeId<"contact">[];
+  cap: number;
+}) =>
+  await readBounded(
+    tx
+      .select({ id: contacts.id, displayName: contacts.displayName })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.organizationId, organizationId),
+          inArray(contacts.id, [...contactIds]),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .for("update"),
+    cap,
+  );
 
 /** Caller holds the matter/timer guards before changing nonbillable work. */
 export const lockUnbillableRateCandidates = async (

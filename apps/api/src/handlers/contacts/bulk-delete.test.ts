@@ -38,7 +38,10 @@ const createContext = (
 
 describe("bulkDeleteContacts", () => {
   test("tenant-scopes contact selection and deletion", async () => {
-    const source = await Bun.file(`${import.meta.dir}/bulk/delete.ts`).text();
+    const source = await Promise.all([
+      Bun.file(`${import.meta.dir}/bulk/delete.ts`).text(),
+      Bun.file(`${import.meta.dir}/../../lib/db/aggregate-lock.ts`).text(),
+    ]).then((files) => files.join("\n"));
     expect(
       source.match(/eq\(contacts\.organizationId, organizationId\)/gu),
     ).toHaveLength(2);
@@ -59,7 +62,9 @@ describe("bulkDeleteContacts", () => {
             if (selectCall === 1) {
               return {
                 orderBy: () => ({
-                  limit: async () => [{ id: ownId, displayName: "Owned" }],
+                  for: () => ({
+                    limit: async () => [{ id: ownId, displayName: "Owned" }],
+                  }),
                 }),
               };
             }
@@ -111,12 +116,17 @@ describe("bulkDeleteContacts", () => {
             if (selectCall === 1) {
               return {
                 orderBy: () => ({
-                  limit: async () => [
-                    { id: clientId, displayName: "Client" },
-                    { id: plainId, displayName: "Plain" },
-                  ],
+                  for: () => ({
+                    limit: async () => [
+                      { id: clientId, displayName: "Client" },
+                      { id: plainId, displayName: "Plain" },
+                    ],
+                  }),
                 }),
               };
+            }
+            if (selectCall === 2) {
+              return [{ id: clientId }];
             }
             return [];
           },
