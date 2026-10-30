@@ -68,7 +68,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.PL_UOKIK]: 15,
   [ADAPTER_KEYS.SK_COURTS]: 23,
   [ADAPTER_KEYS.SK_US]: 21,
-  [ADAPTER_KEYS.UK_FCL]: 4,
+  [ADAPTER_KEYS.UK_FCL]: 5,
 } as const satisfies Record<AdapterKey, number>;
 export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.AT_ASYLGH]: 0,
