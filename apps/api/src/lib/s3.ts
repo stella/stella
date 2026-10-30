@@ -846,6 +846,14 @@ export const writeS3ObjectWithRetry = async (
   throw lastError;
 };
 
+export const S3_OBJECT_CREATE_STATUS = {
+  WRITTEN: "written",
+  EXISTING: "existing",
+} as const;
+
+type S3ObjectCreateStatus =
+  (typeof S3_OBJECT_CREATE_STATUS)[keyof typeof S3_OBJECT_CREATE_STATUS];
+
 /**
  * Write one object only when its key holds none, through the same deadline
  * and retry as {@link writeS3ObjectWithRetry}.
@@ -859,8 +867,9 @@ export const writeS3ObjectWithRetry = async (
  */
 export const createS3ObjectIfAbsent = async (
   object: S3ObjectWrite,
-): Promise<void> => {
+): Promise<S3ObjectCreateStatus> => {
   let conditional = true;
+  let status: S3ObjectCreateStatus = S3_OBJECT_CREATE_STATUS.WRITTEN;
   await writeS3ObjectWithRetry(
     object,
     {
@@ -907,6 +916,7 @@ export const createS3ObjectIfAbsent = async (
       const code =
         failure instanceof Error ? safeErrorCode(failure) : undefined;
       if (code === "PreconditionFailed") {
+        status = S3_OBJECT_CREATE_STATUS.EXISTING;
         return;
       }
       if (code === "NotImplemented") {
@@ -926,6 +936,7 @@ export const createS3ObjectIfAbsent = async (
       throw failure;
     },
   );
+  return status;
 };
 
 export class S3ObjectBudgetError extends TaggedError("S3ObjectBudgetError")<{

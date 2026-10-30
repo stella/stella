@@ -15,6 +15,14 @@ class ApiDeploymentError extends Error {
   }
 }
 
+/** The probe answered, for an environment other than the expected one. */
+export class ApiDeploymentMismatchError extends ApiDeploymentError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApiDeploymentMismatchError";
+  }
+}
+
 const readRequiredEnv = (name: string) => {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -119,7 +127,13 @@ export const readApiDeployment = async ({
           ? Reflect.get(body, readinessField)
           : undefined;
       if (observedEnvironment !== expectedEnvironment) {
-        throw new ApiDeploymentError(
+        // An unreported environment is a deployment not ready to prove, not
+        // another deployment.
+        const ErrorType =
+          observedEnvironment === undefined || observedEnvironment === null
+            ? ApiDeploymentError
+            : ApiDeploymentMismatchError;
+        throw new ErrorType(
           `${probeUrl.toString()} ${readinessField} must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
         );
       }
