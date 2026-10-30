@@ -1,6 +1,11 @@
 // parser-output-unchanged: [pl-kis] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
 // parser-output-unchanged: [pl-uokik] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
 // parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading never reaches.
+// parser-output-unchanged: the PDF text-layer read moved unchanged into libpdf-utils.ts (readPdfTextPages): the same load, pages and extraction.
+// parser-output-unchanged: [pl-sn] the paragraph helpers moved unchanged to pl-printed-lines.ts; positioned spaces and superscript placement stay as on main.
+// parser-output-unchanged: [pl-kis] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [pl-uokik] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [cz-uohs] the helper extraction does not affect extractPlPdfSeparatedContent, which reads through readPagesWithFootnotes and never calls readPage.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *
@@ -18,7 +23,6 @@
  * parser, and this is not a second one.
  */
 
-import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 
 // parser-output-unchanged: imports the document AST from its package owner
@@ -36,8 +40,12 @@ import {
 import {
   buildFontStyleRanges,
   normalizeSpanText,
+  readPdfTextPages,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
-import type { PdfSpan } from "@/api/lib/legal-search/parsers/libpdf-utils";
+import type {
+  PdfSpan,
+  PdfTextPage,
+} from "@/api/lib/legal-search/parsers/libpdf-utils";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_SN_SOURCE_SYSTEM = "sn.pl";
@@ -900,10 +908,6 @@ export const plSnParagraphsToHtml = (
     )
     .join("");
 
-type PdfTextPage = ReturnType<
-  ReturnType<PDF["getPages"]>[number]["extractText"]
->;
-
 type PdfTextLine = PdfTextPage["lines"][number];
 
 const extractedLineOf = (
@@ -1377,8 +1381,7 @@ export const extractPlSnLines = async (
   paragraphStart: PlPdfParagraphStart = PL_PDF_PARAGRAPH_START.INDENT,
   options: ExtractPlSnLinesOptions = {},
 ): Promise<PlSnLine[]> => {
-  const pdf = await PDF.load(pdfBytes);
-  const textPages = pdf.getPages().map((page) => page.extractText());
+  const textPages = await readPdfTextPages(pdfBytes);
   const { supremeCourt } = options;
   if (supremeCourt === undefined) {
     return textPages.flatMap(({ lines }) =>
@@ -2049,8 +2052,7 @@ export const extractPlPdfLetterheadContent = async (
   pdfBytes: Uint8Array,
   paragraphStart: PlPdfParagraphStart,
 ): Promise<PlPdfSeparatedContent> => {
-  const pdf = await PDF.load(pdfBytes);
-  const textPages = pdf.getPages().map((page) => page.extractText());
+  const textPages = await readPdfTextPages(pdfBytes);
   return readSetPages({
     textPages,
     pages: withoutRepeatedFurniture(
@@ -2066,14 +2068,8 @@ export const extractPlPdfLetterheadContent = async (
 export const extractPlPdfSeparatedContent = async (
   pdfBytes: Uint8Array,
   paragraphStart: PlPdfParagraphStart,
-): Promise<PlPdfSeparatedContent> => {
-  const pdf = await PDF.load(pdfBytes);
-  const pages = pdf.getPages().map((page) => {
-    const { height, lines } = page.extractText();
-    return { height, lines };
-  });
-  return readPagesWithFootnotes(pages, paragraphStart);
-};
+): Promise<PlPdfSeparatedContent> =>
+  readPagesWithFootnotes(await readPdfTextPages(pdfBytes), paragraphStart);
 
 type ParsePlSnDecisionInput = {
   pdfBytes: Uint8Array;

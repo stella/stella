@@ -926,11 +926,11 @@ test("each attachment's references resolve to its own footnotes", async () => {
   const bytes = await bytesOf(RGD_9_2026);
   const parsed = await parsePlUokikDocument(inputOf([bytes, bytes]));
   if (parsed === null) {
-    return expect.unreachable("Both attachments have text");
+    expect.unreachable("Both attachments have text");
   }
   const blocks = parsed.documentAst.blocks;
   const targets = blocks.flatMap((block) =>
-    block.type === "paragraph" && block.note !== undefined
+    block.type === "paragraph" && block.note?.noteId !== undefined
       ? [`#${block.note.noteId}`]
       : [],
   );
@@ -985,7 +985,7 @@ test("pipeline validation includes appended tiny footnotes", async () => {
     ).toBe(true);
     expect(report).not.toHaveBeenCalled();
     if (parsed === null) {
-      return expect.unreachable("The PDF has a readable body");
+      expect.unreachable("The PDF has a readable body");
     }
     await checkDecisionRetention({
       adapterKey: "pl-uokik",

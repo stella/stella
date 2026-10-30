@@ -95,7 +95,7 @@ describe("pl-uokik retention projection", () => {
     const projection = await projectionOf(decision);
     expect(projection.type).toBe("source");
     if (projection.type !== "source" || typeof projection.source === "string") {
-      return expect.unreachable("The stored PDF has readable text");
+      expect.unreachable("The stored PDF has readable text");
     }
     expect(projection.source.paragraphs.join(" ")).toContain("nałożenia");
   });
@@ -129,7 +129,7 @@ describe("pl-uokik retention projection", () => {
 
 test("an attachment that is not a readable PDF is unverifiable", async () => {
   if (plUokikRetention.type !== "checked") {
-    return expect.unreachable();
+    expect.unreachable();
   }
   expect(
     await plUokikRetention.project(encodeSourceRawEnvelope({ listing: "{}" }), {
@@ -148,7 +148,7 @@ test("an attachment that is not a readable PDF is unverifiable", async () => {
 
 test("all attachments share the PDF projection byte budget", async () => {
   if (plUokikRetention.type !== "checked") {
-    return expect.unreachable();
+    expect.unreachable();
   }
   const bytes = new Uint8Array(Math.floor(PDF_PROJECTION_MAX_BYTES / 2) + 1);
   expect(

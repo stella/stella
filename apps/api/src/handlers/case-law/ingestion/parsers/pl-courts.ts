@@ -242,7 +242,7 @@ type CreateStateOptions = {
   markup: PlDecisionMarkup | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
-  footnoteIds: readonly string[];
+  footnoteIds: readonly string[] | undefined;
 };
 
 const createState = ({
@@ -264,7 +264,7 @@ const createState = ({
   fallbackDecisionTitle,
   normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
   panelNames: [],
-  footnoteHrefs: new Set(footnoteIds.map((noteId) => `#${noteId}`)),
+  footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
   markup,
   pendingMarker: undefined,
@@ -1347,7 +1347,7 @@ export const parsePlDecisionContent = (
 ): ParsePlDecisionOutput => {
   const loadHtml = input.loadHtml ?? cheerio.load;
   const state = createState({
-    footnoteIds: input.footnoteIds ?? [],
+    footnoteIds: input.footnoteIds,
     superscripts: input.superscripts === true,
     markup: input.markup,
     caseNumber: input.caseNumber,

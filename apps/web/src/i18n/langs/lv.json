@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
-      "remove": "Noņemt filtru {filter}"
+      "countryMismatch": "Noņemti filtri, kas neattiecas uz izvēlēto valsti ({country}): {filters}.",
+      "remove": "Noņemt filtru {filter}",
+      "showInCountry": "Rādīt {filter} valstī {country}"
     },
     "languages": {
       "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
     "activity": {
+      "newerVersion": "Šis saturs tiek rādīts jaunākā versijā.",
       "review": "Pārskatīšanas atjauninājums"
     },
     "aiPrompt": "AI ziņojuma lauks",
@@ -2357,6 +2360,7 @@
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
     "unsavedChanges": "Nesaglabātas izmaiņas",
+    "unsavedChangesClose": "Nesaglabātas izmaiņas. Vēlreiz aizveriet, lai tās atmestu",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
@@ -5425,6 +5429,7 @@
     "showCitedPartOnly": "Rādīt tikai citēto daļu",
     "showFullProvision": "Rādīt visu normu",
     "showInText": "Rādīt tekstā",
+    "sortNeedsYear": "Lai kārtotu pēc šīs kolonnas, filtros izvēlieties gadu.",
     "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {
       "current": "Spēkā",
