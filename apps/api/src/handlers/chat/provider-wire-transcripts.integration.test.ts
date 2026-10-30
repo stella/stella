@@ -5,6 +5,8 @@ import { inArray } from "drizzle-orm";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { createTestState } from "@stll/test-state";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -48,7 +50,6 @@ import type {
   TranscriptPlan,
 } from "@/api/tests/helpers/provider-wire-transcript";
 import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {

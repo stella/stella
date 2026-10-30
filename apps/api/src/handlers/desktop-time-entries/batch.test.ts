@@ -11,6 +11,7 @@ import {
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -35,7 +36,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import {
   createScopedDbMock,
   createSelectQueryMock,

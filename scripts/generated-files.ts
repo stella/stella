@@ -1184,7 +1184,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generate-mobile-folio-fonts.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
-      // folio's version, which pins the fontsource stylesheets it imports.
+      // The @stll/folio-fonts version, which pins its face catalogue.
       "apps/mobile/package.json",
       "package.json",
       "bun.lock",
