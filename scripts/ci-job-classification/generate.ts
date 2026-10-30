@@ -10,6 +10,7 @@ import { approvalPathForKey, decisionPathForKey } from "./inputs";
 import {
   deriveJobPrivileges,
   expectedJobDigest,
+  jobDependencyDigests,
   reachableJobDocuments,
 } from "./job-digests";
 import { verifyPublicMetadata } from "./public-metadata";
@@ -341,21 +342,12 @@ const reviewJobs = ({
     node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
       const key = `${node.repository}:${node.path}/${jobId}`;
       observedJobs.add(key);
-      const callsReusableWorkflow = Object.values(job.dependencies).includes(
-        "reusable-workflow",
-      );
-      const dependencyDigests = Object.fromEntries(
-        Object.keys(job.dependencies)
-          .toSorted(compareCodeUnit)
-          .flatMap((reference) => {
-            const target = node.edges[reference];
-            return !callsReusableWorkflow &&
-              target &&
-              nodes.get(target)?.type === "metadata"
-              ? [[reference, documentDigest(target)]]
-              : [];
-          }),
-      );
+      const dependencyDigests = jobDependencyDigests({
+        definition: job,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];

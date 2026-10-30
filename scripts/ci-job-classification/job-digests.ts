@@ -127,8 +127,12 @@ export const deriveJobPrivileges = ({
                   ),
                 )
               : "read");
+          // A callee's own permissions can only narrow a token grant; under a
+          // privileged event the callee runs in that context regardless.
+          const privilegedEvent =
+            caller.shape.job["workflow-privileged-event"] === true;
           for (const [calleeJobId, calleeJob] of Object.entries(callee.jobs)) {
-            if ("permissions" in calleeJob.shape.job) {
+            if ("permissions" in calleeJob.shape.job && !privilegedEvent) {
               continue;
             }
             const calleeKey = `${calleeNode.repository}:${calleeNode.path}/${calleeJobId}`;
@@ -151,6 +155,38 @@ export const deriveJobPrivileges = ({
     }
   }
   return { jobPrivileges, inheritedGrants };
+};
+
+type JobDependencyDigestsOptions = {
+  definition: ParsedDocument["jobs"][string];
+  edges: Readonly<Record<string, string>>;
+  isMetadata: (target: string) => boolean;
+  documentDigest: (target: string) => string;
+};
+
+/**
+ * The digests of the metadata documents a job depends on. A reusable-workflow
+ * caller is classified by its call surface, so its callees contribute none.
+ */
+export const jobDependencyDigests = ({
+  definition,
+  edges,
+  isMetadata,
+  documentDigest,
+}: JobDependencyDigestsOptions): Record<string, string> => {
+  if (Object.values(definition.dependencies).includes("reusable-workflow")) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.keys(definition.dependencies)
+      .toSorted(compareCodeUnit)
+      .flatMap((reference) => {
+        const target = edges[reference];
+        return target && isMetadata(target)
+          ? [[reference, documentDigest(target)]]
+          : [];
+      }),
+  );
 };
 
 type ExpectedJobDigestOptions = {

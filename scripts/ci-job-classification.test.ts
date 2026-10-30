@@ -255,6 +255,51 @@ jobs:
   expect(digest(contentsWrite, CALLEE)).not.toBe(digest(actionsWrite, CALLEE));
 });
 
+test("a callee with its own permissions is privileged under a privileged event", () => {
+  const underTarget = (step: string) =>
+    jobsFor({
+      ".github/workflows/caller.yml": `on: pull_request_target
+permissions: {}
+jobs:
+  call:
+    uses: ./.github/workflows/shared.yml
+`,
+      ".github/workflows/shared.yml": `on: workflow_call
+jobs:
+  check:
+    permissions: {contents: read}
+    runs-on: ubuntu-latest
+    steps:
+${step}`,
+    });
+  const before = underTarget("      - run: echo check\n");
+  const after = underTarget(
+    "      - run: echo check\n      - uses: actions/setup-node@0000000000000000000000000000000000000000\n",
+  );
+
+  expect(before.get(CALLEE)?.privileged).toBe(true);
+  expect(digest(after, CALLEE)).not.toBe(digest(before, CALLEE));
+});
+
+test("a job reading all secrets as JSON is privileged", () => {
+  const jobs = jobsFor({
+    ".github/workflows/caller.yml": `on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      ALL: \${{ toJSON(secrets) }}
+    steps:
+      - run: echo check
+`,
+  });
+
+  expect(
+    jobs.get("candidate:.github/workflows/caller.yml/check")?.privileged,
+  ).toBe(true);
+});
+
 test("a uses change in an inherited-privileged callee changes its digest", () => {
   const privilegedWorkflow = (action: string) => ({
     ".github/workflows/caller.yml": `on: push

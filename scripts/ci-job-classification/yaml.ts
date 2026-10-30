@@ -154,6 +154,7 @@ const containsCredential = (value: unknown): boolean => {
   if (typeof value === "string") {
     return (
       /secrets(?:\.|\[)(?!github_token\b)/iu.test(value) ||
+      /toJSON\(\s*secrets\s*\)/iu.test(value) ||
       /actions\/(?:create-github-app-token|github-app-token)@|steps\.[^.]+\.outputs\.token/iu.test(
         value,
       )
@@ -425,6 +426,11 @@ const reusableWorkflowCallSurface = (job: JsonRecord, workflow: JsonRecord) =>
     ),
     ...("permissions" in workflow
       ? [["workflow-permissions", workflow["permissions"]]]
+      : []),
+    // A privileged event runs every callee in its context, whatever
+    // permissions the callee declares.
+    ...(workflowHasPrivilegedEvent(workflow["on"])
+      ? [["workflow-privileged-event", true]]
       : []),
   ]);
 

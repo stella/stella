@@ -5,7 +5,11 @@ import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { createGitProvider, resolveGitHead } from "./git-provider";
 import type { SOURCE_CONFIG } from "./git-provider";
-import { deriveJobPrivileges, expectedJobDigest } from "./job-digests";
+import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+} from "./job-digests";
 import {
   METADATA_ORIGIN,
   metadataReferenceIdentity,
@@ -215,21 +219,12 @@ const verifyJobDigests = ({
       if (!definition) {
         return true;
       }
-      const callsReusableWorkflow = Object.values(
-        definition.dependencies,
-      ).includes("reusable-workflow");
-      const dependencyDigests = Object.fromEntries(
-        Object.keys(definition.dependencies)
-          .toSorted(compareCodeUnit)
-          .flatMap((reference) => {
-            const target = node.edges[reference];
-            return !callsReusableWorkflow &&
-              target &&
-              nodes.get(target)?.type === "metadata"
-              ? [[reference, documentDigest(target)]]
-              : [];
-          }),
-      );
+      const dependencyDigests = jobDependencyDigests({
+        definition,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
       const key = `${node.repository}:${node.path}/${job.id}`;
       return (
         job.digest !==
