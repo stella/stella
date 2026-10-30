@@ -166,6 +166,18 @@ describe("search match options", () => {
     ).toEqual([{ start: 4, end: 6 }]);
   });
 
+  test("whole words treats every lone low surrogate as a boundary", () => {
+    for (let codeUnit = 0xdc_00; codeUnit <= 0xdf_ff; codeUnit += 1) {
+      const text = `x${String.fromCodePoint(codeUnit)}a`;
+      const options = { wholeWords: true };
+      expect(findSearchMatchRanges(text, "a", options)).toEqual([
+        { start: 2, end: 3 },
+      ]);
+      expect(hasFoldedSearchMatch(text, "a", options)).toBe(true);
+    }
+    expect(findSearchMatchRanges("𐐀a", "a", { wholeWords: true })).toEqual([]);
+  });
+
   test("hasFoldedSearchMatch agrees with the ranges", () => {
     const options = { matchDiacritics: true, wholeWords: true };
     const folded = foldSearchMatchTextWithOptions(content, options);

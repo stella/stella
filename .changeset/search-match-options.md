@@ -2,4 +2,4 @@
 "@stll/text-normalize": minor
 ---
 
-`findSearchMatchRanges`, `foldSearchMatchText` and `foldSearchMatchTextWithOffsets` take opt-in `matchCase`, `matchDiacritics` and `wholeWords` options, and `hasFoldedSearchMatch` checks a cached folded string under the same options. Calls without options fold and match as before.
+`findSearchMatchRanges` and `hasFoldedSearchMatch` take opt-in `matchCase`, `matchDiacritics` and `wholeWords` options. `foldSearchMatchTextWithOptions` and `foldSearchMatchTextWithOffsetsAndOptions` take `matchCase` and `matchDiacritics`. The unary fold helpers and calls without options fold and match as before.

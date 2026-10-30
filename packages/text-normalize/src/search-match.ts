@@ -160,11 +160,13 @@ const codePointBefore = (text: string, index: number) => {
   if (index <= 0) {
     return "";
   }
-  // Read at a pair's second half, `codePointAt` returns the lone low
-  // surrogate; the pair then starts one unit earlier.
+  // Only a high surrogate can pair with the preceding low surrogate.
   const previous = text.codePointAt(index - 1) ?? 0;
   const pairStart =
-    previous >= 0xdc_00 && previous <= 0xdf_ff && index >= 2
+    previous >= 0xdc_00 &&
+    previous <= 0xdf_ff &&
+    index >= 2 &&
+    (text.codePointAt(index - 2) ?? 0) > 0xff_ff
       ? index - 2
       : index - 1;
   return codePointAt(text, pairStart);

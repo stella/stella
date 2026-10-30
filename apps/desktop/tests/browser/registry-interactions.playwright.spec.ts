@@ -1029,11 +1029,16 @@ for (const language of ["en", "ar"] as const) {
       browserName,
       page,
     }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
       await openClipboard(page);
       await searchBox(page).fill("Privileged");
       // WebKit follows macOS keyboard access: Option+Tab includes buttons.
       await searchBox(page).press(browserName === "webkit" ? "Alt+Tab" : "Tab");
-      // The scope icon stays out of the tab order; the groups rail follows.
+      const searchOptions = page.getByRole("button", {
+        name: messages.clipboard.searchOptions,
+      });
+      await expect(searchOptions).toBeFocused();
+      await searchOptions.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
       await expect(
         page.locator('[data-clipboard-group-id="__no_group__"]'),
       ).toBeFocused();

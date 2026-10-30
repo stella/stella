@@ -2547,7 +2547,7 @@ const ClipboardApp = () => {
     event.preventDefault();
     const controls = Array.from(
       footer.querySelectorAll<HTMLElement>(
-        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), a[href], input:not([disabled])",
+        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]):not([data-clipboard-search-options]), a[href], input:not([disabled])",
       ),
     ).filter((control) => !control.closest("[inert]"));
     const control = target.closest<HTMLElement>("button, a, input");
@@ -3209,7 +3209,13 @@ const ClipboardApp = () => {
                   align="inline-end"
                   className="gap-1 pe-4 [&>kbd]:me-0"
                 >
-                  {searchSource === "clips" ? (
+                  <span
+                    className={cn(
+                      "inline-flex",
+                      searchSource !== "clips" && "invisible",
+                    )}
+                    inert={searchSource !== "clips"}
+                  >
                     <Menu>
                       <Tooltip>
                         <MenuTrigger
@@ -3218,6 +3224,7 @@ const ClipboardApp = () => {
                               render={
                                 <Button
                                   aria-label={t("searchOptions")}
+                                  data-clipboard-search-options=""
                                   className="relative rounded-full"
                                   data-active={
                                     activeSearchOptionCount > 0 ? "" : undefined
@@ -3289,7 +3296,7 @@ const ClipboardApp = () => {
                         ) : null}
                       </MenuPopup>
                     </Menu>
-                  ) : null}
+                  </span>
                   <kbd className="text-foreground-muted text-3xs me-0 font-mono">
                     {PRIMARY_MODIFIER_LABEL}K
                   </kbd>

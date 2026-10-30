@@ -794,6 +794,7 @@ for (const {
       browserName,
       page,
     }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
       const tabBack = browserName === "webkit" ? "Alt+Shift+Tab" : "Shift+Tab";
       const tabForward = browserName === "webkit" ? "Alt+Tab" : "Tab";
       const cards = await openClipboard(page, { language });
@@ -817,6 +818,10 @@ for (const {
       ).toBeFocused();
       await page.keyboard.press(groupKey);
       await expect(page.getByRole("searchbox")).toBeFocused();
+      await page.keyboard.press(tabForward);
+      await expect(
+        page.getByRole("button", { name: messages.clipboard.searchOptions }),
+      ).toBeFocused();
       await page.keyboard.press(tabForward);
       await expect(activeGroup).toBeFocused();
       await expect(selectedCard).toHaveAttribute("aria-current", "true");
@@ -1283,7 +1288,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
 
   await search.focus();
   const footerControls = page.locator(
-    ".clipboard-controls button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
+    ".clipboard-controls button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]):not([data-clipboard-search-options]), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
   );
   const footerControlCount = await footerControls.count();
   expect(footerControlCount).toBeGreaterThan(1);
@@ -1291,8 +1296,8 @@ test("restores footer arrow navigation after changing a menu setting", async ({
     enMessages.clipboard.search,
   );
   await expect(
-    page.locator(".clipboard-search button:not([data-clipboard-scope])"),
-  ).toHaveCount(0);
+    page.getByRole("button", { name: enMessages.clipboard.searchOptions }),
+  ).toBeVisible();
   await expect(footerControls.nth(1)).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(footerControls.nth(2)).toBeFocused();
