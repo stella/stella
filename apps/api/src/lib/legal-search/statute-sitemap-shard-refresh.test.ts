@@ -184,6 +184,8 @@ const expectListedCoveringPath = async () => {
     ),
   );
   expect(indexed.map(({ indexNames }) => indexNames)).toEqual([[LISTED_INDEX]]);
+  // No other scan of the table, of any kind, may join the covering one.
+  expect(scans).toHaveLength(1);
   // The index predicate implies the withdrawn filter, so no row is rechecked.
   expect(scans[0]?.filter ?? "").not.toContain("window_disposition");
   expect(plan).not.toMatch(/Seq Scan on legislation_documents/u);

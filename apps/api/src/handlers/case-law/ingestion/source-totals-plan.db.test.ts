@@ -190,10 +190,12 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
     expect(corpus).toHaveLength(1);
     expect(corpus.at(0)?.indexConditions.join(" ")).toContain("source_id");
     expect(corpus.at(0)?.indexNames).not.toEqual([]);
-    const corpusEstimate = scanOccurrences(root).find(
+    // No other scan of the table, of any kind, may join the covering one.
+    const corpusScans = scanOccurrences(root).filter(
       ({ relation }) => relation === "case_law_decisions",
     );
-    expect(corpusEstimate?.rows).toBeGreaterThan(6000);
-    expect(corpusEstimate?.rows).toBeLessThan(8000);
+    expect(corpusScans).toHaveLength(1);
+    expect(corpusScans.at(0)?.rows).toBeGreaterThan(6000);
+    expect(corpusScans.at(0)?.rows).toBeLessThan(8000);
   });
 });

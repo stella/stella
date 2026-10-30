@@ -149,7 +149,14 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
               vocabulary.params,
             ),
           );
-          // This is a covering-index proof paired with the heap-fetch check.
+          // Every scan of the table, of any kind, must be one of the two
+          // covering probes: a covering-index proof paired with the
+          // heap-fetch check below.
+          expect(
+            scanOccurrences(vocabularyPlan).filter(
+              ({ relation }) => relation === "case_law_decisions",
+            ),
+          ).toHaveLength(2);
           const vocabularyScans = indexedAccessPaths(
             vocabularyPlan,
             "case_law_decisions",
@@ -158,6 +165,8 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
           expect(vocabularyScans).toHaveLength(2);
           for (const scan of vocabularyScans) {
             expect(scan.indexNames).toEqual([PUBLISHED_INDEX]);
+            // A residual filter would walk index entries the bound skips.
+            expect(scan.node["Filter"]).toBeUndefined();
           }
           for (const scan of indexScans(vocabularyPlan)) {
             expect(scan["Actual Rows"]).toBeLessThanOrEqual(1);
