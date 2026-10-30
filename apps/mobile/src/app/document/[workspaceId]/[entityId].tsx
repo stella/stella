@@ -5,9 +5,10 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
-import { Button } from "@/components/ui/button";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -193,12 +194,9 @@ const OpenedDocument = ({
           >
             {phase.failure === "noFile" ||
             phase.failure === "unsupported" ? null : (
-              <Button
-                className="mt-4"
-                label={t("retry")}
-                onPress={onRetry}
-                variant="outline"
-              />
+              <Button className="mt-4" onPress={onRetry} variant="outline">
+                {t("retry")}
+              </Button>
             )}
           </EmptyCard>
         </View>
@@ -216,12 +214,13 @@ const OpenedDocument = ({
           >
             <Button
               className="mt-4"
-              label={t("preview")}
               onPress={() => {
                 void previewOpenedFile(opened);
               }}
               variant="outline"
-            />
+            >
+              {t("preview")}
+            </Button>
           </EmptyCard>
         </View>
       );
