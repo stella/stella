@@ -38,6 +38,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -4357,10 +4358,7 @@ const renamedFiles = (
 const comparisonBase = (headRef?: string): string => {
   const explicitBase =
     revisionOption("--base") ?? process.env["RATCHET_BASE_REF"];
-  if (explicitBase !== undefined) {
-    return resolveCommit(explicitBase);
-  }
-  if (headRef !== undefined) {
+  if (explicitBase === undefined && headRef !== undefined) {
     readGit([
       "fetch",
       "--no-tags",
@@ -4368,9 +4366,11 @@ const comparisonBase = (headRef?: string): string => {
       "+refs/heads/main:refs/remotes/origin/main",
     ]);
   }
-  return resolveCommit(
-    readGit(["merge-base", "origin/main", headRef ?? "HEAD"]),
-  );
+  return treeBaseRevision({
+    repoRoot: REPO_ROOT,
+    baseRef: explicitBase,
+    headRef,
+  });
 };
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
