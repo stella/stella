@@ -45,11 +45,11 @@ export type SessionGeneration = {
   readonly [sessionGenerationBrand]: true;
 };
 
-export type SessionWriteOutcome =
+type SessionWriteOutcome =
   | { readonly type: "committed"; readonly generation: SessionGeneration }
   | { readonly type: "stale" };
 
-export type SessionTransition = {
+type SessionTransition = {
   readonly generation: SessionGeneration;
   readonly write: (session: StoredSession) => Promise<SessionWriteOutcome>;
   readonly clear: () => Promise<SessionWriteOutcome>;
