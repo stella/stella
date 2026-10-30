@@ -409,6 +409,8 @@ export const TAGGED_FAILURE_REASON = {
   ServiceClientUnavailableError: "tagged_failure",
   SesInboundError: "tagged_failure",
   SkCollectionIssueError: "tagged_failure",
+  SkDocumentRawMissingError: "tagged_failure",
+  SkDocumentRawStorageError: "tagged_failure",
   SkillFileError: "tagged_failure",
   SkillRequiredToolsError: "tagged_failure",
   SnapshotReconciliationError: "tagged_failure",
