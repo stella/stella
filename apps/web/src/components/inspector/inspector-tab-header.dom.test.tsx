@@ -233,6 +233,7 @@ test("a long statute title stays on one row with its full accessible tooltip", a
     </IntlProvider>,
   );
   const titleElement = screen.getByLabelText(title);
+  expect(titleElement.tabIndex).toBe(0);
   expect(titleElement.className).toContain("truncate");
   expect(titleElement.className).toContain("whitespace-pre");
   Object.defineProperties(titleElement, {

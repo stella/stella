@@ -171,6 +171,7 @@ export const InspectorTabHeader = ({
               )}
               onContextMenu={onLabelContextMenu}
               onDoubleClick={onStartRename}
+              tabIndex={0}
               tooltip={label}
             >
               <UserText>{label}</UserText>
