@@ -28,6 +28,10 @@ import type { BrowserCommandRun } from "./browser-tool-execution";
 const RESPONSE_TIMEOUT_MS = 45_000;
 export const BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS = 1000;
 const BROWSER_EXTENSION_STATES = {
+  checking: {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: BROWSER_EXTENSION_STATUS.checking,
+  },
   connected: {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: "connected",
@@ -271,18 +275,41 @@ export class BrowserBridgeUnmountedError extends TaggedError(
 export const isBrowserExtensionBridgeMounted = (): boolean =>
   bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
 
+type BrowserExtensionNavigator = {
+  userAgent: string;
+  userAgentData?: { brands: readonly { brand: string }[] };
+};
+
+export const supportsBrowserExtension = (
+  browser: BrowserExtensionNavigator | undefined,
+): boolean => {
+  if (
+    !browser ||
+    /Firefox|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent)
+  ) {
+    return false;
+  }
+  if (browser.userAgentData) {
+    return browser.userAgentData.brands.some(
+      ({ brand }) => brand === "Chromium" || brand === "Google Chrome",
+    );
+  }
+  return /Chrome|Chromium/u.test(browser.userAgent);
+};
+
 /**
  * The single live state of the extension for this stella tab. Unsupported means
- * the browser cannot run the Chrome extension; not-installed follows one missed
+ * the browser cannot run the Chrome extension; checking lasts until the first
+ * announcement or deadline; not-installed follows one missed
  * announcement deadline; access and pairing are reported by the extension;
  * connected means this tab owns a controller and can execute commands.
  */
 export const getBrowserExtensionState = (): BrowserExtensionCapability => {
   const runtime = bridgeRuntime;
   if (
-    typeof navigator !== "undefined" &&
-    /Firefox|Safari/u.test(navigator.userAgent) &&
-    !/Chrome|Chromium|Edg/u.test(navigator.userAgent)
+    !supportsBrowserExtension(
+      typeof navigator === "undefined" ? undefined : navigator,
+    )
   ) {
     return BROWSER_EXTENSION_STATES[
       BROWSER_EXTENSION_STATUS.unsupportedBrowser
@@ -295,7 +322,7 @@ export const getBrowserExtensionState = (): BrowserExtensionCapability => {
     return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.notInstalled];
   }
   if (!runtime.announced) {
-    return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.notPaired];
+    return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.checking];
   }
   if (!runtime.allSitesGranted) {
     return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.needsSiteAccess];

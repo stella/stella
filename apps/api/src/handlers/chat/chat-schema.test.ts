@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_EXTENSION_STATUS,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
@@ -417,13 +418,7 @@ describe("browser client capability", () => {
   };
 
   test("accepts every known status on the current protocol", () => {
-    for (const status of [
-      "unsupported-browser",
-      "not-installed",
-      "needs-site-access",
-      "not-paired",
-      "connected",
-    ]) {
+    for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
       expect(
         v.is(sendMessageBodySchema, {
           ...request,

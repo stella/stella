@@ -86,13 +86,22 @@ const SKILL_METADATA = [
   },
 ] as const;
 
+test("checking browser state asks the user to resend once discovery completes", () => {
+  expect(
+    browserExtensionPromptLine({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "checking",
+    }),
+  ).toContain("send the message again in a moment");
+});
+
 test("not-paired browser state tells the model how the user connects", () => {
   expect(
     browserExtensionPromptLine({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       status: "not-paired",
     }),
-  ).toContain("press Connect current stella tab");
+  ).toContain("on this stella tab and connect the tab");
 });
 
 describe("reader marks in the prompt", () => {

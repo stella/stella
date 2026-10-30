@@ -446,6 +446,7 @@ export type BrowserExtensionResponse = v.InferOutput<
 >;
 
 export const BROWSER_EXTENSION_STATUS = {
+  checking: "checking",
   connected: "connected",
   needsSiteAccess: "needs-site-access",
   notInstalled: "not-installed",

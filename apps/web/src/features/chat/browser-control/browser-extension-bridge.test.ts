@@ -21,10 +21,12 @@ import {
   setBrowserApprovalMode,
 } from "./browser-approval-mode";
 import {
+  BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS,
   executeBrowserExtensionCommand,
   getBrowserExtensionState,
   isBrowserExtensionBridgeMounted,
   mountBrowserExtensionBridge,
+  supportsBrowserExtension,
 } from "./browser-extension-bridge";
 
 const ORIGIN = "https://app.stella.test";
@@ -55,12 +57,18 @@ const APPROVAL_MODE_KEY = userStorageKey("stella.chat.browserApprovalMode");
 const storedValues = new Map<string, string>();
 
 let previousWindow: PropertyDescriptor | undefined;
+let previousNavigator: PropertyDescriptor | undefined;
 let messageListener: ((event: unknown) => void) | null = null;
 let fakeWindow: FakeWindow;
 let unmount: (() => void) | null = null;
 
 beforeEach(() => {
   previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  previousNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36" },
+  });
   fakeWindow = {
     addEventListener: (type, listener) => {
       if (type === "message") {
@@ -94,6 +102,11 @@ afterEach(() => {
   unmount?.();
   unmount = null;
   restoreRealTimers();
+  if (previousNavigator) {
+    Object.defineProperty(globalThis, "navigator", previousNavigator);
+  } else {
+    Reflect.deleteProperty(globalThis, "navigator");
+  }
   if (previousWindow) {
     Object.defineProperty(globalThis, "window", previousWindow);
   } else {
@@ -121,7 +134,127 @@ const report = (
   });
 };
 
+describe("Chromium extension support", () => {
+  test.each([
+    {
+      name: "Chrome",
+      browser: { userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36" },
+      supported: true,
+    },
+    {
+      name: "Chromium",
+      browser: { userAgent: "Mozilla/5.0 Chromium/140.0.0.0" },
+      supported: true,
+    },
+    {
+      name: "Edge",
+      browser: {
+        userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0",
+      },
+      supported: true,
+    },
+    {
+      name: "Brave brands",
+      browser: {
+        userAgent: "reduced",
+        userAgentData: { brands: [{ brand: "Brave" }, { brand: "Chromium" }] },
+      },
+      supported: true,
+    },
+    {
+      name: "Google Chrome brands",
+      browser: {
+        userAgent: "reduced",
+        userAgentData: { brands: [{ brand: "Google Chrome" }] },
+      },
+      supported: true,
+    },
+    {
+      name: "unknown brands override UA",
+      browser: {
+        userAgent: "Chrome/140",
+        userAgentData: { brands: [{ brand: "Unknown" }] },
+      },
+      supported: false,
+    },
+    {
+      name: "Firefox",
+      browser: { userAgent: "Mozilla/5.0 Firefox/140.0" },
+      supported: false,
+    },
+    {
+      name: "iOS Firefox",
+      browser: { userAgent: "Mozilla/5.0 FxiOS/140.0 Safari/605.1.15" },
+      supported: false,
+    },
+    {
+      name: "Safari",
+      browser: { userAgent: "Mozilla/5.0 Version/18.0 Safari/605.1.15" },
+      supported: false,
+    },
+    {
+      name: "iOS Chrome",
+      browser: { userAgent: "Mozilla/5.0 (iPhone) CriOS/140.0 Safari/604.1" },
+      supported: false,
+    },
+    {
+      name: "iOS with Chromium brands",
+      browser: {
+        userAgent: "Mozilla/5.0 (iPad) CriOS/140.0",
+        userAgentData: { brands: [{ brand: "Chromium" }] },
+      },
+      supported: false,
+    },
+    {
+      name: "Android Chrome",
+      browser: {
+        userAgent:
+          "Mozilla/5.0 (Linux; Android 14) Chrome/140.0.0.0 Mobile Safari/537.36",
+      },
+      supported: true,
+    },
+    {
+      name: "unknown browser",
+      browser: { userAgent: "UnknownBrowser/1.0" },
+      supported: false,
+    },
+    { name: "missing navigator", browser: undefined, supported: false },
+  ])("$name", ({ browser, supported }) => {
+    expect(supportsBrowserExtension(browser)).toBe(supported);
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: browser,
+    });
+    expect(getBrowserExtensionState().status).toBe(
+      supported ? "not-installed" : "unsupported-browser",
+    );
+  });
+});
+
 describe("live browser extension state", () => {
+  test("discovery stays checking until the deadline, including after remount", () => {
+    jest.useFakeTimers();
+    for (let mount = 0; mount < 2; mount += 1) {
+      unmount = mountBrowserExtensionBridge();
+      expect(getBrowserExtensionState().status).toBe("checking");
+      jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS - 1);
+      expect(getBrowserExtensionState().status).toBe("checking");
+      jest.advanceTimersByTime(1);
+      expect(getBrowserExtensionState().status).toBe("not-installed");
+      unmount();
+      unmount = null;
+    }
+  });
+
+  test("an announcement resolves checking before the deadline", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    expect(getBrowserExtensionState().status).toBe("checking");
+    report(null);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+  });
   test("covers discovery, permission, pairing, disconnect, and late installation", () => {
     jest.useFakeTimers();
     unmount = mountBrowserExtensionBridge();
@@ -419,6 +552,15 @@ describe("the bridge outlives every chat surface", () => {
       run: { runId: "run-new", threadId },
     });
   };
+
+  test("a send during discovery reports checking", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    expect(sendBody().browserExtension).toEqual({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "checking",
+    });
+  });
 
   test("the first send of a fresh chat carries the browser client once the extension answered", () => {
     connect();
