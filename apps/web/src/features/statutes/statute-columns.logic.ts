@@ -1,5 +1,6 @@
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
 import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
+import type { StatuteListSortKey } from "@stll/api-contract/statute-list-sort";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -26,6 +27,20 @@ export const STATUTE_COLUMN_MODEL = {
   lastAmended: { size: 150, hide: true, emphasis: "metadata" },
   citedBy: { size: 110, hide: true, emphasis: "metadata" },
 } as const satisfies Record<StatuteColumnId, StatuteColumnModel>;
+
+/**
+ * The order each column's header offers, or null for a column the list is
+ * never ordered by. The act column orders by its number.
+ */
+export const STATUTE_COLUMN_SORT_KEYS = {
+  act: "actNumber",
+  type: null,
+  validity: null,
+  firstVersion: "firstVersion",
+  amendments: "amendments",
+  lastAmended: "lastAmended",
+  citedBy: "citedBy",
+} as const satisfies Record<StatuteColumnId, StatuteListSortKey | null>;
 
 /** The narrowest a statute column may be dragged. */
 export const STATUTE_COLUMN_MIN_SIZE = 80;

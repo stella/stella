@@ -192,6 +192,8 @@ const installFakeBroadcastChannel = () => {
     configurable: true,
     value: {
       BroadcastChannel: FakeBroadcastChannel,
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
       localStorage: new MemoryStorage(),
       sessionStorage: new MemoryStorage(),
     },
@@ -917,6 +919,18 @@ describe("revive suggestion", () => {
     openFullscreenFileTab();
     useInspectorTabsStore.getState().closeTab("field-1");
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("a tab moved to the main view minimizes the pane; a plain close does not", () => {
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().setMinimized(false);
+    useInspectorTabsStore.getState().closeTab("field-1");
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().closeTab("field-1", { movedToMain: true });
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
   });
 
   test("closing a side-peek file tab leaves no suggestion", () => {

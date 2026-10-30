@@ -5,10 +5,12 @@ import { Stack, useRouter } from "expo-router";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Input } from "@stll/ui/input";
+import { Text } from "@stll/ui/text";
+
 import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
-import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -101,7 +103,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
-        <TextInput
+        <Input
           accessibilityLabel={t("description")}
           onChangeText={setDescription}
           placeholder={t("description")}

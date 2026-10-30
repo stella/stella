@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/inspector";
 import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
 import type { MatterChromeStyle } from "@stll/ui/matter-colors";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -371,16 +371,22 @@ function ProtectedContent() {
   // space after the last icon) offers a quick "Open new chat"
   // shortcut without forcing a trip to the inspector toggle.
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
-  const chatMenuAnchorRef = useRef<{
+  const [chatMenuAnchor, setChatMenuAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
+  const [chatMenuOpener, setChatMenuOpener] = useState<HTMLElement | null>(
+    null,
+  );
   const handleIconRowContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     const x = e.clientX;
     const y = e.clientY;
-    chatMenuAnchorRef.current = {
+    setChatMenuOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
+    setChatMenuAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    };
+    });
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
@@ -480,17 +486,16 @@ function ProtectedContent() {
           onOpenChange={(nextOpen) => {
             setChatMenuOpen(nextOpen);
             if (!nextOpen) {
-              chatMenuAnchorRef.current = null;
+              setChatMenuAnchor(null);
             }
           }}
           open={chatMenuOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
-          <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={chatMenuAnchor ?? undefined}
+            finalFocus={() => chatMenuOpener}
+          >
             <ChatMenuContent label={t("chat.newChat")}>
               <LazyNewChatMenuItem
                 label={t("chat.newChat")}

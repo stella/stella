@@ -81,6 +81,7 @@ const HEADER_DECISION_FACTS = [
 /** A compact decision reader composed for the inspector's bounded width. */
 export const CaseDecisionInspectorView = ({
   onClose,
+  onMoveToMain,
   tab,
 }: InspectorViewRenderProps<CaseDecisionViewPayload>) => {
   const t = useTranslations();
@@ -247,7 +248,7 @@ export const CaseDecisionInspectorView = ({
             // The text moves to the page, so the tab that held it goes.
             render: () => (
               <DecisionMainViewAction
-                onMoveToMain={onClose}
+                onMoveToMain={onMoveToMain}
                 payload={{
                   ...payload,
                   searchQuery: find.findQuery || undefined,

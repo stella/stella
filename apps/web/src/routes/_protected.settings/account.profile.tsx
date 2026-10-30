@@ -77,6 +77,7 @@ import { routePresentation } from "@/routes/-route-presentation";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
+import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
@@ -602,6 +603,8 @@ function ProfilePageBody() {
       <TwoFactorCard />
 
       <SessionsCard />
+
+      <PersonalDataExportCard />
 
       <Frame className="border-destructive/32">
         <FrameHeader>
