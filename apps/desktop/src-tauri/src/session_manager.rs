@@ -942,6 +942,24 @@ impl SessionManager {
     &mut self,
     account_owner: Option<AccountOwner>,
   ) -> Result<(), String> {
+    self
+      .initialize_with_tokens(account_owner, |id| async move {
+        crate::keychain::get_token_with_timeout(&id, KEYCHAIN_RESTORE_TIMEOUT).await
+      })
+      .await
+  }
+
+  async fn initialize_with_tokens<F, Fut>(
+    &mut self,
+    account_owner: Option<AccountOwner>,
+    lookup: F,
+  ) -> Result<(), String>
+  where
+    F: Fn(String) -> Fut,
+    Fut: std::future::Future<
+        Output = Result<Option<String>, crate::keychain::KeychainReadUnavailable>,
+      >,
+  {
     self.account_owner = account_owner;
     let mut store = session_store::load_session_store(&self.store_path).await;
     // Editor observations are confirmed again after each launch.
@@ -1009,22 +1027,15 @@ impl SessionManager {
         .unconfirmed_sessions
         .insert(persisted.id.clone(), persisted);
     }
-    let restored_tokens = join_all(persisted_sessions.iter().map(|owned| async {
-      (
-        owned.session.id.clone(),
-        crate::keychain::get_token_with_timeout(
-          &owned.session.id,
-          KEYCHAIN_RESTORE_TIMEOUT,
-        )
-        .await,
-      )
-    }))
+    let restored_tokens = join_all(
+      persisted_sessions
+        .iter()
+        .map(|owned| lookup(owned.session.id.clone())),
+    )
     .await;
     let mut token_restore_unavailable = false;
 
-    for (owned, (_, restored_token)) in
-      persisted_sessions.into_iter().zip(restored_tokens)
-    {
+    for (owned, restored_token) in persisted_sessions.into_iter().zip(restored_tokens) {
       let mut persisted = owned.session;
       persisted.account_owner = Some(owned.owner.clone());
       // Token lives in OS keychain. A confirmed missing token prunes the
@@ -2462,6 +2473,7 @@ impl SessionManager {
       .expect("session was present while retiring");
     session.cancel_timers();
     self.session_ids_by_key.remove(&session.key);
+    self.unconfirmed_sessions.remove(session_id);
     self.persist_sessions_result().await?;
     self.retry_retired_sessions(RetirementPass::Pending).await?;
     self.emit_state_change();
@@ -4574,6 +4586,137 @@ mod tests {
     assert!(target.exists());
 
     tokio::fs::remove_dir_all(dir).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn a_paused_account_read_uses_the_completed_link_owner() {
+    let linked = |label: &str| crate::account::LinkedAccount {
+      api_base_url: "https://api.example.test".into(),
+      web_origin: "https://example.test".into(),
+      account: LinkedAccountSnapshot {
+        email: "desktop@example.test".into(),
+        name: None,
+        verified_at: "2026-10-01T00:00:00Z".into(),
+      },
+      identity: crate::types::DesktopAccountIdentity {
+        user_id: label.into(),
+        organization_id: "org_fixture".into(),
+      },
+      credential: crate::types::DesktopAccountCredential {
+        key: format!("stella_dr_{label}"),
+        expires_at: (chrono::Utc::now() + chrono::Duration::minutes(10)).to_rfc3339(),
+      },
+      device_key: crate::device_proof::DeviceKey::fixture(),
+    };
+    let a = linked("a");
+    let b = linked("b");
+    let owner_a = AccountOwner::for_account(&a);
+    let owner_b = AccountOwner::for_account(&b);
+    let account = Arc::new(Mutex::new(crate::account::AccountStore::Memory(Some(a))));
+    let root = std::env::temp_dir()
+      .join(format!("stella-account-read-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = root.join("sessions.json");
+    manager.edit_root = root.join("edit");
+    manager.account_owner = Some(owner_a.clone());
+    let mut persisted = persisted_session_for_test("account-a");
+    persisted.account_owner = Some(owner_a);
+    persisted.file_path = manager
+      .edit_root
+      .join("a/document.docx")
+      .to_string_lossy()
+      .into_owned();
+    manager
+      .retired_sessions
+      .push(RetiredSession::plan(persisted, &manager.quarantine_root()).unwrap());
+    let sessions = Arc::new(Mutex::new(manager));
+    // A link owns this lease while updating the durable account and manager.
+    // Poll the read at the old account-read boundary; it must wait for the link.
+    let link_lease = crate::account::lock_requests().await;
+    let read = crate::account::read_session_account(&account, &sessions);
+    tokio::pin!(read);
+    assert!(futures_util::poll!(&mut read).is_pending());
+    *account.lock().await = crate::account::AccountStore::Memory(Some(b));
+    sessions
+      .lock()
+      .await
+      .set_account_owner(Some(owner_b.clone()))
+      .await
+      .unwrap();
+    drop(link_lease);
+    let crate::account::SessionAccountRead {
+      mut manager,
+      current,
+      lease: _lease,
+    } = read.await;
+    let selected = current.unwrap().as_ref().map(AccountOwner::for_account);
+    assert_eq!(selected, Some(owner_b.clone()));
+    manager.set_account_owner(selected).await.unwrap();
+    assert!(manager.is_account_owner(Some(&owner_b)));
+    let snapshot = manager.get_snapshot();
+    assert!(snapshot.sessions.is_empty());
+    assert!(snapshot.document_recovery.edits.is_empty());
+    drop(manager);
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  #[tokio::test]
+  async fn restored_sessions_stay_retired_after_restart() {
+    let mut manager = test_manager();
+    let root =
+      std::env::temp_dir().join(format!("stella-retire-{}", uuid::Uuid::new_v4()));
+    manager.store_path = root.join("sessions.json");
+    manager.edit_root = root.join("edit");
+    let id = "restored-session";
+    let mut persisted = persisted_session_for_test(id);
+    persisted.file_path = manager
+      .edit_root
+      .join("account/document.docx")
+      .to_string_lossy()
+      .into_owned();
+    manager.unconfirmed_sessions.insert(id.into(), persisted);
+    manager.persist_sessions_result().await.unwrap();
+    manager
+      .initialize_with_tokens(Some(AccountOwner::fixture("account")), |_| async {
+        Ok(Some("session-token".into()))
+      })
+      .await
+      .unwrap();
+    assert!(manager.sessions.contains_key(id));
+    assert!(!manager.unconfirmed_sessions.contains_key(id));
+    // Retirement also prunes any pending metadata for the same runtime id.
+    manager
+      .unconfirmed_sessions
+      .insert(id.into(), manager.sessions[id].to_persisted());
+    manager.cleanup_session_internal(id).await.unwrap();
+    assert!(!manager.unconfirmed_sessions.contains_key(id));
+    manager.persist_sessions_result().await.unwrap();
+    let before = session_store::load_session_store(&manager.store_path).await;
+    assert!(before.sessions.is_empty());
+    let retirement_ids: Vec<_> = before
+      .retired_sessions
+      .iter()
+      .map(|record| record.id.clone())
+      .collect();
+    assert_eq!(retirement_ids.len(), 1);
+    manager
+      .initialize_with_tokens(Some(AccountOwner::fixture("account")), |_| async {
+        panic!("retired session requested a credential")
+      })
+      .await
+      .unwrap();
+    assert!(manager.sessions.is_empty());
+    let after = session_store::load_session_store(&manager.store_path).await;
+    assert!(after.sessions.is_empty());
+    assert_eq!(
+      after
+        .retired_sessions
+        .iter()
+        .map(|record| record.id.clone())
+        .collect::<Vec<_>>(),
+      retirement_ids
+    );
+    std::fs::remove_dir_all(root).unwrap();
   }
 
   #[tokio::test]

@@ -61,9 +61,12 @@ pub async fn get_state(
   state: State<'_, AppState>,
   account: State<'_, crate::account::AccountState>,
 ) -> Result<AppSnapshot, String> {
-  let _lease = crate::account::lock_requests().await;
-  let current = crate::account::current(&account).await?;
-  let mut mgr = state.lock().await;
+  let crate::account::SessionAccountRead {
+    manager: mut mgr,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
   mgr
     .set_account_owner(
       current
@@ -87,9 +90,12 @@ pub async fn open_recovery_folder(
   if window.label() != "main" {
     return Err("document recovery is unavailable in this window".into());
   }
-  let _lease = crate::account::lock_requests().await;
-  let current = crate::account::current(&account).await?;
-  let mut manager = state.lock().await;
+  let crate::account::SessionAccountRead {
+    mut manager,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
   manager
     .set_account_owner(
       current

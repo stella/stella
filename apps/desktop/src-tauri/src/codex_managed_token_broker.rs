@@ -301,11 +301,17 @@ impl CodexManagedTokenBroker {
     if path.as_os_str().len() > UNIX_SOCKET_PATH_BYTES {
       return Err(std::io::Error::other("token broker path is too long"));
     }
-    let listener = tokio::net::UnixListener::bind(&path)?;
-    {
-      use std::os::unix::fs::PermissionsExt;
-      std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    }
+    let listener = crate::local_store::bind_private_socket(&path)?;
+    Self::start_with_listener(source, directory, listener)
+  }
+
+  #[cfg(unix)]
+  fn start_with_listener<S: TokenSource>(
+    source: Arc<S>,
+    directory: OwnedDirectory,
+    listener: tokio::net::UnixListener,
+  ) -> std::io::Result<Self> {
+    let path = directory.path.join("s");
     let endpoint = path
       .to_str()
       .ok_or_else(|| std::io::Error::other("token broker path is not UTF-8"))?
@@ -423,48 +429,9 @@ struct OwnedDirectory {
 #[cfg(unix)]
 impl OwnedDirectory {
   fn create() -> std::io::Result<Self> {
-    let candidates = [std::env::temp_dir(), std::path::PathBuf::from("/tmp")];
-    let mut last = std::io::Error::other("no private directory for the token broker");
-    for parent in candidates {
-      match Self::create_in(&parent) {
-        Ok(directory) => return Ok(directory),
-        Err(error) => last = error,
-      }
-    }
-    Err(last)
-  }
-
-  fn create_in(parent: &Path) -> std::io::Result<Self> {
-    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-
-    let parent = std::fs::canonicalize(parent)?;
-    let name = format!(
-      "stella-token-{}",
-      &uuid::Uuid::new_v4().simple().to_string()[..12]
-    );
-    let path = parent.join(name);
-    std::fs::DirBuilder::new().mode(0o700).create(&path)?;
+    use std::os::unix::fs::MetadataExt;
+    let path = crate::local_store::create_temporary_root()?;
     let created = std::fs::symlink_metadata(&path)?;
-    let owner = created.uid();
-    let parent_metadata = std::fs::symlink_metadata(&parent)?;
-    let parent_mode = parent_metadata.mode();
-    // The parent must be ours and closed to others, or root's and sticky.
-    let parent_trusted = parent_metadata.is_dir()
-      && ((parent_metadata.uid() == owner && parent_mode & 0o022 == 0)
-        || (parent_metadata.uid() == 0
-          && (parent_mode & 0o022 == 0 || parent_mode & 0o1000 != 0)));
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
-    let created = std::fs::symlink_metadata(&path)?;
-    if !parent_trusted
-      || !created.is_dir()
-      || created.file_type().is_symlink()
-      || created.mode() & 0o777 != 0o700
-    {
-      let _ = std::fs::remove_dir(&path);
-      return Err(std::io::Error::other(
-        "token broker directory is not private",
-      ));
-    }
     Ok(Self {
       path,
       device: created.dev(),
@@ -709,9 +676,45 @@ mod tests {
     format!("{{\"version\":1,\"profileKey\":\"{KEY}\"}}\n")
   }
 
+  fn test_broker() -> CodexManagedTokenBroker {
+    #[cfg(target_os = "linux")]
+    {
+      CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+      // Exercise protocol and peer credentials even where production refuses
+      // path-based socket binding. This fixture is not a publication boundary.
+      let directory = OwnedDirectory::create().unwrap();
+      let listener =
+        crate::local_store::bind_socket_fixture(&directory.path.join("s")).unwrap();
+      CodexManagedTokenBroker::start_with_listener(
+        Arc::new(FixedSource),
+        directory,
+        listener,
+      )
+      .unwrap()
+    }
+  }
+
+  #[cfg(not(target_os = "linux"))]
+  #[tokio::test]
+  async fn production_socket_binding_requires_a_handle_relative_platform_api() {
+    let error = CodexManagedTokenBroker::start(Arc::new(FixedSource))
+      .err()
+      .unwrap();
+    assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
+    assert!(
+      error
+        .get_ref()
+        .unwrap()
+        .is::<crate::local_store::UnsupportedPinnedOperation>()
+    );
+  }
+
   /// A broker that answers this test process, as if it were a managed Codex.
   fn started() -> (CodexManagedTokenBroker, BrokerGrant) {
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let broker = test_broker();
     let grant = BrokerGrant::new(&broker.processes, std::process::id());
     (broker, grant)
   }
@@ -748,7 +751,7 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn an_unrelated_same_user_process_is_refused() {
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let broker = test_broker();
     let mut codex = unrelated_process();
     // Only the "Codex" process tree is authorized; this test process is not
     // in it, although it runs as the same user and holds the right key.
@@ -906,7 +909,7 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn a_launch_authorizes_its_codex_process_until_the_grant_ends() {
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let broker = test_broker();
     let launch = launch_for(
       Path::new("/bin/true"),
       broker.endpoint(),

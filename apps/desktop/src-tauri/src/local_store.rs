@@ -4,6 +4,11 @@
 //! `apps/desktop/docs/local-only-data.md`): its own keychain key, AES-256-GCM
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
+//!
+//! Runtime files and directory publication retain their explicit modes and kinds.
+//! Socket binding requires a handle-relative namespace: Linux uses `/proc/self/fd`;
+//! other Unix platforms fail closed with `UnsupportedPinnedOperation`. In
+//! particular macOS does not expose a directory-relative socket bind API.
 
 #![allow(
   clippy::disallowed_methods,
@@ -227,6 +232,73 @@ pub enum OpenMode {
   #[cfg(test)]
   AppendExisting,
   Lock,
+}
+
+/// Archive modes are explicit: ordinary runtime data and executable programs
+/// retain their release semantics instead of inheriting private-store modes.
+#[derive(Clone, Copy)]
+pub enum RuntimeFileMode {
+  Data,
+  Executable,
+}
+
+#[derive(Debug)]
+pub struct UnsupportedPinnedOperation(pub &'static str);
+
+impl std::fmt::Display for UnsupportedPinnedOperation {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      formatter,
+      "pinned {} is unavailable on this platform",
+      self.0
+    )
+  }
+}
+
+impl std::error::Error for UnsupportedPinnedOperation {}
+
+pub fn create_runtime_file(
+  path: &Path,
+  mode: RuntimeFileMode,
+) -> std::io::Result<fs::File> {
+  platform::Parent::at(path)?.create_runtime_file(mode)
+}
+
+pub fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
+  platform::Parent::at(path)?.create_directory_new()
+}
+
+pub fn publish_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.publish_directory(&platform::Parent::at(destination)?)
+}
+
+/// A temporary root is created exclusively beneath the pinned platform temp
+/// directory. Descendants use the same no-follow owner as persistent stores.
+#[cfg(unix)]
+pub fn create_temporary_root() -> std::io::Result<PathBuf> {
+  let path = std::env::temp_dir().join(format!(
+    "stella-{}",
+    &uuid::Uuid::new_v4().simple().to_string()[..12]
+  ));
+  create_private_dir_new(&path)?;
+  Ok(path)
+}
+
+#[cfg(unix)]
+pub fn bind_private_socket(path: &Path) -> std::io::Result<tokio::net::UnixListener> {
+  platform::Parent::at(path)?.bind_socket()
+}
+
+// Protocol fixtures need a real socket on platforms whose production binder
+// fails closed. The fixture never handles application data or publication.
+#[cfg(all(test, unix, not(target_os = "linux")))]
+pub(crate) fn bind_socket_fixture(
+  path: &Path,
+) -> std::io::Result<tokio::net::UnixListener> {
+  use std::os::unix::fs::PermissionsExt;
+  let listener = tokio::net::UnixListener::bind(path)?;
+  fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+  Ok(listener)
 }
 
 pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
@@ -454,6 +526,139 @@ pub fn debug_build_is_memory_only(_env: &str) -> bool {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[cfg(windows)]
+  #[test]
+  fn runtime_publication_pins_windows_directory_paths() {
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    let staging = root.join("staging");
+    create_private_dir_new(&staging).unwrap();
+    let path = staging.join("tool.exe");
+    let mut file = create_runtime_file(&path, RuntimeFileMode::Executable).unwrap();
+    file.write_all(b"runtime").unwrap();
+    drop(file);
+    let source = platform::Parent::at(&staging).unwrap();
+    let destination = platform::Parent::at(&root.join("published")).unwrap();
+    assert!(fs::rename(&root, root.with_extension("moved")).is_err());
+    source.publish_directory(&destination).unwrap();
+    assert_eq!(
+      fs::read(root.join("published/tool.exe")).unwrap(),
+      b"runtime"
+    );
+    drop(source);
+    drop(destination);
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn runtime_modes_and_directory_publication_use_pinned_parents() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let root = create_temporary_root().unwrap();
+    assert_eq!(
+      fs::metadata(&root).unwrap().permissions().mode() & 0o777,
+      0o700
+    );
+    let staging = root.join("staging");
+    create_private_dir_new(&staging).unwrap();
+    assert_eq!(
+      create_private_dir_new(&staging).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    for (name, mode, expected) in [
+      ("tool", RuntimeFileMode::Executable, 0o755),
+      ("data", RuntimeFileMode::Data, 0o644),
+    ] {
+      let file = create_runtime_file(&staging.join(name), mode).unwrap();
+      assert_eq!(
+        file.metadata().unwrap().permissions().mode() & 0o777,
+        expected
+      );
+    }
+    let source = platform::Parent::at(&staging).unwrap();
+    let destination = platform::Parent::at(&root.join("published")).unwrap();
+    let moved = root.with_extension("moved");
+    let outside = root.with_extension("outside");
+    create_private_dir(&outside).unwrap();
+    fs::rename(&root, &moved).unwrap();
+    symlink(&outside, &root).unwrap();
+    source.publish_directory(&destination).unwrap();
+    assert!(!moved.join("staging").exists());
+    assert!(moved.join("published/tool").is_file());
+    assert_eq!(
+      fs::metadata(moved.join("published/tool"))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777,
+      0o755
+    );
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    assert!(
+      create_runtime_file(&root.join("unexpected"), RuntimeFileMode::Executable)
+        .is_err()
+    );
+    assert!(create_private_dir_new(&root.join("unexpected")).is_err());
+    fs::remove_file(&root).unwrap();
+    fs::remove_dir_all(moved).unwrap();
+    fs::remove_dir(outside).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn runtime_files_keep_their_mode_after_parent_path_changes() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let root = create_temporary_root().unwrap();
+    let parent = root.join("parent");
+    let moved = root.join("moved");
+    let outside = root.join("outside");
+    create_private_dir(&parent).unwrap();
+    create_private_dir(&outside).unwrap();
+    let pinned = platform::Parent::at(&parent.join("tool")).unwrap();
+    fs::rename(&parent, &moved).unwrap();
+    symlink(&outside, &parent).unwrap();
+    let file = pinned
+      .create_runtime_file(RuntimeFileMode::Executable)
+      .unwrap();
+    assert_eq!(file.metadata().unwrap().permissions().mode() & 0o777, 0o755);
+    assert!(moved.join("tool").is_file());
+    assert_eq!(fs::read_dir(outside).unwrap().count(), 0);
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn socket_binding_preserves_the_private_directory_boundary() {
+    use std::os::unix::fs::symlink;
+    let root = create_temporary_root().unwrap();
+    let parent = root.join("parent");
+    let moved = root.join("moved");
+    let outside = root.join("outside");
+    create_private_dir(&parent).unwrap();
+    create_private_dir(&outside).unwrap();
+    let pinned = platform::Parent::at(&parent.join("s")).unwrap();
+    fs::rename(&parent, &moved).unwrap();
+    symlink(&outside, &parent).unwrap();
+    #[cfg(target_os = "linux")]
+    {
+      use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+      let listener = pinned.bind_socket().unwrap();
+      let metadata = fs::symlink_metadata(moved.join("s")).unwrap();
+      assert!(metadata.file_type().is_socket());
+      assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+      drop(listener);
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+      let error = pinned.bind_socket().unwrap_err();
+      assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
+      assert!(error.get_ref().unwrap().is::<UnsupportedPinnedOperation>());
+      assert!(!moved.join("s").exists());
+    }
+    assert_eq!(fs::read_dir(outside).unwrap().count(), 0);
+    fs::remove_dir_all(root).unwrap();
+  }
 
   #[cfg(unix)]
   fn assert_link_error(error: std::io::Error) {

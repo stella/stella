@@ -94,7 +94,6 @@ fn roots() -> Vec<(PathBuf, bool)> {
     ));
     roots.push((home.join("Library/LaunchAgents"), false));
   }
-  #[cfg(test)]
   roots.push((std::env::temp_dir(), false));
   roots
 }
@@ -134,10 +133,7 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     .filter(|(root, _)| path.starts_with(root))
     .max_by_key(|(root, _)| root.components().count())
     .ok_or_else(invalid_path)?;
-  #[cfg(test)]
   let temporary_anchor = root_path == std::env::temp_dir();
-  #[cfg(not(test))]
-  let temporary_anchor = false;
   let relative = path
     .strip_prefix(&root_path)
     .map_err(|error| {
@@ -165,15 +161,25 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   }
   // The temporary anchor itself is platform supplied; application roots
   // retain no-follow traversal after resolving only their platform parent.
-  #[cfg(test)]
-  let physical_root = if root_path == std::env::temp_dir() {
+  let physical_root = if temporary_anchor {
     root_path.canonicalize()?
   } else {
     physical_application_root(&root_path)?
   };
-  #[cfg(not(test))]
-  let physical_root = physical_application_root(&root_path)?;
   let directory = absolute_directory(&physical_root)?;
+  if temporary_anchor {
+    let metadata = directory.metadata()?;
+    let trusted = (metadata.uid() == rustix::process::geteuid().as_raw()
+      && metadata.mode() & 0o022 == 0)
+      || (metadata.uid() == 0
+        && (metadata.mode() & 0o022 == 0 || metadata.mode() & 0o1000 != 0));
+    if !trusted {
+      return Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        "temporary root is not trusted",
+      ));
+    }
+  }
   if !temporary_anchor {
     check_owner(&directory)?;
   }
@@ -231,6 +237,79 @@ impl Parent {
       directory: self.directory.try_clone()?,
       name,
     })
+  }
+
+  pub(super) fn create_runtime_file(
+    &self,
+    mode: super::RuntimeFileMode,
+  ) -> io::Result<File> {
+    let permissions = Mode::from_raw_mode(match mode {
+      super::RuntimeFileMode::Data => 0o644,
+      super::RuntimeFileMode::Executable => 0o755,
+    });
+    let file = File::from(fs::openat(
+      &self.directory,
+      &self.name,
+      OFlags::WRONLY
+        | OFlags::CREATE
+        | OFlags::EXCL
+        | OFlags::NOFOLLOW
+        | OFlags::CLOEXEC,
+      permissions,
+    )?);
+    check_owner(&file)?;
+    fs::fchmod(&file, permissions)?;
+    Ok(file)
+  }
+
+  pub(super) fn create_directory_new(&self) -> io::Result<()> {
+    fs::mkdirat(&self.directory, &self.name, DIRECTORY_MODE)?;
+    let directory = child_directory(&self.directory, &self.name, false, true)?;
+    fs::fsync(&directory)?;
+    fs::fsync(&self.directory)?;
+    Ok(())
+  }
+
+  pub(super) fn publish_directory(&self, destination: &Self) -> io::Result<()> {
+    let directory = child_directory(&self.directory, &self.name, false, true)?;
+    fs::fsync(&directory)?;
+    fs::renameat_with(
+      &self.directory,
+      &self.name,
+      &destination.directory,
+      &destination.name,
+      fs::RenameFlags::NOREPLACE,
+    )?;
+    fs::fsync(&destination.directory)?;
+    fs::fsync(&self.directory)?;
+    Ok(())
+  }
+
+  #[cfg(target_os = "linux")]
+  pub(super) fn bind_socket(&self) -> io::Result<tokio::net::UnixListener> {
+    use std::os::fd::AsRawFd;
+    let metadata = self.directory.metadata()?;
+    check_owner(&self.directory)?;
+    if metadata.mode() & 0o777 != 0o700 {
+      return Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        "socket directory is not private",
+      ));
+    }
+    let path = PathBuf::from(format!("/proc/self/fd/{}", self.directory.as_raw_fd()))
+      .join(&self.name);
+    let listener = tokio::net::UnixListener::bind(path)?;
+    fs::chmodat(&self.directory, &self.name, FILE_MODE, AtFlags::empty())?;
+    Ok(listener)
+  }
+
+  #[cfg(not(target_os = "linux"))]
+  pub(super) fn bind_socket(&self) -> io::Result<tokio::net::UnixListener> {
+    check_owner(&self.directory)?;
+    Err(io::Error::new(
+      io::ErrorKind::Unsupported,
+      super::UnsupportedPinnedOperation("Unix socket binding"),
+    ))
   }
 
   pub(super) fn open(&self, mode: OpenMode) -> io::Result<File> {

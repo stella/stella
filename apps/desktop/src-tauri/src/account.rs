@@ -22,6 +22,28 @@ pub async fn lock_requests() -> tokio::sync::MutexGuard<'static, ()> {
   REQUESTS.get_or_init(|| Mutex::new(())).lock().await
 }
 
+/// Keeps account selection and the document owner inside the same request
+/// lease. Callers retain the lease through snapshot or recovery delivery.
+pub(crate) struct SessionAccountRead<'a> {
+  pub manager: tokio::sync::MutexGuard<'a, crate::session_manager::SessionManager>,
+  pub current: Result<Option<LinkedAccount>, String>,
+  pub lease: tokio::sync::MutexGuard<'static, ()>,
+}
+
+pub(crate) async fn read_session_account<'a>(
+  account: &AccountState,
+  sessions: &'a crate::commands::AppState,
+) -> SessionAccountRead<'a> {
+  let lease = lock_requests().await;
+  let manager = sessions.lock().await;
+  let current = current(account).await;
+  SessionAccountRead {
+    manager,
+    current,
+    lease,
+  }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PendingRotation {
@@ -1060,9 +1082,11 @@ pub async fn account_get_state(
   require_account_window(&window)?;
   // Name the server a new connection would really open, never a default the
   // selected self-hosted server overrides.
-  let _lease = lock_requests().await;
-  let current = current(&state).await;
-  let mut manager = sessions.lock().await;
+  let SessionAccountRead {
+    mut manager,
+    current,
+    lease: _lease,
+  } = read_session_account(&state, &sessions).await;
   let server = crate::commands::browser_connect_server(&manager);
   if let Ok(current) = &current {
     manager
