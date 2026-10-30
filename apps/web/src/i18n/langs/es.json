@@ -2357,6 +2357,7 @@
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
     "unsavedChanges": "Cambios sin guardar",
+    "unsavedChangesClose": "Cambios sin guardar. Cierra de nuevo para descartarlos",
     "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",
@@ -5425,6 +5426,7 @@
     "showCitedPartOnly": "Mostrar solo la parte citada",
     "showFullProvision": "Mostrar la disposición completa",
     "showInText": "Ver en el texto",
+    "sortNeedsYear": "Elija un año en los filtros para ordenar por esta columna.",
     "statedWindow": "Fechas indicadas por el editor: {range}",
     "status": {
       "current": "En vigor",

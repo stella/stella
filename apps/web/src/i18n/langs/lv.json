@@ -2357,6 +2357,7 @@
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
     "unsavedChanges": "Nesaglabātas izmaiņas",
+    "unsavedChangesClose": "Nesaglabātas izmaiņas. Vēlreiz aizveriet, lai tās atmestu",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
@@ -5425,6 +5426,7 @@
     "showCitedPartOnly": "Rādīt tikai citēto daļu",
     "showFullProvision": "Rādīt visu normu",
     "showInText": "Rādīt tekstā",
+    "sortNeedsYear": "Lai kārtotu pēc šīs kolonnas, filtros izvēlieties gadu.",
     "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {
       "current": "Spēkā",

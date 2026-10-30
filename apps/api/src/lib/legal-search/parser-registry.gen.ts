@@ -67,7 +67,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.PL_UODO]: 15,
   [ADAPTER_KEYS.PL_UOKIK]: 14,
   [ADAPTER_KEYS.SK_COURTS]: 22,
-  [ADAPTER_KEYS.SK_US]: 18,
+  [ADAPTER_KEYS.SK_US]: 19,
   [ADAPTER_KEYS.UK_FCL]: 4,
 } as const satisfies Record<AdapterKey, number>;
 export const SOURCE_FINGERPRINT_VERSIONS = {
@@ -134,7 +134,7 @@ export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
   [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
   [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"PDF paragraph gaps, lettered items and the bounded first-page metadata table change paragraph text and block boundaries; PDF bytes must be fetched again because this adapter's stored raw contains listing/detail metadata only, and ordinary metadata replay does not rebuild the document"} },
-  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
+  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage."} },
   [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
 } as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];

@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktywna edycja} few {{count} aktywne edycje} many {{count} aktywnych edycji} other {{count} aktywnych edycji}}",
-    "clipboard": "Historia schowka",
     "activity": "Aktywność",
     "activityRecording": "Aktywność: Rejestrowanie · dziś {hours} h",
     "activityPaused": "Aktywność: Wstrzymana · dziś {hours} h",
@@ -150,6 +149,7 @@
     "handoffUnavailable": "Nie udało się otworzyć dokumentu. Zacznij ponownie ze Stelli.",
     "handoffRetry": "Spróbuj ponownie",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
+    "unsavedChangesClose": "Niezapisane zmiany. Zamknij ponownie, aby je odrzucić",
     "handoffConnectToSign": "Połącz stella desktop, aby podpisać ten dokument",
     "handoffConnectToOpen": "Połącz stella desktop, aby otworzyć ten dokument",
     "handoffConnectDetail": "Połącz swoje konto stella. Dokument otworzy się automatycznie po połączeniu.",
