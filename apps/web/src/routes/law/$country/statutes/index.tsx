@@ -478,10 +478,13 @@ const statuteRowsPhase = (
   publicLawRowsPhase({
     isLoading: query.isLoading,
     isPlaceholderData: query.isPlaceholderData,
-    keptRowCount: (query.data?.pages ?? []).reduce(
-      (count, page) => count + page.items.length,
-      0,
-    ),
+    keptRowCount:
+      query.data === undefined
+        ? 0
+        : query.data.pages.reduce(
+            (count, page) => count + page.items.length,
+            0,
+          ),
     routeState,
   });
 
