@@ -96,6 +96,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     roles: ["alertdialog"],
   }),
   "animated-count": noNative("animates a number's digits"),
+  "animated-preview": noNative(
+    "cross-fades a feature preview's stages; HTML has no element for it",
+  ),
   "application-rail": noNative("app navigation chrome built from Button"),
   avatar: owned(AVATAR_RULE, "user avatars render through UserIdentity"),
   badge: noNative(
@@ -400,6 +403,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "use-content-dir": notComponent("a React hook"),
   "use-latest": notComponent("a React hook"),
   "use-mobile": notComponent("a React hook"),
+  "use-prefers-reduced-motion": notComponent("a React hook"),
   "use-viewport-width": notComponent("a React hook"),
   utils: notComponent("class name helpers"),
   "view-toolbar": noNative(

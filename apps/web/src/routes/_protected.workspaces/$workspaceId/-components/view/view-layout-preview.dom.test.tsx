@@ -52,7 +52,7 @@ test("the kanban preview plays the card's move through the shared animated previ
       index: stage.dataset["stageIndex"],
       incoming: stage.dataset["incoming"] !== undefined,
       outgoing: stage.dataset["outgoing"] !== undefined,
-      title: stage.textContent?.includes("Review contract"),
+      title: stage.textContent.includes("Review contract"),
     })),
   ).toEqual([
     { index: "0", incoming: false, outgoing: true, title: true },

@@ -42,16 +42,18 @@ export const AnonymizationPreviewCard = ({
   );
 };
 
-export const AnonymizationPreview = () => {
+const AnonymizationPreview = () => {
   const t = useTranslations();
-  const prompt = (rendering: PersonalDataRendering) =>
+  // Explicit ReactNode: the inferred `t.rich` result carries React 19's
+  // Promise<AwaitedReactNode> member, which promise-function-async flags.
+  const prompt = (rendering: PersonalDataRendering): ReactNode =>
     t.rich("chat.anonymizationPreview.prompt", {
       address: personalData("address", rendering),
       nationalId: personalData("nationalId", rendering),
       person1: personalData("person1", rendering),
       person2: personalData("person2", rendering),
     });
-  const answer = (rendering: PersonalDataRendering) =>
+  const answer = (rendering: PersonalDataRendering): ReactNode =>
     t.rich("chat.anonymizationPreview.answer", {
       person1: personalData("person1", rendering),
       person2: personalData("person2", rendering),
