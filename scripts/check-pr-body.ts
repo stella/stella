@@ -11,7 +11,7 @@ const markerPatterns = markers.map((marker) => ({
   marker,
   pattern: new RegExp(
     `^\\s*(?:(?:[-*+]|1\\.)\\s*)?\`*${escapeRegExp(marker)}`,
-    "iu",
+    "u",
   ),
 }));
 

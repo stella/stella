@@ -14,14 +14,28 @@ describe("pull request body tool log guard", () => {
         ]);
       });
     }
-
-    test(`matches ${marker} case-insensitively`, () => {
-      expect(checkPrBody(marker.toLowerCase())).toEqual([{ line: 1, marker }]);
-    });
   }
 
+  test("distinguishes exact-case markers from human-written prose", () => {
+    expect(
+      checkPrBody(
+        [
+          "- Mutation: removing the index fails 12 cases",
+          "- MUTATION: restoring the index",
+          "PROOF: bun test",
+          "Output tail: failure details",
+          "output tail: summarizes the result in prose",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      { line: 2, marker: "MUTATION:" },
+      { line: 3, marker: "PROOF:" },
+      { line: 4, marker: "Output tail:" },
+    ]);
+  });
+
   test("reports every offending line and the neutral failure message", () => {
-    expect(formatPrBodyCheck("Summary\nproof: command\n- EXIT: 1")).toEqual({
+    expect(formatPrBodyCheck("Summary\nPROOF: command\n- EXIT: 1")).toEqual({
       exitCode: 1,
       lines: [
         "line 2: PROOF:",
