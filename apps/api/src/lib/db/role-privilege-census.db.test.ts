@@ -214,6 +214,95 @@ describePostgres("database role privilege census", () => {
   }, 120_000);
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports predefined-role privileges without an object ACL", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const owner = `stella_census_owner_${suffix}`;
+      const reader = `stella_census_reader_${suffix}`;
+      const table = `stella_census_fixture_${suffix}`;
+      try {
+        await database.unsafe(`
+          CREATE ROLE "${owner}" NOLOGIN;
+          CREATE ROLE "${reader}" NOLOGIN;
+          CREATE TABLE public."${table}" (id integer);
+          ALTER TABLE public."${table}" OWNER TO "${owner}";
+          REVOKE SELECT ON TABLE public."${table}" FROM "${owner}", PUBLIC;
+          GRANT pg_read_all_data TO "${reader}";
+        `);
+        const acl = await database.unsafe<{ hasSelectAcl: boolean }[]>(`
+          SELECT EXISTS (
+            SELECT 1 FROM pg_catalog.pg_class class
+            CROSS JOIN LATERAL pg_catalog.aclexplode(class.relacl) acl
+            WHERE class.oid = 'public."${table}"'::regclass
+              AND acl.privilege_type = 'SELECT'
+          ) AS "hasSelectAcl"
+        `);
+        expect(acl.at(0)?.hasSelectAcl).toBeFalse();
+
+        const census = await readRolePrivilegeCensus(database);
+        expect(privilegesFor(census, reader)).toContain(
+          `table:public.${table}:SELECT:EFFECTIVE`,
+        );
+      } finally {
+        await database.unsafe(`
+          DROP TABLE IF EXISTS public."${table}";
+          REVOKE pg_read_all_data FROM "${reader}";
+          DROP OWNED BY "${reader}";
+          DROP OWNED BY "${owner}";
+          DROP ROLE IF EXISTS "${reader}";
+          DROP ROLE IF EXISTS "${owner}";
+        `);
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports inherited grant options from roles outside the audited set", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `external_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      const grantable = "table:public.account:SELECT:EFFECTIVE_GRANTABLE";
+      const censusAsParent = async () =>
+        database.begin(async (transaction) => {
+          await transaction.unsafe(
+            `SET LOCAL SESSION AUTHORIZATION "${parent}"`,
+          );
+          return readRolePrivilegeCensus(transaction);
+        });
+      try {
+        await database.unsafe(`
+          CREATE ROLE "${parent}" NOLOGIN;
+          CREATE ROLE "${member}" NOLOGIN;
+          GRANT SELECT ON TABLE public.account TO "${parent}";
+          GRANT "${parent}" TO "${member}" WITH INHERIT TRUE, SET FALSE;
+        `);
+        const withoutGrantOption = await censusAsParent();
+        expect(privilegesFor(withoutGrantOption, member)).not.toContain(
+          grantable,
+        );
+
+        await database.unsafe(
+          `GRANT SELECT ON TABLE public.account TO "${parent}" WITH GRANT OPTION`,
+        );
+        const withGrantOption = await censusAsParent();
+        expect(privilegesFor(withGrantOption, member)).toContain(grantable);
+        expect(() =>
+          assertCompleteCensus(withoutGrantOption, withGrantOption),
+        ).toThrow(`${member} ${grantable}`);
+      } finally {
+        await database.unsafe(`
+          REVOKE "${parent}" FROM "${member}";
+          DROP OWNED BY "${member}";
+          DROP OWNED BY "${parent}";
+          DROP ROLE IF EXISTS "${member}";
+          DROP ROLE IF EXISTS "${parent}";
+        `);
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("records SET-only privileges separately from effective privileges", async () => {
     await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");

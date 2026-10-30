@@ -78,7 +78,6 @@ const rolePrivilegeCensusQuery = `
       FROM application_relations relation
       JOIN pg_catalog.pg_attribute attribute ON attribute.attrelid = relation.oid
       WHERE attribute.attnum > 0 AND NOT attribute.attisdropped
-        AND attribute.attacl IS NOT NULL
       UNION ALL
       SELECT 'function', namespace.nspname || '.' || procedure.proname ||
              '(' || pg_catalog.pg_get_function_identity_arguments(procedure.oid) || ')',
@@ -123,8 +122,23 @@ const rolePrivilegeCensusQuery = `
       CROSS JOIN LATERAL pg_catalog.aclexplode(object_acl.acl) acl
     ),
     privilege_candidates AS (
-      SELECT DISTINCT kind, object_name, object_oid, sub_id, privilege_type
-      FROM expanded_acl
+      SELECT object_acl.kind, object_acl.object_name, object_acl.object_oid,
+             object_acl.sub_id, privilege.privilege_type
+      FROM object_acl
+      CROSS JOIN LATERAL (VALUES
+        ('database', 'CONNECT'), ('database', 'CREATE'), ('database', 'TEMPORARY'),
+        ('schema', 'CREATE'), ('schema', 'USAGE'),
+        ('table', 'DELETE'), ('table', 'INSERT'), ('table', 'MAINTAIN'),
+        ('table', 'REFERENCES'), ('table', 'SELECT'), ('table', 'TRIGGER'),
+        ('table', 'TRUNCATE'), ('table', 'UPDATE'),
+        ('column', 'INSERT'), ('column', 'REFERENCES'), ('column', 'SELECT'),
+        ('column', 'UPDATE'),
+        ('sequence', 'SELECT'), ('sequence', 'UPDATE'), ('sequence', 'USAGE'),
+        ('function', 'EXECUTE'), ('procedure', 'EXECUTE'),
+        ('domain', 'USAGE'), ('type', 'USAGE'),
+        ('large_object', 'SELECT'), ('large_object', 'UPDATE')
+      ) privilege(object_kind, privilege_type)
+      WHERE privilege.object_kind = object_acl.kind
     ),
     role_privileges AS (
       SELECT role.oid AS role_oid, candidate.*,
@@ -139,7 +153,19 @@ const rolePrivilegeCensusQuery = `
                WHEN 'domain' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
                WHEN 'type' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
                WHEN 'large_object' THEN pg_catalog.has_largeobject_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
-             END AS effective
+             END AS effective,
+             CASE candidate.kind
+               WHEN 'database' THEN pg_catalog.has_database_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'schema' THEN pg_catalog.has_schema_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'table' THEN pg_catalog.has_table_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'column' THEN pg_catalog.has_column_privilege(role.oid, candidate.object_oid, candidate.sub_id::smallint, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'sequence' THEN pg_catalog.has_sequence_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'function' THEN pg_catalog.has_function_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'procedure' THEN pg_catalog.has_function_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'domain' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'type' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'large_object' THEN pg_catalog.has_largeobject_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+             END AS grantable
       FROM application_roles role
       CROSS JOIN privilege_candidates candidate
     ),
@@ -202,6 +228,12 @@ const rolePrivilegeCensusQuery = `
       FROM role_privileges acl
       JOIN application_roles role ON role.oid = acl.role_oid
       WHERE acl.effective
+      UNION ALL
+      SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
+             acl.privilege_type || ':EFFECTIVE_GRANTABLE'
+      FROM role_privileges acl
+      JOIN application_roles role ON role.oid = acl.role_oid
+      WHERE acl.grantable
       UNION ALL
       SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
              acl.privilege_type || ':SET_REACHABLE'
