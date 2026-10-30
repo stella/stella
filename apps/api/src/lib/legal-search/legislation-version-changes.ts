@@ -296,7 +296,7 @@ class VersionChangeReadLimitError extends TaggedError(
 type PlanVersionChangeTasksOptions = {
   db: ScopedDb;
   works: readonly LegislationVersionWork[];
-  around?: SafeId<"legislationDocument">;
+  around?: SafeId<"legislationDocument"> | undefined;
 };
 
 export type WorkVersionChangeTask = VersionChangeTask & {
@@ -398,7 +398,7 @@ export type PreparedVersionChange = ComputedSummary & {
 type PrepareVersionChangesOptions = {
   db: ScopedDb;
   tasks: readonly WorkVersionChangeTask[];
-  readPayloads?: typeof readVersionChangePayloads;
+  readPayloads?: typeof readVersionChangePayloads | undefined;
 };
 
 /** Payloads are read outside write transactions and released after each bounded comparison batch. */
@@ -440,8 +440,9 @@ export const writePreparedVersionChangesTx = async (
     );
     const current = alias(legislationDocuments, "current_base");
     const predecessor = predecessorIdOf(tx);
+    // Keep the scalar bigint expression; a row projection encodes it as text.
     const baseRevision = tx
-      .select({ revision: current.payloadRevision })
+      .select({ revision: sql`${current.payloadRevision}` })
       .from(current)
       .where(eq(current.id, sql`batch.base_id`))
       .limit(1);
@@ -473,7 +474,7 @@ type RefreshWorkVersionChangesOptions = {
   db: ScopedDb;
   work: LegislationVersionWork;
   around?: SafeId<"legislationDocument"> | undefined;
-  readPayloads?: typeof readVersionChangePayloads;
+  readPayloads?: typeof readVersionChangePayloads | undefined;
 };
 
 /** Refresh the same canonical comparison plan used by the backfill. */
