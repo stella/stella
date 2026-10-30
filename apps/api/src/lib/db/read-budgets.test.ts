@@ -77,12 +77,10 @@ describe("read budget declarations", () => {
   // would hold a lock the schema phase cannot outwait.
   test("every statement and transaction deadline is below the migration lock-wait ladder", () => {
     const violations = Object.entries(READ_BUDGETS).flatMap(([id, budget]) => {
-      const deadlines: Record<string, number | undefined> = {
-        statementDeadlineMs: budget.statementDeadlineMs,
-        ...(budget.surface === "scheduled-job" && {
-          transactionDeadlineMs: budget.transactionDeadlineMs,
-        }),
-      };
+      const deadlines =
+        budget.surface === "scheduled-job" && budget.transactions === "explicit"
+          ? { transactionDeadlineMs: budget.transactionDeadlineMs }
+          : { statementDeadlineMs: budget.statementDeadlineMs };
       return Object.entries(deadlines).flatMap(([name, ms]) =>
         ms === undefined || ms < DEFAULT_LOCK_RETRY_CONFIG.budgetMs
           ? []
@@ -91,7 +89,10 @@ describe("read budget declarations", () => {
     });
     expect(violations).toEqual([]);
     for (const [id, budget] of Object.entries(READ_BUDGETS)) {
-      if (budget.surface === "scheduled-job") {
+      if (
+        budget.surface === "scheduled-job" &&
+        budget.transactions === "explicit"
+      ) {
         expect(budget.transactionDeadlineMs, id).toBeGreaterThan(0);
       }
     }
@@ -134,8 +135,8 @@ describe("read budget declarations", () => {
         continue;
       }
       if (
-        readFileSync(path.join(srcRoot, file), "utf-8").includes(
-          "transaction_timeout",
+        /(?:set_config\s*\(\s*['"]transaction_timeout['"]|\bSET\s+(?:(?:LOCAL|SESSION)\s+)?transaction_timeout\b)/iu.test(
+          readFileSync(path.join(srcRoot, file), "utf-8"),
         )
       ) {
         setters.push(file);

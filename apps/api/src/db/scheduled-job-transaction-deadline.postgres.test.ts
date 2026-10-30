@@ -23,15 +23,14 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const error = await rejectionOf(
-          async () =>
-            await db.transaction(async (tx) => {
-              await setTransactionDeadline(tx, DEADLINE_MS);
-              // Each statement is far below the deadline; only the
-              // transaction as a whole outlasts it.
-              for (let step = 0; step < 4; step += 1) {
-                await tx.execute(`SELECT pg_sleep(${STATEMENT_SLEEP_S})`);
-              }
-            }),
+          db.transaction(async (tx) => {
+            await setTransactionDeadline(tx, DEADLINE_MS);
+            // Each statement is far below the deadline; only the
+            // transaction as a whole outlasts it.
+            for (let step = 0; step < 4; step += 1) {
+              await tx.execute(`SELECT pg_sleep(${STATEMENT_SLEEP_S})`);
+            }
+          }),
         );
         expect(String(error instanceof Error ? error.message : error)).toMatch(
           /transaction timeout/iu,
