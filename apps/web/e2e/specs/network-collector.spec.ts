@@ -12,6 +12,7 @@ test.use({
   screenshot: "off",
   trace: "off",
   video: "off",
+  launchOptions: { args: ["--site-per-process"] },
 });
 
 const BODY_PREFIX = "first chunk; ";
@@ -20,6 +21,17 @@ const BODY_SUFFIX = "last chunk";
 const startBodyServer = async (contentType = "text/plain") => {
   const pending = new Set<ServerResponse>();
   const server = createServer((request, response) => {
+    if (request.url === "/iframe") {
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        return panic("Iframe fixture server did not bind a TCP port");
+      }
+      response.setHeader("content-type", "text/html");
+      response.end(
+        `<iframe src="http://localhost:${address.port}/frame"></iframe>`,
+      );
+      return;
+    }
     if (request.url !== "/slow") {
       response.setHeader("content-type", "text/html");
       response.end(
@@ -164,3 +176,68 @@ for (const contentType of ["text/event-stream", "text/plain"]) {
     }
   });
 }
+
+test("a failed Network.enable detaches its CDP session", async ({ page }) => {
+  const context = page.context();
+  const newCDPSession = context.newCDPSession.bind(context);
+  let detachments = 0;
+  context.newCDPSession = async (target) => {
+    const session = await newCDPSession(target);
+    const detach = session.detach.bind(session);
+    session.send = async () => {
+      throw new TypeError("Network.enable fixture failure");
+    };
+    session.detach = async () => {
+      detachments += 1;
+      await detach();
+    };
+    return session;
+  };
+  const network = createNetworkCollector();
+  await expect(network.trackPage(page)).rejects.toThrow(
+    "Network.enable fixture failure",
+  );
+  expect(detachments).toBe(1);
+  expect((await network.capture()).requests).toEqual([]);
+});
+
+test("API requests in an out-of-process iframe remain explicitly unmeasured", async ({
+  page,
+}) => {
+  const server = await startBodyServer();
+  const iframeOrigin = server.url.replace("127.0.0.1", "localhost");
+  const network = createNetworkCollector({
+    apiOrigin: iframeOrigin,
+    responseSizeBudgetKeys: new Set(["GET /slow"]),
+  });
+  const detach = await network.trackPage(page);
+  try {
+    const headers = page.waitForResponse(`${iframeOrigin}/slow`);
+    await page.goto(`${server.url}/iframe`, { waitUntil: "domcontentloaded" });
+    await headers;
+    server.finishBody();
+    const frame = page
+      .frames()
+      .find((entry) => entry.url() === `${iframeOrigin}/frame`);
+    if (frame === undefined) {
+      return panic("OOPIF fixture did not load its child frame");
+    }
+    const iframeSession = await page.context().newCDPSession(frame);
+    try {
+      const { targetInfo } = await iframeSession.send("Target.getTargetInfo");
+      expect(targetInfo.type).toBe("iframe");
+    } finally {
+      await iframeSession.detach();
+    }
+    const result = await network.capture();
+    expect(result.requests).toHaveLength(1);
+    expect(result.requests.at(0)?.responseSize).toEqual({
+      status: "unreadable",
+      error:
+        "CDP Network events were not observed; the request may belong to an out-of-process iframe",
+    });
+  } finally {
+    await detach();
+    await server.close();
+  }
+});

@@ -169,8 +169,9 @@ export const declarePublicKnowledgeSmoke = ({
           }
         });
         const network = createNetworkCollector();
-        const detach = await network.trackPage(page);
+        let detach: (() => Promise<void>) | undefined;
         try {
+          detach = await network.trackPage(page);
           const response = await page.goto(route.path, {
             waitUntil: "domcontentloaded",
           });
@@ -203,13 +204,16 @@ export const declarePublicKnowledgeSmoke = ({
           expect(forbidden, "member-only requests").toEqual([]);
           expect(unauthorized, "unauthorized responses").toEqual([]);
         } finally {
-          await detach();
-          page.off("requestfinished", settleRequest);
-          page.off("requestfailed", settleRequest);
-          await testInfo.attach("public-network", {
-            body: JSON.stringify({ requests, forbidden, unauthorized }),
-            contentType: "application/json",
-          });
+          try {
+            await detach?.();
+          } finally {
+            page.off("requestfinished", settleRequest);
+            page.off("requestfailed", settleRequest);
+            await testInfo.attach("public-network", {
+              body: JSON.stringify({ requests, forbidden, unauthorized }),
+              contentType: "application/json",
+            });
+          }
         }
       });
     };

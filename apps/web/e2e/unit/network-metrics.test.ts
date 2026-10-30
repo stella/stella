@@ -7,6 +7,7 @@ import {
   countDuplicateGets,
   createResponseSizeSample,
   diffNetworkBaseline,
+  isTrackedProtocolRequest,
   mergeNetworkBaseline,
   NETWORK_DEPTH_METHOD,
   type NetworkBaseline,
@@ -20,6 +21,35 @@ import {
 
 const UUID = "11111111-2222-4333-8444-555555555555";
 const UUID_UPPER = "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE";
+
+describe("protocol request coverage", () => {
+  test.each([undefined, "Fetch", "XHR", "EventSource"])(
+    "tracks API requests with resource type %s",
+    (type) => {
+      expect(
+        isTrackedProtocolRequest(
+          { type, url: "https://api.example.test/v1/contacts" },
+          "https://api.example.test",
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("excludes known non-API resource types and other origins", () => {
+    expect(
+      isTrackedProtocolRequest(
+        { type: "Image", url: "https://api.example.test/image" },
+        "https://api.example.test",
+      ),
+    ).toBe(false);
+    expect(
+      isTrackedProtocolRequest(
+        { type: undefined, url: "https://web.example.test/v1/contacts" },
+        "https://api.example.test",
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("normalizeApiPath", () => {
   test("leaves a plain path untouched", () => {

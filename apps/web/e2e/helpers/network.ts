@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   appendFileSync,
   existsSync,
@@ -166,20 +166,28 @@ const requestDetails = (request: Request): WaterfallRequest => ({
   resourceType: request.resourceType(),
 });
 
-const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
-  if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {
-    return false;
-  }
-  return new URL(request.url()).origin === apiOrigin;
-};
+export const isTrackedProtocolRequest = (
+  { type, url }: { type: string | undefined; url: string },
+  apiOrigin: string,
+): boolean =>
+  (type === undefined || TRACKED_RESOURCE_TYPES.has(type.toLowerCase())) &&
+  new URL(url).origin === apiOrigin;
+
+const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean =>
+  isTrackedProtocolRequest(
+    { type: request.resourceType(), url: request.url() },
+    apiOrigin,
+  );
 
 /** Accumulate decoded bytes without retrieving or retaining the response body. */
-export const createResponseSizeSample = () => {
+export const createResponseSizeSample = (
+  incompleteReason = "CDP loadingFinished was not observed",
+) => {
   let decodedBytes = 0;
   const completion = Promise.withResolvers<undefined>();
   let outcome: ResponseSizeOutcome = {
     status: "unreadable",
-    error: "CDP loadingFinished was not observed",
+    error: incompleteReason,
   };
   return {
     completion: completion.promise,
@@ -222,6 +230,46 @@ export const createResponseSizeSample = () => {
   };
 };
 
+type ReconcileNetworkRecordsOptions = {
+  records: readonly NetworkRecord[];
+  requests: Iterable<Request>;
+};
+
+const reconcileNetworkRecords = ({
+  records,
+  requests,
+}: ReconcileNetworkRecordsOptions) => {
+  // Page request events include OOPIF traffic that the page's CDP target
+  // may not emit. Reconcile occurrence counts so repeated URLs remain
+  // distinct, and expose every unmeasured body to the existing size guard.
+  const remaining = new Map<string, number>();
+  for (const { method, url } of records) {
+    const key = JSON.stringify([method, url]);
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
+  }
+  const capturedRecords = [...records];
+  for (const request of requests) {
+    const key = JSON.stringify([request.method(), request.url()]);
+    const count = remaining.get(key) ?? 0;
+    if (count > 0) {
+      remaining.set(key, count - 1);
+      continue;
+    }
+    capturedRecords.push({
+      method: request.method(),
+      pathname: new URL(request.url()).pathname,
+      url: request.url(),
+      startedAt: request.timing().startTime,
+      dbQueries: null,
+      dbQueryHeaderMissing: false,
+      responseSize: createResponseSizeSample(
+        "CDP Network events were not observed; the request may belong to an out-of-process iframe",
+      ),
+    });
+  }
+  return capturedRecords;
+};
+
 export const createNetworkCollector = (
   collectorOptions: NetworkCollectorOptions = {},
 ): NetworkCollector => {
@@ -239,6 +287,7 @@ export const createNetworkCollector = (
     );
   const records: NetworkRecord[] = [];
   const flushSessions = new Set<() => Promise<void>>();
+  const observedRequests = new Set<Request>();
   let lastActivityAt = Date.now();
   const rounds = createNetworkRoundController<Request>();
   const released = new Set<Request>();
@@ -304,18 +353,13 @@ export const createNetworkCollector = (
             byRequestId.delete(requestId);
           }
           if (
-            type === undefined ||
-            !TRACKED_RESOURCE_TYPES.has(type.toLowerCase())
+            !isTrackedProtocolRequest({ type, url: request.url }, apiOrigin)
           ) {
-            return;
-          }
-          const url = new URL(request.url);
-          if (url.origin !== apiOrigin) {
             return;
           }
           const record: NetworkRecord = {
             method: request.method,
-            pathname: url.pathname,
+            pathname: new URL(request.url).pathname,
             url: request.url,
             startedAt: wallTime * 1000,
             dbQueries: null,
@@ -401,7 +445,19 @@ export const createNetworkCollector = (
           }
         },
       );
-      await session.send("Network.enable");
+      const enabled = await Result.tryPromise(() =>
+        session.send("Network.enable"),
+      );
+      if (enabled.isErr()) {
+        const detached = await Result.tryPromise(() => session.detach());
+        if (detached.isErr()) {
+          throw new AggregateError(
+            [enabled.error.cause, detached.error.cause],
+            "Network collection setup and CDP detach failed",
+          );
+        }
+        throw enabled.error.cause;
+      }
       const flush = async () => {
         await session.send("Runtime.evaluate", { expression: "void 0" });
       };
@@ -410,6 +466,7 @@ export const createNetworkCollector = (
       // Playwright request tokens still own the existing release barrier.
       const onRequest = (request: Request) => {
         if (isTrackedApiRequest(request, apiOrigin)) {
+          observedRequests.add(request);
           markActivity();
         }
       };
@@ -498,10 +555,14 @@ export const createNetworkCollector = (
           record.responseSize.markIncomplete(bodyCompletionTimeoutMs);
         }
       }
+      const capturedRecords = reconcileNetworkRecords({
+        records,
+        requests: observedRequests,
+      });
       return {
         depthChain: rounds.rounds,
-        duplicateGetCounts: countDuplicateGets(records),
-        requests: records.map((record) => ({
+        duplicateGetCounts: countDuplicateGets(capturedRecords),
+        requests: capturedRecords.map((record) => ({
           method: record.method,
           pathname: record.pathname,
           dbQueries: record.dbQueries,
