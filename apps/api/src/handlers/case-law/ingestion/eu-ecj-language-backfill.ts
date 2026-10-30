@@ -48,10 +48,12 @@ export const previousEcjBackfillMonth = (
     return panic(`Not a backfill month: ${month}`);
   }
   // The pattern admits only four-digit years and months 01-12.
-  const year = parseIntegerToken(groups["year"], { sign: "unsigned" }).unwrap();
+  const year = parseIntegerToken(groups["year"], { sign: "unsigned" }).unwrap(
+    "A backfill month's year is four digits",
+  );
   const index = parseIntegerToken(groups["month"], {
     sign: "unsigned",
-  }).unwrap();
+  }).unwrap("A backfill month's month is 01-12");
   return index === 1
     ? `${String(year - 1).padStart(4, "0")}-12`
     : `${String(year).padStart(4, "0")}-${String(index - 1).padStart(2, "0")}`;
