@@ -78,7 +78,7 @@ type InspectorTabHeaderProps = {
    */
   label: string;
   /** Legal identities wrap; other tab labels keep the compact single-line header. */
-  labelOverflow?: "truncate" | "wrap";
+  labelOverflow?: "cut" | "wrap";
   labelContent?: ReactNode;
   /**
    * Click handler that puts the label into rename mode. When
@@ -116,7 +116,7 @@ type InspectorTabHeaderProps = {
 
 export const InspectorTabHeader = ({
   label,
-  labelOverflow = "truncate",
+  labelOverflow = "cut",
   labelContent,
   onStartRename,
   onLabelContextMenu,
@@ -141,7 +141,7 @@ export const InspectorTabHeader = ({
       <div
         className={cn(
           "flex min-w-0 items-center gap-2",
-          !renaming && labelOverflow === "truncate" && "overflow-hidden",
+          !renaming && labelOverflow === "cut" && "overflow-hidden",
         )}
       >
         <Button
@@ -170,19 +170,21 @@ export const InspectorTabHeader = ({
           // sidebar row puts its client under the matter, so the name gets
           // the whole width instead of sharing one line with the chip.
           <div className="flex min-w-0 flex-col items-start md:flex-row md:items-center md:gap-2">
-            <span
+            <TruncatedText
               className={cn(
-                "max-w-full min-w-0 text-xs font-medium",
+                "text-xs font-medium",
+                // A cut label keeps its spaces as the rename field shows them.
                 labelOverflow === "wrap"
                   ? "wrap-anywhere whitespace-normal"
-                  : "overflow-hidden text-ellipsis whitespace-pre",
+                  : "whitespace-pre",
                 onStartRename !== undefined && "cursor-text",
               )}
+              lines={labelOverflow === "wrap" ? "none" : 1}
               onContextMenu={onLabelContextMenu}
               onDoubleClick={onStartRename}
             >
               {labelContent ?? <UserText>{label}</UserText>}
-            </span>
+            </TruncatedText>
             {matter !== undefined && (
               <>
                 <span

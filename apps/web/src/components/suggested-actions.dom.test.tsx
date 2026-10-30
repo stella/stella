@@ -65,16 +65,35 @@ const renderChip = ({
   return { chip, label, selected, view };
 };
 
+/** At rest the label is TruncatedText's one line, capped at the chip. */
+const expectCutToChip = (label: HTMLElement) => {
+  expect(label.dataset["slot"]).toBe("truncated-text");
+  expect(label.classList.contains("truncate")).toBe(true);
+  expect(label.classList.contains("max-w-full")).toBe(true);
+};
+
+/**
+ * While it slides the label is uncut and as wide as its text; the clipping
+ * box around it, not the label, keeps it inside the chip.
+ */
+const expectUncutForSlide = (label: HTMLElement) => {
+  expect(label.dataset["slot"]).toBe("truncated-text");
+  expect(label.classList.contains("truncate")).toBe(false);
+  expect(label.classList.contains("w-max")).toBe(true);
+  expect(label.classList.contains("max-w-none")).toBe(true);
+  expect(label.classList.contains("max-w-full")).toBe(false);
+};
+
 describe("a truncated follow-up chip reveals its whole text", () => {
   test("hovering slides the hidden end into view toward the start", () => {
     const { chip, label } = renderChip({ clipPx: 220, labelPx: 520 });
     expect(label.dataset["reveal"]).toBe("rest");
-    expect(label.className).toContain("truncate");
+    expectCutToChip(label);
 
     fireEvent.pointerEnter(chip);
 
     expect(label.dataset["reveal"]).toBe("revealing");
-    expect(label.className).not.toContain("truncate");
+    expectUncutForSlide(label);
     expect(label.style.translate).toBe("-300px 0");
     // A reading pace: 300px at 45px/s.
     expect(label.style.transitionDuration).toBe("6667ms");
@@ -93,7 +112,7 @@ describe("a truncated follow-up chip reveals its whole text", () => {
     // The ellipsis comes back only once the label is home.
     fireEvent.transitionEnd(label);
     expect(label.dataset["reveal"]).toBe("rest");
-    expect(label.className).toContain("truncate");
+    expectCutToChip(label);
   });
 
   test("stays revealed while the pointer leaves a chip that keeps focus", () => {

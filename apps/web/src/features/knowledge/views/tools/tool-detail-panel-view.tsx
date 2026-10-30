@@ -194,7 +194,7 @@ const ExpandableText = ({ text }: { text: string }) => {
   // line-clamp height. A ResizeObserver keeps it correct across font
   // loads, panel animation, and width changes.
   const textRef = useCallback(
-    (el: HTMLParagraphElement | null) => {
+    (el: HTMLElement | null) => {
       if (expanded || !el) {
         return undefined;
       }
@@ -213,15 +213,16 @@ const ExpandableText = ({ text }: { text: string }) => {
 
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <p
-        className={cn(
-          "text-foreground text-sm leading-relaxed text-pretty",
-          !expanded && "line-clamp-5",
-        )}
+      {/* Show more is the way to the rest of the text, so no hint. */}
+      <TruncatedText
+        className="text-foreground text-sm leading-relaxed text-pretty"
+        hint={false}
+        lines={expanded ? "none" : 5}
         ref={textRef}
+        render={<p />}
       >
         {text}
-      </p>
+      </TruncatedText>
       {(overflowing || expanded) && (
         <Button
           className="text-muted-foreground h-auto p-0"

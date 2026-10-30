@@ -106,7 +106,7 @@ export const AICellSourceCard = ({
     // Unclamped rationale scrolls within the popup rather than truncating; the
     // container must be block-level for max-height/overflow to form a scroll box
     // (an inline span ignores both).
-    clampStatements ? "line-clamp-3" : "block max-h-64 overflow-y-auto",
+    !clampStatements && "block max-h-64 overflow-y-auto",
   );
 
   const cardContent = (
@@ -134,7 +134,12 @@ export const AICellSourceCard = ({
       )}
       {visibleStatements.map((statement) => (
         <span className="flex w-full flex-col gap-1" key={statement.key}>
-          <span className={statementTextClassName}>
+          <TruncatedText
+            className={statementTextClassName}
+            // The scroll box shows the whole rationale; only the clamp hints.
+            hint={clampStatements}
+            lines={clampStatements ? 3 : "none"}
+          >
             {statement.text}
             {statement.pages.map((page) => (
               <span
@@ -144,7 +149,7 @@ export const AICellSourceCard = ({
                 p.&nbsp;{page.pageNumber}
               </span>
             ))}
-          </span>
+          </TruncatedText>
           {statement.quotes.map((quote) => (
             <span
               className={cn(

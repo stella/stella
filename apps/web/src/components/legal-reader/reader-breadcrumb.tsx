@@ -475,13 +475,13 @@ export const ReaderBreadcrumb = ({
                   t("statutes.outline")
                 ) : (
                   <span className="flex min-w-0 items-center">
-                    <bdi
-                      className={cn(
-                        currentNumber === null ? "truncate" : "shrink-0",
-                      )}
-                    >
-                      {currentNumber ?? current.title}
-                    </bdi>
+                    {currentNumber === null ? (
+                      <TruncatedText render={<bdi />}>
+                        {current.title}
+                      </TruncatedText>
+                    ) : (
+                      <bdi className="shrink-0">{currentNumber}</bdi>
+                    )}
                     {currentNumber !== null && (
                       <TruncatedText className="ms-1" render={<bdi />}>
                         {current.title.replace(currentNumber, "").trim()}

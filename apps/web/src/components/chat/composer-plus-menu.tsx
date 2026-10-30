@@ -556,16 +556,14 @@ const ComposerSkillItemBody = ({
       >
         {itemName(item)}
       </TruncatedText>
-      <BidiText
-        as="span"
-        className={cn(
-          "text-muted-foreground block text-xs",
-          // The reason is the row's point; let it wrap rather than clip.
-          !blocked && "truncate",
-        )}
+      <TruncatedText
+        className="text-muted-foreground block text-xs"
+        // The reason is the row's point; let it wrap rather than clip.
+        lines={blocked ? "none" : 1}
+        render={<BidiText as="span" />}
       >
         {secondary}
-      </BidiText>
+      </TruncatedText>
     </span>
   </>
 );
