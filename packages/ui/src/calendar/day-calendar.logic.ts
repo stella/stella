@@ -23,6 +23,7 @@ export type DayCalendarRange = {
 };
 
 const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 export const granularityMs = (granularity: DayCalendarGranularity): number =>
@@ -38,7 +39,9 @@ type DayBoundsOptions = {
 /**
  * The instants a day view covers, from `startHour` to `endHour` wall-clock
  * time in `timeZone`. A daylight-saving day is an hour shorter or longer;
- * the view stays linear in real time.
+ * the view stays linear in real time. Hours wholly inside a daylight-saving
+ * gap resolve both ends to the same instant; the view then covers the hour
+ * after the gap rather than collapsing to zero height.
  */
 export const getDayBounds = ({
   date,
@@ -63,20 +66,18 @@ export const getDayBounds = ({
   }
   const zonedStart = (day: Temporal.PlainDate, hour: number) =>
     day.toZonedDateTime({ plainTime: { hour }, timeZone }).epochMilliseconds;
-  return {
-    endMs:
-      endHour === 24
-        ? zonedStart(plainDate.add({ days: 1 }), 0)
-        : zonedStart(plainDate, endHour),
-    startMs: zonedStart(plainDate, startHour),
-  };
+  const startMs = zonedStart(plainDate, startHour);
+  const endMs =
+    endHour === 24
+      ? zonedStart(plainDate.add({ days: 1 }), 0)
+      : zonedStart(plainDate, endHour);
+  return { endMs: endMs > startMs ? endMs : startMs + HOUR_MS, startMs };
 };
 
 /** One instant per elapsed hour from the day's start, for hour labels. */
 export const getHourTicks = (bounds: DayCalendarRange): number[] => {
   const ticks: number[] = [];
-  const hourMs = 60 * MINUTE_MS;
-  for (let tick = bounds.startMs; tick < bounds.endMs; tick += hourMs) {
+  for (let tick = bounds.startMs; tick < bounds.endMs; tick += HOUR_MS) {
     ticks.push(tick);
   }
   return ticks;
@@ -134,17 +135,33 @@ export const snapToGrid = (
   return clampToBounds(bounds.startMs + slots * step, bounds);
 };
 
-/** Ensures a range spans at least one slot without leaving the day. */
+/**
+ * Ensures a range spans at least one slot without leaving the day. A day
+ * whose length is not a whole number of slots ends in a partial slot, so a
+ * range ending at the day's end may be shorter than a slot; its start stays
+ * on the grid.
+ */
 const atLeastOneSlot = (
   range: DayCalendarRange,
-  { granularity, bounds }: OffsetOptions,
+  options: OffsetOptions,
 ): DayCalendarRange => {
-  const step = granularityMs(granularity);
-  if (range.endMs - range.startMs >= step) {
+  const { bounds } = options;
+  const step = granularityMs(options.granularity);
+  const duration = range.endMs - range.startMs;
+  if (duration >= step || (duration > 0 && range.endMs === bounds.endMs)) {
     return range;
   }
-  const endMs = Math.min(bounds.endMs, range.startMs + step);
-  return { endMs, startMs: Math.max(bounds.startMs, endMs - step) };
+  if (range.startMs < bounds.endMs) {
+    return {
+      endMs: Math.min(bounds.endMs, range.startMs + step),
+      startMs: range.startMs,
+    };
+  }
+  // An empty range at the day's end takes the day's last slot.
+  return {
+    endMs: bounds.endMs,
+    startMs: snapToGrid(bounds.endMs - step, { ...options, direction: "ceil" }),
+  };
 };
 
 /**

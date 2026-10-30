@@ -22,17 +22,26 @@ import type { DayCalendarRange } from "./day-calendar.logic";
 const HOUR_MS = 3_600_000;
 const TIME_ZONE = "Europe/Prague";
 
-// The autumn daylight-saving day has 25 hours, so the grid crosses a
-// UTC-offset change; an ordinary day keeps the plain case covered.
+// Prague's autumn day has 25 hours and its spring day 23, so the grid crosses
+// a UTC-offset change; Lord Howe Island shifts by half an hour, so its spring
+// day (23.5 hours) is not a whole number of hour slots. An ordinary day keeps
+// the plain case covered.
+const BOUNDS_DAYS = [
+  { date: "2026-10-25", timeZone: TIME_ZONE },
+  { date: "2026-10-30", timeZone: TIME_ZONE },
+  { date: "2026-03-29", timeZone: TIME_ZONE },
+  { date: "2026-10-04", timeZone: "Australia/Lord_Howe" },
+] as const;
+
 const boundsArbitrary = fc
   .record({
-    date: fc.constantFrom("2026-10-25", "2026-10-30", "2026-03-29"),
+    day: fc.constantFrom(...BOUNDS_DAYS),
     endHour: fc.integer({ max: 24, min: 1 }),
     startHour: fc.integer({ max: 23, min: 0 }),
   })
   .filter(({ endHour, startHour }) => startHour < endHour)
-  .map(({ date, endHour, startHour }) =>
-    getDayBounds({ date, endHour, startHour, timeZone: TIME_ZONE }),
+  .map(({ day: { date, timeZone }, endHour, startHour }) =>
+    getDayBounds({ date, endHour, startHour, timeZone }),
   );
 
 const gridArbitrary = fc.record({
@@ -74,6 +83,34 @@ describe("day calendar bounds", () => {
     expect(new Date(longDay.startMs).toISOString()).toBe(
       "2026-10-24T22:00:00.000Z",
     );
+  });
+
+  test("keeps an hour when the hours fall inside a daylight-saving gap", () => {
+    // 02:00-03:00 does not exist on 2026-03-29 in Prague; both ends resolve
+    // to 03:00 CEST, so the view covers the hour after the gap.
+    const gap = getDayBounds({
+      date: "2026-03-29",
+      endHour: 3,
+      startHour: 2,
+      timeZone: TIME_ZONE,
+    });
+
+    expect(new Date(gap.startMs).toISOString()).toBe(
+      "2026-03-29T01:00:00.000Z",
+    );
+    expect(gap.endMs - gap.startMs).toBe(HOUR_MS);
+    expect(getHourTicks(gap)).toEqual([gap.startMs]);
+  });
+
+  test("every pair of whole hours spans time on transition days", () => {
+    for (const { date, timeZone } of BOUNDS_DAYS) {
+      for (let startHour = 0; startHour < 24; startHour += 1) {
+        for (let endHour = startHour + 1; endHour <= 24; endHour += 1) {
+          const bounds = getDayBounds({ date, endHour, startHour, timeZone });
+          expect(bounds.endMs).toBeGreaterThan(bounds.startMs);
+        }
+      }
+    }
   });
 
   test("rejects hours outside a day", () => {
@@ -148,11 +185,9 @@ describe("day calendar grid", () => {
 
           expect(range.startMs).toBeGreaterThanOrEqual(bounds.startMs);
           expect(range.endMs).toBeLessThanOrEqual(bounds.endMs);
+          // Only a range ending at the day's end may be a partial slot.
           expect(range.endMs - range.startMs).toBeGreaterThanOrEqual(
-            Math.min(
-              granularityMs(grid.granularity),
-              bounds.endMs - bounds.startMs,
-            ),
+            range.endMs === bounds.endMs ? 1 : granularityMs(grid.granularity),
           );
           expect(isOnGridOrEdge(range.startMs, grid)).toBe(true);
           expect(isOnGridOrEdge(range.endMs, grid)).toBe(true);
@@ -168,6 +203,33 @@ describe("day calendar grid", () => {
         },
       ),
     );
+  });
+
+  test("a click in a day's final partial slot keeps the start on the grid", () => {
+    // Lord Howe Island skips 02:00-02:30 on 2026-10-04: the day lasts 23.5
+    // hours, so hour slots end in a half-hour slot.
+    const bounds = getDayBounds({
+      date: "2026-10-04",
+      endHour: 24,
+      startHour: 0,
+      timeZone: "Australia/Lord_Howe",
+    });
+    const grid = { bounds, granularity: 60 } as const;
+    const lastSlot = {
+      endMs: bounds.endMs,
+      startMs: bounds.startMs + 23 * HOUR_MS,
+    };
+
+    expect(bounds.endMs - bounds.startMs).toBe(23.5 * HOUR_MS);
+    for (const clickMs of [
+      bounds.startMs + 23.2 * HOUR_MS,
+      bounds.endMs,
+      bounds.endMs + HOUR_MS,
+    ]) {
+      expect(
+        rangeFromDrag({ anchorMs: clickMs, pointerMs: clickMs }, grid),
+      ).toEqual(lastSlot);
+    }
   });
 
   test("day calendar keyboard moves keep the duration and the day", () => {
