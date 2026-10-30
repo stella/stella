@@ -6,11 +6,11 @@ import type {
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
+import { fetchWithTimeout } from "@stll/fetch";
 import {
-  fetchWithTimeout,
   iterateBodyWithIdleDeadline,
   readBodyJsonWithIdleDeadline,
-} from "@stll/fetch";
+} from "@stll/fetch/body-reader";
 
 import { api } from "@/lib/api";
 import { getApiRequestHeaders } from "@/lib/api-request-context";

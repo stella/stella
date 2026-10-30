@@ -12,7 +12,8 @@
 
 import { Result, TaggedError } from "better-result";
 
-import { fetchWithTimeout, readBodyJsonWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type {
   GithubSafeText,

@@ -1,4 +1,5 @@
-import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import initWasm, { clean_scan_rgba } from "../generated/scan_engine.js";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";

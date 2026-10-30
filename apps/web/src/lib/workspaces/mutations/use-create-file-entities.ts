@@ -3,7 +3,8 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
-import { fetchWithTimeout, readBodyTextWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyTextWithIdleDeadline } from "@stll/fetch/body-reader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";

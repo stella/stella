@@ -28,7 +28,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./publisher": "./src/publisher.ts"
+    "./publisher": "./src/publisher.ts",
+    "./body-reader": "./src/body-reader.ts"
   },
   "publishConfig": {
     "access": "public"

@@ -27,12 +27,12 @@ import {
 } from "@stll/api-contract/desktop-registry";
 import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 import { printError } from "@stll/errors";
+import { fetchWithTimeout } from "@stll/fetch";
 import {
   BodyByteLimitError,
-  fetchWithTimeout,
   readBodyTextWithIdleDeadline,
   readBodyWithIdleDeadline,
-} from "@stll/fetch";
+} from "@stll/fetch/body-reader";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 

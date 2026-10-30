@@ -30,11 +30,11 @@ import {
   MODEL_BENCHMARK_SPLIT,
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelBenchmarkRating } from "@stll/ai-catalog/benchmarks";
+import { fetchWithTimeout } from "@stll/fetch";
 import {
   BodyByteLimitError,
-  fetchWithTimeout,
   readBodyWithIdleDeadline,
-} from "@stll/fetch";
+} from "@stll/fetch/body-reader";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { formatInteger } from "./model-catalog-rates-gen";

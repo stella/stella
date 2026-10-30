@@ -4,7 +4,10 @@ import * as v from "valibot";
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
-import { BodyByteLimitError, readBodyWithIdleDeadline } from "@stll/fetch";
+import {
+  BodyByteLimitError,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 
 import {
   bindAnswer,

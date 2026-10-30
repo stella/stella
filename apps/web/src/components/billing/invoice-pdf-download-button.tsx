@@ -1,7 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 

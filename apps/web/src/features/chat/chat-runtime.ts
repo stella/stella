@@ -31,7 +31,8 @@ import {
   chatTurnResumeProbeSchema,
 } from "@stll/chat/resume-contract";
 import { sleep } from "@stll/concurrency/sleep";
-import { fetchWithTimeout, readBodyJsonWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type {
   ChatClientTools,

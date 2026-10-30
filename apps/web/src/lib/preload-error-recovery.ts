@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
-import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
 
