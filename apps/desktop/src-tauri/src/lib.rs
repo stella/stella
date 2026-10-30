@@ -282,6 +282,7 @@ pub fn run() {
         let handle = handle.clone();
         tauri::async_runtime::spawn(async move {
           manager.lock().await.set_app_handle(handle.clone());
+          let _lease = account::lock_requests().await;
           let account = handle.state::<account::AccountState>();
           let owner = match account::current(&account).await {
             Ok(account) => account.as_ref().map(document_sessions::AccountOwner::for_account),

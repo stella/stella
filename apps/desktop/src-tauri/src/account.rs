@@ -1018,6 +1018,7 @@ pub fn notify(app: &tauri::AppHandle) {
     let sessions = Arc::clone(&sessions);
     let account = Arc::clone(&account);
     tauri::async_runtime::spawn(async move {
+      let _lease = lock_requests().await;
       let owner = match current(&account).await {
         Ok(account) => account
           .as_ref()
@@ -1059,6 +1060,7 @@ pub async fn account_get_state(
   require_account_window(&window)?;
   // Name the server a new connection would really open, never a default the
   // selected self-hosted server overrides.
+  let _lease = lock_requests().await;
   let current = current(&state).await;
   let mut manager = sessions.lock().await;
   let server = crate::commands::browser_connect_server(&manager);
