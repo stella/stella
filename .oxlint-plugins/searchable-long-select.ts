@@ -14,6 +14,8 @@ import {
   getImportedName,
   getImportLocalName,
   isAstNode,
+  isIdentifier,
+  isStringLiteral,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
@@ -21,22 +23,11 @@ const SELECT_MODULE = "@stll/ui/select";
 const SELECT_THRESHOLD = 30;
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"];
 
-const isSyntaxNode = (
-  value: unknown,
-): value is Record<string, unknown> & { type: string } =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof value.type === "string";
-
 const syntaxPropertyName = (value: unknown): string | null => {
-  if (!isSyntaxNode(value)) {
-    return null;
-  }
-  if (value.type === "Identifier" && typeof value.name === "string") {
+  if (isIdentifier(value)) {
     return value.name;
   }
-  if (value.type === "Literal" && typeof value.value === "string") {
+  if (isStringLiteral(value)) {
     return value.value;
   }
   return null;
@@ -67,8 +58,15 @@ const walk = (node: unknown, visit: (node: AstNode) => void): void => {
   }
 };
 
+const descendants = (node: unknown): AstNode[] => {
+  if (!isAstNode(node)) {
+    return [];
+  }
+  return [node, ...children(node).flatMap((child) => descendants(child))];
+};
+
 const staticArrayLength = (node: unknown): number | null => {
-  if (!isSyntaxNode(node)) {
+  if (!isAstNode(node)) {
     return null;
   }
   if (
@@ -195,6 +193,9 @@ const importedModulePath = (
 
 const moduleLongListCache = new Map<string, ReadonlySet<string>>();
 
+const variableDeclaration = (node: unknown): AstNode | null =>
+  isAstNode(node) && node.type === "VariableDeclaration" ? node : null;
+
 const moduleExportsLongList = (
   filename: string,
   exportedName: string,
@@ -204,47 +205,31 @@ const moduleExportsLongList = (
     return cached.has(exportedName);
   }
   const source = readFileSync(filename, "utf-8");
-  const parsed = parseSync(filename, source);
+  const parsed = parseSync(filename, source, { range: true });
   if (parsed.errors.length > 0) {
     return panic(`Unable to parse imported list source ${filename}`);
   }
   const { program } = parsed;
-  if (!isSyntaxNode(program) || !Array.isArray(program.body)) {
+  if (!isAstNode(program) || !Array.isArray(program.body)) {
     return panic(`Unable to parse imported list source ${filename}`);
   }
   const longBindings = new Set<string>();
   const exportedBindings = new Map<string, string>();
   for (const statement of program.body) {
-    if (!isSyntaxNode(statement)) {
-      continue;
-    }
-    const declaration =
+    const declaration = variableDeclaration(
       statement.type === "ExportNamedDeclaration"
         ? statement.declaration
-        : statement;
-    if (
-      isSyntaxNode(declaration) &&
-      declaration.type === "VariableDeclaration" &&
-      Array.isArray(declaration.declarations)
-    ) {
+        : statement,
+    );
+    if (declaration !== null && Array.isArray(declaration.declarations)) {
       for (const item of declaration.declarations) {
-        if (
-          !isSyntaxNode(item) ||
-          !isSyntaxNode(item.id) ||
-          item.id.type !== "Identifier" ||
-          typeof item.id.name !== "string"
-        ) {
+        if (!isAstNode(item) || !isIdentifier(item.id)) {
           continue;
         }
         if ((staticArrayLength(item.init) ?? 0) > SELECT_THRESHOLD) {
           longBindings.add(item.id.name);
         }
-        if (
-          isSyntaxNode(item.init) &&
-          item.init.type === "Identifier" &&
-          typeof item.init.name === "string" &&
-          longBindings.has(item.init.name)
-        ) {
+        if (isIdentifier(item.init) && longBindings.has(item.init.name)) {
           longBindings.add(item.id.name);
         }
         if (statement.type === "ExportNamedDeclaration") {
@@ -257,7 +242,7 @@ const moduleExportsLongList = (
       Array.isArray(statement.specifiers)
     ) {
       for (const specifier of statement.specifiers) {
-        if (!isSyntaxNode(specifier)) {
+        if (!isAstNode(specifier)) {
           continue;
         }
         const local = syntaxPropertyName(specifier.local);
@@ -321,21 +306,63 @@ const importLocals = (program: unknown, filename: string): Set<string> => {
   return locals;
 };
 
-const referencesLongList = (
+const isBoundedSlice = (node: AstNode): boolean => {
+  if (
+    node.type !== "CallExpression" ||
+    !isAstNode(node.callee) ||
+    node.callee.type !== "MemberExpression" ||
+    !isIdentifier(node.callee.property, "slice") ||
+    !Array.isArray(node.arguments)
+  ) {
+    return false;
+  }
+  const [start, end] = node.arguments;
+  return (
+    isAstNode(start) &&
+    start.type === "Literal" &&
+    typeof start.value === "number" &&
+    isAstNode(end) &&
+    end.type === "Literal" &&
+    typeof end.value === "number" &&
+    end.value - start.value <= SELECT_THRESHOLD
+  );
+};
+
+const returnedExpressionReferencesLongList = (
   node: unknown,
   names: ReadonlySet<string>,
 ): boolean => {
-  let found = false;
-  walk(node, (inner) => {
+  if (!isAstNode(node) || isBoundedSlice(node)) {
+    return false;
+  }
+  if (isIdentifier(node)) {
+    return names.has(node.name);
+  }
+  return children(node).some((child) =>
+    returnedExpressionReferencesLongList(child, names),
+  );
+};
+
+const helperReturnsLongList = (
+  body: unknown,
+  names: ReadonlySet<string>,
+): boolean => {
+  if (!isAstNode(body)) {
+    return false;
+  }
+  if (body.type !== "BlockStatement") {
+    return returnedExpressionReferencesLongList(body, names);
+  }
+  let returnsLongList = false;
+  walk(body, (node) => {
     if (
-      inner.type === "Identifier" &&
-      typeof inner.name === "string" &&
-      names.has(inner.name)
+      node.type === "ReturnStatement" &&
+      returnedExpressionReferencesLongList(node.argument, names)
     ) {
-      found = true;
+      returnsLongList = true;
     }
   });
-  return found;
+  return returnsLongList;
 };
 
 export default eslintCompatPlugin({
@@ -387,15 +414,10 @@ export default eslintCompatPlugin({
                 }
               }
             }
-            let hasNativeSelect = false;
-            walk(program, (inner) => {
-              if (
-                inner.type === "JSXElement" &&
-                elementName(inner) === "select"
-              ) {
-                hasNativeSelect = true;
-              }
-            });
+            const hasNativeSelect = descendants(program).some(
+              (inner) =>
+                inner.type === "JSXElement" && elementName(inner) === "select",
+            );
             if (selectLocals.size === 0 && !hasNativeSelect) {
               return;
             }
@@ -434,7 +456,7 @@ export default eslintCompatPlugin({
                 isAstNode(inner.id) &&
                 inner.id.type === "Identifier" &&
                 typeof inner.id.name === "string" &&
-                referencesLongList(inner.body, longListLocals)
+                helperReturnsLongList(inner.body, longListLocals)
               ) {
                 longListHelpers.add(inner.id.name);
               }
@@ -450,7 +472,7 @@ export default eslintCompatPlugin({
               if (
                 (inner.init.type === "ArrowFunctionExpression" ||
                   inner.init.type === "FunctionExpression") &&
-                referencesLongList(inner.init.body, longListLocals)
+                helperReturnsLongList(inner.init.body, longListLocals)
               ) {
                 longListHelpers.add(inner.id.name);
               }
@@ -462,27 +484,23 @@ export default eslintCompatPlugin({
             if (name === null || (!nativeSelect && !selectLocals.has(name))) {
               return;
             }
-            let itemCount = 0;
-            let mappedLongList = false;
-            walk(node, (inner) => {
-              const innerName = elementName(inner);
-              if (
-                inner.type === "JSXElement" &&
-                (nativeSelect
-                  ? innerName === "option"
-                  : itemLocals.has(innerName ?? ""))
-              ) {
-                itemCount += 1;
+            const nestedNodes = descendants(node);
+            const itemCount = nestedNodes.filter((inner) => {
+              if (inner.type !== "JSXElement") {
+                return false;
               }
-              if (
+              const innerName = elementName(inner);
+              return nativeSelect
+                ? innerName === "option"
+                : itemLocals.has(innerName ?? "");
+            }).length;
+            const mappedLongList = nestedNodes.some(
+              (inner) =>
                 inner.type === "CallExpression" &&
                 (longListLocals.has(mappedListName(inner) ?? "") ||
                   isMappedStaticArray(inner) ||
-                  isMappedHelperCall(inner, longListHelpers))
-              ) {
-                mappedLongList = true;
-              }
-            });
+                  isMappedHelperCall(inner, longListHelpers)),
+            );
             if (itemCount > SELECT_THRESHOLD || mappedLongList) {
               context.report({ node, messageId: "longSelect" });
             }

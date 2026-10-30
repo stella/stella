@@ -57,5 +57,9 @@ export const jurisdictionTimeZones = (countryCode: string): string[] => {
   if (typeof getTimeZones !== "function") {
     return [];
   }
-  return locale.getTimeZones() ?? [];
+  const timeZones = locale.getTimeZones();
+  if (timeZones === undefined) {
+    return [];
+  }
+  return timeZones;
 };

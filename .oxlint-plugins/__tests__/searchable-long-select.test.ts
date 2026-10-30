@@ -127,7 +127,9 @@ test("does not assume an array remains long after a bounded slice", async () => 
       `${IMPORTS}
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 const twoZones = COMMON_TIMEZONES.slice(0, 2);
-const select = <Select>{twoZones.map((zone) => <SelectItem value={zone}>{zone}</SelectItem>)}</Select>;`,
+const shortOptions = () => COMMON_TIMEZONES.slice(0, 2);
+const select = <Select>{twoZones.map((zone) => <SelectItem value={zone}>{zone}</SelectItem>)}</Select>;
+const helperSelect = <Select>{shortOptions().map((zone) => <SelectItem value={zone}>{zone}</SelectItem>)}</Select>;`,
       { sourcePath: "source.tsx" },
     ),
   ).toEqual([]);
