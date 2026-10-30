@@ -4710,6 +4710,7 @@
       "statuses": {
         "accepted": "مقبولة",
         "canceled": "ملغاة",
+        "expired": "منتهية الصلاحية",
         "pending": "قيد الانتظار",
         "rejected": "مرفوضة"
       }
@@ -5250,6 +5251,7 @@
         "title": "استخراج الذاكرة",
         "toggleLabel": "اقتراح عناصر الذاكرة من سجلّ الدردشة في الخلفية"
       },
+      "pastInvitations": "الدعوات السابقة",
       "pendingInvitations": "الدعوات المعلَّقة",
       "practiceJurisdictions": "الولايات القضائية",
       "practiceJurisdictionsDescription": "اختر الولايات القضائية ذات الصلة بك.",

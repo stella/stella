@@ -4710,6 +4710,7 @@
       "statuses": {
         "accepted": "Elfogadva",
         "canceled": "Visszavonva",
+        "expired": "Lejárt",
         "pending": "Függőben",
         "rejected": "Elutasítva"
       }
@@ -5250,6 +5251,7 @@
         "title": "Memóriakinyerés",
         "toggleLabel": "Memóriabejegyzések javaslata a csevegési előzmények alapján, a háttérben"
       },
+      "pastInvitations": "Korábbi meghívók",
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",

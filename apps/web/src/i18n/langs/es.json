@@ -4710,6 +4710,7 @@
       "statuses": {
         "accepted": "Aceptada",
         "canceled": "Cancelada",
+        "expired": "Caducada",
         "pending": "Pendiente",
         "rejected": "Rechazada"
       }
@@ -5250,6 +5251,7 @@
         "title": "Extracción de memoria",
         "toggleLabel": "Sugerir memorias del historial de chat en segundo plano"
       },
+      "pastInvitations": "Invitaciones anteriores",
       "pendingInvitations": "Invitaciones pendientes",
       "practiceJurisdictions": "Jurisdicciones",
       "practiceJurisdictionsDescription": "Seleccione las jurisdicciones relevantes para usted.",

@@ -4710,6 +4710,7 @@
       "statuses": {
         "accepted": "Pieņemts",
         "canceled": "Atcelts",
+        "expired": "Derīguma termiņš beidzies",
         "pending": "Gaida",
         "rejected": "Noraidīts"
       }
@@ -5250,6 +5251,7 @@
         "title": "Atmiņas iegūšana",
         "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
       },
+      "pastInvitations": "Iepriekšējie uzaicinājumi",
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Jurisdikcijas",
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
