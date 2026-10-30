@@ -3515,6 +3515,7 @@ const decisionItemResult = ({
     ...(messages.length === 0 ? {} : { message: messages.join(" ") }),
     status: DECISION_READ_STATUS.found,
     decision: {
+      extractionWarnings: read.extractionWarnings,
       decisionId: read.id,
       caseNumber: read.caseNumber,
       ...nonDocketReference(read),
@@ -3990,6 +3991,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
                   }),
                 ),
               },
+        extractionWarnings: item.extractionWarnings,
         passage: item.passage,
       })),
     }),
