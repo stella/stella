@@ -604,6 +604,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "read",
   },
+  "POST /v1/organization-settings/billing-drafts": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/business-registry-credentials": {
     type: "non-replay",
     reason: "current-state",
