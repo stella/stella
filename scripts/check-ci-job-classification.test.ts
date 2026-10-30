@@ -163,9 +163,14 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
   return { root, commitAll };
 };
 
-const run = (root: string, ...args: string[]) => {
+const runWithEnv = (
+  root: string,
+  env: Record<string, string>,
+  ...args: string[]
+) => {
   const result = Bun.spawnSync([process.execPath, SCRIPT, ...args], {
     cwd: root,
+    env: { ...process.env, ...env },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -175,6 +180,7 @@ const run = (root: string, ...args: string[]) => {
     stderr: decoder.decode(result.stderr),
   };
 };
+const run = (root: string, ...args: string[]) => runWithEnv(root, {}, ...args);
 
 const decisionsIn = (root: string) =>
   readDecisions({ type: "working-tree", root });
@@ -591,4 +597,124 @@ test("conflicting modes are rejected", () => {
   const result = run(root, "--write", "--check");
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("usage:");
+});
+
+const mergeGroupRun = (
+  root: string,
+  base: string,
+  head: string,
+  previous: string,
+  number: number,
+) => {
+  const eventPath = path.join(root, "merge-group-event.json");
+  writeFileSync(
+    eventPath,
+    JSON.stringify({
+      merge_group: {
+        base_sha: base,
+        head_sha: head,
+        head_ref: `refs/heads/gh-readonly-queue/main/pr-${number}-${previous}`,
+      },
+    }),
+  );
+  return runWithEnv(
+    root,
+    { GITHUB_EVENT_NAME: "merge_group", GITHUB_EVENT_PATH: eventPath },
+    "--check",
+    "--base",
+    base,
+  );
+};
+
+const twoEntryMergeGroup = (secondJobField = "") => {
+  const baseWorkflow =
+    "jobs: {check: {steps: [{uses: acme/one@0000000000000000000000000000000000000000}, {uses: acme/two@0000000000000000000000000000000000000000}]}}";
+  const decisions = reviewed(baseWorkflow, "check");
+  const { root, commitAll } = repository(
+    { workflow: baseWorkflow, decisions },
+    { workflow: baseWorkflow, decisions },
+  );
+  const revision = () => {
+    const result = Bun.spawnSync(["git", "-C", root, "rev-parse", "HEAD"], {
+      stdout: "pipe",
+    });
+    return decoder.decode(result.stdout).trim();
+  };
+  const base = revision();
+  const firstWorkflow = baseWorkflow.replace(
+    "acme/one@0000000000000000000000000000000000000000",
+    "acme/one@1111111111111111111111111111111111111111",
+  );
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), firstWorkflow);
+  writeDecision(root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(firstWorkflow, "check"),
+  });
+  commitAll("change first step (#11)");
+  const first = revision();
+  const secondWorkflow = firstWorkflow
+    .replace(
+      "acme/two@0000000000000000000000000000000000000000",
+      "acme/two@2222222222222222222222222222222222222222",
+    )
+    .replace("check: {", () => `check: {${secondJobField}`);
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), secondWorkflow);
+  writeDecision(root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(secondWorkflow, "check"),
+  });
+  commitAll("change second step (#12)");
+  return { root, base, first, head: revision() };
+};
+
+test("a merge group composes ordinary approvals from each pull request head", () => {
+  const group = twoEntryMergeGroup();
+  expect(
+    mergeGroupRun(group.root, group.base, group.head, group.first, 12),
+  ).toEqual({
+    exitCode: 0,
+    stdout: "Classified 1 workflows\n",
+    stderr: "",
+  });
+});
+
+test("a merge group refuses a multi-pull-request privileged-surface composition", () => {
+  const group = twoEntryMergeGroup("permissions: {contents: write}, ");
+  const result = mergeGroupRun(
+    group.root,
+    group.base,
+    group.head,
+    group.first,
+    12,
+  );
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain(keyOf("check"));
+  expect(result.stderr).toContain("#11, #12");
+  expect(result.stderr).toContain("merge them separately");
+});
+
+test("a merge group refuses a job change without its pull request approval", () => {
+  const group = twoEntryMergeGroup();
+  rmSync(
+    path.join(
+      group.root,
+      decisionPathForKey(keyOf("check")).replace(
+        "decision.json",
+        () =>
+          `${digestOf("jobs: {check: {steps: [{uses: acme/one@1111111111111111111111111111111111111111}, {uses: acme/two@0000000000000000000000000000000000000000}]}}", "check")}.json`,
+      ),
+    ),
+  );
+  const result = mergeGroupRun(
+    group.root,
+    group.base,
+    group.head,
+    group.first,
+    12,
+  );
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("approval is missing");
+  expect(result.stderr).toContain("#11");
 });
