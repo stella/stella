@@ -498,18 +498,10 @@ describe("public corpus fleet request budgets", () => {
       }
       for (const line of lines) {
         expect(JSON.parse(line)).toMatchObject({
-          _aws: {
-            CloudWatchMetrics: [
-              {
-                Dimensions: [["class", "outcome"]],
-                Metrics: [{ Name: "PublicCorpusAdmissions", Unit: "Count" }],
-              },
-            ],
-          },
           PublicCorpusAdmissions: 1,
         });
         expect(Object.keys(JSON.parse(line)).toSorted()).toEqual(
-          ["PublicCorpusAdmissions", "_aws", "class", "outcome"].toSorted(),
+          ["PublicCorpusAdmissions", "class", "outcome"].toSorted(),
         );
       }
     } finally {
@@ -709,9 +701,6 @@ describe("public corpus fleet request budgets", () => {
             class: "search",
             outcome: "refused",
             PublicCorpusAdmissions: 1,
-            _aws: {
-              CloudWatchMetrics: [{ Dimensions: [["class", "outcome"]] }],
-            },
           });
         }
       } finally {
