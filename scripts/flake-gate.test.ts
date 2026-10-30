@@ -808,14 +808,23 @@ test("prepare c", () => { prepared += 1; });
 test("requires preparation", () => { expect(prepared).toBe(3); });
 `,
     );
+    const fixtureOutput: string[] = [];
     const report = await executeGate({
       targets: [targetFor(root)],
       skipped: [],
+      reportFailureOutput: (output) => {
+        fixtureOutput.push(output);
+      },
     });
     const result = report.results.at(0);
     expect(result?.runs).toBe(REPEATS);
     expect(result?.failures).toBeGreaterThan(0);
     expect(reportExitCode(report, true)).toBe(1);
+    expect(fixtureOutput).toHaveLength(1);
+    expect(fixtureOutput[0]?.includes("(fail) requires preparation")).toBe(
+      true,
+    );
+    expect(fixtureOutput[0]?.includes("error:")).toBe(true);
     write(root, "empty.test.ts", "export {};\n");
     expect(
       await runOnce({
@@ -826,6 +835,35 @@ test("requires preparation", () => { expect(prepared).toBe(3); });
     ).toMatchObject({ type: "executed", passed: false });
   });
 }, 30_000);
+
+test("the order-dependence self-test keeps fixture failures out of parent output", async () => {
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      "test",
+      "./scripts/flake-gate.test.ts",
+      "-t",
+      "the real runner detects order dependence and rejects zero-test success",
+    ],
+    {
+      cwd: path.resolve(import.meta.dir, ".."),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const [status, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  expect(status).toBe(0);
+  const parentOutput = `${stdout}\n${stderr}`;
+  expect(parentOutput.includes("(fail) requires preparation")).toBe(false);
+  expect(parentOutput.includes("::error")).toBe(false);
+  expect(
+    /\/tmp\/flake-gate-[^/\s]+\/fixture\.test\.ts/u.test(parentOutput),
+  ).toBe(false);
+});
 
 test("the pinned Bun accepts native rerun and shuffle flags", async () => {
   await withFixture(async (root) => {

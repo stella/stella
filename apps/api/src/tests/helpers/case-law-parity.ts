@@ -13,6 +13,7 @@ import {
   plNsaFixture,
   plUodoFixture,
   skUsFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import type { EnrolledAdapterFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -43,6 +44,7 @@ const parityOutputOf = ({
 const PARITY_FIXTURES = {
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_NSA]: plNsaFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
@@ -68,7 +70,7 @@ export const parserParityOutput = async (
     panic(`Unknown parity adapter ${entry.adapterKey}`);
   const fixtureFactory = PARITY_FIXTURES[entry.adapterKey];
   const decision = await buildCaseLawFixture(
-    fixtureFactory(new URL(entry.fixture, INGESTION_ROOT)),
+    fixtureFactory(new URL(entry.fixture, INGESTION_ROOT), entry.identity),
   );
   const reparse = adapter.reparseStoredRaw;
   if (reparse === undefined || decision.sourceRaw === undefined) {

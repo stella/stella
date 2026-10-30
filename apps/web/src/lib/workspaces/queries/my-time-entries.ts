@@ -10,7 +10,11 @@ const MY_TIME_ENTRIES_PAGE_SIZE = 200;
 type MyTimeEntriesRange = { startDate: string; endDate: string };
 
 export const myTimeEntriesKeys = {
-  all: (organizationId: string) => ["myTimeEntries", organizationId],
+  root: () => ["myTimeEntries"],
+  all: (organizationId: string) => [
+    ...myTimeEntriesKeys.root(),
+    organizationId,
+  ],
   range: (
     organizationId: string,
     userId: string,

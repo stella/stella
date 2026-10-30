@@ -174,7 +174,7 @@ type BrowseFilter = Exclude<
 /** The indexes whose order is the walk's: a page is a range of one of them. */
 const walkScan = (sort: DecisionListSort) =>
   new RegExp(
-    `${WALK_SCAN_NODE[sort]} using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_published_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\\n\\s+Index Cond: ([^\\n]+)`,
+    `${WALK_SCAN_NODE[sort]} using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_published_idx|case_law_decisions_country_language_date_published_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\\n\\s+Index Cond: ([^\\n]+)`,
     "u",
   );
 
@@ -235,7 +235,7 @@ const FILTER_ACCESS = {
     reason: "a canonical kind folded from the stated type; no index holds it",
   },
   language: {
-    type: "index-probe",
+    type: "walk-range",
     query: { country: "CZE", language: "en" },
     indexCond: /\(language\)::text = 'en'::text/u,
   },
@@ -261,6 +261,12 @@ const FILTER_ACCESS_BY_BAND = {
       query: FILTER_ACCESS.decisionType.query,
       indexCond:
         /COALESCE\(decision_date, '-infinity'::date\) = '-infinity'::date/u,
+    },
+    language: {
+      type: "index-probe",
+      query: FILTER_ACCESS.language.query,
+      indexCond:
+        /\(language\)::text = 'en'::text\) AND \(COALESCE\(decision_date, '-infinity'::date\) = '-infinity'::date/u,
     },
   },
 } as const satisfies Record<
@@ -342,6 +348,119 @@ test.each(
           access satisfies never;
       }
     }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+/** The language-led walk index the browse reads a chosen language through. */
+const LANGUAGE_WALK_INDEX =
+  "case_law_decisions_country_language_date_published_idx";
+
+/** Raised to roll back the transaction that dropped the index. */
+class PlanReadRollbackError extends Error {
+  override name = "PlanReadRollbackError";
+}
+
+/**
+ * A language's page, explained as the public reader with the language walk
+ * index present or, inside a transaction that is rolled back, dropped.
+ */
+const explainLanguageWalk = async (
+  query: BrowseQuery,
+  sort: DecisionListSort,
+  band: DecisionDateBand,
+  index: "present" | "dropped",
+) => {
+  let plan = "";
+  await db
+    .transaction(async (tx) => {
+      if (index === "dropped") {
+        await tx.execute(
+          sql`DROP INDEX ${sql.identifier(LANGUAGE_WALK_INDEX)}`,
+        );
+      }
+      await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
+      // SAFETY: the role transaction supplies the select surface the read uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+      const readTx = tx as unknown as CaseLawPublicReadTransaction;
+      const page = listDecisionsPageQuery({
+        query,
+        sort,
+        band,
+        take: 51,
+        position: undefined,
+        tx: readTx,
+      });
+      plan = planLines(
+        await tx.execute(sql`EXPLAIN (COSTS OFF) ${page.getSQL()}`),
+      ).join("\n");
+      throw new PlanReadRollbackError("plan read; roll the dropped index back");
+    })
+    .catch((error: unknown) => {
+      if (!(error instanceof PlanReadRollbackError)) {
+        throw error;
+      }
+    });
+  return plan;
+};
+
+// A language is a share of a country: a tenth of it (`en`) or nearly all of
+// it (`cs`), as one language is all of a single-language country. Either way
+// the page is the language's own range of the walk, read in the page's order
+// and stopped by the limit, never every version in the language sorted for
+// one page.
+// timeout: each case explains its page twice, once in a transaction that drops
+// and restores the index, against the shared seeded database.
+test.each(
+  ORDERS_BY_BAND.flatMap(([sort, band]) =>
+    (["en", "cs"] as const).map((language) => [sort, band, language] as const),
+  ),
+)(
+  "the %s-first browse walk's %s band reads language %s as a range of the language walk index",
+  async (sort, band, language) => {
+    const query = { country: "CZE", language };
+    const plan = await explainLanguageWalk(query, sort, band, "present");
+    const languageCond = new RegExp(
+      `\\(language\\)::text = '${language}'::text`,
+      "u",
+    );
+    expect(plan).not.toContain("Seq Scan on case_law_decisions");
+    if (band === "dated") {
+      const walk = orderedWalk(plan, sort);
+      expect(walk?.[1], plan).toBe(LANGUAGE_WALK_INDEX);
+      expect(walk?.[2], plan).toMatch(languageCond);
+    } else {
+      // The undated band is one key of the index, so a small language's
+      // undated rows may come back as a bitmap of that key and be sorted by
+      // id: the sort is bounded by the band within the language, never by
+      // the language.
+      const probe = new RegExp(
+        `(Index Scan(?: Backward)? using|Bitmap Index Scan on) ${LANGUAGE_WALK_INDEX}[^\\n]*\\n\\s+Index Cond: ([^\\n]+)`,
+        "u",
+      ).exec(plan);
+      expect(probe?.[2], plan).toMatch(languageCond);
+      expect(probe?.[2], plan).toMatch(
+        /COALESCE\(decision_date, '-infinity'::date\) = '-infinity'::date/u,
+      );
+    }
+
+    // Without the index no walk range holds the language: the plan either
+    // filters the country's walk or sorts a probe of the language's rows.
+    const withoutIndex = await explainLanguageWalk(
+      query,
+      sort,
+      band,
+      "dropped",
+    );
+    expect(withoutIndex).not.toContain(LANGUAGE_WALK_INDEX);
+    const fallback = walkScan(sort).exec(withoutIndex);
+    const languageIsWalkRange =
+      fallback !== null &&
+      /\(language\)::text = /u.test(fallback[2] ?? "") &&
+      !/\b(Sort|Bitmap Heap Scan)\b/u.test(
+        withoutIndex.slice(0, fallback.index),
+      );
+    expect(languageIsWalkRange, withoutIndex).toBe(false);
   },
   DB_TEST_TIMEOUT_MS,
 );

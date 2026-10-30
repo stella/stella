@@ -1,11 +1,12 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import {
   caseLawBrowseFacetCounts,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 
 type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
 
@@ -57,3 +58,18 @@ export const refreshPgFtsBrowseFacets = async (
     signal?.throwIfAborted();
     return { buckets: summary.buckets };
   });
+
+type FacetRefreshTransaction = Parameters<
+  Parameters<RefreshDb["transaction"]>[0]
+>[0];
+
+/** Discard a source's buckets before the next published-input recount. */
+export const invalidatePgFtsBrowseFacetsTx = async (
+  tx: FacetRefreshTransaction,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  // audit: skip — snapshot invalidation belongs to the canonical removal audit.
+  await tx
+    .delete(caseLawBrowseFacetCounts)
+    .where(eq(caseLawBrowseFacetCounts.sourceId, sourceId));
+};

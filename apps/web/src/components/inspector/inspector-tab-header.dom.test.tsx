@@ -11,6 +11,7 @@ import {
 
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const NativeBroadcastChannel = globalThis.BroadcastChannel;
@@ -22,7 +23,8 @@ const { IntlProvider } = await import("use-intl");
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { InspectorTabHeader } = await import("./inspector-tab-header");
-const { getFileTabHeaderProps } = await import("./file-tab-header");
+const { fileTabHeaderActions, getFileTabHeaderProps } =
+  await import("./file-tab-header");
 const { useFileTabRename } = await import("./use-file-tab-rename");
 const { useInspectorTabsStore } = await import("./inspector-tabs-store");
 const { AuthenticatedUserProvider } =
@@ -78,9 +80,18 @@ const FileHeader = () => {
         ribbonLabelContextMenuOpenAt: () => undefined,
         tab,
       })}
-      actions={
-        <button aria-label={englishMessages.common.download} type="button" />
-      }
+      actions={[
+        {
+          id: "download",
+          requires: AVAILABLE_EVERYWHERE,
+          render: () => (
+            <button
+              aria-label={englishMessages.common.download}
+              type="button"
+            />
+          ),
+        },
+      ]}
     />
   );
 };
@@ -210,5 +221,70 @@ describe("renaming a file from the inspector header", () => {
     await waitFor(() => expect(client.isMutating()).toBe(0));
     expect(renamedTo).toEqual([]);
     expect(screen.queryByText(BASE_NAME)).not.toBeNull();
+  });
+});
+
+test("legal tab headers preserve an identity while clamping only the subject", async () => {
+  const { StatuteDisplayLabel } =
+    await import("@/features/statutes/components/statute-display-label");
+  render(
+    <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+      <InspectorTabHeader
+        label="Zákon č. 274/2026 Z. z."
+        labelOverflow="wrap"
+        labelContent={
+          <StatuteDisplayLabel
+            statute={{
+              country: "SVK",
+              documentType: "zákon",
+              eli: "/eli/sk/zz/2026/274",
+              title: `ktorým sa mení ${"zákon o stavebnom sporení ".repeat(40)}`,
+            }}
+          />
+        }
+        onClose={() => undefined}
+      />
+    </IntlProvider>,
+  );
+  const identity = screen.getByText("Zákon č. 274/2026 Z. z.");
+  for (
+    let element: HTMLElement | null = identity;
+    element !== null;
+    element = element.parentElement
+  ) {
+    expect(element.className).not.toMatch(
+      /overflow-hidden|text-ellipsis|line-clamp/u,
+    );
+  }
+  expect(
+    screen.getByRole("button", { name: englishMessages.common.close }),
+  ).toBeDefined();
+});
+
+describe("file actions in the inspector header", () => {
+  const actionIds = (mainViewHasFileActions: boolean) =>
+    fileTabHeaderActions({
+      desktopEditTarget: { fileType: "docx", propertyId: "file" },
+      downloadRenditions: [],
+      mainViewHasFileActions,
+      pdfSignTarget: {
+        entityId: letter.entityId,
+        fieldId: letter.id,
+        propertyId: "file",
+        workspaceId: letter.workspaceId,
+      },
+      tab: letter,
+    }).map((action) => action.id);
+
+  test("the peek header offers download, desktop open and sign", () => {
+    expect(actionIds(false)).toEqual([
+      "download",
+      "open-in-desktop-app",
+      "sign",
+    ]);
+  });
+
+  test("leaves download and sign to a main view that already shows them", () => {
+    expect(actionIds(true)).toEqual(["open-in-desktop-app"]);
   });
 });

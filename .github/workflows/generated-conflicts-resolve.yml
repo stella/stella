@@ -89,6 +89,14 @@ jobs:
             jq -r '.reasons[]' "$RUNNER_TEMP/plan.json" | sed 's/^/::notice::Left to people: /'
           fi
 
+      - name: Re-resolve merged lockfile with frozen pins
+        timeout-minutes: 5
+        if: steps.plan.outputs.eligible == 'true'
+        run: |
+          bun --no-install --no-env-file scripts/generated-conflicts.ts refresh-lock --repo .
+        env:
+          NPM_TOKEN: ""
+
       - name: Install dependencies
         timeout-minutes: 5
         if: steps.plan.outputs.eligible == 'true'
@@ -109,7 +117,9 @@ jobs:
           done
           # Main's side is only a starting point: each owning generator
           # checks it against the merged inputs and rewrites it when stale.
-          bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
 
       - name: Collect the resolution
         if: steps.plan.outputs.eligible == 'true'

@@ -19,20 +19,31 @@ const catalog = new Map(
   ),
 );
 
-const handlerConfigOf = (module: unknown) => {
-  const endpoint = isRecord(module) ? module["default"] : undefined;
+const handlerConfigOf = (module: unknown, exportName: string) => {
+  const endpoint = isRecord(module) ? module[exportName] : undefined;
   const config = isRecord(endpoint) ? endpoint["config"] : undefined;
   return {
     endpoint,
     accountAccess: isRecord(config) ? config["accountAccess"] : undefined,
     access: isRecord(config) ? config["access"] : undefined,
+    mcp: isRecord(config) ? config["mcp"] : undefined,
   };
 };
 
+const ROUTES: readonly (readonly [
+  string,
+  {
+    readonly handler: string;
+    readonly scope: string;
+    readonly exportName?: string;
+    readonly uncataloged?: string;
+  },
+])[] = Object.entries(API_OAUTH_ROUTES);
+
 describe("the routes an API access token opens", () => {
-  test.each(Object.entries(API_OAUTH_ROUTES))(
+  test.each(ROUTES)(
     "%s is the live route of its handler, at the scope its capability carries",
-    async (key, { handler, scope }) => {
+    async (key, { handler, scope, exportName, uncataloged }) => {
       const [method, path] = key.split(" ");
       const route = apiApp.routes.find(
         (candidate) => candidate.method === method && candidate.path === path,
@@ -41,14 +52,22 @@ describe("the routes an API access token opens", () => {
 
       const endpoint = handlerConfigOf(
         await import(new URL(handler, REPO_ROOT).pathname),
+        exportName ?? "default",
       );
       const definition: unknown = route?.definition;
       expect(definition).toBe(endpoint.endpoint);
       expect(endpoint.accountAccess).not.toBe(ACCOUNT_ACCESS.accountControl);
 
       const capability = catalog.get(
-        deriveCapabilityId({ file: handler, exportName: undefined }),
+        deriveCapabilityId({ file: handler, exportName }),
       );
+      if (uncataloged !== undefined) {
+        // A realtime handler has no capability to carry a scope; it must
+        // be internal for exactly the reason its entry gives.
+        expect(capability).toBeUndefined();
+        expect(endpoint.mcp).toEqual({ type: "internal", reason: uncataloged });
+        return;
+      }
       expect({
         access: capability?.["access"],
         scope: capability?.["scope"],

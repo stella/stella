@@ -192,7 +192,9 @@ export const RunLauncher = ({
           )}
           {filteredEntities === undefined && entitiesFailed && (
             <div className="flex items-center gap-2 p-2 text-xs">
-              <span className="text-muted-foreground">{t("common.error")}</span>
+              <span className="text-muted-foreground">
+                {t("common.loadFailed")}
+              </span>
               <Button
                 onClick={() =>
                   detached(refetchEntities(), "flows.retry-run-entities")

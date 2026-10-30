@@ -7,6 +7,7 @@ import {
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -15,14 +16,20 @@ import {
   ManualTimeEntryForm,
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
+import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
+import type { MatterOption } from "@/components/workspaces/matter-combobox";
+import { MoveEntryField } from "@/features/my-week/move-entry-field";
 import { type MyTimeEntry, MyWeekDay } from "@/features/my-week/my-week-day";
 import { MyWeekHeader } from "@/features/my-week/my-week-header";
 import {
   pendingCountByDay,
-  shiftWeeks,
-  weekOf,
   weekTotals,
 } from "@/features/my-week/my-week.logic";
+import { PendingApprovalsLink } from "@/features/my-week/pending-approvals-link";
+import {
+  SUBMIT_REFUSAL_KEYS,
+  SubmitWeekActions,
+} from "@/features/my-week/submit-week";
 import {
   type SuggestionTarget,
   useMyWeekActions,
@@ -31,6 +38,7 @@ import { WeekStrip } from "@/features/my-week/week-strip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 
@@ -46,7 +54,12 @@ type MyWeekProps = {
 
 type WeekDialog =
   | { type: "closed" }
-  | { type: "edit"; entry: MyTimeEntry }
+  | {
+      type: "edit";
+      entry: MyTimeEntry;
+      /** Where a draft goes on save; null when the entry cannot move. */
+      matter: MatterOption | null;
+    }
   | { type: "accept"; target: SuggestionTarget; narrative: string };
 
 /** The queries behind one week, shared by the route loader and the page. */
@@ -94,6 +107,17 @@ const dialogDefaults = (dialog: WeekDialog): ManualTimeEntryValues => {
   }
 };
 
+/** A draft in a matter can move to another; reviewed or internal time stays. */
+const movableMatterOf = (entry: MyTimeEntry): MatterOption | null =>
+  entry.status === "draft" && entry.workspaceId !== null
+    ? {
+        id: entry.workspaceId,
+        name: entry.workspaceName,
+        clientName: null,
+        color: null,
+      }
+    : null;
+
 const dialogMatterId = (dialog: WeekDialog) => {
   switch (dialog.type) {
     case "accept":
@@ -116,6 +140,7 @@ export const MyWeek = ({
   onSelectDate,
   onToday,
 }: MyWeekProps) => {
+  const t = useTranslations();
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -125,9 +150,13 @@ export const MyWeek = ({
   const { data: suggestionRange } = useSuspenseQuery(queries.suggestions);
   const canDecide = usePermissions({ timeEntry: ["create"] });
   const canEdit = usePermissions({ timeEntry: ["update"] });
+  const canApprove = usePermissions({ timeEntry: ["approve"] });
   const actions = useMyWeekActions({ organizationId, timezoneId });
   const submitGuard = useSingleFlight();
   const [dialog, setDialog] = useState<WeekDialog>({ type: "closed" });
+  const [refusals, setRefusals] = useState<
+    ReadonlyMap<string, TimeSubmitRefusal>
+  >(() => new Map());
 
   const pages = entriesQuery.data.pages;
   // Every page carries the totals for the whole week; the first is enough.
@@ -143,6 +172,16 @@ export const MyWeek = ({
   const suggestionDay = suggestionRange.days.find((day) => day.date === date);
   const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
   const matterId = dialogMatterId(dialog);
+  // Submission covers the whole week, so drafts on pages not loaded yet count:
+  // with a page left, the week may still hold some.
+  const canSubmitWeek =
+    entriesQuery.hasNextPage ||
+    pages
+      .flatMap((page) => page.items)
+      .some((entry) => entry.status === "draft");
+  const refusalNotes = new Map(
+    [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
+  );
 
   const submitDialog = async (values: ManualTimeEntryValues) => {
     await submitGuard.run(async () => {
@@ -151,7 +190,7 @@ export const MyWeek = ({
           if (dialog.type === "accept") {
             await actions.accept(dialog.target, values);
           } else if (dialog.type === "edit") {
-            await actions.editEntry(dialog.entry, values);
+            await actions.editEntry(dialog.entry, values, dialog.matter?.id);
           }
         },
         catch: (cause: unknown): unknown => cause,
@@ -167,6 +206,24 @@ export const MyWeek = ({
   return (
     <div className="flex h-full flex-col">
       <MyWeekHeader
+        actions={
+          <>
+            {/* Members approve what is assigned to them, so the link follows
+                the queue, not the role; it shows nothing while none waits. */}
+            <PendingApprovalsLink
+              organizationId={organizationId}
+              userId={userId}
+            />
+            <SubmitWeekActions
+              canApproveOwn={canApprove}
+              canSubmit={canSubmitWeek}
+              onRefusals={setRefusals}
+              submit={actions.submitWeek}
+              submitting={actions.submitting}
+              week={week}
+            />
+          </>
+        }
         onNextWeek={() => onSelectDate(shiftWeeks(date, 1))}
         onPreviousWeek={() => onSelectDate(shiftWeeks(date, -1))}
         onToday={onToday}
@@ -185,6 +242,7 @@ export const MyWeek = ({
           busyFingerprints={actions.busyFingerprints}
           canDecide={canDecide}
           canEdit={canEdit}
+          notes={refusalNotes}
           date={date}
           entries={entries}
           entriesComplete={entriesComplete}
@@ -218,7 +276,9 @@ export const MyWeek = ({
               narrative,
             })
           }
-          onEditEntry={(entry) => setDialog({ type: "edit", entry })}
+          onEditEntry={(entry) =>
+            setDialog({ type: "edit", entry, matter: movableMatterOf(entry) })
+          }
           suggestions={suggestions}
         />
         {entriesQuery.hasNextPage && (
@@ -226,7 +286,17 @@ export const MyWeek = ({
             <Button
               disabled={entriesQuery.isFetchingNextPage}
               onClick={() =>
-                detached(entriesQuery.fetchNextPage(), "my-week.next-page")
+                detached(
+                  (async () => {
+                    const page = await entriesQuery.fetchNextPage();
+                    // Loaded entries stay; the failure is said, and the
+                    // button stays to retry.
+                    if (page.isFetchNextPageError) {
+                      notifyUserError(page.error, tErrors("actionFailed"));
+                    }
+                  })(),
+                  "my-week.next-page",
+                )
               }
               size="sm"
               variant="outline"
@@ -234,11 +304,6 @@ export const MyWeek = ({
               {tCommon("loadMore")}
             </Button>
           </div>
-        )}
-        {entriesQuery.isFetchNextPageError && (
-          <p className="text-destructive pb-4 text-center text-sm" role="alert">
-            {tErrors("actionFailed")}
-          </p>
         )}
       </ScrollArea>
       <Dialog
@@ -260,6 +325,17 @@ export const MyWeek = ({
               <ManualTimeEntryForm
                 dateLocked={dialog.type === "accept"}
                 defaultValues={dialogDefaults(dialog)}
+                leading={
+                  dialog.type === "edit" && dialog.matter !== null ? (
+                    <MoveEntryField
+                      currentMatterId={matterId}
+                      onChange={(matter) => setDialog({ ...dialog, matter })}
+                      organizationId={organizationId}
+                      userId={userId}
+                      value={dialog.matter}
+                    />
+                  ) : undefined
+                }
                 onCancel={() => setDialog({ type: "closed" })}
                 onSubmit={submitDialog}
                 pending={actions.pending || submitGuard.pending}

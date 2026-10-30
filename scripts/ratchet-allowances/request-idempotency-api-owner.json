@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "A dedicated idempotency slice owns request receipt claim, completion, release, replay and retention. The receipt-table import is confined to that owner instead of adding replay paths to individual resource handlers."
+}

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -35,6 +35,8 @@ type ManualTimeEntryFormProps = {
   narrativeRequired?: boolean;
   pending: boolean;
   workspaceId: string;
+  /** A field above the date, such as the entry's matter. */
+  leading?: ReactNode;
   onCancel: () => void;
   onSubmit: (values: ManualTimeEntryValues) => Promise<void>;
   onSaveAndNew?: (values: ManualTimeEntryValues) => Promise<void>;
@@ -48,6 +50,7 @@ export const ManualTimeEntryForm = ({
   narrativeRequired = true,
   pending,
   workspaceId,
+  leading,
   onCancel,
   onSubmit,
   onSaveAndNew,
@@ -116,6 +119,7 @@ export const ManualTimeEntryForm = ({
         }}
       />
       <fieldset className="flex min-w-0 flex-col gap-4" disabled={pending}>
+        {leading}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label id={`${fieldId}-date-label`} htmlFor={`${fieldId}-date`}>

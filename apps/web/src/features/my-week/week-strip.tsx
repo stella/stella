@@ -3,7 +3,8 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/utils";
 
 import { plainDateEpoch } from "@/components/billing/format-plain-date";
-import type { Week, WeekTotals } from "@/features/my-week/my-week.logic";
+import type { Week } from "@/components/billing/work-week.logic";
+import type { WeekTotals } from "@/features/my-week/my-week.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 

@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 
+import { ContactReadError } from "@/components/contact-read-error";
 import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -69,6 +70,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
   const format = useFormatter();
   const {
     data,
+    error,
     isPending,
     isError,
     isFetchNextPageError,
@@ -181,23 +183,17 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
         </TableBody>
       </Table>
       {isError && (
-        <div role="alert" className="flex items-center gap-2 text-sm">
-          <span>{t("common.error")}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-h-11"
-            disabled={isFetching}
-            onClick={() =>
-              detached(
-                isFetchNextPageError ? fetchNextPage() : refetch(),
-                "correspondence.retry-drops",
-              )
-            }
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
+        <ContactReadError
+          error={error}
+          fallbackKey="common.loadFailed"
+          retryDisabled={isFetching}
+          onRetry={() =>
+            detached(
+              isFetchNextPageError ? fetchNextPage() : refetch(),
+              "correspondence.retry-drops",
+            )
+          }
+        />
       )}
       {hasNextPage && !isError && (
         <Button

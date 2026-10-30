@@ -74,7 +74,10 @@ export const useAnchoredMenu = ({
       }}
       open={open}
     >
-      <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+      <MenuTrigger
+        nativeButton={false}
+        render={<span aria-hidden="true" className="sr-only" tabIndex={-1} />}
+      />
       <MenuPopup anchor={anchor ?? undefined} finalFocus={returnFocus}>
         {children}
       </MenuPopup>

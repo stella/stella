@@ -14,6 +14,8 @@ afterAll(async () => {
 });
 
 const sampleLine = {
+  workspaceId: "matter-one",
+  workspaceName: "Contract review",
   description: "Příprava právního stanoviska",
   quantity: "2.5000",
   unit: "h",
@@ -97,6 +99,52 @@ const textOf = async (value: RenderInvoicePdfOptions) => {
 };
 
 describe("invoice PDF", () => {
+  test("groups interleaved matter lines before printing each matter share and invoice totals", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: {
+        ...options.invoice,
+        lines: [
+          { ...sampleLine, description: "First consultation" },
+          {
+            ...sampleLine,
+            workspaceId: "matter-two",
+            workspaceName: "Litigation",
+            description: "Court filing",
+          },
+          { ...sampleLine, description: "Second consultation" },
+        ],
+      },
+      totals: {
+        ...options.totals,
+        netAmountMinor: cents(166_665),
+        grossAmountMinor: cents(166_665),
+      },
+    });
+    expect(text.indexOf("Contract review")).toBeLessThan(
+      text.indexOf("First consultation"),
+    );
+    expect(text.indexOf("First consultation")).toBeLessThan(
+      text.indexOf("Second consultation"),
+    );
+    expect(text.indexOf("Second consultation")).toBeLessThan(
+      text.indexOf("Celkem: Contract review"),
+    );
+    expect(text.indexOf("Celkem: Contract review")).toBeLessThan(
+      text.indexOf("Court filing"),
+    );
+    expect(text).toContain("Celkem: Litigation");
+    for (const amountCents of [111_110, 55_555, 166_665]) {
+      expect(text).toContain(
+        formatMoneyCents({
+          amountCents,
+          currency: "CZK",
+          locale: "cs-CZ",
+        }).replace(/[\u00a0\u202f]/gu, " "),
+      );
+    }
+  });
+
   test("embeds Czech diacritics, parties, descriptions and formatted monetary values", async () => {
     const { text } = await textOf(options);
     for (const expected of [
