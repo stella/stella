@@ -677,6 +677,8 @@ test("literal provision indices share surface and stem boundaries without rewrit
   const text = "art. 23¹ p.p.s.a.";
   const ast = {
     version: 1,
+    source: SUMMARY_AST.source,
+    metadata: SUMMARY_AST.metadata,
     blocks: [
       {
         id: "p-1",

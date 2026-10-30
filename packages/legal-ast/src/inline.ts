@@ -362,9 +362,13 @@ export const flattenInlineText = (
     if (projection !== "search") {
       return;
     }
-    const lastCharacter = text.replace(/[ \t\r\f]+$/u, "").at(-1);
-    if (lastCharacter !== undefined) {
-      precedingCharacter = lastCharacter;
+    for (let index = text.length - 1; index >= 0; index--) {
+      const character = text.charAt(index);
+      if (/[ \t\r\f]/u.test(character)) {
+        continue;
+      }
+      precedingCharacter = character;
+      return;
     }
   };
   const walk = (nodes: readonly Inline[]): void => {

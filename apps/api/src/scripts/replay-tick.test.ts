@@ -22,10 +22,13 @@ import {
 } from "@/api/scripts/replay-tick-command";
 import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
 
-const runReplayTickScript = (
+const runReplayTickScript = async (
   options: Parameters<typeof runReplayTickCommand>[0] = {},
 ) =>
-  runReplayTickCommand({ enrolment: OFF_REPLAY_ENROLMENT_FIXTURE, ...options });
+  await runReplayTickCommand({
+    enrolment: OFF_REPLAY_ENROLMENT_FIXTURE,
+    ...options,
+  });
 
 const enabledEnvironment = {
   CASE_LAW_REPLAY_ENABLED: true,
