@@ -647,7 +647,10 @@ describe("diffNetworkBaseline", () => {
       responseSizes: { "GET /v1/contacts": 1024 },
     },
   };
-  const sizeMetrics = (bytes: number, missing: Record<string, number> = {}) =>
+  const sizeMetrics = (
+    bytes: number,
+    missing: RouteNetworkMetrics["responseSizeFailures"] = {},
+  ) =>
     metrics(
       ["GET /v1/contacts"],
       2,

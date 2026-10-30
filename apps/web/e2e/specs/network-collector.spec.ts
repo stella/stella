@@ -17,7 +17,7 @@ test.use({
 const BODY_PREFIX = "first chunk; ";
 const BODY_SUFFIX = "last chunk";
 
-const startBodyServer = async () => {
+const startBodyServer = async (contentType = "text/plain") => {
   const pending = new Set<ServerResponse>();
   const server = createServer((request, response) => {
     if (request.url !== "/slow") {
@@ -28,10 +28,16 @@ const startBodyServer = async () => {
       return;
     }
     response.writeHead(200, {
-      "content-type": "text/plain",
-      "content-length": Buffer.byteLength(BODY_PREFIX + BODY_SUFFIX),
+      "content-type": contentType,
+      ...(contentType === "text/event-stream"
+        ? {}
+        : { "content-length": Buffer.byteLength(BODY_PREFIX + BODY_SUFFIX) }),
     });
-    response.write(BODY_PREFIX);
+    response.write(
+      contentType === "text/event-stream"
+        ? "data: first event\n\n"
+        : BODY_PREFIX,
+    );
     pending.add(response);
   });
   await new Promise<void>((resolve) => {
@@ -71,6 +77,7 @@ test("capture waits for a body that outlasts the quiet window", async ({
   const network = createNetworkCollector({
     apiOrigin: server.url,
     bodyCompletionTimeoutMs: 5000,
+    responseSizeBudgetKeys: new Set(["GET /slow"]),
   });
   const detach = await network.trackPage(page);
   try {
@@ -108,6 +115,7 @@ test("capture reports an unreadable body when completion exceeds its bound", asy
   const network = createNetworkCollector({
     apiOrigin: server.url,
     bodyCompletionTimeoutMs: 50,
+    responseSizeBudgetKeys: new Set(["GET /slow"]),
   });
   const detach = await network.trackPage(page);
   try {
@@ -125,3 +133,34 @@ test("capture reports an unreadable body when completion exceeds its bound", asy
     await server.close();
   }
 });
+
+for (const contentType of ["text/event-stream", "text/plain"]) {
+  test(`capture promptly excludes an unfinished ${contentType} response without waiting for its body`, async ({
+    page,
+  }) => {
+    const server = await startBodyServer(contentType);
+    const network = createNetworkCollector({
+      apiOrigin: server.url,
+      bodyCompletionTimeoutMs: 5000,
+      responseSizeBudgetKeys: new Set(
+        contentType === "text/event-stream" ? ["GET /slow"] : [],
+      ),
+    });
+    const detach = await network.trackPage(page);
+    try {
+      const headers = page.waitForResponse(`${server.url}/slow`);
+      await page.goto(server.url, { waitUntil: "domcontentloaded" });
+      await headers;
+      const startedAt = Date.now();
+      const result = await network.capture();
+      expect(Date.now() - startedAt).toBeLessThan(1000);
+      expect(result.requests).toHaveLength(1);
+      expect(result.requests.at(0)?.responseSize.status).toBe(
+        contentType === "text/event-stream" ? "streamed" : "unreadable",
+      );
+    } finally {
+      await detach();
+      await server.close();
+    }
+  });
+}

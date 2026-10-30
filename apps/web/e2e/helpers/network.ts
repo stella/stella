@@ -81,7 +81,7 @@ export type NetworkCollector = {
   // Long-lived SSE streams do not block this: only their request/response
   // events count as activity, not the open connection itself.
   waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
-  // Waits for non-streamed body completion, with a bounded unreadable outcome.
+  // Waits for budgeted non-streamed bodies, with a bounded unreadable outcome.
   capture: () => Promise<NetworkCapture>;
 };
 
@@ -130,6 +130,7 @@ export const waitForQuietPeriod = async ({
 type NetworkCollectorOptions = {
   apiOrigin?: string;
   bodyCompletionTimeoutMs?: number;
+  responseSizeBudgetKeys?: ReadonlySet<string>;
 };
 
 type NetworkRecord = {
@@ -229,6 +230,13 @@ export const createNetworkCollector = (
   const bodyCompletionTimeoutMs =
     collectorOptions.bodyCompletionTimeoutMs ??
     NETWORK_BODY_COMPLETION_TIMEOUT_MS;
+  const responseSizeBudgetKeys =
+    collectorOptions.responseSizeBudgetKeys ??
+    new Set(
+      Object.values(readNetworkBaseline() ?? {}).flatMap((entry) =>
+        Object.keys(entry.responseSizes ?? {}),
+      ),
+    );
   const records: NetworkRecord[] = [];
   const flushSessions = new Set<() => Promise<void>>();
   let lastActivityAt = Date.now();
@@ -314,31 +322,55 @@ export const createNetworkCollector = (
             dbQueryHeaderMissing: false,
             responseSize: createResponseSizeSample(),
           };
+          if (type === "EventSource" || request.method === "HEAD") {
+            record.responseSize.stream();
+          }
           records.push(record);
           byRequestId.set(requestId, record);
           markActivity();
         },
       );
-      session.on("Network.responseReceived", ({ requestId, response }) => {
-        const record = byRequestId.get(requestId);
-        if (record === undefined) {
-          return;
-        }
-        const header = Object.entries(response.headers).find(
-          ([name]) => name.toLowerCase() === DB_QUERIES_HEADER,
-        )?.[1];
-        record.dbQueryHeaderMissing = header === undefined;
-        if (header !== undefined) {
-          record.dbQueries = Number(header);
-        }
-        if (
-          response.mimeType
-            .toLowerCase()
-            .includes(STREAMED_RESPONSE_CONTENT_TYPE)
-        ) {
-          record.responseSize.stream();
-        }
-        markActivity();
+      session.on(
+        "Network.responseReceived",
+        ({ requestId, response, type }) => {
+          const record = byRequestId.get(requestId);
+          if (record === undefined) {
+            return;
+          }
+          const header = Object.entries(response.headers).find(
+            ([name]) => name.toLowerCase() === DB_QUERIES_HEADER,
+          )?.[1];
+          record.dbQueryHeaderMissing = header === undefined;
+          if (header !== undefined) {
+            record.dbQueries = Number(header);
+          }
+          if (
+            type === "EventSource" ||
+            type === "WebSocket" ||
+            response.status === 204 ||
+            response.status === 205 ||
+            response.status === 304 ||
+            response.mimeType
+              .toLowerCase()
+              .includes(STREAMED_RESPONSE_CONTENT_TYPE) ||
+            Object.entries(response.headers).some(
+              ([name, value]) =>
+                name.toLowerCase() === "content-type" &&
+                String(value)
+                  .toLowerCase()
+                  .includes(STREAMED_RESPONSE_CONTENT_TYPE),
+            )
+          ) {
+            record.responseSize.stream();
+          }
+          markActivity();
+        },
+      );
+      session.on("Network.eventSourceMessageReceived", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.stream();
+      });
+      session.on("Network.webSocketCreated", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.stream();
       });
       session.on("Network.dataReceived", ({ requestId, dataLength }) => {
         const record = byRequestId.get(requestId);
@@ -445,7 +477,11 @@ export const createNetworkCollector = (
           observedCount = records.length;
           const result = await Promise.race([
             Promise.all(
-              records.map(({ responseSize }) => responseSize.completion),
+              records
+                .filter((record) =>
+                  responseSizeBudgetKeys.has(requestKey(record)),
+                )
+                .map(({ responseSize }) => responseSize.completion),
             ).then(() => "complete" as const),
             timeout,
           ]);
@@ -457,8 +493,10 @@ export const createNetworkCollector = (
       } finally {
         clearTimeout(timeoutId);
       }
-      for (const { responseSize } of records) {
-        responseSize.markIncomplete(bodyCompletionTimeoutMs);
+      for (const record of records) {
+        if (responseSizeBudgetKeys.has(requestKey(record))) {
+          record.responseSize.markIncomplete(bodyCompletionTimeoutMs);
+        }
       }
       return {
         depthChain: rounds.rounds,
