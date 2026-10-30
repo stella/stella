@@ -16,6 +16,7 @@ import {
   WORKSPACE_ACTIVITY_PERMISSIONS,
   WORKSPACE_ACTIVITY_SCOPE,
 } from "@/api/handlers/workspaces/activity-scope";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/ai-generation/provenance";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
@@ -26,7 +27,6 @@ import {
   pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 

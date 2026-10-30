@@ -12,16 +12,16 @@ import {
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
+import {
+  generateArtefact,
+  projectArtefactText,
+  writeThreadArtefactTitle,
+} from "@/api/lib/ai-generation/provenance";
 import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import {
-  generateArtefact,
-  projectArtefactText,
-  writeThreadArtefactTitle,
-} from "@/api/lib/generated-artefact-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

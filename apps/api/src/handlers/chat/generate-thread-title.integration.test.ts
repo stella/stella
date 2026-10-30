@@ -5,13 +5,13 @@ import { eq, inArray } from "drizzle-orm";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import {
   generateArtefact,
   readArtefactOrigin,
   writeThreadArtefactTitle,
-} from "@/api/lib/generated-artefact-provenance";
+} from "@/api/lib/ai-generation/provenance";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,

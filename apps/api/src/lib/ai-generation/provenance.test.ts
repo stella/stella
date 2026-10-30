@@ -6,7 +6,7 @@ import { createMockDatabase } from "@/api/db/sql-client";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 
-import type { ArtefactOrigin } from "./generated-artefact-provenance";
+import type { ArtefactOrigin } from "./provenance";
 import {
   authorArtefact,
   copyThreadArtefactTitle,
@@ -15,7 +15,7 @@ import {
   projectThreadArtefactProvenance,
   readArtefactOrigin,
   readArtefactText,
-} from "./generated-artefact-provenance";
+} from "./provenance";
 
 const first = toSafeId<"caseLawDecision">(
   "abcdef01-0000-4000-8000-000000000001",
@@ -149,7 +149,7 @@ test.each(["direct", "inherited"])(
   "%s source overflow returns a tagged error before dispatch",
   async (input) => {
     const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-      await import("./generated-artefact-provenance");
+      await import("./provenance");
     let dispatched = false;
     const decisionIds = Array.from(
       { length: ARTEFACT_SOURCE_DECISION_LIMIT + 1 },
@@ -189,7 +189,7 @@ test.each(["direct", "inherited"])(
 
 test("an ignored tool source overflow prevents publishing an artefact", async () => {
   const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-    await import("./generated-artefact-provenance");
+    await import("./provenance");
   const decisionIds = Array.from(
     { length: ARTEFACT_SOURCE_DECISION_LIMIT },
     (_, index) =>
@@ -271,7 +271,7 @@ test("provenance selection constants are immutable and cannot manufacture stored
   const {
     THREAD_ARTEFACT_PROVENANCE_SELECTION,
     THREAD_ARTEFACT_PROVENANCE_COLUMNS,
-  } = await import("./generated-artefact-provenance");
+  } = await import("./provenance");
   expect(Object.keys(THREAD_ARTEFACT_PROVENANCE_SELECTION)).toEqual([
     "generationProvenance",
   ]);
@@ -301,8 +301,7 @@ test("provenance selection constants are immutable and cannot manufacture stored
 });
 
 test("raw provenance decoding accepts only null or validated stored records", async () => {
-  const { decodeRawThreadArtefactProvenance } =
-    await import("./generated-artefact-provenance");
+  const { decodeRawThreadArtefactProvenance } = await import("./provenance");
   const record = {
     version: 1,
     slots: {
@@ -326,7 +325,7 @@ test("raw provenance decoding accepts only null or validated stored records", as
 
 test("raw provenance decoding rejects absent fields and malformed metadata with a typed error", async () => {
   const { decodeRawThreadArtefactProvenance, ArtefactProvenanceDecodeError } =
-    await import("./generated-artefact-provenance");
+    await import("./provenance");
   for (const value of [
     undefined,
     {},

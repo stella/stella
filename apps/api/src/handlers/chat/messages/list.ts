@@ -28,6 +28,7 @@ import {
   isWebSearchAvailable,
 } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/ai-generation/provenance";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -36,7 +37,6 @@ import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/generated-artefact-provenance";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";

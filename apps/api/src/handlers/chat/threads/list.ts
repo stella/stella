@@ -28,6 +28,7 @@ import {
   readChatThreadContexts,
 } from "@/api/handlers/chat/threads/list-context";
 import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/ai-generation/provenance";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -40,7 +41,6 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

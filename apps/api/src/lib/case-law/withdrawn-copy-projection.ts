@@ -14,8 +14,8 @@ import type {
   legalReaderAnswerMessages,
   legalReaderAnswers,
 } from "@/api/db/schema";
+import { readArtefactOrigin } from "@/api/lib/ai-generation/provenance";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
-import { readArtefactOrigin } from "@/api/lib/generated-artefact-provenance";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 import { isDecisionReferenceKey } from "./withdrawn-copy-fields";

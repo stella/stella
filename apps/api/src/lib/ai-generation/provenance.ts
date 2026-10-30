@@ -6,11 +6,11 @@ import type { Transaction } from "@/api/db/root";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
 import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
+import type { ModelOperationId } from "@/api/lib/ai-generation/model-operation-registry";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
-import type { ModelOperationId } from "@/api/lib/model-operation-registry";
 
 /** One slot fits a bounded source lookup; larger input sets must be split. */
 export const ARTEFACT_SOURCE_DECISION_LIMIT = 1024;

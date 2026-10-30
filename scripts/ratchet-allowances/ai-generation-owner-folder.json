@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "owner folder for model operation and generated artefact provenance contracts; later generation surfaces register here instead of adding top-level modules"
+}

@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
-import { ArtefactProvenanceDecodeError } from "@/api/lib/generated-artefact-provenance";
 import { HIGHLIGHT_START, HIGHLIGHT_STOP } from "@/api/lib/search/highlight";
 import { readSearchPreview as readSearchPreviewWithDatabase } from "@/api/lib/search/preview";
 import {

@@ -1,6 +1,6 @@
 import type { SafeDb } from "@/api/db/safe-db";
+import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/ai-generation/provenance";
 import type { SafeId } from "@/api/lib/branded-types";
-import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/generated-artefact-provenance";
 
 import { readChatCopyProjection } from "./withdrawn-copies";
 

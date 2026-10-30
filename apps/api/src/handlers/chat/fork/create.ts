@@ -30,6 +30,10 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
+import {
+  copyThreadArtefactTitle,
+  THREAD_ARTEFACT_PROVENANCE_SELECTION,
+} from "@/api/lib/ai-generation/provenance";
 import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -49,10 +53,6 @@ import {
   OrganizationFileUsageError,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
-import {
-  copyThreadArtefactTitle,
-  THREAD_ARTEFACT_PROVENANCE_SELECTION,
-} from "@/api/lib/generated-artefact-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import {

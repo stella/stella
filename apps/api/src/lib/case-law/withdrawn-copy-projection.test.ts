@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import type { StoredArtefactProvenance } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
-import type { StoredArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 
 import {
   decisionReferencesIn,

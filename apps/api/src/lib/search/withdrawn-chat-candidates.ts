@@ -4,13 +4,13 @@ import { sql } from "drizzle-orm";
 import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 
 import type { Transaction } from "@/api/db/root";
-import { captureError } from "@/api/lib/analytics/capture";
-import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   decodeRawThreadArtefactProvenance,
   projectThreadArtefactProvenance,
-} from "@/api/lib/generated-artefact-provenance";
+} from "@/api/lib/ai-generation/provenance";
+import { captureError } from "@/api/lib/analytics/capture";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";

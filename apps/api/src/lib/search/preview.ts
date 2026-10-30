@@ -5,11 +5,11 @@ import type { SQL } from "drizzle-orm";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/ai-generation/provenance";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
-import { decodeRawThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
