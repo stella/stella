@@ -15,7 +15,7 @@ import ts from "typescript6";
  * anchor:
  *
  * - a separator literal or a regular expression handed to a string method
- *   of an anchor (`anchorId.split("-")`);
+ *   of an anchor (`anchorId.split("-")`), except whitespace normalization;
  * - a string method handed an anchor joined to a separator
  *   (`` child.startsWith(`${parentAnchor}-`) ``);
  * - an anchor joined to nothing but a separator (`` `-${anchorId}` ``,
@@ -115,6 +115,33 @@ const isAnchorPathStep = (
   );
 };
 
+// Accept only whitespace atoms, their repetition, and edge anchors for trimming.
+// Negated classes and mixed tokens must still reach the grammar guard.
+const WHITESPACE_BRANCH =
+  /^\^?(?:(?:\\[stnrfv]|[ \t\n\r\f\v]|\[(?:\\[stnrfv]|[ \t\n\r\f\v])+\])(?:[+*?]|\{\d+(?:,\d*)?\})?)+\$?$/u;
+
+const isWhitespaceNormalization = (call: ts.CallExpression): boolean => {
+  if (
+    !ts.isPropertyAccessExpression(call.expression) ||
+    !["replace", "replaceAll"].includes(call.expression.name.text)
+  ) {
+    return false;
+  }
+  const pattern = call.arguments.at(0);
+  const replacement = call.arguments.at(1);
+  if (
+    pattern === undefined ||
+    !ts.isRegularExpressionLiteral(pattern) ||
+    replacement === undefined ||
+    !isPlainString(replacement) ||
+    !/^\s*$/u.test(replacement.text)
+  ) {
+    return false;
+  }
+  const body = pattern.text.slice(1, pattern.text.lastIndexOf("/"));
+  return body.split("|").every((branch) => WHITESPACE_BRANCH.test(branch));
+};
+
 type SeparatorArgumentOptions = {
   argument: ts.Expression;
   receiverNamesAnchor: boolean;
@@ -206,7 +233,8 @@ const grammarFindings = (file: string, text: string): Finding[] => {
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
-      STRING_METHODS.has(node.expression.name.text)
+      STRING_METHODS.has(node.expression.name.text) &&
+      !isWhitespaceNormalization(node)
     ) {
       const argument = node.arguments.at(0);
       if (
@@ -305,6 +333,31 @@ describe("statute anchor grammar", () => {
         ].join("\n"),
       ),
     ).toEqual([]);
+  });
+
+  test("distinguishes whitespace normalization from anchor grammar", () => {
+    const normalizations = [
+      String.raw`anchor.replaceAll(/\s+/gu, " ")`,
+      String.raw`anchor.replace(/[ \t\n]+/g, " ")`,
+      String.raw`anchor.replace(/^\s+|\s+$/g, "")`,
+      String.raw`anchor.replaceAll(/\t{2,}/g, "\t")`,
+    ];
+    for (const normalization of normalizations) {
+      expect(grammarFindings("probe.ts", normalization)).toEqual([]);
+    }
+    const grammar = [
+      String.raw`anchor.match(/§\s*(\d+)/u)`,
+      String.raw`anchor.replace(/\s*§\s*/u, "")`,
+      String.raw`anchor.replace(/[^\s]+/g, "")`,
+      String.raw`anchor.replace(/[\s\d]+/g, " ")`,
+      String.raw`anchor.replace(/\s+/g, "-")`,
+      String.raw`anchor.split(/\s+/g)`,
+    ];
+    for (const expression of grammar) {
+      expect(grammarFindings("probe.ts", expression)).toEqual([
+        { file: "probe.ts", line: 1, text: expression },
+      ]);
+    }
   });
 
   test("scans the trees that read statute anchors", () => {
