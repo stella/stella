@@ -35,7 +35,8 @@
     "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "updateReady": "Värskendus valmis",
-    "updatesManaged": "Värskendusi haldab teie organisatsioon"
+    "updatesManaged": "Värskendusi haldab teie organisatsioon",
+    "openActivity": "Ava tegevus"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} soovib redigeerimise üle võtta",
     "takeoverWindowTitle": "Ülevõtmistaotlus",
     "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
-    "webOrigin": "Veebi päritolu"
+    "webOrigin": "Veebi päritolu",
+    "unsavedChangesClose": "Salvestamata muudatused. Loobumiseks sulge uuesti"
   },
   "settings": {
     "about": "Teave",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Vajuta {shortcut}, et sirvida ajalugu ja valida lõige.",
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
-    "welcomeTitle": "Sinu uus lõikelaud"
+    "welcomeTitle": "Sinu uus lõikelaud",
+    "registryIdentifierSearchHint": "Sisestage {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "Üksikasjade salvestamiseks lubage juurdepääs ligipääsetavuse seadetes. Rakenduste nimed salvestatakse endiselt.",

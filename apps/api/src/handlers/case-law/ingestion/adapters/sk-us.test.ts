@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -11,6 +12,7 @@ import {
 
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import { sha256Hex } from "@stll/sha256/bun";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -37,6 +39,7 @@ import {
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
   type IngestionResult,
   listingIdentityKey,
@@ -52,6 +55,42 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(skUsAdapter);
+
+const storedReplayInput = (decision: IngestionResult) => {
+  const objects = decision.sourceRawObjects ?? {};
+  const refs = Object.fromEntries(
+    Object.entries(objects).map(([part, object]) => [
+      part,
+      {
+        location: part,
+        sha256: sha256Hex(object.bytes),
+        byteLength: object.bytes.byteLength,
+        contentType: object.contentType,
+      },
+    ]),
+  );
+  return {
+    raw: new TextEncoder().encode(
+      encodeSourceRawEnvelope(
+        decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
+          panic("Missing source envelope"),
+        refs,
+      ),
+    ),
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    caseNumber: decision.caseNumber,
+    sourceDocumentId: decision.sourceDocumentId ?? null,
+    court: decision.court,
+    language: decision.language,
+    ecli: decision.ecli ?? null,
+    decisionDate: decision.decisionDate ?? null,
+    decisionType: decision.decisionType ?? null,
+    sourceUrl: decision.sourceUrl ?? null,
+    documentUrl: decision.documentUrl ?? null,
+    metadata: decision.metadata,
+    readObject: async (key: string) => Result.ok(objects[key]?.bytes ?? null),
+  };
+};
 
 /**
  * The stored refusal marker, typed as the stored shape: metadata values are
@@ -352,7 +391,9 @@ const searchResponse = (stub: SearchStub): Response => {
     case "page":
       return new Response(
         JSON.stringify({ documents: stub.documents, numFound: stub.numFound }),
-        { headers: JSON_HEADERS },
+        {
+          headers: JSON_HEADERS,
+        },
       );
     case "body":
       return new Response(stub.json, { headers: JSON_HEADERS });
@@ -564,7 +605,9 @@ describe("sk-us listing identity", () => {
   test("an item the crawl would drop is unidentifiable, not keyed on nothing", () => {
     expect(
       skUsListingIdentity({ ...CHAMBER_RESOLUTION, mkRSAPNumberOfFile: "" }),
-    ).toEqual({ type: "unidentifiable" });
+    ).toEqual({
+      type: "unidentifiable",
+    });
     expect(skUsListingIdentity(WITHOUT_DOCUMENT_ID)).toEqual({
       type: "unidentifiable",
     });
@@ -658,7 +701,10 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {
@@ -1011,26 +1057,19 @@ describe("sk-us buildDecision", () => {
     if (reparse === undefined) {
       throw new Error("sk-us must support stored replay");
     }
-    const replayed = await reparse({
-      raw: new TextEncoder().encode(decision.sourceRaw),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: decision.caseNumber,
-      sourceDocumentId: decision.sourceDocumentId ?? null,
-      court: decision.court,
-      language: decision.language,
-      ecli: decision.ecli ?? null,
-      decisionDate: decision.decisionDate ?? null,
-      decisionType: decision.decisionType ?? null,
-      sourceUrl: decision.sourceUrl ?? null,
-      documentUrl: decision.documentUrl ?? null,
-      metadata: decision.metadata,
-    });
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    const replayed = await reparse(storedReplayInput(decision));
     expect(replayed.type).toBe("parsed");
     if (replayed.type !== "parsed") {
       throw new Error("the captured collection must be reparsable");
     }
     expect(replayed.result.textFields).toEqual(decision.textFields);
     expect(replayed.result.metadata).toEqual(decision.metadata);
+    expect(replayed.result).toEqual(decision);
+    const again = await reparse(storedReplayInput(replayed.result));
+    expect(again).toEqual(replayed);
   });
 
   test("every response the court served for the decision is in the envelope", async () => {
@@ -1485,7 +1524,9 @@ describe("sk-us buildDecision", () => {
     // A field whose type the DMS changed under us keys nothing either.
     expect(
       await reconciliation.buildDecision({ ...PLENARY_OPINION, documentId: 7 }),
-    ).toEqual({ type: "unkeyable" });
+    ).toEqual({
+      type: "unkeyable",
+    });
   });
 
   test("replays a payload that round-tripped through storage", async () => {
@@ -1742,25 +1783,58 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     ]);
   });
 
-  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
-    const outcome = await skUsAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(
-        encodeSourceRawEnvelope({
-          listing: JSON.stringify(CHAMBER_RESOLUTION),
-        }),
-      ),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: CHAMBER_RESOLUTION.mkRSAPNumberOfFile,
-      sourceDocumentId: CHAMBER_RESOLUTION.documentId,
-      language: "sk",
-      court: "Ústavný súd SR",
-      ecli: null,
-      decisionDate: null,
-      decisionType: null,
-      sourceUrl: null,
-      documentUrl: null,
-      metadata: {},
+  test("stored replay without the PDF object or XHTML replays from the stored listing without a publisher request", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    const input = storedReplayInput(built.decision);
+    const parts =
+      decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ??
+      panic("Missing fixture envelope");
+    const { document: _document, ...withoutDocument } = parts;
+    const refs = decodeSourceRawEnvelopeObjects(
+      new TextDecoder().decode(input.raw),
+    );
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    for (const raw of [
+      new TextEncoder().encode(built.decision.sourceRaw ?? ""),
+      new TextEncoder().encode(encodeSourceRawEnvelope(withoutDocument, refs)),
+    ]) {
+      const outcome = await skUsAdapter.reparseStoredRaw?.({ ...input, raw });
+      expect(outcome).toMatchObject({
+        type: "parsed",
+        result: { caseNumber: built.decision.caseNumber },
+      });
+    }
+    const missingBody = await skUsAdapter.reparseStoredRaw?.({
+      ...input,
+      readObject: async () => Result.ok(null),
     });
+    expect(missingBody).toMatchObject({
+      type: "parsed",
+      result: {
+        caseNumber: built.decision.caseNumber,
+        isListingOnly: true,
+      },
+    });
+  });
+
+  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    const outcome = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(built.decision),
+    );
     expect(outcome).toMatchObject({
       type: "parsed",
       result: {

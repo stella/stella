@@ -35,7 +35,8 @@
     "supportRevealAppData": "App-Daten anzeigen",
     "temporaryWorkingCopies": "Temporäre Arbeitskopien",
     "updateReady": "Aktualisierung bereit",
-    "updatesManaged": "Aktualisierungen werden von Ihrer Organisation verwaltet"
+    "updatesManaged": "Aktualisierungen werden von Ihrer Organisation verwaltet",
+    "openActivity": "Aktivität öffnen"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Änderungen bleiben lokal und werden automatisch erneut versucht",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} möchte die Bearbeitung übernehmen",
     "takeoverWindowTitle": "Übernahmeanfrage",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
-    "webOrigin": "Web-Origin"
+    "webOrigin": "Web-Origin",
+    "unsavedChangesClose": "Ungespeicherte Änderungen. Erneut schließen, um sie zu verwerfen"
   },
   "settings": {
     "about": "Über",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Drücken Sie {shortcut}, um den Verlauf zu durchsuchen und einen Eintrag auszuwählen.",
     "welcomeShortcutTitle": "Überall öffnen.",
     "welcomeStart": "Mit dem Kopieren beginnen",
-    "welcomeTitle": "Ihre neue Zwischenablage"
+    "welcomeTitle": "Ihre neue Zwischenablage",
+    "registryIdentifierSearchHint": "Geben Sie {identifiers} ein."
   },
   "activity": {
     "accessibilityRequired": "Erlauben Sie den Zugriff unter Bedienungshilfen, um Details aufzuzeichnen. App-Namen werden weiterhin erfasst.",

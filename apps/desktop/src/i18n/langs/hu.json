@@ -35,7 +35,8 @@
     "supportRevealAppData": "Alkalmazásadatok megjelenítése",
     "temporaryWorkingCopies": "Ideiglenes munkamásolatok",
     "updateReady": "Frissítés kész",
-    "updatesManaged": "A frissítéseket a szervezete kezeli"
+    "updatesManaged": "A frissítéseket a szervezete kezeli",
+    "openActivity": "Tevékenység megnyitása"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — A változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} át szeretné venni a szerkesztést",
     "takeoverWindowTitle": "Átvételi kérés",
     "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
-    "webOrigin": "Webes forrás"
+    "webOrigin": "Webes forrás",
+    "unsavedChangesClose": "Nem mentett módosítások. Az elvetéshez zárja be újra"
   },
   "settings": {
     "about": "Névjegy",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "A {shortcut} megnyomásával böngészhet az előzmények között és kiválaszthat egy kivágást.",
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
-    "welcomeTitle": "Ismerje meg a vágólapot"
+    "welcomeTitle": "Ismerje meg a vágólapot",
+    "registryIdentifierSearchHint": "Adja meg a következőt: {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "A részletek rögzítéséhez engedélyezze a Kisegítő lehetőségek hozzáférést. Az alkalmazásnevek továbbra is rögzülnek.",

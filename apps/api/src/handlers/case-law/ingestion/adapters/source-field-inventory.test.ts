@@ -26,6 +26,8 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
@@ -220,6 +222,12 @@ describe("every adapter accounts for the fields its source states", () => {
       for (const buildFixture of fixtures) {
         const evidence = buildFixture();
         const decision = await evidence.buildDecision();
+        if ("blocks" in decision.documentAst) {
+          expect(
+            headMatterPrecedesBody(decision.documentAst.blocks),
+            `${key}: head matter follows the decision body`,
+          ).toBe(true);
+        }
         const schema = metadataUrlSchemaForAdapter(key);
         // The branded contract covers every registered source with no field debt.
         const normalized = plainTextIngestionResult(decision, schema);

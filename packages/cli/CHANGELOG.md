@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.1.4
+
+### Patch Changes
+
+- [#7197](https://github.com/stella/stella/pull/7197) [`707df70`](https://github.com/stella/stella/commit/707df70b8b242cb3b77ede702c972ab5848c8f87) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Return publisher-withdrawal markers in matter-link results.
+
 ## 6.1.3
 
 ### Patch Changes

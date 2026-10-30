@@ -6,7 +6,9 @@ import {
   isIdentifierReference,
   memberPropertyName,
   resolveImport,
+  resolveVariable,
   type ScopeContext,
+  stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -63,23 +65,66 @@ const isNode = (
   "type" in input &&
   typeof input.type === "string";
 
-const restoresFetch = (input: unknown): boolean => {
+type FetchRestorationOptions = {
+  context: ScopeContext;
+  replacement: ESTree.Node;
+  before: number;
+};
+
+const stableValue = (context: ScopeContext, input: unknown) => {
+  let value = unwrapExpression(input);
+  const seen = new Set([value]);
+  while (isIdentifierReference(value)) {
+    const binding = resolveVariable(context, value);
+    value =
+      binding === null ? null : unwrapExpression(stableInitializer(binding));
+    if (seen.has(value)) {
+      return null;
+    }
+    seen.add(value);
+  }
+  return value;
+};
+
+const restoresFetch = (
+  input: unknown,
+  options: FetchRestorationOptions,
+): boolean => {
   if (!isNode(input)) {
     return false;
   }
+  if (
+    input.type === "ArrowFunctionExpression" ||
+    input.type === "FunctionExpression" ||
+    input.type === "FunctionDeclaration"
+  ) {
+    return false;
+  }
   if (input.type === "AssignmentExpression" && isFetchTarget(input.left)) {
-    return true;
+    const value = unwrapExpression(input.right);
+    if (!isIdentifierReference(value)) {
+      return false;
+    }
+    const initializer = stableValue(options.context, value);
+    const range = nodeRange(initializer);
+    return (
+      isFetchTarget(initializer) && range !== null && range[1] < options.before
+    );
   }
   if (input.type === "CallExpression") {
     const callee = unwrapExpression(input.callee);
     if (
       callee?.type === "MemberExpression" &&
-      memberPropertyName(callee) === "mockRestore"
+      memberPropertyName(callee) === "mockRestore" &&
+      isIdentifierReference(callee.object)
     ) {
-      return true;
+      return (
+        options.replacement.type === "CallExpression" &&
+        stableValue(options.context, callee.object) === options.replacement
+      );
     }
   }
-  return children(input).some(restoresFetch);
+  return children(input).some((child) => restoresFetch(child, options));
 };
 
 const nodeRange = (node: unknown): [number, number] | null => {
@@ -92,12 +137,21 @@ const nodeRange = (node: unknown): [number, number] | null => {
     : null;
 };
 
-const allowedInsideRestoredTest = (
-  node: unknown,
-  testCallbacks: unknown[],
-  functions: unknown[],
-  tries: unknown[],
-): boolean => {
+type RestoredTestOptions = {
+  context: ScopeContext;
+  node: unknown;
+  testCallbacks: unknown[];
+  functions: unknown[];
+  tries: unknown[];
+};
+
+const allowedInsideRestoredTest = ({
+  context,
+  node,
+  testCallbacks,
+  functions,
+  tries,
+}: RestoredTestOptions): boolean => {
   if (!isAstNode(node)) {
     return false;
   }
@@ -151,7 +205,11 @@ const allowedInsideRestoredTest = (
         candidateRange[0] < testRange[0] ||
         candidateRange[1] > testRange[1] ||
         !isNode(candidate.finalizer) ||
-        !restoresFetch(candidate.finalizer)
+        !restoresFetch(candidate.finalizer, {
+          context,
+          replacement: node,
+          before: Math.min(candidateRange[0], range[0]),
+        })
       ) {
         return false;
       }
@@ -254,12 +312,13 @@ export default eslintCompatPlugin({
           "Program:exit"() {
             for (const violation of violations) {
               if (
-                !allowedInsideRestoredTest(
-                  violation,
+                !allowedInsideRestoredTest({
+                  context,
+                  node: violation,
                   testCallbacks,
                   functions,
                   tries,
-                )
+                })
               ) {
                 context.report({ node: violation, messageId: "replacement" });
               }

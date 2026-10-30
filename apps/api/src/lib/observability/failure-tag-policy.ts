@@ -10,6 +10,7 @@ import type { FailureTag } from "@/api/lib/observability/failure-tags.gen";
  * The generated census contains no policy, so a new tag requires a decision.
  */
 export const TAGGED_FAILURE_REASON = {
+  AnalysisInputVersionChangedError: "conflict",
   AIColumnInputRequiredError: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",
   AccountExportArchiveError: "tagged_failure",
@@ -409,6 +410,8 @@ export const TAGGED_FAILURE_REASON = {
   ServiceClientUnavailableError: "tagged_failure",
   SesInboundError: "tagged_failure",
   SkCollectionIssueError: "tagged_failure",
+  SkDocumentRawMissingError: "tagged_failure",
+  SkDocumentRawStorageError: "tagged_failure",
   SkillFileError: "tagged_failure",
   SkillRequiredToolsError: "tagged_failure",
   SnapshotReconciliationError: "tagged_failure",
@@ -448,6 +451,7 @@ export const TAGGED_FAILURE_REASON = {
   TokenExchangeError: "tagged_failure",
   TokenRefreshError: "tagged_failure",
   ToolOutputContractDegradedError: "tagged_failure",
+  TranscriptInputError: "tagged_failure",
   UnknownSkillPromptError: "tagged_failure",
   UnpersistableDecisionFieldError: "tagged_failure",
   Unreachable: "tagged_failure",
@@ -473,6 +477,7 @@ export const TAGGED_FAILURE_REASON = {
   VisualDefinitionError: "tagged_failure",
   VisualMarkupError: "tagged_failure",
   VisualPreviewError: "tagged_failure",
+  VocabularyInputError: "tagged_failure",
   WebHandoffOperationError: "tagged_failure",
   WebSearchProviderError: "tagged_failure",
   WindowsProcessOwnershipError: "tagged_failure",

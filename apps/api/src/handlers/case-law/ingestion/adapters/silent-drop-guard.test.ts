@@ -156,6 +156,11 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     part: "detail",
     file: "pl-uokik-detail-2520d55b0f17a317c1257ec6007b9773.html",
   },
+  "cz-uohs": {
+    driver: "unsupported",
+    reason:
+      "Decision text is read from stored PDF and office document objects, which require an object-level driver.",
+  },
 } as const satisfies Record<string, Driver>;
 const drivers = new Map<string, Driver>(Object.entries(DRIVERS));
 const replayAdapters = listAdapters().filter(

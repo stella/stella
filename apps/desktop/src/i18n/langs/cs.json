@@ -35,7 +35,8 @@
     "supportRevealAppData": "Zobrazit data aplikace",
     "temporaryWorkingCopies": "Dočasné pracovní kopie",
     "updateReady": "Aktualizace připravena",
-    "updatesManaged": "Aktualizace spravuje vaše organizace"
+    "updatesManaged": "Aktualizace spravuje vaše organizace",
+    "openActivity": "Otevřít aktivitu"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Změny zůstávají lokální a budou automaticky zopakovány",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} chce převzít úpravy",
     "takeoverWindowTitle": "Žádost o převzetí",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
-    "webOrigin": "Původ webu"
+    "webOrigin": "Původ webu",
+    "unsavedChangesClose": "Neuložené změny. Dalším zavřením je zahodíte"
   },
   "settings": {
     "about": "O aplikaci",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Stisknutím {shortcut} procházejte historii a vyberte výstřižek.",
     "welcomeShortcutTitle": "Otevřete ji odkudkoli.",
     "welcomeStart": "Začít kopírovat",
-    "welcomeTitle": "Seznamte se se schránkou"
+    "welcomeTitle": "Seznamte se se schránkou",
+    "registryIdentifierSearchHint": "Zadejte {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "Pro záznam podrobností povolte přístup ke Zpřístupnění. Názvy aplikací se zaznamenávají i bez něj.",

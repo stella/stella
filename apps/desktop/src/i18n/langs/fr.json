@@ -35,7 +35,8 @@
     "supportRevealAppData": "Afficher les données de l'app",
     "temporaryWorkingCopies": "Copies de travail temporaires",
     "updateReady": "Mise à jour prête",
-    "updatesManaged": "Mises à jour gérées par votre organisation"
+    "updatesManaged": "Mises à jour gérées par votre organisation",
+    "openActivity": "Ouvrir l’activité"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Les modifications restent locales et seront réessayées automatiquement",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} souhaite reprendre la modification",
     "takeoverWindowTitle": "Demande de reprise",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
-    "webOrigin": "Origine web"
+    "webOrigin": "Origine web",
+    "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner"
   },
   "settings": {
     "about": "À propos",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Appuyez sur {shortcut} pour parcourir l’historique et choisir un extrait.",
     "welcomeShortcutTitle": "Ouvrez-le partout.",
     "welcomeStart": "Commencer à copier",
-    "welcomeTitle": "Découvrez votre presse-papiers"
+    "welcomeTitle": "Découvrez votre presse-papiers",
+    "registryIdentifierSearchHint": "Saisissez {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "Autorisez l’accès à l’accessibilité pour enregistrer les détails. Les noms des applications restent enregistrés.",

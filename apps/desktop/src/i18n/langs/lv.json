@@ -35,7 +35,8 @@
     "supportRevealAppData": "Rādīt lietotnes datus",
     "temporaryWorkingCopies": "Pagaidu darba kopijas",
     "updateReady": "Atjauninājums gatavs",
-    "updatesManaged": "Atjauninājumus pārvalda jūsu organizācija"
+    "updatesManaged": "Atjauninājumus pārvalda jūsu organizācija",
+    "openActivity": "Atvērt darbību"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} vēlas pārņemt rediģēšanu",
     "takeoverWindowTitle": "Pārņemšanas pieprasījums",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
-    "webOrigin": "Tīmekļa izcelsme"
+    "webOrigin": "Tīmekļa izcelsme",
+    "unsavedChangesClose": "Nesaglabātas izmaiņas. Vēlreiz aizveriet, lai tās atmestu"
   },
   "settings": {
     "about": "Par",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Nospiediet {shortcut}, lai pārlūkotu vēsturi un izvēlētos izgriezumu.",
     "welcomeShortcutTitle": "Atveriet to jebkur.",
     "welcomeStart": "Sākt kopēšanu",
-    "welcomeTitle": "Iepazīstiet savu starpliktuvi"
+    "welcomeTitle": "Iepazīstiet savu starpliktuvi",
+    "registryIdentifierSearchHint": "Ievadiet {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "Lai ierakstītu detaļas, atļaujiet piekļuvi Pieejamības iestatījumos. Lietotņu nosaukumi joprojām tiek ierakstīti.",

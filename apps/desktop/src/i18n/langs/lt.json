@@ -35,7 +35,8 @@
     "supportRevealAppData": "Rodyti programos duomenis",
     "temporaryWorkingCopies": "Laikinos darbinės kopijos",
     "updateReady": "Naujinimas paruoštas",
-    "updatesManaged": "Naujinimus valdo jūsų organizacija"
+    "updatesManaged": "Naujinimus valdo jūsų organizacija",
+    "openActivity": "Atverti veiklą"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} nori perimti redagavimą",
     "takeoverWindowTitle": "Perėmimo prašymas",
     "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte",
-    "webOrigin": "Žiniatinklio kilmė"
+    "webOrigin": "Žiniatinklio kilmė",
+    "unsavedChangesClose": "Neišsaugoti pakeitimai. Dar kartą uždarykite, kad juos atmestumėte"
   },
   "settings": {
     "about": "Apie",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Paspauskite {shortcut}, kad peržiūrėtumėte istoriją ir pasirinktumėte iškarpą.",
     "welcomeShortcutTitle": "Atidarykite bet kur.",
     "welcomeStart": "Pradėti kopijuoti",
-    "welcomeTitle": "Susipažinkite su iškarpine"
+    "welcomeTitle": "Susipažinkite su iškarpine",
+    "registryIdentifierSearchHint": "Įveskite {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "Norėdami įrašyti detales, suteikite pritaikymo neįgaliesiems prieigą. Programų pavadinimai ir toliau įrašomi.",

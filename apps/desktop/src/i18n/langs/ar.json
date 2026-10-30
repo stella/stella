@@ -35,7 +35,8 @@
     "supportRevealAppData": "إظهار بيانات التطبيق",
     "temporaryWorkingCopies": "نسخ العمل المؤقتة",
     "updateReady": "التحديث جاهز",
-    "updatesManaged": "تدير مؤسستك التحديثات"
+    "updatesManaged": "تدير مؤسستك التحديثات",
+    "openActivity": "فتح النشاط"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
@@ -157,7 +158,8 @@
     "takeoverTitle": "يريد {requester} تولي التحرير",
     "takeoverWindowTitle": "طلب تولي التحرير",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
-    "webOrigin": "أصل الويب"
+    "webOrigin": "أصل الويب",
+    "unsavedChangesClose": "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها"
   },
   "settings": {
     "about": "حول",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "اضغط {shortcut} لتصفح سجلك واختيار مقتطف.",
     "welcomeShortcutTitle": "افتحها من أي مكان.",
     "welcomeStart": "ابدأ النسخ",
-    "welcomeTitle": "تعرّف على حافظتك"
+    "welcomeTitle": "تعرّف على حافظتك",
+    "registryIdentifierSearchHint": "أدخل {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "اسمح بالوصول إلى تسهيلات الاستخدام لتسجيل التفاصيل. يستمر تسجيل أسماء التطبيقات.",

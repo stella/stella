@@ -35,7 +35,8 @@
     "supportRevealAppData": "Mostrar dados do aplicativo",
     "temporaryWorkingCopies": "Cópias de trabalho temporárias",
     "updateReady": "Atualização pronta",
-    "updatesManaged": "Atualizações gerenciadas pela sua organização"
+    "updatesManaged": "Atualizações gerenciadas pela sua organização",
+    "openActivity": "Abrir atividade"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — As alterações permanecem locais e serão reenviadas automaticamente",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} quer assumir a edição",
     "takeoverWindowTitle": "Solicitação de transferência",
     "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las",
-    "webOrigin": "Origem web"
+    "webOrigin": "Origem web",
+    "unsavedChangesClose": "Alterações não salvas. Feche novamente para descartá-las"
   },
   "settings": {
     "about": "Sobre",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Pressione {shortcut} para navegar pelo histórico e escolher um recorte.",
     "welcomeShortcutTitle": "Abra em qualquer lugar.",
     "welcomeStart": "Começar a copiar",
-    "welcomeTitle": "Conheça sua área de transferência"
+    "welcomeTitle": "Conheça sua área de transferência",
+    "registryIdentifierSearchHint": "Insira {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "Permita o acesso de Acessibilidade para registrar detalhes. Os nomes dos aplicativos continuam sendo registrados.",

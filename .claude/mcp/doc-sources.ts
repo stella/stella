@@ -259,7 +259,17 @@ export const DOC_SOURCES = {
     url: "https://fast-check.dev/llms.txt",
   },
   Fontsource: {
-    dependencies: ["@fontsource-variable/source-serif-4"],
+    dependencies: [
+      "@fontsource-variable/source-serif-4",
+      "@fontsource/arimo",
+      "@fontsource/caladea",
+      "@fontsource/carlito",
+      "@fontsource/cousine",
+      "@fontsource/lato",
+      "@fontsource/noto-sans-arabic",
+      "@fontsource/source-sans-3",
+      "@fontsource/tinos",
+    ],
     url: "https://fontsource.org/llms.txt",
   },
   Lucide: {
@@ -884,11 +894,11 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-30T00:00:00.000Z",
+    checkedAt: "2026-10-30T00:00:00.000Z",
     dependency: "@standard-schema/spec",
     explanation:
       "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
-    expiresAt: "2026-10-30T00:00:00.000Z",
+    expiresAt: "2026-11-29T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

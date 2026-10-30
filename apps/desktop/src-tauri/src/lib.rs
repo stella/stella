@@ -256,8 +256,7 @@ pub fn run() {
               });
             }
             feature_gate::DesktopFeature::TimeBilling => {
-              use tauri::Emitter;
-              let _ = app.emit(activity::CHANGED_EVENT, ());
+              activity::emit_changed(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);

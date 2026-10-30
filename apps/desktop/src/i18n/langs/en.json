@@ -35,7 +35,8 @@
     "supportRevealAppData": "Reveal app data",
     "temporaryWorkingCopies": "Temporary working copies",
     "updateReady": "Update ready",
-    "updatesManaged": "Updates managed by your organization"
+    "updatesManaged": "Updates managed by your organization",
+    "openActivity": "Open activity"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Changes stay local and will retry automatically",
@@ -157,7 +158,8 @@
     "takeoverTitle": "{requester} wants to take over editing",
     "takeoverWindowTitle": "Takeover request",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
-    "webOrigin": "Web origin"
+    "webOrigin": "Web origin",
+    "unsavedChangesClose": "Unsaved changes. Close again to discard"
   },
   "settings": {
     "about": "About",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Press {shortcut} to browse your history and choose a clip.",
     "welcomeShortcutTitle": "Open it anywhere.",
     "welcomeStart": "Start copying",
-    "welcomeTitle": "Meet your clipboard"
+    "welcomeTitle": "Meet your clipboard",
+    "registryIdentifierSearchHint": "Enter {identifiers}."
   },
   "activity": {
     "accessibilityRequired": "Allow Accessibility access to record details. App names are still recorded.",

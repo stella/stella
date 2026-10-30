@@ -1756,6 +1756,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          extractionWarnings: [],
           hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
@@ -1922,6 +1923,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                extractionWarnings: [],
                 textWithheldReason: null,
                 sectionIndex: 1,
                 doctrine: "unread",
@@ -2602,6 +2604,7 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      extractionWarnings: [],
       hasDocument: true,
       documentPending: false,
       documentReadFailed: false,
