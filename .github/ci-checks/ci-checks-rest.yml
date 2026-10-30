@@ -590,6 +590,8 @@ checks:
     run: |
       bun test scripts/check-workflow-yaml.test.ts
       bun scripts/check-workflow-yaml.ts
+      bun test scripts/check-workflow-pr-write-token.test.ts
+      bun scripts/check-workflow-pr-write-token.ts
 
   - name: Module ownership
     id: static_check_040
