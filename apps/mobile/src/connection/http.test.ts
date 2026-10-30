@@ -90,7 +90,9 @@ describe("HTTP request deadline", () => {
     const response = await fetchWithTimeout(fetch, "https://example.com");
     const clone = response.clone();
     const body = response.text().catch((error: unknown) => error);
-    await clone.body?.cancel("not needed");
+    // A clone is one branch of a tee, whose cancel settles only once both
+    // branches are cancelled, so it is started and not awaited.
+    const cancelled = clone.body?.cancel("not needed");
     await flush();
     expect(jest.getTimerCount()).toBe(1);
 
@@ -99,6 +101,7 @@ describe("HTTP request deadline", () => {
 
     expect(await body).toMatchObject({ name: "AbortError" });
     expect(jest.getTimerCount()).toBe(0);
+    expect(cancelled).toBeInstanceOf(Promise);
   });
 
   test("cancels a stalled read through to the source", async () => {

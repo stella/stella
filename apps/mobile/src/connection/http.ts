@@ -50,16 +50,26 @@ export const fetchWithTimeout = async (
     clear();
     return response;
   }
-  const deadline = () =>
-    new Promise<never>((_resolve, reject) => {
+  // The abort's own reason (an `AbortError`), or one named the same way on a
+  // runtime whose reason is not an Error.
+  const abortReason = (): Error => {
+    const reason: unknown = controller.signal.reason;
+    return reason instanceof Error
+      ? reason
+      : Object.assign(new Error("The operation was aborted."), {
+          name: "AbortError",
+        });
+  };
+  const deadline = async () =>
+    await new Promise<never>((_resolve, reject) => {
       if (controller.signal.aborted) {
-        reject(controller.signal.reason);
+        reject(abortReason());
         return;
       }
       controller.signal.addEventListener(
         "abort",
         () => {
-          reject(controller.signal.reason);
+          reject(abortReason());
         },
         { once: true },
       );
