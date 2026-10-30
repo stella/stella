@@ -14,48 +14,28 @@ import {
   findSortUnstableNames,
   validateRequires,
 } from "../apps/api/src/lib/db/migration-ledger";
+import {
+  findMigrationTimestampViolations,
+  MIGRATION_FILE,
+  MIGRATION_TIMESTAMP,
+  type MigrationIdentityChanges,
+  readMigrationBaseSnapshot,
+  runGit,
+} from "./migration-restamp";
+
+export {
+  findMigrationTimestampViolations,
+  readMigrationBaseSnapshot,
+  readMigrationChanges,
+} from "./migration-restamp";
 
 type MigrationIdentityViolation =
   | { type: "invalid-name"; directory: string }
   | { type: "removed-base-migration"; directory: string }
   | { type: "stale-timestamp"; directory: string; newestBaseDirectory: string };
 
-type MigrationIdentityChanges = {
-  addedDirectories: readonly string[];
-  removedDirectories: readonly string[];
-};
-
-type MigrationChanges = MigrationIdentityChanges & {
-  modifiedFiles: readonly string[];
-};
-
-const MIGRATION_TIMESTAMP = /(?:^|\/)([0-9]{14})_[^/]+$/u;
-const MIGRATION_FILE = /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u;
-const MIGRATION_FOLDER_FILE = /^apps\/api\/drizzle\/[^/]+\/.+$/u;
-const ALIAS_INVENTORY_PATH =
-  "apps/api/src/lib/db/migration-alias-inventory.json";
 const HASH = /^[0-9a-f]{64}$/u;
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-
-const runGit = ({
-  arguments_,
-  cwd,
-}: {
-  arguments_: readonly string[];
-  cwd: string;
-}): Uint8Array => {
-  const result = Bun.spawnSync(["git", ...arguments_], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    panic(
-      `git ${arguments_.join(" ")} failed (${result.exitCode}): ${result.stderr.toString()}`,
-    );
-  }
-  return result.stdout;
-};
 
 export const findMigrationIdentityViolation = ({
   addedDirectories,
@@ -71,92 +51,6 @@ export const findMigrationIdentityViolation = ({
     }
   }
   return null;
-};
-
-type MigrationTimestampViolation = Extract<
-  MigrationIdentityViolation,
-  { type: "stale-timestamp" }
->;
-
-export const findMigrationTimestampViolations = ({
-  addedDirectories,
-  baseDirectories,
-}: {
-  addedDirectories: readonly string[];
-  baseDirectories: readonly string[];
-}): MigrationTimestampViolation[] => {
-  let newestBase: { directory: string; stamp: string } | undefined;
-  for (const directory of baseDirectories) {
-    const stamp = MIGRATION_TIMESTAMP.exec(directory)?.at(1);
-    if (
-      stamp !== undefined &&
-      (newestBase === undefined || stamp > newestBase.stamp)
-    ) {
-      newestBase = { directory, stamp };
-    }
-  }
-  if (newestBase === undefined) {
-    return [];
-  }
-  const violations: MigrationTimestampViolation[] = [];
-  for (const directory of addedDirectories) {
-    const stamp = MIGRATION_TIMESTAMP.exec(directory)?.at(1);
-    if (stamp !== undefined && stamp <= newestBase.stamp) {
-      violations.push({
-        type: "stale-timestamp",
-        directory,
-        newestBaseDirectory: newestBase.directory,
-      });
-    }
-  }
-  return violations;
-};
-
-export const readMigrationChanges = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}): MigrationChanges => {
-  const arguments_ = [
-    "diff",
-    "--no-renames",
-    "--name-status",
-    `${baseRef}...HEAD`,
-    "--",
-    "apps/api/drizzle",
-  ];
-  const addedDirectories: string[] = [];
-  const removedDirectories: string[] = [];
-  const modifiedFiles: string[] = [];
-  for (const line of new TextDecoder()
-    .decode(runGit({ arguments_, cwd }))
-    .split("\n")) {
-    const [status, filename] = line.split("\t");
-    if (filename === undefined) {
-      continue;
-    }
-    if (status !== "A" && status !== "D" && status !== "M") {
-      panic(
-        `Unsupported migration change status ${String(status)} for ${filename}`,
-      );
-    }
-    if (status === "M" && MIGRATION_FOLDER_FILE.test(filename)) {
-      modifiedFiles.push(filename);
-      continue;
-    }
-    if (!MIGRATION_FILE.test(filename)) {
-      continue;
-    }
-    const directory = path.posix.dirname(filename);
-    if (status === "A") {
-      addedDirectories.push(directory);
-    } else if (status === "D") {
-      removedDirectories.push(directory);
-    }
-  }
-  return { addedDirectories, removedDirectories, modifiedFiles };
 };
 
 type AliasEntry = {
@@ -355,76 +249,6 @@ const readGitFile = ({
 
 export const hashBytes = (bytes: Uint8Array): string =>
   createSha256().update(bytes).digest("hex");
-
-const readBaseInventory = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}): unknown => {
-  const files = new TextDecoder()
-    .decode(
-      runGit({
-        arguments_: [
-          "ls-tree",
-          "--name-only",
-          baseRef,
-          "--",
-          ALIAS_INVENTORY_PATH,
-        ],
-        cwd,
-      }),
-    )
-    .trim();
-  if (files === "") {
-    return [];
-  }
-  if (files !== ALIAS_INVENTORY_PATH) {
-    panic(`Unexpected base inventory path: ${files}`);
-  }
-  return JSON.parse(
-    new TextDecoder().decode(
-      readGitFile({ ref: baseRef, file: ALIAS_INVENTORY_PATH, cwd }),
-    ),
-  );
-};
-
-export const readMigrationBaseSnapshot = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}) => {
-  const mergeBase = new TextDecoder()
-    .decode(runGit({ arguments_: ["merge-base", baseRef, "HEAD"], cwd }))
-    .trim();
-  const changes = readMigrationChanges({ baseRef: mergeBase, cwd });
-  const baseInventory = readBaseInventory({ baseRef: mergeBase, cwd });
-  const baseHashes: Record<string, string> = {};
-  for (const file of changes.modifiedFiles.filter((candidate) =>
-    MIGRATION_FILE.test(candidate),
-  )) {
-    baseHashes[file] = hashBytes(readGitFile({ ref: mergeBase, file, cwd }));
-  }
-  const baseDirectories = new TextDecoder()
-    .decode(
-      runGit({
-        arguments_: [
-          "ls-tree",
-          "--name-only",
-          baseRef,
-          "--",
-          "apps/api/drizzle/",
-        ],
-        cwd,
-      }),
-    )
-    .split("\n")
-    .filter((directory) => MIGRATION_TIMESTAMP.test(directory));
-  return { mergeBase, changes, baseInventory, baseHashes, baseDirectories };
-};
 
 export const formatAliasSummary = (
   entries: readonly {

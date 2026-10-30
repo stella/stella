@@ -647,6 +647,7 @@ describe("migration immutability", () => {
 test("the migration CLI rejects bad new dependencies and accepts an aliased base edit", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "migration-cli-"));
   const scriptPath = path.join(cwd, "scripts/check-migration-order.ts");
+  const restampPath = path.join(cwd, "scripts/migration-restamp.ts");
   const ledgerPath = path.join(cwd, "apps/api/src/lib/db/migration-ledger.ts");
   const inventoryPath = path.join(
     cwd,
@@ -675,6 +676,10 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     copyFileSync(
       path.join(import.meta.dir, "check-migration-order.ts"),
       scriptPath,
+    );
+    copyFileSync(
+      path.join(import.meta.dir, "migration-restamp.ts"),
+      restampPath,
     );
     copyFileSync(
       path.resolve(

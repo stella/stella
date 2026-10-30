@@ -113,7 +113,10 @@ const fixture = () => {
 
 describe("generator output boundary", () => {
   test("registers only the supported generator IDs", () => {
-    expect(Object.keys(PR_GENERATORS)).toEqual(["query-plan-contracts"]);
+    expect(Object.keys(PR_GENERATORS)).toEqual([
+      "migration-restamp",
+      "query-plan-contracts",
+    ]);
   });
 
   test("required services are checked against the actual job", () => {

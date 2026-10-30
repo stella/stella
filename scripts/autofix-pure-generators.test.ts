@@ -109,6 +109,8 @@ const PURE_AUTOFIX = {
 // A committed generator must have an explicit purity decision. Native builds
 // need toolchains outside the Bun install, and recorders need live services.
 const EXCLUDED_AUTOFIX = {
+  "migration-restamp":
+    "Re-stamping is dispatched for one pull request against its current base",
   "request-replay-routes":
     "Mounted handler discovery runs API module initialization under its test preload",
   "playwright-devices":
