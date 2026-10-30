@@ -35,7 +35,7 @@ use crate::{
   logging::with_cause_logged,
 };
 
-pub const CHANGED_EVENT: &str = "activity-timeline-changed";
+const CHANGED_EVENT: &str = "activity-timeline-changed";
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// A sample later than this after the previous one means the machine slept
 /// or the sampler stalled; the open segment ends at the last sample.
@@ -2392,7 +2392,7 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
   }
 }
 
-fn emit_changed(app: &AppHandle) {
+pub(crate) fn emit_changed(app: &AppHandle) {
   let _ = app.emit(CHANGED_EVENT, ());
   refresh_tray(app);
 }
