@@ -278,6 +278,26 @@ const readContinuation = (
   return "ambiguous";
 };
 
+/**
+ * Whether the printed repeat at `from` opens a nested list: the numbers after
+ * it count up from it, and the run that breaks them steps back into their
+ * range, which is the court resuming its own paragraphs after the list.
+ */
+const repeatOpensList = (
+  candidates: readonly Candidate[],
+  from: number,
+  value: number,
+): boolean => {
+  let next = value + 1;
+  for (const later of candidates.slice(from + 1)) {
+    if (later.number !== next) {
+      return later.number > value && later.number < next;
+    }
+    next += 1;
+  }
+  return false;
+};
+
 type Walk = {
   /** The court's paragraphs, in order. */
   readonly accepted: Candidate[];
@@ -339,6 +359,10 @@ const walk = (candidates: readonly Candidate[], startingAt: number): Walk => {
       number > 1 &&
       number === accepted.at(-1)?.number
     ) {
+      if (repeatOpensList(candidates, index, number)) {
+        nestedNext = number + 1;
+        continue;
+      }
       accepted.push(candidate);
       continue;
     }

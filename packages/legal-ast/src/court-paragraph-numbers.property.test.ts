@@ -943,3 +943,35 @@ test.each([
     });
   },
 );
+
+const paragraphOf = (index: number, text: string): ParagraphBlock => ({
+  id: `b${String(index)}`,
+  anchorId: `p-${String(index)}`,
+  type: "paragraph",
+  inlines: [{ type: "text", text }],
+  plainText: text,
+});
+
+test("a nested list starting at the last court number stays a list", () => {
+  const texts = [
+    "1. Soud uvážil věc.",
+    "2. Soud uvážil věc.",
+    "3. Soud uvážil tyto body:",
+    "3. První bod seznamu;",
+    "4. Druhý bod seznamu.",
+    "4. Soud uvážil věc.",
+    "5. Soud uvážil věc.",
+  ];
+  const result = extractCourtParagraphNumbers(
+    texts.map((text, index) => paragraphOf(index, text)),
+  );
+  expect(labelsOf(result.blocks)).toEqual([
+    1,
+    2,
+    3,
+    undefined,
+    undefined,
+    4,
+    5,
+  ]);
+});
