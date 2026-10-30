@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Účet",
     "server": "Server",
-    "signOut": "Odhlásit se"
+    "signOut": "Odhlásit se",
+    "deleteAccount": "Smazat účet",
+    "deleteAccountHint": "Otevře váš účet na webu, kde ho můžete smazat i se vším, co je vaše."
   },
   "header": {
     "search": "Hledat"
@@ -199,7 +201,8 @@
     "retry": "Zkusit znovu",
     "unavailable": "Vaše organizace nemá zapnuté vykazování času.",
     "startFailed": "Časovač se nepodařilo spustit. Zkuste to znovu.",
-    "changeFailed": "Časovač se nepodařilo změnit. Zkuste to znovu."
+    "changeFailed": "Časovač se nepodařilo změnit. Zkuste to znovu.",
+    "more": "{count, plural, one {a # další časovač} few {a # další časovače} other {a # dalších časovačů}}"
   },
   "scan": {
     "title": "Naskenovat dokument",

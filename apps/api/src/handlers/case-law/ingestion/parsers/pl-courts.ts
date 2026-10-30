@@ -1,3 +1,4 @@
+// parser-output-unchanged: Retention validation moved to the ingestion pipeline; the bounded plaintext load that enforces a source's DOM budget is kept on byte-identical markup, so blocks and rejections are unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
@@ -47,10 +48,6 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
@@ -1140,6 +1137,14 @@ const parsePlainText = (state: ParserState, content: string): void => {
   }
 };
 
+/**
+ * The markup a bounded loader is charged for plain text: one paragraph
+ * element per paragraph, the same document the shared validator built
+ * before the pipeline took the check over, so the DOM budget a source
+ * enforces through its loader admits and rejects exactly what it did.
+ */
+const plainTextParagraphsHtml = (paragraphs: readonly string[]): string =>
+  `<body>${paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("")}</body>`;
 /** Elements whose opening SAOS's serializer never marks: blocks. */
 const SERIALIZER_BLOCK_TAGS: ReadonlySet<string> = new Set([
   ...COMMON_COURT_BLOCK_TAGS,
@@ -1240,12 +1245,6 @@ export const parsePlDecisionContent = (
       renderHtmlWhiteSpace(parsed);
     }
     parseChildren($, state, root);
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      input.content,
-      state.blocks,
-      { document: $ },
-    );
   } else {
     enforcePlainTextExpansionBudget(input.content, input.htmlExpansionBudget);
     const normalizedContent = normalizeLegacyPlainText(
@@ -1257,16 +1256,11 @@ export const parsePlDecisionContent = (
         const normalized = normalizeWhitespace(paragraph);
         return normalized ? [normalized] : [];
       });
-    const validationHtml = buildValidationHtml(paragraphs);
-    // Check expansion before allocating paragraph ASTs for bounded sources.
-    const sourceDocument = input.loadHtml?.(validationHtml);
+    // Check expansion before allocating paragraph ASTs for bounded sources:
+    // their loader charges its DOM budget on the paragraphs' markup and
+    // rejects the document past it, which is that source's stored outcome.
+    input.loadHtml?.(plainTextParagraphsHtml(paragraphs));
     parsePlainText(state, normalizedContent);
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      validationHtml,
-      state.blocks,
-      sourceDocument === undefined ? {} : { document: sourceDocument },
-    );
   }
 
   const fulltext = state.blocks

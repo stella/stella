@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Paskyra",
     "server": "Serveris",
-    "signOut": "Atsijungti"
+    "signOut": "Atsijungti",
+    "deleteAccount": "Ištrinti paskyrą",
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
   },
   "header": {
     "search": "Ieškoti"
@@ -199,7 +201,8 @@
     "retry": "Bandyti dar kartą",
     "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
     "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
-    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą."
+    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą.",
+    "more": "{count, plural, one {dar # laikmatis} few {dar # laikmačiai} other {dar # laikmačių}}"
   },
   "scan": {
     "title": "Nuskenuoti dokumentą",

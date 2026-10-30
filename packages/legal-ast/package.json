@@ -99,6 +99,10 @@
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
     },
+    "./closed-quotation-paragraphs": {
+      "types": "./src/closed-quotation-paragraphs.ts",
+      "import": "./src/closed-quotation-paragraphs.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"

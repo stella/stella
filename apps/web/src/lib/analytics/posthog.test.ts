@@ -1087,7 +1087,9 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
-  test("captureError ignores aborted transport failures", () => {
+  const expectTransientSignal = (
+    transportKind: "network" | "timeout" | "aborted",
+  ) => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1095,14 +1097,40 @@ describe("PostHog browser analytics adapter", () => {
     analytics.captureError(
       new APIError({
         status: 0,
-        message: "Request aborted",
-        transportKind: "aborted",
+        message: "Private browser transport detail",
+        transportKind,
       }),
       {
-        fingerprintKey: "posthog:aborted-transport",
-        scope: { type: "handler", handlerId: "posthog:aborted-transport" },
+        fingerprintKey: "desktop-presence:query",
+        scope: { type: "handler", handlerId: "desktop-presence" },
       },
     );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "desktop-presence:query",
+      transport_kind: transportKind,
+    });
+  };
+
+  test("captureError records a network API transport failure as one transient signal", () => {
+    expectTransientSignal("network");
+  });
+
+  test("captureError records a timeout API transport failure as one transient signal", () => {
+    expectTransientSignal("timeout");
+  });
+
+  test("captureError records an aborted API transport failure as one transient signal", () => {
+    expectTransientSignal("aborted");
+  });
+
+  test("captureError ignores a bare abort exception", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     analytics.captureError(new DOMException("Cancelled", "AbortError"), {
       fingerprintKey: "posthog:abort-error",
       scope: { type: "handler", handlerId: "posthog:abort-error" },

@@ -1,5 +1,20 @@
 # @stll/chat
 
+## 0.2.12
+
+### Patch Changes
+
+- [#6894](https://github.com/stella/stella/pull/6894) [`32cafef`](https://github.com/stella/stella/commit/32cafefeeae7289d6757ed82a22727190a4b46a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh third-party dependencies to their latest minor and patch releases.
+- Updated dependencies [[`32cafef`](https://github.com/stella/stella/commit/32cafefeeae7289d6757ed82a22727190a4b46a5), [`3de86b1`](https://github.com/stella/stella/commit/3de86b150597e60512d88f053b2ee0c2a9969bbf)]:
+  - @stll/ui@0.55.1
+
+## 0.2.11
+
+### Patch Changes
+
+- Updated dependencies [[`9c0ea0e`](https://github.com/stella/stella/commit/9c0ea0e95c1e9f9edc9ffaa84cb18e4c43a85d8b), [`df53905`](https://github.com/stella/stella/commit/df5390529e1e6bc783d2e442b57bb959ad8acadd), [`b1db339`](https://github.com/stella/stella/commit/b1db33914f1bd2cb04d1760ffd8ff1a222c806c2), [`5e31c64`](https://github.com/stella/stella/commit/5e31c6433b4bf3400ebb7d137d137e81e419b236), [`cd78348`](https://github.com/stella/stella/commit/cd7834897fba75056fa30f8351ccc42dd46a16a0)]:
+  - @stll/ui@0.55.0
+
 ## 0.2.10
 
 ### Patch Changes

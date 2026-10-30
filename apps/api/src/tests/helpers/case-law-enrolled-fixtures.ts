@@ -419,7 +419,9 @@ const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
       fieldId,
       CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
     ),
-).join("")}</body></html>`;
+).join(
+  "",
+)}<table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>
@@ -430,12 +432,14 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   zamítá.</p>
 </body></html>`;
 
-export const czNssFixture = (): EnrolledAdapterFixture => ({
+export const czNssFixture = (
+  detailHtml = CZ_NSS_DETAIL_PAGE,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
       const body = url.includes("/DokumentDetail/Index/")
-        ? CZ_NSS_DETAIL_PAGE
+        ? detailHtml
         : CZ_NSS_DOCUMENT_PAGE;
       return await Promise.resolve(
         new Response(body, {
@@ -943,19 +947,37 @@ const plSnDetailRecord = (): Record<string, unknown> => {
  * Built from the payloads directly rather than through the adapter's fetch
  * path. What these guards certify is the mapping from a stated field to the
  * row, and driving a stubbed transport to reach it only added this publisher's
- * one-second request gate to every run. No document is supplied: no declared
- * field is stored through it, so the fixture states exactly what the inventory
- * reads.
+ * one-second request gate to every run. The field inventory needs no PDF;
+ * the raw-capture guard supplies one to exercise document retention as well.
  */
-export const plSnFixture = (): EnrolledAdapterFixture => ({
+export const plSnFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
   buildDecision: async () => {
+    const documentBytes =
+      documentUrl === undefined
+        ? undefined
+        : new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
     const built = await assemblePlSnDecision({
       item: { ...PL_SN_LISTING_ROW },
       detail: normalizePlSnDetail(plSnDetailRecord()),
-      documentBytes: undefined,
+      documentBytes,
       rawParts: {
         listing: JSON.stringify(PL_SN_LISTING_ROW),
         detail: PL_SN_DETAIL_PAYLOAD,
+        ...(documentBytes === undefined
+          ? {}
+          : {
+              document: JSON.stringify({
+                success: true,
+                data: [
+                  {
+                    success: true,
+                    data: {
+                      raw: Buffer.from(documentBytes).toBase64(),
+                    },
+                  },
+                ],
+              }),
+            }),
       },
     });
     return built.type === "unkeyable"
