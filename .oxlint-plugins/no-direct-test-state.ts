@@ -27,7 +27,7 @@ import {
 const BASELINE_PATH = BASELINE_PATHS.testState;
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG_MODULE = "apps/api/src/env";
-const FIXTURE_MODULE = "apps/api/src/tests/helpers/test-state";
+const FIXTURE_MODULE = "@stll/test-state";
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 
 // Counts are validated by the same parser as the shrink-only membership check.
@@ -206,7 +206,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           mutation:
-            "Use createTestState from apps/api/src/tests/helpers/test-state.ts to mutate test environment or validated configuration; it restores file and test setup automatically.",
+            "Use createTestState from @stll/test-state to mutate test environment or validated configuration; it restores file and test setup automatically.",
           stale:
             "{{file}} now has {{count}} state mutations (baseline {{baseline}}). Shrink scripts/test-state-baseline.json in this change.",
           concurrent:
