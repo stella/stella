@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -25,10 +27,10 @@ const createFixture = () => {
   );
   writeFileSync(path.join(root, "apps/api/src/db/schema/one.ts"), table());
   writeFileSync(path.join(root, "apps/api/src/db/schema/two.ts"), "");
-  symlinkSync(
-    path.resolve(import.meta.dir, "../node_modules"),
-    path.join(root, "node_modules"),
-    "dir",
+  writeFileSync(path.join(root, ".gitignore"), "node_modules/\n");
+  writeFileSync(
+    path.join(root, "package.json"),
+    '{"private":true,"workspaces":["packages/*"]}\n',
   );
   const git = (...args: string[]) => {
     const result = Bun.spawnSync(["git", ...args], {
@@ -44,12 +46,21 @@ const createFixture = () => {
   git("add", ".");
   git("commit", "-m", "base");
   git("tag", "base");
+  const sourceModules = path.resolve(import.meta.dir, "../node_modules");
+  const fixtureModules = path.join(root, "node_modules");
+  mkdirSync(fixtureModules);
+  for (const entry of readdirSync(sourceModules)) {
+    symlinkSync(
+      path.join(sourceModules, entry),
+      path.join(fixtureModules, entry),
+    );
+  }
   return { root, git };
 };
-const runGuard = (root: string) =>
+const runGuard = (root: string, env = process.env) =>
   Bun.spawnSync(
     ["bun", path.resolve(import.meta.dir, "check-migration-schema.ts"), "base"],
-    { cwd: root, stdout: "pipe", stderr: "pipe" },
+    { cwd: root, env, stdout: "pipe", stderr: "pipe" },
   );
 afterEach(() => {
   for (const fixture of fixtures.splice(0)) {
@@ -98,6 +109,84 @@ test("a column change with a migration folder passes", () => {
   git("add", ".");
   git("commit", "-m", "change table");
   expect(runGuard(root).exitCode).toBe(0);
+});
+
+test("a non-SQL file in a migration folder does not hide a schema change", () => {
+  const { root, git } = createFixture();
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    table("integer"),
+  );
+  mkdirSync(path.join(root, "apps/api/drizzle/existing"), { recursive: true });
+  writeFileSync(
+    path.join(root, "apps/api/drizzle/existing/README.md"),
+    "note\n",
+  );
+  git("add", ".");
+  git("commit", "-m", "change schema and migration note");
+  expect(runGuard(root).exitCode).toBe(1);
+});
+
+test("a workspace helper change is resolved independently in each tree", () => {
+  const { root, git } = createFixture();
+  const packageRoot = path.join(root, "packages/schema-helper");
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(
+    path.join(packageRoot, "package.json"),
+    '{"name":"@fixture/schema-helper","type":"module","exports":"./index.ts"}\n',
+  );
+  writeFileSync(
+    path.join(packageRoot, "index.ts"),
+    'import { text } from "drizzle-orm/pg-core";\nexport const column = () => text("value");\n',
+  );
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    'import { pgTable } from "drizzle-orm/pg-core";\nimport { column } from "@fixture/schema-helper";\nexport const items = pgTable("items", { value: column() });\n',
+  );
+  mkdirSync(path.join(root, "node_modules/@fixture"), { recursive: true });
+  symlinkSync(
+    packageRoot,
+    path.join(root, "node_modules/@fixture/schema-helper"),
+  );
+  git("add", ".");
+  git("commit", "-m", "add schema helper");
+  git("tag", "-f", "base");
+  writeFileSync(
+    path.join(packageRoot, "index.ts"),
+    'import { integer } from "drizzle-orm/pg-core";\nexport const column = () => integer("value");\n',
+  );
+  git("add", ".");
+  git("commit", "-m", "change schema helper");
+  expect(runGuard(root).exitCode).toBe(1);
+});
+
+test("a failed worktree add preserves its error and removes the temporary directory", () => {
+  const { root } = createFixture();
+  const bin = path.join(root, "test-bin");
+  mkdirSync(bin);
+  const gitPath = Bun.spawnSync(["which", "git"]).stdout.toString().trim();
+  writeFileSync(
+    path.join(bin, "git"),
+    `#!/bin/sh\nif [ "$1 $2" = "worktree add" ]; then echo "injected add failure" >&2; exit 23; fi\nexec "${gitPath}" "$@"\n`,
+  );
+  chmodSync(path.join(bin, "git"), 0o755);
+  const before = new Set(
+    readdirSync(tmpdir()).filter((entry) =>
+      entry.startsWith("migration-schema-base-"),
+    ),
+  );
+  const result = runGuard(root, {
+    ...process.env,
+    PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+  });
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("injected add failure");
+  expect(
+    readdirSync(tmpdir()).filter(
+      (entry) =>
+        entry.startsWith("migration-schema-base-") && !before.has(entry),
+    ),
+  ).toEqual([]);
 });
 
 test("an unrelated comment in a schema file passes", () => {

@@ -2,7 +2,10 @@ import { panic } from "better-result";
 import { generateDrizzleJson } from "drizzle-kit/api-postgres";
 import {
   existsSync,
+  lstatSync,
+  mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -83,6 +86,101 @@ const runGit = (root: string, arguments_: readonly string[]) => {
   return result.stdout.toString();
 };
 
+const readPackageManifest = (manifestPath: string) => {
+  const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  if (manifest === null || typeof manifest !== "object") {
+    panic(`Could not map package manifest at ${manifestPath}.`);
+  }
+  return manifest;
+};
+
+const workspacePackages = (root: string) => {
+  const packageJson = readPackageManifest(path.join(root, "package.json"));
+  if (
+    !("workspaces" in packageJson) ||
+    !Array.isArray(packageJson.workspaces) ||
+    !packageJson.workspaces.every((workspace) => typeof workspace === "string")
+  ) {
+    panic(
+      "Could not map workspace packages: package.json workspaces must be an array of paths.",
+    );
+  }
+
+  const packages = new Map<string, string>();
+  for (const workspace of packageJson.workspaces) {
+    if (!workspace.endsWith("/*")) {
+      panic(`Could not map workspace pattern ${workspace}.`);
+    }
+    const parent = path.join(root, workspace.slice(0, -2));
+    if (!existsSync(parent)) {
+      continue;
+    }
+    for (const directory of readdirSync(parent)) {
+      const packageRoot = path.join(parent, directory);
+      const manifestPath = path.join(packageRoot, "package.json");
+      if (!existsSync(manifestPath)) {
+        continue;
+      }
+      const manifest = readPackageManifest(manifestPath);
+      if (
+        !("name" in manifest) ||
+        typeof manifest.name !== "string" ||
+        packages.has(manifest.name)
+      ) {
+        panic(`Could not map workspace package at ${packageRoot}.`);
+      }
+      packages.set(manifest.name, packageRoot);
+    }
+  }
+  return packages;
+};
+
+const linkBaseDependencies = (headRoot: string, baseRoot: string) => {
+  const headModules = path.join(headRoot, "node_modules");
+  const baseModules = path.join(baseRoot, "node_modules");
+  if (!existsSync(headModules)) {
+    panic(
+      `Cannot build the baseline node_modules: ${headModules} does not exist.`,
+    );
+  }
+  mkdirSync(baseModules);
+
+  const workspaces = workspacePackages(baseRoot);
+  const workspaceScopes = new Set(
+    [...workspaces.keys()]
+      .filter((name) => name.startsWith("@"))
+      .map((name) => name.split("/").at(0)),
+  );
+  for (const entry of readdirSync(headModules)) {
+    const headEntry = path.join(headModules, entry);
+    if (workspaces.has(entry)) {
+      continue;
+    }
+    if (workspaceScopes.has(entry)) {
+      const baseScope = path.join(baseModules, entry);
+      mkdirSync(baseScope);
+      for (const scopedEntry of readdirSync(headEntry)) {
+        if (!workspaces.has(`${entry}/${scopedEntry}`)) {
+          symlinkSync(
+            path.join(headEntry, scopedEntry),
+            path.join(baseScope, scopedEntry),
+          );
+        }
+      }
+      continue;
+    }
+    symlinkSync(headEntry, path.join(baseModules, entry));
+  }
+  for (const [name, packageRoot] of workspaces) {
+    const destination = path.join(baseModules, name);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    if (existsSync(destination) || lstatSync(packageRoot).isSymbolicLink()) {
+      panic(`Could not map workspace package ${name} to ${packageRoot}.`);
+    }
+    symlinkSync(packageRoot, destination, "dir");
+  }
+};
+
 export const checkMigrationRequirement = async (
   root: string,
   baseRef: string,
@@ -97,20 +195,20 @@ export const checkMigrationRequirement = async (
   ])
     .trim()
     .split("\n");
-  if (changedFiles.some((file) => file.startsWith("apps/api/drizzle/"))) {
+  if (
+    changedFiles.some((file) =>
+      /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u.test(file),
+    )
+  ) {
     return { status: "migration-present" } as const;
   }
 
   const baseRoot = mkdtempSync(path.join(tmpdir(), "migration-schema-base-"));
+  let worktreeAdded = false;
   try {
     runGit(root, ["worktree", "add", "--detach", baseRoot, mergeBase]);
-    if (!existsSync(path.join(baseRoot, "node_modules"))) {
-      symlinkSync(
-        path.join(root, "node_modules"),
-        path.join(baseRoot, "node_modules"),
-        "dir",
-      );
-    }
+    worktreeAdded = true;
+    linkBaseDependencies(root, baseRoot);
     const [baseSnapshot, headSnapshot] = await Promise.all([
       generateSchemaSnapshot(baseRoot),
       generateSchemaSnapshot(root),
@@ -123,7 +221,9 @@ export const checkMigrationRequirement = async (
       message: MISSING_MIGRATION_MESSAGE,
     } as const;
   } finally {
-    runGit(root, ["worktree", "remove", "--force", baseRoot]);
+    if (worktreeAdded) {
+      runGit(root, ["worktree", "remove", "--force", baseRoot]);
+    }
     rmSync(baseRoot, { recursive: true, force: true });
   }
 };
