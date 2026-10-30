@@ -75,7 +75,6 @@ import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-s
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
-import { errorTag } from "@/api/lib/errors/utils";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -83,7 +82,9 @@ import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -418,11 +419,53 @@ const sectionBlockIdsAt = (
  * read costs its rows their passage, never the page: the citation and the
  * decision it names are still the answer to what the court cited.
  */
+const citationTextReadFailure = failureSink({
+  event: "case_law.citation_passage.text_unavailable",
+  expected: [],
+});
+
 type DecisionTextGroupOptions = {
   readTombstones?: CorpusTombstoneReader;
   caseLawDb: CaseLawPublicReadDb;
   pointers: readonly PassageSourcePointer[];
   countries: readonly string[];
+};
+
+const readCitationAdmission = async ({
+  caseLawDb,
+  pointers,
+  countries,
+  readTombstones = readCorpusTombstones,
+}: DecisionTextGroupOptions) => {
+  const fresh = await caseLawDb(
+    async (tx) =>
+      await readPassageSourcePointers(
+        tx,
+        pointers.map(({ id }) => id),
+        countries,
+      ),
+  );
+  const freshById = new Map(fresh.map((pointer) => [pointer.id, pointer]));
+  const locations = pointers.flatMap(({ astS3Key }) =>
+    astS3Key === null ? [] : [astS3Key],
+  );
+  const tombstones = await readTombstones(locations);
+  const allowed = new Set(
+    pointers
+      .filter((pointer) => {
+        const current = freshById.get(pointer.id);
+        return (
+          current !== undefined &&
+          current.textWithheldReason === null &&
+          current.textEligibilityFingerprint ===
+            pointer.textEligibilityFingerprint &&
+          decisionPayloadKey(current) === decisionPayloadKey(pointer) &&
+          (pointer.astS3Key === null || !tombstones.has(pointer.astS3Key))
+        );
+      })
+      .map(({ id }) => id),
+  );
+  return { allowed, freshById };
 };
 
 export const readDecisionTextGroup = async ({
@@ -431,40 +474,14 @@ export const readDecisionTextGroup = async ({
   pointers,
   countries,
 }: DecisionTextGroupOptions): Promise<Map<string, DecisionTextRead>> => {
-  const admissionMatches = async () => {
-    const fresh = await caseLawDb(
-      async (tx) =>
-        await readPassageSourcePointers(
-          tx,
-          pointers.map(({ id }) => id),
-          countries,
-        ),
-    );
-    const freshById = new Map(fresh.map((pointer) => [pointer.id, pointer]));
-    const locations = pointers.flatMap(({ astS3Key }) =>
-      astS3Key === null ? [] : [astS3Key],
-    );
-    const tombstones = await readTombstones(locations);
-    return new Set(
-      pointers
-        .filter((pointer) => {
-          const current = freshById.get(pointer.id);
-          return (
-            current !== undefined &&
-            current.textWithheldReason === null &&
-            current.textEligibilityFingerprint ===
-              pointer.textEligibilityFingerprint &&
-            decisionPayloadKey(current) === decisionPayloadKey(pointer) &&
-            (pointer.astS3Key === null || !tombstones.has(pointer.astS3Key))
-          );
-        })
-        .map(({ id }) => id),
-    );
-  };
-  const before = await Result.tryPromise(admissionMatches);
+  const admission = { caseLawDb, pointers, countries, readTombstones };
+  const before = await Result.tryPromise(() =>
+    readCitationAdmission(admission),
+  );
   if (Result.isError(before)) {
-    logger.warn("case_law.citation_passage.eligibility_unavailable", {
-      "error.type": errorTag(before.error),
+    observeFailure(before.error, {
+      sink: citationTextReadFailure,
+      ctx: { phase: "admission" },
     });
     return new Map(
       pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
@@ -491,13 +508,33 @@ export const readDecisionTextGroup = async ({
     };
   };
   const readAst = payloadBatch("documentAst");
-  const readSections = payloadBatch("sections");
+  const sectionsRead = await Result.tryPromise(() =>
+    caseLawDb(
+      async (tx) =>
+        await readDecisionVersionedPayloads({
+          tx,
+          versions: pointers.filter(({ id }) => before.value.allowed.has(id)),
+          column: "sections",
+        }),
+    ),
+  );
+  if (Result.isError(sectionsRead)) {
+    observeFailure(sectionsRead.error, {
+      sink: citationTextReadFailure,
+      ctx: { phase: "sections" },
+    });
+    return new Map(
+      pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
+    );
+  }
+  const readSections = (pointer: PassageSourcePointer) =>
+    sectionsRead.value.get(pointer.id) ?? { kind: "version-changed" as const };
   const changed = new Set<SafeId<"caseLawDecision">>();
   const entries = await Promise.all(
     pointers.map(async (pointer) => {
       if (
         pointer.textWithheldReason !== null ||
-        !before.value.has(pointer.id)
+        !before.value.allowed.has(pointer.id)
       ) {
         return null;
       }
@@ -533,13 +570,13 @@ export const readDecisionTextGroup = async ({
           ast,
           onVersionChanged,
           readSections: async () => {
-            const result = await readSections(pointer);
+            const result = readSections(pointer);
             return result.kind === "version-changed"
               ? DECISION_ROW_AST_VERSION_CHANGED
               : result.value;
           },
         });
-        const evidence = await readSections(pointer);
+        const evidence = readSections(pointer);
         if (evidence.kind === "version-changed") {
           onVersionChanged();
           return null;
@@ -552,8 +589,9 @@ export const readDecisionTextGroup = async ({
             };
       });
       if (Result.isError(read)) {
-        logger.warn("case_law.citation_passage.ast_unavailable", {
-          "error.type": errorTag(read.error),
+        observeFailure(read.error, {
+          sink: citationTextReadFailure,
+          ctx: { phase: "payload" },
         });
         return { status: "unavailable" as const, id: pointer.id };
       }
@@ -590,16 +628,35 @@ export const readDecisionTextGroup = async ({
       });
     }
   }
-  const after = await Result.tryPromise(admissionMatches);
+  const after = await Result.tryPromise(() => readCitationAdmission(admission));
+  if (Result.isError(after)) {
+    observeFailure(after.error, {
+      sink: citationTextReadFailure,
+      ctx: { phase: "revalidation" },
+    });
+  }
   for (const pointer of pointers) {
     if (
       pointer.textWithheldReason === null &&
       (changed.has(pointer.id) ||
-        !before.value.has(pointer.id) ||
+        !before.value.allowed.has(pointer.id) ||
         Result.isError(after) ||
-        !after.value.has(pointer.id))
+        !after.value.allowed.has(pointer.id))
     ) {
-      textByDecision.set(pointer.id, UNAVAILABLE_DECISION_TEXT);
+      const current = Result.isError(after)
+        ? undefined
+        : after.value.freshById.get(pointer.id);
+      textByDecision.set(
+        pointer.id,
+        current !== undefined && current.textWithheldReason !== null
+          ? {
+              type: "source",
+              text: null,
+              textWithheldReason: current.textWithheldReason,
+              extractionWarnings: current.extractionWarnings,
+            }
+          : UNAVAILABLE_DECISION_TEXT,
+      );
     }
   }
   return textByDecision;

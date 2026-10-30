@@ -22,6 +22,7 @@ const changes = {
   publication: sql`DELETE FROM case_law_published_decisions`,
   redistribution: sql`UPDATE case_law_sources SET descriptor = '{"allowsRedistribution":false,"allowsDerivedAi":true}'::jsonb`,
   derivedAi: sql`UPDATE case_law_sources SET descriptor = '{"allowsRedistribution":true,"allowsDerivedAi":false}'::jsonb`,
+  revisionPolicy: sql`WITH updated AS (UPDATE case_law_published_decisions SET updated_at = '2026-01-01T00:00:00.123457Z' RETURNING id) UPDATE case_law_sources SET descriptor = '{"allowsRedistribution":true,"allowsDerivedAi":false}'::jsonb`,
   tombstone: sql`SELECT 1`,
 };
 for (const [fence, change] of Object.entries(changes)) {
@@ -133,7 +134,15 @@ for (const [fence, change] of Object.entries(changes)) {
           },
         });
         expect(reads).toBeGreaterThanOrEqual(2);
-        expect(result.get(id)).toEqual({ type: "unavailable" });
+        if (fence === "derivedAi" || fence === "revisionPolicy") {
+          expect(result.get(id)).toMatchObject({
+            type: "source",
+            text: null,
+            textWithheldReason: "source_licence",
+          });
+        } else {
+          expect(result.get(id)).toEqual({ type: "unavailable" });
+        }
       } finally {
         await client.close();
       }
