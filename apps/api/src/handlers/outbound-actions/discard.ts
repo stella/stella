@@ -94,7 +94,7 @@ const discardOutboundAction = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(discardOutboundAction.handler, {
+declareAggregateMutation(discardOutboundAction, {
   type: "aggregate",
   aggregates: ["outboundAction"],
 });

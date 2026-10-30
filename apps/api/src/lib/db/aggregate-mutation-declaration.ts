@@ -13,7 +13,7 @@ export type AggregateMutationDeclaration =
 const declarations = new WeakMap<object, AggregateMutationDeclaration>();
 
 /** Records which aggregates a route's mutation owns, keyed by its definition. */
-export const declareAggregateMutation = <T extends object>(
+export const declareAggregateMutation = <T extends RouteEntry["definition"]>(
   definition: T,
   declaration: AggregateMutationDeclaration,
 ): T => {

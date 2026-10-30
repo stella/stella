@@ -295,7 +295,7 @@ const confirmOutboundAction = createConfirmOutboundActionHandler(
   OUTBOUND_ACTION_EXECUTORS,
 );
 
-declareAggregateMutation(confirmOutboundAction.handler, {
+declareAggregateMutation(confirmOutboundAction, {
   type: "aggregate",
   aggregates: ["outboundAction"],
 });
