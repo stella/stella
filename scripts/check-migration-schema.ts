@@ -16,11 +16,31 @@ import path from "node:path";
 const MISSING_MIGRATION_MESSAGE =
   "ERROR: Database schema changed without a migration file in apps/api/drizzle/.";
 
-const readSchemaInputs = (root: string) => {
-  const config = readFileSync(
-    path.join(root, "apps/api/drizzle.config.ts"),
-    "utf-8",
+const readDrizzleConfig = (root: string) =>
+  readFileSync(path.join(root, "apps/api/drizzle.config.ts"), "utf-8");
+
+// drizzle-kit generates migrations only for the configured schemas, so the
+// snapshots compare exactly those; without the key drizzle-kit uses public.
+const DRIZZLE_DEFAULT_SCHEMA_FILTER = ["public"];
+
+const readSchemaFilter = (root: string) => {
+  const filterSource = /schemaFilter\s*:\s*\[([^\]]*)\]/mu
+    .exec(readDrizzleConfig(root))
+    ?.at(1);
+  if (filterSource === undefined) {
+    return DRIZZLE_DEFAULT_SCHEMA_FILTER;
+  }
+  const schemas = [...filterSource.matchAll(/["'`]([^"'`]+)["'`]/gu)].map(
+    (match) => match.at(1) ?? panic("Schema filter capture was empty."),
   );
+  if (schemas.length === 0) {
+    panic("apps/api/drizzle.config.ts schemaFilter names no schema.");
+  }
+  return schemas;
+};
+
+const readSchemaInputs = (root: string) => {
+  const config = readDrizzleConfig(root);
   const schemaMatch = /schema\s*:\s*\[([\s\S]*?)\]/mu.exec(config);
   const schemaSource = schemaMatch?.at(1);
   if (!schemaSource) {
@@ -64,7 +84,11 @@ const generateSchemaSnapshot = async (root: string) => {
     }),
   );
   const schema = Object.fromEntries(schemaEntries.flat());
-  const { ddl } = await generateDrizzleJson(schema, undefined, ["public"]);
+  const { ddl } = await generateDrizzleJson(
+    schema,
+    undefined,
+    readSchemaFilter(root),
+  );
   // Entity order follows schema input order, which a table move changes; each
   // entity is self-contained, so sorting them keeps only semantic differences.
   // Arrays inside an entity (column lists) stay ordered: their order is DDL.

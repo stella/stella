@@ -136,6 +136,24 @@ test("deleting an existing migration does not count as providing one", () => {
   expect(runGuard(root).exitCode).toBe(1);
 });
 
+test("a table in a configured non-public schema needs a migration", () => {
+  const { root, git } = createFixture();
+  writeFileSync(
+    path.join(root, "apps/api/drizzle.config.ts"),
+    'export default { schema: ["./src/db/schema/one.ts", "./src/db/schema/two.ts"], schemaFilter: ["public", "custom"] };\n',
+  );
+  git("add", ".");
+  git("commit", "-m", "configure schemas");
+  git("tag", "-f", "base");
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/two.ts"),
+    'import { pgSchema, text } from "drizzle-orm/pg-core";\nexport const custom = pgSchema("custom");\nexport const notes = custom.table("notes", { value: text("value") });\n',
+  );
+  git("add", ".");
+  git("commit", "-m", "add custom schema table");
+  expect(runGuard(root).exitCode).toBe(1);
+});
+
 test("a non-SQL file in a migration folder does not hide a schema change", () => {
   const { root, git } = createFixture();
   writeFileSync(
