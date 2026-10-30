@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "SK_COURTS",
+  "key": "sk-courts",
+  "parserVersion": 22,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving first-line and hanging indentation, line pitch, short final lines and paragraph gaps; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own; publisher head-matter ordering is revalidated across the complete AST"
+  }
+}

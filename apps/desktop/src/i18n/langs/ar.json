@@ -6,6 +6,7 @@
     "activityRecording": "النشاط: جارٍ التسجيل · {hours} س اليوم",
     "activityPaused": "النشاط: متوقف مؤقتًا · {hours} س اليوم",
     "activityOff": "النشاط: متوقف",
+    "openActivity": "فتح النشاط",
     "activityNow": "الآن: {name}",
     "activityPause": "إيقاف التسجيل مؤقتًا",
     "activityResume": "استئناف التسجيل",

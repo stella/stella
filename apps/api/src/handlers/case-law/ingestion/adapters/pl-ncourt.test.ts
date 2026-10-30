@@ -239,7 +239,7 @@ describe("identity", () => {
 
   test("a stored row replays to the same identity and the same decision", async () => {
     const decision = await pairDecision();
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -383,7 +383,7 @@ describe("building a judgment", () => {
     expect(reconciled.type).toBe("built-supplement");
 
     // A replay of its stored payload is the supplement again.
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(supplement.document.sourceRaw ?? ""),
       contentType: supplement.document.sourceRawContentType ?? null,
       caseNumber: supplement.document.caseNumber,
@@ -610,7 +610,7 @@ describe("building a judgment", () => {
     expect(decision.metadata["documentStatus"] === "publisher-404").toBe(true);
 
     // The status is kept in the envelope, so a replay states it too.
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -778,7 +778,7 @@ describe("decision types", () => {
         ),
       ).toBe(true);
       for (const metadata of [{}, { documentRole: role }]) {
-        const replayed = plNcourtAdapter.reparseStoredRaw?.({
+        const replayed = await plNcourtAdapter.reparseStoredRaw?.({
           raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
           contentType: decision.sourceRawContentType ?? null,
           caseNumber: decision.caseNumber,
@@ -1871,7 +1871,7 @@ describe("the walk", () => {
     );
 
     // The audit row replays to itself.
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(quarantine.sourceRaw ?? ""),
       contentType: quarantine.sourceRawContentType ?? null,
       caseNumber: quarantine.caseNumber,

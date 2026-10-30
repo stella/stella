@@ -5,6 +5,11 @@ export const MCP_DOCUMENTS_HTTP_PATH = "/mcp-documents" as const;
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized" as const;
 export const MCP_LAW_HTTP_PATH = "/mcp-law" as const;
 
+export const ACCOUNT_EXPORT_SCOPES = {
+  read: "stella:account_export_read",
+  write: "stella:account_export_write",
+} as const;
+
 // Browser-safe literal; registry.test.ts compares both directions against
 // every scope required by the tools served on /mcp.
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
@@ -37,6 +42,8 @@ export const MCP_ADVANCED_RESOURCE_SCOPES = [
   "stella:billing_write",
   "stella:admin_read",
   "stella:admin_write",
+  ACCOUNT_EXPORT_SCOPES.read,
+  ACCOUNT_EXPORT_SCOPES.write,
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
@@ -60,6 +67,8 @@ export const MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE = {
   "stella:billing_write": null,
   "stella:admin_read": null,
   "stella:admin_write": null,
+  "stella:account_export_read": null,
+  "stella:account_export_write": null,
   "stella:onboarding": null,
   "stella:skills": null,
   "stella:external_mcps": null,
@@ -100,6 +109,8 @@ const MCP_RESOURCE_SCOPE_ACCESS = {
   "stella:billing_write": "write-only",
   "stella:admin_read": "read-capable",
   "stella:admin_write": "write-only",
+  "stella:account_export_read": "read-capable",
+  "stella:account_export_write": "write-only",
   "stella:onboarding": "read-capable",
   "stella:skills": "read-capable",
   "stella:external_mcps": "read-capable",

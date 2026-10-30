@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "SK_US",
+  "key": "sk-us",
+  "parserVersion": 19,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "multiline preamble titles and document-unique block anchors are rebuilt from stored markup, alongside paragraph text, paragraph numbers and anonymization markers before whitespace trimming, including unpainted non-breaking-space redaction runs and uneven letter-spaced chunks witnessed by intact words; none has feature storage of its own; publisher head-matter ordering is revalidated across the complete AST"
+  }
+}
