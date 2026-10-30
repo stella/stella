@@ -125,6 +125,10 @@ export const createSearchHistoryCountryRepair = ({
   decrypt = decryptContent,
 }: RepairRuntimeOptions = {}): OnlineRepair => ({
   name: REPAIR_NAME,
+  introducedBy: {
+    type: "code",
+    owner: "src/db/search-history-country-repair.ts",
+  },
   readCompletion,
   repair: async (connection) => {
     const runtime = createBackfillRuntime({

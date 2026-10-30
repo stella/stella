@@ -252,7 +252,7 @@ export const BillingCodesDialog = ({
                       </span>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
                     <Button
                       className="size-7"
                       onClick={() => handleToggleActive(code.id, code.active)}

@@ -86,6 +86,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "playbook_definitions",
   "rate_entries",
   "report_exports",
+  "request_idempotency_receipts",
   "sanctions_contact_matches",
   "saved_searches",
   "saved_time_narratives",

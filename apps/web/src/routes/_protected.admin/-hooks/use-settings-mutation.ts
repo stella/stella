@@ -1,4 +1,4 @@
-import { hashKey, useMutation, useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 
@@ -11,6 +11,8 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 
 type SuccessToast = { title: string; description?: string };
 
@@ -22,7 +24,10 @@ type ErrorToast = { title: string; description?: string };
 type UseSettingsMutationOptions<TVariables, TData> = {
   exceptionScope:
     HandlerExceptionScope | ((variables: TVariables) => HandlerExceptionScope);
-  mutationFn: (variables: TVariables) => Promise<TData>;
+  mutationFn: (
+    variables: TVariables,
+    request: IdempotentRequest,
+  ) => Promise<TData>;
   /** Key to invalidate once the mutation resolves. */
   invalidate: QueryKey;
   /**
@@ -123,12 +128,13 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
 
   const invalidatesOnSettle = options.invalidateOn === "settled";
 
-  return useMutation({
+  return useIdempotentMutation({
+    idempotencyScope: activeOrganizationId,
     scope: { id: settingsMutationScopeId(options.invalidate) },
-    mutationFn: async (variables: TVariables) => {
+    mutationFn: async (variables: TVariables, request) => {
       // A changed organization rejects before the write is sent.
       readQueryResult(await checkSettingsOrganization(activeOrganizationId));
-      return await options.mutationFn(variables);
+      return await options.mutationFn(variables, request);
     },
     onSuccess: (data, variables) => {
       if (!invalidatesOnSettle) {

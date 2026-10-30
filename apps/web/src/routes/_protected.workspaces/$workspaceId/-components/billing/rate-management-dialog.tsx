@@ -40,6 +40,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { apiFieldIssueMessage, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
@@ -116,21 +117,27 @@ const RateTablesView = ({
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
   const analytics = useAnalytics();
 
-  const createTable = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      ...body
-    }: {
-      workspaceId: string;
-      name: string;
-      currency: string;
-      isDefault?: boolean;
-    }) => {
+  const createTable = useIdempotentMutation({
+    mutationFn: async (
+      {
+        workspaceId: ws,
+        ...body
+      }: {
+        workspaceId: string;
+        name: string;
+        currency: string;
+        isDefault?: boolean;
+      },
+      request,
+    ) => {
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })
-        .put({
-          ...body,
-        });
+        .put(
+          {
+            ...body,
+          },
+          request,
+        );
 
       return unwrapApiResponse(response);
     },
@@ -284,7 +291,7 @@ const RateTablesView = ({
                 </span>
               </button>
 
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
                 {!table.isDefault && (
                   <Button
                     className="size-7"
@@ -471,38 +478,44 @@ const RateEntriesView = ({
   const table = tables.find((tbl) => tbl.id === rateTableId);
   const analytics = useAnalytics();
 
-  const createEntry = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      rateTableId: rtId,
-      ...body
-    }: {
-      workspaceId: string;
-      rateTableId: string;
-      userId?: string | null;
-      role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
-      activityCodeId?: string | null;
-      hourlyRate: number;
-      effectiveFrom: string;
-      effectiveTo?: string | null;
-    }) => {
+  const createEntry = useIdempotentMutation({
+    mutationFn: async (
+      {
+        workspaceId: ws,
+        rateTableId: rtId,
+        ...body
+      }: {
+        workspaceId: string;
+        rateTableId: string;
+        userId?: string | null;
+        role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+        activityCodeId?: string | null;
+        hourlyRate: number;
+        effectiveFrom: string;
+        effectiveTo?: string | null;
+      },
+      request,
+    ) => {
       const { userId, activityCodeId, ...restBody } = body;
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })({
           rateTableId: toSafeId<"rateTable">(rtId),
         })
-        .entries.put({
-          ...restBody,
-          ...(activityCodeId !== undefined && {
-            activityCodeId:
-              activityCodeId === null
-                ? null
-                : toSafeId<"billingCode">(activityCodeId),
-          }),
-          ...(userId !== undefined && {
-            userId: userId === null ? null : toSafeId<"user">(userId),
-          }),
-        });
+        .entries.put(
+          {
+            ...restBody,
+            ...(activityCodeId !== undefined && {
+              activityCodeId:
+                activityCodeId === null
+                  ? null
+                  : toSafeId<"billingCode">(activityCodeId),
+            }),
+            ...(userId !== undefined && {
+              userId: userId === null ? null : toSafeId<"user">(userId),
+            }),
+          },
+          request,
+        );
 
       return unwrapApiResponse(response);
     },
@@ -624,7 +637,7 @@ const RateEntriesView = ({
 
               <Button
                 aria-label={t("common.delete")}
-                className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
+                className="size-7 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
                 onClick={() => handleDelete(entry.id)}
                 size="icon"
                 variant="destructive-ghost"

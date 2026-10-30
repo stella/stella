@@ -12,6 +12,10 @@ export const SEARCH_HISTORY_COUNTRY_CONSTRAINTS = [
 
 export const SEARCH_HISTORY_COUNTRY_CONSTRAINT_VALIDATION = {
   name: CONSTRAINT_NAME,
+  introducedBy: {
+    type: "code",
+    owner: "src/db/search-history-country-constraint-validation.ts",
+  },
   readCompletion: async (connection) =>
     await readConstraintCompletion({
       connection,

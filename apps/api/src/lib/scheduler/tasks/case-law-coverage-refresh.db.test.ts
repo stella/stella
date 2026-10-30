@@ -21,7 +21,7 @@ import {
 } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
-import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
+import { CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -68,22 +68,22 @@ test("coverage refresh publishes complete answers atomically and retains them on
   const complete = createCaseLawCoverageRefreshTask({
     createRuntime,
     compute: async () => ({
-      answer: CASE_LAW_COVERAGE_FIXTURE,
+      answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
       complete: true,
     }),
   });
   expect(await complete(context)).toBeUndefined();
   const published = (await db.select().from(caseLawCoverageSummaries)).at(0);
-  expect(published?.answer).toEqual(CASE_LAW_COVERAGE_FIXTURE);
+  expect(published?.answer).toEqual(CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE);
   expect(published?.generatedAt.toISOString()).toBe(
-    CASE_LAW_COVERAGE_FIXTURE.generatedAt,
+    CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE.generatedAt,
   );
   expect(published?.sourcePolicy).toBe("[]");
   const degraded = createCaseLawCoverageRefreshTask({
     createRuntime,
     compute: async () => ({
       answer: {
-        ...CASE_LAW_COVERAGE_FIXTURE,
+        ...CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
         generatedAt: "2026-10-01T12:05:00.000Z",
       },
       complete: false,
@@ -179,7 +179,7 @@ test("coverage refresh publishes complete answers atomically and retains them on
       }),
     compute: async () => {
       computations += 1;
-      return { answer: CASE_LAW_COVERAGE_FIXTURE, complete: true };
+      return { answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE, complete: true };
     },
   });
   expect(await held(context)).toBeUndefined();
