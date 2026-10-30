@@ -13,6 +13,7 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../../../..");
 const API_SOURCE = path.join(REPO_ROOT, "apps/api/src");
 const RECORD_CALL =
   /\brecordSystemAudit\(\s*[A-Za-z_$][\w$]*,\s*"(?<actor>system:[a-z0-9-]+)"/gu;
+const RAW_RUN_ACTOR = /\bconst AUDIT_ACTOR = "(?<actor>system:[a-z0-9-]+)"/gu;
 
 /** Each production file that records through `recordSystemAudit`, by actor. */
 const recordersByActor = (): Map<
@@ -26,7 +27,12 @@ const recordersByActor = (): Map<
       continue;
     }
     const source = readFileSync(path.join(API_SOURCE, file), "utf-8");
-    for (const match of source.matchAll(RECORD_CALL)) {
+    const rawRunRecorders =
+      source.includes("INSERT INTO public.system_audit_runs") &&
+      source.includes("systemAuditRow(AUDIT_ACTOR,")
+        ? [...source.matchAll(RAW_RUN_ACTOR)]
+        : [];
+    for (const match of [...source.matchAll(RECORD_CALL), ...rawRunRecorders]) {
       const actor = match.groups?.["actor"];
       if (actor !== undefined) {
         const files = recorders.get(actor) ?? [];

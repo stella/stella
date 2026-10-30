@@ -1,0 +1,8 @@
+{
+  "add-column": "The three nullable, default-free history and owner columns are catalog additions without rewriting existing history rows; acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "add-constraint": "The country CHECK is NOT VALID, so adding it enforces new writes without scanning old history; the registered online phase validates old rows after release of the schema lock.",
+  "create-table-references": "The new empty country-clear table adds foreign keys to existing organization, user, and owner rows without scanning a populated child table; referenced-table lock acquisition is bounded by 1s and the statement by 5s.",
+  "row-level-security": "ENABLE and FORCE RLS affect only the newly created empty country-clear table and are catalog changes under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The tenant and owner policies are installed only on the new empty country-clear table; each catalog statement has 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "Installing the two stale-import fence triggers on existing history entries is catalog-only without a row scan; the writer-blocking lock has 1s acquisition and 5s statement bounds."
+}

@@ -61,6 +61,7 @@ const upsertSearchHistory = createSafeRootHandler(
             tx,
             rows,
             mode: "record",
+            timestampSource: "database",
             recordAuditEvent,
           }),
       ),

@@ -26,6 +26,7 @@ import {
   properties,
   requestIdempotencyReceipts,
   searchHistoryEntries,
+  searchHistoryOwners,
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
@@ -375,6 +376,14 @@ if (!databaseUrl || !runPostgresTests) {
           report: { ...report, desktopId: Bun.randomUUIDv7() },
         });
         const historyLookupKey = Bun.randomUUIDv7();
+        await db
+          .insert(searchHistoryOwners)
+          .values([
+            { organizationId, userId },
+            { organizationId, userId: actorUserId },
+            { organizationId: otherOrganizationId, userId },
+          ])
+          .onConflictDoNothing();
         await db.insert(searchHistoryEntries).values(
           [
             { organizationId, userId },

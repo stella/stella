@@ -79,6 +79,11 @@ const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
   "20261020000100_stored_keys_organization_scope",
   "migration.sql",
 );
+const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261030204555_search_history_country_expand",
+  "migration.sql",
+);
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260911150000_statute_citation_counts",
@@ -165,6 +170,25 @@ export const installPgliteFlowTransitions = async (db: PgliteSchemaDb) => {
       if (statement.trim()) {
         await db.execute(sql.raw(statement));
       }
+    }
+  }
+};
+
+/** Install the same stale-import fence that protects the PostgreSQL history writer. */
+export const installPgliteSearchHistoryClearFence = async (
+  db: PgliteSchemaDb,
+) => {
+  for (const statement of readMigrationStatements(
+    SEARCH_HISTORY_COUNTRY_MIGRATION_PATH,
+  )) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith(
+        "CREATE FUNCTION public.search_history_entries_clear_cutoff_fence",
+      ) ||
+      source.startsWith("CREATE TRIGGER search_history_entries_clear_cutoff_")
+    ) {
+      await db.execute(sql.raw(statement));
     }
   }
 };

@@ -15,6 +15,16 @@ export const scheduledJobsModeSchema = v.optional(
   "enabled",
 );
 
+export const contentEncryptionKeySchema = v.optional(
+  v.pipe(
+    v.string(),
+    v.regex(
+      /^[0-9a-f]{64}$/iu,
+      "CONTENT_ENCRYPTION_KEY must be a 64-character hex string",
+    ),
+  ),
+);
+
 /**
  * Environment shared by the API process and document-processing worker.
  * Keeping this boundary separate lets the worker boot without validating
@@ -32,15 +42,7 @@ export const envDocumentProcessingWorkerServerSchema = {
   DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
-  CONTENT_ENCRYPTION_KEY: v.optional(
-    v.pipe(
-      v.string(),
-      v.regex(
-        /^[0-9a-f]{64}$/iu,
-        "CONTENT_ENCRYPTION_KEY must be a 64-character hex string",
-      ),
-    ),
-  ),
+  CONTENT_ENCRYPTION_KEY: contentEncryptionKeySchema,
 };
 
 type DocumentProcessingEnvInvariantInput = {
@@ -49,6 +51,17 @@ type DocumentProcessingEnvInvariantInput = {
   runtimeMode: RuntimeMode;
   scheduledJobsMode: v.InferOutput<typeof scheduledJobsModeSchema>;
 };
+
+export const contentEncryptionKeyInvariantViolation = ({
+  contentEncryptionKey,
+  runtimeMode,
+}: Pick<
+  DocumentProcessingEnvInvariantInput,
+  "contentEncryptionKey" | "runtimeMode"
+>): string | null =>
+  runtimeMode.mode !== RUNTIME_MODE.open && !contentEncryptionKey
+    ? "CONTENT_ENCRYPTION_KEY is required outside local development."
+    : null;
 
 /**
  * REDIS_URL is declared in the base schema and optional there, so a process
@@ -71,8 +84,8 @@ export const documentProcessingEnvInvariantViolation = ({
   if (redisUrl === undefined) {
     return "REDIS_URL is required by the API server and the document-processing worker.";
   }
-  if (runtimeMode.mode !== RUNTIME_MODE.open && !contentEncryptionKey) {
-    return "CONTENT_ENCRYPTION_KEY is required outside local development.";
-  }
-  return null;
+  return contentEncryptionKeyInvariantViolation({
+    contentEncryptionKey,
+    runtimeMode,
+  });
 };

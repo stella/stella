@@ -140,6 +140,11 @@ import {
   SANCTIONS_MONITORING_CONSTRAINTS,
 } from "./sanctions-monitoring-constraint-validation";
 import {
+  SEARCH_HISTORY_COUNTRY_CONSTRAINT_VALIDATION,
+  SEARCH_HISTORY_COUNTRY_CONSTRAINTS,
+} from "./search-history-country-constraint-validation";
+import { SEARCH_HISTORY_COUNTRY_REPAIR } from "./search-history-country-repair";
+import {
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINTS,
 } from "./time-entry-submitted-constraint-validation";
@@ -251,6 +256,24 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "search_history_entries_owner_read_identity_idx" ON public."search_history_entries" (organization_id, user_id, kind, COALESCE(base_lookup_key, lookup_key), country, last_used_at, id)`,
+    definitionBody:
+      "ON public.search_history_entries USING btree (organization_id, user_id, kind, COALESCE(base_lookup_key, lookup_key), country, last_used_at, id)",
+    isUnique: false,
+    name: "search_history_entries_owner_read_identity_idx",
+    introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
+    tableName: "search_history_entries",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "search_history_entries_legacy_documents_pending_idx" ON public."search_history_entries" (id) WHERE country IS NULL AND kind <> 'search'`,
+    definitionBody:
+      "ON public.search_history_entries USING btree (id) WHERE ((country IS NULL) AND (kind <> 'search'::text))",
+    isUnique: false,
+    name: "search_history_entries_legacy_documents_pending_idx",
+    introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
+    tableName: "search_history_entries",
+  },
   {
     name: "chat_run_log_entries_message_snapshot_idx",
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
@@ -942,6 +965,8 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...FUNCTION_DEPENDENT_INDEX_REINDEXES,
   CHAT_RUN_TEXT_BOUNDARIES,
   ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
+  SEARCH_HISTORY_COUNTRY_REPAIR,
+  SEARCH_HISTORY_COUNTRY_CONSTRAINT_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
   CLIENT_INVOICE_BACKFILL,
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
@@ -989,6 +1014,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...DECISION_DATE_CEILING_CONSTRAINTS,
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
+    ...SEARCH_HISTORY_COUNTRY_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
     ...READER_ANNOTATION_CONSTRAINTS,

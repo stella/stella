@@ -77,6 +77,7 @@ export const LawRecent = ({
   const history = useLawHistory({ filter, country });
   return (
     <LawRecentList
+      key={country}
       onSearch={onSearch}
       history={history}
       filter={filter}

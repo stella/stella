@@ -91,6 +91,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "sanctions_contact_matches",
   "saved_searches",
   "saved_time_narratives",
+  "search_history_country_clears",
   "search_history_entries",
   "search_history_owners",
   "search_history_tombstones",

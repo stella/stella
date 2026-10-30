@@ -33,7 +33,7 @@ import { oauthClient, organization, user } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -351,8 +351,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
       sub: `sub-stepup-${Bun.randomUUIDv7()}`,
     };
     await createHumanSession(stepUpIdentity.email);
-    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    const restoreKey = withoutContentEncryptionKeyForTesting();
     try {
       for (const identity of [readyIdentity, stepUpIdentity]) {
         const response = await postIdentity(
@@ -365,7 +364,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
         expect(body["claim_token"]).toBeUndefined();
       }
     } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+      restoreKey();
     }
   });
 });

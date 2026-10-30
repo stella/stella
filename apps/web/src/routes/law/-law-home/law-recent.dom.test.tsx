@@ -775,6 +775,60 @@ test("recents list only the selected jurisdiction's searches and opened decision
   }
 });
 
+test("clear confirmation resets across countries and submits the selected country", async () => {
+  const fixture = await mountServerHistory(({ url, method }) =>
+    Response.json(
+      method === "DELETE"
+        ? { deleted: 1 }
+        : {
+            scope: {
+              userId: "scoped-history-reader",
+              organizationId: "scoped-history-org-a",
+            },
+            items: [
+              {
+                ...seed[0],
+                query: `History ${String(url.searchParams.get("country"))}`,
+              },
+            ],
+            nextCursor: null,
+            limit: 20,
+          },
+    ),
+  );
+  try {
+    await waitFor(() => expect(screen.getByText("History CZE")).toBeTruthy());
+    await click(messages.lawHome.clearRecent);
+    const staleConfirm = screen.getByRole("button", {
+      name: messages.common.delete,
+    });
+    await fixture.setCountry("POL");
+    await waitFor(() => expect(screen.getByText("History POL")).toBeTruthy());
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await act(async () => fireEvent.click(staleConfirm));
+    expect(
+      fixture.requests.filter(({ method }) => method === "DELETE"),
+    ).toHaveLength(0);
+    await fixture.setCountry("CZE");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await fixture.setCountry("POL");
+    await click(messages.lawHome.clearRecent);
+    await click(messages.common.delete);
+    await waitFor(() =>
+      expect(
+        fixture.requests.filter(({ method }) => method === "DELETE"),
+      ).toHaveLength(1),
+    );
+    expect(
+      fixture.requests
+        .find(({ method }) => method === "DELETE")
+        ?.url.searchParams.get("country"),
+    ).toBe("POL");
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("clear confirmation belongs to its opening organization and cannot survive an organization round trip", async () => {
   const organizationA = "scoped-history-org-a";
   const organizationB = "scoped-history-org-b";

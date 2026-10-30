@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   decryptAIConfig,
@@ -86,7 +86,6 @@ const settingsReader = (row: SettingsRow) => {
 
 describe("loadOrgAIConfig", () => {
   test("every runtime loader exposes only the shared confidentiality allowlist", async () => {
-    const key = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
     const fixtures = {
       "incomplete-envelope": {
         aiConfigEncrypted: Buffer.from("stored-incomplete"),
@@ -122,13 +121,15 @@ describe("loadOrgAIConfig", () => {
     const isReason = (value: string): value is keyof typeof fixtures =>
       Object.hasOwn(fixtures, value);
 
-    try {
-      for (const reason of Object.keys(fixtures)) {
-        if (!isReason(reason)) {
-          continue;
-        }
-        envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
-          reason === "missing-key" ? undefined : key;
+    for (const reason of Object.keys(fixtures)) {
+      if (!isReason(reason)) {
+        continue;
+      }
+      const restoreKey =
+        reason === "missing-key"
+          ? withoutContentEncryptionKeyForTesting()
+          : undefined;
+      try {
         for (const [name, load] of Object.entries(loaders)) {
           const classified: unknown[] = [];
           const discarded: unknown[] = [];
@@ -198,9 +199,9 @@ describe("loadOrgAIConfig", () => {
             analytics.restore();
           }
         }
+      } finally {
+        restoreKey?.();
       }
-    } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = key;
     }
   });
 

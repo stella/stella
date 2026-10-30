@@ -59,6 +59,7 @@ import {
   installPgliteSanctionsMonitoringTriggers,
   installPgliteSchedulerJobPauseLog,
   installPgliteSchemaPrerequisites,
+  installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
@@ -880,6 +881,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteTimeEntryTimerSignals(db);
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
+  await installPgliteSearchHistoryClearFence(db);
   await installPglitePlaybookDocumentTypeKey(db);
 
   return client;

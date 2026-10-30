@@ -1,7 +1,10 @@
 import { Result } from "better-result";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
+import { abortTransaction } from "@/api/db/safe-db";
 import {
+  searchHistoryCountryClears,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -10,11 +13,13 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import {
   holdSearchHistoryOwnerAccess,
   lockSearchHistoryOwner,
+  searchHistoryCountrySchema,
 } from "./entries";
 import {
   assertSearchHistoryScope,
@@ -27,8 +32,11 @@ const config = {
     "Personal history refreshes through the caller-owned query cache",
   ),
   description:
-    "Delete your whole search history in the active organization: every search and opened decision or statute it holds. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
-  query: searchHistoryScopeQuery,
+    "Delete your search history in the active organization. With `country`, remove that country's entries and older searches that recorded no country; older documents without a known country must finish classification before a country clear. Omit `country` to remove all history. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
+  query: v.object({
+    ...searchHistoryScopeQuery.entries,
+    country: v.optional(searchHistoryCountrySchema),
+  }),
   permissions: { searchHistory: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -58,6 +66,111 @@ const clearSearchHistory = createSafeRootHandler(
           .values(owner)
           .onConflictDoNothing();
         await lockSearchHistoryOwner(tx, owner);
+        if (query.country !== undefined) {
+          // The legacy cutoff applies only to rows that never named a country.
+          // Countryful imports use their own country's barrier.
+          const legacyDocumentScope = and(
+            eq(searchHistoryEntries.organizationId, owner.organizationId),
+            eq(searchHistoryEntries.userId, owner.userId),
+            isNull(searchHistoryEntries.country),
+            ne(searchHistoryEntries.kind, "search"),
+          );
+          const failedLegacyDocuments = await tx
+            .select({ id: searchHistoryEntries.id })
+            .from(searchHistoryEntries)
+            .where(
+              and(
+                legacyDocumentScope,
+                isNotNull(searchHistoryEntries.countryRepairFailedAt),
+              ),
+            )
+            .limit(1);
+          if (failedLegacyDocuments.length > 0) {
+            abortTransaction(
+              new HandlerError({
+                status: 409,
+                message:
+                  "A legacy document could not be classified. Clear all history or contact support.",
+              }),
+            );
+          }
+          const pendingLegacyDocuments = await tx
+            .select({ id: searchHistoryEntries.id })
+            .from(searchHistoryEntries)
+            .where(legacyDocumentScope)
+            .limit(1);
+          if (pendingLegacyDocuments.length > 0) {
+            abortTransaction(
+              new HandlerError({
+                status: 409,
+                message:
+                  "Country clear is awaiting legacy document classification. Try again after maintenance completes.",
+              }),
+            );
+          }
+          await tx
+            .update(searchHistoryOwners)
+            .set({
+              legacyClearedAt: sql`GREATEST(${searchHistoryOwners.legacyClearedAt}, clock_timestamp())`,
+            })
+            .where(
+              and(
+                eq(searchHistoryOwners.organizationId, owner.organizationId),
+                eq(searchHistoryOwners.userId, owner.userId),
+              ),
+            );
+          await tx
+            .insert(searchHistoryCountryClears)
+            .values({
+              ...owner,
+              country: query.country,
+              clearedAt: sql`clock_timestamp()`,
+            })
+            .onConflictDoUpdate({
+              target: [
+                searchHistoryCountryClears.organizationId,
+                searchHistoryCountryClears.userId,
+                searchHistoryCountryClears.country,
+              ],
+              set: {
+                clearedAt: sql`GREATEST(${searchHistoryCountryClears.clearedAt}, excluded.cleared_at)`,
+              },
+            });
+          const deletedEntries = tx.$with("deleted_scoped_search_history").as(
+            tx
+              .delete(searchHistoryEntries)
+              .where(
+                and(
+                  eq(searchHistoryEntries.organizationId, owner.organizationId),
+                  eq(searchHistoryEntries.userId, owner.userId),
+                  or(
+                    eq(searchHistoryEntries.country, query.country),
+                    isNull(searchHistoryEntries.country),
+                  ),
+                ),
+              )
+              .returning({ kind: searchHistoryEntries.kind }),
+          );
+          const groups = await tx
+            .with(deletedEntries)
+            .select({ kind: deletedEntries.kind, deleted: count() })
+            .from(deletedEntries)
+            .groupBy(deletedEntries.kind);
+          const entryCount = groups.reduce(
+            (total, group) => total + group.deleted,
+            0,
+          );
+          await recordAuditEvent(
+            tx,
+            searchHistoryAuditEvent({
+              resourceId: user.id,
+              operation: "clear",
+              entryCount,
+              kinds: groups.map(({ kind }) => kind),
+            }),
+          );
+          return entryCount;
+        }
         await tx
           .update(searchHistoryOwners)
           .set({

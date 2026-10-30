@@ -515,6 +515,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped presence; the person stays an organization member.",
   "search_history_entries.user_id":
     "The person's own organization-scoped search history; they stay an organization member.",
+  "search_history_country_clears.user_id":
+    "Organization-scoped country clear barriers outlive a matter removal.",
   "search_history_owners.user_id":
     "Organization-scoped history ordering state outlives a matter removal.",
   "search_history_tombstones.user_id":

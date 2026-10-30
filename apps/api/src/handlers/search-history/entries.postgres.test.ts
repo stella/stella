@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { SQL } from "bun";
 import {
   afterEach,
   beforeEach,
@@ -10,11 +11,14 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { sha256Hex } from "@stll/sha256/bun";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
 import {
   auditLogs,
+  searchHistoryCountryClears,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -29,10 +33,11 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -42,9 +47,15 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 
+import { createUngatedTableGateForTests } from "../../db/online-ddl";
+import { createSearchHistoryCountryRepair } from "../../db/search-history-country-repair";
 import clear from "./clear";
 import deleteEntry from "./delete";
-import { prepareSearchHistoryRows, upsertSearchHistoryRows } from "./entries";
+import {
+  prepareSearchHistoryImportRows,
+  prepareSearchHistoryRows,
+  upsertSearchHistoryRows,
+} from "./entries";
 import importEntries from "./import";
 import importClock from "./import-clock";
 import list from "./list";
@@ -56,6 +67,7 @@ const NOW = new Date();
 const INITIAL_MEMBERSHIP_CREATED_AT = new Date("2000-01-01T00:00:00.000Z");
 
 type HistoryFixture = {
+  sql: SQL;
   db: GatedTestDb;
   rlsDb: GatedTestDb & RlsDatabaseMarker;
   organizationId: SafeId<"organization">;
@@ -71,7 +83,7 @@ const withHistory = async (
   work: (fixture: HistoryFixture) => Promise<void>,
 ) => {
   await withGatedTestClients(connectionUrl, async ({ openClient }) => {
-    const { db } = openClient({ max: 4 });
+    const { db, sql: client } = openClient({ max: 4 });
     const organizationId = mintAuthProviderId<"organization">();
     const otherOrganizationId = mintAuthProviderId<"organization">();
     const userId = mintAuthProviderId<"user">();
@@ -134,6 +146,7 @@ const withHistory = async (
       ]);
       const rlsDb = markRlsDatabase(db);
       await work({
+        sql: client,
         db,
         rlsDb,
         organizationId,
@@ -240,6 +253,527 @@ if (!databaseUrl || !enabled) {
   describe("search history (postgres)", () => {
     beforeEach(() => setSystemTime(NOW));
     afterEach(() => setSystemTime());
+
+    test("base identity writes retain one row across country metadata versions", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const query = "Náhrada škody";
+        const baseKey = (
+          await keyedContentLookupKey(
+            fixture.organizationId,
+            `search\u0000náhrada škody`,
+          )
+        ).unwrap();
+        const written = await recordQuery(fixture, query, "CZE");
+        const stored = (
+          await fixture.db
+            .select()
+            .from(searchHistoryEntries)
+            .where(eq(searchHistoryEntries.id, written.id))
+        ).at(0);
+        expect(stored).toMatchObject({
+          lookupKey: baseKey,
+          baseLookupKey: baseKey,
+          country: "CZE",
+        });
+        const oldRows = await prepareSearchHistoryRows(fixture, [
+          {
+            entry: { kind: "search", query, country: "CZE" },
+            usedAt: new Date(),
+          },
+        ]);
+        const oldRow = oldRows.at(0);
+        if (oldRow === undefined) {
+          panic("Expected one prepared history use");
+        }
+        const { baseLookupKey: _metadata, ...oldWriterRow } = {
+          ...oldRow,
+          baseLookupKey: baseKey,
+        };
+        await fixture.db
+          .insert(searchHistoryEntries)
+          .values(oldWriterRow)
+          .onConflictDoUpdate({
+            target: [
+              searchHistoryEntries.organizationId,
+              searchHistoryEntries.userId,
+              searchHistoryEntries.kind,
+              searchHistoryEntries.lookupKey,
+            ],
+            set: {
+              useCount: sql`${searchHistoryEntries.useCount} + excluded.use_count`,
+            },
+          });
+        const listed = await readHistory(fixture, { country: "CZE" });
+        expect(listed.items).toHaveLength(1);
+        expect(listed.items.at(0)).toMatchObject({
+          id: written.id,
+          useCount: 2,
+        });
+        await fixture.db
+          .update(searchHistoryEntries)
+          .set({ baseLookupKey: null })
+          .where(eq(searchHistoryEntries.id, written.id));
+        const next = await recordQuery(fixture, query, "CZE");
+        expect(next.id).toBe(written.id);
+        const restored = (
+          await fixture.db
+            .select({
+              baseLookupKey: searchHistoryEntries.baseLookupKey,
+              useCount: searchHistoryEntries.useCount,
+            })
+            .from(searchHistoryEntries)
+            .where(eq(searchHistoryEntries.id, written.id))
+        ).at(0);
+        expect(restored).toEqual({ baseLookupKey: baseKey, useCount: 3 });
+      });
+    });
+
+    test("base and country-scoped read identities retain one current entry", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const original = await recordQuery(fixture, "Náhrada škody", "CZE");
+        const row = (
+          await fixture.db
+            .select()
+            .from(searchHistoryEntries)
+            .where(eq(searchHistoryEntries.id, original.id))
+        ).at(0);
+        if (row === undefined) {
+          panic("Expected stored history");
+        }
+        const scopedKey = sha256Hex(
+          `search-history-country:v1\u0000CZE\u0000${row.lookupKey}`,
+        );
+        expect(scopedKey).not.toBe(row.lookupKey);
+        await fixture.db.insert(searchHistoryEntries).values({
+          ...row,
+          id: createSafeId<"searchHistoryEntry">(),
+          lookupKey: scopedKey,
+          baseLookupKey: row.lookupKey,
+          lastUsedAt: new Date(row.lastUsedAt.getTime() + 1000),
+        });
+        const otherCountryId = createSafeId<"searchHistoryEntry">();
+        await fixture.db.insert(searchHistoryEntries).values({
+          ...row,
+          id: otherCountryId,
+          country: "POL",
+          lookupKey: sha256Hex(
+            `search-history-country:v1\u0000POL\u0000${row.lookupKey}`,
+          ),
+          baseLookupKey: row.lookupKey,
+        });
+        const normalized = (await readHistory(fixture, { country: "CZE" }))
+          .items;
+        expect(normalized).toHaveLength(1);
+        const visible = normalized.at(0);
+        if (visible === undefined) {
+          panic("Expected normalized history");
+        }
+        await deleteEntry.handler(
+          createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>({
+            ...identity(fixture),
+            params: { entryId: visible.id },
+          }),
+        );
+        const remaining = (await readHistory(fixture)).items;
+        expect(remaining).toHaveLength(1);
+        expect(remaining.at(0)).toMatchObject({
+          id: otherCountryId,
+          country: "POL",
+        });
+        const barriers = await fixture.db
+          .select({ lookupKey: searchHistoryTombstones.lookupKey })
+          .from(searchHistoryTombstones)
+          .where(
+            eq(searchHistoryTombstones.organizationId, fixture.organizationId),
+          );
+        expect(barriers).toEqual([{ lookupKey: row.lookupKey }]);
+      });
+    });
+
+    test("country clear blocks its stale base identity and preserves another country import", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const query = "Náhrada škody";
+        await recordQuery(fixture, query, "CZE");
+        const context = identity(fixture);
+        expect(
+          await clear.handler(
+            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+              ...context,
+              query: { ...context.query, country: "CZE" },
+            }),
+          ),
+        ).toEqual({ deleted: 1 });
+        const importCountry = async (country: CaseLawJurisdiction) =>
+          await importEntries.handler(
+            createTestHandlerContext<
+              Parameters<typeof importEntries.handler>[0]
+            >({
+              ...identity(fixture),
+              body: {
+                ...(await getImportClockBody(fixture)),
+                entries: [
+                  {
+                    entry: { kind: "search", query, country },
+                    usedAt: "2020-01-02T03:04:05.000Z",
+                  },
+                ],
+              },
+            }),
+          );
+        expect(await importCountry("POL")).toEqual({
+          entries: 1,
+          skipped: 0,
+          rejected: 0,
+        });
+        expect(await importCountry("CZE")).toEqual({
+          entries: 0,
+          skipped: 1,
+          rejected: 0,
+        });
+        expect(
+          (await readHistory(fixture, { country: "POL" })).items,
+        ).toHaveLength(1);
+        expect(
+          (await readHistory(fixture, { country: "CZE" })).items,
+        ).toHaveLength(0);
+        const tombstones = await fixture.db
+          .select()
+          .from(searchHistoryTombstones)
+          .where(
+            eq(searchHistoryTombstones.organizationId, fixture.organizationId),
+          );
+        expect(tombstones).toHaveLength(0);
+      });
+    });
+
+    test("country aggregates retain only that country's uses across a clear", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const query = "Náhrada škody";
+        await recordQuery(fixture, query, "CZE");
+        await recordQuery(fixture, query, "CZE");
+        await recordQuery(fixture, query, "POL");
+        const polish = (
+          await readHistory(fixture, { country: "POL" })
+        ).items.at(0);
+        const context = identity(fixture);
+        await clear.handler(
+          createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+            ...context,
+            query: { ...context.query, country: "CZE" },
+          }),
+        );
+        await recordQuery(fixture, query, "POL");
+        expect(
+          (await readHistory(fixture, { country: "POL" })).items.at(0),
+        ).toMatchObject({
+          useCount: 2,
+          firstUsedAt: polish?.firstUsedAt,
+        });
+        await recordQuery(fixture, query, "CZE");
+        const czech = (await readHistory(fixture, { country: "CZE" })).items.at(
+          0,
+        );
+        expect(czech?.useCount).toBe(1);
+        expect(
+          new Date(czech?.firstUsedAt ?? 0).getTime(),
+        ).toBeGreaterThanOrEqual(new Date(polish?.lastUsedAt ?? 0).getTime());
+      });
+    });
+
+    test("mixed country import aggregates stay on their own side of a clear", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const context = identity(fixture);
+        await clear.handler(
+          createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+            ...context,
+            query: { ...context.query, country: "CZE" },
+          }),
+        );
+        const cutoff = (
+          await fixture.db
+            .select()
+            .from(searchHistoryCountryClears)
+            .where(
+              eq(
+                searchHistoryCountryClears.organizationId,
+                fixture.organizationId,
+              ),
+            )
+        ).at(0);
+        if (cutoff === undefined) {
+          panic("Expected country clear cutoff");
+        }
+        const before = new Date(cutoff.clearedAt.getTime() - 1000);
+        const after = new Date(cutoff.clearedAt.getTime() + 1000);
+        const rows = await prepareSearchHistoryImportRows(fixture, [
+          {
+            entry: { kind: "search", query: "Náhrada škody", country: "POL" },
+            usedAt: before,
+          },
+          {
+            entry: { kind: "search", query: "Náhrada škody", country: "CZE" },
+            usedAt: after,
+          },
+        ]);
+        await fixture.db.transaction(
+          async (tx) =>
+            await upsertSearchHistoryRows({
+              tx,
+              rows,
+              mode: "import",
+              timestampSource: "prepared",
+              recordAuditEvent: historyAuditRecorder(fixture),
+            }),
+        );
+        await fixture.db.transaction(
+          async (tx) =>
+            await upsertSearchHistoryRows({
+              tx,
+              rows: rows.slice(0, 1),
+              mode: "import",
+              timestampSource: "prepared",
+              recordAuditEvent: historyAuditRecorder(fixture),
+            }),
+        );
+        expect(
+          (await readHistory(fixture, { country: "CZE" })).items.at(0),
+        ).toMatchObject({
+          firstUsedAt: after.toISOString(),
+          lastUsedAt: after.toISOString(),
+          useCount: 1,
+        });
+        expect(
+          await fixture.db
+            .select({ id: searchHistoryEntries.id })
+            .from(searchHistoryEntries)
+            .where(
+              eq(searchHistoryEntries.organizationId, fixture.organizationId),
+            ),
+        ).toHaveLength(1);
+      });
+    });
+
+    test("organization reset counts history barriers and preserves another organization's barriers", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const entry = await recordQuery(fixture, "Saved history");
+        await deleteEntry.handler(
+          createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>({
+            ...identity(fixture),
+            params: { entryId: entry.id },
+          }),
+        );
+        for (const organizationId of [
+          fixture.organizationId,
+          fixture.otherOrganizationId,
+        ]) {
+          const context = identity({ ...fixture, organizationId });
+          await clear.handler(
+            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+              ...context,
+              query: { ...context.query, country: "POL" },
+            }),
+          );
+        }
+        const removed = await fixture.db.transaction(
+          async (tx) =>
+            await sweepReviewOrganization(
+              tx,
+              fixture.organizationId,
+              fixture.userId,
+            ),
+        );
+        expect(removed.get("search_history_country_clears")).toBe(1);
+        expect(removed.get("search_history_tombstones")).toBe(1);
+        expect(
+          await fixture.db
+            .select()
+            .from(searchHistoryCountryClears)
+            .where(
+              eq(
+                searchHistoryCountryClears.organizationId,
+                fixture.organizationId,
+              ),
+            ),
+        ).toHaveLength(0);
+        expect(
+          await fixture.db
+            .select()
+            .from(searchHistoryTombstones)
+            .where(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+            ),
+        ).toHaveLength(0);
+        expect(
+          await fixture.db
+            .select()
+            .from(searchHistoryCountryClears)
+            .where(
+              eq(
+                searchHistoryCountryClears.organizationId,
+                fixture.otherOrganizationId,
+              ),
+            ),
+        ).toHaveLength(1);
+      });
+    });
+
+    test("country clear retains unclassified documents until their bounded repair completes", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const saved = await recordEntry(fixture, {
+          kind: "statute",
+          documentId: "legacy-history-statute",
+          title: "Zákon",
+          path: "/law/cze/statutes/89-2012",
+        });
+        await fixture.db
+          .update(searchHistoryEntries)
+          .set({
+            country: null,
+            countryUsedAt: null,
+            countryRepairFailedAt: new Date(),
+          })
+          .where(eq(searchHistoryEntries.id, saved.id));
+        const context = identity(fixture);
+        const clearCountry = async () =>
+          await clear.handler(
+            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+              ...context,
+              query: { ...context.query, country: "CZE" },
+            }),
+          );
+        const unclassifiable = await clearCountry();
+        expect(
+          unclassifiable instanceof HttpStatusResponse
+            ? unclassifiable.code
+            : undefined,
+        ).toBe(409);
+        await fixture.db
+          .update(searchHistoryEntries)
+          .set({ countryRepairFailedAt: null })
+          .where(eq(searchHistoryEntries.id, saved.id));
+        const pending = await clearCountry();
+        expect(pending).toBeInstanceOf(HttpStatusResponse);
+        expect(
+          pending instanceof HttpStatusResponse ? pending.code : undefined,
+        ).toBe(409);
+        const repair = createSearchHistoryCountryRepair({
+          readVerdict: async () => ({ kind: "normal", signals: [] }),
+          sleep: async () => {},
+        });
+        const reserved = await fixture.sql.reserve();
+        const connection = {
+          execute: async (query, params = []) => {
+            await reserved.unsafe(query, [...params]);
+          },
+          query: async (query, params = []) =>
+            await reserved.unsafe(query, [...params]),
+          release: async () => {
+            await reserved.release();
+          },
+        } satisfies OnlineMigrationConnection;
+        try {
+          await repair.repair(
+            connection,
+            createUngatedTableGateForTests(connection),
+          );
+        } finally {
+          await connection.release();
+        }
+        const classified = (
+          await fixture.db
+            .select({
+              country: searchHistoryEntries.country,
+              countryUsedAt: searchHistoryEntries.countryUsedAt,
+              lastUsedAt: searchHistoryEntries.lastUsedAt,
+            })
+            .from(searchHistoryEntries)
+            .where(eq(searchHistoryEntries.id, saved.id))
+        ).at(0);
+        expect(classified?.country).toBe("CZE");
+        expect(classified?.countryUsedAt).toEqual(classified?.lastUsedAt);
+        expect(await clearCountry()).toEqual({ deleted: 1 });
+      });
+    });
+
+    test("scoped deletion barriers retain their country and old base barriers remain global", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const query = "Náhrada škody";
+        const saved = await recordQuery(fixture, query, "CZE");
+        const original = (
+          await fixture.db
+            .select()
+            .from(searchHistoryEntries)
+            .where(eq(searchHistoryEntries.id, saved.id))
+        ).at(0);
+        if (original === undefined) {
+          panic("Expected saved identity");
+        }
+        await fixture.db
+          .delete(searchHistoryEntries)
+          .where(eq(searchHistoryEntries.id, saved.id));
+        const scopedKey = sha256Hex(
+          `search-history-country:v1\u0000CZE\u0000${original.lookupKey}`,
+        );
+        await fixture.db.insert(searchHistoryTombstones).values({
+          organizationId: fixture.organizationId,
+          userId: fixture.userId,
+          kind: "search",
+          lookupKey: scopedKey,
+          deletedAt: new Date(),
+        });
+        const restore = async (country: CaseLawJurisdiction) =>
+          await importEntries.handler(
+            createTestHandlerContext<
+              Parameters<typeof importEntries.handler>[0]
+            >({
+              ...identity(fixture),
+              body: {
+                ...(await getImportClockBody(fixture)),
+                entries: [
+                  {
+                    entry: { kind: "search", query, country },
+                    usedAt: "2020-01-02T03:04:05.000Z",
+                  },
+                ],
+              },
+            }),
+          );
+        expect(await restore("CZE")).toEqual({
+          entries: 0,
+          skipped: 1,
+          rejected: 0,
+        });
+        expect(await restore("POL")).toEqual({
+          entries: 1,
+          skipped: 0,
+          rejected: 0,
+        });
+        await fixture.db.insert(searchHistoryTombstones).values({
+          organizationId: fixture.organizationId,
+          userId: fixture.userId,
+          kind: "search",
+          lookupKey: original.lookupKey,
+          deletedAt: new Date(),
+        });
+        expect(await restore("AUT")).toEqual({
+          entries: 0,
+          skipped: 1,
+          rejected: 0,
+        });
+        const retained = await fixture.db
+          .select({ lookupKey: searchHistoryTombstones.lookupKey })
+          .from(searchHistoryTombstones)
+          .where(
+            eq(searchHistoryTombstones.organizationId, fixture.organizationId),
+          );
+        expect(retained.map(({ lookupKey }) => lookupKey).toSorted()).toEqual(
+          [scopedKey, original.lookupKey].toSorted(),
+        );
+      });
+    });
 
     test("members and owners can record and read personal history", async () => {
       await withHistory(databaseUrl, async (fixture) => {
@@ -833,6 +1367,7 @@ if (!databaseUrl || !enabled) {
               tx,
               rows,
               mode: "record",
+              timestampSource: "prepared",
               recordAuditEvent: historyAuditRecorder(fixture),
             }),
         );
@@ -894,6 +1429,7 @@ if (!databaseUrl || !enabled) {
                 tx,
                 rows,
                 mode: "import",
+                timestampSource: "prepared",
                 recordAuditEvent: historyAuditRecorder(fixture),
               }),
           );
@@ -960,7 +1496,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("entries keep their jurisdiction and a country filter lists only its own", async () => {
+    test("country filters use the latest jurisdiction and its own counted uses", async () => {
       await withHistory(databaseUrl, async (fixture) => {
         const refiled = await recordQuery(fixture, "Náhrada škody", "CZE");
         const czechQuery = await recordQuery(fixture, "Zástavní právo", "CZE");
@@ -990,6 +1526,7 @@ if (!databaseUrl || !enabled) {
               tx,
               rows: legacyRows,
               mode: "import",
+              timestampSource: "prepared",
               recordAuditEvent: historyAuditRecorder(fixture),
             }),
         );
@@ -1006,7 +1543,7 @@ if (!databaseUrl || !enabled) {
         );
         expect(
           polish.items.find(({ id }) => id === polishQuery.id),
-        ).toMatchObject({ useCount: 2 });
+        ).toMatchObject({ useCount: 1 });
         expect(polish.items.every(({ country }) => country === "POL")).toBe(
           true,
         );

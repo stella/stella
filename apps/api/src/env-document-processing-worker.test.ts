@@ -19,6 +19,10 @@ const workerEnvModuleUrl = new URL(
   "env-document-processing-worker.ts",
   import.meta.url,
 ).href;
+const contentEncryptionModuleUrl = new URL(
+  "lib/content-encryption.ts",
+  import.meta.url,
+).href;
 const repoRoot = new URL("../../..", import.meta.url).pathname;
 const workerEntrypoint = nodePath.resolve(
   apiSourceRoot,
@@ -33,6 +37,20 @@ const validateWorkerEnv = (env: Record<string, string | undefined> = baseEnv) =>
       "--no-env-file",
       "-e",
       `import ${JSON.stringify(workerEnvModuleUrl)};`,
+    ],
+    cwd: repoRoot,
+    env,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+
+const encryptWithEnv = (env: Record<string, string | undefined>) =>
+  Bun.spawnSync({
+    cmd: [
+      process.execPath,
+      "--no-env-file",
+      "-e",
+      `const { encryptContent } = await import(${JSON.stringify(contentEncryptionModuleUrl)}); await encryptContent("test-organization", "fixture");`,
     ],
     cwd: repoRoot,
     env,
@@ -93,5 +111,24 @@ describe("document-processing worker environment", () => {
       nodePath.resolve(apiSourceRoot, "env-document-processing-worker.ts"),
     );
     expect(modules).not.toContain(nodePath.resolve(apiSourceRoot, "env.ts"));
+  });
+});
+
+describe("content encryption environment", () => {
+  test("encrypts without unrelated worker S3 or Redis configuration", () => {
+    expect(
+      encryptWithEnv({
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+      }).exitCode,
+    ).toBe(0);
+  });
+
+  test("refuses plaintext storage outside local development", () => {
+    const result = encryptWithEnv({ NODE_ENV: "production" });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "CONTENT_ENCRYPTION_KEY is required outside local development.",
+    );
   });
 });

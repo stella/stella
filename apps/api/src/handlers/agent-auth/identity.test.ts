@@ -24,7 +24,7 @@ import { oauthClient } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import { isAgentAuthRateLimitedPath } from "@/api/handlers/agent-auth/rate-limit";
 import {
   agentAuthConfirmRoute,
@@ -198,8 +198,7 @@ describe("agent registration configuration", () => {
 
   test("returns a service error when the selected storage format is unavailable", async () => {
     const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
-    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    const restoreKey = withoutContentEncryptionKeyForTesting();
     try {
       const responses = [
         await postIdentity({
@@ -220,7 +219,7 @@ describe("agent registration configuration", () => {
         expect(body["registration_id"]).toBeUndefined();
       }
     } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+      restoreKey();
     }
   });
 });
