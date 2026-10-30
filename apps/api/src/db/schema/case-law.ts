@@ -608,7 +608,10 @@ export const caseLawDecisions = p.pgTable(
     id: pUuid<"caseLawDecision">().primaryKey(),
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
-      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+      .references(() => caseLawSources.id, {
+        onDelete: "cascade",
+        name: "coverage_court_bucket_source_fk",
+      }),
     /** The decision's primary citable reference; `caseNumberType` says what kind. */
     caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
     /**

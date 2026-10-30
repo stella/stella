@@ -3280,7 +3280,7 @@ export const lockTimerMatterAccessRows = async ({
 export const lockCaseLawRemovalSnapshots = async (
   tx: ExecuteTransaction,
 ): Promise<void> => {
-  await tx.execute(sql`LOCK TABLE case_law_browse_facet_counts, case_law_coverage_summaries,
+  await tx.execute(sql`LOCK TABLE case_law_browse_facet_counts, case_law_coverage_court_buckets, case_law_coverage_summaries,
     case_law_sitemap_shard_counts, case_law_sitemap_shards, case_law_source_arrivals
     IN SHARE ROW EXCLUSIVE MODE`);
 };

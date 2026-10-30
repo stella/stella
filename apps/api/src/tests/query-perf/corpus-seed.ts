@@ -463,7 +463,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
     }
   }
   await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-    VALUES (${COMPLETION_SOURCE_ID}, 'query-perf-completion', 'Completion query fixture', false)`);
+    VALUES (${COMPLETION_SOURCE_ID}, ${ADAPTER_KEYS.EU_ECJ}, 'Completion query fixture', false)`);
   for (const chunk of chunks(COMPLETION_ROWS)) {
     await withoutTriggers(database, async (tx) => {
       await tx.execute(sql`INSERT INTO case_law_decisions

@@ -289,6 +289,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // and read only by the public-law reader, never through the request role.
   "case_law_sitemap_shards",
   "case_law_browse_facet_counts",
+  "case_law_coverage_court_buckets",
   "case_law_source_arrivals",
   "case_law_coverage_summaries",
   "legislation_facet_counts",

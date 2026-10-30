@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -43,18 +43,17 @@ export const readPgFtsBrowseFacetsBatch = async (
     .orderBy(caseLawBrowseFacetCounts.kind)
     .limit(1);
   if (snapshot.length === 0) {
-    const entries: [string, LegalBrowseFacets][] = [];
-    for (const country of countries) {
-      // db-await-in-loop: fresh installs have no snapshot; the bounded public-country set uses the live fallback once.
-      entries.push([
-        country,
-        await readLivePgFtsBrowseFacets(tx, {
-          jurisdiction: country,
-          excludedSourceIds: [],
-          limit,
-        }),
-      ]);
-    }
+    const readCountry = async (
+      country: string,
+    ): Promise<[string, LegalBrowseFacets]> => [
+      country,
+      await readLivePgFtsBrowseFacets(tx, {
+        jurisdiction: country,
+        excludedSourceIds: [],
+        limit,
+      }),
+    ];
+    const entries = await Promise.all(countries.map(readCountry));
     return new Map(entries);
   }
 
@@ -95,11 +94,13 @@ export const readPgFtsBrowseFacetsBatch = async (
       typeof row["value"] !== "string" ||
       typeof row["total"] !== "number"
     ) {
-      continue;
+      panic("Invalid materialized case-law browse facet row");
     }
     const facets = result.get(row["country"]);
     if (facets === undefined) {
-      continue;
+      panic(
+        "Materialized case-law browse facet returned an unrequested country",
+      );
     }
     if (
       row["kind"] === "country" ||
@@ -107,6 +108,8 @@ export const readPgFtsBrowseFacetsBatch = async (
       row["kind"] === "year"
     ) {
       facets[row["kind"]].push({ value: row["value"], count: row["total"] });
+    } else {
+      panic("Invalid materialized case-law browse facet kind");
     }
   }
   return result;
