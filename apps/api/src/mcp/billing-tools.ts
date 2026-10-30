@@ -880,6 +880,14 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
 const saveTimeEntryArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
+      confirm: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Set true only after the human user approves saving this time entry.",
+          ),
+        ),
+      ),
       time_entry_id: v.optional(
         uuidInputSchema("Time entry ID to update; omit to create"),
       ),

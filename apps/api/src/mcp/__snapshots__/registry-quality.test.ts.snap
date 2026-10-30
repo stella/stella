@@ -5518,6 +5518,10 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean",
+          "description": "Set true only after the human user approves saving this time entry."
+        },
         "time_entry_id": {
           "type": "string",
           "format": "uuid",
@@ -12167,6 +12171,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean",
+          "description": "Set true only after the human user approves saving this time entry."
+        },
         "time_entry_id": {
           "type": "string",
           "format": "uuid",

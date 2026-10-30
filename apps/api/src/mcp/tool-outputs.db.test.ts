@@ -255,6 +255,7 @@ const STEPS: readonly Step[] = [
   {
     tool: "save_time_entry",
     args: (s) => ({
+      confirm: true,
       matter_id: required(s.matterId, "matter"),
       date_worked: today(),
       timezone_id: "UTC",

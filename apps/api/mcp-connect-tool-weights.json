@@ -521,9 +521,9 @@
       "name": "save_time_entry",
       "nameChars": 15,
       "descriptionChars": 480,
-      "inputSchemaChars": 2017,
-      "totalChars": 2512,
-      "estimatedTokens": 1006
+      "inputSchemaChars": 2130,
+      "totalChars": 2625,
+      "estimatedTokens": 1053
     },
     {
       "name": "search",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127017,
-    "estimatedTokens": 50348
+    "characters": 127130,
+    "estimatedTokens": 50395
   }
 }

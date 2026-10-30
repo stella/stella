@@ -847,19 +847,20 @@ describe("projected chat write approvals", () => {
     }
   });
 
-  test("no confirmation-gated or account-control tool is covered by a stored grant", () => {
-    const isConfirmationGated = (tool: (typeof defaultTools)[number]) =>
+  test("no person-approved, confirmation-gated or account-control tool is covered by a stored grant", () => {
+    const requiresFreshApproval = (tool: (typeof defaultTools)[number]) =>
       describeAgentAccess({
         target: { type: "tool", name: tool.name, access: tool.access },
         context: { toolConfirmation: TOOL_CONFIRMATION.caller },
-      }).access.kind === AGENT_ACCESS_KIND.callerConfirms;
+      }).access.kind !== AGENT_ACCESS_KIND.open;
     const freshApprovalTools = defaultTools.filter(
       (tool) =>
-        isConfirmationGated(tool) ||
+        requiresFreshApproval(tool) ||
+        tool.annotations.destructiveHint ||
         (tool.access === "write" &&
           tool.accountAccess === ACCOUNT_ACCESS.accountControl),
     );
-    expect(freshApprovalTools.some(isConfirmationGated)).toBe(true);
+    expect(freshApprovalTools.some(requiresFreshApproval)).toBe(true);
     const grantable = freshApprovalTools
       .filter(
         (tool) =>

@@ -11393,7 +11393,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // the cross-field schema rejects it before touching the database.
   test("save_time_entry rejects an update with no changes", async () => {
     const result = await handleMcpToolCall({
-      args: { time_entry_id: TIME_ENTRY_ID },
+      args: { time_entry_id: TIME_ENTRY_ID, confirm: true },
       context: createBillingContext(),
       toolName: "save_time_entry",
     });

@@ -15,6 +15,8 @@
 // development process, which is what the registry projects (every feature
 // gate open).
 import "../src/tests/setup-env";
+import { panic } from "better-result";
+
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
@@ -140,12 +142,28 @@ for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   }
 
   projectedChatPolicyKinds[tool.name] = "mutation";
-  // Account-control changes need fresh consent even when they are reversible.
-  projectedChatGrantPolicies[tool.name] =
-    tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
-    tool.annotations.destructiveHint
-      ? "approve-once"
-      : "grantable";
+  const { access } = describeAgentAccess({
+    target: { type: "tool", name: tool.name, access: tool.access },
+    context: CLI_AGENT_CONTEXT,
+  });
+  switch (access.kind) {
+    case AGENT_ACCESS_KIND.personApproves:
+    case AGENT_ACCESS_KIND.personOnly:
+    case AGENT_ACCESS_KIND.callerConfirms:
+    case "per-capability":
+      projectedChatGrantPolicies[tool.name] = "approve-once";
+      break;
+    case AGENT_ACCESS_KIND.open:
+      projectedChatGrantPolicies[tool.name] =
+        tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
+        tool.annotations.destructiveHint
+          ? "approve-once"
+          : "grantable";
+      break;
+    default:
+      access satisfies never;
+      panic("Unhandled projected tool agent access");
+  }
 }
 
 const generatedChatPolicyPath = new URL(

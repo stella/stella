@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { accountExportParams } from "@/api/handlers/account-exports/params";
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
@@ -18,6 +18,7 @@ import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { AGENT_CALL_SURFACE, decideAgentCall } from "@/api/mcp/agent-access";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
 
 type DownloadAuthenticationDependencies = {
@@ -67,6 +68,22 @@ const authenticateAccountExportDownload = async (
   const userId = parseAuthProviderId<"user">(authenticated.value.userId);
   if (userId === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
+  }
+  const agentDecision = decideAgentCall({
+    target: { type: "capability", id: "account-exports.download.get" },
+    context: {},
+    surface: AGENT_CALL_SURFACE.mcp,
+    subject: "Account export download",
+    confirmed: false,
+  });
+  switch (agentDecision.type) {
+    case "refuse":
+      return { ok: false, answer: status(403, agentDecision.refusal) };
+    case "allow":
+      break;
+    default:
+      agentDecision satisfies never;
+      return panic("Unhandled account export agent decision");
   }
   const user = await Result.tryPromise(async () => await resolveUser(userId));
   if (Result.isError(user)) {

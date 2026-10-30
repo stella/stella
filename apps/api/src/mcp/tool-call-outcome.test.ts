@@ -81,6 +81,7 @@ const contextFor = () =>
   });
 
 const createArgs = {
+  confirm: true,
   matter_id: MATTER_ID,
   date_worked: "2024-01-01",
   timezone_id: "Europe/Prague",

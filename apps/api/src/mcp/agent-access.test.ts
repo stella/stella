@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import path from "node:path";
+import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
@@ -13,7 +14,7 @@ import {
   decideAgentCall,
   describeAgentAccess,
 } from "@/api/mcp/agent-access";
-import type { AgentAccess, AgentAccessTarget } from "@/api/mcp/agent-access";
+import type { AgentAccessTarget } from "@/api/mcp/agent-access";
 import { loadCapabilityCatalog } from "@/api/mcp/capability-tools";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type {
@@ -237,44 +238,79 @@ describe("classification", () => {
     }
   });
 
-  test("organization-wide settings changes need a person's approval", () => {
-    // The sender list is a read the catalog files under write (it needs the
-    // settings grant); every other settings write changes the organization.
-    const reads = new Set([
-      "organization-settings.correspondence.allowed-senders.list",
-    ]);
-    const settingsWrites = capabilityCatalog.filter(
-      ({ id, access }) =>
-        id.startsWith("organization-settings.") &&
-        access === "write" &&
-        !reads.has(id),
-    );
-    expect(settingsWrites.length).toBeGreaterThan(0);
-    const changesSettings = {
-      kind: AGENT_ACCESS_KIND.personApproves,
-      reason: "changes-organization-settings",
-    } as const satisfies AgentAccess;
-    for (const { id } of settingsWrites) {
-      expect({
-        id,
-        access: describeAgentAccess({
-          target: { type: "capability", id },
+  test("catalog authority metadata requires approval for organization settings and financial writes", () => {
+    let settingsWrites = 0;
+    let financialWrites = 0;
+    const billingWriteScope = "stella:billing_write";
+    for (const entry of capabilityCatalog) {
+      if (entry.access !== "write") {
+        continue;
+      }
+      const permissions = v.parse(
+        v.optional(v.record(v.string(), v.array(v.string())), {}),
+        entry.permissions,
+      );
+      const settings = permissions["organizationSettings"]?.includes("update");
+      const financialAuthority =
+        ["invoice", "rate", "expense", "billingCode"].some(
+          (resource) => (permissions[resource]?.length ?? 0) > 0,
+        ) ||
+        (entry.scope === billingWriteScope &&
+          permissions["timeEntry"]?.some(
+            (action) => action === "read" || action === "approve",
+          ));
+      const financial = financialAuthority || entry.scope === billingWriteScope;
+      if (settings || financial) {
+        const access = describeAgentAccess({
+          target: { type: "capability", id: entry.id },
           context: CALLER,
-        }).access,
-      }).toEqual({ id, access: changesSettings });
+        }).access;
+        expect(access.kind, entry.id).toBe(
+          settings || financialAuthority
+            ? AGENT_ACCESS_KIND.personApproves
+            : AGENT_ACCESS_KIND.callerConfirms,
+        );
+        if (settings) {
+          settingsWrites += 1;
+          expect(access, entry.id).toEqual({
+            kind: AGENT_ACCESS_KIND.personApproves,
+            reason: "changes-organization-settings",
+          });
+        }
+        if (financial) {
+          financialWrites += 1;
+        }
+      }
     }
+    expect(settingsWrites).toBeGreaterThan(0);
+    expect(financialWrites).toBeGreaterThan(0);
     for (const name of [
       "update_organization_settings",
       "set_practice_jurisdictions",
     ]) {
-      expect(
-        describeAgentAccess({ target: toolTarget(name), context: CALLER })
-          .access,
-      ).toEqual(changesSettings);
+      expect(kindOf(toolTarget(name))).toBe(AGENT_ACCESS_KIND.personApproves);
     }
-    for (const id of reads) {
-      expect(kindOf({ type: "capability", id })).toBe(AGENT_ACCESS_KIND.open);
-    }
+  });
+
+  test("feedback reports require outbound confirmation", () => {
+    const target = toolTarget("submit_feedback");
+    const description = describeAgentAccess({ target, context: CALLER });
+    expect(description.access).toMatchObject({
+      kind: AGENT_ACCESS_KIND.callerConfirms,
+      reason: "outbound",
+    });
+    expect(
+      decideAgentCall({
+        target,
+        context: CALLER,
+        surface: AGENT_CALL_SURFACE.mcp,
+        subject: "Feedback report",
+        confirmed: false,
+      }),
+    ).toMatchObject({
+      type: "refuse",
+      refusal: { code: "confirmation_required" },
+    });
   });
 
   test("an unclassified target is a defect, not an open door", () => {
