@@ -22,7 +22,8 @@
     "toolUsed": "Kasutatud: {tool}",
     "threadTitle": "Vestlus",
     "threadLoadFailed": "Seda vestlust ei õnnestunud laadida.",
-    "threadEmptyDescription": "Selles vestluses pole veel sõnumeid.",
+    "greeting": "Millega soovite tegeleda?",
+    "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "sections": {
       "today": "Täna",
       "yesterday": "Eile",
