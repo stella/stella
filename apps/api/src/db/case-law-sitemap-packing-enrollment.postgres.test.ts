@@ -21,12 +21,16 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { refreshCaseLawSitemapShards } from "@/api/lib/case-law/sitemap-shard-refresh";
+import {
+  refreshCaseLawSitemapShards,
+  SITEMAP_SHARD_SPLIT_THRESHOLD,
+} from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
   decisionBucketSqlFor,
   SITEMAP_ALL_BUCKET,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawPublishedDecisionsFixtureSql } from "@/api/tests/helpers/case-law-publication-view-fixture";
@@ -42,6 +46,8 @@ import {
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 type RefreshDb = Parameters<typeof refreshCaseLawSitemapShards>[0];
+const QUIET_MONTH_DECISIONS = 5000;
+const LARGE_MONTH_DECISIONS = LIMITS.caseLawSitemapShardUrlLimit + 1;
 
 if (!databaseUrl || !enabled) {
   describe.skip("sitemap packing enrollment (postgres)", () => {
@@ -52,7 +58,7 @@ if (!databaseUrl || !enabled) {
 } else {
   describe("sitemap packing enrollment (postgres)", () => {
     // timeout: seeds and reads a full protocol-sized sitemap through real PostgreSQL.
-    test("monolingual months pack 50000 URLs with flat reads, cached bucket partitions and lastmod", async () => {
+    test("monolingual months pack at the split threshold with flat reads, cached bucket partitions and lastmod", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         let measuredQueries: string[] | undefined;
         const { db: isolated } = openClient({
@@ -117,9 +123,9 @@ if (!databaseUrl || !enabled) {
               (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
             SELECT md5('sitemap-capacity-' || i::text)::uuid, ${capacitySourceId}::uuid,
               'sitemap-capacity-' || i::text, 'Fixture court', 'CZE', 'cs', 'sitemap-capacity-' || i::text,
-              CASE WHEN i < 5000 THEN '2024-06-15'::date ELSE '2026-06-15'::date END,
-              CASE WHEN i = 0 OR i = 5000 THEN ${newest.toISOString()}::timestamptz ELSE '2024-07-01'::timestamptz END
-            FROM generate_series(0, 55000) AS i
+              CASE WHEN i < ${QUIET_MONTH_DECISIONS} THEN '2024-06-15'::date ELSE '2026-06-15'::date END,
+              CASE WHEN i = 0 OR i = ${QUIET_MONTH_DECISIONS} THEN ${newest.toISOString()}::timestamptz ELSE '2024-07-01'::timestamptz END
+            FROM generate_series(0, ${QUIET_MONTH_DECISIONS + LARGE_MONTH_DECISIONS - 1}::integer) AS i
           `);
           await isolated.execute(sql`ANALYZE case_law_decisions`);
           await isolated.execute(sql`ANALYZE case_law_sources`);
@@ -159,14 +165,31 @@ if (!databaseUrl || !enabled) {
           };
           expect(
             await listSitemapShardDecisionsHandler(query, readDb),
-          ).toMatchObject({ code: 500 });
-          await isolated.execute(
-            sql`DELETE FROM case_law_decisions WHERE case_number = 'sitemap-capacity-5001'`,
-          );
-          await isolated
-            .insert(caseLawSitemapChanges)
-            .values({ country: "CZE", year: "2026", month: "06" });
-          await refreshCaseLawSitemapShards(isolatedRefresh);
+          ).toMatchObject({
+            code: 500,
+          });
+          // Keeps the newest row (index QUIET_MONTH_DECISIONS) and drops the tail.
+          const keepLargeMonth = async (decisions: number) => {
+            await isolated.execute(sql`
+              DELETE FROM case_law_decisions WHERE case_number IN (
+                SELECT 'sitemap-capacity-' || i::text
+                FROM generate_series(${QUIET_MONTH_DECISIONS + decisions}::integer, ${QUIET_MONTH_DECISIONS + LARGE_MONTH_DECISIONS - 1}::integer) AS i
+              )
+            `);
+            await isolated
+              .insert(caseLawSitemapChanges)
+              .values({ country: "CZE", year: "2026", month: "06" });
+            await refreshCaseLawSitemapShards(isolatedRefresh);
+          };
+          await keepLargeMonth(SITEMAP_SHARD_SPLIT_THRESHOLD + 1);
+          const pastThreshold = await listSitemapShardsHandler(readDb);
+          if (!("items" in pastThreshold)) {
+            panic("Expected fixture sitemap index past the split threshold");
+          }
+          expect(
+            pastThreshold.items.filter(({ year }) => year === "2026"),
+          ).toHaveLength(64);
+          await keepLargeMonth(SITEMAP_SHARD_SPLIT_THRESHOLD);
           const packed = await listSitemapShardsHandler(readDb);
           if (!("items" in packed)) {
             panic("Expected consolidated fixture sitemap index");
@@ -342,21 +365,22 @@ if (!databaseUrl || !enabled) {
           if (!("items" in smaller)) {
             panic("Expected the smaller measurement fixture");
           }
-          expect(smaller.items).toHaveLength(5000);
+          expect(smaller.items).toHaveLength(QUIET_MONTH_DECISIONS);
           const largerQueries: string[] = [];
           measuredQueries = largerQueries;
           const full = await listSitemapShardDecisionsHandler(query, readDb);
           measuredQueries = undefined;
           if (!("items" in full)) {
             panic(
-              "Expected a complete monolingual month at the protocol ceiling",
+              "Expected a complete monolingual month at the split threshold",
             );
           }
-          expect(full.items).toHaveLength(50_000);
+          expect(full.items).toHaveLength(SITEMAP_SHARD_SPLIT_THRESHOLD);
           expect(largerQueries).toHaveLength(smallerQueries.length);
           expect(
             full.items.find(
-              ({ caseNumber }) => caseNumber === "sitemap-capacity-5000",
+              ({ caseNumber }) =>
+                caseNumber === `sitemap-capacity-${QUIET_MONTH_DECISIONS}`,
             )?.updatedAt,
           ).toEqual(newest);
           const cached = await listSitemapShardDecisionsHandler(
