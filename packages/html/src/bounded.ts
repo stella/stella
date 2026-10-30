@@ -4,6 +4,8 @@ import { adapter } from "parse5-htmlparser2-tree-adapter";
 
 import { load } from "./load";
 
+export type { CheerioAPI } from "./selection";
+
 type AllocationBudget = {
   maxDomAllocations: number;
   reject: () => never;

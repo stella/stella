@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML node and selection bindings come from their package owner; the visible-text walk is unchanged.
 import { type AnyNode, hasChildren, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: moved unchanged from shared-inlines.ts; the visible-text walk and excluded tags are the same.
 import type * as cheerio from "@stll/html/selection";

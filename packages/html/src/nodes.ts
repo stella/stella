@@ -1,20 +1,15 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import {
-  type AnyNode as DomNode,
   Element as DomElement,
   hasChildren as domHasChildren,
   isCDATA as domIsCDATA,
   isComment as domIsComment,
   isTag as domIsTag,
   isText as domIsText,
-  type ParentNode as DomParent,
   Text as DomText,
 } from "domhandler";
 
-export type AnyNode = DomNode;
-export type ParentNode = DomParent;
-export type Element = DomElement;
-export type Text = DomText;
+export type { AnyNode, Element, ParentNode, Text } from "domhandler";
 export const createElement = (
   ...args: ConstructorParameters<typeof DomElement>
 ) => new DomElement(...args);
