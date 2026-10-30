@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktívna úprava} few {{count} aktívne úpravy} other {{count} aktívnych úprav}}",
-    "clipboard": "História schránky",
     "activity": "Aktivita",
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityPaused": "Aktivita: Pozastavené · dnes {hours} h",

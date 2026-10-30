@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, zero {{count} aktīvu labojumu} one {{count} aktīvs labojums} other {{count} aktīvi labojumi}}",
-    "clipboard": "Starpliktuves vēsture",
     "activity": "Darbība",
     "activityRecording": "Darbība: Ierakstīšana · šodien {hours} st.",
     "activityPaused": "Darbība: Apturēta · šodien {hours} st.",

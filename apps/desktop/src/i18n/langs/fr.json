@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {{count} modification active} other {{count} modifications actives}}",
-    "clipboard": "Historique du presse-papiers",
     "activity": "Activité",
     "activityRecording": "Activité : Enregistrement · {hours} h aujourd’hui",
     "activityPaused": "Activité : En pause · {hours} h aujourd’hui",
