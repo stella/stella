@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "AT_ASYLGH",
+  "key": "at-asylgh",
+  "parserVersion": 9,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."
+  }
+}
