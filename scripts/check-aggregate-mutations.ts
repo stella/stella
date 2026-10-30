@@ -42,6 +42,7 @@ type Identifier = Extract<Node, { type: "Identifier" }>;
 const ROOT = path.resolve(import.meta.dir, "..");
 const API = "apps/api/src/";
 const REGISTRY = `${API}lib/db/aggregate-lock.ts`;
+const REGISTRY_INDEX = `${API}lib/db/aggregate-lock-entries/registry.gen.ts`;
 const OWNER = `${API}lib/db/aggregate-mutation-declaration.ts`;
 const DECLARE = "declareAggregateMutation";
 const BASELINE = BASELINE_PATHS.aggregateMutations;
@@ -180,37 +181,45 @@ const validateDeclaration = ({
 
 const readAggregateRegistry = (load: SourceLoader) => {
   const registry = new Set<string>();
-  const registryContent = load(REGISTRY);
-  if (registryContent !== undefined) {
-    const registrySource = parse({ file: REGISTRY, source: registryContent });
-    const collectRegistry = (node: Node) => {
+  const content = load(REGISTRY_INDEX);
+  if (content === undefined) {
+    return registry;
+  }
+  for (const statement of parse({ file: REGISTRY_INDEX, source: content })
+    .program.body) {
+    if (
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.source === null
+    ) {
+      panic("Aggregate registry requires one named re-export per entry");
+    }
+    const target = resolveModule({
+      file: REGISTRY_INDEX,
+      name: statement.source.value,
+    });
+    if (target === undefined || load(target) === undefined) {
+      panic(`Missing aggregate registry entry: ${statement.source.value}`);
+    }
+    if (statement.specifiers.length !== 1) {
+      panic("Aggregate registry requires one named re-export per entry");
+    }
+    for (const specifier of statement.specifiers) {
       if (
-        node.type === "VariableDeclarator" &&
-        node.id.type === "Identifier" &&
-        node.id.name === "AGGREGATE_LOCKS" &&
-        node.init !== null
+        specifier.type !== "ExportSpecifier" ||
+        specifier.local.type !== "Identifier" ||
+        specifier.local.name !== "default"
       ) {
-        const initializer =
-          node.init.type === "TSAsExpression"
-            ? node.init.expression
-            : node.init;
-        if (!(initializer.type === "ObjectExpression")) {
-          panic("Aggregate registry requires a literal object");
-        }
-        for (const property of initializer.properties) {
-          if (!isPropertyAssignment(property)) {
-            panic("Aggregate registry cannot use computed spreads");
-          }
-          registry.add(
-            isStringLiteral(property.key)
-              ? property.key.value
-              : nodeText(property.key, registrySource),
-          );
-        }
+        panic("Aggregate registry entries must re-export their default");
       }
-      visitChildren(node, collectRegistry);
-    };
-    collectRegistry(registrySource.program);
+      const name =
+        specifier.exported.type === "Identifier"
+          ? specifier.exported.name
+          : specifier.exported.value;
+      if (registry.has(name)) {
+        panic(`Duplicate aggregate registry entry: ${name}`);
+      }
+      registry.add(name);
+    }
   }
   return registry;
 };

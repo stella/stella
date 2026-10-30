@@ -25,6 +25,7 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  "db-registry-entries": "scripts/db-registry-entries.ts",
   "withdrawn-decision-labels":
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and

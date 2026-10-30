@@ -12,8 +12,12 @@ const owner = "apps/api/src/lib/db/aggregate-mutation-declaration.ts";
 const fixture = () =>
   new Map([
     [
-      "apps/api/src/lib/db/aggregate-lock.ts",
-      "export const AGGREGATE_LOCKS = {workspace: {rank: 1}} as const;",
+      "apps/api/src/lib/db/aggregate-lock-entries/registry.gen.ts",
+      'export { default as "workspace" } from "./workspace";',
+    ],
+    [
+      "apps/api/src/lib/db/aggregate-lock-entries/workspace.ts",
+      'export default {rank: 1, kind: "row"} as const;',
     ],
     [
       "apps/api/src/lib/api-handlers.ts",
@@ -867,8 +871,12 @@ describe("declared handler locks", () => {
     test("direct and followed locks combine to cover the declaration", () => {
       const sources = setup();
       sources.set(
-        "apps/api/src/lib/db/aggregate-lock.ts",
-        "export const AGGREGATE_LOCKS = {workspace: {rank: 1}, entity: {rank: 2}} as const;",
+        "apps/api/src/lib/db/aggregate-lock-entries/registry.gen.ts",
+        'export { default as "workspace" } from "./workspace"; export { default as "entity" } from "./entity";',
+      );
+      sources.set(
+        "apps/api/src/lib/db/aggregate-lock-entries/entity.ts",
+        'export default {rank: 2, kind: "row"} as const;',
       );
       const declaration =
         '{type: "aggregate", aggregates: ["workspace", "entity"]}';
