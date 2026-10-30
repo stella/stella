@@ -104,6 +104,10 @@
     "reason": "pending gate classification"
   },
   {
+    "key": "unclassified-route:DELETE /v1/contacts",
+    "reason": "pending gate classification"
+  },
+  {
     "key": "unclassified-route:DELETE /v1/contacts/:contactId",
     "reason": "pending gate classification"
   },

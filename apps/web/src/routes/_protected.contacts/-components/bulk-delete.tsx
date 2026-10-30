@@ -17,6 +17,7 @@ import { Trash2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -33,10 +34,14 @@ type DeleteContacts = (
 
 const requestBulkDelete = async (
   contactIds: readonly string[],
-): Promise<readonly BulkDeleteOutcome[]> => {
-  const response = await api.contacts.delete({ contactIds: [...contactIds] });
-  return unwrapApiResponse(response).outcomes;
-};
+): Promise<readonly BulkDeleteOutcome[]> =>
+  await invokeCapability(
+    "contacts.bulk.delete",
+    async (request) =>
+      unwrapApiResponse(
+        await api.contacts.delete({ contactIds: [...contactIds] }, request),
+      ).outcomes,
+  );
 
 export function BulkDeleteContacts({
   contactIds,

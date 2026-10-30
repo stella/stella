@@ -1,4 +1,4 @@
-import bulkDeleteContacts from "@/api/handlers/contacts/bulk-delete";
+import bulkDeleteContacts from "@/api/handlers/contacts/bulk/delete";
 import businessRegistriesCheck from "@/api/handlers/contacts/business-registries/check";
 import businessRegistriesLookup from "@/api/handlers/contacts/business-registries/lookup";
 import createContact from "@/api/handlers/contacts/create";

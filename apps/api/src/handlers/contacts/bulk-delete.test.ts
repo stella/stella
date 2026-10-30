@@ -10,7 +10,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import bulkDeleteContacts, {
   bulkDeleteContactsBodySchema,
   CONTACT_BULK_DELETE_LIMIT,
-} from "./bulk-delete";
+} from "./bulk/delete";
 
 type BulkDeleteContext = Parameters<typeof bulkDeleteContacts.handler>[0];
 
@@ -38,7 +38,7 @@ const createContext = (
 
 describe("bulkDeleteContacts", () => {
   test("tenant-scopes contact selection and deletion", async () => {
-    const source = await Bun.file(`${import.meta.dir}/bulk-delete.ts`).text();
+    const source = await Bun.file(`${import.meta.dir}/bulk/delete.ts`).text();
     expect(
       source.match(/eq\(contacts\.organizationId, organizationId\)/gu),
     ).toHaveLength(2);
