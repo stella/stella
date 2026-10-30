@@ -503,6 +503,8 @@ const descriptorPath = (argument: string) => {
   return match === null ? undefined : decodeTraceString(match.at(1) ?? "");
 };
 
+const traceCallFailed = (line: string) => /\)\s+=\s+-1\b/u.test(line);
+
 const TRACE_ESCAPES: Readonly<Record<string, number>> = {
   n: 0x0a,
   t: 0x09,
@@ -607,7 +609,7 @@ export const undeclaredTracedFiles = ({
       relative.startsWith("node_modules/") ||
       relative.startsWith(".git/") ||
       closure.has(relative) ||
-      !tracked.has(relative) ||
+      (!tracked.has(relative) && !traceCallFailed(line)) ||
       // Bun reads these for every test, and a change to any of them already
       // selects every test.
       Object.values(SCRIPT_TEST_ALL_RULES).some((rule) =>
@@ -964,7 +966,7 @@ const commandScans = ({
         call.args.at(call.syscall.argument) ?? "",
       );
       if (directory === undefined) {
-        if (/\)\s+=\s+-1\b/u.test(line)) {
+        if (traceCallFailed(line)) {
           continue;
         }
         panic("Directory listing is missing its descriptor path");

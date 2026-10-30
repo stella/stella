@@ -538,6 +538,47 @@ describe("directory scan coverage", () => {
     });
   });
 
+  test("an absent repository path requires coverage before a later addition selects the test", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const optional = "data/optional.json";
+      expect(existsSync(path.join(root, optional))).toBe(false);
+      const trace = [
+        '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+        '1 access("data/optional.json", F_OK) = -1 ENOENT (No such file or directory)',
+      ].join("\n");
+      const options = { trace, root, tracked, closure: new Set<string>() };
+      expect(
+        undeclaredTracedFiles({
+          ...options,
+          declared: ["data/a.txt"],
+        }),
+      ).toEqual([optional]);
+      expect(
+        undeclaredTracedFiles({
+          ...options,
+          declared: ["data/**"],
+        }),
+      ).toEqual([]);
+
+      mkdirSync(path.join(root, "scripts"));
+      const testFile = "scripts/optional.test.ts";
+      writeFileSync(
+        path.join(root, testFile),
+        'import { existsSync } from "node:fs"; existsSync(new URL("../data/optional.json", import.meta.url));\n',
+      );
+      writeFileSync(path.join(root, optional), "{}\n");
+      expect(
+        selectAffectedScriptTests({
+          tests: [testFile],
+          changed: [optional],
+          root,
+          inputs: { [testFile]: ["data/**"] },
+          tracked: new Set([...tracked, testFile, optional]),
+        }).files,
+      ).toEqual([testFile]);
+    });
+  });
+
   type ForkSyscall = {
     [
       Key in keyof typeof SCRIPT_TEST_TRACE_SYSCALLS
