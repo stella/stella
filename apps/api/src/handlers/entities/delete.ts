@@ -33,7 +33,9 @@ import {
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -332,7 +334,9 @@ export const deleteEntitiesHandler = async function* ({
   );
   if (txOutcome.status === "rejected") {
     return Result.err(
-      new HandlerError({ status: 409, message: txOutcome.error.message }),
+      LegalHoldActiveError.is(txOutcome.error)
+        ? legalHoldRefusal(txOutcome.error)
+        : txOutcome.error,
     );
   }
   const deletedEntities = txOutcome.entities;

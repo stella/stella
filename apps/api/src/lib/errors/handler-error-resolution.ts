@@ -1,7 +1,6 @@
 import { Panic, Result, UnhandledException } from "better-result";
 
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
-import { LEGAL_HOLD_ACTIVE_HINT } from "@stll/api-contract/legal-holds";
 import { DocxArchiveError } from "@stll/docx-utils";
 
 import {
@@ -10,6 +9,7 @@ import {
 } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 
 /** How far a typed status is followed through transport wrappers. */
@@ -90,18 +90,7 @@ const legalHoldHandlerError = (error: unknown): HandlerError | null => {
   let candidate = error;
   for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
     if (LegalHoldActiveError.is(candidate)) {
-      return new HandlerError({
-        status: 409,
-        code: candidate.code,
-        message: candidate.message,
-        hint: LEGAL_HOLD_ACTIVE_HINT,
-        issues: candidate.holds.map((hold) => ({
-          path: hold.id,
-          code: hold.scope,
-          message: hold.placedAt.toISOString(),
-        })),
-        cause: candidate,
-      });
+      return legalHoldRefusal(candidate);
     }
     if (HandlerError.is(candidate) && candidate.status !== 500) {
       break;

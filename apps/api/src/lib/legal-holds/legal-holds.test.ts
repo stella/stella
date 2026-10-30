@@ -12,6 +12,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { LegalHoldActiveError } from "./errors";
 import { holdTargetPredicate } from "./holds";
 import type { HoldTarget } from "./holds";
+import { legalHoldRefusal } from "./refusal";
 
 const targets = () =>
   ({
@@ -55,12 +56,13 @@ test("every hold target uses parameterized SQL; empty collections never match", 
 });
 
 test("hold refusals retain the shared HTTP MCP and CLI conflict code", () => {
+  const holdId = createSafeId<"legalHold">();
   const error = new LegalHoldActiveError({
     message: "An active legal hold prevents deletion.",
     code: LEGAL_HOLD_ACTIVE,
     holds: [
       {
-        id: createSafeId<"legalHold">(),
+        id: holdId,
         scope: "matter",
         workspaceId: createSafeId<"workspace">(),
         placedAt: new Date("2026-01-01T00:00:00Z"),
@@ -81,8 +83,14 @@ test("hold refusals retain the shared HTTP MCP and CLI conflict code", () => {
       status: 409,
       code: LEGAL_HOLD_ACTIVE,
       cause: error,
+      issues: [{ path: holdId, code: "matter" }],
     });
   }
+  expect(legalHoldRefusal(error)).toMatchObject({
+    status: 409,
+    code: LEGAL_HOLD_ACTIVE,
+    issues: [{ path: holdId, code: "matter" }],
+  });
   expect(
     resolveHandlerError(new HandlerError({ status: 403, message: "Forbidden" }))
       ?.status,

@@ -29,6 +29,14 @@ const HOLD_CHECKS = new Set([
   "requireNoHold",
   "heldMatterIdsForAccount",
 ]);
+const HOLD_REFUSAL_HANDLERS = [
+  "handlers/chat/threads/delete.ts",
+  "handlers/contacts/delete.ts",
+  "handlers/entities/copy.ts",
+  "handlers/entities/delete.ts",
+  "handlers/entities/versions/delete.ts",
+  "handlers/workspaces/delete.ts",
+] as const;
 
 // Each entry names the concrete ownership boundary that permits this module's
 // deletions. The reverse census removes exceptions when their call sites vanish.
@@ -263,6 +271,49 @@ const censusSource = (source: string): DeletionCensus => {
   return { deletions, guarded };
 };
 
+const mapsHoldRefusal = (source: string): boolean => {
+  const file = ts.createSourceFile(
+    "refusal-census.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const mappers = new Set<string>();
+  for (const statement of file.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.includes("/legal-holds/refusal")
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const specifier of bindings.elements) {
+        if (
+          (specifier.propertyName?.text ?? specifier.name.text) ===
+          "legalHoldRefusal"
+        ) {
+          mappers.add(specifier.name.text);
+        }
+      }
+    }
+  }
+  let called = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      mappers.has(node.expression.text)
+    ) {
+      called = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return called;
+};
+
 const uncoveredModule = (path: string, source: string): string[] => {
   const { deletions, guarded } = censusSource(source);
   return guarded || EXCEPTIONS.has(path)
@@ -280,6 +331,32 @@ const isProductionSource = (path: string): boolean =>
   !path.startsWith("__fixtures__/");
 
 describe("legal hold deletion path census", () => {
+  test("a deletion refusal must use the shared legal-hold mapping", () => {
+    const plainRefusal = `
+      import { requireNoHold } from "@/api/lib/legal-holds/holds";
+      import { HandlerError } from "@/api/lib/errors/tagged-errors";
+      const hold = await requireNoHold({ tx, organizationId, target });
+      if (hold.isErr()) {
+        return Result.err(new HandlerError({ status: 409, message: hold.error.message }));
+      }
+    `;
+    expect(mapsHoldRefusal(plainRefusal)).toBe(false);
+    expect(
+      mapsHoldRefusal(`
+        import { legalHoldRefusal as mapRefusal } from "@/api/lib/legal-holds/refusal";
+        ${plainRefusal}
+        return Result.err(mapRefusal(hold.error));
+      `),
+    ).toBe(true);
+  });
+
+  test("every hold-refusing deletion handler uses the shared mapping", async () => {
+    for (const path of HOLD_REFUSAL_HANDLERS) {
+      const source = await Bun.file(`${SOURCE_ROOTS.src}/${path}`).text();
+      expect(mapsHoldRefusal(source), path).toBe(true);
+    }
+  });
+
   test("rejects unguarded row and storage deletion fixtures, including imported aliases", () => {
     const source = `
       import { entities as documents } from "@/api/db/schema";

@@ -25,6 +25,7 @@ import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -459,12 +460,7 @@ export const deleteEntityVersionHandler = async function* ({
 
   if (!txOutcome.ok) {
     if ("error" in txOutcome) {
-      return Result.err(
-        new HandlerError({
-          status: txOutcome.status,
-          message: txOutcome.message,
-        }),
-      );
+      return Result.err(legalHoldRefusal(txOutcome.error));
     }
     return Result.err(
       new HandlerError({

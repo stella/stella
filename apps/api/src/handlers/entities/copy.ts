@@ -49,6 +49,7 @@ import {
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
@@ -651,9 +652,7 @@ const copyToWorkspaceHandler = async function* ({
   if (Result.isError(copied)) {
     await rollbackS3Copies(copiedS3Keys, dependencies.deleteCopiedObjects);
     if (LegalHoldActiveError.is(copied.error)) {
-      return Result.err(
-        new HandlerError({ status: 409, message: copied.error.message }),
-      );
+      return Result.err(legalHoldRefusal(copied.error));
     }
     return Result.err(copied.error);
   }
