@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { panic, Result } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import {
@@ -41,13 +41,29 @@ type CreateOrganizationOptions = {
   idempotencyKey: string | null;
 };
 
+type OrganizationCreationDependencies = {
+  database?: Pick<
+    typeof rootDb,
+    "insert" | "select" | "delete" | "update" | "transaction"
+  >;
+  createOrganization?: (input: {
+    body: {
+      name: string;
+      slug: string;
+      userId: SafeId<"user">;
+      keepCurrentActiveOrganization: true;
+    };
+  }) => Promise<{ id: string; name: string; slug: string }>;
+};
+
 /** Root access is limited to this authenticated account's creation receipts; better-auth owns organization writes. */
-export const createOrganizationForAccount = async ({
-  userId,
-  name,
-  slug,
-  idempotencyKey,
-}: CreateOrganizationOptions) => {
+export const createOrganizationForAccount = async (
+  { userId, name, slug, idempotencyKey }: CreateOrganizationOptions,
+  {
+    database = rootDb,
+    createOrganization = getAuth().api.createOrganization,
+  }: OrganizationCreationDependencies = {},
+) => {
   const fingerprint = fingerprintRequest({
     method: "POST",
     route: "organizations.create",
@@ -67,14 +83,14 @@ export const createOrganizationForAccount = async ({
       );
     }
     // audit: skip - Coordination receipt; the resource creation is audited below.
-    const claimed = await rootDb
+    const claimed = await database
       .insert(receipts)
       .values({ userId, key, fingerprint })
       .onConflictDoNothing()
       .returning({ key: receipts.key });
     if (claimed.length === 0) {
       const receipt = (
-        await rootDb
+        await database
           .select()
           .from(receipts)
           .where(and(eq(receipts.userId, userId), eq(receipts.key, key)))
@@ -118,7 +134,7 @@ export const createOrganizationForAccount = async ({
   const reject = async (error: HandlerError) => {
     if (key !== null) {
       // audit: skip - A known refusal created no organization, so the coordination claim can be released.
-      await rootDb
+      await database
         .delete(receipts)
         .where(and(eq(receipts.userId, userId), eq(receipts.key, key)));
     }
@@ -129,9 +145,9 @@ export const createOrganizationForAccount = async ({
     const suffix = attempt === 0 ? "" : `-${String(attempt + 1)}`;
     const candidate = `${base.slice(0, ORGANIZATION_SLUG_MAX_LENGTH - suffix.length)}${suffix}`;
     // no-network-await-in-loop: bounded collision retries must observe the preceding unique-slug refusal before choosing the next suffix.
-    const created = await Result.tryPromise(
-      async () =>
-        await getAuth().api.createOrganization({
+    const created = await Result.tryPromise({
+      try: async () =>
+        await createOrganization({
           body: {
             name,
             slug: candidate,
@@ -139,7 +155,8 @@ export const createOrganizationForAccount = async ({
             keepCurrentActiveOrganization: true,
           },
         }),
-    );
+      catch: (cause) => cause,
+    });
     if (Result.isError(created)) {
       if (isSlugConflict(created.error)) {
         if (slug === undefined) {
@@ -162,7 +179,7 @@ export const createOrganizationForAccount = async ({
       }
       // An unknown failure may follow a committed better-auth write. Keep the
       // claim pending rather than risking a duplicate organization on retry.
-      return Result.err(created.error);
+      return Result.err(new UnhandledException({ cause: created.error }));
     }
     const result = {
       organizationId: created.value.id,
@@ -171,7 +188,7 @@ export const createOrganizationForAccount = async ({
       role: "owner" as const,
     };
     // db-await-in-loop: executed only once after the bounded slug collision loop succeeds; the function returns immediately.
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(database, async (tx) => {
       await createBackgroundAuditRecorder({ account: { userId } })(tx, {
         type: "organization.created",
         resourceId: result.organizationId,
