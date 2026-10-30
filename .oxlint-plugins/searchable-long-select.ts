@@ -345,14 +345,14 @@ const returnedExpressionReferencesLongList = (
     returnedExpressionReferencesLongList(child, context, variables);
   switch (node.type) {
     case "ConditionalExpression":
-      return follow(node["consequent"]) || follow(node["alternate"]);
+      return follow(node.consequent) || follow(node.alternate);
     case "LogicalExpression":
-      return follow(node["left"]) || follow(node["right"]);
+      return follow(node.left) || follow(node.right);
     case "ParenthesizedExpression":
     case "TSAsExpression":
     case "TSSatisfiesExpression":
     case "TSNonNullExpression":
-      return follow(node["expression"]);
+      return follow(node.expression);
     case "CallExpression":
       return (
         isAstNode(node.callee) &&
@@ -361,12 +361,12 @@ const returnedExpressionReferencesLongList = (
       );
     case "ArrayExpression":
       return (
-        Array.isArray(node["elements"]) &&
-        node["elements"].some(
+        Array.isArray(node.elements) &&
+        node.elements.some(
           (element: unknown) =>
             isAstNode(element) &&
             element.type === "SpreadElement" &&
-            follow(element["argument"]),
+            follow(element.argument),
         )
       );
     default:
