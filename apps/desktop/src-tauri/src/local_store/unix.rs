@@ -299,7 +299,15 @@ impl Parent {
     let path = PathBuf::from(format!("/proc/self/fd/{}", self.directory.as_raw_fd()))
       .join(&self.name);
     let listener = tokio::net::UnixListener::bind(path)?;
-    fs::chmodat(&self.directory, &self.name, FILE_MODE, AtFlags::empty())?;
+    // O_PATH can pin a socket inode without opening a connection to it. The
+    // no-follow open also refuses to chmod a replaced symbolic link's target.
+    let socket = File::from(fs::openat(
+      &self.directory,
+      &self.name,
+      OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+      Mode::empty(),
+    )?);
+    restrict_socket(&socket)?;
     Ok(listener)
   }
 
@@ -410,9 +418,67 @@ impl Parent {
   }
 }
 
+#[cfg(target_os = "linux")]
+fn restrict_socket(socket: &File) -> io::Result<()> {
+  use std::os::{fd::AsRawFd, unix::fs::FileTypeExt};
+  if !socket.metadata()?.file_type().is_socket() {
+    return Err(invalid_path());
+  }
+  check_owner(socket)?;
+  // Linux does not fchmod O_PATH descriptors. Its proc descriptor namespace
+  // follows the pinned inode, including after unlink or replacement of the name.
+  let path = PathBuf::from(format!("/proc/self/fd/{}", socket.as_raw_fd()));
+  fs::chmodat(fs::CWD, &path, FILE_MODE, AtFlags::empty()).map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[cfg(target_os = "linux")]
+  #[test]
+  fn socket_permissions_follow_the_opened_inode_after_name_replacement() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let root = super::super::create_temporary_root().unwrap();
+    let path = root.join("s");
+    let moved = root.join("moved");
+    let outside = root.join("outside");
+    super::super::write_private_atomic(&outside, b"outside").unwrap();
+    std::fs::set_permissions(&outside, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let unchanged = std::fs::metadata(&outside).unwrap().mode();
+    assert_eq!(unchanged & 0o777, 0o644);
+    let _listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let parent = Parent::at(&path).unwrap();
+    let socket = File::from(
+      fs::openat(
+        &parent.directory,
+        &parent.name,
+        OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+      )
+      .unwrap(),
+    );
+    std::fs::rename(&path, &moved).unwrap();
+    symlink(&outside, &path).unwrap();
+    restrict_socket(&socket).unwrap();
+    assert_eq!(std::fs::metadata(&moved).unwrap().mode() & 0o777, 0o600);
+    assert_eq!(std::fs::metadata(&outside).unwrap().mode(), unchanged);
+    let replaced = File::from(
+      fs::openat(
+        &parent.directory,
+        &parent.name,
+        OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+      )
+      .unwrap(),
+    );
+    assert_eq!(
+      restrict_socket(&replaced).unwrap_err().kind(),
+      io::ErrorKind::InvalidInput
+    );
+    std::fs::remove_dir_all(root).unwrap();
+  }
 
   #[test]
   fn platform_aliases_keep_application_roots_no_follow() {
