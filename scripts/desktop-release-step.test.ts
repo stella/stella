@@ -736,7 +736,7 @@ test("native compilation and signing run in separate jobs without source executi
   expect(JSON.stringify(build)).not.toMatch(/secrets\./u);
   expect(build["permissions"]).toEqual({ contents: "read" });
   expect(sign["needs"]).toBe("cli-native-build");
-  expect(sign["permissions"]).toEqual({ contents: "read" });
+  expect(sign["permissions"]).toEqual({});
   expect(sign["env"]).toBeUndefined();
   for (const step of sign["steps"]) {
     if (!record(step)) {

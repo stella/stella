@@ -25,6 +25,7 @@ import {
   type PreCutGate,
   preCutGates,
 } from "./prepare-maintenance-release-gates";
+import { selectPromotedReleaseBelow } from "./promoted-release-policy";
 import { heavyVerdict } from "./release-heavy-verdict";
 
 // Computed filesystem reads retain these repository Markdown inputs.
@@ -496,15 +497,113 @@ const runChangesetVersion = (rootDir: string) => {
   }
 };
 
+export type ReleaseDates = Record<string, string | null>;
+
+/**
+ * The release publication manifest as the release PR will carry it: every
+ * unpromoted record that GitHub now dates takes its time, the previous final
+ * takes GitHub's verdict (a time when promoted, null when not), and a
+ * never-tagged previous version records nothing. The cut writes this and
+ * checks npm against it, so the cut and the tag see the same promotions.
+ */
+export const projectReleaseDates = ({
+  dates,
+  previousRelease,
+  previousTag,
+  refreshed,
+}: {
+  dates: ReleaseDates;
+  previousRelease: PreviousRelease;
+  previousTag: string;
+  refreshed: Readonly<Record<string, string>>;
+}): ReleaseDates => {
+  const projected: ReleaseDates = Object.fromEntries(
+    Object.entries(dates).map(([tag, publishedAt]) => [
+      tag,
+      publishedAt ?? refreshed[tag] ?? null,
+    ]),
+  );
+  switch (previousRelease.kind) {
+    case "published":
+      return { ...projected, [previousTag]: previousRelease.publishedAt };
+    case "unpromoted":
+      return { ...projected, [previousTag]: null };
+    case "superseded":
+      return projected;
+    default:
+      previousRelease satisfies never;
+      return panic("Unhandled previous release");
+  }
+};
+
+/**
+ * Asks GitHub about every release the manifest records as unpromoted, so one
+ * promoted after a later cut becomes a reference. Only a published time is
+ * taken; a release still unpublished stays null. A lookup that fails is
+ * tolerated only for a tag older than the newest promoted release, which can
+ * never be the reference; any other failure stops the cut.
+ */
+export const refreshUnpromotedReleases = async ({
+  cutVersion,
+  dates,
+  previousTag,
+  readRelease,
+}: {
+  /** The release being cut: the reference is always strictly below it. */
+  cutVersion: string;
+  dates: ReleaseDates;
+  previousTag: string;
+  readRelease: (tag: string) => Promise<PreviousRelease>;
+}): Promise<Record<string, string>> => {
+  // The previous final is read by the cut itself and may be promoted without
+  // being recorded, so it never sets the bound.
+  const newestPromoted = Object.entries(dates)
+    .filter(
+      ([tag, publishedAt]) =>
+        publishedAt !== null &&
+        tag !== previousTag &&
+        Bun.semver.order(tag.slice(1), cutVersion) < 0,
+    )
+    .map(([tag]) => tag.slice(1))
+    .toSorted((left, right) => Bun.semver.order(right, left))
+    .at(0);
+  const refreshed: (readonly [string, string])[] = [];
+  for (const [tag, publishedAt] of Object.entries(dates)) {
+    if (publishedAt !== null || tag === previousTag) {
+      continue;
+    }
+    const outcome = await Result.tryPromise(async () => readRelease(tag));
+    if (Result.isError(outcome)) {
+      if (
+        newestPromoted !== undefined &&
+        Bun.semver.order(tag.slice(1), newestPromoted) < 0
+      ) {
+        continue;
+      }
+      const { cause } = outcome.error;
+      throw new MaintenanceReleaseError(
+        `Could not read ${tag} from GitHub Releases: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
+    if (outcome.value.kind === "published") {
+      refreshed.push([tag, outcome.value.publishedAt]);
+    }
+  }
+  return Object.fromEntries(refreshed);
+};
+
 export const prepareMaintenanceReleaseFiles = ({
   previousFinalVersion,
   previousRelease,
+  refreshedReleases = {},
   rootDir,
   versionPackages = runChangesetVersion,
   writeFile = atomicWriteFile,
 }: {
   previousFinalVersion: string;
   previousRelease: PreviousRelease;
+  /** Publication times of releases recorded as unpromoted that GitHub now dates. */
+  refreshedReleases?: Readonly<Record<string, string>>;
   rootDir: string;
   /** Consumes the pending changesets; the repository's own version script. */
   versionPackages?: (rootDir: string) => void;
@@ -547,14 +646,12 @@ export const prepareMaintenanceReleaseFiles = ({
   }
 
   const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
-  const releaseDates = readReleaseDates(rootDir);
-  if (
-    previousRelease.kind !== "superseded" &&
-    releaseDates[previousTag] !== null
-  ) {
-    releaseDates[previousTag] =
-      previousRelease.kind === "published" ? previousRelease.publishedAt : null;
-  }
+  const releaseDates = projectReleaseDates({
+    dates: readReleaseDates(rootDir),
+    previousRelease,
+    previousTag,
+    refreshed: refreshedReleases,
+  });
   const changesets = readPendingChangesets(rootDir);
   const emptyChangesetPath = nodePath.join(
     rootDir,
@@ -1495,6 +1592,8 @@ export type CutGateOutcome =
 export type CutGateContext = {
   readonly baseSha: string;
   readonly previousFinalTag: string;
+  /** The publication manifest as the release PR will carry it. */
+  readonly releaseDates: ReleaseDates;
   readonly rootDir: string;
   readonly write: (text: string) => void;
 };
@@ -1506,8 +1605,10 @@ export type CutGateRunner = (
 ) => Promise<CutGateOutcome>;
 
 /**
- * Runs the tag's guards on the base tree. The cut checks npm at its resolved
- * final tag; the RC checks the preceding final from its candidate. The caller's
+ * Runs the tag's guards on the base tree. The cut checks npm at the newest
+ * promoted final below the release it cuts, chosen from the manifest the
+ * release PR will carry (GitHub's verdict on the previous final included); the
+ * RC checks the same release from its candidate. The caller's
  * environment forwards an explicit waiver
  * (WAIVE_DEPENDENCY_AUDIT=true with WAIVER_REASON) reaches the dependency
  * audit exactly as the tag's waiver inputs do.
@@ -1522,15 +1623,27 @@ export const runCutGate: CutGateRunner = async (gate, context) => {
     case "command":
       command = gate.check.command;
       break;
-    case "npm-publish-lag":
-      // The cut has no candidate yet: check the final it will increment.
+    case "npm-publish-lag": {
+      // The cut has no candidate yet. The reference is the newest promoted
+      // final below the release it will cut, chosen from the manifest the
+      // release PR will carry (GitHub's verdict on the previous final
+      // included), so the tag later checks the same release.
+      const reference = selectPromotedReleaseBelow(
+        context.releaseDates,
+        nextPatchVersion(parseStableVersion(context.previousFinalTag.slice(1)))
+          .value,
+      );
+      if (reference.status !== "resolved") {
+        return { passed: false, detail: reference.message };
+      }
       command = [
         "bun",
         "scripts/check-npm-publish-lag.ts",
         "--ref",
-        context.previousFinalTag,
+        reference.ref,
       ];
       break;
+    }
     default:
       gate.check satisfies never;
       return panic("Unhandled maintenance release gate");
@@ -1658,11 +1771,28 @@ export const cutMaintenanceRelease = async (
   const current = parseStableVersion(effects.latestFinalVersion());
   const previousFinalTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
+  // GitHub's verdict on the previous final and on every release the manifest
+  // records as unpromoted, read before any gate: the npm gate checks against
+  // the manifest the release PR will carry, which the preparation writes.
+  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
+  const recordedDates = readReleaseDates(rootDir);
+  const refreshedReleases = await refreshUnpromotedReleases({
+    cutVersion: nextPatchVersion(current).value,
+    dates: recordedDates,
+    previousTag: previousFinalTag,
+    readRelease: effects.readPreviousRelease,
+  });
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
     context: {
       baseSha,
       previousFinalTag,
+      releaseDates: projectReleaseDates({
+        dates: recordedDates,
+        previousRelease,
+        previousTag: previousFinalTag,
+        refreshed: refreshedReleases,
+      }),
       rootDir,
       write: effects.write,
     },
@@ -1672,7 +1802,6 @@ export const cutMaintenanceRelease = async (
   if (queueHistoryWarning !== null) {
     effects.write(`${queueHistoryWarning}\n`);
   }
-  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
   // checks below run after it, and a failure there must restore the version
@@ -1684,6 +1813,7 @@ export const cutMaintenanceRelease = async (
       const release = prepareMaintenanceReleaseFiles({
         previousFinalVersion: current.value,
         previousRelease,
+        refreshedReleases,
         rootDir,
         versionPackages: effects.versionPackages,
       });

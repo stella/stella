@@ -21,10 +21,6 @@ import {
   systemAuditRuns,
 } from "@/api/db/schema";
 import {
-  EMPTY_AST,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   getAdapter,
   listAdapters,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -60,6 +56,10 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  EMPTY_AST,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,

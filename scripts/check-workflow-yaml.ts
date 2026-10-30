@@ -326,7 +326,7 @@ export const ARTIFACT_DOWNLOAD_EXCEPTIONS: readonly ArtifactDownloadException[] 
       step: "Download built standalone CLI",
       reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.noActionsRead,
       detail:
-        "The artifact-only signer grants contents: read and has no checkout or repository scripts.",
+        "The artifact-only signer grants no repository-token permissions and has no checkout or repository scripts.",
     },
     {
       file: ".github/workflows/type-cost-measurement.yml",

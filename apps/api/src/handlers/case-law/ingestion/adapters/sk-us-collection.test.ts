@@ -3,13 +3,13 @@ import { describe, expect, test } from "bun:test";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { readGzipJson } from "@/api/lib/gzip-json";
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const fixture = async () => {

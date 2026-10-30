@@ -795,8 +795,7 @@ jobs:
     needs: cli-native-build
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
-    permissions:
-      contents: read
+    permissions: {}
     strategy: *cli-native-strategy
     steps:
       - name: Download built standalone CLI

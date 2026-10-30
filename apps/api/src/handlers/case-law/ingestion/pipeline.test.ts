@@ -36,11 +36,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import {
-  EMPTY_AST,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
@@ -84,9 +79,14 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
-import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionJudgeInput,
+  IngestionResult,
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
