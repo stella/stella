@@ -541,10 +541,11 @@ const measureRouteTarget = async ({
       `${route.template} must show exactly one divider under the app chrome`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
+    // Capture at the settled route boundary; awaiting the document's CSP
+    // check must not extend the network measurement into background work.
+    const capture = await network.capture();
     await csp.assertClean();
-    // Captured after the route shell and tracked API work are ready, so the
-    // manifest reflects the fully-rendered route.
-    return summarizeCapture(await network.capture());
+    return summarizeCapture(capture);
   } finally {
     detachNetwork();
     detachPage();
