@@ -1093,7 +1093,24 @@ describe("account export capability authority", () => {
     }
   });
 
-  test("consented OAuth subject validates reads and requires approval for export creation", async () => {
+  test("bulk account download invocation requires human approval", async () => {
+    const context = createContext({
+      credential: oauthCredential,
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "account-exports.download.get",
+        input: { params: { exportId: "00000000-0000-4000-8000-000000000001" } },
+      },
+      context,
+    });
+    expect(errorEnvelope(result).code).toBe("person_approval_required");
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("consented OAuth subject validates status reads and requires approval for exports", async () => {
     const context = createContext({
       credential: oauthCredential,
       grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
@@ -1115,7 +1132,10 @@ describe("account export capability authority", () => {
         },
         context,
       });
-      if (entry.access === "write") {
+      if (
+        entry.access === "write" ||
+        entry.id === "account-exports.download.get"
+      ) {
         expect(errorEnvelope(result).code).toBe("person_approval_required");
       } else {
         expect(

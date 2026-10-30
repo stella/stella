@@ -164,7 +164,10 @@ const CAPABILITY_AGENT_ACCESS = {
     kind: AGENT_ACCESS_KIND.personApproves,
     reason: "writes-content",
   },
-  "account-exports.download.get": OPEN,
+  "account-exports.download.get": {
+    kind: AGENT_ACCESS_KIND.personApproves,
+    reason: "outbound",
+  },
   "account-exports.get": OPEN,
   "account-exports.status.get": OPEN,
   "tasks.list": OPEN,

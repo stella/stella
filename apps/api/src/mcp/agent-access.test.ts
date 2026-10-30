@@ -146,7 +146,7 @@ describe("classification", () => {
     }
   });
 
-  test("read tools and read capabilities are open", () => {
+  test("read tools and capabilities stay open except approved bulk account downloads", () => {
     for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
       if (tool.access === "read") {
         expect({
@@ -160,7 +160,13 @@ describe("classification", () => {
         expect({
           id: entry.id,
           kind: kindOf({ type: "capability", id: entry.id }),
-        }).toEqual({ id: entry.id, kind: AGENT_ACCESS_KIND.open });
+        }).toEqual({
+          id: entry.id,
+          kind:
+            entry.id === "account-exports.download.get"
+              ? AGENT_ACCESS_KIND.personApproves
+              : AGENT_ACCESS_KIND.open,
+        });
       }
     }
   });
@@ -215,14 +221,16 @@ describe("classification", () => {
     );
   });
 
-  test("account export creation needs approval while account export reads stay open", () => {
+  test("account export creation and bulk downloads need approval while status reads stay open", () => {
     expect(kindOf({ type: "capability", id: "account-exports.create" })).toBe(
       AGENT_ACCESS_KIND.personApproves,
     );
+    expect(
+      kindOf({ type: "capability", id: "account-exports.download.get" }),
+    ).toBe(AGENT_ACCESS_KIND.personApproves);
     for (const id of [
       "account-exports.get",
       "account-exports.status.get",
-      "account-exports.download.get",
       "matters.vocabulary.get",
     ]) {
       expect(kindOf({ type: "capability", id })).toBe(AGENT_ACCESS_KIND.open);
