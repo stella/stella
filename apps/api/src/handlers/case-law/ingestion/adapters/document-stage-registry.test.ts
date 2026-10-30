@@ -7,7 +7,6 @@ import {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { defineSourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   listAdapters,
   listDocumentStageAdapters,
@@ -15,6 +14,7 @@ import {
 import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
+import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";

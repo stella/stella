@@ -117,9 +117,16 @@ export const NO_NATIVE_UI_REGISTRY = {
     roles: ["button"],
     inputTypes: ["button", "image", "reset", "submit"],
   }),
-  calendar: owned(
+  "calendar-primitives": owned(
     DATE_INPUT_RULE,
     "the native date pickers are reported there",
+  ),
+  "resource-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "resource-calendar.logic": notComponent(
+    "resource calendar placement helpers",
   ),
   checkbox: native("Checkbox from @stll/ui/checkbox", {
     roles: ["checkbox"],
@@ -158,6 +165,13 @@ export const NO_NATIVE_UI_REGISTRY = {
   "date-range-filter": owned(
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
     "hand-built range filters are reported there",
+  ),
+  "day-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "day-calendar.logic": notComponent(
+    "day calendar layout and snapping helpers",
   ),
   "destructive-action-confirmation": owned(
     "eslint/no-alert",
@@ -199,6 +213,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   icons: owned(
     "no-direct-lucide-import/no-direct-lucide-import",
     "glyphs come from @stll/ui/icons, never the icon library directly",
+  ),
+  "identity-text": noNative(
+    "a clipped name that discloses its full text in a tooltip",
   ),
   "inline-drop-indicator": noNative("a drag-and-drop insertion marker"),
   "inline-rename": owned(
@@ -342,6 +359,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
+  text: noNative(
+    "text in one of the design system's roles; a <span> or <p> is ordinary " +
+      "markup on the web",
+  ),
   "text-mark": owned(
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
     "raw <mark> and hand-styled marks are reported there",

@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  isObjectLiteralProperty,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { TABLE_RETENTION } from "@/api/db/retention";
 
@@ -11,60 +18,55 @@ const apiRoot = path.resolve(import.meta.dirname, "../../..");
 const repoRoot = path.resolve(apiRoot, "../..");
 
 const exemptRouteFiles = () => {
-  const config = ts.createSourceFile(
+  const config = parseSource(
     "oxlint.config.ts",
     readFileSync(path.join(repoRoot, "oxlint.config.ts"), "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
   );
+  const keyText = (property: ObjectProperty) =>
+    config.sourceText.slice(property.key.start, property.key.end);
+  const entry = (node: ObjectExpression, name: string) =>
+    node.properties.find(
+      (property): property is ObjectProperty =>
+        isObjectLiteralProperty(property, node) &&
+        !property.shorthand &&
+        !property.method &&
+        !property.computed &&
+        keyText(property) === name,
+    );
   const files: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isObjectLiteralExpression(node)) {
-      const rules = node.properties.find(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          property.name.getText() === "rules",
-      );
+  walk(config.program, (node) => {
+    if (node.type !== "ObjectExpression") {
+      return;
+    }
+    const rules = entry(node, "rules");
+    if (rules?.value.type !== "ObjectExpression") {
+      return;
+    }
+    const exempt = rules.value.properties.some(
+      (property) =>
+        property.type === "Property" &&
+        !property.shorthand &&
+        !property.computed &&
+        property.key.type === "Literal" &&
+        property.key.value ===
+          "require-safe-route-handlers/require-safe-route-handlers" &&
+        property.value.type === "Literal" &&
+        property.value.value === "off",
+    );
+    const paths = exempt ? entry(node, "files") : undefined;
+    if (paths?.value.type !== "ArrayExpression") {
+      return;
+    }
+    for (const item of paths.value.elements) {
       if (
-        rules &&
-        ts.isPropertyAssignment(rules) &&
-        ts.isObjectLiteralExpression(rules.initializer)
+        item?.type === "Literal" &&
+        typeof item.value === "string" &&
+        item.value.startsWith("apps/api/src/handlers/")
       ) {
-        const exempt = rules.initializer.properties.some(
-          (property) =>
-            ts.isPropertyAssignment(property) &&
-            ts.isStringLiteral(property.name) &&
-            property.name.text ===
-              "require-safe-route-handlers/require-safe-route-handlers" &&
-            ts.isStringLiteral(property.initializer) &&
-            property.initializer.text === "off",
-        );
-        if (exempt) {
-          const paths = node.properties.find(
-            (property) =>
-              ts.isPropertyAssignment(property) &&
-              property.name.getText() === "files",
-          );
-          if (
-            paths &&
-            ts.isPropertyAssignment(paths) &&
-            ts.isArrayLiteralExpression(paths.initializer)
-          ) {
-            for (const item of paths.initializer.elements) {
-              if (
-                ts.isStringLiteral(item) &&
-                item.text.startsWith("apps/api/src/handlers/")
-              ) {
-                files.push(item.text.slice("apps/api/".length));
-              }
-            }
-          }
-        }
+        files.push(item.value.slice("apps/api/".length));
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(config);
+  });
   return files;
 };
 

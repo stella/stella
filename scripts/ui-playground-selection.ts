@@ -39,9 +39,103 @@ export type PlaygroundInventory = {
 };
 
 const EMITTED_SCANNER = new Bun.Transpiler({ loader: "js" });
+const MODULE_LITERAL =
+  /(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/u.source;
+
+const moduleLiteral = (expression: string) => {
+  const imports = EMITTED_SCANNER.scanImports(`import(${expression})`);
+  return imports.length === 1 ? imports.at(0)?.path : undefined;
+};
+
+type GlobReference = { patterns: readonly string[]; base: string | undefined };
+
+const scanModuleReferences = (emitted: string) => {
+  const urls: string[] = [];
+  const globs: GlobReference[] = [];
+  // Environment metadata is not a module path. Every other import.meta use
+  // must be accounted for by one of the literal reference forms below.
+  let followed =
+    emitted.match(/\bimport\s*\.\s*meta\s*\.\s*env\b/gu)?.length ?? 0;
+  const urlPattern = new RegExp(
+    String.raw`\bnew\s+URL\s*\(\s*(${MODULE_LITERAL})\s*,\s*import\s*\.\s*meta\s*\.\s*url\s*,?\s*\)`,
+    "gu",
+  );
+  for (const match of emitted.matchAll(urlPattern)) {
+    const expression = match.at(1);
+    const specifier =
+      expression === undefined ? undefined : moduleLiteral(expression);
+    if (specifier !== undefined) {
+      urls.push(specifier);
+      followed += 1;
+    }
+  }
+  const array = String.raw`\[\s*(?:${MODULE_LITERAL}\s*(?:,\s*${MODULE_LITERAL}\s*)*,?\s*)?\]`;
+  const globPattern = new RegExp(
+    String.raw`\bimport\s*\.\s*meta\s*\.\s*glob\s*\(\s*(${MODULE_LITERAL}|${array})\s*(?:,\s*(\{[^{}]*\})\s*)?\)`,
+    "gu",
+  );
+  for (const match of emitted.matchAll(globPattern)) {
+    const expression = match.at(1);
+    if (expression === undefined) {
+      continue;
+    }
+    const literals = [...expression.matchAll(new RegExp(MODULE_LITERAL, "gu"))];
+    const patterns: string[] = [];
+    for (const literal of literals) {
+      const specifier = moduleLiteral(literal[0]);
+      if (specifier !== undefined) {
+        patterns.push(specifier);
+      }
+    }
+    if (patterns.length !== literals.length) {
+      continue;
+    }
+    const optionText = match.at(2);
+    const options: unknown =
+      optionText === undefined ? {} : Bun.JSON5.parse(optionText);
+    if (
+      typeof options !== "object" ||
+      options === null ||
+      Array.isArray(options)
+    ) {
+      continue;
+    }
+    const base = "base" in options ? options.base : undefined;
+    if (base !== undefined && typeof base !== "string") {
+      continue;
+    }
+    if ("caseSensitive" in options && options.caseSensitive !== true) {
+      continue;
+    }
+    if (
+      Object.keys(options).some(
+        (key) =>
+          ![
+            "base",
+            "caseSensitive",
+            "eager",
+            "exhaustive",
+            "import",
+            "query",
+          ].includes(key),
+      )
+    ) {
+      continue;
+    }
+    globs.push({ patterns, base });
+    followed += 1;
+  }
+  const references = emitted.match(/\bimport\s*\.\s*meta\b/gu)?.length ?? 0;
+  return { urls, globs, complete: references === followed };
+};
+
 const SOURCE_IMPORTS = new Map<
   string,
-  { imports: readonly string[]; complete: boolean }
+  {
+    imports: readonly string[];
+    references: ReturnType<typeof scanModuleReferences>;
+    complete: boolean;
+  }
 >();
 
 const normalize = (file: string) =>
@@ -400,12 +494,126 @@ const stylesheetImports = (
   return { files, complete };
 };
 
+type ModuleGlob = {
+  include: readonly Bun.Glob[];
+  exclude: readonly Bun.Glob[];
+};
+
+const matchesModuleGlob = (glob: ModuleGlob, file: string) =>
+  glob.include.some((pattern) => pattern.match(file)) &&
+  !glob.exclude.some((pattern) => pattern.match(file));
+
+type FollowModuleReferencesOptions = {
+  references: ReturnType<typeof scanModuleReferences>;
+  importer: string;
+  root: string;
+};
+
+const followModuleReferences = ({
+  references,
+  importer,
+  root,
+}: FollowModuleReferencesOptions) => {
+  const files: string[] = [];
+  const globs: ModuleGlob[] = [];
+  let complete = true;
+  try {
+    for (const url of references.urls) {
+      if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/iu.test(url)) {
+        continue;
+      }
+      const specifier = url.split(/[?#]/u, 1).at(0) ?? "";
+      const candidates = specifier.startsWith("/")
+        ? [
+            `apps/web/${specifier.slice(1)}`,
+            `apps/web/public/${specifier.slice(1)}`,
+          ]
+        : [
+            specifier === ""
+              ? importer
+              : path.posix.join(path.posix.dirname(importer), specifier),
+          ];
+      const resolved = candidates.flatMap((candidate) => {
+        const file = sourceCandidate(root, candidate);
+        return file === undefined ? [] : [file];
+      });
+      complete &&= resolved.length > 0;
+      files.push(...resolved);
+    }
+    for (const reference of references.globs) {
+      let directory = path.posix.dirname(importer);
+      if (reference.base !== undefined) {
+        if (reference.base.startsWith("/")) {
+          directory = path.posix.join("apps/web", reference.base.slice(1));
+        } else if (reference.base.startsWith(".")) {
+          directory = path.posix.join(directory, reference.base);
+        } else {
+          complete = false;
+          continue;
+        }
+      }
+      const include: Bun.Glob[] = [];
+      const exclude: Bun.Glob[] = [];
+      for (const pattern of reference.patterns) {
+        const negative = pattern.startsWith("!");
+        const value = negative ? pattern.slice(1) : pattern;
+        let normalized: string;
+        if (value.startsWith("/")) {
+          normalized = path.posix.join("apps/web", value.slice(1));
+        } else if (value.startsWith("@/")) {
+          normalized = path.posix.join(WEB_SOURCE, value.slice(2));
+        } else if (value.startsWith(".") || negative) {
+          normalized = path.posix.join(directory, value);
+        } else {
+          complete = false;
+          continue;
+        }
+        // Bun's glob syntax does not cover every Vite pattern extension.
+        if (/[!+@?*]\(/u.test(value)) {
+          complete = false;
+          continue;
+        }
+        const glob = new Bun.Glob(normalize(normalized));
+        (negative ? exclude : include).push(glob);
+      }
+      const glob = { include, exclude };
+      globs.push(glob);
+      for (const pattern of include) {
+        for (const matched of pattern.scanSync({
+          cwd: root,
+          onlyFiles: true,
+          dot: true,
+        })) {
+          const file = normalize(matched);
+          if (matchesModuleGlob(glob, file)) {
+            files.push(file);
+          }
+        }
+      }
+    }
+  } catch {
+    complete = false;
+  }
+  return { files, globs, complete };
+};
+
+type ImportClosure = {
+  files: ReadonlySet<string>;
+  globs: readonly ModuleGlob[];
+  complete: boolean;
+};
+
+const closureIncludes = (closure: ImportClosure, file: string) =>
+  closure.files.has(file) ||
+  closure.globs.some((glob) => matchesModuleGlob(glob, file));
+
 export const staticImportClosure = (
   entry: string,
   root = REPO_ROOT,
   boundary: ReadonlySet<string> = new Set(),
-): { files: ReadonlySet<string>; complete: boolean } => {
+): ImportClosure => {
   const files = new Set<string>();
+  const globs: ModuleGlob[] = [];
   const pending = [sourceCandidate(root, entry) ?? normalize(entry)];
   let complete = true;
   for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
@@ -471,6 +679,7 @@ export const staticImportClosure = (
     let scanned = SOURCE_IMPORTS.get(scanKey);
     if (scanned === undefined) {
       let imports: readonly string[];
+      let references: ReturnType<typeof scanModuleReferences>;
       let importComplete = true;
       try {
         const transpiler = new Bun.Transpiler({ loader, logLevel: "error" });
@@ -480,13 +689,24 @@ export const staticImportClosure = (
         imports = EMITTED_SCANNER.scanImports(emitted).map(
           ({ path: imported }) => imported,
         );
+        references = scanModuleReferences(emitted);
         // A computed `import(...)` names no module the scan can follow. The
         // emitted code has no comments or type-only imports, so any call beyond
         // the literal ones leaves the closure unknown.
         const dynamicCalls = emitted.match(/\bimport\s*\(/gu)?.length ?? 0;
-        const literalCalls =
-          emitted.match(/\bimport\s*\(\s*(["'])[^"'`]+\1\s*[,)]/gu)?.length ??
-          0;
+        const literalCalls = [
+          ...emitted.matchAll(
+            new RegExp(
+              String.raw`\bimport\s*\(\s*(${MODULE_LITERAL})\s*[,)]`,
+              "gu",
+            ),
+          ),
+        ].filter((match) => {
+          const expression = match.at(1);
+          return (
+            expression !== undefined && moduleLiteral(expression) !== undefined
+          );
+        }).length;
         if (dynamicCalls > literalCalls) {
           importComplete = false;
         }
@@ -494,16 +714,29 @@ export const staticImportClosure = (
         // A file the transpiler cannot parse is followed as far as the plain
         // scan reaches, but its closure is not known to be complete.
         importComplete = false;
+        references = { urls: [], globs: [], complete: false };
         imports = [
           ...source.matchAll(/(?:from\s*|import\s*\()(["'])([^"']+)\1/gu),
         ]
           .map((match) => match[2])
           .filter((imported): imported is string => imported !== undefined);
       }
-      scanned = { imports, complete: importComplete };
+      scanned = {
+        imports,
+        references,
+        complete: importComplete && references.complete,
+      };
       SOURCE_IMPORTS.set(scanKey, scanned);
     }
     complete &&= scanned.complete;
+    const followed = followModuleReferences({
+      references: scanned.references,
+      importer: file,
+      root,
+    });
+    pending.push(...followed.files);
+    globs.push(...followed.globs);
+    complete &&= followed.complete;
     for (const imported of scanned.imports) {
       const resolved = resolveImport(imported, file, root, boundary);
       pending.push(...resolved.files);
@@ -512,7 +745,7 @@ export const staticImportClosure = (
       }
     }
   }
-  return { files, complete };
+  return { files, globs, complete };
 };
 
 export const readPlaygroundInventory = (
@@ -551,10 +784,9 @@ export const readPlaygroundInventory = (
 
 /** The app shell's import closure; incomplete when any entry is missing or
  *  reaches an internal module the selector cannot resolve. */
-export const appShellClosure = (
-  root = REPO_ROOT,
-): { files: ReadonlySet<string>; complete: boolean } => {
+export const appShellClosure = (root = REPO_ROOT): ImportClosure => {
   const files = new Set<string>();
+  const globs: ModuleGlob[] = [];
   let complete = true;
   for (const entry of APP_SHELL_ENTRIES) {
     const cacheKey = `${root}\0shell\0${entry}`;
@@ -563,11 +795,12 @@ export const appShellClosure = (
       staticImportClosure(entry, root, APP_SHELL_BOUNDARY);
     IMPORT_CLOSURES.set(cacheKey, closure);
     complete &&= closure.complete;
+    globs.push(...closure.globs);
     for (const file of closure.files) {
       files.add(file);
     }
   }
-  return { files, complete };
+  return { files, globs, complete };
 };
 
 export const isSharedPlaygroundHarness = (file: string): boolean => {
@@ -699,7 +932,10 @@ export const selectGeometrySpecs = (
     return inventory.specs;
   }
   const shell = appShellClosure(root);
-  if (!shell.complete || [...changed].some((file) => shell.files.has(file))) {
+  if (
+    !shell.complete ||
+    [...changed].some((file) => closureIncludes(shell, file))
+  ) {
     return inventory.specs;
   }
   const selected = new Set<string>();
@@ -714,9 +950,6 @@ export const selectGeometrySpecs = (
         ),
     ),
   );
-  for (const file of shell.files) {
-    unclassified.delete(file);
-  }
   const closures = new Map<string, ReturnType<typeof staticImportClosure>>();
   for (const spec of inventory.specs) {
     if (changed.has(spec)) {
@@ -739,10 +972,12 @@ export const selectGeometrySpecs = (
         if (!closure.complete) {
           return inventory.specs;
         }
-        for (const file of closure.files) {
-          unclassified.delete(file);
+        for (const file of unclassified) {
+          if (closureIncludes(closure, file)) {
+            unclassified.delete(file);
+          }
         }
-        if ([...changed].some((file) => closure.files.has(file))) {
+        if ([...changed].some((file) => closureIncludes(closure, file))) {
           selected.add(spec);
         }
       }

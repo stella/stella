@@ -814,8 +814,10 @@
       "deleteRateTable": "Tariftabelle löschen",
       "editRateTable": "Tariftabelle bearbeiten",
       "effectiveFrom": "Gültig ab",
+      "effectiveRateRequired": "Für diese Akte, diese Person und dieses Datum ist kein gültiger Stundensatz hinterlegt. Fügen Sie einen Stundensatz hinzu oder erfassen Sie die Zeit als nicht abrechenbar.",
       "effectiveTo": "Gültig bis",
       "hourlyRate": "Stundensatz",
+      "logNonBillable": "Als nicht abrechenbar erfassen",
       "noRateEntries": "Noch keine Tarifeinträge",
       "noRateFound": "Kein Tarif konfiguriert",
       "noRateTables": "Noch keine Tariftabellen",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
-      "remove": "Filter {filter} entfernen"
+      "countryMismatch": "Filter entfernt, da sie nicht zu {country} gehören: {filters}.",
+      "remove": "Filter {filter} entfernen",
+      "showInCountry": "{filter} in {country} anzeigen"
     },
     "languages": {
       "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
     "activity": {
+      "newerVersion": "Dieser Inhalt wird in einer neueren Version angezeigt.",
       "review": "Aktualisierung zur Prüfung"
     },
     "aiPrompt": "KI-Nachrichtenfeld",
@@ -2084,8 +2089,6 @@
     "clearFilters": "Filter löschen",
     "clearSearch": "Suche löschen",
     "close": "Schließen",
-    "closeAll": "Alle schließen",
-    "closeOthers": "Andere schließen",
     "columns": "Spalten",
     "comfortable": "Komfortabel",
     "comingSoon": "Demnächst verfügbar",
@@ -2359,6 +2362,7 @@
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
     "unsavedChanges": "Ungespeicherte Änderungen",
+    "unsavedChangesClose": "Ungespeicherte Änderungen. Erneut schließen, um sie zu verwerfen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
@@ -2400,6 +2404,8 @@
     "returnToAgent": "Kehren Sie zu Ihrem Agenten zurück, um fortzufahren.",
     "returnsLocally": "Sie kehren auf diesem Computer zu {clientName} zurück",
     "returnsTo": "Sie kehren zu {clientName} zurück",
+    "scopeAccountExportRead": "Ihre personenbezogenen Datenexporte lesen",
+    "scopeAccountExportWrite": "Exporte Ihrer personenbezogenen Daten anfordern",
     "scopeAdminRead": "Das Audit-Protokoll Ihrer Organisation lesen",
     "scopeAdminWrite": "Mitglieder und Einstellungen der Organisation verwalten",
     "scopeBillingWrite": "Ihre Zeiteinträge erstellen, bearbeiten und löschen",
@@ -3674,6 +3680,9 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "closeAllTabs": "{count, plural, one {# Tab} other {Alle # Tabs}} schließen",
+    "closeOtherTabs": "{count, plural, one {# anderen Tab} other {# andere Tabs}} schließen",
+    "closeTab": "<bdi>{name}</bdi> schließen",
     "conversionRefusal": {
       "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
       "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
@@ -5048,6 +5057,8 @@
       "desktopCardConnectedTitle": "stella desktop ist verknüpft",
       "desktopCardMissingDetail": "Installieren Sie es oder verbinden Sie es, falls es auf diesem Computer schon installiert ist.",
       "desktopCardMissingTitle": "stella desktop ist noch nicht verknüpft",
+      "desktopCardOpeningDetail": "Dieser Computer wird mit <bdi>{identity}</bdi> auf {host} verknüpft. Wenn Ihr Browser nachfragt, erlauben Sie das Öffnen von stella desktop.",
+      "desktopCardOpeningTitle": "stella desktop wird geöffnet...",
       "desktopCardOutdatedDetail": "Version {version} ist mit <bdi>{identity}</bdi> verknüpft. Installieren Sie die neueste Version, damit Dokumente und Aktivität weiter funktionieren.",
       "desktopCardOutdatedTitle": "stella desktop braucht ein Update",
       "desktopClipboardDescription": "Öffnen, durchsuchen, organisieren und verwenden Sie kopierten Text aus jeder App erneut.",
@@ -5067,6 +5078,7 @@
       "desktopInstallOpenStep": "Öffnen Sie stella desktop einmal. Die Zwischenablage erscheint sofort und bleibt über die macOS-Menüleiste oder den Windows-Infobereich verfügbar.",
       "desktopInstallTitle": "Installieren und öffnen",
       "desktopInstallWindowsStep": "Starten Sie das Installationsprogramm und folgen Sie den Anweisungen.",
+      "desktopOpenApp": "stella desktop öffnen",
       "desktopPrivacyDescription": "Der Zwischenablageverlauf wird verschlüsselt auf diesem Gerät gespeichert.",
       "desktopPrivacyTitle": "Standardmäßig privat",
       "desktopSelfHostDescription": "Vertrauen Sie dieser stella-URL in der signierten Desktop-App, damit Dokumente aus dieser Installation lokal geöffnet werden können.",
@@ -5076,6 +5088,15 @@
       "displayNameSaved": "Anzeigename aktualisiert",
       "enterOtp": "Bestätigungscode",
       "otpSentSuccess": "Bestätigungscode an Ihre E-Mail-Adresse gesendet.",
+      "personalDataExportDescription": "Fordern Sie eine herunterladbare Kopie der personenbezogenen Daten in Ihrem Konto an. Der Download ist eine Stunde verfügbar.",
+      "personalDataExportExpired": "Dieser Export ist abgelaufen.",
+      "personalDataExportExpiresAt": "Verfügbar bis {expiresAt}.",
+      "personalDataExportFailed": "Ihr Export konnte nicht erstellt werden.",
+      "personalDataExportReady": "Ihr Export ist bereit.",
+      "personalDataExportRequest": "Export anfordern",
+      "personalDataExportRequestNew": "Neuen Export anfordern",
+      "personalDataExportTitle": "Meine Daten exportieren",
+      "personalDataExportWorking": "Ihr Export wird vorbereitet…",
       "preferredName": "Bevorzugter Name",
       "preferredNameDescription": "Wird als Autor für DOCX-Änderungsverfolgung und Kommentare verwendet.",
       "preferredNamePlaceholder": "Ihr Name",
@@ -5413,6 +5434,7 @@
     "showCitedPartOnly": "Nur zitierten Teil anzeigen",
     "showFullProvision": "Ganze Vorschrift anzeigen",
     "showInText": "Im Text anzeigen",
+    "sortNeedsYear": "Wählen Sie in den Filtern ein Jahr, um nach dieser Spalte zu sortieren.",
     "statedWindow": "Vom Herausgeber angegebene Daten: {range}",
     "status": {
       "current": "In Kraft",
@@ -6510,6 +6532,14 @@
           "started": "Dokumentenprüfung gestartet für"
         },
         "empty": "Noch keine Aktivität in dieser Akte.",
+        "fields": {
+          "dueDate": "Fälligkeitsdatum",
+          "parentFolder": "übergeordneter Ordner",
+          "priority": "Priorität",
+          "property": "Eigenschaft",
+          "schedule": "Zeitplan",
+          "sortOrder": "Reihenfolge"
+        },
         "filterLabel": "Aktivität filtern",
         "filters": {
           "all": "Alle Aktivitäten",
@@ -6559,6 +6589,7 @@
           "translation": "Übersetzung"
         },
         "title": "Aktivität",
+        "updatedFields": "{fields} aktualisiert",
         "views": {
           "list": "Listenansicht",
           "timeline": "Zeitleistenansicht"

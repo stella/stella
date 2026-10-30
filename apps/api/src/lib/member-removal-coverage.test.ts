@@ -61,6 +61,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
   "case_law_decisions.document_ast",
+  "case_law_decisions.extraction_warnings",
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
   "case_law_judges.external_refs",
@@ -359,6 +360,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "legal_list_item_comments.author_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_reviews.reviewer_id":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_item_source_decisions.actor_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.verified_by":
     "Retained attribution or request history; this column grants no matter membership.",

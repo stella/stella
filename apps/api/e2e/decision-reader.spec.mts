@@ -33,6 +33,7 @@ declare global {
 }
 
 const metadata = {
+  extractionWarnings: [],
   decisionId: "00000000-0000-4000-8000-000000000001",
   caseNumber: "I. ÚS 123/24",
   court: "Ústavní soud",
@@ -44,7 +45,7 @@ const metadata = {
   date: "2024-04-15",
   ecli: null,
   url: "https://stella.example/case-law/fixture",
-} as const satisfies ReaderPage["metadata"];
+} satisfies ReaderPage["metadata"];
 const OPEN = {
   status: "available",
   metadata,

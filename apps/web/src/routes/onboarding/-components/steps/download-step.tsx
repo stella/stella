@@ -255,9 +255,12 @@ const DesktopSetupPanel = () => {
       </p>
       <DesktopDownloadButtons platform={platform} />
       <Button
-        loading={state.status === "connecting"}
+        loading={state.status === "connecting" || state.status === "opening"}
         onClick={() => {
-          detached(connect(), "onboarding-download-step.connect-desktop");
+          detached(
+            connect("explicit"),
+            "onboarding-download-step.connect-desktop",
+          );
         }}
         type="button"
         variant="outline"
@@ -266,7 +269,10 @@ const DesktopSetupPanel = () => {
       </Button>
       <DesktopConnectionStatus
         onRetry={() => {
-          detached(connect(), "onboarding-download-step.connect-desktop");
+          detached(
+            connect("explicit"),
+            "onboarding-download-step.connect-desktop",
+          );
         }}
         state={state}
       />
