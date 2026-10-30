@@ -156,6 +156,7 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
   git("init", "--quiet");
   commitAll("base");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
+  git("remote", "add", "origin", ".");
   write(head);
   if (commit) {
     commitAll("head");
@@ -653,17 +654,46 @@ const twoEntryMergeGroup = (secondJobField = "") => {
   });
   commitAll("change first step (#11)");
   const first = revision();
-  const secondWorkflow = firstWorkflow
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", root, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  };
+  git("update-ref", "refs/pull/11/head", first);
+  git("switch", "--detach", base);
+  const ownSecondWorkflow = baseWorkflow
     .replace(
       "acme/two@0000000000000000000000000000000000000000",
       "acme/two@2222222222222222222222222222222222222222",
     )
     .replace("check: {", () => `check: {${secondJobField}`);
-  writeFileSync(path.join(root, ".github/workflows/ci.yml"), secondWorkflow);
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), ownSecondWorkflow);
   writeDecision(root, keyOf("check"), {
     kind: "ordinary",
     qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(secondWorkflow, "check"),
+    reviewedDigest: digestOf(ownSecondWorkflow, "check"),
+  });
+  commitAll("second pull request head");
+  git("update-ref", "refs/pull/12/head", revision());
+  git("switch", "--detach", first);
+  const composedWorkflow = firstWorkflow
+    .replace(
+      "acme/two@0000000000000000000000000000000000000000",
+      "acme/two@2222222222222222222222222222222222222222",
+    )
+    .replace("check: {", () => `check: {${secondJobField}`);
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), composedWorkflow);
+  writeDecision(root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(firstWorkflow, "check"),
+  });
+  writeDecision(root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(ownSecondWorkflow, "check"),
   });
   commitAll("change second step (#12)");
   return { root, base, first, head: revision() };
@@ -674,6 +704,68 @@ test("a merge group composes ordinary approvals from each pull request head", ()
   expect(
     mergeGroupRun(group.root, group.base, group.head, group.first, 12),
   ).toEqual({
+    exitCode: 0,
+    stdout: "Classified 1 workflows\n",
+    stderr: "",
+  });
+});
+
+test("a merge group accepts an own-head approval after main changes the job", () => {
+  const original =
+    "jobs: {check: {steps: [{run: echo first-old}, {run: echo second-old}]}}";
+  const decisions = reviewed(original, "check");
+  const { root, commitAll } = repository(
+    { workflow: original, decisions },
+    { workflow: original, decisions },
+  );
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", root, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+    return decoder.decode(result.stdout).trim();
+  };
+  const oldMain = git("rev-parse", "HEAD");
+  const pullRequestWorkflow = original.replace("first-old", "first-new");
+  writeFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    pullRequestWorkflow,
+  );
+  writeDecision(root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(pullRequestWorkflow, "check"),
+  });
+  commitAll("pull request head");
+  git("update-ref", "refs/pull/21/head", "HEAD");
+
+  git("switch", "--detach", oldMain);
+  const newMainWorkflow = original.replace("second-old", "second-new");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), newMainWorkflow);
+  writeDecision(root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(newMainWorkflow, "check"),
+  });
+  commitAll("main changes another step");
+  const base = git("rev-parse", "HEAD");
+  git("update-ref", "refs/remotes/origin/main", base);
+
+  const composedWorkflow = pullRequestWorkflow.replace(
+    "second-old",
+    "second-new",
+  );
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), composedWorkflow);
+  writeDecision(root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(pullRequestWorkflow, "check"),
+  });
+  commitAll("compose pull request (#21)");
+  const head = git("rev-parse", "HEAD");
+
+  expect(mergeGroupRun(root, base, head, base, 21)).toEqual({
     exitCode: 0,
     stdout: "Classified 1 workflows\n",
     stderr: "",
@@ -697,6 +789,14 @@ test("a merge group refuses a multi-pull-request privileged-surface composition"
 
 test("a merge group refuses a job change without its pull request approval", () => {
   const group = twoEntryMergeGroup();
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", group.root, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  };
+  git("switch", "--detach", group.first);
   rmSync(
     path.join(
       group.root,
@@ -707,6 +807,19 @@ test("a merge group refuses a job change without its pull request approval", () 
       ),
     ),
   );
+  git("add", ".");
+  git(
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "--quiet",
+    "-m",
+    "remove first approval",
+  );
+  git("update-ref", "refs/pull/11/head", "HEAD");
+  git("switch", "--detach", group.head);
   const result = mergeGroupRun(
     group.root,
     group.base,

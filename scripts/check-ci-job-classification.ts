@@ -130,6 +130,23 @@ const gitLines = (root: string, args: string[]) => {
   return new TextDecoder().decode(result.stdout).trim().split("\n");
 };
 
+const pullRequestHead = (root: string, number: number) => {
+  gitLines(root, [
+    "fetch",
+    "--no-tags",
+    "--force",
+    "origin",
+    `refs/pull/${number}/head`,
+  ]);
+  const [head, ...extra] = gitLines(root, ["rev-parse", "FETCH_HEAD"]);
+  if (!head || extra.length > 0 || !SHA.test(head)) {
+    throw new AdmissionError({
+      message: `Pull request head cannot be resolved: #${number}`,
+    });
+  }
+  return head;
+};
+
 const mergeGroupEntries = (root: string): MergeGroupEntry[] | undefined => {
   if (process.env["GITHUB_EVENT_NAME"] !== "merge_group") {
     return undefined;
@@ -220,6 +237,24 @@ const checkMergeGroupClassification = (
       return generateWithJobs({ ...inputs, decisions: groupInputs.decisions });
     },
   );
+  const pullRequestHeads = new Map<
+    number,
+    {
+      inputs: ClassificationInputs;
+      generation: ReturnType<typeof generateWithJobs>;
+    }
+  >();
+  const getPullRequestHead = (number: number) => {
+    const existing = pullRequestHeads.get(number);
+    if (existing) {
+      return existing;
+    }
+    const revision = pullRequestHead(root, number);
+    const inputs = readClassificationInputsAtRevision(root, revision);
+    const head = { inputs, generation: generateWithJobs(inputs) };
+    pullRequestHeads.set(number, head);
+    return head;
+  };
   for (const key of changedKeys) {
     const changers = entries.flatMap((entry, index) => {
       const before = revisions[index]?.jobs.get(key);
@@ -231,12 +266,14 @@ const checkMergeGroupClassification = (
         message: `Merge-group job change is not covered by a queued pull request: ${key}`,
       });
     }
-    const decision = groupInputs.decisions[key];
-    const missing = changers.filter(
-      ({ after }) =>
-        after === undefined ||
-        !decision?.approvedDigests.includes(after.digest),
-    );
+    const missing = changers.filter(({ entry }) => {
+      const head = getPullRequestHead(entry.number);
+      const job = head.generation.jobs.get(key);
+      return (
+        job === undefined ||
+        !head.inputs.decisions[key]?.approvedDigests.includes(job.digest)
+      );
+    });
     if (missing.length > 0) {
       throw new AdmissionError({
         message: `Merge-group job approval is missing for ${key} in pull request(s): ${missing.map(({ entry }) => `#${entry.number}`).join(", ")}`,
@@ -364,7 +401,10 @@ export const checkJobClassification = (root: string, base?: string) =>
 const gitMergeBase = (root: string) => {
   const result = Bun.spawnSync(
     ["git", "-C", root, "merge-base", "origin/main", "HEAD"],
-    { stdout: "pipe", stderr: "pipe" },
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
   if (result.exitCode !== 0) {
     throw new AdmissionError({
@@ -464,7 +504,10 @@ const decisionsFileChanged = (root: string) =>
       "--",
       CLASSIFICATION_DECISIONS_PATH,
     ],
-    { stdout: "pipe", stderr: "ignore" },
+    {
+      stdout: "pipe",
+      stderr: "ignore",
+    },
   ).stdout.length > 0;
 
 const runCheck = (root: string, base: string) => {
