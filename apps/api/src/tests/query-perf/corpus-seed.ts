@@ -370,16 +370,21 @@ const FACET_SOURCE_KEYS = [
 ] as const;
 const FACET_COURTS_BASE = 50;
 const FACET_COURTS_STEP = 150;
-const FACET_FIRST_YEAR = 1956;
-const FACET_YEARS = 70;
-const FACET_UNUSED_BUCKETS_PER_SOURCE = 10_000;
+const FACET_COURT_HEAVY_SOURCE_BUCKETS = 3000;
+const FACET_FIRST_YEAR = 1900;
+const FACET_YEARS = 131;
+const COVERAGE_DECISION_FIRST_YEAR = 1956;
+const COVERAGE_DECISION_YEARS = 70;
 
 const FACET_SOURCES = FACET_SOURCE_KEYS.map((adapterKey, index) => ({
   adapterKey,
   index,
   sourceId: `01990000-00c2-7000-8000-${(index + 1).toString(16).padStart(12, "0")}`,
   country: `XF${String.fromCodePoint(65 + index)}`,
-  courts: FACET_COURTS_BASE + FACET_COURTS_STEP * index,
+  courts:
+    index === FACET_SOURCE_KEYS.length - 1
+      ? FACET_COURT_HEAVY_SOURCE_BUCKETS
+      : FACET_COURTS_BASE + FACET_COURTS_STEP * index,
 }));
 
 const seedBrowseFacetCounts = async (database: GatedTestDb) => {
@@ -404,9 +409,6 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
       UNION ALL
       SELECT 'year', ${country}, ${sourceId}::uuid, (${FACET_FIRST_YEAR - 1}::integer + n)::text, 1 + n % 41
       FROM generate_series(1, ${FACET_YEARS}) n
-      UNION ALL
-      SELECT 'year', ${country}, ${sourceId}::uuid, 'unused/' || n, 1
-      FROM generate_series(1, ${FACET_UNUSED_BUCKETS_PER_SOURCE}) n
       ON CONFLICT DO NOTHING`);
   }
 };
@@ -676,7 +678,7 @@ const seedCoverageDecisions = async ({
         'Facet court ' || (1 + (i / ${FACET_SOURCES.length}::integer) % slot.courts),
         'xx', 'fixture/' || i::text, NULL,
         make_date(
-          ${FACET_FIRST_YEAR}::integer + (i / ${FACET_SOURCES.length}::integer) % ${FACET_YEARS}::integer,
+          ${COVERAGE_DECISION_FIRST_YEAR}::integer + (i / ${FACET_SOURCES.length}::integer) % ${COVERAGE_DECISION_YEARS}::integer,
           1 + i % 12, 1 + i % 28),
         TIMESTAMPTZ '2024-01-01 00:00:00+00', TIMESTAMPTZ '2024-01-01 00:00:00+00'
       FROM generate_series(${first}::integer, ${last}::integer) i
