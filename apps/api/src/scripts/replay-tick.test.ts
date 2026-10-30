@@ -96,10 +96,20 @@ describe("scheduled replay entrypoint", () => {
     expect(stderr).not.toContain("S3_BUCKET");
   });
 
-  test("committed enrolment previews only the Constitutional Court and enrols nothing", () => {
-    expect(
-      Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
-    ).toEqual([[ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }]]);
+  // A parser version change previews its replay; enrolling a source to write
+  // stays a reviewed step of its own. The committed map's type already admits
+  // no enrolled source, so this checks the preview budget.
+  test("committed enrolment only previews, within the preview budget, and enrols nothing", () => {
+    const previews = Object.values(REPLAY_ENROLMENT).filter(
+      ({ mode }) => mode !== "off",
+    );
+    for (const preview of previews) {
+      expect(preview).toEqual({ mode: "dry-run", dailyBudget: 10_000 });
+    }
+    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US]).toEqual({
+      mode: "dry-run",
+      dailyBudget: 10_000,
+    });
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {
