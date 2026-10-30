@@ -47,6 +47,7 @@ const WRITE_HINT =
   "declare an intentional increase in apps/web/e2e/network-budgets/<change>.json; main records the shared baseline";
 
 const NETWORK_ROUND_POLL_MS = 10;
+const NETWORK_BODY_COMPLETION_TIMEOUT_MS = 10_000;
 
 // --- collector -------------------------------------------------------------
 
@@ -80,7 +81,7 @@ export type NetworkCollector = {
   // Long-lived SSE streams do not block this: only their request/response
   // events count as activity, not the open connection itself.
   waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
-  // Flushes each CDP session before snapshotting its decoded-byte outcomes.
+  // Waits for non-streamed body completion, with a bounded unreadable outcome.
   capture: () => Promise<NetworkCapture>;
 };
 
@@ -128,6 +129,7 @@ export const waitForQuietPeriod = async ({
 
 type NetworkCollectorOptions = {
   apiOrigin?: string;
+  bodyCompletionTimeoutMs?: number;
 };
 
 type NetworkRecord = {
@@ -173,11 +175,21 @@ const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
 /** Accumulate decoded bytes without retrieving or retaining the response body. */
 export const createResponseSizeSample = () => {
   let decodedBytes = 0;
+  const completion = Promise.withResolvers<undefined>();
   let outcome: ResponseSizeOutcome = {
     status: "unreadable",
     error: "CDP loadingFinished was not observed",
   };
   return {
+    completion: completion.promise,
+    markIncomplete: (timeoutMs: number) => {
+      if (outcome.status === "unreadable") {
+        outcome = {
+          status: "unreadable",
+          error: `body incomplete after ${timeoutMs}ms`,
+        };
+      }
+    },
     receive: (dataLength: number) => {
       if (outcome.status !== "streamed") {
         decodedBytes += dataLength;
@@ -187,6 +199,7 @@ export const createResponseSizeSample = () => {
       if (outcome.status !== "streamed" && outcome.status !== "failed") {
         outcome = { status: "measured", bytes: decodedBytes };
       }
+      completion.resolve(undefined);
     },
     fail: ({
       errorText,
@@ -196,9 +209,11 @@ export const createResponseSizeSample = () => {
       canceled?: boolean;
     }) => {
       outcome = { status: "failed", error: errorText, canceled };
+      completion.resolve(undefined);
     },
     stream: () => {
       outcome = { status: "streamed" };
+      completion.resolve(undefined);
     },
     get outcome(): ResponseSizeOutcome {
       return outcome;
@@ -211,6 +226,9 @@ export const createNetworkCollector = (
 ): NetworkCollector => {
   const apiOrigin =
     collectorOptions.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
+  const bodyCompletionTimeoutMs =
+    collectorOptions.bodyCompletionTimeoutMs ??
+    NETWORK_BODY_COMPLETION_TIMEOUT_MS;
   const records: NetworkRecord[] = [];
   const flushSessions = new Set<() => Promise<void>>();
   let lastActivityAt = Date.now();
@@ -323,7 +341,15 @@ export const createNetworkCollector = (
         markActivity();
       });
       session.on("Network.dataReceived", ({ requestId, dataLength }) => {
-        byRequestId.get(requestId)?.responseSize.receive(dataLength);
+        const record = byRequestId.get(requestId);
+        if (
+          record === undefined ||
+          record.responseSize.outcome.status === "streamed"
+        ) {
+          return;
+        }
+        record.responseSize.receive(dataLength);
+        markActivity();
       });
       session.on("Network.loadingFinished", ({ requestId }) => {
         byRequestId.get(requestId)?.responseSize.complete();
@@ -397,7 +423,43 @@ export const createNetworkCollector = (
       }),
 
     capture: async () => {
-      await Promise.all([...flushSessions].map(async (flush) => await flush()));
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<"timeout">((resolve) => {
+        timeoutId = setTimeout(
+          () => resolve("timeout"),
+          bodyCompletionTimeoutMs,
+        );
+      });
+      try {
+        let observedCount = -1;
+        while (true) {
+          const flushed = await Promise.race([
+            Promise.all(
+              [...flushSessions].map(async (flush) => await flush()),
+            ).then(() => "complete" as const),
+            timeout,
+          ]);
+          if (flushed === "timeout" || observedCount === records.length) {
+            break;
+          }
+          observedCount = records.length;
+          const result = await Promise.race([
+            Promise.all(
+              records.map(({ responseSize }) => responseSize.completion),
+            ).then(() => "complete" as const),
+            timeout,
+          ]);
+          if (result === "timeout") {
+            break;
+          }
+          // Flush again: completion can start another request before the snapshot.
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      for (const { responseSize } of records) {
+        responseSize.markIncomplete(bodyCompletionTimeoutMs);
+      }
       return {
         depthChain: rounds.rounds,
         duplicateGetCounts: countDuplicateGets(records),
