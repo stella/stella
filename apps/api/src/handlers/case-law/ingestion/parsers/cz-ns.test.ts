@@ -583,18 +583,19 @@ describe("parseNsDecisionHtml", () => {
           b.type === "heading" && "role" in b && b.role === "decision-title",
       );
       expect(titles.length).toBeGreaterThan(0);
-      // The court's name before the case number is kept, not dropped.
+      // The court's name before the case number is kept, not dropped, and
+      // the letter-spaced title reads as the word it spells.
       expect(documentAst.blocks.slice(0, 3).map((b) => b.plainText)).toEqual([
         "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY",
         "29 Odo 975/2006",
-        "U S N E S E N Í",
+        "USNESENÍ",
       ]);
     });
 
-    // An older print page prints each caption line in its own run, and the
-    // parser merges them: the title is every capital after the case number,
-    // not the tail after the first capital standing before a space.
-    test("keeps a whole run-on caption title", () => {
+    // An older print page prints each caption line in its own run: the state
+    // and the formula stay lines of their own, and the decision type between
+    // them is the title.
+    test("reads a caption printed line by line", () => {
       const html = `<html><body>
         <table id="box-table-a"><tbody>
           <tr><td>Soud:</td><td>NS</td></tr>
@@ -614,16 +615,22 @@ describe("parseNsDecisionHtml", () => {
 
       const { documentAst, fulltext } = parseNsDecisionHtml(baseInput(html));
 
-      const [caseNumber, title] = documentAst.blocks;
-      expect(caseNumber).toMatchObject({
-        plainText: "21 Cdo 4994/2007",
-        role: "case-number",
-        type: "paragraph",
-      });
-      expect(title).toMatchObject({ role: "decision-title", type: "heading" });
-      expect(title?.plainText.replaceAll(/\s+/gu, " ")).toBe(
-        "ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY",
-      );
+      expect(
+        documentAst.blocks.slice(0, 4).map((block) => ({
+          type: block.type,
+          role: "role" in block ? block.role : undefined,
+          plainText: block.plainText,
+        })),
+      ).toEqual([
+        {
+          type: "paragraph",
+          role: "case-number",
+          plainText: "21 Cdo 4994/2007",
+        },
+        { type: "paragraph", role: "intro", plainText: "ČESKÁ REPUBLIKA" },
+        { type: "heading", role: "decision-title", plainText: "ROZSUDEK" },
+        { type: "paragraph", role: "intro", plainText: "JMÉNEM REPUBLIKY" },
+      ]);
       expect(fulltext).toContain("ČESKÁ REPUBLIKA");
     });
   });

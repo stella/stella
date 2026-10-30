@@ -798,6 +798,33 @@ const captionParagraphIndex = (blocks: readonly Block[]): number => {
 };
 
 /**
+ * A caption whose case number ends its line takes as its title the
+ * decision-type line among the caption's own lines below it.
+ */
+const markCaptionTitleLine = (merged: Block[], caseNumberIdx: number): void => {
+  const titleIdx = merged.findIndex(
+    (block, index) =>
+      index > caseNumberIdx &&
+      index <= caseNumberIdx + CAPTION_TITLE_LOOKAHEAD &&
+      block.type === "paragraph" &&
+      isDecisionTitle(block.plainText),
+  );
+  const titleBlock = merged.at(titleIdx);
+  if (titleIdx === -1 || titleBlock?.type !== "paragraph") {
+    return;
+  }
+  merged.splice(titleIdx, 1, {
+    id: titleBlock.id,
+    anchorId: `p-dt`,
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: titleBlock.inlines,
+    plainText: titleBlock.plainText,
+  });
+};
+
+/**
  * Split the first paragraph if it contains an embedded caption (older HTML:
  * "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY 29 Odo 975/2006 U S N E S E N Í", "21 Cdo
  * 4994/2007 ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
@@ -840,27 +867,7 @@ const splitEmbeddedCaption = (
           plainText: caption.caseNumber,
         };
         if (caption.title === "") {
-          // The title is the decision-type line among the caption's own
-          // lines below the case number.
-          const titleIdx = merged.findIndex(
-            (block, index) =>
-              index > firstParaIdx &&
-              index <= firstParaIdx + CAPTION_TITLE_LOOKAHEAD &&
-              block.type === "paragraph" &&
-              isDecisionTitle(block.plainText),
-          );
-          const titleBlock = merged.at(titleIdx);
-          if (titleIdx !== -1 && titleBlock?.type === "paragraph") {
-            merged.splice(titleIdx, 1, {
-              id: titleBlock.id,
-              anchorId: `p-dt`,
-              type: "heading",
-              level: 1,
-              role: "decision-title",
-              inlines: titleBlock.inlines,
-              plainText: titleBlock.plainText,
-            });
-          }
+          markCaptionTitleLine(merged, firstParaIdx);
         }
         const replacements: Block[] =
           caption.title === ""
@@ -884,6 +891,7 @@ const splitEmbeddedCaption = (
         /^\d+\s+\w+\s+\d+\/\d{4}/u.test(firstPara.plainText)
       ) {
         firstPara.role = "case-number";
+        markCaptionTitleLine(merged, firstParaIdx);
       }
     }
   }
