@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   CASE_LAW_CONFORMANCE_FIXTURES,
   plSnFixture,

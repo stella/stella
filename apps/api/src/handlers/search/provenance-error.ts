@@ -1,3 +1,5 @@
+import { classifyFailure } from "@stll/errors";
+
 import type { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -10,9 +12,12 @@ const SEARCH_PROVENANCE_UNREADABLE = failureSink({
 
 export const searchProvenanceError = (cause: ArtefactProvenanceDecodeError) => {
   observeFailure(cause, { sink: SEARCH_PROVENANCE_UNREADABLE });
-  return new HandlerError({
-    status: 500,
-    message: "Search results could not be read",
-    cause,
-  });
+  return classifyFailure(
+    new HandlerError({
+      status: 500,
+      message: "Search results could not be read",
+      cause,
+    }),
+    "tagged_failure",
+  );
 };

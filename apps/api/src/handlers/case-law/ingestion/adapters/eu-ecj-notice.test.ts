@@ -29,7 +29,6 @@ import {
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildDecision,
   buildListingQuery,
@@ -62,13 +61,16 @@ import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
-import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

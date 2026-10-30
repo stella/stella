@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { readFailureBrand } from "@stll/errors";
+
 import {
   searchPreviewBodySchema,
   searchPreviewHandler,
@@ -46,6 +48,10 @@ test("unreadable preview provenance is a server failure rather than a missing re
   if (result.isErr()) {
     expect(result.error.status).toBe(500);
     expect(result.error.cause).toBe(cause);
+    expect(readFailureBrand(result.error)).toEqual({
+      reason: "tagged_failure",
+      source: "instance",
+    });
   }
 });
 
