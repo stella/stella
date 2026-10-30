@@ -98,7 +98,11 @@ export default eslintCompatPlugin({
           },
           TemplateElement(node) {
             const { raw } = node.value;
-            if (EMPTY_CELL_MARKER.test(raw)) {
+            if (
+              node.parent.type === "TemplateLiteral" &&
+              node.parent.expressions.length === 0 &&
+              EMPTY_CELL_MARKER.test(raw)
+            ) {
               return;
             }
             if (containsEmDash(raw) && enforces(node)) {

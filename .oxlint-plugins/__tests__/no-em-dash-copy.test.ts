@@ -36,6 +36,12 @@ test("rejects a spaced glyph that separates two pieces of copy", async () => {
   expect(await lint(`const title = \`\${a} — \${b}\`;`)).toEqual([1]);
 });
 
+test("rejects a marker-shaped segment when the template has interpolations", async () => {
+  expect(await lint(`const title = \`\${left}—\${right}\`;`)).toEqual([1]);
+  expect(await lint(`const title = \`—\${right}\`;`)).toEqual([1]);
+  expect(await lint(`const title = \`\${left}—\`;`)).toEqual([1]);
+});
+
 test("allows the lone empty-cell marker", async () => {
   expect(await lint('const cell = (v: string | null) => v ?? "—";')).toEqual(
     [],
