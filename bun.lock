@@ -449,6 +449,7 @@
         "expo-doctor": "1.21.5",
         "fast-check": "catalog:",
         "tailwindcss": "catalog:",
+        "whatwg-fetch": "3.6.20",
       },
     },
     "apps/playground": {

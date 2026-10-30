@@ -451,6 +451,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
+  fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
+    "no-constructed-fetch-object/no-constructed-fetch-object",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -538,6 +541,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
     "bun-test-hygiene/no-promise-matchers",
+    "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
     "bun-test-hygiene/require-module-mock-reset",
@@ -1853,6 +1857,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-unowned-icon.ts",
@@ -2344,6 +2349,12 @@ const config = defineConfig({
     ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      // `apps/web` runs each DOM test file in its own process; the packages
+      // run them together, where `screen` reads another file's document.
+      files: ["packages/**/*.dom.test.{ts,tsx}"],
+      rules: { "bun-test-hygiene/no-global-testing-library-screen": "error" },
+    },
     {
       // The built-in jest/vitest rules do not recognise `bun:test`; these
       // resolve test functions through their `bun:test` import.
@@ -4357,6 +4368,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-hookless-use-function/no-hookless-use-function": "error",
+      },
+    },
+    {
+      // On React Native the global Response and Request are the whatwg-fetch
+      // polyfill, which reads a stream body as "[object ReadableStream]".
+      // Tests stub fetch with real responses and stay out of scope.
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/test-support/**",
+      ],
+      rules: {
+        "no-constructed-fetch-object/no-constructed-fetch-object": "error",
       },
     },
     {
