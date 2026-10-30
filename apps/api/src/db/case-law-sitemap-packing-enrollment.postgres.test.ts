@@ -74,6 +74,7 @@ if (!databaseUrl || !enabled) {
             "case_law_sitemap_changes",
             "case_law_sitemap_shards",
             "case_law_sitemap_drain_progress",
+            "case_law_sitemap_refresh_cursor",
             "case_law_browse_facet_counts",
             "case_law_coverage_summaries",
             "case_law_sitemap_shard_counts",
@@ -228,7 +229,7 @@ if (!databaseUrl || !enabled) {
                 }
                 return rows;
               },
-              release: () => session.release(),
+              release: async () => await session.release(),
             } satisfies OnlineMigrationConnection;
           };
           const repairClient = openClient({ max: 1, idleTimeout: 0 }).sql;
@@ -262,9 +263,31 @@ if (!databaseUrl || !enabled) {
             .select()
             .from(caseLawSitemapChanges)
             .where(sql`year = '*' AND month = '*'`);
-          await refreshCaseLawSitemapShards(isolatedRefresh, {
+          const tickOptions = {
             changeRowBudget: 10_000,
-          });
+            discoveryTargetBudget: 64,
+          };
+          // Each enrolled country contributes its broad target and at most two fixture months.
+          const maxDrainTicks =
+            Math.ceil(
+              (2 * pendingEnrollment.length + 2) /
+                tickOptions.discoveryTargetBudget,
+            ) + 1;
+          let drained = await refreshCaseLawSitemapShards(
+            isolatedRefresh,
+            tickOptions,
+          );
+          for (
+            let tick = 1;
+            drained.type === "pending" && tick < maxDrainTicks;
+            tick += 1
+          ) {
+            drained = await refreshCaseLawSitemapShards(
+              isolatedRefresh,
+              tickOptions,
+            );
+          }
+          expect(drained.type).toBe("refreshed");
           const repacked = await listSitemapShardsHandler(readDb);
           if (!("items" in repacked)) {
             panic("Expected repacked quiet month");

@@ -511,7 +511,7 @@ test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
       expect(probe?.indexCond).toMatch(
         /language_group_key\)::text = \(case_law_decisions.language_group_key/u,
       );
-      expect(`${probe?.indexCond} ${probe?.filter}`).toMatch(
+      expect([probe?.indexCond, probe?.filter].join(" ")).toMatch(
         /country\)::text = \(case_law_decisions.country/u,
       );
       expect(probe?.filter).toContain("redacted_at IS NULL");

@@ -96,7 +96,7 @@ describe("search crawler identity", () => {
     });
     expect(
       await Promise.all(
-        Array.from({ length: 10 }, () => verify("66.249.66.1")),
+        Array.from({ length: 10 }, async () => await verify("66.249.66.1")),
       ),
     ).toEqual(Array.from({ length: 10 }, () => true));
     expect(queries).toBe(1);
@@ -200,8 +200,9 @@ test("DNS concurrency stays bounded and capacity refusals do not poison identiti
       };
     },
   });
-  const active = Array.from({ length: 8 }, (_, i) =>
-    verify(`192.0.2.${i + 1}`),
+  const active = Array.from(
+    { length: 8 },
+    async (_, i) => await verify(`192.0.2.${i + 1}`),
   );
   const duplicate = verify("192.0.2.1");
   await entered.promise;
