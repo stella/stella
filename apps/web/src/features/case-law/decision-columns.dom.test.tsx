@@ -58,6 +58,7 @@ const ROW: Decision = {
   languageAlternates: [version("bg"), version("en")],
   decisionDate: "2024-06-20",
   decisionType: "judgment",
+  decisionTypeKind: null,
   headnote: { type: "absent", reason: "not_published" },
   citationCount: 3,
 };
