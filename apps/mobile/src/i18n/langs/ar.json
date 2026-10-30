@@ -22,7 +22,8 @@
     "toolUsed": "تم استخدام: {tool}",
     "threadTitle": "محادثة",
     "threadLoadFailed": "تعذّر تحميل هذه المحادثة.",
-    "threadEmptyDescription": "لا تحتوي هذه المحادثة على رسائل بعد.",
+    "greeting": "ما الذي تودّ العمل عليه؟",
+    "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "sections": {
       "today": "اليوم",
       "yesterday": "أمس",
