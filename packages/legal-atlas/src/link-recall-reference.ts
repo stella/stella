@@ -159,10 +159,12 @@ export const extractAuditReferences = ({
         `${previousEnd === 0 ? precedingText : ""}\n${before}`.slice(
           -REVIEWED_RADIUS,
         );
+      // Citation prefixes (č. j., sp. zn.) belong to the match, so their
+      // abbreviation periods do not end the preceding cue's sentence.
       const localBefore =
         before
           .slice(-PROCEDURAL_RADIUS)
-          .split(/[;!?\n]/u)
+          .split(/[.;!?\n]/u)
           .at(-1) ?? "";
       const nextStart = decisions.at(index + 1)?.start ?? text.length;
       const localAfter =
