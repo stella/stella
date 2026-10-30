@@ -132,6 +132,31 @@ const link = async (
   );
 
 (runPostgresTests ? test : test.skip)(
+  "batch preserves a valid provision when another jurisdiction is rejected",
+  async () => {
+    await db
+      .delete(legislationMatterLinks)
+      .where(eq(legislationMatterLinks.workspaceId, ids.wsA1));
+    const czech = item("CZE");
+    const austrian = { ...czech, jurisdiction: "AUT" };
+    const outcome = await link([czech, austrian]);
+
+    expect(outcome.linked).toHaveLength(1);
+    expect(outcome.linked.at(0)).toMatchObject({
+      documentId: czechVersion,
+      statuteId: czech.statuteId,
+      provisionId: czech.provisionId,
+      appliedVersion: czech.version,
+      jurisdiction: czech.jurisdiction,
+    });
+    expect(outcome.existing).toEqual([]);
+    expect(outcome.rejected).toEqual([
+      { ...austrian, reason: "out_of_jurisdiction" },
+    ]);
+  },
+);
+
+(runPostgresTests ? test : test.skip)(
   "create, retry, batch, list applied versions, delete, tenancy and refusals",
   async () => {
     await db

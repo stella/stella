@@ -53,7 +53,7 @@ export const linkProvisionsToMatter = async ({
   const requests = [
     ...new Map(
       items.map((item) => [
-        `${item.statuteId}\0${item.provisionId}\0${item.version}`,
+        `${item.statuteId}\0${item.provisionId}\0${item.version}\0${item.jurisdiction}`,
         item,
       ]),
     ).values(),
