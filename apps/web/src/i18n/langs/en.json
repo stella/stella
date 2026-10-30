@@ -2519,6 +2519,9 @@
     "deleteContact": "Delete contact",
     "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.",
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.",
+    "deleteSelected": "Delete {count, plural, one {# contact} other {# contacts}}",
+    "deleteSelectedConfirm": "Permanently delete {count, plural, one {this contact} other {these # contacts}}? This action cannot be undone.",
+    "deletedCount": "Deleted {count, plural, one {# contact} other {# contacts}}",
     "editContact": "Edit contact",
     "emailTypes": {
       "other": "Other",
@@ -2648,6 +2651,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazilian CPF/CNPJ (checksum)",
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
+      "undoImport": "Undo import ({count})",
       "validateFailed": "Couldn't check these contacts.",
       "warning": {
         "ignored_populated_column": "Column “{column}” contains data but is ignored.",
@@ -2677,6 +2681,7 @@
     "saved": "Contact details saved.",
     "search": "Search contacts...",
     "searchCountries": "Search nationalities",
+    "selectContact": "Select {name}",
     "title": "Clients",
     "type": {
       "organization": "Organization",

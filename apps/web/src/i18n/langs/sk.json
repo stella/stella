@@ -2519,6 +2519,9 @@
     "deleteContact": "Vymazať kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
+    "deleteSelected": "Odstrániť {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov}}",
+    "deleteSelectedConfirm": "Natrvalo odstrániť {count, plural, one {tento kontakt} few {tieto # kontakty} other {týchto # kontaktov}}? Túto akciu nemožno vrátiť späť.",
+    "deletedCount": "Odstránené: {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov}}",
     "editContact": "Upraviť kontakt",
     "emailTypes": {
       "other": "Iný",
@@ -2648,6 +2651,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazílske CPF/CNPJ (kontrolný súčet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
+      "undoImport": "Vrátiť import ({count})",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
       "warning": {
         "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
@@ -2677,6 +2681,7 @@
     "saved": "Údaje kontaktu boli uložené.",
     "search": "Hľadať v kontaktoch...",
     "searchCountries": "Hľadať krajiny",
+    "selectContact": "Vybrať {name}",
     "title": "Klienti",
     "type": {
       "organization": "Organizácia",

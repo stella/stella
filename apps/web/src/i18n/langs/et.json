@@ -2519,6 +2519,9 @@
     "deleteContact": "Kustuta kontakt",
     "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
+    "deleteSelected": "Kustuta {count, plural, one {# kontakt} other {# kontakti}}",
+    "deleteSelectedConfirm": "Kas kustutada {count, plural, one {see kontakt} other {need # kontakti}} jäädavalt? Seda toimingut ei saa tagasi võtta.",
+    "deletedCount": "Kustutati {count, plural, one {# kontakt} other {# kontakti}}",
     "editContact": "Muuda kontakti",
     "emailTypes": {
       "other": "Muu",
@@ -2648,6 +2651,7 @@
       "taxIdSchemeBrCpfCnpj": "Brasiilia CPF/CNPJ (kontrollsumma)",
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
+      "undoImport": "Võta import tagasi ({count})",
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
       "warning": {
         "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
@@ -2677,6 +2681,7 @@
     "saved": "Kontakti andmed on salvestatud.",
     "search": "Otsi kontakte...",
     "searchCountries": "Otsi riike",
+    "selectContact": "Vali {name}",
     "title": "Kliendid",
     "type": {
       "organization": "Organisatsioon",

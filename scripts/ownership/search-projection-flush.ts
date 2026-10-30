@@ -17,6 +17,7 @@ export default {
     kind: "import",
     specifiers: ["@/api/lib/search/projection-repair-flush"],
     allowed: [
+      "apps/api/src/handlers/contacts/bulk-delete.ts",
       "apps/api/src/handlers/contacts/create.ts",
       "apps/api/src/handlers/contacts/delete.ts",
       "apps/api/src/handlers/contacts/import.ts",

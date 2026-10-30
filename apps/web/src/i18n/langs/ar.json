@@ -2519,6 +2519,9 @@
     "deleteContact": "حذف جهة الاتصال",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
+    "deleteSelected": "حذف {count, plural, one {جهة اتصال واحدة} other {# جهات اتصال}}",
+    "deleteSelectedConfirm": "هل تريد حذف {count, plural, one {جهة الاتصال هذه} other {جهات الاتصال الـ # هذه}} نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.",
+    "deletedCount": "تم حذف {count, plural, one {جهة اتصال واحدة} other {# جهات اتصال}}",
     "editContact": "تعديل جهة الاتصال",
     "emailTypes": {
       "other": "أخرى",
@@ -2648,6 +2651,7 @@
       "taxIdSchemeBrCpfCnpj": "الرقم البرازيلي CPF/CNPJ (مجموع تحقق)",
       "taxIdSchemeNone": "بدون تحقق من الرقم الضريبي",
       "title": "استيراد جهات الاتصال",
+      "undoImport": "التراجع عن الاستيراد ({count})",
       "validateFailed": "تعذّر التحقق من جهات الاتصال هذه.",
       "warning": {
         "ignored_populated_column": "يحتوي العمود «{column}» على بيانات، ولكن سيتم تجاهله.",
@@ -2677,6 +2681,7 @@
     "saved": "تم حفظ بيانات جهة الاتصال.",
     "search": "البحث في جهات الاتصال...",
     "searchCountries": "ابحث عن البلدان",
+    "selectContact": "تحديد {name}",
     "title": "العملاء",
     "type": {
       "organization": "مؤسسة",

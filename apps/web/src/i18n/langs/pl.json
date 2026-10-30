@@ -2519,6 +2519,9 @@
     "deleteContact": "Usuń kontakt",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
+    "deleteSelected": "Usuń {count, plural, one {# kontakt} few {# kontakty} other {# kontaktów}}",
+    "deleteSelectedConfirm": "Trwale usunąć {count, plural, one {ten kontakt} few {te # kontakty} other {tych # kontaktów}}? Tej operacji nie można cofnąć.",
+    "deletedCount": "Usunięto {count, plural, one {# kontakt} few {# kontakty} other {# kontaktów}}",
     "editContact": "Edytuj kontakt",
     "emailTypes": {
       "other": "Inny",
@@ -2648,6 +2651,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazylijski CPF/CNPJ (suma kontrolna)",
       "taxIdSchemeNone": "Bez weryfikacji numeru podatkowego",
       "title": "Import kontaktów",
+      "undoImport": "Cofnij import ({count})",
       "validateFailed": "Nie udało się sprawdzić tych kontaktów.",
       "warning": {
         "ignored_populated_column": "Kolumna „{column}” zawiera dane, ale jest ignorowana.",
@@ -2677,6 +2681,7 @@
     "saved": "Zapisano dane kontaktu.",
     "search": "Szukaj kontaktów...",
     "searchCountries": "Szukaj krajów",
+    "selectContact": "Wybierz {name}",
     "title": "Klienci",
     "type": {
       "organization": "Organizacja",

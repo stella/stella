@@ -2519,6 +2519,9 @@
     "deleteContact": "Excluir contato",
     "deleteContactBlockedByMatters": "Este contato ainda está atribuído como cliente em casos. Reatribua ou exclua esses casos antes de excluir o contato.",
     "deleteContactConfirmDescription": "Tem certeza de que deseja excluir este contato? Esta ação não pode ser desfeita.",
+    "deleteSelected": "Excluir {count, plural, one {# contato} other {# contatos}}",
+    "deleteSelectedConfirm": "Excluir permanentemente {count, plural, one {este contato} other {estes # contatos}}? Esta ação não pode ser desfeita.",
+    "deletedCount": "{count, plural, one {# contato excluído} other {# contatos excluídos}}",
     "editContact": "Editar contato",
     "emailTypes": {
       "other": "Outro",
@@ -2648,6 +2651,7 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brasileiro (dígito verificador)",
       "taxIdSchemeNone": "Sem validação da identificação fiscal",
       "title": "Importar contatos",
+      "undoImport": "Desfazer importação ({count})",
       "validateFailed": "Não foi possível verificar estes contatos.",
       "warning": {
         "ignored_populated_column": "A coluna “{column}” contém dados, mas será ignorada.",
@@ -2677,6 +2681,7 @@
     "saved": "Os dados do contato foram salvos.",
     "search": "Pesquisar contatos...",
     "searchCountries": "Buscar países",
+    "selectContact": "Selecionar {name}",
     "title": "Clientes",
     "type": {
       "organization": "Organização",

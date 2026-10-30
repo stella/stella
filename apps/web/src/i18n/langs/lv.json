@@ -2519,6 +2519,9 @@
     "deleteContact": "Dzēst kontaktpersonu",
     "deleteContactBlockedByMatters": "Šī kontaktpersona joprojām ir norādīta kā klients lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
     "deleteContactConfirmDescription": "Vai tiešām vēlaties dzēst šo kontaktu? Šo darbību nevar atsaukt.",
+    "deleteSelected": "Dzēst {count} kontaktpersonas",
+    "deleteSelectedConfirm": "Neatgriezeniski dzēst {count} kontaktpersonas? Šo darbību nevar atsaukt.",
+    "deletedCount": "Izdzēstas {count} kontaktpersonas",
     "editContact": "Rediģēt kontaktpersonu",
     "emailTypes": {
       "other": "Cits",
@@ -2648,6 +2651,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazīlijas CPF/CNPJ (kontrolsumma)",
       "taxIdSchemeNone": "Nodokļu numurs netiek pārbaudīts",
       "title": "Kontaktpersonu importēšana",
+      "undoImport": "Atsaukt importēšanu ({count})",
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
       "warning": {
         "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta.",
@@ -2677,6 +2681,7 @@
     "saved": "Kontaktinformācija saglabāta.",
     "search": "Meklēt kontaktos...",
     "searchCountries": "Meklēt valstis",
+    "selectContact": "Atlasīt {name}",
     "title": "Klienti",
     "type": {
       "organization": "Organizācija",
