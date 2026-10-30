@@ -82,7 +82,8 @@ describe("SOAP request schema contracts", () => {
 
     restoreFetch();
     const personBodies = captureRequests([
-      await fixture("isir-person-clear.xml"),
+      await fixture("isir-person-found.xml"),
+      await fixture("isir-person-found.xml"),
     ]);
     const person: CheckedEntityCheckSubject = {
       type: "person",
@@ -91,8 +92,14 @@ describe("SOAP request schema contracts", () => {
       birthDate: "1901-01-01",
     };
     await checkCzInsolvency(person, undefined, "unobserved");
-    expect(personBodies).toHaveLength(1);
+    expect(personBodies).toHaveLength(2);
     await expectSchemaConformant(personBodies, CONTRACTS["cz-insolvency.ts"]);
+    expect(personBodies.at(1)).toContain(
+      "<filtrAktualniRizeni>T</filtrAktualniRizeni>",
+    );
+    expect(personBodies.at(1)).toContain(
+      "<vyhledatBezDiakritiky>T</vyhledatBezDiakritiky>",
+    );
   });
 
   test("covers the VAT reliability DIČ request", async () => {
@@ -112,6 +119,43 @@ describe("SOAP request schema contracts", () => {
     const body = readSoapBody(await fixture("isir-request-wrong-order.xml"));
     expect(requestContractViolations(body, schema)).toContain(
       "child maxPocetVysledku is out of sequence",
+    );
+  });
+
+  test("rejects VAT children without their required namespace", async () => {
+    const schema = await schemaFor(CONTRACTS["cz-vat-reliability.ts"]);
+    const requests = captureRequests([
+      await fixture("adis-vat-payer-clear.xml"),
+    ]);
+    const subject: CheckedEntityCheckSubject = {
+      type: "tax-id",
+      value: "CZ45274649",
+      derivedFrom: null,
+    };
+    await checkCzVatReliability(subject, undefined, "unobserved");
+    const request = requests.at(0) ?? "";
+    const body = readSoapBody(
+      request.replace("<roz:dic", "<dic").replace("</roz:dic>", "</dic>"),
+    );
+    expect(requestContractViolations(body, schema)).toContain(
+      `expected child {${schema.namespace}}dic, received {}dic`,
+    );
+  });
+
+  test("rejects insolvency children with the types namespace", async () => {
+    const schema = await schemaFor(CONTRACTS["cz-insolvency.ts"]);
+    const requests = captureRequests([await fixture("isir-person-clear.xml")]);
+    const company: CheckedEntityCheckSubject = {
+      type: "company-id",
+      value: "26863154",
+    };
+    await checkCzInsolvency(company, undefined, "unobserved");
+    const request = requests.at(0) ?? "";
+    const body = readSoapBody(
+      request.replace("<ic>", "<typ:ic>").replace("</ic>", "</typ:ic>"),
+    );
+    expect(requestContractViolations(body, schema)).toContain(
+      `expected child {}ic, received {${schema.namespace}}ic`,
     );
   });
 

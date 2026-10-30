@@ -3,6 +3,7 @@ import { SaxesParser } from "saxes";
 
 export type SchemaChild = {
   name: string;
+  namespace: string;
   minOccurs: number;
   maxOccurs: number | "unbounded";
 };
@@ -37,6 +38,7 @@ export const readRequestSchema = (
     namespace: "",
     referencedType: null,
   };
+  let localElementsAreQualified = false;
   let schemaDepth = 0;
   let elementDepth = 0;
   let sequence: Sequence | null = null;
@@ -49,6 +51,8 @@ export const readRequestSchema = (
       schemaDepth += 1;
       if (schemaDepth === 1) {
         schema.namespace = attributes["targetNamespace"] ?? "";
+        localElementsAreQualified =
+          attributes["elementFormDefault"] === "qualified";
       }
       return;
     }
@@ -80,8 +84,13 @@ export const readRequestSchema = (
       elementDepth += 1;
     }
     if (sequence !== null && nameAttribute !== undefined) {
+      const form = attributes["form"];
+      const isQualified =
+        form === "qualified" ||
+        (form !== "unqualified" && localElementsAreQualified);
       sequence.children.push({
         name: nameAttribute,
+        namespace: isQualified ? schema.namespace : "",
         minOccurs: occurrence(attributes["minOccurs"], 1),
         maxOccurs: maximumOccurrence(attributes["maxOccurs"]),
       });
@@ -193,6 +202,15 @@ export const requestContractViolations = (
     if (position === undefined) {
       violations.push(`undeclared child ${child.name}`);
       continue;
+    }
+    const expectedChild = schema.children.at(position);
+    if (
+      expectedChild !== undefined &&
+      child.namespace !== expectedChild.namespace
+    ) {
+      violations.push(
+        `expected child {${expectedChild.namespace}}${child.name}, received {${child.namespace}}${child.name}`,
+      );
     }
     if (position < previousPosition) {
       violations.push(`child ${child.name} is out of sequence`);
