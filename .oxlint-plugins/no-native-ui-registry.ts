@@ -117,15 +117,15 @@ export const NO_NATIVE_UI_REGISTRY = {
     roles: ["button"],
     inputTypes: ["button", "image", "reset", "submit"],
   }),
-  "calendar/primitives": owned(
+  "calendar-primitives": owned(
     DATE_INPUT_RULE,
     "the native date pickers are reported there",
   ),
-  "calendar/resource-calendar": owned(
+  "resource-calendar": owned(
     DATE_INPUT_RULE,
     "the native date pickers are reported there",
   ),
-  "calendar/resource-calendar.logic": notComponent(
+  "resource-calendar.logic": notComponent(
     "resource calendar placement helpers",
   ),
   checkbox: native("Checkbox from @stll/ui/checkbox", {

@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import type { TaskStatus } from "@stll/api-contract";
-import { CalendarEntryButton } from "@stll/ui/calendar/primitives";
+import { CalendarEntryButton } from "@stll/ui/calendar-primitives";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
