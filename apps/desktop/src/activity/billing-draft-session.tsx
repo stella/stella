@@ -40,7 +40,7 @@ import {
   resolveStructure,
 } from "./billing-draft-logic";
 import type { DraftableGroup, DraftResult } from "./billing-draft-logic";
-import { canAcceptStructure } from "./billing-review-state";
+import { canAcceptStructure, ReviewState } from "./billing-review-state";
 import type {
   EntryEdit,
   ReviewAction,
@@ -451,7 +451,7 @@ export const useBillingDraftSession = ({
     const applicable =
       acceptance !== null &&
       canAcceptStructure(
-        new Map(eligible.map((entry) => [entry.id, editFor(entry)])),
+        new ReviewState(eligible.map((entry) => [entry.id, editFor(entry)])),
         acceptance,
       );
     return (

@@ -8,6 +8,7 @@ import {
   absorbedGroupIds,
   captureReviewSources,
   draftStructure,
+  partitionRanges,
   resolveStructure,
   reviewItems,
 } from "../src/activity/billing-draft-logic";
@@ -21,12 +22,10 @@ import {
   initialReviewEdit,
   reviewRecovery,
   reviewReducer,
+  ReviewState,
   reviewStateForGroups,
 } from "../src/activity/billing-review-state";
-import type {
-  ReviewAction,
-  ReviewState,
-} from "../src/activity/billing-review-state";
+import type { ReviewAction } from "../src/activity/billing-review-state";
 
 const classification = {
   type: "activity_group",
@@ -136,7 +135,7 @@ const move = {
   classification,
 } satisfies ResolvedStructureProposal;
 const accept = (proposal: ResolvedStructureProposal) =>
-  reviewReducer(new Map(), {
+  reviewReducer(new ReviewState(), {
     type: "accept-structure",
     ...target,
     proposal,
@@ -234,7 +233,9 @@ test("merge selection is atomic and preserves edited canonical items for reselec
 });
 
 test("partial and overlapping structural acceptance is rejected", () => {
-  const partial = new Map([["second", { ...initial, selected: false }]]);
+  const partial = new ReviewState([
+    ["second", { ...initial, selected: false }],
+  ]);
   expect(
     reviewReducer(partial, {
       type: "accept-structure",
@@ -265,7 +266,7 @@ test("partial and overlapping structural acceptance is rejected", () => {
 });
 
 test("late offers snapshot live edits only at the first actual application", () => {
-  let state = reviewReducer(new Map(), {
+  let state = reviewReducer(new ReviewState(), {
     type: "set-narrative",
     ...target,
     itemKey: "first",
@@ -303,7 +304,7 @@ test("late offers snapshot live edits only at the first actual application", () 
 });
 
 test("unchanged offers apply atomically but accepted or absorbed groups only get proposals", () => {
-  const offered = reviewReducer(new Map(), {
+  const offered = reviewReducer(new ReviewState(), {
     type: "offer-results",
     groups: currentGroups,
     mode: "initial",
@@ -332,7 +333,7 @@ test("unchanged offers apply atomically but accepted or absorbed groups only get
 });
 
 test("undo all restores applied drafts and dismisses late proposals without touching edits", () => {
-  let state = reviewReducer(new Map(), {
+  let state = reviewReducer(new ReviewState(), {
     type: "offer-results",
     groups: currentGroups,
     mode: "initial",
@@ -366,7 +367,7 @@ test("undo all restores applied drafts and dismisses late proposals without touc
 });
 
 test("unknown canonical item keys panic rather than silently dropping edits", () => {
-  for (const state of [new Map(), accept(split)]) {
+  for (const state of [new ReviewState(), accept(split)]) {
     expect(() =>
       reviewReducer(state, {
         type: "set-narrative",
@@ -446,7 +447,7 @@ test("scalar proposals never flatten accepted geometry or release its participan
 test.each(["use-original", "undo-all"] as const)(
   "%s after refinements restores the first pre-AI narrative and billable baseline",
   (undoType) => {
-    let state = reviewReducer(new Map(), {
+    let state = reviewReducer(new ReviewState(), {
       type: "set-billable",
       ...target,
       itemKey: "first",
@@ -570,9 +571,9 @@ test("billing-review.changed-source-invalidates-acceptance", () => {
           );
           expect([...absorbedGroupIds(rows(refreshed))]).toEqual([]);
           expect(reviewStateForGroups(refreshed, live)).toBe(refreshed);
-          expect(reviewStateForGroups(refreshed, currentGroups)).toBe(
-            refreshed,
-          );
+          expect(
+            entry(reviewStateForGroups(refreshed, currentGroups)).content,
+          ).toBe(entry(refreshed).content);
         }
       },
     ),
@@ -591,7 +592,7 @@ test("a changed merge participant releases the owner and an old split cannot omi
   );
   const first = groups.at(0) ?? panic("Missing split source");
   const extended = { ...first, roundedTenths: first.roundedTenths + 1 };
-  const state = reviewReducer(new Map(), {
+  const state = reviewReducer(new ReviewState(), {
     type: "accept-structure",
     ...target,
     proposal: split,
@@ -608,7 +609,7 @@ test("billing-review.offers-are-bound-to-requested-activity", () => {
       fc.constantFrom("activity", "evidence", "context", "unchanged"),
       fc.string({ maxLength: 40 }),
       (mode, change, evidence) => {
-        const previous = reviewReducer(new Map(), {
+        const previous = reviewReducer(new ReviewState(), {
           type: "offer-results",
           groups: currentGroups,
           mode: "initial",
@@ -617,7 +618,9 @@ test("billing-review.offers-are-bound-to-requested-activity", () => {
           ],
         });
         const state =
-          mode === "initial" ? new Map([[target.groupId, initial]]) : previous;
+          mode === "initial"
+            ? new ReviewState([[target.groupId, initial]])
+            : previous;
         const current = entry(state);
         const offered = result("New suggestion");
         const live = new Map(currentGroups);
@@ -637,6 +640,7 @@ test("billing-review.offers-are-bound-to-requested-activity", () => {
         if (change === "evidence" || change === "context") {
           live.set(source.id, { ...source, evidence: [`Changed ${evidence}`] });
         }
+        const expected = entry(reviewStateForGroups(state, live));
         const next = reviewReducer(state, {
           type: "offer-results",
           groups: live,
@@ -658,11 +662,17 @@ test("billing-review.offers-are-bound-to-requested-activity", () => {
           expect(updated.draft?.using).toBe("draft");
           return;
         }
-        expect(updated.content.narrative).toBe(current.content.narrative);
-        expect(updated.content.classification).toEqual(
-          current.content.classification,
+        expect(updated.content.narrative).toBe(
+          expected.content.type === "single"
+            ? expected.content.narrative
+            : panic("Expected scalar baseline"),
         );
-        expect(updated.revision).toBe(current.revision);
+        expect(updated.content.classification).toEqual(
+          expected.content.type === "single"
+            ? expected.content.classification
+            : panic("Expected scalar baseline"),
+        );
+        expect(updated.revision).toBe(expected.revision);
         const pending = updated.draft;
         if (pending === null) {
           panic("Missing offered draft");
@@ -695,7 +705,7 @@ test("billing-review.applied-results-cannot-survive-source-edit-sequences", () =
       (edits) => {
         for (const proposal of [null, split, merge, move]) {
           const live = new Map(currentGroups);
-          let state = reviewReducer(new Map(), {
+          let state = reviewReducer(new ReviewState(), {
             type: "offer-results",
             groups: live,
             mode: "initial",
@@ -806,9 +816,9 @@ test("billing-review.applied-results-cannot-survive-source-edit-sequences", () =
             ).toEqual(projected);
             expect(entry(state).draft?.using).toBe("proposal");
             const invalidated = state;
-            expect(reviewStateForGroups(state, currentGroups)).toBe(
-              invalidated,
-            );
+            expect(
+              entry(reviewStateForGroups(state, currentGroups)).content,
+            ).toBe(entry(invalidated).content);
             if (entry(state).content.type === "blocked") {
               expect(entry(state).content).toMatchObject({ ownership: "user" });
               // Discarding the edited structure is an explicit user action, never an invalidation.
@@ -858,8 +868,99 @@ const modelSubmittable = (model: ReviewModel) => {
   );
 };
 
+const modelValues = ({ state, groups: live }: ReviewModel) => {
+  const candidates = modelRows({ state, groups: live });
+  const absorbed = absorbedGroupIds(
+    candidates.map(({ group, edit }) => ({ group, content: edit.content })),
+  );
+  const active = candidates
+    .filter(({ group }) => !absorbed.has(group.id))
+    .map(({ edit }) => edit);
+  const retained = [...state.retained.values()].map(({ edit }) => edit);
+  return [...active, ...retained].flatMap(({ content }) =>
+    content.type === "single"
+      ? [
+          JSON.stringify([
+            content.narrative,
+            content.billable,
+            content.classification,
+          ]),
+        ]
+      : content.items.map(({ narrative, billable, classification: codes }) =>
+          JSON.stringify([narrative, billable, codes]),
+        ),
+  );
+};
+
+const assertReviewReferences = ({ state, groups: live }: ReviewModel) => {
+  expect([...state.groups.keys()].toSorted()).toEqual(
+    [...live.keys()].toSorted(),
+  );
+  const owners = new Map<string, string>();
+  for (const [owner, edit] of state) {
+    expect(live.has(owner)).toBe(true);
+    if (edit.content.type === "single") {
+      continue;
+    }
+    expect(edit.content.sources.map(({ id }) => id)).toContain(owner);
+    for (const { id } of edit.content.sources) {
+      expect(live.has(id)).toBe(true);
+      expect(state.has(id)).toBe(true);
+      expect(owners.get(id) ?? owner).toBe(owner);
+      owners.set(id, owner);
+    }
+    expect(reviewRecovery(edit.content)?.type).toBe("undo-structure");
+    for (const item of edit.content.items) {
+      expect(item.key === owner || item.key.startsWith(`${owner}:`)).toBe(true);
+    }
+  }
+  for (const id of state.retained.keys()) {
+    expect(live.has(id)).toBe(false);
+  }
+  for (const { group, edit } of modelRows({ state, groups: live })) {
+    if (owners.has(group.id) && owners.get(group.id) !== group.id) {
+      continue;
+    }
+    const targetRow = { groupId: group.id, initial: edit };
+    const controls: ReviewAction[] = [
+      { type: "set-selected", ...targetRow, selected: !edit.selected },
+      { type: "undo-all" },
+    ];
+    for (const item of reviewItems([{ group, content: edit.content }], live)) {
+      controls.push(
+        {
+          type: "set-narrative",
+          ...targetRow,
+          itemKey: item.key,
+          narrative: item.narrative,
+        },
+        {
+          type: "set-billable",
+          ...targetRow,
+          itemKey: item.key,
+          billable: !item.billable,
+        },
+      );
+    }
+    const recovery = reviewRecovery(edit.content);
+    if (recovery !== null) {
+      controls.push({ type: recovery.type, ...targetRow });
+    }
+    if (edit.draft?.using === "draft") {
+      controls.push({ type: "use-original", ...targetRow });
+    }
+    if (edit.content.type === "single" && edit.draft !== null) {
+      controls.push({ type: "apply-proposal", ...targetRow, groups: live });
+    }
+    for (const action of controls) {
+      reviewStateForGroups(reviewReducer(state, action), live);
+    }
+  }
+};
+
 /** Exercise only controls the editable review exposes; every recovery comes from its content. */
 const assertSubmissionReachable = (model: ReviewModel) => {
+  assertReviewReferences(model);
   let next = model;
   for (let step = 0; step <= model.groups.size * 2 + 1; step += 1) {
     if (modelSubmittable(next)) {
@@ -931,6 +1032,124 @@ const assertSubmissionReachable = (model: ReviewModel) => {
   expect(modelSubmittable(next)).toBe(true);
 };
 
+const RECORDING_MODEL_EVENTS = [
+  "record",
+  "disappear",
+  "reassign",
+  "regroup",
+] as const;
+
+type ModelGroupingChange = {
+  type: "disappear" | "reassign" | "regroup";
+  source: DraftableGroup;
+  groups: Map<string, DraftableGroup>;
+};
+const changeModelGrouping = ({
+  type,
+  source,
+  groups: live,
+}: ModelGroupingChange) => {
+  if (type === "disappear") {
+    if (live.size > 1) {
+      live.delete(source.id);
+    }
+  } else if (type === "reassign") {
+    const recipient =
+      [...live.values()].find(({ id }) => id !== source.id) ??
+      makeGroup(source.id === "third" ? "fourth" : "third");
+    const existing = live.has(recipient.id);
+    live.delete(source.id);
+    live.set(recipient.id, {
+      ...recipient,
+      durationMs: source.durationMs + (existing ? recipient.durationMs : 0),
+      roundedTenths:
+        source.roundedTenths + (existing ? recipient.roundedTenths : 0),
+      ranges: [...(existing ? recipient.ranges : []), ...source.ranges],
+    });
+  } else {
+    const id = ["first", "second", "third", "fourth"].find(
+      (candidate) => !live.has(candidate),
+    );
+    if (id !== undefined) {
+      const [kept, moved] = partitionRanges(source.ranges, [1, 1]);
+      for (const [group, ranges] of [
+        [source, kept],
+        [makeGroup(id), moved],
+      ] as const) {
+        if (ranges === undefined) {
+          panic("Regrouping lost a range partition");
+        }
+        const durationMs = ranges.reduce(
+          (duration, range) =>
+            duration + Date.parse(range.end) - Date.parse(range.start),
+          0,
+        );
+        live.set(group.id, {
+          ...group,
+          durationMs,
+          roundedTenths: Math.max(1, Math.ceil(durationMs / 360_000)),
+          ranges,
+        });
+      }
+    }
+  }
+};
+
+type ModelRecordingChange = {
+  state: ReviewState;
+  groups: Map<string, DraftableGroup>;
+  source: DraftableGroup;
+  sequence: number;
+};
+const recordModelActivity = ({
+  state,
+  groups: live,
+  source,
+  sequence,
+}: ModelRecordingChange) => {
+  const userValues = modelRows({ state, groups: live })
+    .filter(
+      ({ edit }) =>
+        edit.content.type === "blocked" ||
+        (edit.content.type === "accepted"
+          ? edit.content.ownership === "user"
+          : edit.content.sourceBinding?.type === "user"),
+    )
+    .map(({ group, edit }) => ({
+      group,
+      values: reviewItems([{ group, content: edit.content }], live).map(
+        ({ narrative, billable }) => ({
+          narrative,
+          billable,
+        }),
+      ),
+    }));
+  const end = source.ranges.at(-1)?.end ?? panic("Missing recorded range");
+  live.set(source.id, {
+    ...source,
+    evidence: [`Recording ${sequence}`],
+    roundedTenths: source.roundedTenths + 1,
+    durationMs: source.durationMs + 360_000,
+    ranges: [
+      ...source.ranges,
+      {
+        start: end,
+        end: new Date(Date.parse(end) + 360_000).toISOString(),
+      },
+    ],
+  });
+  const next = reviewStateForGroups(state, live);
+  for (const { group, values } of userValues) {
+    const edit = next.get(group.id) ?? initial;
+    expect(
+      reviewItems([{ group, content: edit.content }], live).map(
+        ({ narrative, billable }) => ({ narrative, billable }),
+      ),
+    ).toEqual(values);
+  }
+  return next;
+};
+
 test("billing-review.visible-actions-always-reach-submission", () => {
   assertProperty(
     "billing-review.visible-actions-always-reach-submission",
@@ -944,7 +1163,7 @@ test("billing-review.visible-actions-always-reach-submission", () => {
             "review",
             "narrative",
             "billable",
-            "record",
+            ...RECORDING_MODEL_EVENTS,
             "undo",
             "undo-all",
             "dismiss",
@@ -960,7 +1179,15 @@ test("billing-review.visible-actions-always-reach-submission", () => {
       (events) => {
         for (const scenario of ["split", "merge", "move"] as const) {
           const prefix = (
-            ["draft", "accept", "narrative", "record", "undo-all"] as const
+            [
+              "draft",
+              "accept",
+              "narrative",
+              "record",
+              "undo-all",
+              "reassign",
+              "regroup",
+            ] as const
           ).map((type) => ({
             type,
             structure: scenario,
@@ -969,8 +1196,9 @@ test("billing-review.visible-actions-always-reach-submission", () => {
             checked: true,
             group: 0,
           }));
-          let state: ReviewState = new Map();
           const live = new Map(currentGroups);
+          let state = reviewStateForGroups(new ReviewState(), live);
+          let entered = new Set<string>();
           for (const group of live.values()) {
             expect(
               group.ranges.reduce(
@@ -1161,49 +1389,24 @@ test("billing-review.visible-actions-always-reach-submission", () => {
                       };
                 break;
               }
-              case "record": {
-                const userValues = visibleRows
-                  .filter(
-                    ({ edit }) =>
-                      edit.content.type === "blocked" ||
-                      (edit.content.type === "accepted"
-                        ? edit.content.ownership === "user"
-                        : edit.content.sourceBinding?.type === "user"),
-                  )
-                  .map(({ group, edit }) => ({
-                    group,
-                    values: reviewItems(
-                      [{ group, content: edit.content }],
-                      live,
-                    ).map(({ narrative, billable }) => ({
-                      narrative,
-                      billable,
-                    })),
-                  }));
-                const end =
-                  row.group.ranges.at(-1)?.end ??
-                  panic("Missing recorded range");
-                live.set(row.group.id, {
-                  ...row.group,
-                  evidence: [`Recording ${index}`],
-                  roundedTenths: row.group.roundedTenths + 1,
-                  durationMs: row.group.durationMs + 360_000,
-                  ranges: [
-                    ...row.group.ranges,
-                    {
-                      start: end,
-                      end: new Date(Date.parse(end) + 360_000).toISOString(),
-                    },
-                  ],
+              case "record":
+                state = recordModelActivity({
+                  state,
+                  groups: live,
+                  source: row.group,
+                  sequence: index,
                 });
+                break;
+              case "disappear":
+              case "reassign":
+              case "regroup": {
+                const before = [...entered];
+                const source = row.group;
+                changeModelGrouping({ type: event.type, source, groups: live });
                 state = reviewStateForGroups(state, live);
-                for (const { group, values } of userValues) {
-                  const edit = state.get(group.id) ?? initial;
-                  expect(
-                    reviewItems([{ group, content: edit.content }], live).map(
-                      ({ narrative, billable }) => ({ narrative, billable }),
-                    ),
-                  ).toEqual(values);
+                const after = modelValues({ state, groups: live });
+                for (const value of before) {
+                  expect(after).toContain(value);
                 }
                 break;
               }
@@ -1242,7 +1445,31 @@ test("billing-review.visible-actions-always-reach-submission", () => {
             if (action !== null) {
               state = reviewStateForGroups(reviewReducer(state, action), live);
             }
-            if (index === prefix.length - 1) {
+            if (event.type === "narrative" || event.type === "billable") {
+              const edit = state.get(row.group.id) ?? initial;
+              const item =
+                reviewItems(
+                  [{ group: row.group, content: edit.content }],
+                  live,
+                ).at(0) ?? panic("Manual input lost its visible row");
+              entered.add(
+                JSON.stringify([
+                  item.narrative,
+                  item.billable,
+                  item.classification,
+                ]),
+              );
+            }
+            if (!RECORDING_MODEL_EVENTS.some((type) => type === event.type)) {
+              const retainedValues = new Set(
+                modelValues({ state, groups: live }),
+              );
+              // Only explicit user actions may replace a previously entered value.
+              entered = new Set(
+                [...entered].filter((value) => retainedValues.has(value)),
+              );
+            }
+            if (index === 4) {
               expect(entry(state).content.type).toBe("blocked");
               expect(entry(state).draft).toBeNull();
             }

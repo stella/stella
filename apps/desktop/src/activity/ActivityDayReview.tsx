@@ -45,10 +45,8 @@ import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
 import {
   absorbedGroupIds,
-  captureReviewSources,
   confirmedBatchItem,
   reviewItems,
-  reviewSourcesCurrent,
 } from "./billing-draft-logic";
 import type {
   ConfirmedBatchItem,
@@ -60,13 +58,13 @@ import type { DraftStatus, ReviewBarDrafts } from "./billing-draft-session";
 import {
   initialReviewEdit,
   reviewReducer,
+  ReviewState,
   reviewStateForGroups,
 } from "./billing-review-state";
 import type {
   EntryEdit,
   ReviewAction,
   ReviewEvent,
-  ReviewState,
 } from "./billing-review-state";
 import "./day-review.css";
 import { canAssign, matchDay } from "./day-review-logic";
@@ -123,25 +121,15 @@ const canDiscardPending = (
   snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey;
 
 /** Each group's edits, defaulting to a narrative from what was recorded. */
-type ReviewEditStore = {
-  edits: ReviewState;
-  sources: readonly DraftableGroup[];
-};
-
 const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const [stored, setReview] = useState<ReviewEditStore>(() => ({
-    edits: new Map(),
-    sources: captureReviewSources([...groups.values()]),
-  }));
-  const edits = reviewStateForGroups(stored.edits, groups);
-  if (
-    edits !== stored.edits ||
-    stored.sources.length !== groups.size ||
-    !reviewSourcesCurrent(stored.sources, groups)
-  ) {
-    setReview({ edits, sources: captureReviewSources([...groups.values()]) });
+  const [stored, setReview] = useState(() =>
+    reviewStateForGroups(new ReviewState(), groups),
+  );
+  const edits = reviewStateForGroups(stored, groups);
+  if (edits !== stored) {
+    setReview(edits);
   }
   const narrative = (group: DayReviewGroup) =>
     group.evidence.length
@@ -163,9 +151,14 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
     });
   const dispatch = (event: ReviewEvent) =>
     setReview((current) => {
-      const latestGroups = new Map(
-        current.sources.map((group) => [group.id, group]),
-      );
+      const latestGroups = current.groups;
+      if (
+        event.type !== "offer-results" &&
+        event.type !== "undo-all" &&
+        !latestGroups.has(event.groupId)
+      ) {
+        return current;
+      }
       const action = (() => {
         switch (event.type) {
           case "offer-results":
@@ -178,12 +171,20 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
                 return {
                   ...offer,
                   initial:
-                    !current.edits.has(offer.groupId) && group
+                    !current.has(offer.groupId) && group
                       ? initial(group)
                       : offer.initial,
                 };
               }),
             } as const satisfies ReviewAction;
+          case "accept-structure":
+            return {
+              ...event,
+              groups: [...latestGroups.values()].map((group) => ({
+                group,
+                initial: current.get(group.id) ?? initial(group),
+              })),
+            };
           case "use-draft":
           case "apply-proposal":
             return { ...event, groups: latestGroups };
@@ -191,10 +192,7 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
             return event;
         }
       })();
-      const next = reviewReducer(current.edits, action);
-      return next === current.edits
-        ? current
-        : { edits: next, sources: current.sources };
+      return reviewStateForGroups(reviewReducer(current, action), latestGroups);
     });
   return {
     editFor: (group: DayReviewGroup) => edits.get(group.id) ?? initial(group),

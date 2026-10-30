@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
+import { Temporal } from "@stll/time";
 
 import {
   captureReviewSources,
@@ -95,7 +96,20 @@ export type EntryEdit = {
   content: ReviewContent;
   draft: DraftEntryState | null;
 };
-export type ReviewState = ReadonlyMap<string, EntryEdit>;
+type RetainedReview = { group: DraftableGroup; edit: EntryEdit };
+
+/** Active ownership and historical user work are separate; history never participates in lookups. */
+export class ReviewState extends Map<string, EntryEdit> {
+  readonly groups: Map<string, DraftableGroup>;
+  readonly retained: Map<string, RetainedReview>;
+  constructor(entries: Iterable<readonly [string, EntryEdit]> = []) {
+    super(entries);
+    this.groups = new Map(entries instanceof ReviewState ? entries.groups : []);
+    this.retained = new Map(
+      entries instanceof ReviewState ? entries.retained : [],
+    );
+  }
+}
 type ReviewTarget = { groupId: string; initial: EntryEdit };
 export type ReviewAction =
   | (ReviewTarget & {
@@ -175,6 +189,7 @@ const unitIds = (groupId: string, content: ReviewContent) =>
 const ownerOf = (state: ReviewState, groupId: string) => {
   for (const [id, edit] of state) {
     if (
+      state.groups.has(id) &&
       edit.content.type !== "single" &&
       edit.content.sources.some((source) => source.id === groupId)
     ) {
@@ -198,7 +213,7 @@ const commitChange = ({
   change,
   selectUnit = false,
 }: CommitChangeOptions): ReviewState => {
-  const next = new Map(state);
+  const next = new ReviewState(state);
   const updated = changedEntry(current, change);
   const participants = new Set([
     ...unitIds(groupId, current.content),
@@ -301,8 +316,11 @@ const offerResults = (
   state: ReviewState,
   action: Extract<ReviewAction, { type: "offer-results" }>,
 ): ReviewState => {
-  let next = state;
+  let next = reviewStateForGroups(state, action.groups);
   for (const offer of action.offers) {
+    if (!action.groups.has(offer.groupId)) {
+      continue;
+    }
     const current = next.get(offer.groupId) ?? offer.initial;
     const sourceCurrent = reviewSourcesCurrent(
       offer.result.sources,
@@ -326,7 +344,7 @@ const offerResults = (
             result: current.draft.result,
             proposal: offer.result,
           });
-    const updated = new Map(next);
+    const updated = new ReviewState(next);
     updated.set(offer.groupId, {
       selected: current.selected,
       revision: current.revision,
@@ -446,8 +464,12 @@ const prepareStructure = (
   state: ReviewState,
   action: AcceptStructureAction,
 ) => {
-  const own = state.get(action.groupId) ?? action.initial;
-  const ownerId = ownerOf(state, action.groupId);
+  const currentState = reviewStateForGroups(
+    state,
+    new Map(action.groups.map(({ group }) => [group.id, group])),
+  );
+  const own = currentState.get(action.groupId) ?? action.initial;
+  const ownerId = ownerOf(currentState, action.groupId);
   if (ownerId !== action.groupId || own.content.type !== "single") {
     return null;
   }
@@ -458,17 +480,21 @@ const prepareStructure = (
   if (!ids.includes(action.groupId) || new Set(ids).size !== ids.length) {
     return null;
   }
-  const initialized = new Map(state);
+  const initialized = new ReviewState(currentState);
+  initialized.groups.clear();
+  for (const { group } of action.groups) {
+    initialized.groups.set(group.id, structuredClone(group));
+  }
   for (const id of ids) {
     const source = action.groups.find(({ group }) => group.id === id);
     if (!source) {
       return null;
     }
-    const entry = state.get(id) ?? source.initial;
+    const entry = currentState.get(id) ?? source.initial;
     if (
       !entry.selected ||
       entry.content.type !== "single" ||
-      ownerOf(state, id) !== id
+      ownerOf(currentState, id) !== id
     ) {
       return null;
     }
@@ -535,31 +561,253 @@ const acceptStructure = (
   });
 };
 
-/** Invalidations persist even if later recording restores the old geometry. */
+const rangesOverlap = (
+  left: DraftableGroup["ranges"],
+  right: DraftableGroup["ranges"],
+) =>
+  left.some((a) =>
+    right.some(
+      (b) =>
+        Temporal.Instant.compare(
+          Temporal.Instant.from(a.start),
+          Temporal.Instant.from(b.end),
+        ) < 0 &&
+        Temporal.Instant.compare(
+          Temporal.Instant.from(b.start),
+          Temporal.Instant.from(a.end),
+        ) < 0,
+    ),
+  );
+
+const scalarRecovery = (
+  content: SingleReviewContent,
+  groups: ReadonlyMap<string, DraftableGroup>,
+) => {
+  const current = currentReviewContent(content, groups);
+  if (current.type !== "single") {
+    return panic("Scalar recovery became structured content");
+  }
+  return current;
+};
+
+type DetachReviewOptions = {
+  state: ReviewState;
+  ownerId: string;
+  edit: EntryEdit;
+  source: DraftableGroup;
+  groups: ReadonlyMap<string, DraftableGroup>;
+  detached: Set<string>;
+};
+const detachReview = ({
+  state,
+  ownerId,
+  edit,
+  source,
+  groups,
+  detached,
+}: DetachReviewOptions) => {
+  const content = edit.content;
+  const sources = content.type === "single" ? [source] : content.sources;
+  const ranges =
+    content.type === "single"
+      ? source.ranges
+      : content.items.flatMap(({ ranges: itemRanges }) => itemRanges);
+  const recipients = [...groups.values()].filter(
+    (group) =>
+      group.id === ownerId ||
+      sources.some(({ id }) => id === group.id) ||
+      rangesOverlap(group.ranges, ranges),
+  );
+  const existingOwner = state.get(ownerId);
+  state.delete(ownerId);
+  if (recipients.length === 0) {
+    state.retained.set(ownerId, { group: source, edit });
+    return;
+  }
+  state.retained.delete(ownerId);
+  const fallback = scalarRecovery(
+    content.type === "single" ? content : content.recovery.content,
+    groups,
+  );
+  const userOwned =
+    content.type === "single"
+      ? content.sourceBinding?.type !== "ai"
+      : content.ownership === "user";
+  for (const group of recipients) {
+    const previous = group.id === ownerId ? existingOwner : state.get(group.id);
+    const prior = previous?.content;
+    const recovery =
+      prior === undefined
+        ? fallback
+        : scalarRecovery(
+            prior.type === "single" ? prior : prior.recovery.content,
+            groups,
+          );
+    if (!userOwned) {
+      if (group.id !== ownerId && previous !== undefined) {
+        continue;
+      }
+      state.set(group.id, {
+        selected: edit.selected,
+        revision: edit.revision + 1,
+        draft: null,
+        content: recovery,
+      });
+      continue;
+    }
+    const items =
+      content.type === "single"
+        ? [
+            {
+              key: ownerId,
+              matter: source.matter,
+              durationMinutes: source.roundedTenths * 6,
+              narrative: content.narrative,
+              billable: content.billable,
+              classification: content.classification,
+              ranges: source.ranges,
+            },
+          ]
+        : [...content.items];
+    const keepPrevious =
+      prior !== undefined &&
+      (detached.has(group.id) || !sources.some(({ id }) => id === group.id));
+    if (keepPrevious) {
+      if (prior.type === "single") {
+        items.push({
+          key: group.id,
+          matter: group.matter,
+          durationMinutes: group.roundedTenths * 6,
+          narrative: prior.narrative,
+          billable: prior.billable,
+          classification: prior.classification,
+          ranges: group.ranges,
+        });
+      } else {
+        items.push(...prior.items);
+      }
+    }
+    state.set(group.id, {
+      selected: previous?.selected ?? edit.selected,
+      revision: Math.max(previous?.revision ?? 0, edit.revision) + 1,
+      draft: null,
+      content: {
+        type: "blocked",
+        ownership: "user",
+        notice: "sourceChanged",
+        sources: captureReviewSources([group]),
+        summary:
+          content.type === "single"
+            ? { type: "split", parts: items.length }
+            : content.summary,
+        items: [
+          ...new Map(
+            items.map((item) => [
+              JSON.stringify([
+                item.matter.id,
+                item.durationMinutes,
+                item.narrative,
+                item.billable,
+                item.classification,
+                item.ranges,
+              ]),
+              item,
+            ]),
+          ).values(),
+        ].map((item, index) => ({
+          ...item,
+          key: index === 0 ? group.id : `${group.id}:retained:${index}`,
+        })),
+        recovery: { type: "undo-structure", content: recovery },
+      },
+    });
+    detached.add(group.id);
+  }
+};
+
+/** Reconcile live ownership before any edit; historical values never own current groups. */
 export const reviewStateForGroups = (
   state: ReviewState,
   groups: ReadonlyMap<string, DraftableGroup>,
 ): ReviewState => {
-  let next = state;
+  const next = new ReviewState(state);
+  let changed =
+    state.groups.size !== groups.size ||
+    !reviewSourcesCurrent([...state.groups.values()], groups);
+  next.groups.clear();
+  for (const group of captureReviewSources([...groups.values()])) {
+    next.groups.set(group.id, group);
+  }
+  const detached = new Set<string>();
+  for (const [ownerId, { group, edit }] of state.retained) {
+    detachReview({
+      state: next,
+      ownerId,
+      edit,
+      source: group,
+      groups,
+      detached,
+    });
+    if (!next.retained.has(ownerId)) {
+      changed = true;
+    }
+  }
   for (const [groupId, edit] of state) {
-    const content = currentReviewContent(edit.content, groups);
+    const content = edit.content;
+    const missing =
+      !groups.has(groupId) ||
+      (content.type !== "single" &&
+        (content.sources.some(({ id }) => !groups.has(id)) ||
+          (content.sources.length > 1 &&
+            content.sources.some(({ id }) => detached.has(id)))));
+    if (!missing) {
+      continue;
+    }
+    const source =
+      state.groups.get(groupId) ??
+      (content.type === "single"
+        ? content.sourceBinding?.sources.find(({ id }) => id === groupId)
+        : content.sources.find(({ id }) => id === groupId));
+    if (source === undefined) {
+      return panic("Review lost its source snapshot", groupId);
+    }
+    detachReview({
+      state: next,
+      ownerId: groupId,
+      edit,
+      source,
+      groups,
+      detached,
+    });
+    changed = true;
+  }
+  for (const [groupId, edit] of next) {
+    let content = currentReviewContent(edit.content, groups);
+    if (content.type !== "single") {
+      const recovery = scalarRecovery(content.recovery.content, groups);
+      if (recovery !== content.recovery.content) {
+        content = {
+          ...content,
+          recovery: { type: "undo-structure", content: recovery },
+        };
+      }
+    }
     if (content === edit.content) {
       continue;
     }
-    next = commitChange({
-      state: next,
+    next.set(
       groupId,
-      current: edit,
-      change: {
+      changedEntry(edit, {
         content,
         draft:
           edit.draft === null
             ? null
             : { using: "proposal", result: edit.draft.result },
-      },
-    });
+      }),
+    );
+    changed = true;
   }
-  return next;
+  return changed ? next : state;
 };
 
 /** Every offer and user action observes the state React supplies to this reducer. */

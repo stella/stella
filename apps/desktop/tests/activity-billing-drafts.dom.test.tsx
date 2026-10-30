@@ -1271,3 +1271,90 @@ test("Undo all leaves recovery for an edited stale merge through successful subm
     ],
   });
 });
+
+test("a merge participant stays editable and recoverable after its owner disappears", async () => {
+  const boundary = installNativeBoundary();
+  const secondSegment = {
+    appIdentifier: "com.example.editor",
+    appName: "Example Editor",
+    matterId: SECOND_MATTER_ID,
+    start: "2026-10-07T10:00:00Z",
+    end: "2026-10-07T10:30:00Z",
+  };
+  const view = mountReview(snapshot([...segments, secondSegment]));
+  const request = await startDrafting(view, boundary.draftRequests);
+  await resolveDraft(
+    request,
+    review([
+      draft("entry_1", "Combined work", [
+        {
+          type: "merge",
+          entryIds: ["entry_1", "entry_2"],
+          narrative: "Combined work",
+          classification: CLIENT_CLASSIFICATION,
+          billable: true,
+        },
+      ]),
+      draft("entry_2", "Second source"),
+    ]),
+  );
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiApply }),
+  );
+  fireEvent.change(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+    { target: { value: "My combined work" } },
+  );
+  view.rerender(
+    <DesktopIntlProvider language="en" messages={messages}>
+      <ActivityDayReview
+        snapshot={snapshot([
+          ...segments.map((segment) => ({
+            ...segment,
+            matterId: SECOND_MATTER_ID,
+          })),
+          secondSegment,
+        ])}
+        header={<span>Review</span>}
+        billingDrafts={billingDrafts}
+        onCopy={(_text, onSettled) => onSettled(true)}
+        onReviewStatusChange={() => undefined}
+      />
+    </DesktopIntlProvider>,
+  );
+  const narrative = view.getByRole("textbox", {
+    name: messages.activity.entryNarrative,
+  });
+  expect(narrative).toHaveProperty("value", "My combined work");
+  expect(view.getByText(messages.activity.aiStructureChanged)).toBeTruthy();
+  fireEvent.change(narrative, { target: { value: "Edited surviving work" } });
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Edited surviving work");
+  expect(view.getByRole("button", { name: "Create 1 draft" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  const recover = view.getByRole("button", { name: messages.activity.aiUndo });
+  expect(recover).toHaveProperty("disabled", false);
+  fireEvent.click(recover);
+  fireEvent.change(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+    { target: { value: "Reviewed surviving work" } },
+  );
+  const submit = view.getByRole("button", { name: "Create 1 draft" });
+  expect(submit).toHaveProperty("disabled", false);
+  fireEvent.click(submit);
+  await waitFor(() => expect(boundary.submissions).toHaveLength(1));
+  expect(boundary.submissions.at(0)).toMatchObject({
+    items: [
+      {
+        entry: {
+          matterId: SECOND_MATTER_ID,
+          durationMinutes: 90,
+          narrative: "Reviewed surviving work",
+        },
+      },
+    ],
+  });
+});
