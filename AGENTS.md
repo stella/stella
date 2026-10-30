@@ -237,6 +237,7 @@ true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
   copy. "workspace" is the internal identifier for the same thing (DB schema,
   TypeScript, HTTP routes) and the product-category word ("an open-source legal
   workspace"). Where the two meet, rename at the boundary, once.
+  [test: apps/api/src/mcp/input-vocabulary.test.ts]
 
 ## Project Overview
 
@@ -264,35 +265,32 @@ dated-waiver inventory and healing checks enforce its seven-day deadline.
 
 - Comments explain a non-obvious invariant, trade-off, safety constraint, or why
   the code exists. Do not narrate the next statement, add empty documentation
-  blocks, or label closing braces.
+  blocks, or label closing braces. [review]
 - Search before you write. Before adding a helper, module, schema, or validation
   step, check `docs/module-ownership.md` and `packages/*` for the capability.
   Extend the owner; if a second implementation is right, say why in the PR.
+  [review]
 - Make abstractions earn their keep. Avoid pass-through wrappers, single-use
   helpers, and interfaces with one implementation unless they establish a real
-  ownership boundary, contract, or test seam.
-- Prefer deleting concepts, branches, and layers over moving complexity around.
-  Keep feature-specific behavior at its canonical owner; do not scatter flags and
-  special cases through shared flows.
-- Defensive code belongs at real trust and failure boundaries. Do not add null
-  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
-  types, validation, or framework guarantees.
+  ownership boundary, contract, or test seam. [review]
 - No forward-compatibility placeholders: never ship a flag, option, field, or
   export that is accepted but has no effect "for later" (a `--keychain` that
   always falls back, a `setDefault` helper nothing calls). Add it in the PR that
   wires it end to end. Dead-export checks (knip) enforce this where a package is
-  enrolled; enroll new packages.
+  enrolled; enroll new packages. [check: check:knip-exports]
+
+Prefer deleting concepts, branches, and layers over moving complexity around,
+and keep feature-specific behavior at its canonical owner.
 
 ## Workspace Layout
 
-- `apps/*` contains runnable applications only.
-- `packages/*` contains shared or publishable packages only.
-- Every direct child of `apps/` and `packages/` must be a workspace package named
-  `@stll/<directory>`.
-- Use scoped workspace filters in commands, for example
-  `bun --filter @stll/web dev`.
+`apps/*` holds runnable applications and `packages/*` shared or publishable
+code. Commands use scoped workspace filters, for example
+`bun --filter @stll/web dev`.
+
 - Create a package with `bun run new-package <name> --description "…"`; copying a
   helper between apps is not an option when a package can own it.
+  [check: ratchet:cross-app-lib-path-copies]
 
 ## Finding Things
 

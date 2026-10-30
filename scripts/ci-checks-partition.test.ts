@@ -763,7 +763,7 @@ const withoutPreparedGeneration = (step: Step): Step => {
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
-  "Instruction references",
+  "Instruction policy",
 ]);
 // Documentation checks retain all prerequisites while widening beyond package scope.
 const documentationScope = (step: Step): Step => {

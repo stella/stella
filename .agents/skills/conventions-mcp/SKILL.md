@@ -23,60 +23,63 @@ whether a contract change helped.
    drives the real tools with the real schemas and scores each step separately
    (authored, created, configured, filled, or the workflow's equivalents). Run it
    before and after a contract change and put both tables in the PR. A change that
-   is "obviously better" without numbers is a hypothesis.
+   is "obviously better" without numbers is a hypothesis. [review]
 2. **Keep the rejected call, in the eval only.** The eval records the raw input
    of every call the schema rejected before the handler ran; a pass rate without
    the rejected payloads cannot say whether the model or the contract failed.
    Eval fixtures are synthetic, so the trace may hold them whole. Production
    telemetry for a rejected call records the tool name, the issue codes, and the
    issue paths, never the payload: tool arguments carry matter content and
-   personal data.
+   personal data. [review]
 3. **Parse through the schema the handler uses.** The eval, the tests, and the
    handler must validate the same object; a normalisation that lives only in one
-   handler's pre-step is invisible to the eval and drifts.
+   handler's pre-step is invisible to the eval and drifts. [review]
 
 ## Shape Tools For How Models Behave
 
 4. **One tool, one intent.** Split create, configure, and update into separate
    tools rather than one tool whose meaning depends on which optional arguments
    are present. Cross-field "provide A or B, not both" checks are a sign the tool
-   has more than one job.
+   has more than one job. [review]
 5. **Few optionals, one discriminator.** Replace a set of mutually exclusive
    optional keys with one discriminated union (`source: { type: "ai" | "lookup"
 | ... }`). A model that fills every property cannot produce a contradictory
-   union member; it can produce six contradictory optionals.
+   union member; it can produce six contradictory optionals. [review]
 6. **Best effort over all-or-nothing for collections.** When a call carries a
    list of entries, validate each entry independently, apply the valid ones, and
    return the rest as per-entry `issues[]`. One bad property must not sink a call
-   that carried seven good entries.
+   that carried seven good entries. [review]
 7. **Echo the next call.** Return, from the call that discovers state, the exact
    payload the next call accepts (a `configure` skeleton, canonical path spelling,
    allowed values). Copying beats inferring. Read-back must round-trip: the shape
    a describe tool returns is the shape the configure tool accepts, byte for byte,
-   and a test pins that fixed point.
+   and a test pins that fixed point. [review]
 8. **Idempotent and re-entrant.** Models retry with the same call and resend
    everything they know. Accept the resend: upsert on a stable id, idempotency
    keys that cover every argument, durable receipts replayed without re-executing.
+   [review]
 9. **Keep artefacts out of the model.** Bytes are the hardest step in any loop.
    Prefer references (a host file reference, an id of something already stored)
    over inline base64; when inline is the only path, bound it by the request
    frame, derive the limit from the shared constant, and state it in the
    description. Never let an error hint invite the model to shrink or rewrite a
-   document.
+   document. [review]
 
 ## Every Error Is A Next Step
 
 10. **Structured envelope, closed codes.** Failures return `{ code, message, hint,
 issues[] }` with codes from a closed set. `hint` names the corrective action,
     the tool to call, and where to go (a deep link when the fix is in the UI).
-    "Disabled" without "enable it here" is a dead end.
+    "Disabled" without "enable it here" is a dead end. [review]
 11. **Never leak the substrate.** A malformed id is a validation issue at the
     boundary, never a database cast error reported as `internal_error`. Every id
     input is declared with the shared id schema; a registry-wide test enforces it.
+    [test: apps/api/src/mcp/uuid-id-inputs.test.ts]
 12. **Warn about what the model probably meant.** Discovery and save return
     `warnings[]` with closed codes for the known traps (unprefixed loop item,
     unknown directive, split marker, and so on). A census test keeps the code
     list and the reference in step.
+    [test: apps/api/src/lib/docx/template-warnings.test.ts]
 13. **Read each value kind leniently, in one place.** A model spells a value the
     way its training data did: `null` for an unset optional, `4 000` for a
     number, `1. 10. 2026` for a date, `ano` for a boolean, `cs_CZ` for a locale.
@@ -115,7 +118,7 @@ issues[] }` with codes from a closed set. `hint` names the corrective action,
     guard (an ownership row, a census test) so a new call site cannot parse the
     kind itself. Never per-tool tolerance code, and never a second reader: two
     lenient readers of one kind are worse than one strict one, because they
-    disagree.
+    disagree. [test: apps/api/src/lib/agent-input-owner.test.ts]
 
 ## References Are Read Verbatim
 
@@ -124,13 +127,15 @@ issues[] }` with codes from a closed set. `hint` names the corrective action,
     promised behaviour the code does not have (a preserved extension, a size limit
     that is not the enforced one) is a bug, not a docs nit. Render numbers from the
     constants; type tool names against the registry; keep drift tests.
+    [test: apps/api/src/mcp/description-enum-drift.test.ts]
 15. **One workflow resource per workflow.** Publish the ordered steps (create,
     read back, configure, preview, persist) as a resource pointed to from the MCP
     instructions, and keep the quiz or eval that checks a model understood it.
+    [review]
 16. **Decide grammar leniency by evidence.** When two independent models write the
     same form the grammar rejects, that is a product signal: either accept the
     form or make the reference unambiguous, then re-measure. Do not do both at
-    once.
+    once. [review]
 
 ## Name Capabilities By Resource
 
@@ -150,15 +155,16 @@ at 0.
 
 - Registry-wide tests over every tool definition: id schemas, null-optional
   tolerance, description and reference drift, and a zero-diff capability export.
+  [test: apps/api/src/mcp/null-optional-inputs.test.ts]
 - Total companion maps keyed by tool name (`as const satisfies Record<ToolName,
 ...>`) for policy, consent, projection, and CLI disposition, so a new tool cannot
-  land without each decision.
+  land without each decision. [check: typecheck]
 - Compile-time gates in the tool factory (a schema that is not wrapped, an id that
-  is not the shared schema) rather than review discipline.
+  is not the shared schema) rather than review discipline. [check: typecheck]
 - The CLI is generated from the same catalog: a capability whose transport the
   generator cannot invoke is not advertised anywhere, and generated artifacts are
   regenerated in order (capability export, then CLI codegen) until the diff is
-  zero.
+  zero. [check: scripts/check-cli-runtime-generation.ts]
 
 ## Existing References
 

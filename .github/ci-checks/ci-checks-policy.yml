@@ -194,7 +194,7 @@ checks:
     # scripts/dated-waivers.ts owns the expiry.
     run: bun run check:docs-sources
 
-  - name: Instruction references
+  - name: Instruction policy
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -208,9 +208,15 @@ checks:
     # scripts/instruction-references-allowlist.json, and an entry that
     # suppresses nothing fails as stale. The --self-test run first proves
     # each matcher still fires, so a broken guard cannot pass silently.
+    # check-instruction-enforcement requires every rule item in the
+    # instruction sources to end with the lint, check or test that enforces
+    # it, or [review]; each named mechanism must be live, and the [review]
+    # count in scripts/instruction-enforcement-ledger.json must match.
     run: |
       bun scripts/check-instruction-references.ts --self-test
       bun run check:instruction-references
+      bun test scripts/check-instruction-enforcement.test.ts
+      bun --preload ./scripts/offline-network-preload.ts scripts/check-instruction-enforcement.ts --check
 
   - name: Knip production dependency checks
     env:

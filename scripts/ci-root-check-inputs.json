@@ -790,7 +790,7 @@
     "Guard rollout scope tests": ["**"],
     "Dated waiver lifecycle guards": ["**"],
     "Documentation source policy rule": ["**"],
-    "Instruction references": ["**"],
+    "Instruction policy": ["**"],
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
     "Knip dead-export check (packages/cli)": ["**"],

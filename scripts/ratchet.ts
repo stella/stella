@@ -88,6 +88,8 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
+const INSTRUCTION_ENFORCEMENT_LEDGER_REL =
+  "scripts/instruction-enforcement-ledger.json";
 
 // The single owners of a transport: callers reach fetch, Bun SQL and SQS
 // clients through them, so their own acquisition is the capability, not a
@@ -2533,6 +2535,21 @@ const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
+// The count scripts/check-instruction-enforcement.ts holds equal to the
+// `[review]` tags in the instruction sources; this metric keeps it falling.
+const countReviewOnlyInstructionRules: FileCounter = (content) => {
+  const parsed: unknown = JSON.parse(content);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("reviewOnlyRules" in parsed) ||
+    typeof parsed.reviewOnlyRules !== "number"
+  ) {
+    return panic("instruction-enforcement ledger must hold reviewOnlyRules");
+  }
+  return parsed.reviewOnlyRules;
+};
+
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
@@ -3630,6 +3647,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: [INTERNAL_MODULE_MOCK_LEDGER_REL],
     exclude: () => false,
     count: countInternalModuleMockLedgerEntries,
+  },
+  {
+    scope: "file",
+    id: "review-only-instruction-rules",
+    description:
+      "instruction rules whose only control is a reader (`[review]` in .ai/local and .ai/local-skills); a rule leaves the count when a lint, check or test enforces it",
+    include: [INSTRUCTION_ENFORCEMENT_LEDGER_REL],
+    exclude: () => false,
+    count: countReviewOnlyInstructionRules,
   },
   {
     scope: "file",
@@ -5563,6 +5589,12 @@ const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
   2,
 )}\n`;
 const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
+const SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER = `${JSON.stringify(
+  { reviewOnlyRules: 4, excludedSources: [], excludedSections: [] },
+  null,
+  2,
+)}\n`;
+const EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES = 4;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -6252,6 +6284,10 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
     },
     {
+      id: "review-only-instruction-rules",
+      expected: EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES,
+    },
+    {
       id: "outbound-indirect-access-exceptions",
       expected: 1,
     },
@@ -6912,6 +6948,11 @@ const runSelfTest = (): number => {
       root,
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
+    );
+    writeFixture(
+      root,
+      INSTRUCTION_ENFORCEMENT_LEDGER_REL,
+      SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER,
     );
     writeFixture(
       root,

@@ -864,6 +864,7 @@ if (import.meta.main) {
   } else if (!shouldSync) {
     console.log(
       "\nError: locale files are out of sync with en.json.\n" +
+        "Run `bun run i18n:sync` in the app to add missing keys and regenerate typed messages (never edit the generated files), then translate the added values in every locale.\n" +
         "Untranslated/duplicate findings can be fixed, or grandfathered with `i18n-check <dir> --write-baseline`.",
     );
     process.exit(1);
