@@ -1,0 +1,3 @@
+{
+  "add-column": "Nullable publisher text columns without defaults require no row scan or table rewrite; lock acquisition is bounded by 5s and the statement by 30s."
+}

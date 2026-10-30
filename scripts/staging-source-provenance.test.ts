@@ -414,13 +414,19 @@ const assertImageBindings = (workflow: Record<string, unknown>) => {
   );
   const synthetic = contextFromNested({
     inputs: { release_ref: "" },
-    needs: { resolve: { outputs: { sha: sourceCommit } }, ...builtImages },
-    steps: { "rc-images": { outputs: { api: "", web: "" } } },
+    needs: {
+      resolve: { outputs: { sha: sourceCommit } },
+      "rc-manifest": { outputs: { api: "", web: "" } },
+      ...builtImages,
+    },
   });
   const candidate = contextFromNested({
     inputs: { release_ref: "v1.2.3-rc.1" },
-    needs: { resolve: { outputs: { sha: sourceCommit } }, ...builtImages },
-    steps: { "rc-images": { outputs: { api: "rc-api", web: "rc-web" } } },
+    needs: {
+      resolve: { outputs: { sha: sourceCommit } },
+      "rc-manifest": { outputs: { api: "rc-api", web: "rc-web" } },
+      ...builtImages,
+    },
   });
   expect(evaluateInput(promotionInputs["git-sha"], synthetic)).toBe(
     sourceCommit,

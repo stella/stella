@@ -70,8 +70,8 @@ import {
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
-  PdfSignDialogs,
-  usePdfSignFlow,
+  PdfSignRequiredDialog,
+  usePdfSignFromList,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
@@ -500,13 +500,17 @@ export const RowActions = ({
     readOnly: entity.readOnly,
   });
   const desktopEditGate = useDesktopActionGate("edit-file");
-  const pdfSignFlow = usePdfSignFlow();
   // A folder has no file; a row always shows the current version.
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity: !entity.readOnly,
     entityId: entity.entityId,
     file: isBulk ? null : file,
     isCurrentVersion: true,
+    workspaceId,
+  });
+  const { flow: pdfSignFlow, sign: signPdf } = usePdfSignFromList({
+    entity,
+    target: pdfSignTarget,
     workspaceId,
   });
   const openCopyToMatterDialog = () => {
@@ -1133,7 +1137,7 @@ export const RowActions = ({
             aria-label={t("common.actions")}
             className={cn(
               triggerClassName ??
-                "opacity-0! transition-opacity group-hover/row:opacity-100!",
+                "opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100!",
             )}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1246,7 +1250,7 @@ export const RowActions = ({
               ? {
                   capability: "desktop",
                   label: pdfSignFlow.actionLabel,
-                  onSelect: pdfSignFlow.start,
+                  onSelect: signPdf,
                   onSetUp: pdfSignFlow.setUp,
                   status: pdfSignFlow.status,
                 }
@@ -1327,9 +1331,7 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
-      {pdfSignTarget !== null && (
-        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
-      )}
+      {pdfSignTarget !== null && <PdfSignRequiredDialog flow={pdfSignFlow} />}
       <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );
@@ -1354,7 +1356,7 @@ const RowDuplicatePrimaryAction = ({
 
   return (
     <Button
-      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       disabled={pending}
       onClick={(event) => {
         event.stopPropagation();

@@ -14,6 +14,8 @@ const matterSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
   name: v.string(),
   reference: v.nullish(v.string()),
+  /** The matter's colour, as the web stores it; absent, one is hashed from the id. */
+  color: v.nullish(v.string()),
   lastActivityAt: v.nullish(v.string()),
   client: v.nullish(v.object({ displayName: v.string() })),
 });
@@ -42,4 +44,44 @@ export const listMatters = async ({
       }),
     );
     return Result.ok(workspaces);
+  });
+
+/** The name of a new matter's documents column, as the web and MCP name it. */
+const FILE_PROPERTY_NAME = "Documents";
+
+const createdMatterSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1)),
+});
+
+/**
+ * Opens a matter under `name`. Without a client the server makes it a
+ * personal matter, which only its creator sees until they share it.
+ */
+export const createMatter = async ({
+  fetch,
+  id,
+  name,
+  source,
+}: {
+  readonly fetch: Fetch;
+  /**
+   * The new matter's id, which the app names as the web does, so the
+   * request repeated on a fresh token cannot open a second matter.
+   */
+  readonly id: string;
+  readonly name: string;
+  readonly source: AccessTokenSource;
+}): Promise<Result<string, ApiError>> =>
+  await Result.gen(async function* () {
+    const created = yield* Result.await(
+      requestApi({
+        body: { filePropertyName: FILE_PROPERTY_NAME, id, name },
+        fetch,
+        method: "PUT",
+        path: MATTERS_PATH,
+        schema: createdMatterSchema,
+        source,
+      }),
+    );
+    return Result.ok(created.id);
   });

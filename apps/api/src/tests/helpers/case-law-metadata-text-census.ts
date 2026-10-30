@@ -41,6 +41,7 @@ const excluded = (reason: string): MetadataTextDisposition => ({
 });
 
 export const METADATA_TEXT_DISPOSITIONS = {
+  detailFieldEvidence: INSPECTED,
   identifiers: INSPECTED,
   xmlFields: INSPECTED,
   feedFields: INSPECTED,
@@ -371,6 +372,16 @@ export const METADATA_TEXT_DISPOSITIONS = {
   publishedDate: INSPECTED,
   publishedInCollection: INSPECTED,
   publishedInReports: INSPECTED,
+  nssReporterNumber: INSPECTED,
+  nssReporterYear: INSPECTED,
+  nssReporterIssue: INSPECTED,
+  nssKeywordSearchCode: INSPECTED,
+  nssRegistryCaseNumber: INSPECTED,
+  nssRegistryReferral: INSPECTED,
+  nssRegistryReferralDate: INSPECTED,
+  nssRegistryAgainstCases: INSPECTED,
+  nssRegistryStatus: INSPECTED,
+  nssRegistryAnnotation: INSPECTED,
   publisher: INSPECTED,
   publisherBlocked: INSPECTED,
   publisherCaseNumber: INSPECTED,

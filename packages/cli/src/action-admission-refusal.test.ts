@@ -35,7 +35,10 @@ const EXPECTED_EXITS = {
   action_period_exhausted: EXIT_CODES.usageLimited,
   action_concurrency_busy: EXIT_CODES.server,
   action_not_enabled: EXIT_CODES.featureDisabled,
-  action_admission_unavailable: EXIT_CODES.server,
+  limiter_store_unavailable: EXIT_CODES.server,
+  action_admission_configuration_incomplete: EXIT_CODES.server,
+  action_admission_org_state_unreadable: EXIT_CODES.server,
+  action_admission_lease_lost: EXIT_CODES.server,
   action_feature_disabled: EXIT_CODES.featureDisabled,
 } as const satisfies Record<ActionAdmissionCode, number>;
 

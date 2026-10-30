@@ -13,6 +13,13 @@ const CONFIG_PATH = "oxlint.config.ts";
 const TURBO_PATH = "turbo.json";
 const ROOT_PREFIX = "$TURBO_ROOT$/";
 
+const registeredLocalPlugins = (): string[] =>
+  [
+    ...read(CONFIG_PATH).matchAll(
+      /["'](\.\/\.oxlint-plugins\/[^"']+\.[cm]?ts)["']/gu,
+    ),
+  ].flatMap(([, plugin]) => (plugin === undefined ? [] : [plugin]));
+
 const read = (file: string) =>
   readFileSync(path.join(REPO_ROOT, file), "utf-8");
 
@@ -169,6 +176,38 @@ test("every relative import the lint plugins load names its file", () => {
       .filter(({ specifier }) => !/\.(?:[cm]?[jt]sx?|json)$/u.test(specifier))
       .map(({ file, specifier }) => `${file}: ${specifier}`),
   ).toEqual([]);
+});
+
+// This deliberately uses the system Node executable rather than Bun: oxlint
+// evaluates JS plugins with Node's type stripping and without tsconfig aliases.
+test("every registered local oxlint plugin loads in plain Node", () => {
+  const plugins = registeredLocalPlugins();
+  expect(plugins.length).toBeGreaterThan(100);
+  const node = Bun.which("node");
+  expect(node).not.toBeNull();
+  if (node === null) {
+    return;
+  }
+  const loader = `
+    import { pathToFileURL } from "node:url";
+    for (const plugin of process.argv.slice(1)) {
+      try {
+        await import(pathToFileURL(plugin));
+      } catch (error) {
+        console.error(plugin + ": " + (error?.stack ?? error));
+        process.exitCode = 1;
+      }
+    }
+  `;
+  const result = Bun.spawnSync([
+    node,
+    "--input-type=module",
+    "--eval",
+    loader,
+    ...plugins.map((plugin) => path.resolve(REPO_ROOT, plugin)),
+  ]);
+  const error = result.stderr.toString();
+  expect(result.exitCode, error).toBe(0);
 });
 
 test("every Turbo task that runs Oxlint lists every lint cache input", () => {

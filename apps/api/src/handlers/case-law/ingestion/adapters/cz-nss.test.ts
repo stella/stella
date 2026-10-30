@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The cz-nss listing reconciliation capability, and the parser it keys on.
  *
@@ -6,8 +7,6 @@
  * regexes rather than the ones the crawl runs, which is how this suite's
  * predecessor came to assert a citation pattern the adapter no longer had.
  */
-
-import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -40,6 +39,7 @@ import {
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import { readNssRegistryMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
@@ -396,8 +396,9 @@ const installStub = ({
   htmlDocumentStatus = documentStatus,
   legalSentence,
   search = [],
-}: StubOptions): { requests: RecordedRequest[] } => {
+}: StubOptions): { requests: RecordedRequest[]; timeouts: number[] } => {
   const requests: RecordedRequest[] = [];
+  const timeouts: number[] = [];
   let searchCalls = 0;
   let continuationCalls = 0;
 
@@ -405,6 +406,9 @@ const installStub = ({
     async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ?? "GET";
+      if (init && "timeoutMs" in init && typeof init.timeoutMs === "number") {
+        timeouts.push(init.timeoutMs);
+      }
       requests.push({
         method,
         url: url.toString(),
@@ -445,6 +449,14 @@ const installStub = ({
             ? utf16Response(DOCUMENT_TEXT)
             : new Response(null, { status: documentStatus });
         }
+        if (
+          url.hostname === "www.nssoud.cz" &&
+          url.pathname === "/rozhodovaci-cinnost/rozsireny-senat"
+        ) {
+          return htmlResponse(
+            "<table><tbody><tr><td>Nebyl nalezen žádný záznam.</td></tr></tbody></table>",
+          );
+        }
         if (url.pathname === "/") {
           return htmlResponse(SESSION_PAGE);
         }
@@ -455,7 +467,7 @@ const installStub = ({
     },
   );
 
-  return { requests };
+  return { requests, timeouts };
 };
 
 /**
@@ -485,21 +497,22 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
   expect(invalidation.isErr()).toBe(true);
 
   const originalTimeout = AbortSignal.timeout;
-  const timeouts: number[] = [];
+  const pageDeadlines: number[] = [];
   const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
     (milliseconds) => {
-      timeouts.push(milliseconds);
+      pageDeadlines.push(milliseconds);
       return originalTimeout(milliseconds);
     },
   );
   try {
-    installStub({ search: [htmlResponse("", 503)] });
+    const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(timeouts).toEqual([90_000, 60_000, 60_000]);
-    timeouts.length = 0;
+    expect(pageDeadlines).toEqual([90_000]);
+    expect(failedStub.timeouts).toEqual([60_000, 60_000]);
+    pageDeadlines.length = 0;
 
-    installStub({
+    const pageStub = installStub({
       search: [
         htmlResponse(
           searchPage({
@@ -513,7 +526,8 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(timeouts.slice(0, 4)).toEqual([90_000, 60_000, 60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000]);
+    expect(pageStub.timeouts.slice(0, 3)).toEqual([60_000, 60_000, 60_000]);
   } finally {
     timeoutSpy.mockRestore();
   }
@@ -2871,4 +2885,38 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(built.type).toBe("built");
     expect(built.decision.fulltext).toContain("Kasační stížnost");
   });
+});
+
+describe("NSS publisher retention", () => {
+  test("retains reporter components from table cells and keyword codes", () => {
+    const detail = parseCzNssDetailMetadata(`
+      <table><tr><td class="det-textval" data-field-id="nssjudikat">3540</td>
+      <td class="det-textval" data-field-id="nssrok">2017</td>
+      <td class="det-textval" data-field-id="nsssesit">4</td></tr></table>
+      <div data-field-id="vyhledavanidlehesel"><span class="det-textval">017</span></div>
+    `);
+    expect(detail).toMatchObject({
+      nssReporterNumber: "3540",
+      nssReporterYear: "2017",
+      nssReporterIssue: "4",
+      nssKeywordSearchCode: "017",
+    });
+  });
+});
+
+test("registry metadata belongs to the exact decision rather than its referral", () => {
+  const html = `<table><thead><tr><th>Spisová značka</th><th>Předkládací usnesení</th><th>Rozhodnutí RS</th><th>Stav</th></tr></thead><tbody>
+    <tr><td>RS 20/2017</td><td><a href="/referral">5 As 140/2014-76</a></td><td><a href="/other">8 As 1/2017-42</a></td><td>Other status</td></tr>
+    <tr><td>RS 10/2016</td><td><a href="/earlier">5 As 140/2014-53</a></td><td><a href="/original">5 As 140/2014-76</a></td><td>Rozhodnuto</td></tr>
+    <tr class="nssext-extra-table-row"><td><strong>Anotace:</strong> Publisher annotation</td></tr>
+  </tbody></table>`;
+  expect(
+    readNssRegistryMetadata({ html, reference: "5 As 140/2014-76" }),
+  ).toMatchObject({
+    nssRegistryCaseNumber: "RS 10/2016",
+    nssRegistryReferral: "5 As 140/2014-53",
+    nssRegistryStatus: "Rozhodnuto",
+    nssRegistryAnnotation: "Publisher annotation",
+  });
+  expect(readNssRegistryMetadata({ html, reference: "missing" })).toEqual({});
 });

@@ -4,6 +4,21 @@
   "reportInvalidScopeDisables": true,
   "reportNeedlessDisables": true,
   "reportUnscopedDisables": true,
+  "overrides": [
+    {
+      "files": ["packages/decision-reader/**/*.css"],
+      "rules": {
+        "declaration-property-value-allowed-list": [
+          {
+            "/^-webkit-hyphens$|^hyphens$/": ["manual", "none"]
+          },
+          {
+            "message": "Decision reader styles must not enable automatic hyphenation. Found \"%s: %s\"."
+          }
+        ]
+      }
+    }
+  ],
   "rules": {
     "color-no-invalid-hex": true,
     "declaration-block-no-duplicate-properties": [

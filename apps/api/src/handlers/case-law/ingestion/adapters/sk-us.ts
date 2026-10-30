@@ -2387,6 +2387,7 @@ const SK_US_SOURCE_FIELDS_LIST = [
   "mkWordRegister",
   "mkMaterialRegister",
   "mkComplainedLegalRegulation",
+  "mkComplainedLegalRegulationAct",
   "mkClarificationOfLegalRegulation",
   "mkFileReference",
   "mkReferences",
@@ -2415,6 +2416,16 @@ type SkUsPublisherRecord = Readonly<
 >;
 
 const SK_US_SOURCE_FIELDS = {
+  mkComplainedLegalRegulationAct: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "codelists",
+      path: ["codelist", "mkComplainedLegalRegulationAct"],
+      reason:
+        "The publisher's act vocabulary is retained verbatim alongside the decision's challenged legislation.",
+    },
+  },
   documentId: { disposition: "stored", target: { type: "identity" } },
   docType: {
     disposition: "stored",

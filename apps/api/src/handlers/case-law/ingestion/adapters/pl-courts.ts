@@ -74,7 +74,10 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   absentDecisionTextFields,
@@ -1508,6 +1511,8 @@ export const buildPlDecision = ({
         keywords,
         statutes,
         documentId: upstreamId ?? String(saosId ?? caseNumber),
+        superscripts: true,
+        markup: PL_DECISION_MARKUP.COMMON_COURT,
       });
 
       documentAst = parserResult.documentAst;

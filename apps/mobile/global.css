@@ -1,0 +1,18 @@
+/* The app's Tailwind (uniwind): the web's tokens, generated from @stll/ui. */
+@import "tailwindcss";
+@import "uniwind";
+@import "./ui-theme.gen.css";
+
+/* Classes the app takes from the web's shared tokens, which uniwind
+   generates only for the files it scans. */
+@source "../../packages/ui/src/components/composer-tokens.ts";
+
+@theme {
+  /* The web's typeface, DM Sans, by the names the expo-font plugin embeds. */
+  --font-sans: "DMSans-Regular";
+  /* Each weight is its own embedded face: iOS does not derive one from a
+     weight, so `font-sans-bold` names the face, not `font-bold`. */
+  --font-sans-medium: "DMSans-Medium";
+  --font-sans-semibold: "DMSans-SemiBold";
+  --font-sans-bold: "DMSans-Bold";
+}
