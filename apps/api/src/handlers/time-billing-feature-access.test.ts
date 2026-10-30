@@ -122,16 +122,19 @@ const enrolledContext = () =>
     memberRole: "owner",
   });
 
+// Invoice link sending and its management are measured by their own tests.
+const INVOICE_SEND_ROUTES = [
+  ...invoiceSendsRoute,
+  ...invoiceSendManagementRoute,
+];
+const isInvoiceSendRoute = (entry: RouteEntry) =>
+  INVOICE_SEND_ROUTES.some(({ definition }) => definition === entry.definition);
+
 const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   billingCodesRoute,
   expensesRoute,
   internalTimeEntriesRoute,
-  invoicesRoute: invoicesRoute.filter(
-    (entry) =>
-      ![...invoiceSendsRoute, ...invoiceSendManagementRoute].some(
-        ({ definition }) => definition === entry.definition,
-      ),
-  ),
+  invoicesRoute: invoicesRoute.filter((entry) => !isInvoiceSendRoute(entry)),
   clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
@@ -244,11 +247,10 @@ describe("time billing admission census", () => {
     // Caller-enrolled routes are measured separately from invoice management.
     const census = Object.values(TIME_BILLING_ROUTES).flat();
     const flagged = apiRoutes.filter(
-      ({ middleware, definition }) =>
-        middleware.some((stage) => deploymentFeatureGateFlag(stage) === FLAG) &&
-        !invoiceSendManagementRoute.some(
-          (entry) => entry.definition === definition,
-        ),
+      (entry) =>
+        entry.middleware.some(
+          (stage) => deploymentFeatureGateFlag(stage) === FLAG,
+        ) && !isInvoiceSendRoute(entry),
     );
     expect(flagged.length).toBeGreaterThan(0);
     // A group's paths lack the mount prefix; its definitions are the same
@@ -339,6 +341,11 @@ describe("time billing admission census", () => {
       expect(
         entry.middleware.some(
           (stage) => featureAccessGateFeature(stage) === "invoice-links",
+        ),
+      ).toBe(true);
+      expect(
+        entry.middleware.some(
+          (stage) => deploymentFeatureGateFlag(stage) === FLAG,
         ),
       ).toBe(true);
     }

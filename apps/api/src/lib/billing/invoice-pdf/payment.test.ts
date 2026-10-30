@@ -43,7 +43,7 @@ test("an unpaid credit note with a seller account requests no payment", () => {
     totals: { ...fixture.totals, grossAmountMinor: cents(-756_250) },
     paymentAmountMinor: outstandingAmount,
   };
-  expect(credit.seller?.iban).toBeTruthy();
+  expect(credit.seller.iban).toBeTruthy();
   expect(buildInvoiceTemplateData(credit).unwrap().payment).toBeNull();
   expect(buildInvoicePaymentPayload(credit)).toBeNull();
 });
