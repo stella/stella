@@ -7,10 +7,8 @@ Framework-free MCP tool registry, compact schemas, and lazy capability discovery
 A transport-neutral registry with direct tools and three discovery tools:
 `list_capabilities`, `describe_capability`, and `invoke_capability`. Handlers return
 JSON text or `{ error: { code, message, hint, retryable } }` with optional issues.
-Runtime dependencies are `@stll/agent-input` for normalization,
-`@stll/fuzzy-search` for scalar-aware name suggestions, and `better-result` for
-invariant and failure handling. Name suggestions count Unicode scalar values,
-so astral characters such as emoji count as one edit.
+Runtime dependencies are `@stll/agent-input` for normalization and `better-result`
+for invariant and failure handling.
 
 ```ts
 import { createToolSurface, success } from "@stll/mcp-kit";

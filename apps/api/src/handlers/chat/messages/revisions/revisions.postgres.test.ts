@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -11,13 +11,13 @@ import { createTestClock } from "@stll/test-kit";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
-  chatMessages,
   chatMessageRevisions,
+  chatMessages,
   chatThreadCompactions,
   chatThreads,
   chatTurns,
-  workspaces,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
@@ -26,8 +26,8 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
-  buildChatSystemPromptParts,
   buildChatRevisionNoteSection,
+  buildChatSystemPromptParts,
   CHAT_REVISION_NOTE_MAX_CHARS,
   estimateChatRevisionNoteTokens,
 } from "@/api/handlers/chat/chat-prompt";
@@ -39,6 +39,7 @@ import { readChatMessageRevisionsOnTx } from "@/api/handlers/chat/messages/revis
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import type { ChatMessageRevisionChange } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import type { ChatMessageMetadata } from "@/api/handlers/chat/types";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -49,6 +50,7 @@ import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { decodePaginationCursor } from "@/api/lib/pagination";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -100,6 +102,10 @@ const seedFixture = async (db: GatedTestDb) => {
     name: "Revision fixture",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values({
     id: userId,
@@ -516,6 +522,10 @@ if (!databaseUrl || !runPostgres) {
             slug: otherOrganizationId,
             createdAt: new Date(),
           });
+          await recordNewOrganizationAccessState(db, {
+            organizationId: otherOrganizationId,
+            now: new Date(),
+          });
           await db.insert(member).values({
             id: mintAuthProviderIdValue(),
             organizationId: fixture.organizationId,
@@ -746,7 +756,7 @@ if (!databaseUrl || !runPostgres) {
             content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "Continue" }],
             }),
-            createdAt: new Date(Date.now() + 60_000),
+            createdAt: sql`now() + interval '1 minute'`,
           });
           const boundary = (
             await db
@@ -861,6 +871,7 @@ if (!databaseUrl || !runPostgres) {
               practiceJurisdictions: [],
               refRegistry: createChatRefRegistry(),
               safeDb: toSafeDbMock(fixture.scoped(db)),
+              skillBindingScope: NO_SKILL_BINDING_SCOPE,
               messages,
               requestedSkillNames: new Set(),
               threadId: fixture.threadId,
@@ -1215,7 +1226,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: fixture.organizationId,
             userId: fixture.userId,
             userMessageId,
-            leaseExpiresAt: new Date(Date.now() + 60_000),
+            leaseExpiresAt: sql`now() + interval '1 minute'`,
           });
           const beforeActive = await fixture.observe();
           expect(await fixture.write(db, acceptedChange)).toEqual({

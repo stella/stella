@@ -7,10 +7,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { stellaPublicSanctionsReader } from "@/api/db/rls";
 import {
-  sanctionsSources,
+  sanctionsEditionEntries,
   sanctionsEditions,
   sanctionsEntryPayloads,
-  sanctionsEditionEntries,
+  sanctionsSources,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
@@ -47,7 +47,7 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
           ebs: { type: "disabled" },
         });
       } finally {
-        connection.release();
+        await connection.release();
       }
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const application = `sanctions_application_${suffix}`;

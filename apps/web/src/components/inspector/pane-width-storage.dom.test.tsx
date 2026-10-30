@@ -14,6 +14,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 
+const { StrictMode } = await import("react");
 const { cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
 const { INSPECTOR_PANE_DEFAULT_WIDTH, INSPECTOR_PANE_KEYBOARD_STEP } =
@@ -48,6 +49,7 @@ const Dock = ({ openedFrom }: { openedFrom: Surface }) => {
 };
 
 beforeEach(() => {
+  globalThis.history.replaceState(null, "", "/workspaces");
   for (const key of [
     INSPECTOR_PANE_WIDTH_STORAGE_KEY,
     LEGACY_MATTER_KEY,
@@ -157,4 +159,40 @@ test("no source outside the owner keeps an inspector width of its own", async ()
   }
 
   expect(offenders).toEqual([]);
+});
+
+test("released shared width migrates into the registry envelope without changing the preference", () => {
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "640");
+  render(<Dock openedFrom="matter" />);
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
+    "640",
+  );
+  expect(
+    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
+  ).toEqual({ version: 1, value: 640 });
+});
+
+test("safe-mode StrictMode mounting preserves the saved width until a user resize", () => {
+  const savedWidth = 640;
+  const saved = JSON.stringify({ version: 1, value: savedWidth });
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, saved);
+  globalThis.history.replaceState(null, "", "/workspaces?safe=1");
+
+  render(
+    <StrictMode>
+      <Dock openedFrom="matter" />
+    </StrictMode>,
+  );
+
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
+    String(INSPECTOR_PANE_DEFAULT_WIDTH),
+  );
+  expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe(saved);
+  fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowLeft" });
+  expect(
+    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
+  ).toEqual({
+    version: 1,
+    value: INSPECTOR_PANE_DEFAULT_WIDTH + INSPECTOR_PANE_KEYBOARD_STEP,
+  });
 });

@@ -7,10 +7,9 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createCorpusAggregateCache } from "@/api/lib/legal-search/corpus-aggregate-cache";
 import {
-  CorpusIndexError,
   type CorpusIndexAggregations,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
-import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   type CorpusAggregate,
   type CorpusSearchFacetName,
@@ -34,7 +33,9 @@ const testCache = (limits: Partial<CacheLimits> = {}) => {
   return { cache, clock };
 };
 
-type Target = ServingCorpusIndexGeneration & { indexId: string };
+type Target = Parameters<
+  ReturnType<typeof createCorpusAggregateCache>["reader"]
+>[0]["target"];
 
 const TARGET: Target = {
   family: "case_law",
@@ -227,6 +228,52 @@ describe("what an aggregation is keyed by", () => {
 });
 
 describe("what an entry is served for", () => {
+  test("a changed aggregation scope cannot reuse counts for identical physical indexes", async () => {
+    const { cache } = testCache();
+    const engine = countingEngine();
+    const target = {
+      ...TARGET,
+      aggregationFilter: 'jurisdiction:"SVK"',
+    };
+    const first = await read({ cache, load: engine.load, target });
+    const warm = await read({
+      cache,
+      load: engine.load,
+      target: { ...target },
+    });
+    const changedTarget = {
+      ...target,
+      aggregationFilter: 'jurisdiction:"CZE"',
+    };
+    const changed = await read({
+      cache,
+      load: engine.load,
+      target: changedTarget,
+    });
+    const changedWarm = await read({
+      cache,
+      load: engine.load,
+      target: { ...changedTarget },
+    });
+
+    expect(valueOf(first.answer)).toEqual({ value: 1 });
+    expect(valueOf(warm.answer)).toEqual({ value: 1 });
+    expect(warm.outcome).toEqual({ hits: 1, misses: 0, sharedFlights: 0 });
+    expect(valueOf(changed.answer)).toEqual({ value: 2 });
+    expect(changed.outcome).toEqual({ hits: 0, misses: 1, sharedFlights: 0 });
+    expect(valueOf(changedWarm.answer)).toEqual({ value: 2 });
+    expect(changedWarm.outcome).toEqual({
+      hits: 1,
+      misses: 0,
+      sharedFlights: 0,
+    });
+    expect(engine.calls).toHaveLength(2);
+    expect(engine.calls.map(({ query }) => query)).toEqual([
+      "text:promlčení",
+      "text:promlčení",
+    ]);
+  });
+
   test("a new serving generation never reads the previous one's entries", async () => {
     const { cache } = testCache();
     const engine = countingEngine();
@@ -497,28 +544,56 @@ describe("cross-filter reuse", () => {
     expect(engine.calls).toEqual([
       {
         query: QUERY,
-        names: [
-          "court",
-          "courtYear",
-          "decisionType",
-          "language",
-          "source",
-          "total",
-          "year",
-        ],
+        names: ["court", "decisionType", "language", "source", "total", "year"],
       },
       {
         query: `(${QUERY}) AND ${COURT_FILTER}`,
-        names: [
-          "courtYear",
-          "decisionType",
-          "language",
-          "source",
-          "total",
-          "year",
-        ],
+        names: ["decisionType", "language", "source", "total", "year"],
       },
     ]);
-    expect(filtered.outcome).toEqual({ hits: 1, misses: 6, sharedFlights: 0 });
+    expect(filtered.outcome).toEqual({ hits: 1, misses: 5, sharedFlights: 0 });
   });
+});
+
+test("cancellable readers isolate flights and reuse settled answers", async () => {
+  const { cache } = testCache();
+  const firstController = new AbortController();
+  const secondController = new AbortController();
+  const firstEngine = deferredEngine();
+  const secondEngine = deferredEngine();
+  const first = cache.reader({
+    target: TARGET,
+    scope: PUBLIC,
+    load: firstEngine.load,
+    signal: firstController.signal,
+  });
+  const second = cache.reader({
+    target: TARGET,
+    scope: PUBLIC,
+    load: secondEngine.load,
+    signal: secondController.signal,
+  });
+  const input = { query: "text:promlčení", aggs: { total: COUNT_AGGREGATION } };
+  const cancelled = first.aggregate(input);
+  const surviving = second.aggregate(input);
+  expect(firstEngine.calls).toHaveLength(1);
+  expect(secondEngine.calls).toHaveLength(1);
+  firstController.signal.addEventListener(
+    "abort",
+    () => {
+      firstEngine.answer(
+        Result.err(new CorpusIndexError({ message: "Cancelled aggregation" })),
+      );
+    },
+    { once: true },
+  );
+  firstController.abort();
+  secondEngine.answer(Result.ok({ total: { value: 42 } }));
+  expect((await cancelled).isErr()).toBe(true);
+  expect(valueOf(await surviving)).toEqual({ value: 42 });
+  expect(second.outcome()).toEqual({ hits: 0, misses: 1, sharedFlights: 0 });
+  const engine = countingEngine();
+  const warm = await read({ cache, load: engine.load });
+  expect(valueOf(warm.answer)).toEqual({ value: 42 });
+  expect(engine.calls).toHaveLength(0);
 });

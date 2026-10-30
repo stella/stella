@@ -5,7 +5,10 @@ import path from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
-import { listApiTestPaths, planApiTestBatches } from "./api-test-plan";
+import {
+  planApiTestBatchesFromSourceIndex,
+  readApiTestSourceIndex,
+} from "./api-test-plan";
 import {
   batchPeakRss,
   composeTestBatches,
@@ -19,13 +22,16 @@ import {
   TEST_BATCH_RSS_HEADROOM_RATIO,
   TEST_RSS_TABLE_MAX_AGE_DAYS,
   testRssArtifact,
-  unmeasuredTestPeakRss,
   type TestRssTable,
+  unmeasuredTestPeakRss,
 } from "./test-batch-plan";
 import { partitionTestFiles } from "./test-file-shards";
 
 // Only the db class has its own unmeasured estimate; these cases are ordinary.
 const NO_DB_TESTS: ReadonlySet<string> = new Set();
+const API_ROOT = path.resolve(import.meta.dir, "..");
+const API_TEST_SOURCE_INDEX = await readApiTestSourceIndex(API_ROOT);
+const API_TEST_PATHS = API_TEST_SOURCE_INDEX.testPaths;
 
 const BUDGET_MB = 2560;
 const ENVIRONMENT = {
@@ -361,9 +367,9 @@ test("measurement mode composes fresh children without consulting normal estimat
     "scripts/resource-usage.test.ts",
     "scripts/test-lanes.test.ts",
   ];
-  const groups = await planApiTestBatches({
-    apiRoot: path.resolve(import.meta.dir, ".."),
+  const groups = planApiTestBatchesFromSourceIndex({
     propertyOnly: false,
+    sourceIndex: API_TEST_SOURCE_INDEX,
     testPaths,
     executionMode: "measure-rss",
   });
@@ -375,35 +381,39 @@ test("measurement mode composes fresh children without consulting normal estimat
       ),
   ).toEqual(testPaths.toSorted().map((file) => [file]));
 });
-test("a partial or property-only plan classifies every measured file like a full plan", async () => {
-  const apiRoot = path.resolve(import.meta.dir, "..");
+test("every measured file names a current API test file", () => {
+  // The refresh drops deleted files, but a change that deletes or renames a
+  // test between refreshes must drop its row itself.
+  const current = new Set(API_TEST_PATHS);
+  const stale = Object.keys(measuredTestRssTable().files).filter(
+    (file) => !current.has(file),
+  );
+  expect(stale).toEqual([]);
+});
+
+test("a partial or property-only plan classifies every measured file like a full plan", () => {
   const measured = Object.keys(measuredTestRssTable().files);
-  const dbClass = async (
-    testPaths: readonly string[],
-    propertyOnly: boolean,
-  ) => {
-    const [group] = await planApiTestBatches({
-      apiRoot,
+  const dbClass = (testPaths: readonly string[], propertyOnly: boolean) => {
+    const [group] = planApiTestBatchesFromSourceIndex({
       propertyOnly,
+      sourceIndex: API_TEST_SOURCE_INDEX,
       testPaths,
     });
     const dbTestPaths = group?.dbTestPaths ?? new Set<string>();
     return measured.filter((file) => dbTestPaths.has(file)).toSorted();
   };
-  const full = await dbClass(listApiTestPaths(apiRoot), false);
+  const full = dbClass(API_TEST_PATHS, false);
   expect(full.length).toBeGreaterThan(0);
-  expect(await dbClass(["scripts/resource-usage.test.ts"], false)).toEqual(
-    full,
-  );
-  expect(await dbClass(["scripts/resource-usage.test.ts"], true)).toEqual(full);
-  expect(await dbClass(listApiTestPaths(apiRoot), true)).toEqual(full);
+  expect(dbClass(["scripts/resource-usage.test.ts"], false)).toEqual(full);
+  expect(dbClass(["scripts/resource-usage.test.ts"], true)).toEqual(full);
+  expect(dbClass(API_TEST_PATHS, true)).toEqual(full);
 });
 test("full-size refresh tests reclaim their process before another DB suite", async () => {
   const refresh = "src/lib/lists/sanctions/refresh-event-loop.db.test.ts";
   const monitoring = "src/lib/lists/sanctions/monitoring-drain.db.test.ts";
-  const groups = await planApiTestBatches({
-    apiRoot: path.resolve(import.meta.dir, ".."),
+  const groups = planApiTestBatchesFromSourceIndex({
     propertyOnly: false,
+    sourceIndex: API_TEST_SOURCE_INDEX,
     testPaths: [monitoring, refresh],
   });
   const batches = groups.flatMap(({ testBatches }) => testBatches);
@@ -487,11 +497,10 @@ test("the memory profile warns only once it is more than the maximum age old", (
   );
 });
 test("every production batch fits its cap, and every shared batch its measured headroom", async () => {
-  const apiRoot = path.resolve(import.meta.dir, "..");
-  const files = listApiTestPaths(apiRoot);
-  const groups = await planApiTestBatches({
-    apiRoot,
+  const files = API_TEST_PATHS;
+  const groups = planApiTestBatchesFromSourceIndex({
     propertyOnly: false,
+    sourceIndex: API_TEST_SOURCE_INDEX,
     testPaths: files,
   });
   const table = measuredTestRssTable();
@@ -502,7 +511,7 @@ test("every production batch fits its cap, and every shared batch its measured h
       dbTestPaths,
     })),
   );
-  expect(planned.flatMap(({ batch }) => batch).toSorted()).toEqual(files);
+  expect(planned.flatMap(({ batch }) => batch).toSorted()).toEqual([...files]);
   for (const { batch, budgetMb, dbTestPaths } of planned) {
     const estimate = batchPeakRss({
       files: batch,

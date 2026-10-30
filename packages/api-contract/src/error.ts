@@ -138,11 +138,7 @@ export type ApiErrorObjectValue = {
 } & Record<string, unknown>;
 
 export type ApiErrorValue =
-  | ApiErrorObjectValue
-  | ApiValidationErrorValue
-  | string
-  | null
-  | undefined;
+  ApiErrorObjectValue | ApiValidationErrorValue | string | null | undefined;
 
 export type ApiErrorInput = {
   status: number;
@@ -242,3 +238,6 @@ export const normalizeApiError = ({
     status,
   };
 };
+
+export const IDEMPOTENCY_IN_PROGRESS_CODE = "idempotency_in_progress" as const;
+export const IDEMPOTENCY_KEY_REUSED_CODE = "idempotency_key_reused" as const;

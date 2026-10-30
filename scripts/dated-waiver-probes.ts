@@ -1,14 +1,30 @@
 import { panic, Result } from "better-result";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import ts from "typescript";
 import * as v from "valibot";
 
 import {
-  DOC_SOURCE_FILE,
-  ZERO_AGE_OVERRIDE,
+  type CallExpression,
+  type Expression,
+  type Node,
+  type ObjectExpression,
+  type ParsedSource,
+  parseSource,
+  staticPropertyName,
+  type StringLiteral,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
+import {
   type DatedWaiver,
+  DOC_SOURCE_FILE,
+  type ProbeKind,
+  ZERO_AGE_OVERRIDE,
 } from "./dated-waivers";
+import {
+  parseRegistry,
+  serializeRegistry,
+  splitTestId,
+} from "./flaky-test-quarantine";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -18,94 +34,237 @@ import { parseLedger } from "./suppression-waivers";
 
 export type RemovalChange = { source: string; before: string; after: string };
 
+export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "no-llms-txt": true,
+  "release-age-exclusion": true,
+  "release-age-exception": true,
+  "dependency-audit": true,
+  "quarantined-test": true,
+  "flaky-test-quarantine": true,
+  "suppression-waiver": true,
+  "pending-contract-migration": false,
+} as const satisfies Record<ProbeKind, boolean>;
+
 // Offsets must come from a parseable owner, never from regex over source text.
-const parseOwner = (source: string, file: string): ts.SourceFile => {
-  const diagnostics =
-    ts.transpileModule(source, {
-      fileName: file,
-      reportDiagnostics: true,
-      compilerOptions: {
-        target: ts.ScriptTarget.Latest,
-        jsx: ts.JsxEmit.Preserve,
-      },
-    }).diagnostics ?? [];
-  if (
-    diagnostics.some(({ category }) => category === ts.DiagnosticCategory.Error)
-  ) {
-    panic(`Dated waiver owner does not parse: ${file}`);
+const parseOwner = (source: string, file: string) => parseSource(file, source);
+
+const nextTokenOffset = (ast: ParsedSource, offset: number): number => {
+  let next = offset;
+  for (;;) {
+    while (
+      /\s/u.test(ast.sourceText.charAt(next)) &&
+      next < ast.sourceText.length
+    ) {
+      next += 1;
+    }
+    const commentStart = next;
+    const comment = ast.comments.find(
+      (candidate) => candidate.start === commentStart,
+    );
+    if (!comment) {
+      return next;
+    }
+    next = comment.end;
   }
-  return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
 };
 
-const removeNode = (
-  source: string,
-  ast: ts.SourceFile,
-  node: ts.Node,
-): string => {
-  const scanner = ts.createScanner(
-    ts.ScriptTarget.Latest,
-    true,
-    ts.LanguageVariant.Standard,
-    source,
-  );
-  scanner.resetTokenState(node.end);
-  const token = scanner.scan();
-  const end =
-    token === ts.SyntaxKind.CommaToken ? scanner.getTokenEnd() : node.end;
-  return source.slice(0, node.getStart(ast)) + source.slice(end);
+const removeNode = (source: string, ast: ParsedSource, node: Node): string => {
+  const next = nextTokenOffset(ast, node.end);
+  const end = source.charAt(next) === "," ? next + 1 : node.end;
+  return source.slice(0, node.start) + source.slice(end);
+};
+
+const unwrap = (node: Expression): Expression => {
+  let value = node;
+  while (
+    value.type === "ParenthesizedExpression" ||
+    value.type === "TSSatisfiesExpression" ||
+    value.type === "TSAsExpression" ||
+    value.type === "TSNonNullExpression"
+  ) {
+    value = value.expression;
+  }
+  return value;
+};
+
+/**
+ * One documentation waiver as its owner declares it: the element a removal
+ * deletes, and the string literals its checkedAt and expiresAt come from.
+ * Entries built from one shared date constant share those literal nodes.
+ */
+export type DocumentationSite = {
+  dependency: string;
+  node: Node;
+  checkedAt: StringLiteral | undefined;
+  expiresAt: StringLiteral | undefined;
+};
+
+type DocumentationOwner = {
+  ast: ParsedSource;
+  registry: ObjectExpression;
+  sites: DocumentationSite[];
+};
+
+// Reads the declaration shapes the owner uses: inline objects, `.concat`,
+// spreads, and `.map` over dependency names or `[name, urls]` tuples, with
+// dates from literals or top-level string constants. Any other shape fails
+// closed rather than being skipped.
+export const readDocumentationOwner = (source: string): DocumentationOwner => {
+  const ast = parseOwner(source, DOC_SOURCE_FILE);
+  const declarations = new Map<string, Expression>();
+  for (const statement of ast.program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    if (declaration?.type !== "VariableDeclaration") {
+      continue;
+    }
+    for (const variable of declaration.declarations) {
+      if (variable.id.type === "Identifier" && variable.init) {
+        declarations.set(variable.id.name, variable.init);
+      }
+    }
+  }
+  const resolve = (node: Expression, depth = 0): Expression => {
+    const value = unwrap(node);
+    if (value.type !== "Identifier") {
+      return value;
+    }
+    const declared = declarations.get(value.name);
+    if (declared === undefined || depth > 8) {
+      return panic(
+        `Documentation waiver reference is not a top-level constant: ${value.name}`,
+      );
+    }
+    return resolve(declared, depth + 1);
+  };
+  const owner = declarations.get("DOC_SOURCE_EXCLUSIONS");
+  const registry = declarations.get("DOC_SOURCES");
+  const registryObject = registry === undefined ? undefined : unwrap(registry);
+  if (owner === undefined || registryObject?.type !== "ObjectExpression") {
+    return panic("Documentation waiver owner missing");
+  }
+  const property = (
+    object: ObjectExpression,
+    name: string,
+  ): Expression | undefined => {
+    for (const member of object.properties) {
+      if (
+        member.type === "Property" &&
+        !member.method &&
+        staticPropertyName(member) === name
+      ) {
+        return member.value;
+      }
+    }
+    return undefined;
+  };
+  const dateSlot = (
+    object: ObjectExpression,
+    name: "checkedAt" | "expiresAt",
+  ): StringLiteral | undefined => {
+    const initializer = property(object, name);
+    if (initializer === undefined) {
+      return undefined;
+    }
+    const value = resolve(initializer);
+    return value.type === "Literal" && typeof value.value === "string"
+      ? value
+      : panic(`Documentation waiver ${name} is not a string literal`);
+  };
+  const dateSlots = (object: ObjectExpression) => ({
+    checkedAt: dateSlot(object, "checkedAt"),
+    expiresAt: dateSlot(object, "expiresAt"),
+  });
+  const mapped = (
+    call: CallExpression,
+    receiver: Expression,
+  ): DocumentationSite[] => {
+    const items = resolve(receiver);
+    const callback = call.arguments.at(0);
+    if (
+      items.type !== "ArrayExpression" ||
+      callback === undefined ||
+      callback.type === "SpreadElement"
+    ) {
+      return panic("Documentation waiver map has no literal dependency list");
+    }
+    const fn = resolve(callback);
+    const object =
+      fn.type === "ArrowFunctionExpression" && fn.body.type !== "BlockStatement"
+        ? unwrap(fn.body)
+        : undefined;
+    if (object?.type !== "ObjectExpression") {
+      return panic("Documentation waiver map callback must return an object");
+    }
+    return items.elements.map((item) => {
+      const name =
+        item?.type === "ArrayExpression" ? item.elements.at(0) : item;
+      if (!item || name?.type !== "Literal" || typeof name.value !== "string") {
+        return panic("Documentation waiver map item has no dependency name");
+      }
+      return { dependency: name.value, node: item, ...dateSlots(object) };
+    });
+  };
+  const collect = (node: Expression): DocumentationSite[] => {
+    const value = resolve(node);
+    if (value.type === "ObjectExpression") {
+      const dependency = property(value, "dependency");
+      if (
+        dependency?.type !== "Literal" ||
+        typeof dependency.value !== "string"
+      ) {
+        return panic("Documentation waiver object has no literal dependency");
+      }
+      return [
+        { dependency: dependency.value, node: value, ...dateSlots(value) },
+      ];
+    }
+    if (value.type === "ArrayExpression") {
+      return value.elements.flatMap((element) => {
+        if (element === null) {
+          return panic("Unsupported documentation waiver declaration shape");
+        }
+        return collect(
+          element.type === "SpreadElement" ? element.argument : element,
+        );
+      });
+    }
+    if (
+      value.type === "CallExpression" &&
+      value.callee.type === "MemberExpression" &&
+      !value.callee.computed &&
+      value.callee.property.type === "Identifier"
+    ) {
+      const receiver = value.callee.object;
+      switch (value.callee.property.name) {
+        case "concat":
+          return [
+            ...collect(receiver),
+            ...value.arguments.flatMap((argument) =>
+              collect(
+                argument.type === "SpreadElement"
+                  ? argument.argument
+                  : argument,
+              ),
+            ),
+          ];
+        case "map":
+          return mapped(value, receiver);
+        default:
+          break;
+      }
+    }
+    return panic("Unsupported documentation waiver declaration shape");
+  };
+  return { ast, registry: registryObject, sites: collect(owner) };
 };
 
 const removeDocumentation = (source: string, entry: DatedWaiver): string => {
-  const ast = parseOwner(source, DOC_SOURCE_FILE);
-  let owner: ts.VariableDeclaration | undefined;
-  let registry: ts.ObjectLiteralExpression | undefined;
-  const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node)) {
-      if (node.name.getText(ast) === "DOC_SOURCE_EXCLUSIONS") {
-        owner = node;
-      }
-      if (node.name.getText(ast) === "DOC_SOURCES" && node.initializer) {
-        let value = node.initializer;
-        while (ts.isSatisfiesExpression(value) || ts.isAsExpression(value)) {
-          value = value.expression;
-        }
-        if (ts.isObjectLiteralExpression(value)) {
-          registry = value;
-        }
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  if (!owner || !registry) {
-    panic("Documentation waiver owner missing");
-  }
-  const matches: ts.Node[] = [];
-  const find = (node: ts.Node): void => {
-    if (
-      ts.isObjectLiteralExpression(node) &&
-      node.properties.some(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          property.name.getText(ast) === "dependency" &&
-          ts.isStringLiteral(property.initializer) &&
-          property.initializer.text === entry.id,
-      )
-    ) {
-      matches.push(node);
-      return;
-    }
-    if (ts.isArrayLiteralExpression(node)) {
-      for (const element of node.elements) {
-        if (ts.isStringLiteral(element) && element.text === entry.id) {
-          matches.push(element);
-        }
-      }
-    }
-    ts.forEachChild(node, find);
-  };
-  find(owner);
-  const target = matches.at(0);
+  const { ast, registry, sites } = readDocumentationOwner(source);
+  const matches = sites.filter(({ dependency }) => dependency === entry.id);
+  const target = matches.at(0)?.node;
   if (matches.length !== 1 || !target) {
     panic(`Documentation waiver anchor is not unique: ${entry.id}`);
   }
@@ -113,16 +272,16 @@ const removeDocumentation = (source: string, entry: DatedWaiver): string => {
   if (!url || !url.startsWith("https://")) {
     panic(`Documentation waiver has no canonical llms.txt URL: ${entry.id}`);
   }
-  const separator =
-    registry.properties.length > 0 && !registry.properties.hasTrailingComma
-      ? ","
-      : "";
+  const lastProperty = registry.properties.at(-1);
+  const next = nextTokenOffset(ast, lastProperty?.end ?? registry.start + 1);
+  const trailingComma = source.charAt(next) === ",";
+  const insertion = trailingComma
+    ? next + 1
+    : (lastProperty?.end ?? registry.start + 1);
+  const separator = registry.properties.length > 0 && !trailingComma ? "," : "";
   // Insert first: registry precedes exclusions, so original removal offsets hold.
   const removed = removeNode(source, ast, target);
-  const updated = `${removed.slice(
-    0,
-    registry.properties.end,
-  )}${separator}\n  ${JSON.stringify(entry.id)}: { dependencies: [${JSON.stringify(entry.id)}], url: ${JSON.stringify(url)} },\n${removed.slice(registry.properties.end)}`;
+  const updated = `${removed.slice(0, insertion)}${separator}\n  ${JSON.stringify(entry.id)}: { dependencies: [${JSON.stringify(entry.id)}], url: ${JSON.stringify(url)} },\n${removed.slice(insertion)}`;
   parseOwner(updated, DOC_SOURCE_FILE);
   return updated;
 };
@@ -178,10 +337,22 @@ const removeReleaseAgeException = (
   return lines.join("\n");
 };
 
+const leadingComments = (ast: ParsedSource, node: Node) =>
+  ast.comments.filter(
+    (comment) =>
+      comment.end <= node.start &&
+      /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*(?:\n|$))*$/u.test(
+        ast.sourceText.slice(comment.end, node.start),
+      ),
+  );
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
 ): RemovalChange[] => {
+  if (!AUTOMATIC_REMOVAL_ALLOWED[entry.kind]) {
+    return panic(`Automatic removal is disabled for ${entry.kind}`);
+  }
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
@@ -190,52 +361,51 @@ export const removeWaiver = (
       break;
     case "quarantined-test": {
       const ast = parseOwner(before, entry.source);
-      const matches: ts.CallExpression[] = [];
-      const visit = (node: ts.Node): void => {
+      const matches: CallExpression[] = [];
+      walk(ast.program, (node) => {
         if (
-          ts.isCallExpression(node) &&
-          ts.isPropertyAccessExpression(node.expression) &&
-          node.expression.name.text === "skip" &&
-          ["test", "it"].includes(node.expression.expression.getText(ast))
+          node.type !== "CallExpression" ||
+          node.callee.type !== "MemberExpression" ||
+          node.callee.computed ||
+          node.callee.property.type !== "Identifier" ||
+          node.callee.property.name !== "skip" ||
+          !["test", "it"].includes(
+            before.slice(node.callee.object.start, node.callee.object.end),
+          )
         ) {
-          const title = node.arguments.at(0);
-          if (
-            title &&
-            ts.isStringLiteral(title) &&
-            title.text === entry.id &&
-            before
-              .slice(node.getFullStart(), node.getStart(ast))
-              .includes(`test-quarantine-expires: ${entry.expiresAt}`)
-          ) {
-            matches.push(node);
-          }
+          return;
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(ast);
+        const title = node.arguments.at(0);
+        if (
+          title?.type === "Literal" &&
+          title.value === entry.id &&
+          leadingComments(ast, node).some((comment) =>
+            comment.value.includes(
+              `test-quarantine-expires: ${entry.expiresAt}`,
+            ),
+          )
+        ) {
+          matches.push(node);
+        }
+      });
       const call = matches.at(0);
       if (
         matches.length !== 1 ||
         !call ||
-        !ts.isPropertyAccessExpression(call.expression)
+        call.callee.type !== "MemberExpression"
       ) {
         panic(`Test quarantine anchor is not unique: ${entry.id}`);
       }
       after =
-        before.slice(0, call.expression.expression.end) +
-        before.slice(call.expression.end);
-      const marker = ts
-        .getLeadingCommentRanges(before, call.getFullStart())
-        ?.find((range) =>
-          before
-            .slice(range.pos, range.end)
-            .includes(`test-quarantine-expires: ${entry.expiresAt}`),
-        );
+        before.slice(0, call.callee.object.end) + before.slice(call.callee.end);
+      const marker = leadingComments(ast, call).find((comment) =>
+        comment.value.includes(`test-quarantine-expires: ${entry.expiresAt}`),
+      );
       if (!marker) {
         panic(`Test quarantine comment anchor missing: ${entry.id}`);
       }
       // The marker precedes the edited call, so its original offsets still hold.
-      after = after.slice(0, marker.pos) + after.slice(marker.end);
+      after = after.slice(0, marker.start) + after.slice(marker.end);
       parseOwner(after, entry.source);
       break;
     }
@@ -347,6 +517,26 @@ export const removeWaiver = (
         { source: waiver.file, before: content, after: updated },
       ];
     }
+    case "flaky-test-quarantine": {
+      const parsed = parseRegistry(JSON.parse(before));
+      if (parsed.status === "invalid") {
+        return panic(parsed.errors.join("\n"));
+      }
+      const { entries } = parsed.registry;
+      if (
+        entries.filter(
+          ({ id, expires }) => id === entry.id && expires === entry.expiresAt,
+        ).length !== 1
+      ) {
+        panic(`Flaky-test quarantine anchor missing: ${entry.id}`);
+      }
+      after = serializeRegistry({
+        entries: entries.filter(({ id }) => id !== entry.id),
+      });
+      break;
+    }
+    case "pending-contract-migration":
+      return panic(`Automatic removal is disabled for ${entry.kind}`);
     default:
       entry.kind satisfies never;
       return panic("Unhandled dated waiver kind");
@@ -355,6 +545,17 @@ export const removeWaiver = (
 };
 
 export type ProbeResult = { passed: boolean; output: string };
+
+// 404 and 410 confirm the llms.txt is still absent. Network failures, redirects,
+// rate limits and server errors say nothing about it.
+const DOC_ABSENT_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+const docEndpointReceipt = (status: number): string =>
+  `Documentation endpoint returned HTTP ${status}.`;
+/** Whether one probe sample's whole output is an absence receipt. */
+export const isDocAbsentReceipt = (output: string): boolean =>
+  [...DOC_ABSENT_STATUSES].some(
+    (status) => output.trim() === docEndpointReceipt(status),
+  );
 
 export const PROBE_PHASE_BUDGET_MS = 45 * 60_000;
 export const PROBE_TIMEOUT_MS = 10 * 60_000;
@@ -404,6 +605,33 @@ export const createProbeBudget = ({
   };
 };
 
+// Which printed Bun result names the probed test, for kinds whose probe runs
+// a single test.
+const receiptSelector = (
+  entry: DatedWaiver,
+): ((name: string) => boolean) | undefined => {
+  switch (entry.kind) {
+    case "quarantined-test":
+      return (name) => name === entry.id || name.endsWith(` > ${entry.id}`);
+    case "flaky-test-quarantine": {
+      const expected =
+        splitTestId(entry.id)?.name ??
+        panic(`Invalid flaky-test quarantine id: ${entry.id}`);
+      return (name) => name === expected;
+    }
+    case "no-llms-txt":
+    case "release-age-exclusion":
+    case "release-age-exception":
+    case "dependency-audit":
+    case "suppression-waiver":
+    case "pending-contract-migration":
+      return undefined;
+    default:
+      entry.kind satisfies never;
+      return panic("Unhandled dated waiver kind");
+  }
+};
+
 type RunProbeOptions = {
   run: (command: readonly string[]) => Promise<ProbeResult>;
 };
@@ -425,7 +653,8 @@ export const runWaiverProbe = async (
     }
     const receipt = result.value;
     let executedTest = true;
-    if (entry.kind === "quarantined-test") {
+    const selects = receiptSelector(entry);
+    if (selects !== undefined) {
       // Filtered Bun runs may include skipped declarations other than the
       // selected test. Only its named receipt establishes recovery.
       const output = stripVTControlCharacters(receipt.output);
@@ -433,11 +662,7 @@ export const runWaiverProbe = async (
         const match = /^\((pass|fail|skip|todo)\) (.+)$/u.exec(line);
         const status = match?.at(1);
         const name = match?.at(2)?.replace(/ \[\d+(?:\.\d+)?(?:ms|s)\]$/u, "");
-        if (
-          !status ||
-          !name ||
-          (name !== entry.id && !name.endsWith(` > ${entry.id}`))
-        ) {
+        if (!status || !name || !selects(name)) {
           return [];
         }
         return [status];
@@ -454,9 +679,23 @@ export const runWaiverProbe = async (
     });
   }
   const passed = results.filter((result) => result.passed).length;
+  // Only a documentation waiver can confirm its own premise, and only when
+  // every sample got the exact absence receipt: an error, timeout or any
+  // other status stays red, so it reports instead of renewing.
+  const absent =
+    entry.kind === "no-llms-txt" &&
+    results.length === entry.probe.attempts &&
+    results.every(
+      (result) => !result.passed && isDocAbsentReceipt(result.output),
+    );
+  let status: "green" | "absent" | "red" = "red";
+  if (passed === entry.probe.attempts) {
+    status = "green";
+  } else if (absent) {
+    status = "absent";
+  }
   return {
-    status:
-      passed === entry.probe.attempts ? ("green" as const) : ("red" as const),
+    status,
     attempts: entry.probe.attempts,
     passed,
     command: entry.probe.command,
@@ -486,7 +725,7 @@ export const probeDocUrl = async (
   await result.value.body?.cancel();
   return {
     passed: result.value.status === 200,
-    output: `Documentation endpoint returned HTTP ${result.value.status}.`,
+    output: docEndpointReceipt(result.value.status),
   };
 };
 

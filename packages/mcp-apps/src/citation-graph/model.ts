@@ -16,6 +16,8 @@ export type GraphNode =
 export type GraphModel = {
   subjectId: string;
   direction: CitationPage["direction"];
+  doctrine: CitationPage["doctrine"];
+  polarity: CitationPage["polarity"];
   pages: readonly CitationPage[];
   expanded: readonly string[];
 };
@@ -23,6 +25,8 @@ export type GraphModel = {
 export const createGraph = (page: CitationPage): GraphModel => ({
   subjectId: page.decisionId,
   direction: page.direction,
+  doctrine: page.doctrine,
+  polarity: page.polarity,
   pages: [page],
   expanded: [],
 });
@@ -61,6 +65,8 @@ export const mergePage = (model: GraphModel, page: CitationPage) => {
   return {
     subjectId: model.subjectId,
     direction: model.direction,
+    doctrine: model.doctrine,
+    polarity: model.polarity,
     pages,
     expanded:
       previous === undefined

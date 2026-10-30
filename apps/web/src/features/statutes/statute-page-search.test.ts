@@ -20,12 +20,33 @@ test("provision citation filters survive the statute route search contract", () 
   });
   expect(parsed.q).toBe("civil law");
   expect(readProvisionCitingSearch({})).toEqual({ citingSort: "newest" });
-  for (const search of [
-    { citingSort: "authority" },
-    { citingYear: 0 },
-    { citingYear: 2024.5 },
-    { citingCourt: "x".repeat(513) },
-  ]) {
-    expect(v.safeParse(publicStatuteSearchSchema, search).success).toBe(false);
+});
+
+test("a citing filter the reader cannot use is dropped, not a failed page", () => {
+  const parsed = v.parse(publicStatuteSearchSchema, {
+    citingSort: "authority",
+    citingCourt: "x".repeat(513),
+  });
+  expect(parsed.citingSort).toBeUndefined();
+  expect(parsed.citingCourt).toBeUndefined();
+});
+
+test("a reloaded citing year reads from the URL's text", () => {
+  expect(
+    v.parse(publicStatuteSearchSchema, { citingYear: "2024" }).citingYear,
+  ).toBe(2024);
+});
+
+test("a citing year that is not one is dropped, not a failed page", () => {
+  for (const citingYear of [0, 2024.5, "", "20x4", "2024.5"]) {
+    expect(
+      v.parse(publicStatuteSearchSchema, { citingYear }).citingYear,
+    ).toBeUndefined();
   }
+});
+
+test("a future as-of date survives the public statute search contract", () => {
+  expect(v.parse(publicStatuteSearchSchema, { asOf: "2027-01-01" }).asOf).toBe(
+    "2027-01-01",
+  );
 });

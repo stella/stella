@@ -1,5 +1,34 @@
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: Identifier checks are named for schema publication; accepted values are identical.
+// parser-output-unchanged: [cz-ns] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [cz-nss] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [cz-us] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [cz-regional] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [sk-courts] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [sk-us] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-courts] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-sn] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-kio] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-tk] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-nsa] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-ncourt] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-courts] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-vfgh] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-vwgh] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-bvwg] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-lvwg] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-asylgh] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-ubas] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-uvs] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-verg] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-umse] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-bks] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-findok] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [eu-ecj] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [hu-bhgy] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-kis] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-uodo] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: the authority decision number type adds a union member; parsers that never emit it produce identical output.
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -8,7 +37,9 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { stripDangerousChars } from "./text-sanitize.js";
 
 export const DECISION_IDENTIFIER_TYPES = {
+  AUTHORITY_DECISION_NUMBER: "authority-decision-number",
   CASE_NUMBER: "case-number",
+  COMMISSION_CASE_NUMBER: "commission-case-number",
   ECLI: "ecli",
   NEUTRAL_CITATION: "neutral-citation",
   REPORTER_CITATION: "reporter-citation",
@@ -30,6 +61,11 @@ export const DECISION_PRIMARY_REFERENCE_TYPES = [
 export type DecisionPrimaryReferenceType =
   (typeof DECISION_PRIMARY_REFERENCE_TYPES)[number];
 
+export type AuthorityDecisionNumberIdentifier = {
+  type: typeof DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER;
+  value: string;
+};
+
 export type CaseNumberIdentifier = {
   type: typeof DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   value: string;
@@ -37,6 +73,11 @@ export type CaseNumberIdentifier = {
 
 export type EcliIdentifier = {
   type: typeof DECISION_IDENTIFIER_TYPES.ECLI;
+  value: string;
+};
+
+export type CommissionCaseNumberIdentifier = {
+  type: typeof DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER;
   value: string;
 };
 
@@ -51,7 +92,9 @@ export type ReporterCitationIdentifier = {
 };
 
 export type DecisionIdentifier =
+  | AuthorityDecisionNumberIdentifier
   | CaseNumberIdentifier
+  | CommissionCaseNumberIdentifier
   | EcliIdentifier
   | NeutralCitationIdentifier
   | ReporterCitationIdentifier;
@@ -110,8 +153,16 @@ export const reporterCitationIdentifierSchema = v.strictObject({
 export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
   v.variant("type", [
     v.strictObject({
+      type: v.literal(DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER),
+      value: identifierValueSchema,
+    }),
+    v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
       value: identifierValueSchema,
+    }),
+    v.strictObject({
+      type: v.literal(DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER),
+      value: structuredIdentifierValueSchema,
     }),
     v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.ECLI),
@@ -137,7 +188,10 @@ export const isDecisionIdentifier = (
  * normalize them with its case-number policy.
  */
 export const normalizeStructuredDecisionIdentifier = (
-  identifier: Exclude<DecisionIdentifier, CaseNumberIdentifier>,
+  identifier: Exclude<
+    DecisionIdentifier,
+    AuthorityDecisionNumberIdentifier | CaseNumberIdentifier
+  >,
 ): string => {
   switch (identifier.type) {
     case DECISION_IDENTIFIER_TYPES.ECLI:
@@ -146,6 +200,7 @@ export const normalizeStructuredDecisionIdentifier = (
         "",
       );
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
       return normalizeStructuredCitation(identifier.value);
     default: {

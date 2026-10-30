@@ -19,14 +19,14 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
-
 import { account, session, user, verification } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { rootDb } from "@/api/db/root";
 import {
   createSessionLifetime,
+  SESSION_ABSOLUTE_AGE_MS,
   SESSION_LIFETIME_FIELDS,
+  SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
@@ -34,6 +34,7 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -57,8 +58,6 @@ beforeAll(async () => {
   store = createDatabaseSessionLifetimeStore(testDb, {
     expiresIn: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
-    rotationEnabled: true,
-    capEnabled: true,
   });
 }, 120_000);
 
@@ -70,6 +69,7 @@ afterAll(async () => {
 });
 
 type FixtureOptions = {
+  userId?: string;
   ageMs?: number;
   idleMs?: number | null;
   expiresAt?: Date;
@@ -77,18 +77,21 @@ type FixtureOptions = {
 };
 
 const insertSession = async ({
+  userId = mintAuthProviderIdValue(),
   ageMs = DAY_MS,
   idleMs = HOUR_MS,
   expiresAt = new Date(NOW.getTime() + DAY_MS),
   refreshMode = "automatic",
 }: FixtureOptions = {}) => {
-  const userId = mintAuthProviderIdValue();
   fixtureUsers.push(userId);
-  await testDb.insert(user).values({
-    id: userId,
-    name: "Session fixture",
-    email: `${userId}@session.test`,
-  });
+  await testDb
+    .insert(user)
+    .values({
+      id: userId,
+      name: "Session fixture",
+      email: `${userId}@session.test`,
+    })
+    .onConflictDoNothing({ target: user.id });
   const fixture = {
     id: mintAuthProviderIdValue(),
     userId,
@@ -150,7 +153,12 @@ describe("session rollout policies", () => {
     ] as const;
     const fixtures = await Promise.all(
       cases.map(async (entry) => {
-        const initial = await insertSession();
+        const initial = await insertSession({
+          userId:
+            entry.prefix === "smoke-session-"
+              ? "smoke-user-stella"
+              : mintAuthProviderIdValue(),
+        });
         const id = `${entry.prefix}${initial.id}`;
         await testDb
           .update(session)
@@ -173,6 +181,7 @@ describe("session rollout policies", () => {
       );
     }
     const short = await insertSession({
+      userId: "smoke-user-stella",
       expiresAt: new Date(NOW.getTime() - DAY_MS + 60_000),
     });
     await testDb
@@ -184,33 +193,114 @@ describe("session rollout policies", () => {
       .where(eq(session.id, short.id));
     await testDb.$client.exec(backfill);
     const preserved = await testDb.query.session.findFirst({
-      where: { userId: { eq: short.userId } },
+      where: { id: { eq: `smoke-session-${short.id}` } },
     });
     expect(preserved?.refreshMode).toBe("fixed");
     expect(preserved?.expiresAt).toEqual(short.expiresAt);
   });
 
-  test("keeps both rollout policies disabled by default", async () => {
-    const defaults = createDatabaseSessionLifetimeStore(testDb, {
-      expiresIn: 30 * 24 * 60 * 60,
-      updateAge: 24 * 60 * 60,
-    });
-    const fixture = await insertSession({ ageMs: 91 * DAY_MS });
+  test("refuses a session in continuous use once it outlives the absolute lifetime", async () => {
+    const outlived = await insertSession({ ageMs: 91 * DAY_MS, idleMs: 0 });
+    expect(await store.observe({ token: outlived.token, now: NOW })).toBeNull();
+    const within = await insertSession({ ageMs: 89 * DAY_MS, idleMs: 0 });
     expect(
-      await defaults.observe({
+      await store.observe({ token: within.token, now: NOW }),
+    ).not.toBeNull();
+  });
+
+  test("never refreshes a session past its absolute lifetime", async () => {
+    const fixture = await insertSession({ ageMs: 80 * DAY_MS });
+    const refreshed = await store.refresh({
+      token: fixture.token,
+      now: NOW,
+      expiresAt: REFRESH_EXPIRES_AT,
+    });
+    expect(refreshed?.expiresAt).toEqual(
+      new Date(fixture.createdAt.getTime() + SESSION_ABSOLUTE_AGE_MS),
+    );
+  });
+
+  test("rotates every refreshed session and honours the prior token until its recovery ceiling", async () => {
+    const fixture = await insertSession();
+    const refreshed = await store.refresh({
+      token: fixture.token,
+      now: NOW,
+      expiresAt: REFRESH_EXPIRES_AT,
+    });
+    expect(refreshed).not.toBeNull();
+    expect(refreshed?.token).not.toBe(fixture.token);
+    expect(refreshed?.expiresAt).toEqual(REFRESH_EXPIRES_AT);
+    expect(
+      await store.observe({
         token: fixture.token,
-        now: NOW,
-        boundary: "startup",
+        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS - 1),
       }),
     ).not.toBeNull();
-    const refreshed = await defaults.refresh({
-      credentialMode: "cookie",
+    expect(
+      await store.observe({
+        token: fixture.token,
+        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS + 1),
+      }),
+    ).toBeNull();
+  });
+
+  test("refreshes a capped session once per update interval", async () => {
+    const fixture = await insertSession({ ageMs: 80 * DAY_MS });
+    const first = await store.refresh({
+      token: fixture.token,
+      now: NOW,
+      expiresAt: REFRESH_EXPIRES_AT,
+    });
+    const rotated = first?.token ?? panic("First refresh did not rotate");
+    expect(rotated).not.toBe(fixture.token);
+    const second = await store.refresh({
+      token: rotated,
+      now: new Date(NOW.getTime() + 1000),
+      expiresAt: REFRESH_EXPIRES_AT,
+    });
+    expect(second?.token).toBe(rotated);
+    expect(
+      await store.observe({
+        token: fixture.token,
+        now: new Date(NOW.getTime() + 30_000),
+      }),
+    ).not.toBeNull();
+  });
+
+  test("extends a throttled session without rotating past its absolute lifetime", async () => {
+    const fixture = await insertSession({
+      ageMs: 80 * DAY_MS,
+      expiresAt: new Date(NOW.getTime() + 60_000),
+    });
+    await testDb
+      .update(session)
+      .set({ updatedAt: new Date(NOW.getTime() - 60_000) })
+      .where(eq(session.id, fixture.id));
+
+    const refreshed = await store.refresh({
+      token: fixture.token,
+      now: NOW,
+      expiresAt: REFRESH_EXPIRES_AT,
+    });
+
+    expect(refreshed?.token).toBe(fixture.token);
+    expect(refreshed?.expiresAt).toEqual(
+      new Date(fixture.createdAt.getTime() + SESSION_ABSOLUTE_AGE_MS),
+    );
+  });
+
+  test("preserves fixed sessions and their expiry", async () => {
+    const fixture = await insertSession({
+      refreshMode: "fixed",
+      expiresAt: new Date(NOW.getTime() + 15 * 60_000),
+    });
+    const refreshed = await store.refresh({
       token: fixture.token,
       now: NOW,
       expiresAt: REFRESH_EXPIRES_AT,
     });
     expect(refreshed?.token).toBe(fixture.token);
-    expect(refreshed?.expiresAt).toEqual(REFRESH_EXPIRES_AT);
+    expect(refreshed?.expiresAt).toEqual(fixture.expiresAt);
     expect(
       (
         await testDb.query.session.findFirst({
@@ -218,109 +308,15 @@ describe("session rollout policies", () => {
         })
       )?.priorTokenHash,
     ).toBeNull();
-  });
-
-  test("configures rotation and startup expiration independently", async () => {
-    for (const rotationEnabled of [false, true]) {
-      for (const capEnabled of [false, true]) {
-        const configured = createDatabaseSessionLifetimeStore(testDb, {
-          expiresIn: 30 * 24 * 60 * 60,
-          updateAge: 24 * 60 * 60,
-          rotationEnabled,
-          capEnabled,
-        });
-        const old = await insertSession({ ageMs: 91 * DAY_MS });
-        expect(
-          (await configured.observe({
-            token: old.token,
-            now: NOW,
-            boundary: "startup",
-          })) === null,
-        ).toBe(capEnabled);
-        const fresh = await insertSession();
-        const refreshed = await configured.refresh({
-          credentialMode: "cookie",
-          token: fresh.token,
-          now: NOW,
-          expiresAt: REFRESH_EXPIRES_AT,
-        });
-        expect(refreshed).not.toBeNull();
-        expect(refreshed?.token === fresh.token).toBe(!rotationEnabled);
-        expect(refreshed?.expiresAt).toEqual(REFRESH_EXPIRES_AT);
-        const prior = await configured.observe({
-          token: fresh.token,
-          now: new Date(NOW.getTime() + 60_000),
-          boundary: "activity",
-        });
-        expect(prior === null).toBe(rotationEnabled);
-      }
-    }
-  });
-
-  test("preserves fixed credentials and expiry under either rotation policy", async () => {
-    for (const rotationEnabled of [false, true]) {
-      const configured = createDatabaseSessionLifetimeStore(testDb, {
-        expiresIn: 30 * 24 * 60 * 60,
-        updateAge: 24 * 60 * 60,
-        rotationEnabled,
-        capEnabled: true,
-      });
-      const fixture = await insertSession({
-        refreshMode: "fixed",
-        expiresAt: new Date(NOW.getTime() + 15 * 60_000),
-      });
-      const refreshed = await configured.refresh({
-        credentialMode: "cookie",
+    expect(
+      await store.observe({
         token: fixture.token,
-        now: NOW,
-        expiresAt: REFRESH_EXPIRES_AT,
-      });
-      expect(refreshed?.token).toBe(fixture.token);
-      expect(refreshed?.expiresAt).toEqual(fixture.expiresAt);
-      expect(
-        (
-          await testDb.query.session.findFirst({
-            where: { id: { eq: fixture.id } },
-          })
-        )?.priorTokenHash,
-      ).toBeNull();
-      expect(
-        await configured.observe({
-          token: fixture.token,
-          now: new Date(NOW.getTime() + 60_001),
-          boundary: "activity",
-        }),
-      ).not.toBeNull();
-      expect(
-        await configured.observe({
-          token: fixture.token,
-          now: fixture.expiresAt,
-          boundary: "activity",
-        }),
-      ).toBeNull();
-    }
-  });
-
-  test("extends bearer credentials without rotating them", async () => {
-    const fixture = await insertSession();
-    const refreshed = await store.refresh({
-      credentialMode: "bearer",
-      token: fixture.token,
-      now: NOW,
-      expiresAt: REFRESH_EXPIRES_AT,
-    });
-    expect(refreshed?.token).toBe(fixture.token);
-    expect(refreshed?.expiresAt).toEqual(REFRESH_EXPIRES_AT);
-    const later = await store.observe({
-      token: fixture.token,
-      now: new Date(NOW.getTime() + 60_001),
-      boundary: "activity",
-    });
-    expect(later?.token).toBe(fixture.token);
-    const persisted = await testDb.query.session.findFirst({
-      where: { id: { eq: fixture.id } },
-    });
-    expect(persisted?.priorTokenHash).toBeNull();
+        now: new Date(NOW.getTime() + 60_001),
+      }),
+    ).not.toBeNull();
+    expect(
+      await store.observe({ token: fixture.token, now: fixture.expiresAt }),
+    ).toBeNull();
   });
 
   test("tracks activity at five-minute intervals", async () => {
@@ -329,7 +325,6 @@ describe("session rollout policies", () => {
       await store.observe({
         token: fixture.token,
         now: new Date(NOW.getTime() + elapsedMs),
-        boundary: "activity",
       });
       const persisted = await testDb.query.session.findFirst({
         where: { id: { eq: fixture.id } },
@@ -339,7 +334,6 @@ describe("session rollout policies", () => {
     await store.observe({
       token: fixture.token,
       now: new Date(NOW.getTime() + 300_000),
-      boundary: "activity",
     });
     const persisted = await testDb.query.session.findFirst({
       where: { id: { eq: fixture.id } },
@@ -356,7 +350,6 @@ describe("session refresh credentials", () => {
         { length: 8 },
         async () =>
           await store.refresh({
-            credentialMode: "cookie",
             token: fixture.token,
             now: NOW,
             expiresAt: REFRESH_EXPIRES_AT,
@@ -379,14 +372,13 @@ describe("session refresh credentials", () => {
     expect(persisted?.priorTokenHash).toBe(hashSessionToken(fixture.token));
     expect(persisted?.priorTokenHash).not.toBe(fixture.token);
     expect(persisted?.priorTokenExpiresAt).toEqual(
-      new Date(NOW.getTime() + 60_000),
+      new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS),
     );
   });
 
-  test("the prior credential works only before the sixty-second boundary", async () => {
+  test("the unconfirmed prior credential works only before the recovery ceiling", async () => {
     const fixture = await insertSession();
     const current = await store.refresh({
-      credentialMode: "cookie",
       token: fixture.token,
       now: NOW,
       expiresAt: REFRESH_EXPIRES_AT,
@@ -394,24 +386,24 @@ describe("session refresh credentials", () => {
     expect(current).not.toBeNull();
     const grace = await store.observe({
       token: fixture.token,
-      now: new Date(NOW.getTime() + 59_999),
-      boundary: "activity",
+      now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS - 1),
     });
     expect(grace?.token).toBe(current?.token);
-    for (const elapsedMs of [60_000, 60_001]) {
+    for (const elapsedMs of [
+      SESSION_PRIOR_TOKEN_RECOVERY_MS,
+      SESSION_PRIOR_TOKEN_RECOVERY_MS + 1,
+    ]) {
       expect(
         await store.observe({
           token: fixture.token,
           now: new Date(NOW.getTime() + elapsedMs),
-          boundary: "activity",
         }),
       ).toBeNull();
     }
     expect(
       await store.observe({
         token: current?.token ?? "missing-credential",
-        now: new Date(NOW.getTime() + 60_001),
-        boundary: "activity",
+        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS + 1),
       }),
     ).not.toBeNull();
   });
@@ -419,7 +411,6 @@ describe("session refresh credentials", () => {
   test("revocation removes the current credential and its in-flight alias", async () => {
     const fixture = await insertSession();
     const current = await store.refresh({
-      credentialMode: "cookie",
       token: fixture.token,
       now: NOW,
       expiresAt: REFRESH_EXPIRES_AT,
@@ -441,12 +432,9 @@ describe("session refresh credentials", () => {
       fixture.token,
       current?.token ?? "missing-credential",
     ]) {
-      expect(
-        await store.observe({ token, now: NOW, boundary: "activity" }),
-      ).toBeNull();
+      expect(await store.observe({ token, now: NOW })).toBeNull();
       expect(
         await store.refresh({
-          credentialMode: "cookie",
           token,
           now: NOW,
           expiresAt: REFRESH_EXPIRES_AT,
@@ -458,7 +446,6 @@ describe("session refresh credentials", () => {
   test("an unexpired session outside its refresh window keeps its credential", async () => {
     const fixture = await insertSession({ expiresAt: REFRESH_EXPIRES_AT });
     const current = await store.refresh({
-      credentialMode: "cookie",
       token: fixture.token,
       now: NOW,
       expiresAt: REFRESH_EXPIRES_AT,
@@ -471,154 +458,43 @@ describe("session refresh credentials", () => {
   });
 });
 
-describe("absolute session age at startup", () => {
-  const observationCases = (["startup", "activity"] as const).flatMap(
-    (boundary) =>
-      [90 * DAY_MS - 1, 90 * DAY_MS, 91 * DAY_MS].flatMap((ageMs) =>
-        [HOUR_MS - 1, HOUR_MS, HOUR_MS + 1].map((idleMs) => ({
-          boundary,
-          ageMs,
-          idleMs,
-        })),
-      ),
+describe("absolute session age", () => {
+  const observationCases = [90 * DAY_MS - 1, 90 * DAY_MS, 91 * DAY_MS].flatMap(
+    (ageMs) => [0, HOUR_MS, null].map((idleMs) => ({ ageMs, idleMs })),
   );
   test.each(observationCases)(
-    "%j respects both session boundaries",
-    async ({ boundary, ageMs, idleMs }) => {
+    "%j is refused exactly from the absolute age, whatever the activity",
+    async ({ ageMs, idleMs }) => {
       const fixture = await insertSession({ ageMs, idleMs });
-      const observed = await store.observe({
-        token: fixture.token,
-        now: NOW,
-        boundary,
-      });
-      const refused =
-        boundary === "startup" && ageMs >= 90 * DAY_MS && idleMs >= HOUR_MS;
-      expect(observed === null).toBe(refused);
+      const observed = await store.observe({ token: fixture.token, now: NOW });
+      expect(observed === null).toBe(ageMs >= SESSION_ABSOLUTE_AGE_MS);
       const persisted = await testDb.query.session.findFirst({
         where: { id: { eq: fixture.id } },
       });
       expect(persisted?.createdAt).toEqual(fixture.createdAt);
-      expect(persisted?.updatedAt).toEqual(fixture.updatedAt);
-      expect(persisted?.lastSeenAt).toEqual(NOW);
-      expect(persisted?.expiresAt).toEqual(refused ? NOW : fixture.expiresAt);
-      if (refused) {
-        expect(
-          await store.observe({
-            token: fixture.token,
-            now: new Date(NOW.getTime() + 1),
-            boundary: "activity",
-          }),
-        ).toBeNull();
-      }
     },
   );
 
-  test("a completed startup decision remains final for earlier request clocks", async () => {
-    const fixture = await insertSession({
-      ageMs: 91 * DAY_MS,
-      idleMs: HOUR_MS,
-    });
+  test("an outlived session cannot be refreshed back to life", async () => {
+    const fixture = await insertSession({ ageMs: 91 * DAY_MS, idleMs: 0 });
     expect(
-      await store.observe({
+      await store.refresh({
         token: fixture.token,
         now: NOW,
-        boundary: "startup",
-      }),
-    ).toBeNull();
-    for (const elapsedMs of [1, 60_000, HOUR_MS]) {
-      const earlier = new Date(NOW.getTime() - elapsedMs);
-      expect(
-        await store.observe({
-          token: fixture.token,
-          now: earlier,
-          boundary: "activity",
-        }),
-      ).toBeNull();
-      expect(
-        await store.refresh({
-          credentialMode: "cookie",
-          token: fixture.token,
-          now: earlier,
-          expiresAt: REFRESH_EXPIRES_AT,
-        }),
-      ).toBeNull();
-    }
-    const persisted = await testDb.query.session.findFirst({
-      where: { id: { eq: fixture.id } },
-    });
-    expect(persisted?.token).toBe(fixture.token);
-    expect(persisted?.priorTokenHash).toBeNull();
-    expect(persisted?.lastSeenAt).toEqual(NOW);
-    expect(persisted?.expiresAt).toEqual(NOW);
-  });
-
-  test("a legacy session without a real last-seen starts without an idle assumption", async () => {
-    const fixture = await insertSession({ ageMs: 91 * DAY_MS, idleMs: null });
-    expect(
-      await store.observe({
-        token: fixture.token,
-        now: NOW,
-        boundary: "startup",
-      }),
-    ).not.toBeNull();
-    const persisted = await testDb.query.session.findFirst({
-      where: { id: { eq: fixture.id } },
-    });
-    expect(persisted?.lastSeenAt).toEqual(NOW);
-    expect(
-      await store.observe({
-        token: fixture.token,
-        now: new Date(NOW.getTime() + HOUR_MS),
-        boundary: "startup",
+        expiresAt: REFRESH_EXPIRES_AT,
       }),
     ).toBeNull();
   });
 
   test("out-of-order observations keep the latest activity clock", async () => {
-    const fixture = await insertSession({ ageMs: 91 * DAY_MS });
+    const fixture = await insertSession({ ageMs: DAY_MS });
     const recent = new Date(NOW.getTime() + HOUR_MS);
-    await store.observe({
-      token: fixture.token,
-      now: recent,
-      boundary: "activity",
-    });
-    await store.observe({
-      token: fixture.token,
-      now: NOW,
-      boundary: "activity",
-    });
+    await store.observe({ token: fixture.token, now: recent });
+    await store.observe({ token: fixture.token, now: NOW });
     const persisted = await testDb.query.session.findFirst({
       where: { id: { eq: fixture.id } },
     });
     expect(persisted?.lastSeenAt).toEqual(recent);
-    expect(
-      await store.observe({
-        token: fixture.token,
-        now: new Date(recent.getTime() + HOUR_MS - 1),
-        boundary: "startup",
-      }),
-    ).not.toBeNull();
-  });
-
-  test("continued activity preserves an old session through later app startup", async () => {
-    const fixture = await insertSession({
-      ageMs: 91 * DAY_MS,
-      idleMs: HOUR_MS + 1,
-    });
-    expect(
-      await store.observe({
-        token: fixture.token,
-        now: NOW,
-        boundary: "activity",
-      }),
-    ).not.toBeNull();
-    expect(
-      await store.observe({
-        token: fixture.token,
-        now: new Date(NOW.getTime() + HOUR_MS - 1),
-        boundary: "startup",
-      }),
-    ).not.toBeNull();
   });
 });
 
@@ -645,8 +521,6 @@ const createHttpSession = async (cacheEnabled: boolean) => {
   const fixtureStore = createDatabaseSessionLifetimeStore(fixtureDb, {
     expiresIn: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
-    rotationEnabled: true,
-    capEnabled: true,
   });
   const lifetime = createSessionLifetime({
     store: fixtureStore,
@@ -726,18 +600,16 @@ const createHttpSession = async (cacheEnabled: boolean) => {
     expect(cookie).toContain("session_data=");
   }
   const requestSession = async ({
-    startup = false,
     requestCookie = cookie,
     disableCookieCache = false,
     authoritative = false,
   } = {}) =>
     await auth.handler(
       new Request(
-        `http://localhost:3001/api/auth/get-session${disableCookieCache || startup ? "?disableCookieCache=true" : ""}`,
+        `http://localhost:3001/api/auth/get-session${disableCookieCache ? "?disableCookieCache=true" : ""}`,
         {
           headers: {
             cookie: requestCookie,
-            ...(startup ? { [AUTH_SESSION_STARTUP_HEADER]: "1" } : {}),
             ...(authoritative ? { "x-stella-test-authoritative": "1" } : {}),
           },
         },
@@ -758,6 +630,78 @@ const createHttpSession = async (cacheEnabled: boolean) => {
 };
 
 describe("native authentication session responses", () => {
+  test.each(["cap", "revocation"] as const)(
+    "cookie cache bounds stale %s snapshots to its window",
+    async (transition) => {
+      const fixture = await createHttpSession(true);
+      let requestCookie = fixture.cookie;
+      const createdAt = new Date(
+        fixture.clock.getTime() - SESSION_ABSOLUTE_AGE_MS + 30_000,
+      );
+      if (transition === "cap") {
+        await testDb
+          .update(session)
+          .set({ createdAt })
+          .where(eq(session.id, fixture.original.id));
+        const snapshot = await fixture.requestSession({
+          disableCookieCache: true,
+        });
+        expect(await snapshot.json()).toMatchObject({
+          session: { id: fixture.original.id },
+        });
+        const tokenCookie =
+          fixture.cookie
+            .split("; ")
+            .find((cookie) =>
+              cookie.startsWith("better-auth.session_token="),
+            ) ?? panic("Sign-in has no token cookie");
+        requestCookie = `${tokenCookie}; ${responseCookies(snapshot)}`;
+      } else {
+        await store.revokeById({
+          sessionId: fixture.original.id,
+          userId: brandPersistedUserId(fixture.original.userId),
+        });
+      }
+      fixture.advance(59_000);
+      await runWithQueryCounter(async (counter) => {
+        const cached = await fixture.requestSession({ requestCookie });
+        expect(await cached.json()).toMatchObject({
+          session: {
+            id: fixture.original.id,
+            createdAt: (transition === "cap"
+              ? createdAt
+              : fixture.original.createdAt
+            ).toISOString(),
+          },
+        });
+        expect(counter.count).toBe(0);
+      });
+      fixture.advance(1001);
+      const expiredCache = await fixture.requestSession({ requestCookie });
+      expect(await expiredCache.json()).toBeNull();
+    },
+  );
+
+  test("a session already capped skips the native refresh write", async () => {
+    const fixture = await createHttpSession(false);
+    await testDb
+      .update(session)
+      .set({
+        createdAt: new Date(fixture.clock.getTime() - 89 * DAY_MS),
+        updatedAt: new Date(fixture.clock.getTime() - 2 * DAY_MS),
+        lastSeenAt: fixture.clock,
+        expiresAt: new Date(fixture.clock.getTime() + DAY_MS),
+      })
+      .where(eq(session.id, fixture.original.id));
+    await runWithQueryCounter(async (counter) => {
+      const response = await fixture.requestSession();
+      expect(await response.json()).toMatchObject({
+        session: { token: fixture.original.token },
+      });
+      expect(counter.count).toBe(2);
+    });
+  });
+
   test.each([false, true])(
     "removes an expired current session through native resolution with cookie cache %s",
     async (cacheEnabled) => {
@@ -803,7 +747,7 @@ describe("native authentication session responses", () => {
     expect(await requestCount(true)).toBe(3);
     expect(await requestCount(true)).toBe(2);
   });
-  test("global before-hook authoritative resolution observes startup policy before plugin hooks", async () => {
+  test("global before-hook authoritative resolution observes the absolute lifetime before plugin hooks", async () => {
     const fixture = await createHttpSession(true);
     await testDb
       .update(session)
@@ -813,14 +757,14 @@ describe("native authentication session responses", () => {
       })
       .where(eq(session.id, fixture.original.id));
     const response = await fixture.requestSession({
-      startup: true,
       authoritative: true,
+      disableCookieCache: true,
     });
     expect(fixture.authoritativeToken()).toBeNull();
     expect(await response.json()).toBeNull();
   });
   test.each([false, true])(
-    "old idle session is refused at startup with cookie cache %s",
+    "an outlived session is refused with cookie cache %s",
     async (cacheEnabled) => {
       const fixture = await createHttpSession(cacheEnabled);
       await testDb
@@ -830,7 +774,9 @@ describe("native authentication session responses", () => {
           lastSeenAt: new Date(fixture.clock.getTime() - HOUR_MS),
         })
         .where(eq(session.id, fixture.original.id));
-      const response = await fixture.requestSession({ startup: true });
+      const response = await fixture.requestSession({
+        disableCookieCache: true,
+      });
       expect(response.status).toBe(200);
       expect(await response.json()).toBeNull();
       expect(
@@ -847,37 +793,57 @@ describe("native authentication session responses", () => {
   );
 
   test.each([false, true])(
-    "uncached activity keeps an old idle session active with cookie cache %s",
+    "continuous activity does not keep an outlived session with cookie cache %s",
     async (cacheEnabled) => {
       const fixture = await createHttpSession(cacheEnabled);
       await testDb
         .update(session)
         .set({
           createdAt: new Date(fixture.clock.getTime() - 91 * DAY_MS),
-          lastSeenAt: new Date(fixture.clock.getTime() - HOUR_MS),
+          lastSeenAt: fixture.clock,
         })
         .where(eq(session.id, fixture.original.id));
       const response = await fixture.requestSession({
         disableCookieCache: true,
       });
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        session: { id: fixture.original.id },
-      });
-      const startup = await fixture.requestSession({ startup: true });
-      expect(await startup.json()).toMatchObject({
-        session: { id: fixture.original.id },
-      });
+      expect(await response.json()).toBeNull();
     },
   );
-  test("native refresh forwards a new cookie and expires the prior cached credential after grace", async () => {
+  test("the replacement cookie confirms rotation on its first cached read", async () => {
     const fixture = await createHttpSession(true);
-    const createdAt = new Date(fixture.clock.getTime() - 91 * DAY_MS);
+    await testDb
+      .update(session)
+      .set({
+        updatedAt: new Date(fixture.clock.getTime() - 2 * DAY_MS),
+        expiresAt: new Date(fixture.clock.getTime() + DAY_MS),
+      })
+      .where(eq(session.id, fixture.original.id));
+    const rotated = await fixture.requestSession({ disableCookieCache: true });
+    const newCookie = responseCookies(rotated);
+    expect(newCookie).toContain("session_data=");
+    expect(
+      await (await fixture.requestSession({ requestCookie: newCookie })).json(),
+    ).toMatchObject({ session: { id: fixture.original.id } });
+    // A request still in flight with the old cookie keeps working briefly.
+    expect(
+      await (await fixture.requestSession({ disableCookieCache: true })).json(),
+    ).toMatchObject({ session: { id: fixture.original.id } });
+    fixture.advance(60_001);
+    expect(
+      await (await fixture.requestSession({ disableCookieCache: true })).json(),
+    ).toBeNull();
+  });
+
+  test("native refresh recovers a dropped cookie until the replacement is presented", async () => {
+    const fixture = await createHttpSession(true);
+    const createdAt = new Date(fixture.clock.getTime() - 85 * DAY_MS);
     await testDb
       .update(session)
       .set({
         createdAt,
-        expiresAt: new Date(fixture.clock.getTime() + 28 * DAY_MS),
+        updatedAt: new Date(fixture.clock.getTime() - 2 * DAY_MS),
+        expiresAt: new Date(fixture.clock.getTime() + DAY_MS),
       })
       .where(eq(session.id, fixture.original.id));
     const refreshed = await fixture.requestSession({
@@ -895,8 +861,10 @@ describe("native authentication session responses", () => {
     expect(body).toMatchObject({
       session: { id: fixture.original.id, token: current.token },
     });
-    for (const field of Object.keys(SESSION_LIFETIME_FIELDS)) {
-      expect(body).not.toHaveProperty(`session.${field}`);
+    for (const [field, config] of Object.entries(SESSION_LIFETIME_FIELDS)) {
+      if ("returned" in config) {
+        expect(body).not.toHaveProperty(`session.${field}`);
+      }
     }
     const refreshedCookie = responseCookies(refreshed);
     expect(refreshedCookie).toContain("session_token=");
@@ -910,8 +878,10 @@ describe("native authentication session responses", () => {
     );
     expect(cached).not.toBeNull();
     expect(cached).toMatchObject({ session: { token: current.token } });
-    for (const field of Object.keys(SESSION_LIFETIME_FIELDS)) {
-      expect(cached).not.toHaveProperty(`session.${field}`);
+    for (const [field, config] of Object.entries(SESSION_LIFETIME_FIELDS)) {
+      if ("returned" in config) {
+        expect(cached).not.toHaveProperty(`session.${field}`);
+      }
     }
     fixture.advance(59_999);
     const cachedInFlight = await fixture.requestSession();
@@ -923,7 +893,32 @@ describe("native authentication session responses", () => {
       session: { token: current.token },
     });
     expect(responseCookies(inFlight)).toContain("session_token=");
-    fixture.advance(1);
+    fixture.advance(60_001);
+    const retryAfterDroppedResponse = await fixture.requestSession({
+      disableCookieCache: true,
+    });
+    expect(await retryAfterDroppedResponse.json()).toMatchObject({
+      session: { token: current.token },
+    });
+    fixture.advance(60_000);
+    expect(
+      await (await fixture.requestSession({ disableCookieCache: true })).json(),
+    ).toMatchObject({ session: { token: current.token } });
+    const confirmed = await fixture.requestSession({
+      requestCookie: refreshedCookie,
+      disableCookieCache: true,
+    });
+    expect(await confirmed.json()).toMatchObject({
+      session: { token: current.token },
+    });
+    // Old-cookie requests already in flight survive the confirmation briefly.
+    const inFlightAfterConfirm = await fixture.requestSession({
+      disableCookieCache: true,
+    });
+    expect(await inFlightAfterConfirm.json()).toMatchObject({
+      session: { token: current.token },
+    });
+    fixture.advance(60_001);
     const stale = await fixture.requestSession({ disableCookieCache: true });
     expect(await stale.json()).toBeNull();
     fixture.advance(1);

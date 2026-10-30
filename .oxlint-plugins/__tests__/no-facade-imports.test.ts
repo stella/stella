@@ -33,7 +33,7 @@ test("accepts owning leaves imported directly", async () => {
   expect(
     await lintSingleRule(
       "no-facade-imports",
-      'import { db } from "@/api/db/root";\nimport { capture } from "@/api/lib/analytics/capture";\nimport { APIError } from "@/lib/errors/api";\nimport { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";\nimport { forceClosePool } from "@/api/db/sql-close";',
+      'import { db } from "@/api/db/root";\nimport { capture } from "@/api/lib/analytics/capture";\nimport { APIError } from "@/lib/errors/api";\nimport { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";\nimport { forceClosePool } from "@/api/db/sql-close";\nimport { setDedicatedStatementTimeout } from "@/api/db/dedicated-connection-timeouts";\nimport { onlineUniqueIndexTarget } from "@/api/db/online-unique-indexes";',
     ),
   ).toEqual([]);
 });
@@ -185,19 +185,28 @@ for (const { form, source } of [
   },
 ]) {
   test(`${form} enforce the same retired module boundary`, async () => {
-    for (const module of [
-      "@/api/handlers/case-law/document-ast",
-      "@/api/lib/case-law/document-ast",
-      "../../document-ast",
-    ]) {
-      expect(
-        await lintSingleRule("no-facade-imports", source(module), {
-          cwd: "scratch",
-          sourcePath:
-            "apps/api/src/handlers/case-law/ingestion/parsers/sample.ts",
-        }),
-      ).toEqual([1]);
-    }
+    const results = await Promise.all(
+      [
+        "@/api/handlers/case-law/document-ast",
+        "@/api/lib/case-law/document-ast",
+        "../../document-ast",
+      ].map(async (lintCase, index) => {
+        const module = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule("no-facade-imports", source(module), {
+            cwd: "scratch",
+            sourcePath:
+              "apps/api/src/handlers/case-law/ingestion/parsers/sample.ts",
+          }),
+          expected: [1],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
     expect(
       await lintSingleRule(
         "no-facade-imports",

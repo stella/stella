@@ -1,34 +1,35 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test, setDefaultTimeout } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { safeDbFromScoped } from "@/api/db/safe-db";
+import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import {
-  properties,
   auditLogs,
+  contacts,
   desktopEditHandoffs,
-  pdfSigningSessions,
   desktopEditSessions,
   desktopPresence,
-  searchHistoryEntries,
+  entities,
   entityVersions,
   flowDefinitions,
   flowRuns,
   flowRunSteps,
   mcpConnectors,
-  mcpUserConnections,
   mcpOAuthState,
+  mcpUserConnections,
+  pdfSigningSessions,
+  properties,
+  requestIdempotencyReceipts,
+  searchHistoryEntries,
   sharepointConnections,
   sharepointOAuthState,
-  workObligations,
-  contacts,
-  entities,
   taskAssignees,
+  workObligations,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -49,15 +50,18 @@ import {
 } from "@/api/lib/audit-log";
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
+import { completeRequestReceipt } from "@/api/lib/idempotency/request-receipts";
 import {
-  tryLockMemberCleanupWorkspace,
   removeOrganizationMemberInTransaction,
+  tryLockMemberCleanupWorkspace,
 } from "@/api/lib/member-assignment-offboarding";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -87,6 +91,199 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
+  test("organization removal refuses live receipts, then clears only the departing user's organization cache", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const { db: owningDb } = openClient();
+      const organizationId = mintAuthProviderId<"organization">();
+      const otherOrganizationId = mintAuthProviderId<"organization">();
+      const userId = mintAuthProviderId<"user">();
+      const actorUserId = mintAuthProviderId<"user">();
+      const memberId = Bun.randomUUIDv7();
+      const workspaceId = createSafeId<"workspace">();
+      const key = Bun.randomUUIDv7();
+      await db.insert(user).values(
+        [userId, actorUserId].map((id) => ({
+          id,
+          name: "Receipt member",
+          email: `${id}@example.test`,
+        })),
+      );
+      try {
+        await db.insert(organization).values(
+          [organizationId, otherOrganizationId].map((id) => ({
+            id,
+            name: "Receipt organization",
+            slug: id,
+            createdAt: new Date(),
+          })),
+        );
+        const departingPrincipal = { organizationId, userId };
+        const actorPrincipal = { organizationId, userId: actorUserId };
+        const otherOrganizationPrincipal = {
+          organizationId: otherOrganizationId,
+          userId,
+        };
+        const principals = [
+          departingPrincipal,
+          actorPrincipal,
+          otherOrganizationPrincipal,
+        ];
+        for (const id of [organizationId, otherOrganizationId]) {
+          await recordNewOrganizationAccessState(db, {
+            organizationId: id,
+            now: new Date(),
+          });
+        }
+        await db.insert(member).values(
+          principals.map((principal) => ({
+            ...principal,
+            id:
+              principal.organizationId === organizationId &&
+              principal.userId === userId
+                ? memberId
+                : Bun.randomUUIDv7(),
+            role: principal.userId === actorUserId ? "owner" : "member",
+            createdAt: new Date(),
+          })),
+        );
+        await db.insert(workspaces).values({
+          id: workspaceId,
+          organizationId,
+          name: "Receipt matter",
+          reference: workspaceId,
+        });
+        await db
+          .insert(workspaceMembers)
+          .values(
+            [userId, actorUserId].map((id) => ({ workspaceId, userId: id })),
+          );
+        const seedReceipt = async (principal: typeof departingPrincipal) =>
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            principal.organizationId,
+            principal.userId,
+          )(
+            async (tx) =>
+              await tx.insert(requestIdempotencyReceipts).values({
+                ...principal,
+                id: createSafeId<"requestIdempotencyReceipt">(),
+                idempotencyKey: key,
+                route: "/contacts",
+                requestFingerprint: "a".repeat(64),
+                state: "pending",
+              }),
+          );
+        await Promise.all([
+          seedReceipt(departingPrincipal),
+          seedReceipt(actorPrincipal),
+          seedReceipt(otherOrganizationPrincipal),
+        ]);
+        const safeDb = safeDbFromScoped(
+          async (fn) =>
+            await db.transaction(
+              async (tx) => await fn(asTestRaw<Transaction>(tx)),
+            ),
+        );
+        const remove = async () =>
+          await abortableTx(
+            safeDb,
+            async (tx) =>
+              await removeOrganizationMemberInTransaction(tx, {
+                organizationId,
+                memberId,
+                userId,
+                actorUserId,
+              }),
+          );
+        const holding = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const original = createScopedDb(
+          markRlsDatabase(owningDb),
+          [],
+          organizationId,
+          userId,
+        )(async (tx) => {
+          const locked = await tx
+            .select({ id: requestIdempotencyReceipts.id })
+            .from(requestIdempotencyReceipts)
+            .where(
+              and(
+                eq(requestIdempotencyReceipts.organizationId, organizationId),
+                eq(requestIdempotencyReceipts.userId, userId),
+              ),
+            )
+            .for("update");
+          const receipt = locked.at(0);
+          if (receipt === undefined) {
+            panic("The original request must own its pending receipt");
+          }
+          holding.resolve(undefined);
+          await release.promise;
+          await tx.insert(contacts).values({
+            id: createSafeId<"contact">(),
+            organizationId,
+            displayName: "Committed create",
+            type: "person",
+          });
+          await completeRequestReceipt({
+            scopedDb: async (fn) => await withAggregateSavepoint(tx, fn),
+            id: receipt.id,
+            status: 201,
+            body: { userId },
+          });
+        });
+        await Promise.race([holding.promise, original]);
+        try {
+          const refused = await remove();
+          expect(Result.isError(refused)).toBe(true);
+          if (Result.isError(refused)) {
+            expect(refused.error).toMatchObject({
+              status: 409,
+              code: MEMBER_REMOVAL_BUSY_CODE,
+            });
+          }
+          expect(
+            await db.$count(
+              workspaceMembers,
+              and(
+                eq(workspaceMembers.workspaceId, workspaceId),
+                eq(workspaceMembers.userId, userId),
+              ),
+            ),
+          ).toBe(1);
+        } finally {
+          release.resolve(undefined);
+          await original;
+        }
+        expect(Result.isOk(await remove())).toBe(true);
+        const remaining = await db
+          .select({
+            organizationId: requestIdempotencyReceipts.organizationId,
+            userId: requestIdempotencyReceipts.userId,
+          })
+          .from(requestIdempotencyReceipts)
+          .where(eq(requestIdempotencyReceipts.idempotencyKey, key));
+        expect(remaining).toHaveLength(2);
+        expect(remaining).toEqual(expect.arrayContaining(principals.slice(1)));
+        expect(
+          await db.$count(
+            contacts,
+            eq(contacts.organizationId, organizationId),
+          ),
+        ).toBe(1);
+      } finally {
+        await db
+          .delete(organization)
+          .where(
+            inArray(organization.id, [organizationId, otherOrganizationId]),
+          );
+        await db.delete(user).where(inArray(user.id, [userId, actorUserId]));
+      }
+    });
+  });
+
   test("organization removal clears the departing member's presence and history and rejoining starts unreported", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db } = openClient();
@@ -118,6 +315,12 @@ if (!databaseUrl || !runPostgresTests) {
             createdAt: new Date(),
           })),
         );
+        for (const id of [organizationId, otherOrganizationId]) {
+          await recordNewOrganizationAccessState(db, {
+            organizationId: id,
+            now: new Date(),
+          });
+        }
         await db.insert(member).values([
           {
             id: memberId,
@@ -340,6 +543,10 @@ if (!databaseUrl || !runPostgresTests) {
             name: "Assignment organization",
             slug: organizationId,
             createdAt: new Date(),
+          });
+          await recordNewOrganizationAccessState(checkDb, {
+            organizationId,
+            now: new Date(),
           });
           try {
             await checkDb.insert(member).values([
@@ -632,6 +839,10 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Contact organization",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
         });
         try {
           await db.insert(member).values([
@@ -1182,6 +1393,10 @@ if (!databaseUrl || !runPostgresTests) {
           slug: organizationId,
           createdAt: new Date(),
         });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
+        });
         try {
           await db.insert(member).values(
             [actorUserId, userId].map((id) => ({
@@ -1406,6 +1621,10 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Busy fixture",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(holdingDb, {
+          organizationId,
+          now: new Date(),
         });
         let writer: Promise<void> | undefined;
         try {

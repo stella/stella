@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { savedTimeNarratives } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -8,22 +8,24 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { LIMITS } from "@/api/lib/limits";
 
 import { toSavedTimeNarrativeItem } from "./schema";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Save a personal named time narrative for reuse across matters in the active organization.",
   permissions: { timeEntry: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
-  body: t.Object({
-    name: t.String({ minLength: 1, maxLength: 128 }),
-    narrative: t.String({ minLength: 1, maxLength: 10_000 }),
-    narrativeLanguage: t.Optional(narrativeLanguageSchema),
+  body: v.object({
+    name: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    narrative: v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+    narrativeLanguage: v.optional(narrativeLanguageSchema),
   }),
 } satisfies HandlerConfig;
 
@@ -90,6 +92,7 @@ const createSavedTimeNarrative = createSafeRootHandler(
     }
     return Result.ok(toSavedTimeNarrativeItem(created));
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createSavedTimeNarrative;

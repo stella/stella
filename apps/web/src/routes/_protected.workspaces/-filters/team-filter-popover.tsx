@@ -11,9 +11,11 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { LeadFilter, Workspace } from "@/lib/workspaces/types";
+
+import { filterTeamMembersBySearch } from "./matters-search.logic";
 
 type TeamFilterPopoverProps = {
   teamValue: string[] | undefined;
@@ -38,7 +40,7 @@ export const TeamFilterPopover = ({
   workspaces,
 }: TeamFilterPopoverProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [search, setSearch] = useState("");
 
   const members: MemberOption[] = (() => {
@@ -63,15 +65,7 @@ export const TeamFilterPopover = ({
     );
   })();
 
-  const q = search.trim().toLowerCase();
-  const filtered = q
-    ? members.filter(
-        (m) =>
-          m.userName.toLowerCase().includes(q) ||
-          m.userEmail.toLowerCase().includes(q) ||
-          m.userId.toLowerCase().includes(q),
-      )
-    : members;
+  const filtered = filterTeamMembersBySearch(members, search);
 
   const selectedTeam: Set<string> = teamValue ? new Set(teamValue) : new Set();
   const toggleTeam = (id: string) => {
@@ -125,7 +119,7 @@ export const TeamFilterPopover = ({
         </p>
         <Input
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("workspaces.filters.team.searchMembers")}
+          placeholder={t("common.searchMembers")}
           size="sm"
           value={search}
         />

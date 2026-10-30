@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViewTemplates } from "@/api/db/schema";
@@ -11,7 +11,7 @@ import {
   AVT_LAYOUT_FEATURE_ACCESS,
   avtViewAccessStatus,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -29,16 +29,14 @@ import {
   portableLayout,
 } from "@/api/lib/views/utils";
 
-const createViewTemplateBodySchema = t.Object(
-  {
-    name: tDefaultVarchar,
-    layout: tViewLayoutSchema,
-  },
-  { additionalProperties: false },
-);
+const createViewTemplateBodySchema = v.strictObject({
+  name: defaultVarcharSchema,
+  layout: tViewLayoutSchema,
+});
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Save a view layout as a personal view template, the blueprint used to " +
     "create views in other matters. Duplicate sorts and multiple kind " +
@@ -208,7 +206,7 @@ const createViewTemplate = createSafeHandler(
   },
 );
 
-declareAggregateMutation(createViewTemplate.handler, {
+declareAggregateMutation(createViewTemplate, {
   type: "aggregate",
   aggregates: ["personalCatalog"],
 });

@@ -1,3 +1,4 @@
+// parser-output-unchanged: retention is checked by the pipeline against the stored raw; the parser no longer validates itself, and its blocks are unchanged.
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
@@ -6,11 +7,8 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
+import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 
 import { visibleHtmlText } from "./shared-inlines";
 
@@ -35,7 +33,6 @@ export type ParseFindokDecisionOutput = {
   envelope: FindokEnvelopeFields;
   statutes: string[];
   subjectCodes: string[];
-  validationIssues: string[];
 };
 
 /**
@@ -187,7 +184,6 @@ export const parseFindokDecisionXml = (
   }
 
   const blocks: Block[] = [];
-  const validationParts: string[] = [];
   let blockIndex = 0;
   const appendParagraph = (text: string): void => {
     if (text === "") {
@@ -245,8 +241,7 @@ export const parseFindokDecisionXml = (
   for (const xhtml of xhtmlSegments) {
     const document = cheerio.load(xhtml);
     const body = document("body").first();
-    const validationText = normalizedText(visibleHtmlText(body));
-    if (body.length === 0 || validationText === "") {
+    if (body.length === 0 || normalizedText(visibleHtmlText(body)) === "") {
       return Result.err(
         new ParseXmlError({
           message: "Findok embedded XHTML has no decision text",
@@ -254,7 +249,6 @@ export const parseFindokDecisionXml = (
         }),
       );
     }
-    validationParts.push(validationText);
 
     body.contents().each((_, node) => {
       appendNode(node, document);
@@ -275,16 +269,6 @@ export const parseFindokDecisionXml = (
   const statutes = distinctTexts(envelope, "Grundk ngesamt_erf");
   const subjectCodes = distinctTexts(envelope, "Grundk matnr_erf");
   const betreff = optionalText(envelope, "Grundk > betreff");
-  const validation = validateAndLog(
-    {
-      parser: "at-findok",
-      caseNumber: input.caseNumber,
-      language: "de",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(validationParts),
-    blocks,
-  );
   return Result.ok({
     betreff,
     envelope: envelopeFields(envelope),
@@ -312,6 +296,5 @@ export const parseFindokDecisionXml = (
     fulltext: blocks.map((block) => block.plainText).join("\n\n"),
     keywords,
     statutes,
-    validationIssues: validation.issues.map((issue) => issue.code),
   });
 };

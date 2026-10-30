@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+import {
+  UNTRUSTED_CONTENT_CLOSE,
+  UNTRUSTED_CONTENT_OPEN,
+} from "@stll/api-contract/untrusted-content-fence";
 
 import {
   externalMcpCitedAssistantMessageFixture,
@@ -9,9 +18,14 @@ import {
 } from "@/components/chat/__fixtures__/external-mcp";
 import {
   collectExternalSources,
+  collectSourceChipEntries,
+  courtTierForSource,
   dedupeExternalSources,
+  sortCourtTiers,
 } from "@/components/chat/source-chips.logic";
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
+
+const APP_ORIGINS: ReadonlySet<string> = new Set(["https://app.test"]);
 
 describe("external source extraction from tool output", () => {
   test("keeps a root-relative URL only when it opens a legal reader page", () => {
@@ -74,6 +88,24 @@ describe("external source extraction from tool output", () => {
       "El Pleno del Tribunal Constitucional",
     );
     expect(sources.at(0)?.text).toBeUndefined();
+  });
+
+  test("extracts a source from JSON fenced as an untrusted connector result", () => {
+    const payload = JSON.stringify({
+      title: "Decision 105/2022",
+      url: "https://registry.example/decisions/105-2022",
+    });
+    const fenced = `External connector result (connector "registry", tool "search").\n${UNTRUSTED_CONTENT_OPEN}\n${payload}\n${UNTRUSTED_CONTENT_CLOSE}`;
+    const sources: ExternalSourceEntry[] = [];
+
+    collectExternalSources(fenced, sources);
+
+    expect(sources.map(({ title, url }) => ({ title, url }))).toEqual([
+      {
+        title: "Decision 105/2022",
+        url: "https://registry.example/decisions/105-2022",
+      },
+    ]);
   });
 
   test("extracts full document text when get_document returns it", () => {
@@ -327,5 +359,313 @@ describe("external source extraction from tool output", () => {
 
     expect(sources).toHaveLength(1);
     expect(sources.at(0)?.businessRegistry).toBeUndefined();
+  });
+});
+
+const decisionPart = (output: unknown) => ({
+  type: "tool-call" as const,
+  id: "search",
+  name: "infosoud_lookup_case" as const,
+  state: "complete" as const,
+  arguments: "{}",
+  input: {},
+  output,
+});
+
+describe("answer source classification", () => {
+  test("classifies a persisted document by its canonical entity link", () => {
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      sourceDocuments: [
+        {
+          entityId: "document-1",
+          kind: "document",
+          mimeType: "application/pdf",
+          title: "Authority.pdf",
+          workspaceId: "workspace-1",
+        },
+      ],
+      parts: [
+        {
+          type: "text",
+          content: "[Authority](#stella-entity=workspace-1:document-1)",
+        },
+      ],
+    });
+
+    expect(result.entries).toEqual([
+      expect.objectContaining({ relation: "cited", type: "document" }),
+    ]);
+  });
+
+  test("splits cited and consulted decisions and merges duplicate hits", () => {
+    const citedUrl = "https://example.test/cases/cited";
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          results: [
+            {
+              url: citedUrl,
+              caseNumber: "I. ÚS 1/26",
+              court: "Ústavní soud",
+              courtAbbreviation: "ÚS",
+              decisionDate: "2026-01-01",
+              summary: "A holding.",
+            },
+            {
+              url: citedUrl,
+              caseNumber: "I. ÚS 1/26",
+              court: "Ústavní soud",
+              courtAbbreviation: "ÚS",
+              decisionDate: "2026-01-01",
+            },
+            {
+              url: "https://example.test/cases/consulted",
+              caseNumber: "2 Cdo 2/26",
+              court: "Nejvyšší soud",
+              courtAbbreviation: "NS",
+            },
+          ],
+        }),
+        { type: "text", content: `[cited](${citedUrl})` },
+      ],
+    });
+    expect(result.entries).toHaveLength(2);
+    expect(result.entries.map(({ relation }) => relation)).toEqual([
+      "cited",
+      "consulted",
+    ]);
+    expect(result.entries.at(0)).toMatchObject({
+      type: "case-law",
+      caseLaw: { caseNumber: "I. ÚS 1/26", holding: "A holding." },
+    });
+  });
+
+  test("keeps the date and id of an earlier hit for the same decision", () => {
+    const url = "https://example.test/cases/repeated";
+    const first = {
+      url,
+      caseNumber: "3 Cdo 3/26",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      decisionDate: "2026-01-02",
+      decisionId: "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9",
+    };
+    const later = {
+      url,
+      caseNumber: "3 Cdo 3/26",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+    };
+    const sources: ExternalSourceEntry[] = [];
+    collectExternalSources({ results: [first, later] }, sources);
+    expect(dedupeExternalSources(sources).at(0)?.caseLaw).toMatchObject({
+      decisionDate: "2026-01-02",
+      decisionId: first.decisionId,
+    });
+  });
+
+  test("keeps a decision without court metadata as a generic source", () => {
+    const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          url: "https://example.test/cases/missing",
+          title: "Decision without citation metadata",
+          decisionId,
+          caseNumber: "I. ÚS 2/26",
+        }),
+      ],
+    });
+    expect(result.entries).toEqual([
+      expect.objectContaining({
+        type: "external",
+        source: expect.objectContaining({
+          caseLawDecision: { caseNumber: "I. ÚS 2/26", decisionId },
+          title: "Decision without citation metadata",
+        }),
+      }),
+    ]);
+    expect(result.uniqueExternalSources).toHaveLength(1);
+  });
+
+  test("cites a source through a paragraph fragment of its URL", () => {
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          url: "https://example.test/cases/cited",
+          title: "Cited decision",
+        }),
+        {
+          type: "text",
+          content: "[bod 10](https://example.test/cases/cited#paragraph-10)",
+        },
+      ],
+    });
+    expect(result.entries.map(({ relation }) => relation)).toEqual(["cited"]);
+  });
+
+  test("cites an absolute app source through its root-relative route", () => {
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          url: "https://app.test/law/cze/cases/ustavni-soud/i-us-1-26",
+          title: "Decision by its app route",
+        }),
+        {
+          type: "text",
+          content: "[nález](/law/cze/cases/ustavni-soud/i-us-1-26#paragraph-3)",
+        },
+      ],
+    });
+    expect(result.entries.map(({ relation }) => relation)).toEqual(["cited"]);
+  });
+
+  test("cites an incomplete decision source by its canonical decision route", () => {
+    const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
+    const route = createCaseLawDecisionPath(
+      createCaseLawDecisionRouteParams({
+        caseNumber: "I. ÚS 2/26",
+        country: "CZE",
+        court: "Ústavní soud",
+        decisionId,
+        language: null,
+        languageAlternates: null,
+        slug: null,
+      }),
+    );
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          url: "https://example.test/cases/missing",
+          title: "Decision without citation metadata",
+          decisionId,
+          caseNumber: "I. ÚS 2/26",
+        }),
+        { type: "text", content: `[nález](${route})` },
+      ],
+    });
+    expect(result.entries.map(({ relation }) => relation)).toEqual(["cited"]);
+  });
+
+  test("keeps decision dates in the plain ISO form the row formats", () => {
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          results: [
+            {
+              url: "https://example.test/cases/annotated",
+              caseNumber: "I. ÚS 3/26",
+              court: "Ústavní soud",
+              courtAbbreviation: "ÚS",
+              decisionDate: "2026-01-02[u-ca=iso8601]",
+            },
+          ],
+        }),
+      ],
+    });
+    const entry = result.entries.at(0);
+    const decisionDate =
+      entry?.type === "case-law" ? entry.caseLaw.decisionDate : undefined;
+    expect(decisionDate).toBe("2026-01-02");
+    expect(Number.isFinite(new Date(decisionDate ?? "").getTime())).toBe(true);
+  });
+
+  test("keeps a non-legal external URL whose path contains cases", () => {
+    const url = "https://example.test/cases/customer-story";
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [decisionPart({ url, title: "Customer story" })],
+    });
+
+    expect(result.entries).toEqual([
+      expect.objectContaining({
+        relation: "consulted",
+        type: "external",
+        source: expect.objectContaining({ title: "Customer story", url }),
+      }),
+    ]);
+    expect(result.uniqueExternalSources).toHaveLength(1);
+  });
+
+  test.each([
+    ["inline", "[authority](https://example.test/cases/cited)"],
+    [
+      "reference-style",
+      "[authority][decision]\n\n[decision]: https://example.test/cases/cited",
+    ],
+    ["autolink", "<https://example.test/cases/cited>"],
+  ])("classifies %s Markdown destinations as cited", (_kind, markdown) => {
+    const url = "https://example.test/cases/cited";
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({ url, title: "Cited source" }),
+        { type: "text", content: markdown },
+      ],
+    });
+
+    expect(result.entries).toEqual([
+      expect.objectContaining({ relation: "cited", type: "external" }),
+    ]);
+  });
+
+  test("orders Czech court tiers from apex to first instance", () => {
+    const codes = ["OS", "MS", "KS", "VS", "NSS", "NS", "ÚS"];
+    expect(sortCourtTiers(codes.map(courtTierForSource))).toEqual([
+      "constitutional",
+      "supreme",
+      "supreme",
+      "regional",
+      "regional",
+      "other",
+      "other",
+    ]);
+  });
+
+  test.each<[string, string | undefined, CourtTierLabel]>([
+    ["SCOTUS", "supreme", "supreme"],
+    ["KSBR", "regional", "regional"],
+    ["NS", undefined, "supreme"],
+    ["NS", "invalid", "supreme"],
+  ])(
+    "uses the supplied %s court tier when valid and otherwise infers it",
+    (courtAbbreviation, courtTier, expectedTier) => {
+      const sources: ExternalSourceEntry[] = [];
+      collectExternalSources(
+        {
+          url: `https://example.test/${courtAbbreviation}`,
+          caseNumber: "1/2026",
+          court: "Example court",
+          courtAbbreviation,
+          courtTier,
+        },
+        sources,
+      );
+
+      expect(sources.at(0)?.caseLaw?.tier).toBe(expectedTier);
+    },
+  );
+
+  test("omits invalid decision dates during extraction", () => {
+    const sources: ExternalSourceEntry[] = [];
+    collectExternalSources(
+      {
+        url: "https://example.test/invalid-date",
+        caseNumber: "1/2026",
+        court: "Example court",
+        courtAbbreviation: "SCOTUS",
+        decisionDate: "not-a-date",
+      },
+      sources,
+    );
+
+    expect(sources.at(0)?.caseLaw?.decisionDate).toBeUndefined();
   });
 });

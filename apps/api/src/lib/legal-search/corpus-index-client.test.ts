@@ -12,10 +12,11 @@ import {
   CORPUS_INDEX_COMMIT,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
-  type CorpusIndexDeleteSettlementRead,
-  type CorpusIndexSettlementSplit,
   corpusIndexCommittedIngestTimeoutMs,
+  type CorpusIndexDeleteSettlementRead,
+  CorpusIndexError,
   corpusIndexScoredSearchRequest,
+  type CorpusIndexSettlementSplit,
   getCorpusIndexClient,
   parseCorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -24,8 +25,8 @@ import {
   DECISION_TIMESTAMP_FIELD,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
-  corpusIndexConfigFromManifest,
   CORPUS_INDEX_MANIFESTS,
+  corpusIndexConfigFromManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   NATIVE_SCAN_TRANSPORT,
@@ -37,14 +38,19 @@ import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
+  type ActionCostObservation,
   actionRequestObserver,
   runObservedAction,
-  type ActionCostObservation,
 } from "@/api/lib/usage/action-costs/context";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
+import {
+  testAppliedProjectionsFor,
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -70,6 +76,13 @@ let requests: RecordedRequest[];
 let responseBody: unknown;
 let responseBodyForUrl: ((url: URL) => unknown) | null;
 let responseStatus: number;
+const abortReason = (signal: AbortSignal): Error => {
+  const reason: unknown = signal.reason;
+  return reason instanceof Error
+    ? reason
+    : panic("Test cancellation needs an Error reason");
+};
+
 const originalFetch = globalThis.fetch;
 const originalQ09Endpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
 const originalQ09SearchEndpoint = envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
@@ -483,7 +496,87 @@ test("aggregation asks the engine for a compact response body", async () => {
   );
   expect(body["format"]).toBe("json");
   expect(body["max_hits"]).toBe(0);
+  expect(requests).toHaveLength(1);
+  expect(requests.at(0)?.path).toBe("/api/v1/legal_corpus_v1_cze/search");
+  expect(requests.at(0)?.body).toBe(
+    JSON.stringify({
+      query: "text:smlouva",
+      max_hits: 0,
+      aggs: { court: { terms: { field: "court" } } },
+      format: "json",
+    }),
+  );
 });
+
+test("generation-scoped aggregation keeps caller exclusions strict in one request", async () => {
+  const aggregations = { court: { buckets: [{ key: "NS", doc_count: 3 }] } };
+  responseBody = { aggregations };
+  const query = '(text:smlouva AND NOT source:"excluded-source")';
+  const filter =
+    '(NOT jurisdiction:"CZE" OR projection_generation:"case_law_v9")';
+  const aggs = { court: { terms: { field: "court" } } };
+
+  const result = await getCorpusIndexClient("q09").aggregate({
+    observer: "unobserved",
+    indexId: "case_law_v8_cs_sk,case_law_v9_cze",
+    query,
+    filter,
+    aggs,
+  });
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual(aggregations);
+  }
+  expect(requests).toHaveLength(1);
+  const request = requests.at(0);
+  expect(request?.host).toBe(hostOf(originalQ09SearchEndpoint));
+  expect(request?.path).toBe(
+    "/api/v1/_elastic/case_law_v8_cs_sk,case_law_v9_cze/_search",
+  );
+  expect(JSON.parse(request?.body ?? "{}")).toEqual({
+    size: 0,
+    track_total_hits: false,
+    query: {
+      bool: {
+        must: [{ query_string: { query, default_operator: "AND" } }],
+        filter: [
+          {
+            query_string: {
+              query: filter,
+              default_operator: "AND",
+              lenient: true,
+            },
+          },
+        ],
+      },
+    },
+    aggs,
+  });
+});
+
+test.each([undefined, 'projection_generation:"case_law_v9"'])(
+  "aggregation rejects malformed engine output with filter %s",
+  async (filter) => {
+    responseBody = { aggregations: [] };
+    const result = await getCorpusIndexClient("q09").aggregate({
+      observer: "unobserved",
+      indexId: "case_law_v9_cze",
+      query: "text:smlouva",
+      filter,
+      aggs: {},
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(CorpusIndexError);
+      expect(result.error.message).toBe(
+        "corpus index aggregation returned an invalid response",
+      );
+    }
+  },
+);
 
 test("search accepts a response without snippets", async () => {
   // A count-only search (`maxHits: 0`, no snippet fields) is answered
@@ -589,15 +682,21 @@ test("search rejects a malformed object response", async () => {
   }
 });
 
-const readSortedPage = async (order: CorpusSearchOrder) => {
+const readSortedPage = async (
+  order: CorpusSearchOrder,
+  signal?: AbortSignal,
+) => {
   responseBody = {
     num_hits: 1,
-    hits: [{ document_id: "doc-1" }],
+    hits: [
+      { document_id: "doc-1", projection_revision: testRevisionOf("doc-1") },
+    ],
     snippets: [{ text: ["snippet"] }],
   };
 
   await readCorpusIndexSearchPage({
     scanTransport: NATIVE_SCAN_TRANSPORT,
+    signal,
     observer: "unobserved",
     cluster: "q09",
     indexId: "legal_corpus_v1_cze",
@@ -611,19 +710,25 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: candidates.map((candidate) =>
-        corpusSearchGroupToken(candidate.id),
-      ),
-      ranked: candidates.map((candidate) => ({
-        id: candidate.id,
-        score: candidate.score,
-        lexicalScore: candidate.score,
-        citationAuthority: 0,
-      })),
-      revisionById: testRevisionsFor(candidates),
-    }),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const revisionById = testRevisionsFor(probes);
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
+      return {
+        context: null,
+        groups: candidates.map((candidate) =>
+          corpusSearchGroupToken(candidate.id),
+        ),
+        ranked: candidates.map((candidate) => ({
+          id: candidate.id,
+          score: candidate.score,
+          lexicalScore: candidate.score,
+          citationAuthority: 0,
+        })),
+        revisionById,
+      };
+    },
   });
 };
 
@@ -637,6 +742,45 @@ const requestedSortOrders = (): unknown[] =>
     const body: unknown = JSON.parse(request.body);
     return isRecord(body) ? body["sort_by"] : null;
   });
+
+test.each(["scan", "highlight"] as const)(
+  "a page cancels its %s request when the caller aborts",
+  async (phase) => {
+    const controller = new AbortController();
+    const entered = Promise.withResolvers<AbortSignal>();
+    let calls = 0;
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      calls += 1;
+      if (phase === "highlight" && calls === 1) {
+        return new Response(JSON.stringify(responseBody));
+      }
+      const signal =
+        init?.signal ?? panic("Page requests require an abort signal");
+      entered.resolve(signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const page = readSortedPage(RELEVANCE_ORDER, controller.signal);
+    const failure = page.catch((error: unknown) => error);
+    const transportSignal = await entered.promise;
+    controller.abort(new DOMException("Client cancelled page", "AbortError"));
+    expect(transportSignal.aborted).toBe(true);
+    expect(await failure).toMatchObject({
+      message:
+        "The case-law and legislation search index is temporarily unavailable; retry shortly.",
+    });
+    expect(calls).toBe(phase === "scan" ? 1 : 2);
+  },
+);
 
 test("a relevance scan requests BM25 order on every call", async () => {
   await readSortedPage(RELEVANCE_ORDER);
@@ -1355,8 +1499,7 @@ type PropertySplit = {
   publish_timestamp: number | null;
   create_timestamp: number;
   maturity:
-    | { type: "mature" }
-    | { type: "immature"; maturation_period_millis: number };
+    { type: "mature" } | { type: "immature"; maturation_period_millis: number };
 };
 
 const propertySplitArb: fc.Arbitrary<PropertySplit> = fc.record({
@@ -1930,7 +2073,7 @@ test("a search aborts within the remaining shared-request budget", async () => {
     indexId: "case_law_v8_cs_sk",
     query: "text:smlouva",
     maxHits: 1,
-    timeoutMs: 20,
+    timeoutMs: 20, // timeout under test
   });
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -1938,6 +2081,161 @@ test("a search aborts within the remaining shared-request budget", async () => {
     expect(result.error.message).toContain("within its 20ms budget");
   }
 });
+
+test.each(["search", "scoredSearch", "aggregate", "scopedAggregate"] as const)(
+  "%s cancels its HTTP request when the caller aborts",
+  async (operation) => {
+    const controller = new AbortController();
+    const entered = Promise.withResolvers<AbortSignal>();
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal = init?.signal ?? panic("Search requires an abort signal");
+      entered.resolve(signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const client = getCorpusIndexClient("q09");
+    const input = {
+      observer: "unobserved" as const,
+      indexId: "case_law_v8_cs_sk",
+      query: "text:smlouva",
+      signal: controller.signal,
+    };
+    const request = (async () => {
+      switch (operation) {
+        case "search":
+          return client.search({ ...input, maxHits: 1 });
+        case "scoredSearch":
+          return client.scoredSearch({
+            ...input,
+            from: 0,
+            size: 1,
+            fields: ["document_id"],
+            requiredFields: ["document_id"],
+          });
+        case "aggregate":
+        case "scopedAggregate":
+          return client.aggregate({
+            ...input,
+            aggs: { total: { cardinality: { field: "document_id" } } },
+            filter:
+              operation === "scopedAggregate" ? "jurisdiction:CZE" : undefined,
+          });
+        default:
+          operation satisfies never;
+          return panic("Unhandled cancellation test operation");
+      }
+    })();
+    const transportSignal = await entered.promise;
+    expect(transportSignal.aborted).toBe(false);
+    const reason = new DOMException("Client cancelled search", "AbortError");
+    controller.abort(reason);
+    expect(transportSignal.aborted).toBe(true);
+    expect(transportSignal.reason).toBe(reason);
+    const result = await request;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.cause).toBe(reason);
+    }
+  },
+);
+
+test.each(["search", "scoredSearch"] as const)(
+  "%s cancels its HTTP request when the public-read lease aborts",
+  async (operation) => {
+    const requestController = new AbortController();
+    const leaseController = new AbortController();
+    const entered = Promise.withResolvers<AbortSignal>();
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal = init?.signal ?? panic("Search requires an abort signal");
+      entered.resolve(signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const client = getCorpusIndexClient("q09");
+    const input = {
+      observer: "unobserved" as const,
+      indexId: "case_law_v8_cs_sk",
+      query: "text:smlouva",
+      signal: requestController.signal,
+    };
+    const request = runWithPublicReadStatementTimeout(
+      { budgetMs: 30_000, signal: leaseController.signal },
+      async () =>
+        operation === "search"
+          ? await client.search({ ...input, maxHits: 1 })
+          : await client.scoredSearch({
+              ...input,
+              from: 0,
+              size: 1,
+              fields: ["document_id"],
+              requiredFields: ["document_id"],
+            }),
+    );
+    const transportSignal = await entered.promise;
+    expect(transportSignal.aborted).toBe(false);
+    const reason = new DOMException("Public-read lease lost", "AbortError");
+    leaseController.abort(reason);
+    expect(transportSignal.aborted).toBe(true);
+    expect(transportSignal.reason).toBe(reason);
+    const result = await request;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.cause).toBe(reason);
+    }
+  },
+);
+
+test.each([undefined, "jurisdiction:CZE"])(
+  "aggregation transport uses its remaining budget with filter %s",
+  async (filter) => {
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal =
+        init?.signal ?? panic("Aggregation requires a timeout signal");
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const result = await getCorpusIndexClient("q09").aggregate({
+      observer: "unobserved",
+      indexId: "case_law_v8_cs_sk",
+      query: "text:smlouva",
+      filter,
+      aggs: { total: { cardinality: { field: "document_id" } } },
+      timeoutMs: 20, // timeout under test
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain("within its 20ms budget");
+      expect(result.error.reach).toBe("unreachable");
+    }
+  },
+);
 
 test("each request reports its own budget, not a shared one", async () => {
   rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));

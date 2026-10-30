@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import path from "node:path";
-import ts from "typescript";
+
+import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 import {
   deriveCapabilityId,
@@ -8,58 +9,43 @@ import {
 } from "./capability-catalog";
 
 const exportedNames = (source: string) => {
-  const tree = ts.createSourceFile(
-    "handler.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    false,
-  );
+  const { program } = parseSource("handler.ts", source);
   const names = new Set<string | undefined>();
-  for (const statement of tree.statements) {
-    if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+  for (const statement of program.body) {
+    if (statement.type === "ExportDefaultDeclaration") {
       names.add(undefined);
       continue;
     }
-    if (
-      ts.isExportDeclaration(statement) &&
-      !statement.isTypeOnly &&
-      statement.exportClause &&
-      ts.isNamedExports(statement.exportClause)
-    ) {
-      for (const element of statement.exportClause.elements) {
-        if (!element.isTypeOnly) {
-          names.add(
-            element.name.text === "default" ? undefined : element.name.text,
-          );
-        }
+    if (statement.type !== "ExportNamedDeclaration") {
+      continue;
+    }
+    // oxc marks `export type { … }` and also `export declare const …` as type
+    // exports; only the former exports no value.
+    for (const element of statement.specifiers) {
+      if (statement.exportKind !== "type" && element.exportKind !== "type") {
+        const name =
+          element.exported.type === "Literal"
+            ? element.exported.value
+            : element.exported.name;
+        names.add(name === "default" ? undefined : name);
       }
-      continue;
     }
-    if (!ts.canHaveModifiers(statement)) {
-      continue;
-    }
-    const modifiers = ts.getModifiers(statement);
-    if (!modifiers?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword)) {
-      continue;
-    }
-    if (modifiers.some(({ kind }) => kind === ts.SyntaxKind.DefaultKeyword)) {
-      names.add(undefined);
-      continue;
-    }
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name)) {
-          names.add(declaration.name.text);
+    const { declaration } = statement;
+    if (declaration?.type === "VariableDeclaration") {
+      for (const declarator of declaration.declarations) {
+        if (declarator.id.type === "Identifier") {
+          names.add(declarator.id.name);
         }
       }
       continue;
     }
     if (
-      (ts.isFunctionDeclaration(statement) ||
-        ts.isClassDeclaration(statement)) &&
-      statement.name
+      (declaration?.type === "FunctionDeclaration" ||
+        declaration?.type === "TSDeclareFunction" ||
+        declaration?.type === "ClassDeclaration") &&
+      declaration.id
     ) {
-      names.add(statement.name.text);
+      names.add(declaration.id.name);
     }
   }
   return names;

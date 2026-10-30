@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   beforeAll,
@@ -9,13 +8,14 @@ import {
   test,
 } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
 import { readNamedResearchColumns } from "@/api/handlers/case-law/research/column-access";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
@@ -23,6 +23,8 @@ import listResearchColumns from "@/api/handlers/case-law/research/columns-list";
 import reorderResearchColumns from "@/api/handlers/case-law/research/columns-reorder";
 import updateResearchColumn from "@/api/handlers/case-law/research/columns-update";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -39,6 +41,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import {
   createTestIds,
   setupRlsTestData,
@@ -58,6 +61,9 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const lookupResearchAnswers = createLookupResearchAnswers({
+  readCopies: createTestWithdrawalCopyReader(() => testDb),
+});
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -76,7 +82,7 @@ const contextFor = (
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/research/columns"),
-  route: "/case/research/columns",
+  route: "/v1/case/research/columns" satisfies ApiRoutePath,
   safeDb: createSafeDb(testDb, [], organizationId, userId),
   scopedDb: createScopedDb(testDb, [], organizationId, userId),
   session: { activeOrganizationId: organizationId },
@@ -100,14 +106,9 @@ const call = async (
   }
 };
 
-/** A refusal arrives as Elysia's status response: `{ code, response }`. */
+/** A refusal arrives as a status response carrying its code. */
 const statusOf = (result: unknown): number | null =>
-  typeof result === "object" &&
-  result !== null &&
-  "code" in result &&
-  typeof result.code === "number"
-    ? result.code
-    : null;
+  result instanceof HttpStatusResponse ? result.code : null;
 
 /** The yes/no column the product used to have, as the property model spells it. */
 const YES_NO_OPTIONS = [
@@ -290,7 +291,7 @@ describe("an organization holding more columns than it may add", () => {
     });
     expect(named).toHaveLength(HELD);
     expect(
-      Value.Check(runResearchAnswersBodySchema, {
+      v.is(runResearchAnswersBodySchema, {
         columnIds,
         decisionIds: [decisionId],
       }),
@@ -505,11 +506,9 @@ describe("a run answers only the cells that need it", () => {
       { length: LIMITS.caseLawResearchRunDecisionsMax },
       () => createSafeId<"caseLawDecision">(),
     );
-    expect(Value.Check(runResearchAnswersBodySchema, { decisionIds })).toBe(
-      true,
-    );
+    expect(v.is(runResearchAnswersBodySchema, { decisionIds })).toBe(true);
     expect(
-      Value.Check(runResearchAnswersBodySchema, {
+      v.is(runResearchAnswersBodySchema, {
         decisionIds: [...decisionIds, createSafeId<"caseLawDecision">()],
       }),
     ).toBe(false);

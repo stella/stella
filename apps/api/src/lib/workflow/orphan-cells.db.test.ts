@@ -8,9 +8,12 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { fields } from "@/api/db/schema";
+import { extractionRuns, fields } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
+  errorPendingCell,
   errorPendingCells,
+  selectPendingCellPage,
   selectWorkspacesWithPendingCells,
 } from "@/api/lib/workflow/orphan-cells";
 import type { OrphanCellsDatabase } from "@/api/lib/workflow/orphan-cells";
@@ -52,6 +55,9 @@ const setContentType = async (
         type === "pending"
           ? { type: "pending", version: 1 }
           : { type: "text", value: "done", version: 1 },
+      ...(type === "text"
+        ? { ownerRunId: null, attempt: null, aiSettlement: null }
+        : {}),
     })
     .where(inArray(fields.id, [...fieldIds]));
 };
@@ -81,6 +87,63 @@ const recordingDatabase = (): {
 };
 
 describe("orphan cell reconciliation", () => {
+  test("errors a selected owned pending cell with its failed settlement", async () => {
+    const ownerRunId = createSafeId<"extractionRun">();
+    await testDb
+      .update(fields)
+      .set({
+        content: { type: "pending", version: 1 },
+        ownerRunId,
+        attempt: 1,
+      })
+      .where(eq(fields.id, ids.fieldA1));
+
+    expect(
+      await errorPendingCell(testDb, {
+        id: ids.fieldA1,
+        ownerRunId,
+        attempt: 1,
+      }),
+    ).toBe(true);
+    const [cell] = await testDb
+      .select({ content: fields.content, aiSettlement: fields.aiSettlement })
+      .from(fields)
+      .where(eq(fields.id, ids.fieldA1));
+    expect(cell).toEqual({
+      content: { type: "error", version: 1 },
+      aiSettlement: {
+        type: "failed",
+        runId: ownerRunId,
+        settledAt: expect.any(String),
+      },
+    });
+  });
+
+  test("does not borrow another member's identity for an unowned cell", async () => {
+    await testDb.insert(extractionRuns).values({
+      id: createSafeId<"extractionRun">(),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      requestedBy: ids.userA2,
+      scope: "workspace",
+    });
+    await testDb
+      .update(fields)
+      .set({
+        content: { type: "pending", version: 1 },
+        ownerRunId: null,
+        attempt: null,
+      })
+      .where(eq(fields.id, ids.fieldA1));
+
+    const cells = await selectPendingCellPage(testDb, null, 10);
+    const unowned = cells.find(({ id }) => id === ids.fieldA1);
+    expect(unowned).toMatchObject({
+      ownerRunId: null,
+      requestedBy: null,
+    });
+  });
+
   test("scans for pending cells on the handle it is given", async () => {
     await setContentType([ids.fieldA1, ids.fieldB1], "pending");
     const { calls, database } = recordingDatabase();
@@ -101,14 +164,23 @@ describe("orphan cell reconciliation", () => {
   });
 
   test("errors one workspace's pending cells on the handle it is given", async () => {
+    const ownerRunId = createSafeId<"extractionRun">();
     await setContentType([ids.fieldA1, ids.fieldB1], "pending");
+    await testDb
+      .update(fields)
+      .set({ ownerRunId })
+      .where(eq(fields.id, ids.fieldA1));
     const { calls, database } = recordingDatabase();
 
     expect(await errorPendingCells(database, ids.wsA1)).toBe(1);
     expect(calls).toEqual({ selectDistinct: 0, update: 1 });
 
     const contentTypes = await testDb
-      .select({ id: fields.id, content: fields.content })
+      .select({
+        id: fields.id,
+        content: fields.content,
+        aiSettlement: fields.aiSettlement,
+      })
       .from(fields)
       .where(inArray(fields.id, [ids.fieldA1, ids.fieldB1]));
     expect(
@@ -116,6 +188,13 @@ describe("orphan cell reconciliation", () => {
         contentTypes.map(({ id, content }) => [id, content.type]),
       ),
     ).toEqual({ [ids.fieldA1]: "error", [ids.fieldB1]: "pending" });
+    expect(
+      contentTypes.find(({ id }) => id === ids.fieldA1)?.aiSettlement,
+    ).toEqual({
+      type: "failed",
+      runId: ownerRunId,
+      settledAt: expect.any(String),
+    });
 
     // A second pass finds nothing left to error in that workspace.
     expect(await errorPendingCells(database, ids.wsA1)).toBe(0);

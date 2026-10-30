@@ -1,7 +1,7 @@
 import path from "node:path";
-import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
 
 import {
@@ -18,10 +18,9 @@ import {
 // enumeration) moves both consumers together.
 //
 // Enumeration is by module glob + dynamic import of every `{ config, handler }`
-// export a handler module exposes (the default export and any named exports),
-// NOT Elysia route introspection: the `mcp` field lives on the endpoint config
-// and is never threaded into the route wiring, so the composed app cannot see
-// it. An endpoint's identifier is its repo-relative module path for the default
+// export a handler module exposes (the default export and any named exports).
+// The route table mounts these same definition objects, so a consumer can join
+// an endpoint to its mounted routes by identity. An endpoint's identifier is its repo-relative module path for the default
 // export, or `path#exportName` for a named export.
 import {
   type HandlerKind,
@@ -49,33 +48,37 @@ export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
  * Parse actual call expressions: type queries and runtime generic
  * instantiations reference factories without constructing endpoints.
  */
+// Every subtree that holds only types: annotations, type arguments and
+// parameters, aliases, interfaces and `implements` clauses.
+const TYPE_POSITIONS = new Set([
+  "TSTypeAnnotation",
+  "TSTypeParameterInstantiation",
+  "TSTypeParameterDeclaration",
+  "TSTypeAliasDeclaration",
+  "TSInterfaceDeclaration",
+  "TSClassImplements",
+]);
+
 export const inspectSafeHandlerCalls = (source: string) => {
   const kinds = new Set<HandlerKind>();
   let callCount = 0;
   if (!SAFE_HANDLER_FACTORY_NAMES.some((name) => source.includes(name))) {
     return { callCount, kinds: [...kinds] };
   }
-  const file = ts.createSourceFile(
-    "handler.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const visit = (node: ts.Node) => {
-    if (ts.isTypeNode(node)) {
-      return;
+  walk(parseSource("handler.ts", source).program, (node) => {
+    if (TYPE_POSITIONS.has(node.type)) {
+      return "skip-children";
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      isSafeHandlerFactory(node.expression.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      isSafeHandlerFactory(node.callee.name)
     ) {
       callCount += 1;
-      kinds.add(SAFE_HANDLER_FACTORIES[node.expression.text].kind);
+      kinds.add(SAFE_HANDLER_FACTORIES[node.callee.name].kind);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+    return undefined;
+  });
   return { callCount, kinds: [...kinds] };
 };
 
@@ -86,6 +89,7 @@ export type ParsedExposure =
       type: "capability";
       reason: string;
       consumesServices: ServiceClassification;
+      confirmation?: "required";
       readClass?: McpReadClass;
     }
   | { type: "internal"; reason: string }
@@ -146,6 +150,10 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
   }
   const reason = mcp["reason"];
   const consumesServices = mcp["consumesServices"];
+  const confirmation = mcp["confirmation"];
+  if (confirmation !== undefined && confirmation !== "required") {
+    return { type: "invalid", raw: mcp };
+  }
   if (
     type === "capability" &&
     typeof reason === "string" &&
@@ -155,6 +163,7 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
       type: "capability",
       reason,
       consumesServices,
+      ...(confirmation === undefined ? {} : { confirmation }),
       ...readClassification,
     };
   }
@@ -170,6 +179,8 @@ export type CollectedEndpoint = {
   id: string;
   /** `undefined` for the default export, the export name otherwise. */
   exportName: string | undefined;
+  /** The exported definition itself, the object the route table mounts. */
+  definition: object;
   config: Record<string, unknown>;
   exposure: ParsedExposure;
 };
@@ -194,6 +205,7 @@ const collectModuleEndpoints = (
     endpoints.push({
       id: moduleId,
       exportName: undefined,
+      definition: defaultExport,
       config: defaultExport.config,
       exposure: parseExposure(defaultExport.config["mcp"]),
     });
@@ -207,6 +219,7 @@ const collectModuleEndpoints = (
     endpoints.push({
       id: `${moduleId}#${key}`,
       exportName: key,
+      definition: value,
       config: value.config,
       exposure: parseExposure(value.config["mcp"]),
     });
@@ -242,16 +255,9 @@ type DiscoveredFile = {
   kinds: HandlerKind[];
 };
 
-const ELYSIA_INSTANCE_PATTERN = /\bnew Elysia\s*\(/u;
-
 export type SafeHandlerDiscovery = {
   endpoints: DiscoveredEndpoint[];
   files: DiscoveredFile[];
-  /**
-   * Every handler-tree file that builds an Elysia instance, whatever its name
-   * and whether or not it defines handlers itself: route hooks live there.
-   */
-  routeFiles: { id: string; source: string }[];
   importErrors: { id: string; message: string }[];
 };
 
@@ -264,14 +270,13 @@ export type SafeHandlerDiscovery = {
  */
 export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
   // Seed env defaults so handler modules import without real services (same
-  // approach as exact-mirror-guard and the coverage guard).
+  // approach as the coverage guard).
   await import("../../src/tests/setup-env");
   const { Glob } = await import("bun");
   const glob = new Glob(HANDLERS_GLOB);
 
   const endpoints: DiscoveredEndpoint[] = [];
   const files: DiscoveredFile[] = [];
-  const routeFiles: { id: string; source: string }[] = [];
   const importErrors: { id: string; message: string }[] = [];
 
   for await (const abs of glob.scan({ cwd: REPO_ROOT, absolute: true })) {
@@ -280,9 +285,6 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
     }
     const source = await Bun.file(abs).text();
     const id = toEndpointIdentifier(abs, REPO_ROOT);
-    if (ELYSIA_INSTANCE_PATTERN.test(source)) {
-      routeFiles.push({ id, source });
-    }
     const { callCount, kinds } = inspectSafeHandlerCalls(source);
     if (callCount === 0) {
       continue;
@@ -322,6 +324,5 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
 
   endpoints.sort((a, b) => compareCodeUnit(a.id, b.id));
   files.sort((a, b) => compareCodeUnit(a.id, b.id));
-  routeFiles.sort((a, b) => compareCodeUnit(a.id, b.id));
-  return { endpoints, files, routeFiles, importErrors };
+  return { endpoints, files, importErrors };
 };

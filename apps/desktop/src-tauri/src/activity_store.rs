@@ -143,10 +143,10 @@ impl ActivityStore {
             continue;
           }
           if entry.file_name() != DAYS_DIR_NAME
-            && !entry
+            && entry
               .path()
               .extension()
-              .is_some_and(|extension| extension == "tmp")
+              .is_none_or(|extension| extension != "tmp")
           {
             paths.push(entry.path());
           }
@@ -164,7 +164,7 @@ impl ActivityStore {
         .map_err(EncryptedReadError::Unavailable)?
         .into_iter()
         .map(|(path, _)| path)
-        .filter(|path| !path.extension().is_some_and(|extension| extension == "tmp")),
+        .filter(|path| path.extension().is_none_or(|extension| extension != "tmp")),
     );
     let mut unavailable = None;
     for path in paths {
@@ -305,9 +305,9 @@ impl ActivityStore {
         Some(pending.clone())
       }
       PendingMutation::Cancel(key) => {
-        if !saved_pending
+        if saved_pending
           .as_ref()
-          .is_some_and(|saved| saved.idempotency_key == key)
+          .is_none_or(|saved| saved.idempotency_key != key)
         {
           return Err("activity batch key does not match".into());
         }
@@ -1049,6 +1049,7 @@ mod tests {
       window_title: Some("Confidential draft".to_string()),
       document: Some("/private/draft.docx".to_string()),
       matter_id: None,
+      call: false,
       start: Utc.with_ymd_and_hms(2026, 3, 1, 9, 0, 0).unwrap(),
       end: Utc.with_ymd_and_hms(2026, 3, 1, 9, 30, 0).unwrap(),
     }

@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 import fc from "fast-check";
 import JSZip from "jszip";
 
@@ -13,6 +12,10 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { discoverHandler } from "@/api/handlers/templates/discover";
 import discoverEndpoint from "@/api/handlers/templates/discover";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { createHttpApp } from "@/api/http/app";
+import { decodeRequestInput } from "@/api/http/input";
+import { routes } from "@/api/http/route";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
@@ -22,36 +25,39 @@ import { CONDITION_RAW_VALUES } from "@/api/lib/docx/block-directives";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import { partParagraphTexts } from "@/api/lib/docx/rich-patch";
-import type { TemplateData, FieldMeta } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateData } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { buildTemplateS3Key } from "./storage-keys";
 import {
   decideTemplateFillCompletion,
   fillDiagnosticsOf,
   templateFillStatus,
 } from "./template-fill-completion";
 import {
+  type AiFillAdmission,
+  type AiFillCollaborators,
+  clauseDirectiveRecoveryHint,
   describeStoredTemplate,
+  discoverTemplateSource,
   fillStoredTemplateDocx,
   fillTemplateDocx,
   fillTemplateDocxStrict,
-  discoverTemplateSource,
-  clauseDirectiveRecoveryHint,
-  type AiFillAdmission,
-  type AiFillCollaborators,
 } from "./template-fill-service";
 import { runAdmittedAiFill } from "./template-fill-usage";
 
@@ -675,7 +681,7 @@ describe("fillTemplateDocx required-field rejection", () => {
 
 describe("fillStoredTemplateDocx use recording", () => {
   const usedTemplateId = toSafeId<"template">("tmpl_use");
-  const storedS3Key = "fake-key-use-recording";
+  const storedS3Key = buildTemplateS3Key(organizationId, usedTemplateId);
   const storedRow = {
     name: "NDA",
     fileName: "nda.docx",
@@ -1025,7 +1031,7 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
 
 describe("describeStoredTemplate gated blocks", () => {
   const templateId = toSafeId<"template">("tmpl_2");
-  const s3Key = "fake-key-conditions";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -1119,7 +1125,7 @@ describe("describeStoredTemplate gated blocks", () => {
 describe("describeStoredTemplate array shape", () => {
   const templateId = toSafeId<"template">("tmpl_1");
 
-  const s3Key = "fake-key-unused-because-loadTemplate-is-bypassed";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -2017,27 +2023,40 @@ test("stored web discovery, description and effective fill declarations agree fo
   const templateId = toSafeId<"template">(
     "00000000-0000-4000-8000-000000000001",
   );
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
   const fakeS3 = startFakeS3();
   try {
-    fakeS3.put("stella", "clause-web-discovery", new Uint8Array(file.bytes));
-    const scopedDb = stubScopedDb(clauseBody, "clause-web-discovery");
-    const app = new Elysia().post(
-      "/templates/discover",
-      async ({ body, request }) =>
-        await discoverEndpoint.handler(
-          createTestHandlerContext<
-            Parameters<typeof discoverEndpoint.handler>[0]
-          >({
-            audit: NO_AUDIT,
-            safeDb: NO_DB,
-            scopedDb,
-            session: { activeOrganizationId: organizationId },
-            body,
-            request,
-            route: "/templates/discover",
-          }),
-        ),
-      { body: discoverEndpoint.config.body },
+    fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
+    const scopedDb = stubScopedDb(clauseBody, s3Key);
+    await using server = serveForTest(
+      createHttpApp({
+        middleware: [errorBoundary],
+        routes: routes({
+          "/templates/discover": {
+            POST: {
+              access: "public",
+              config: { body: discoverEndpoint.config.body },
+              run: async ({ ctx, readBody }) =>
+                await discoverEndpoint.handler(
+                  createTestHandlerContext<
+                    Parameters<typeof discoverEndpoint.handler>[0]
+                  >({
+                    audit: NO_AUDIT,
+                    safeDb: NO_DB,
+                    scopedDb,
+                    session: { activeOrganizationId: organizationId },
+                    body: await decodeRequestInput(
+                      discoverEndpoint.config.body,
+                      await readBody(),
+                    ),
+                    request: ctx.request,
+                    route: "/v1/templates/discover" satisfies ApiRoutePath,
+                  }),
+                ),
+            },
+          },
+        }),
+      }),
     );
     const form = new FormData();
     form.set(
@@ -2047,12 +2066,10 @@ test("stored web discovery, description and effective fill declarations agree fo
       }),
     );
     form.set("templateId", templateId);
-    const response = await app.handle(
-      new Request("http://localhost/templates/discover", {
-        method: "POST",
-        body: form,
-      }),
-    );
+    const response = await server.fetch("http://localhost/templates/discover", {
+      method: "POST",
+      body: form,
+    });
     expect(response.status).toBe(200);
     const web =
       await readTestJson<

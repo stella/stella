@@ -1,11 +1,9 @@
-import { Type } from "@sinclair/typebox";
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   desktopMatterCandidatesResponseSchema,
-  type DesktopMatterCandidatesResponse,
 } from "@stll/api-contract/desktop-time-entries";
 
 import {
@@ -23,14 +21,9 @@ import {
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
-
-const responseSchema = Type.Unsafe<DesktopMatterCandidatesResponse>(
-  jsonSchemaToTypeBox(toJsonSchema(desktopMatterCandidatesResponseSchema)),
-);
 
 export const createDesktopMatterCandidatesEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -41,7 +34,9 @@ export const createDesktopMatterCandidatesEndpoint = (
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
-      response: safePublicHandlerResponseSchemasWithStatusText(responseSchema),
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopMatterCandidatesResponseSchema,
+      ),
     },
     async function* ({ request }) {
       const account = yield* Result.await(
@@ -59,7 +54,7 @@ export const createDesktopMatterCandidatesEndpoint = (
       >`(select max(${workspaceMembers.createdAt})::text from ${workspaceMembers} where ${workspaceMembers.workspaceId} = ${workspaces.id} and ${workspaceMembers.userId} = ${account.userId} and ${workspaceMembers.createdAt} >= now() - interval '7 days')`;
       const upcomingDeadlineSignal = sql<
         string | null
-      >`(select min(${entities.dueDate})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${entities.kind} = 'task' and (${entities.status} is null or ${entities.status} not in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELLED})) and ${entities.dueDate} between current_date and current_date + 7)`;
+      >`(select min(${entities.dueDate})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${workTask(entities)} and (${entities.status} is null or ${entities.status} not in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELLED})) and ${entities.dueDate} between current_date and current_date + 7)`;
       const page = yield* Result.await(
         account.safeDb(async (tx) =>
           readCursorPage(

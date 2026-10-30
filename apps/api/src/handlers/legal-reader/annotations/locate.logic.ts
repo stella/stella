@@ -10,10 +10,15 @@
 
 import { panic } from "better-result";
 
-import { AhoCorasick } from "@stll/aho-corasick";
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
-import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
+import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
+
+import {
+  servedNoteLabel,
+  servedParagraphQuoteOf,
+} from "@/api/lib/case-law/served-paragraph-number";
 
 type AnnotationPassage = {
   /**
@@ -85,56 +90,36 @@ const compact = (raw: string): CompactText => {
   return { text, rawIndex };
 };
 
-type Occurrence = { pattern: number; startOffset: number; endOffset: number };
+type Occurrence = { startOffset: number; endOffset: number };
 
-const findOccurrences = (raw: string, matcher: AhoCorasick): Occurrence[] => {
+const findOccurrences = (raw: string, quote: string): Occurrence[] => {
   const haystack = compact(raw);
-  return matcher.findOverlappingIter(haystack.text).map((match) => {
-    const startOffset = haystack.rawIndex[match.start];
-    const last = haystack.rawIndex[match.end - 1];
+  const needle = compact(quote).text;
+  if (needle.length === 0) {
+    return [];
+  }
+  const occurrences: Occurrence[] = [];
+  let from = 0;
+  for (;;) {
+    const at = haystack.text.indexOf(needle, from);
+    if (at === -1) {
+      return occurrences;
+    }
+    const startOffset = haystack.rawIndex[at];
+    const last = haystack.rawIndex[at + needle.length - 1];
     if (startOffset === undefined || last === undefined) {
       return panic("A compact match lies outside its own text");
     }
-    return { pattern: match.pattern, startOffset, endOffset: last + 1 };
-  });
-};
-
-/** The places a block's words are rendered, each under its own anchor. */
-type TextPiece = { anchorId: string; text: string };
-
-const piecesOf = (block: Block): TextPiece[] => {
-  switch (block.type) {
-    case "heading":
-    case "paragraph":
-      return [
-        {
-          anchorId: block.anchorId,
-          text: plainTextOf(block.inlines).toWellFormed(),
-        },
-      ];
-    case "table":
-      return block.rows.flatMap((row, rowIndex) =>
-        row.map((cell, columnIndex) => ({
-          anchorId: tableCellPieceId({
-            blockId: block.id,
-            columnIndex,
-            rowIndex,
-          }),
-          text: plainTextOf(cell.inlines).toWellFormed(),
-        })),
-      );
-    case "image":
-      return [];
-    default:
-      block satisfies never;
-      return panic(`Unhandled block type: ${String(block)}`);
+    occurrences.push({ startOffset, endOffset: last + 1 });
+    from = at + 1;
   }
 };
 
 type LocateContext = {
   blocks: readonly Block[];
   blocksByAnchor: ReadonlyMap<string, Block>;
-  findMatches: ReturnType<typeof createPassageMatcher>;
+  /** The note mark the served text prints before a block, by its anchor. */
+  noteLabelsByAnchor: ReadonlyMap<string, string>;
 };
 
 type LocateOneResult =
@@ -158,55 +143,92 @@ const quoteNotFoundMessage = (block: Block | undefined): string => {
 /** How many candidate anchors an ambiguity issue names. */
 const AMBIGUITY_ANCHORS_SHOWN = 8;
 
-type MatchedPiece = { block: Block; piece: TextPiece; occurrence: Occurrence };
-
-let lastPassageMatcher: { key: string; matcher: AhoCorasick } | undefined;
-
-const createPassageMatcher = (passages: readonly AnnotationPassage[]) => {
-  const needles = Array.from(
-    new Set(
-      passages
-        .map(({ quote }) => compact(quote.toWellFormed()).text)
-        .filter((quote) => quote.length > 0),
-    ),
+// Both sides are matched as Unicode scalar values: an isolated surrogate
+// becomes U+FFFD (one UTF-16 unit, so offsets are unchanged) and can never
+// match half of a surrogate pair.
+const matchesIn = (blocks: readonly Block[], rawQuote: string) => {
+  const quote = rawQuote.toWellFormed();
+  return blocks.flatMap((block) =>
+    readerAnchorPiecesOf(block).flatMap((rawPiece) => {
+      const piece = { ...rawPiece, text: rawPiece.text.toWellFormed() };
+      return findOccurrences(piece.text, quote).map((occurrence) => ({
+        block,
+        occurrence,
+        piece,
+      }));
+    }),
   );
-  const needleIds = new Map(needles.map((needle, index) => [needle, index]));
-  const matcherKey = JSON.stringify(needles);
-  const matcher =
-    lastPassageMatcher?.key === matcherKey
-      ? lastPassageMatcher.matcher
-      : new AhoCorasick(needles);
-  lastPassageMatcher = { key: matcherKey, matcher };
-  const matchesByBlock = new Map<Block, MatchedPiece[]>();
-  return (blocks: readonly Block[], quote: string) => {
-    const needle = compact(quote.toWellFormed()).text;
-    if (needle.length === 0) {
+};
+
+/**
+ * A quote copied with the court's paragraph number the served text prints
+ * in front of a paragraph (`¶ 48 The applicant…`). The number is structure,
+ * not the paragraph's text, so the words are matched at the start of the
+ * paragraph the court numbered so.
+ */
+const servedParagraphMatches = (blocks: readonly Block[], rawQuote: string) => {
+  const served = servedParagraphQuoteOf(rawQuote);
+  if (served === null) {
+    return [];
+  }
+  return matchesIn(
+    blocks.filter((block) => courtParagraphNumber(block) === served.number),
+    served.words,
+  ).filter(
+    ({ occurrence, piece }) =>
+      piece.text.slice(0, occurrence.startOffset).trim() === "",
+  );
+};
+
+/**
+ * A quote copied with the mark the served text prints in front of a
+ * footnote (`[3] Zob.…`). The mark is the note's label, not its text, so the
+ * words are matched at the start of the note printed with that mark.
+ */
+const servedNoteMatches = (
+  blocks: readonly Block[],
+  noteLabelsByAnchor: ReadonlyMap<string, string>,
+  rawQuote: string,
+) => {
+  const quote = rawQuote.trimStart();
+  return blocks.flatMap((block) => {
+    const label = noteLabelsByAnchor.get(block.anchorId);
+    if (
+      label === undefined ||
+      !quote.startsWith(label) ||
+      !/^\s/u.test(quote.slice(label.length))
+    ) {
       return [];
     }
-    const needleId =
-      needleIds.get(needle) ??
-      panic("A passage quote is absent from its matcher");
-    return blocks.flatMap((block) => {
-      let matches = matchesByBlock.get(block);
-      if (matches === undefined) {
-        matches = piecesOf(block).flatMap((piece) =>
-          findOccurrences(piece.text, matcher).map((occurrence) => ({
-            block,
-            occurrence,
-            piece,
-          })),
-        );
-        matchesByBlock.set(block, matches);
-      }
-      return matches.filter(
-        ({ occurrence }) => occurrence.pattern === needleId,
-      );
-    });
-  };
+    return matchesIn([block], quote.slice(label.length).trimStart()).filter(
+      ({ occurrence, piece }) =>
+        piece.text.slice(0, occurrence.startOffset).trim() === "",
+    );
+  });
+};
+
+/**
+ * The quote as the reader's text holds it, else as the served text prints it
+ * with a paragraph number or a note mark in front.
+ */
+const quoteMatches = (
+  candidates: readonly Block[],
+  noteLabelsByAnchor: ReadonlyMap<string, string>,
+  quote: string,
+) => {
+  const literal = matchesIn(candidates, quote);
+  if (literal.length > 0) {
+    return literal;
+  }
+  const paragraph = servedParagraphMatches(candidates, quote);
+  if (paragraph.length > 0) {
+    return paragraph;
+  }
+  return servedNoteMatches(candidates, noteLabelsByAnchor, quote);
 };
 
 const locateOne = (
-  { blocks, blocksByAnchor, findMatches }: LocateContext,
+  { blocks, blocksByAnchor, noteLabelsByAnchor }: LocateContext,
   { anchor, quote }: AnnotationPassage,
   passageIndex: number,
 ): LocateOneResult => {
@@ -227,7 +249,8 @@ const locateOne = (
       message: `Block "${block.anchorId}" is an image and has no text to mark.`,
     });
   }
-  const matches = findMatches(block === undefined ? blocks : [block], quote);
+  const candidates = block === undefined ? blocks : [block];
+  const matches = quoteMatches(candidates, noteLabelsByAnchor, quote);
   const [match, ...others] = matches;
   if (match === undefined) {
     return issue({
@@ -285,9 +308,14 @@ export const locatePassages = (
 ): LocatePassagesResult => {
   const context: LocateContext = {
     blocks,
-    findMatches: createPassageMatcher(passages),
     blocksByAnchor: new Map(
       blocks.map((block) => [block.anchorId, block] as const),
+    ),
+    noteLabelsByAnchor: new Map(
+      blocks.flatMap((block, index) => {
+        const label = servedNoteLabel(block, blocks[index - 1]);
+        return label === null ? [] : [[block.anchorId, label] as const];
+      }),
     ),
   };
   const spans: LocatedSpan[] = [];

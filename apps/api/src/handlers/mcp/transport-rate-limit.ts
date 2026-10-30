@@ -10,34 +10,9 @@ import type {
   RateLimitOptions,
 } from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
-import {
-  MCP_ADVANCED_HTTP_PATH,
-  MCP_ANONYMIZED_HTTP_PATH,
-  MCP_DOCUMENTS_HTTP_PATH,
-  MCP_HTTP_PATH,
-  MCP_LAW_HTTP_PATH,
-} from "@/api/mcp/constants";
 
 const MCP_TRANSPORT_RATE_LIMIT_SCOPE = "mcp-transport";
 const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE = "mcp-transport-address";
-
-const MCP_TRANSPORT_PATHS: ReadonlySet<string> = new Set([
-  MCP_ADVANCED_HTTP_PATH,
-  MCP_ANONYMIZED_HTTP_PATH,
-  MCP_DOCUMENTS_HTTP_PATH,
-  MCP_HTTP_PATH,
-  MCP_LAW_HTTP_PATH,
-]);
-
-/**
- * Only the JSON-RPC transport paths carry a budget. Protected-resource
- * discovery and CORS preflight are static, credential-free, and answered before
- * a client knows how to authenticate, so throttling them would break discovery
- * rather than bound any cost.
- */
-export const isMcpTransportRateLimitedRequest = (request: Request): boolean =>
-  request.method !== "OPTIONS" &&
-  MCP_TRANSPORT_PATHS.has(new URL(request.url).pathname);
 
 const BEARER_SCHEME = "bearer ";
 
@@ -106,7 +81,6 @@ export const MCP_TRANSPORT_RATE_LIMIT_POLICY = {
   duration: API_RATE_LIMITS.mcpTransport.duration,
   errorResponse: MCP_RATE_LIMIT_JSON_RPC_ERROR,
   max: API_RATE_LIMITS.mcpTransport.max,
-  skip: (request: Request) => !isMcpTransportRateLimitedRequest(request),
   budget: (key: string) =>
     key.startsWith(`${MCP_TRANSPORT_RATE_LIMIT_SCOPE}:token:`)
       ? { name: "mcp.transport.bearer", keyKind: "bearer" }
@@ -155,7 +129,8 @@ export const createMcpAuthenticationFailureLimiter = (
 ) => {
   options.context.init({ duration: options.duration });
   const skip = async (request: Request) =>
-    env.E2E_DISABLE_AUTH_RATE_LIMIT || (await options.skip?.(request));
+    env.E2E_DISABLE_AUTH_RATE_LIMIT ||
+    (await options.skip?.(request, undefined));
   const getKey = async ({
     request,
     clientIp,

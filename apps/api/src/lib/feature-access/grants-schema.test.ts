@@ -129,6 +129,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
         ...process.env,
         LOGS_OTLP_URL: "",
         LOGS_OTLP_TOKEN: "",
+        STELLA_VERSION: "feature-grants-test",
         API_FEATURE_ACCESS_GRANTS: JSON.stringify({
           ...knownGrants,
           "unknown-feature": [
@@ -160,6 +161,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
       severity: "ERROR",
       message: "feature_access.unknown_grant",
       "feature_access.unknown_grant_count": 2,
+      "service.version": "feature-grants-test",
     },
   ]);
 });

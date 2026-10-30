@@ -1,26 +1,32 @@
 import { describe, expect, test } from "bun:test";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import { LANGUAGES } from "@stll/locales";
+
 import {
   PROVISION_EXTRACTION_ADMISSION,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "./provision-extraction-admission";
 
-/**
- * The scopes each admission revision admits. Changing the admission moves
- * the current revision's scopes: bump `PROVISION_EXTRACTION_ADMISSION_REVISION`
- * and add its entry. Never edit an existing entry; deployments have applied it.
- */
-const ADMITTED_SCOPES_BY_REVISION = {
-  1: ["CZE/cs"],
-} as const satisfies Record<number, readonly string[]>;
-
 describe("provision extraction admission", () => {
-  test("the admitted scopes are pinned to the admission revision", () => {
-    const scopes = Object.values(PROVISION_EXTRACTION_ADMISSION)
-      .map(({ jurisdiction, language }) => `${jurisdiction}/${language}`)
-      .toSorted();
-    expect(scopes).toEqual([
-      ...ADMITTED_SCOPES_BY_REVISION[PROVISION_EXTRACTION_ADMISSION_REVISION],
-    ]);
+  test("EU extraction admits every known decision country and language", () => {
+    expect(PROVISION_EXTRACTION_ADMISSION_REVISION).toBe(2);
+    const actual = new Set(
+      PROVISION_EXTRACTION_ADMISSION_SCOPES.map(
+        ({ jurisdiction, language }) => `${jurisdiction}/${language}`,
+      ),
+    );
+    expect(actual.size).toBe(CASE_LAW_JURISDICTIONS.length * LANGUAGES.length);
+    for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+      for (const { code } of LANGUAGES) {
+        expect(actual.has(`${jurisdiction}/${code}`)).toBe(true);
+      }
+    }
+    for (const { jurisdiction, language } of Object.values(
+      PROVISION_EXTRACTION_ADMISSION,
+    )) {
+      expect(actual.has(`${jurisdiction}/${language}`)).toBe(true);
+    }
   });
 });

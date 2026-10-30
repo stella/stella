@@ -55,18 +55,21 @@ import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,
   atRisFixture,
+  type AtRisFixtureAdapter,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
   plCourtsSearchFixture,
   plKioFixture,
   plKisFixture,
-  plNsaFixture,
   plNcourtFixture,
+  plNsaFixture,
   plSnFixture,
   plTkFixture,
   plUodoFixture,
@@ -74,9 +77,9 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type AtRisFixtureAdapter,
-  type EnrolledAdapterFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
@@ -124,12 +127,16 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: czNsFixture },
     { kind: "page-recording", file: "cz-ns-page.json.gz" },
   ],
-  [ADAPTER_KEYS.CZ_NSS]: [{ kind: "built", fixture: czNssFixture }],
+  [ADAPTER_KEYS.CZ_NSS]: [
+    { kind: "built", fixture: czNssFixture },
+    { kind: "built", fixture: nssRecoveryFixture },
+  ],
   [ADAPTER_KEYS.CZ_US]: [
     { kind: "built", fixture: czUsFixture },
     { kind: "page-recording", file: "cz-us-page.json.gz" },
   ],
   [ADAPTER_KEYS.CZ_REGIONAL]: [{ kind: "built", fixture: czRegionalFixture }],
+  [ADAPTER_KEYS.CZ_UOHS]: [{ kind: "built", fixture: czUohsFixture }],
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },
@@ -166,6 +173,7 @@ const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.AT_FINDOK]: [{ kind: "built", fixture: atFindokFixture }],
   [ADAPTER_KEYS.EU_ECJ]: [{ kind: "built", fixture: euEcjFixture }],
   [ADAPTER_KEYS.HU_BHGY]: [{ kind: "built", fixture: huBhgyFixture }],
+  [ADAPTER_KEYS.UK_FCL]: [{ kind: "built", fixture: ukFclFixture }],
   [ADAPTER_KEYS.PL_KIO]: [{ kind: "built", fixture: plKioFixture }],
   [ADAPTER_KEYS.PL_KIS]: [{ kind: "built", fixture: plKisFixture }],
   [ADAPTER_KEYS.PL_UODO]: [{ kind: "built", fixture: plUodoFixture }],

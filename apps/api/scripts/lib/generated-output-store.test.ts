@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import { API } from "tsrs/unstable/async";
 
 import {
   type CompilerInputStamp,
@@ -38,27 +38,20 @@ const write = (root: string, file: string, source: string) => {
 
 // Builds the fixture program the way the generator does and returns the
 // portable stamp its inputs give.
-const portableStamp = (root: string): CompilerInputStamp => {
+const portableStamp = async (root: string): Promise<CompilerInputStamp> => {
   const recorder = createCompilerInputRecorder();
-  const config = ts.getParsedCommandLineOfConfigFile(
-    path.join(root, "tsconfig.json"),
-    {},
-    recorder.wrap({
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: () => {
-        throw new Error("unreadable tsconfig");
-      },
-    }),
-  );
-  if (config === undefined) {
-    throw new Error("tsconfig not parsed");
+  const tsconfig = path.join(root, "tsconfig.json");
+  const api = new API({ cwd: root, fs: recorder.fileSystem() });
+  try {
+    const snapshot = await api.createSnapshot({ openProjects: [tsconfig] });
+    expect(
+      await snapshot
+        .getConfiguredProject(tsconfig)
+        ?.program.getSourceFile(path.join(root, "src/a.ts")),
+    ).toBeDefined();
+  } finally {
+    await api.close();
   }
-  const program = ts.createProgram({
-    rootNames: config.fileNames,
-    options: config.options,
-    host: recorder.wrap(ts.createCompilerHost(config.options)),
-  });
-  expect(program.getSourceFile(path.join(root, "src/a.ts"))).toBeDefined();
   return recorder.portableStamp(CONTEXT, root);
 };
 
@@ -102,7 +95,7 @@ afterEach(() => {
 test("another checkout with the same inputs restores the stored output", async () => {
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "printed",
   });
   const other = path.join(scratch, "checkout-b");
@@ -126,7 +119,7 @@ test("checkouts reached through a symbolic link restore each other's output", as
   symlinkSync(real, checkout);
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "printed",
   });
   const otherReal = path.join(scratch, "real-b");
@@ -144,7 +137,7 @@ test("a checkout under other parents restores only while its ancestors resolve a
   renameSync(checkout, publisher);
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(publisher),
+    stamp: await portableStamp(publisher),
     output: "printed",
   });
   const other = path.join(scratch, "parent-b/repo");
@@ -174,7 +167,7 @@ test("a checkout under other parents restores only while its ancestors resolve a
 test("a changed source or dependency misses", async () => {
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "printed",
   });
   write(checkout, "src/a.ts", "export type A = number;\n");
@@ -193,7 +186,7 @@ test("a changed source or dependency misses", async () => {
 test("another generation context misses", async () => {
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "printed",
   });
   expect(await restore(checkout, "other-context")).toBeUndefined();
@@ -202,13 +195,13 @@ test("another generation context misses", async () => {
 test("restores the entry that matches when several are stored", async () => {
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "first",
   });
   write(checkout, "src/a.ts", "export type A = number;\n");
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "second",
   });
   expect((await restore(checkout))?.output.toString()).toBe("second");
@@ -223,7 +216,7 @@ test("restores the entry that matches when several are stored", async () => {
 test("skips an entry whose output does not match its recorded hash", async () => {
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "printed",
   });
   const [entry] = readdirSync(storeDir);
@@ -231,8 +224,8 @@ test("skips an entry whose output does not match its recorded hash", async () =>
   expect(await restore(checkout)).toBeUndefined();
 });
 
-test("publishing the same output twice keeps one entry", () => {
-  const stamp = portableStamp(checkout);
+test("publishing the same output twice keeps one entry", async () => {
+  const stamp = await portableStamp(checkout);
   publishGeneratedOutput({ storeDir, stamp, output: "printed" });
   publishGeneratedOutput({ storeDir, stamp, output: "printed" });
   expect(readdirSync(storeDir)).toHaveLength(1);
@@ -242,12 +235,12 @@ test("keeps at most KEEP_ENTRIES entries, dropping the least recently used", asy
   const source = 'import type { Dep } from "dep";\nexport type A = Dep;\n';
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "kept",
   });
   const [kept = ""] = readdirSync(storeDir);
   write(checkout, "src/a.ts", "export type A = number;\n");
-  const other = portableStamp(checkout);
+  const other = await portableStamp(checkout);
   for (let index = 1; index < KEEP_ENTRIES; index += 1) {
     publishGeneratedOutput({
       storeDir,
@@ -274,7 +267,7 @@ test("keeps at most KEEP_ENTRIES entries, dropping the least recently used", asy
 test("an entry that cannot be inspected is skipped and pruned first", async () => {
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "printed",
   });
   // A self-referential link: inspecting it fails with ELOOP.
@@ -282,7 +275,7 @@ test("an entry that cannot be inspected is skipped and pruned first", async () =
   expect((await restore(checkout))?.output.toString()).toBe("printed");
 
   write(checkout, "src/a.ts", "export type A = number;\n");
-  const other = portableStamp(checkout);
+  const other = await portableStamp(checkout);
   for (let index = 1; index < KEEP_ENTRIES; index += 1) {
     publishGeneratedOutput({
       storeDir,
@@ -295,7 +288,7 @@ test("an entry that cannot be inspected is skipped and pruned first", async () =
   expect(entries).not.toContain("looped");
 });
 
-test("publishing removes temporaries abandoned by a dead process", () => {
+test("publishing removes temporaries abandoned by a dead process", async () => {
   mkdirSync(storeDir, { recursive: true });
   const abandoned = path.join(storeDir, ".entry.4242.tmp");
   const active = path.join(storeDir, ".entry.4343.tmp");
@@ -306,7 +299,7 @@ test("publishing removes temporaries abandoned by a dead process", () => {
 
   publishGeneratedOutput({
     storeDir,
-    stamp: portableStamp(checkout),
+    stamp: await portableStamp(checkout),
     output: "printed",
   });
   const entries = readdirSync(storeDir);

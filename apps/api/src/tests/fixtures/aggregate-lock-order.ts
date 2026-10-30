@@ -20,11 +20,25 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    requestReceipt: {
+      aggregate: "requestReceipt",
+      id: {
+        id: createSafeId<"requestIdempotencyReceipt">(),
+        organizationId,
+        userId,
+      },
+      mode: "update",
+    },
     account: { aggregate: "account", id: userId, mode: "no key update" },
     accountExport: {
       aggregate: "accountExport",
       id: { id: Bun.randomUUIDv7(), userId },
       mode: "share",
+    },
+    accountDeletionRequest: {
+      aggregate: "accountDeletionRequest",
+      id: createSafeId<"accountDeletionRequest">(),
+      mode: "update",
     },
     folioCollabRoom: {
       aggregate: "folioCollabRoom",
@@ -45,6 +59,10 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    organizationObjectIntent: {
+      aggregate: "organizationObjectIntent",
+      id: organizationId,
+    },
     professionalUseAcceptance: {
       aggregate: "professionalUseAcceptance",
       id: { userId: mintAuthProviderId<"user">() },
@@ -63,6 +81,22 @@ export const aggregateFences = () => {
       aggregate: "definition",
       id: { id: definitionId, organizationId },
       mode: "update",
+    },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
+    caseLawSitemapMonth: {
+      aggregate: "caseLawSitemapMonth",
+      id: { country: "CZE", year: "2020", month: "03" },
+    },
+    legislationAmendmentWork: {
+      aggregate: "legislationAmendmentWork",
+      id: {
+        sourceId: createSafeId<"legislationSource">(),
+        eli: "eli/cz/sb/2012/89",
+        language: "cs",
+      },
     },
     scoutCensus: {
       aggregate: "scoutCensus",
@@ -97,6 +131,14 @@ export const aggregateFences = () => {
       id: { type: "organization-member", id: "member-claim", organizationId },
       mode: "update",
     },
+    chatOwnerStoredContentEgress: {
+      aggregate: "chatOwnerStoredContentEgress",
+      id: { organizationId, userId },
+    },
+    chatStoredContentEgress: {
+      aggregate: "chatStoredContentEgress",
+      id: threadId,
+    },
     chatThread: {
       aggregate: "chatThread",
       id: { id: threadId, organizationId, userId },
@@ -106,6 +148,14 @@ export const aggregateFences = () => {
       aggregate: "readerAnswer",
       id: { id: answerId, organizationId, userId },
       mode: "update",
+    },
+    readerAnnotation: {
+      aggregate: "readerAnnotation",
+      id: {
+        id: createSafeId<"legalReaderAnnotation">(),
+        organizationId,
+        userId,
+      },
     },
     readerAnswerMessage: {
       aggregate: "readerAnswerMessage",
@@ -152,6 +202,20 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"field">(), workspaceId },
       mode: "update",
     },
+    memory: {
+      aggregate: "memory",
+      id: { id: createSafeId<"aiMemory">(), organizationId },
+      mode: "update",
+    },
+    searchProjectionRepair: {
+      aggregate: "searchProjectionRepair",
+      id: {
+        kind: "entity",
+        revision: Bun.randomUUIDv7(),
+        sourceId: Bun.randomUUIDv7(),
+      },
+      mode: "update",
+    },
     signal: {
       aggregate: "signal",
       id: { id: createSafeId<"signal">(), organizationId },
@@ -167,7 +231,35 @@ export const aggregateFences = () => {
       mode: "update",
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    fileComparisonCapacity: {
+      aggregate: "fileComparisonCapacity",
+      id: { organizationId },
+    },
+    billingCodeCapacity: {
+      aggregate: "billingCodeCapacity",
+      id: { workspaceId },
+    },
+    expenseCapacity: {
+      aggregate: "expenseCapacity",
+      id: { workspaceId },
+    },
+    rateTableWorkspace: {
+      aggregate: "rateTableWorkspace",
+      id: { workspaceId },
+    },
+    mcpOAuthState: {
+      aggregate: "mcpOAuthState",
+      id: {
+        connectorId: createSafeId<"mcpConnector">(),
+        organizationId,
+        userId,
+      },
+    },
     sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
+    chatToolGrants: {
+      aggregate: "chatToolGrants",
+      id: { organizationId, userId },
+    },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

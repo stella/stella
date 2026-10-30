@@ -34,7 +34,8 @@ globalThis.fetch = Object.assign(
   { preconnect: () => undefined },
 );
 
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const testing = await import("@testing-library/react");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -58,8 +59,7 @@ type InFlight = {
 };
 
 type Step =
-  | { kind: "submit" }
-  | { kind: "settle"; pick: number; succeeds: boolean };
+  { kind: "submit" } | { kind: "settle"; pick: number; succeeds: boolean };
 
 const step: fc.Arbitrary<Step> = fc.oneof(
   fc.constant({ kind: "submit" as const }),
@@ -76,7 +76,7 @@ const drain = async () =>
   await testing.act(async () => await Promise.resolve());
 
 const mountSettingsMutation = () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
   const inFlight: InFlight[] = [];
@@ -88,7 +88,7 @@ const mountSettingsMutation = () => {
   // Errors the hook reported through `onError`, in order.
   const errors: unknown[] = [];
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <query.QueryClientProvider client={client}>
+    <QueryClientProvider client={client}>
       <AuthenticatedUserProvider
         user={{
           activeOrganizationId: ORGANIZATION,
@@ -103,11 +103,15 @@ const mountSettingsMutation = () => {
       >
         {children}
       </AuthenticatedUserProvider>
-    </query.QueryClientProvider>
+    </QueryClientProvider>
   );
   const { result, unmount } = testing.renderHook(
     () =>
       useSettingsMutation({
+        exceptionScope: {
+          type: "handler",
+          handlerId: "mountSettingsMutation.useSettingsMutation",
+        },
         mutationFn: async (value: number) => {
           const settle = Promise.withResolvers<number>();
           sent.push(value);
@@ -122,6 +126,11 @@ const mountSettingsMutation = () => {
       }),
     { wrapper },
   );
+  const waitForTransport = async () => {
+    await testing.waitFor(() => {
+      expect(client.isMutating() === 0 || inFlight.length > 0).toBe(true);
+    });
+  };
   const settle = async (pick: number, succeeds: boolean) => {
     const index = pick % inFlight.length;
     const [call] = inFlight.splice(index, 1);
@@ -137,6 +146,7 @@ const mountSettingsMutation = () => {
       }
     });
     await drain();
+    await waitForTransport();
   };
   return {
     client,
@@ -151,6 +161,7 @@ const mountSettingsMutation = () => {
         result.current.mutateAsync(value).catch(() => undefined);
       });
       await drain();
+      await waitForTransport();
     },
     settle,
     unmount,

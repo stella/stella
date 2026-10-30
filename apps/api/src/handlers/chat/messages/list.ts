@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { booleanFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
@@ -31,7 +33,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
@@ -125,10 +128,10 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    allowMissingThread: t.Optional(t.Boolean()),
-    workspaceId: t.Optional(tSafeId("workspace")),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({
+    allowMissingThread: v.optional(booleanFromString()),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
   }),
 } satisfies HandlerConfig;
 
@@ -322,7 +325,13 @@ const getMessages = createSafeRootHandler(
                 id: { eq: thread.parentThreadId },
                 userId: { eq: user.id },
               },
-              columns: { id: true, title: true, workspaceId: true },
+              columns: {
+                id: true,
+                title: true,
+                titleSource: true,
+                subjectDecisionId: true,
+                workspaceId: true,
+              },
             })
           : undefined;
 
@@ -345,6 +354,15 @@ const getMessages = createSafeRootHandler(
           }),
         );
 
+        const { projection: parentWithdrawal } = await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: parent,
+        });
+        const maskedParent =
+          parent === undefined
+            ? undefined
+            : { ...parent, title: parentWithdrawal.thread(parent).title };
         return {
           kind: "ok" as const,
           attachedFiles,
@@ -352,7 +370,7 @@ const getMessages = createSafeRootHandler(
           modelTier,
           thread,
           page,
-          parent,
+          parent: maskedParent,
           checkpoint,
           windowedMessages,
           revisionNoteTokens: estimateChatRevisionNoteTokens(revisionChanges),

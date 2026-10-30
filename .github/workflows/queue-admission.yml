@@ -1,0 +1,188 @@
+name: Queue admission
+run-name: "Queue admission #${{ inputs.pr }} @${{ inputs.head }}"
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to admit
+        required: true
+        type: number
+      head:
+        description: Pull request head commit SHA to admit
+        required: true
+        type: string
+
+concurrency:
+  group: queue-admission-${{ inputs.pr }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      pr: ${{ steps.merge.outputs.pr }}
+      head: ${{ steps.merge.outputs.head }}
+      base: ${{ steps.merge.outputs.base }}
+      merge: ${{ steps.merge.outputs.merge }}
+    steps:
+      - name: Checkout current merge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          ref: refs/pull/${{ inputs.pr }}/merge
+
+      - name: Validate and record merge identity
+        id: merge
+        env:
+          EXPECTED_HEAD: ${{ inputs.head }}
+          PR: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::head must be a 40-character lowercase hexadecimal commit SHA"
+            exit 1
+          fi
+          read -r merge base head extra < <(git rev-list --parents -n 1 HEAD)
+          if [[ -n "${extra:-}" || -z "${head:-}" ]]; then
+            echo "::error::refs/pull/$PR/merge is not a two-parent merge commit"
+            exit 1
+          fi
+          if [[ "$head" != "$EXPECTED_HEAD" ]]; then
+            echo "::error::Merge ref second parent $head does not match requested head $EXPECTED_HEAD"
+            exit 1
+          fi
+          {
+            printf 'pr=%s\n' "$PR"
+            printf 'merge=%s\n' "$merge"
+            printf 'base=%s\n' "$base"
+            printf 'head=%s\n' "$head"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '### Queue admission tree'
+            echo
+            printf -- '- Pull request: %s\n- Base: %s\n- Head: %s\n- Merge: %s\n' "$PR" "$base" "$head" "$merge"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        id: install
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+        env:
+          NPM_TOKEN: ""
+
+      - name: Check migration identity against current main
+        id: migration_identity
+        timeout-minutes: 5
+        run: |
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          bun scripts/check-migration-order.ts origin/main
+
+      - name: Run deterministic manifest checks
+        id: manifest
+        continue-on-error: true
+        env:
+          CI_CHECK_POOL_INPUTS: "null"
+          CI_CHECK_POOL_STEPS: '{"checkout":{"outcome":"success","outputs":{}},"install":{"outcome":"success","outputs":{}},"standalone_lockfiles":{"outcome":"success","outputs":{}},"lockfile_ages":{"outcome":"success","outputs":{}},"static_receipts":{"outcome":"success","outputs":{}}}'
+          GITHUB_EVENT_NAME: merge_group
+          BASE_REF: main
+          EVENT_NAME: merge_group
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_HEAD_REF: refs/heads/gh-readonly-queue/main/pr-${{ inputs.pr }}-${{ steps.merge.outputs.head }}
+          PULL_REQUEST_NUMBER: ${{ inputs.pr }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          needs_file=$(mktemp)
+          printf '%s\n' '{"ci-plan":{"outputs":{"package_checks_required":"true","root_checks":""}}}' > "$needs_file"
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ci-checks-rest --only \
+            "Workspace hygiene,Test dependency malware scanners,Generated files manifest guard,Generated source artifact contract,Generated artifact formatting invariants"
+
+      - name: Check parser versions
+        id: parser
+        continue-on-error: true
+        env:
+          EVENT_NAME: pull_request
+          BASE_SHA: ${{ steps.merge.outputs.base }}
+          HEAD_SHA: ${{ steps.merge.outputs.merge }}
+          PR_HEAD_SHA: ${{ steps.merge.outputs.head }}
+        run: |
+          bun test scripts/check-parser-versions.test.ts
+          bun scripts/check-parser-versions.ts
+
+      - name: Check workflow job classifications
+        id: classification
+        continue-on-error: true
+        run: bun scripts/check-ci-job-classification.ts
+
+      - name: Code quality for changed files
+        id: quality
+        continue-on-error: true
+        env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ steps.merge.outputs.base }}
+        run: |
+          bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
+          bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
+          bun run code-check:affected -- --leg rest --base "$CHECK_BASE_REF"
+
+      - name: Write admission result
+        if: always()
+        env:
+          PR: ${{ inputs.pr }}
+          HEAD: ${{ steps.merge.outputs.head }}
+          BASE: ${{ steps.merge.outputs.base }}
+          MERGE: ${{ steps.merge.outputs.merge }}
+          MANIFEST: ${{ steps.manifest.outcome }}
+          MIGRATION_IDENTITY: ${{ steps.migration_identity.outcome }}
+          PARSER: ${{ steps.parser.outcome }}
+          CLASSIFICATION: ${{ steps.classification.outcome }}
+          QUALITY: ${{ steps.quality.outcome }}
+        run: |
+          # Values come from this step's env, so the program needs no shell or jq variables.
+          jq -n 'env | {pr: (.PR | tonumber), head: .HEAD, base: .BASE, merge: .MERGE, checks: {migration_identity: .MIGRATION_IDENTITY, manifest: .MANIFEST, parser_version: .PARSER, job_classification: .CLASSIFICATION, code_quality: .QUALITY}}' \
+            > admission.json
+          {
+            echo '### Machine-readable result'
+            echo
+            echo '~~~json'
+            cat admission.json
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload admission result
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-admission-${{ inputs.pr }}
+          path: admission.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce admission result
+        if: always()
+        run: jq -e 'all(.checks[]; . == "success")' admission.json

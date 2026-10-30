@@ -136,3 +136,19 @@ export const mergeJunitReports = (
       : `<testsuites ${attributes.join(" ")}>`;
   return `${opening}\n${parsed.flatMap(({ body }) => (body === "" ? [] : [body])).join("\n")}\n${ROOT_CLOSING}\n`;
 };
+
+const xmlAttribute = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+/**
+ * A batch whose process wrote no report still appears in the merged file, as
+ * one errored case naming the batch, so a crash can never read as a pass.
+ */
+export const missingBatchReport = (source: string): string => {
+  const name = xmlAttribute(path.basename(source));
+  return `<testsuites tests="1" failures="0" errors="1"><testsuite name="${name}" tests="1" failures="0" errors="1"><testcase name="${name}" classname="junit-batch-report"><error message="The test batch wrote no JUnit report." /></testcase></testsuite></testsuites>`;
+};

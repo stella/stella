@@ -2,12 +2,13 @@ import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   CHAT_THREAD_ORIGIN,
   type ChatThreadOrigin,
 } from "@stll/api-contract/chat";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { classifyFailure } from "@stll/errors";
 
 import {
@@ -32,7 +33,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -52,8 +57,7 @@ const contextMatterWorkspaces = alias(
  * not be read this time, so the row knows it has a decision it cannot draw.
  */
 type ChatThreadDecision =
-  | { type: "present"; badge: PublicDecisionBadge }
-  | { type: "unavailable" };
+  { type: "present"; badge: PublicDecisionBadge } | { type: "unavailable" };
 
 type ChatThreadListItem = {
   context: ChatThreadContext;
@@ -125,21 +129,43 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
-    workspaceId: t.Optional(tSafeId("workspace")),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.chatThreadListPageSizeMax,
-      }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    search: v.optional(
+      v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
+    ),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.chatThreadListPageSizeMax),
+        ),
+      ),
     ),
   }),
 } satisfies HandlerConfig;
 
+const THREAD_LIST_PROJECTION = {
+  createdAt: chatThreads.createdAt,
+  forkedFromMessageId: chatThreads.forkedFromMessageId,
+  id: chatThreads.id,
+  subjectDecisionId: chatThreads.subjectDecisionId,
+  title: chatThreads.title,
+  titleSource: chatThreads.titleSource,
+  updatedAt: chatThreads.updatedAt,
+  usedAnonymization: chatThreads.usedAnonymization,
+  updatedAtCursor:
+    chatThreadListCursorCodec.cursorValue.as("updated_at_cursor"),
+  workspaceId: chatThreads.workspaceId,
+  workspaceName: workspacesTable.name,
+} as const;
+
 type GetThreadsDependencies = {
   readDecisionBadges: typeof readPublicDecisionBadges;
+  readCopies?: typeof readWithdrawnCopyProjection;
 };
 
 const GET_THREADS_DEPENDENCIES = {
@@ -148,6 +174,7 @@ const GET_THREADS_DEPENDENCIES = {
 
 export const createGetThreads = ({
   readDecisionBadges,
+  readCopies = readWithdrawnCopyProjection,
 }: GetThreadsDependencies = GET_THREADS_DEPENDENCIES) =>
   createSafeRootHandler(
     config,
@@ -243,19 +270,7 @@ export const createGetThreads = ({
           }
 
           let listQuery = tx
-            .select({
-              createdAt: chatThreads.createdAt,
-              forkedFromMessageId: chatThreads.forkedFromMessageId,
-              id: chatThreads.id,
-              subjectDecisionId: chatThreads.subjectDecisionId,
-              title: chatThreads.title,
-              updatedAt: chatThreads.updatedAt,
-              usedAnonymization: chatThreads.usedAnonymization,
-              updatedAtCursor:
-                chatThreadListCursorCodec.cursorValue.as("updated_at_cursor"),
-              workspaceId: chatThreads.workspaceId,
-              workspaceName: workspacesTable.name,
-            })
+            .select(THREAD_LIST_PROJECTION)
             .from(chatThreads)
             .leftJoin(
               workspacesTable,
@@ -301,6 +316,9 @@ export const createGetThreads = ({
         readDecisionBadges,
       );
 
+      const withdrawal = yield* Result.await(
+        Result.tryPromise(async () => readCopies({ values: page })),
+      );
       const global: ChatThreadListItem[] = [];
 
       const groupedWorkspaceThreads = new Map<
@@ -325,7 +343,7 @@ export const createGetThreads = ({
             decision,
             id: thread.id,
             origin,
-            title: thread.title,
+            title: withdrawal.thread(thread).title,
             createdAt: thread.createdAt,
             updatedAt: thread.updatedAt,
             usedAnonymization: thread.usedAnonymization,
@@ -342,7 +360,7 @@ export const createGetThreads = ({
           decision,
           id: thread.id,
           origin,
-          title: thread.title,
+          title: withdrawal.thread(thread).title,
           createdAt: thread.createdAt,
           updatedAt: thread.updatedAt,
           usedAnonymization: thread.usedAnonymization,

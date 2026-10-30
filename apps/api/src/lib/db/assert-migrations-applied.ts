@@ -16,7 +16,7 @@ import {
 } from "@/api/lib/db/rls-role-posture";
 import { logger } from "@/api/lib/observability/logger";
 
-import { assertOnlineMigrationsApplied } from "../../db/online-migrations";
+import { reportOnlineMigrations } from "../../db/online-migrations";
 import {
   APPLICATION_RLS_ROLE_NAME,
   INGESTION_ROLE_NAME,
@@ -88,7 +88,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
       "to bypass the check (emergency only).",
   });
-  await assertOnlineMigrationsApplied({
+  const onlineReport = await reportOnlineMigrations({
     reserve: async () => {
       const connection = await rootDb.$client.reserve();
       return {
@@ -97,8 +97,26 @@ export const assertMigrationsApplied = async (): Promise<void> => {
         },
         query: async (query, params = []) =>
           await connection.unsafe(query, [...params]),
-        release: () => connection.release(),
+        release: async () => {
+          await connection.release();
+        },
       };
     },
   });
+  switch (onlineReport.type) {
+    case "migrator_active":
+      logger.warn("startup.online_validation_left_to_migrator");
+      return;
+    case "validated":
+      if (onlineReport.report.pending.length > 0) {
+        logger.warn("startup.online_migrations_pending", {
+          newestAppliedMigration: onlineReport.report.newestAppliedMigration,
+          steps: onlineReport.report.pending,
+        });
+      }
+      return;
+    default:
+      onlineReport satisfies never;
+      return panic("Unknown online validation outcome");
+  }
 };

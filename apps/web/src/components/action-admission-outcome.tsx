@@ -2,10 +2,8 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { getTranslator } from "@/i18n/translator";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 
 export const ActionAdmissionOutcome = ({
@@ -57,32 +55,4 @@ export const ActionAdmissionOutcome = ({
       </div>
     </div>
   );
-};
-
-export const notifyActionAdmissionRefusal = (error: unknown): boolean => {
-  const outcome = actionAdmissionOutcome(error);
-  if (!outcome) {
-    return false;
-  }
-  const t = getTranslator();
-  stellaToast.add({
-    id: outcome.code,
-    title: t(outcome.messageKey),
-    type: "info",
-    ...(outcome.contactUrl
-      ? {
-          description: (
-            <a
-              className="underline underline-offset-4"
-              href={sanitizeHref(outcome.contactUrl)}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {t("errors.actionAdmission.contact")}
-            </a>
-          ),
-        }
-      : {}),
-  });
-  return true;
 };

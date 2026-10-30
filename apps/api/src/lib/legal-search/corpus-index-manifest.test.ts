@@ -6,13 +6,19 @@ import {
 } from "@stll/api-contract/case-law-jurisdictions";
 
 import type { CaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
+import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
+  corpusIndexGenerationField,
   corpusIndexIdFromManifest,
+  corpusIndexManifestCoversJurisdiction,
   corpusIndexManifestDigest,
+  corpusIndexManifestIsPartial,
+  corpusIndexManifestScopeJurisdictions,
   corpusIndexPositionalFields,
   corpusIndexPublisherFields,
+  corpusIndexRevisionRetrieval,
   corpusIndexRoute,
   corpusIndexStemFields,
   requireCorpusIndexIdForManifest,
@@ -34,19 +40,25 @@ const EXPECTED_DIGESTS = {
     "ca567a8f26fc3c4af987db655943ac46bbde12af27379b927239e795eb16d2d0",
   case_law_v8:
     "f86d63a815b35dbc8dd9de16ad84355ccbf61e5faad64483ca884bb5a9994b65",
+  case_law_v9:
+    "6c9ecbd88e8026a1f7148a1e45cfca999e4fe94f78c3dab3649c0d5d7dde7db0",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
   legislation_v3:
     "a3a9c8005b8475abc0565d4c9ff7aa41b2e9882a86e7202217789ea02c6aa8d0",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
 
-type CaseLawManifestGeneration = {
-  [
-    TGeneration in keyof typeof CORPUS_INDEX_MANIFESTS
-  ]: (typeof CORPUS_INDEX_MANIFESTS)[TGeneration]["family"] extends "case_law"
-    ? TGeneration
-    : never;
-}[keyof typeof CORPUS_INDEX_MANIFESTS];
+/** The case-law generations that hold every jurisdiction. */
+type CaseLawManifestGeneration = Exclude<
+  {
+    [
+      TGeneration in keyof typeof CORPUS_INDEX_MANIFESTS
+    ]: (typeof CORPUS_INDEX_MANIFESTS)[TGeneration]["family"] extends "case_law"
+      ? TGeneration
+      : never;
+  }[keyof typeof CORPUS_INDEX_MANIFESTS],
+  "case_law_v9"
+>;
 
 /**
  * Every physical index a case-law generation routes a declared jurisdiction
@@ -68,6 +80,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
     AUT: "aut",
     CZE: "cs_sk",
     EU: "eu",
+    GBR: "gbr",
     HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
@@ -77,6 +90,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
     AUT: "aut",
     CZE: "cs_sk",
     EU: "eu",
+    GBR: "gbr",
     HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
@@ -86,6 +100,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
     AUT: "aut",
     CZE: "cs_sk",
     EU: "eu",
+    GBR: "gbr",
     HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
@@ -95,6 +110,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
     AUT: "aut",
     CZE: "cs_sk",
     EU: "eu",
+    GBR: "gbr",
     HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
@@ -111,9 +127,13 @@ test("the final-generation registry is exact and fails closed", () => {
     "case_law_v6",
     "case_law_v7",
     "case_law_v8",
+    "case_law_v9",
     "legislation_v2",
     "legislation_v3",
   ]);
+  expect(requireCorpusIndexManifest("case_law", "case_law_v9")).toBe(
+    CORPUS_INDEX_MANIFESTS.case_law_v9,
+  );
   expect(requireCorpusIndexManifest("case_law", "case_law_v5")).toBe(
     CORPUS_INDEX_MANIFESTS.case_law_v5,
   );
@@ -140,6 +160,54 @@ test("the final-generation registry is exact and fails closed", () => {
   ).toThrow("Unknown legislation index manifest: legislation_v1");
 });
 
+test("revision retrieval capability follows each manifest mapping", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const field = manifest.projection.projectionRevisionField;
+    const mapping = manifest.engine.indexConfig.doc_mapping.field_mappings.find(
+      (entry) => entry.name === field,
+    );
+    expect(mapping).toBeDefined();
+    expect(corpusIndexRevisionRetrieval(manifest)).toEqual({
+      type: mapping?.stored === true ? "stored" : "query_only",
+      field,
+    });
+  }
+  expect(
+    corpusIndexRevisionRetrieval(CORPUS_INDEX_MANIFESTS.case_law_v9),
+  ).toEqual({ type: "stored", field: "projection_revision" });
+  for (const generation of [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+    "legislation_v2",
+    "legislation_v3",
+  ] as const) {
+    expect(
+      corpusIndexRevisionRetrieval(CORPUS_INDEX_MANIFESTS[generation]),
+    ).toEqual({ type: "query_only", field: "projection_revision" });
+  }
+  const malformed = {
+    ...CORPUS_INDEX_MANIFESTS.case_law_v9,
+    engine: {
+      ...CORPUS_INDEX_MANIFESTS.case_law_v9.engine,
+      indexConfig: {
+        ...CORPUS_INDEX_MANIFESTS.case_law_v9.engine.indexConfig,
+        doc_mapping: {
+          ...CORPUS_INDEX_MANIFESTS.case_law_v9.engine.indexConfig.doc_mapping,
+          field_mappings:
+            CORPUS_INDEX_MANIFESTS.case_law_v9.engine.indexConfig.doc_mapping.field_mappings.filter(
+              (entry) => entry.name !== "projection_revision",
+            ),
+        },
+      },
+    },
+  } satisfies typeof CORPUS_INDEX_MANIFESTS.case_law_v9;
+  expect(() => corpusIndexRevisionRetrieval(malformed)).toThrow(
+    "Corpus manifest does not map its projection revision field",
+  );
+});
+
 test("manifest digests pin every semantic array and ignore object key order", () => {
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v5)).toBe(
     EXPECTED_DIGESTS.case_law_v5,
@@ -152,6 +220,9 @@ test("manifest digests pin every semantic array and ignore object key order", ()
   );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v8)).toBe(
     EXPECTED_DIGESTS.case_law_v8,
+  );
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v9)).toBe(
+    EXPECTED_DIGESTS.case_law_v9,
   );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)).toBe(
     EXPECTED_DIGESTS.legislation_v2,
@@ -241,7 +312,11 @@ test("physical index ids are deployment state, not manifest identity", () => {
 test("every declared jurisdiction routes into every case-law generation", () => {
   expect(Object.keys(EXPECTED_CASE_LAW_ROUTES).toSorted()).toEqual(
     Object.values(CORPUS_INDEX_MANIFESTS)
-      .filter((manifest) => manifest.family === "case_law")
+      .filter(
+        (manifest) =>
+          manifest.family === "case_law" &&
+          !corpusIndexManifestIsPartial(manifest),
+      )
       .map((manifest) => manifest.generation)
       .toSorted(),
   );
@@ -257,9 +332,8 @@ test("every declared jurisdiction routes into every case-law generation", () => 
       const indexId = `${generation}_${group}`;
       expect([
         corpusIndexIdFromManifest(manifest, jurisdiction),
-        corpusIndexIdFromManifest(manifest, jurisdiction.toLowerCase()),
         requireCorpusIndexIdForManifest(manifest, indexId),
-      ]).toEqual([indexId, indexId, indexId]);
+      ]).toEqual([indexId, indexId]);
     }
   }
   // Non-vacuity: the generations were built before Hungary was declared, and
@@ -324,8 +398,6 @@ test("a query routes where the projection writes", () => {
     indexId: "case_law_v7_cs_sk",
     jurisdictionClause: "CZE",
   });
-  // The clause is the canonical code indexed documents carry, whatever case
-  // the scope arrived in.
   expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "cze")).toEqual({
     indexId: "case_law_v7_cs_sk",
     jurisdictionClause: "CZE",
@@ -484,6 +556,7 @@ const EXPECTED_DOCSTORE_BLOCKSIZE = {
   case_law_v6: 1_000_000,
   case_law_v7: 65_536,
   case_law_v8: 65_536,
+  case_law_v9: 65_536,
   legislation_v2: 1_000_000,
   legislation_v3: 1_000_000,
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, number>;
@@ -503,6 +576,7 @@ const EXPECTED_INDEXING = {
   case_law_v6: BUILT_THROUGH_V7_INDEXING,
   case_law_v7: BUILT_THROUGH_V7_INDEXING,
   case_law_v8: V8_INDEXING,
+  case_law_v9: V8_INDEXING,
   legislation_v2: BUILT_THROUGH_V7_INDEXING,
   legislation_v3: V8_INDEXING,
 } as const satisfies Record<
@@ -534,7 +608,10 @@ test("final manifests make every storage and index cost explicit", () => {
     ]) {
       expect(fields.has(absent)).toBe(false);
     }
-    expect(fields.has("chunk_id")).toBe(manifest.generation === "case_law_v8");
+    expect(fields.has("chunk_id")).toBe(
+      manifest.generation === "case_law_v8" ||
+        manifest.generation === "case_law_v9",
+    );
     expect(manifest.engine.indexConfig.doc_mapping.store_source).toBe(false);
     expect(manifest.engine.indexConfig.doc_mapping.max_num_partitions).toBe(
       200,
@@ -919,4 +996,116 @@ test("which language fills a stem field is projection content, not index identit
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v6)).toBe(
     EXPECTED_DIGESTS.case_law_v6,
   );
+});
+
+test("case_law_v9 is a partial generation: Czech decisions in a group of their own", () => {
+  const v8 = CORPUS_INDEX_MANIFESTS.case_law_v8;
+  const v9 = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  expect(corpusIndexManifestIsPartial(v9)).toBe(true);
+  expect(corpusIndexManifestScopeJurisdictions(v9)).toEqual(["CZE"]);
+  // Every earlier generation holds every jurisdiction.
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+    v8,
+  ]) {
+    expect(corpusIndexManifestIsPartial(manifest)).toBe(false);
+    expect(corpusIndexManifestScopeJurisdictions(manifest)).toBeNull();
+    for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+      expect(
+        corpusIndexManifestCoversJurisdiction(manifest, jurisdiction),
+      ).toBe(true);
+    }
+  }
+  // The partial generation holds only what its route records.
+  for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+    expect([
+      jurisdiction,
+      corpusIndexManifestCoversJurisdiction(v9, jurisdiction),
+    ]).toEqual([jurisdiction, jurisdiction === "CZE"]);
+  }
+  expect(corpusIndexManifestCoversJurisdiction(v9, "cze")).toBe(false);
+
+  // Czech decisions are in a group of their own from v9 on, and in the group
+  // they were created in before: the serving generations route exactly as
+  // they did.
+  expect(corpusIndexIdFromManifest(v9, "CZE")).toBe("case_law_v9_cze");
+  expect(corpusIndexIdFromManifest(v8, "CZE")).toBe("case_law_v8_cs_sk");
+  expect(corpusIndexIdFromManifest(v8, "SVK")).toBe("case_law_v8_cs_sk");
+  expect(corpusIndexRoute(v9, "CZE")).toEqual({
+    indexId: "case_law_v9_cze",
+    jurisdictionClause: undefined,
+  });
+  expect(corpusIndexRoute(v8, "CZE")).toEqual({
+    indexId: "case_law_v8_cs_sk",
+    jurisdictionClause: "CZE",
+  });
+  // The only index id v9 names is the Czech one.
+  expect(requireCorpusIndexIdForManifest(v9, "case_law_v9_cze")).toBe(
+    "case_law_v9_cze",
+  );
+  expect(() =>
+    requireCorpusIndexIdForManifest(v9, "case_law_v9_cs_sk"),
+  ).toThrow("Corpus index id is not a manifest route");
+  expect(() => requireCorpusIndexIdForManifest(v9, "case_law_v9_pol")).toThrow(
+    "Corpus index id is not a manifest route",
+  );
+
+  // It is a new manifest with its own digest, and v8's is untouched. The
+  // digest is pinned here once v9 is built.
+  expect(corpusIndexManifestDigest(v9)).toMatch(/^[0-9a-f]{64}$/u);
+  expect(corpusIndexManifestDigest(v9)).not.toBe(EXPECTED_DIGESTS.case_law_v8);
+  expect(corpusIndexManifestDigest(v8)).toBe(EXPECTED_DIGESTS.case_law_v8);
+  const v8Fields = v8.engine.indexConfig.doc_mapping.field_mappings;
+  const v9Fields = v9.engine.indexConfig.doc_mapping.field_mappings;
+  expect(v9Fields).toEqual([
+    ...v8Fields.map((field) =>
+      field.name === "projection_revision" ? { ...field, stored: true } : field,
+    ),
+    {
+      name: PROJECTION_GENERATION_FIELD,
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: false,
+      fast: false,
+      record: "basic",
+      fieldnorms: false,
+    },
+  ]);
+});
+
+test("generation origin filtering follows mapping presence", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const mapped = manifest.engine.indexConfig.doc_mapping.field_mappings.some(
+      ({ name }) => name === PROJECTION_GENERATION_FIELD,
+    );
+    expect(corpusIndexGenerationField(manifest)).toBe(
+      mapped ? PROJECTION_GENERATION_FIELD : null,
+    );
+    expect(mapped).toBe(manifest === CORPUS_INDEX_MANIFESTS.case_law_v9);
+    if (corpusIndexManifestIsPartial(manifest)) {
+      expect(corpusIndexGenerationField(manifest)).not.toBeNull();
+    }
+  }
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  expect(
+    corpusIndexGenerationField({
+      ...manifest,
+      engine: {
+        ...manifest.engine,
+        indexConfig: {
+          ...manifest.engine.indexConfig,
+          doc_mapping: {
+            ...manifest.engine.indexConfig.doc_mapping,
+            field_mappings:
+              manifest.engine.indexConfig.doc_mapping.field_mappings.filter(
+                ({ name }) => name !== PROJECTION_GENERATION_FIELD,
+              ),
+          },
+        },
+      },
+    }),
+  ).toBeNull();
 });

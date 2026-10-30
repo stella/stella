@@ -182,11 +182,27 @@ describe.skipIf(!enabled)(
               expect(getPgErrorCode(result.error)).toBe("55P03");
             }
             const report = await monitor.stop();
-            const snapshot = JSON.parse(JSON.parse(report).samples.at(-1));
-            expect(snapshot.waiters).toContainEqual({
-              pid: waiterPid,
-              blockers: [holderPid],
-            });
+            // The final sample can be taken after the wait timed out, when the
+            // waiter is still listed but no longer blocked; one sample taken
+            // during the wait must show the waiter and its lock owner.
+            const samples: unknown[] = JSON.parse(report).samples.map(
+              (sample: string): unknown => JSON.parse(sample),
+            );
+            expect(
+              samples.some(
+                (snapshot) =>
+                  typeof snapshot === "object" &&
+                  snapshot !== null &&
+                  "waiters" in snapshot &&
+                  Array.isArray(snapshot.waiters) &&
+                  snapshot.waiters.some(
+                    (waiter: { pid?: unknown; blockers?: unknown }) =>
+                      waiter.pid === waiterPid &&
+                      Array.isArray(waiter.blockers) &&
+                      waiter.blockers.includes(holderPid),
+                  ),
+              ),
+            ).toBe(true);
             expect(report).toContain("ShareUpdateExclusiveLock");
             expect(report).toContain("AccessExclusiveLock");
             expect(report).toContain("client backend");

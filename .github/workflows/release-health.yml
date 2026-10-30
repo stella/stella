@@ -1,0 +1,200 @@
+name: Release health
+run-name: Release health ${{ inputs.release_ref }}
+
+# Dispatched by release.yml once production serves a stable release: wait out
+# the post-release window, compare the release's failure fingerprints with the
+# previous release's (scripts/release-health.ts), and record the verdict on
+# the GitHub release, where the next promotion's gate reads it. A verdict
+# other than healthy fails the run, which alerts through
+# scheduled-run-alerts.yml.
+# release-chain-alert
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "Stable release promoted to production, for example v1.2.3"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-health-${{ inputs.release_ref }}
+  cancel-in-progress: false
+
+jobs:
+  window:
+    name: Post-release window
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: release-app
+    permissions:
+      contents: write # record the verdict on the release
+    env:
+      RELEASE_REF: ${{ inputs.release_ref }}
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Checkout release health tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            scripts/gh-retry.sh
+            scripts/retry.sh
+            scripts/release-health.ts
+            apps/api/src/lib/observability/release-failure-contract.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Resolve the release and its predecessor
+        id: release
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::release_ref must be a stable release such as v1.2.3"
+            exit 1
+          fi
+          published_at="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_REF}" --jq '.published_at // empty')"
+          if [[ -z "$published_at" ]]; then
+            echo "::error::${RELEASE_REF} is not a published release"
+            exit 1
+          fi
+          bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          previous="$(bun scripts/release-health.ts previous --release "$RELEASE_REF" --releases "$RUNNER_TEMP/releases.json")"
+          {
+            echo "window_end=$(bun scripts/release-health.ts window-end --published-at "$published_at")"
+            echo "previous=$(jq -r '.tag // empty' <<<"$previous")"
+            echo "previous_published_at=$(jq -r '.publishedAt // empty' <<<"$previous")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Wait out the post-release window
+        timeout-minutes: 65
+        env:
+          WINDOW_END: ${{ steps.release.outputs.window_end }}
+        run: |
+          set -euo pipefail
+          remaining=$(( $(date -u -d "$WINDOW_END" +%s) - $(date -u +%s) ))
+          if (( remaining > 0 )); then
+            echo "Waiting ${remaining}s for the window to close at ${WINDOW_END}."
+            sleep "$remaining"
+          fi
+
+      # A failed query still records a verdict: inconclusive, which the next
+      # promotion's gate refuses like an unhealthy one.
+      - name: Query failure fingerprints
+        id: query
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_RELEASE_HEALTH_API_KEY }}
+          POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+          POSTHOG_API_HOST: https://eu.posthog.com
+          PREVIOUS_REF: ${{ steps.release.outputs.previous }}
+          PREVIOUS_PUBLISHED_AT: ${{ steps.release.outputs.previous_published_at }}
+          WINDOW_END: ${{ steps.release.outputs.window_end }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$POSTHOG_API_KEY" || ! "$POSTHOG_PROJECT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::The release health query credentials are not configured"
+            exit 1
+          fi
+          bun scripts/release-health.ts query \
+            --release "$RELEASE_REF" \
+            --previous "$PREVIOUS_REF" \
+            --previous-published-at "$PREVIOUS_PUBLISHED_AT" \
+            --until "$WINDOW_END" > "$RUNNER_TEMP/query.json"
+          bash scripts/retry.sh curl --fail -sS --max-time 60 \
+            -X POST \
+            -H "Authorization: Bearer ${POSTHOG_API_KEY}" \
+            -H "content-type: application/json" \
+            --data-binary @"$RUNNER_TEMP/query.json" \
+            -o "$RUNNER_TEMP/result.json" \
+            "${POSTHOG_API_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/"
+
+      - name: Evaluate the release
+        id: evaluate
+        env:
+          PREVIOUS_REF: ${{ steps.release.outputs.previous }}
+          PREVIOUS_PUBLISHED_AT: ${{ steps.release.outputs.previous_published_at }}
+          QUERY_OUTCOME: ${{ steps.query.outcome }}
+          WINDOW_END: ${{ steps.release.outputs.window_end }}
+        run: |
+          set -euo pipefail
+          result_args=()
+          if [[ "$QUERY_OUTCOME" == "success" ]]; then
+            result_args=(--result "$RUNNER_TEMP/result.json")
+          fi
+          bun scripts/release-health.ts evaluate \
+            --release "$RELEASE_REF" \
+            --previous "$PREVIOUS_REF" \
+            --until "$WINDOW_END" \
+            --previous-published-at "$PREVIOUS_PUBLISHED_AT" \
+            --record "$RUNNER_TEMP/private-release-health.json" \
+            "${result_args[@]}" \
+            --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --verdict "$RUNNER_TEMP/release-health.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          echo "verdict=$(jq -r '.verdict' "$RUNNER_TEMP/release-health.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Record the verdict on the release
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$RUNNER_TEMP/release-health.json" --clobber
+
+      - name: Mint private record token
+        id: record-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          permission-contents: write
+
+      - name: Persist private release record
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ steps.record-token.outputs.token }}
+          RECORD_STORE: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+        run: |
+          bun scripts/release-health.ts record \
+            --release "$RELEASE_REF" \
+            --store "$RECORD_STORE" \
+            --record "$RUNNER_TEMP/private-release-health.json"
+
+      - name: Fail a release that is not healthy
+        if: steps.evaluate.outputs.verdict != 'healthy'
+        env:
+          VERDICT: ${{ steps.evaluate.outputs.verdict }}
+        run: |
+          echo "::error::${RELEASE_REF} is ${VERDICT} after its post-release window; the next production promotion is refused until a dispatch acknowledges it."
+          exit 1

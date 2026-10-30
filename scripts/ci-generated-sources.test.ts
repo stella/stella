@@ -3,7 +3,9 @@ import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { PR_CODE_QUALITY_CANCEL_JOBS } from "./ci-cancellation-contract";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
+import { lexShell, programWords } from "./install-free-ci";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -52,12 +54,17 @@ const workflow = v.parse(workflowSchema, {
   ),
 });
 type Workflow = v.InferOutput<typeof workflowSchema>;
+// The cancellation helpers only end a failed run; they check no sources.
+const cancellationHelpers = new Set<string>(
+  Object.keys(PR_CODE_QUALITY_CANCEL_JOBS),
+);
 const consumerIds = (source: Workflow) =>
   Object.keys(source.jobs).filter(
     (id) =>
-      id.startsWith("ci-checks-") ||
-      id.startsWith("code-quality-") ||
-      id === "typecheck-baseline",
+      !cancellationHelpers.has(id) &&
+      (id.startsWith("ci-checks-") ||
+        id.startsWith("code-quality-") ||
+        id === "typecheck-baseline"),
   );
 const manifest = `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`;
 const artifact = `generated-sources-\${{ needs.generated-sources.outputs.input_hash }}`;
@@ -166,7 +173,20 @@ const assertHandoff = (source: Workflow) => {
     if (!job) {
       panic(`Missing generated source consumer: ${id}`);
     }
-    expect(job.needs, id).toEqual(["ci-plan", "generated-sources"]);
+    // A check that waits for the quick checks also names their gate. It runs
+    // past `!cancelled()`, so its condition must require the producer itself.
+    const gated =
+      Array.isArray(job.needs) && job.needs.includes("pr-heavy-gate");
+    expect(job.needs, id).toEqual([
+      "ci-plan",
+      "generated-sources",
+      ...(gated ? ["pr-heavy-gate"] : []),
+    ]);
+    if (gated) {
+      expect(job.if, id).toContain(
+        "&& needs.generated-sources.result == 'success' &&",
+      );
+    }
     expect(job.env?.["CI_GENERATED_SOURCES_MANIFEST"], id).toBe(manifest);
     const downloads = job.steps.filter(
       ({ name }) => name === "Download generated sources",
@@ -410,6 +430,7 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
       "condition",
       "order",
       "generation",
+      "gate",
     ] as const) {
       const mutated = structuredClone(workflow);
       const job = mutated.jobs[id];
@@ -461,6 +482,14 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
             name: "Unlisted preparation",
             run: "bun run generate",
           });
+          break;
+        case "gate":
+          // Waiting on the gate without requiring the producer's success.
+          job.needs = ["ci-plan", "generated-sources", "pr-heavy-gate"];
+          job.if = job.if?.replace(
+            " && needs.generated-sources.result == 'success'",
+            "",
+          );
           break;
       }
       expect(() => assertHandoff(mutated), `${id}/${mutation}`).toThrow(id);
@@ -844,3 +873,182 @@ test("API boot entry points prepare capability runtime sources before starting",
     "bun ../../scripts/prepare-mcp-apps.ts",
   );
 });
+
+// A web app served from source imports every generated module the registry
+// owns. A built app does not need this: its build runs the generators.
+const startsWebFromSource = (run: string) =>
+  lexShell(run).some((event) => {
+    if (event.type !== "command") {
+      return false;
+    }
+    const words = programWords(event.words);
+    if (
+      words.at(0) === "bun" &&
+      words.at(1) === "run" &&
+      words.at(2) === "dev:web"
+    ) {
+      return true;
+    }
+    let args: string[] | null = null;
+    if (words.at(0) === "vite") {
+      args = words.slice(1);
+    } else if (words.at(0) === "bunx" && words.at(1) === "vite") {
+      args = words.slice(2);
+    } else if (
+      words.at(0) === "bun" &&
+      words.at(1) === "--bun" &&
+      words.at(2) === "vite"
+    ) {
+      args = words.slice(3);
+    }
+    if (
+      args === null ||
+      args.includes("--help") ||
+      args.includes("--version")
+    ) {
+      return false;
+    }
+    const command = args.at(0);
+    return (
+      command === undefined ||
+      command.startsWith("-") ||
+      command === "dev" ||
+      command === "serve"
+    );
+  });
+const REGISTRY_PREPARE = "bun scripts/ci-generated-sources.ts prepare";
+const preparesGeneratedSources = (run: string) =>
+  lexShell(run).some((event) => {
+    if (event.type !== "command") {
+      return false;
+    }
+    const words = programWords(event.words);
+    return (
+      words.at(0) === "bun" &&
+      words.at(1) === "scripts/ci-generated-sources.ts" &&
+      ((words.at(2) === "prepare" && words.length === 3) ||
+        (words.at(2) === "restore" &&
+          words.length === 4 &&
+          words.at(3)?.startsWith("-") === false))
+    );
+  });
+const looseWorkflow = v.object({
+  jobs: v.optional(
+    v.record(
+      v.string(),
+      v.looseObject({
+        steps: v.optional(
+          v.array(
+            v.looseObject({
+              name: v.optional(v.string()),
+              run: v.optional(v.string()),
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
+});
+type LooseWorkflow = v.InferOutput<typeof looseWorkflow>;
+
+const unpreparedSourceStarts = (file: string, source: LooseWorkflow) =>
+  Object.entries(source.jobs ?? {}).flatMap(([id, job]) => {
+    const steps = job.steps ?? [];
+    const start = steps.findIndex(({ run }) => startsWebFromSource(run ?? ""));
+    if (start === -1) {
+      return [];
+    }
+    const prepared = steps
+      .slice(0, start)
+      .some(({ run }) => preparesGeneratedSources(run ?? ""));
+    return prepared ? [] : [`${file}/${id}/${steps[start]?.name ?? start}`];
+  });
+
+test("every job that serves the web app from source runs the generated-source registry first", () => {
+  const directory = new URL("../.github/workflows/", import.meta.url);
+  const workflows = [...new Bun.Glob("*.yml").scanSync(directory.pathname)]
+    .toSorted()
+    .map((file) => ({
+      file,
+      source: v.parse(
+        looseWorkflow,
+        Bun.YAML.parse(readFileSync(new URL(file, directory), "utf-8")),
+      ),
+    }));
+  const starters = workflows.flatMap(({ file, source }) =>
+    Object.entries(source.jobs ?? {})
+      .filter(([, job]) =>
+        (job.steps ?? []).some(({ run }) => startsWebFromSource(run ?? "")),
+      )
+      .map(([id]) => `${file}/${id}`),
+  );
+  expect(starters).toContain("ci.yml/e2e-vite-canary");
+  expect(
+    workflows.flatMap(({ file, source }) =>
+      unpreparedSourceStarts(file, source),
+    ),
+  ).toEqual([]);
+
+  // Dropping the registry step leaves the dev server without its modules.
+  const mutated = structuredClone(
+    workflows.find(({ file }) => file === "ci.yml")?.source ??
+      panic("Missing ci.yml"),
+  );
+  const canary = mutated.jobs?.["e2e-vite-canary"] ?? panic("Missing canary");
+  canary.steps = (canary.steps ?? []).filter(
+    ({ run }) => !(run ?? "").includes(REGISTRY_PREPARE),
+  );
+  expect(unpreparedSourceStarts("ci.yml", mutated)).toEqual([
+    "ci.yml/e2e-vite-canary/Start web dev server",
+  ]);
+});
+
+test.each([
+  ["bun --bun vite --port 3000", true],
+  ["nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &", true],
+  ["CI=true bunx vite dev --host 127.0.0.1", true],
+  ["vite serve", true],
+  ["bun run dev:web", true],
+  ["echo 'bun --bun vite'", false],
+  ["# bun --bun vite", false],
+  ["cat <<'TEXT'\nbun --bun vite\nTEXT", false],
+  ["bun --bun vite build", false],
+  ["bunx vite preview", false],
+  ["vite --version", false],
+])(
+  "only executable development commands start the web app: %s",
+  (run, starts) => {
+    expect(startsWebFromSource(run)).toBe(starts);
+  },
+);
+
+test.each([
+  [REGISTRY_PREPARE, true],
+  [`CI_CHECK_KIND=CONTEXTUAL ${REGISTRY_PREPARE}`, true],
+  [
+    'bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"',
+    true,
+  ],
+  [`echo '${REGISTRY_PREPARE}'`, false],
+  [`# ${REGISTRY_PREPARE}`, false],
+  [`cat <<'TEXT'\n${REGISTRY_PREPARE}\nTEXT`, false],
+  ["bun scripts/ci-generated-sources.ts restore", false],
+  ["echo 'Nothing to restore'", false],
+])(
+  "source preparation requires an executable registry command: %s",
+  (run, prepared) => {
+    const source = {
+      jobs: {
+        web: {
+          steps: [
+            { name: "Restore generated sources", run },
+            { name: "Serve", run: "bun --bun vite" },
+          ],
+        },
+      },
+    };
+    expect(unpreparedSourceStarts("fixture.yml", source)).toEqual(
+      prepared ? [] : ["fixture.yml/web/Serve"],
+    );
+  },
+);

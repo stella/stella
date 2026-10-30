@@ -1,5 +1,5 @@
-import { Result, panic } from "better-result";
-import { and, eq, sql, isNull } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { CorrespondenceActorDisplay } from "@stll/api-contract/correspondence";
 
@@ -13,10 +13,10 @@ import {
 } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
-  workspaceMembers,
-  workspaces,
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

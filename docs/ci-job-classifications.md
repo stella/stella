@@ -1,0 +1,21 @@
+# Workflow job classifications
+
+CI validates every workflow job and its reachable reusable-workflow and composite-action metadata against the reviewed decisions in `.github/ci-job-classification-decisions/`:
+
+- `ordinary`: checks without publication or deployment.
+- `support`: prerequisite checks whose release behavior follows the workflow conditions.
+- `priority`: publication, tagging or deployment, subject to the workflow conditions.
+
+The check reads an isolated sparse checkout at the workflow revision. Supplier metadata is captured at immutable revisions in `.github/ci-job-classification-sources.json`; validation checks classification-relevant metadata, full owner/repository/path/commit identity and complete callee job census without fetching suppliers. A shared parser binds each remote reference to its independently recorded source origin; changing a reference cannot reuse metadata from another repository, file or commit.
+
+Human decisions live as one JSON file per `repository:path/job` key in `.github/ci-job-classification-decisions/`. Each file contains exactly `kind`, `qualifier`, and `reviewedDigest`, the digest of the classification-relevant metadata reviewed for that job. The filename is the key encoded with JavaScript's `encodeURIComponent`, followed by `.json`; decoding the filename recovers the complete key without collisions. The encoding and all reads and writes are owned by `scripts/ci-job-classification/inputs.ts`.
+
+The checker discovers workflows, jobs, references and reachable actions; it never chooses a kind or qualifier. When a job is new or its reviewed digest changes, the check fails with the exact per-job path and value to review. Review the classification before writing the supplied digest. It writes `privileged_classification_change=true` or `false` to `GITHUB_OUTPUT` on every check. Privileged jobs have a priority decision or derived publication/deployment metadata, secrets, write permissions (including OIDC), or self-hosted runner labels. When a reviewed digest changes for a privileged job, the check emits `::error title=Sensitive classification change::<job keys>`.
+
+Entire workflow/action documents, jobs and steps are projected in full with recursively sorted mapping keys. Unknown/new keys participate by default, including reusable-workflow caller inputs and all action inputs and environment values. All top-level keys participate, including triggers, workflow-call and dispatch inputs/defaults/secrets/outputs, permissions, environment, defaults, concurrency and action execution metadata. Each job's `reviewedDigest` binds the document-level context and that job's definition; it excludes sibling job definitions.
+
+The explicit exclusions in `CLASSIFICATION_EXCLUSIONS` are document `name` and `run-name`, job `name` and `timeout-minutes`, and step `name`, `timeout-minutes` and `run`. YAML comments disappear during parsing. Run bodies retain their secret references and a marker when they match `publish|deploy|release|push` (case-insensitively), including steps without conditions. Step conditions still participate. No nested action or reusable-workflow input keys are excluded, including cache-key inputs. Mapping order and ordinary run-body edits do not invalidate classifications. This projection is a review aid, not shell side-effect analysis.
+
+Changes to this shape fail with the exact decision key and replacement entry. Review kind and qualifier before updating `reviewedDigest`. Missing decisions and unresolved callees remain hard failures. Remove decisions for deleted jobs; stale entries also fail the check. Classification changes follow ordinary pull request review. This metadata check does not execute inspected commands or infer application and shell side effects.
+
+The parser emits one dependency graph for the generator and verifier: reusable-workflow job `uses` and action-step `uses`, including nested parallel groups and composite actions. These are execution-reference positions, not a filter on digested metadata. Unknown fields and every condition remain in the digest. Publication keywords affect the step shape independently of conditions. Shell bodies and opaque executable action entry points are not interpreted as dependency declarations.

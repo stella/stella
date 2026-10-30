@@ -1,14 +1,206 @@
+import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { Button } from "./button";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogTrigger,
+} from "./alert-dialog";
+import { Button, BUTTON_CONTENT, BUTTON_SIZE_CONTENT } from "./button";
+import { Dialog, DialogClose, DialogTrigger } from "./dialog";
+import { Menu, MenuTrigger } from "./menu";
+import { Popover, PopoverTrigger } from "./popover";
+import { Sheet, SheetClose, SheetTrigger } from "./sheet";
 
 // `disabled=""` is what React emits for the native attribute; a button that
 // carries it can never be hovered or focused, so its tooltip can never open.
 const isNativelyDisabled = (markup: string) => / disabled=""/u.test(markup);
 const isAccessiblyDisabled = (markup: string) =>
   markup.includes('aria-disabled="true"');
+// Base UI marks the element a mounted tooltip is attached to.
+const hasTooltip = (markup: string) =>
+  markup.includes("data-base-ui-tooltip-trigger");
+
+const SIZES = Object.keys(BUTTON_SIZE_CONTENT).filter(
+  (size): size is keyof typeof BUTTON_SIZE_CONTENT =>
+    size in BUTTON_SIZE_CONTENT,
+);
+
+// What a caller can name a button with besides an explicit `tooltip`.
+const ACCESSIBLE_NAMES = [
+  { "aria-label": "Go to the reasoning" },
+  { title: "Go to the reasoning" },
+] as const;
+
+describe("Button implicit tooltip", () => {
+  test.each(SIZES)(
+    "%s: the accessible name becomes a tooltip only at an icon size",
+    (size) => {
+      const isIconSize = BUTTON_SIZE_CONTENT[size] === BUTTON_CONTENT.icon;
+      for (const name of ACCESSIBLE_NAMES) {
+        expect(
+          hasTooltip(
+            renderToStaticMarkup(
+              <Button {...name} size={size}>
+                Reasoning
+              </Button>,
+            ),
+          ),
+        ).toBe(isIconSize);
+        // The disposition reads the same rule, so a disabled text button
+        // with a label stays natively disabled.
+        expect(
+          isAccessiblyDisabled(
+            renderToStaticMarkup(
+              <Button {...name} disabled size={size}>
+                Reasoning
+              </Button>,
+            ),
+          ),
+        ).toBe(isIconSize);
+      }
+    },
+  );
+
+  test("an unsized button is a text button", () => {
+    expect(
+      hasTooltip(
+        renderToStaticMarkup(
+          <Button aria-label="Go to the reasoning">Reasoning</Button>,
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  test.each(SIZES)("%s: an explicit tooltip renders", (size) => {
+    expect(
+      hasTooltip(
+        renderToStaticMarkup(
+          <Button size={size} tooltip="Opens the reasoning">
+            Reasoning
+          </Button>,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test("tooltip={false} suppresses an icon button's tooltip", () => {
+    expect(
+      hasTooltip(
+        renderToStaticMarkup(
+          <Button aria-label="Close" size="icon" tooltip={false} />,
+        ),
+      ),
+    ).toBe(false);
+  });
+});
+
+type TriggerProps = {
+  "aria-label"?: string;
+  children?: ReactNode;
+  render?: ReactElement;
+  tooltip?: ReactNode;
+};
+
+const OVERLAY_TRIGGERS = {
+  AlertDialogClose: (props: TriggerProps) => (
+    <AlertDialog>
+      <AlertDialogClose {...props} />
+    </AlertDialog>
+  ),
+  AlertDialogTrigger: (props: TriggerProps) => (
+    <AlertDialog>
+      <AlertDialogTrigger {...props} />
+    </AlertDialog>
+  ),
+  DialogClose: (props: TriggerProps) => (
+    <Dialog>
+      <DialogClose {...props} />
+    </Dialog>
+  ),
+  DialogTrigger: (props: TriggerProps) => (
+    <Dialog>
+      <DialogTrigger {...props} />
+    </Dialog>
+  ),
+  MenuTrigger: (props: TriggerProps) => (
+    <Menu>
+      <MenuTrigger {...props} />
+    </Menu>
+  ),
+  PopoverTrigger: (props: TriggerProps) => (
+    <Popover>
+      <PopoverTrigger {...props} />
+    </Popover>
+  ),
+  SheetClose: (props: TriggerProps) => (
+    <Sheet>
+      <SheetClose {...props} />
+    </Sheet>
+  ),
+  SheetTrigger: (props: TriggerProps) => (
+    <Sheet>
+      <SheetTrigger {...props} />
+    </Sheet>
+  ),
+};
+
+const TRIGGER_NAMES = Object.keys(OVERLAY_TRIGGERS).filter(
+  (name): name is keyof typeof OVERLAY_TRIGGERS => name in OVERLAY_TRIGGERS,
+);
+
+describe("overlay trigger tooltip", () => {
+  test.each(TRIGGER_NAMES)(
+    "%s derives no tooltip from its own label",
+    (name) => {
+      const Trigger = OVERLAY_TRIGGERS[name];
+      expect(
+        hasTooltip(
+          renderToStaticMarkup(
+            <Trigger aria-label="Open the outline">Outline</Trigger>,
+          ),
+        ),
+      ).toBe(false);
+      expect(
+        hasTooltip(
+          renderToStaticMarkup(
+            <Trigger
+              aria-label="Open the outline"
+              render={<Button size="sm" />}
+            >
+              Outline
+            </Trigger>,
+          ),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test.each(TRIGGER_NAMES)(
+    "%s rendered as an icon Button hands it the label",
+    (name) => {
+      const Trigger = OVERLAY_TRIGGERS[name];
+      expect(
+        hasTooltip(
+          renderToStaticMarkup(
+            <Trigger aria-label="Add" render={<Button size="icon" />} />,
+          ),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test.each(TRIGGER_NAMES)("%s still mounts an explicit tooltip", (name) => {
+    const Trigger = OVERLAY_TRIGGERS[name];
+    expect(
+      hasTooltip(
+        renderToStaticMarkup(<Trigger tooltip="Outline">Outline</Trigger>),
+      ),
+    ).toBe(true);
+  });
+});
 
 describe("Button disabled disposition", () => {
   test("a disabled button with no tooltip keeps the native attribute", () => {
@@ -43,9 +235,7 @@ describe("Button disabled disposition", () => {
 
   test("a suppressed tooltip leaves the button natively disabled", () => {
     const markup = renderToStaticMarkup(
-      <Button disabled tooltip={false}>
-        Approve
-      </Button>,
+      <Button aria-label="Approve" disabled size="icon" tooltip={false} />,
     );
 
     expect(isNativelyDisabled(markup)).toBe(true);
@@ -78,8 +268,8 @@ describe("Button loading icon", () => {
   // the only icon a reader sees, not a second spinner beside the first.
   test("the loader stands in for the caller's icon while loading", () => {
     const markup = renderToStaticMarkup(
-      <Button loading>
-        <RetryIcon /> Try again
+      <Button icon={<RetryIcon />} loading>
+        <span>Try again</span>
       </Button>,
     );
 
@@ -87,15 +277,14 @@ describe("Button loading icon", () => {
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).not.toContain("animate-spin");
-    // The ampersand of the arbitrary variant is HTML-escaped in markup.
-    expect(markup).toContain("_svg:not([data-slot=button-loader]_svg)]:hidden");
+    expect(markup.match(/<svg/gu)).toHaveLength(1);
+    expect(markup).not.toContain('data-testid="retry-icon"');
+    expect(markup).toContain("<span>Try again</span>");
   });
 
   test("the caller's icon shows once the button is idle", () => {
     const markup = renderToStaticMarkup(
-      <Button>
-        <RetryIcon /> Try again
-      </Button>,
+      <Button icon={<RetryIcon />}>Try again</Button>,
     );
 
     expect(markup).toContain('data-testid="retry-icon"');

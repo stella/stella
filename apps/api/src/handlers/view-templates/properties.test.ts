@@ -140,6 +140,14 @@ const defaultExistingTemplateReuseProperty = {
   tool: { version: 1, type: "manual-input" },
 } satisfies ExistingTemplateReuseProperty;
 
+const systemFileProperty = {
+  id: "system_file",
+  name: "Documents",
+  content: { version: 1, type: "file" },
+  tool: { version: 1, type: "manual-input" },
+  system: true,
+} satisfies ExistingTemplateReuseProperty;
+
 const createTemplateReuseTx = (
   existingProperty:
     | ExistingTemplateReuseProperty
@@ -611,6 +619,37 @@ describe("resolveTemplateProperties", () => {
     expect(dependencyValuesMock).not.toHaveBeenCalled();
   });
 
+  test("returns a typed error when an AI template column has no possible input", async () => {
+    const { dependencyValuesMock, tx } = createTemplateDependencyTx();
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_summary",
+      name: "Summary",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "ai-model", prompt: "Summarize" },
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout(templateProperty.sourceId),
+        templateProperties: [templateProperty],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
+
+    expect(rejection).toMatchObject({
+      status: 422,
+      code: "ai-column-input-required",
+      message:
+        "AI columns require an input; provide a dependency or keep exactly one document file column in the matter.",
+    });
+    expect(dependencyValuesMock).not.toHaveBeenCalled();
+  });
+
   test("reuses existing shape matches only once", async () => {
     const { createdPropertyIds, tx } = createTemplateReuseTx();
     const firstProperty = {
@@ -661,12 +700,15 @@ describe("resolveTemplateProperties", () => {
 
   test("does not reuse AI shape matches when either side has dependencies", async () => {
     const { createdPropertyIds, tx } = createTemplateReuseTx(
-      {
-        id: "existing_property",
-        name: "Summary",
-        content: { version: 1, type: "text" },
-        tool: { version: 1, type: "ai-model", prompt: "Summarize" },
-      },
+      [
+        {
+          id: "existing_property",
+          name: "Summary",
+          content: { version: 1, type: "text" },
+          tool: { version: 1, type: "ai-model", prompt: "Summarize" },
+        },
+        systemFileProperty,
+      ],
       [{ propertyId: "existing_property" }],
     );
     const templateProperty = {
@@ -705,20 +747,23 @@ describe("resolveTemplateProperties", () => {
     expect(resolvedValueOf(result)).toEqual({
       layout: {
         ...layout,
-        columnOrder: [createdId],
+        columnOrder: [systemFileProperty.id, createdId],
       },
-      propertyIds: ["existing_property", createdId],
+      propertyIds: ["existing_property", systemFileProperty.id, createdId],
     });
   });
 
   test("sanitizes AI prompt markup before persisting template-created columns", async () => {
     const { createdPropertyIds, createdPropertyRows, tx } =
-      createTemplateReuseTx({
-        id: "existing_property",
-        name: "Other",
-        content: { version: 1, type: "text" },
-        tool: { version: 1, type: "manual-input" },
-      });
+      createTemplateReuseTx([
+        {
+          id: "existing_property",
+          name: "Other",
+          content: { version: 1, type: "text" },
+          tool: { version: 1, type: "manual-input" },
+        },
+        systemFileProperty,
+      ]);
     const templateProperty = {
       version: 1,
       sourceId: "source_unsafe_ai",
@@ -764,13 +809,16 @@ describe("resolveTemplateProperties", () => {
       prompt: "Classify the document type.",
     } satisfies ViewTemplateProperty["tool"];
     const { createdPropertyIds, createdPropertyRows, tx } =
-      createTemplateReuseTx({
-        id: "existing_property",
-        name: "Type de document",
-        content,
-        tool,
-        role: null,
-      });
+      createTemplateReuseTx([
+        {
+          id: "existing_property",
+          name: "Type de document",
+          content,
+          tool,
+          role: null,
+        },
+        systemFileProperty,
+      ]);
     const templateProperty = {
       version: 1,
       sourceId: "source_document_type",
@@ -1237,7 +1285,10 @@ describe("resolveTemplateProperties", () => {
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
     const { createdPropertyIds, createdPropertyRows, tx } =
-      createTemplateReuseTx();
+      createTemplateReuseTx([
+        defaultExistingTemplateReuseProperty,
+        systemFileProperty,
+      ]);
     const templateProperty = {
       version: 1,
       sourceId: "source_document_type",
@@ -1277,7 +1328,10 @@ describe("resolveTemplateProperties", () => {
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
     const { createdPropertyIds, createdPropertyRows, tx } =
-      createTemplateReuseTx();
+      createTemplateReuseTx([
+        defaultExistingTemplateReuseProperty,
+        systemFileProperty,
+      ]);
     const templateProperty = {
       version: 1,
       sourceId: "source_document_type",
@@ -1349,7 +1403,10 @@ describe("resolveTemplateProperties", () => {
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
     const { createdPropertyIds, createdPropertyRows, tx } =
-      createTemplateReuseTx();
+      createTemplateReuseTx([
+        defaultExistingTemplateReuseProperty,
+        systemFileProperty,
+      ]);
     const explicitClassifier = {
       version: 1,
       sourceId: "source_document_type_tagged",

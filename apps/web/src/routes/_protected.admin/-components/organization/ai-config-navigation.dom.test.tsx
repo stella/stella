@@ -30,6 +30,9 @@ let organizationSettings = {
   promptCachingEnabled: false,
   documentProcessingMode: "off",
   memoryExtractionEnabled: false,
+  declaredFeatureIds: [],
+  capabilities: {},
+  deploymentFeatures: {},
 };
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const GOOGLE_DEFAULTS = {
@@ -265,6 +268,9 @@ afterEach(() => {
     promptCachingEnabled: false,
     documentProcessingMode: "off",
     memoryExtractionEnabled: false,
+    declaredFeatureIds: [],
+    capabilities: {},
+    deploymentFeatures: {},
   };
   reflectProviderOrder = false;
   previewBarrier = undefined;

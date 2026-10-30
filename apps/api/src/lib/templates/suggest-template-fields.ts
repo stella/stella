@@ -18,7 +18,7 @@ import * as v from "valibot";
 
 import { isFieldPath } from "@stll/template-conditions";
 
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -122,6 +122,7 @@ export const suggestTemplateFields = async ({
   const { suggestions } = await (
     generateObjectForTask ?? generateTanStackObjectForTask
   )({
+    userId: admission.userId,
     dataClass: "customer",
     task: "short-text",
     orgAIConfig,
@@ -139,7 +140,7 @@ export const suggestTemplateFields = async ({
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(documentText, instructions),
     outputSchema: fieldSuggestionsSchema,
-    abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
+    deadlineMs: SUGGEST_TIMEOUT_MS,
     serviceTier: "standard",
   });
   // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion

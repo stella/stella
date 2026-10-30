@@ -32,8 +32,8 @@ import {
 } from "@/features/case-law/case-law-jurisdiction";
 import {
   caseLawLandingPage,
-  caseLawPageNumber,
   caseLawPageEvidence,
+  caseLawPageNumber,
 } from "@/features/case-law/case-law-route-pages.logic";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { prefetchDecisionFacetsAfterSearch } from "@/features/case-law/decision-filter-facets";
@@ -54,6 +54,7 @@ import {
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { ssrStatusHeaders } from "@/ssr-response-status";
 
+import { PublicCaseLawIndexError } from "./-case-law-index-error";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { searchSchema } from "./-case-law-search-schema";
 
@@ -119,9 +120,10 @@ const pageDecisions = (
 
 export const Route = createFileRoute("/law/cases/")({
   validateSearch: searchSchema,
-  // Which questions are drawn does not change the rows, so picking one must
-  // not send the loader after them again.
-  loaderDeps: ({ search: { questions, ...search } }) => search,
+  // Which questions are drawn, and which words a rewrite replaced, do not
+  // change the rows, so neither sends the loader after them again.
+  loaderDeps: ({ search: { questions, rewrite, rewrittenFrom, ...search } }) =>
+    search,
   // This is a results screen, not an entry screen: with nothing to show
   // results for, the reader belongs on the home. A first visit also starts in
   // the jurisdiction the UI language points at, and the URL says so, so the
@@ -349,6 +351,7 @@ export const Route = createFileRoute("/law/cases/")({
     async () => import("./-case-law-index-page"),
     "PublicCaseLawIndex",
   ),
+  errorComponent: PublicCaseLawIndexError,
   pendingComponent: lazyRouteComponent(
     async () => import("./-case-law-index-page"),
     "PublicCaseLawIndexPending",

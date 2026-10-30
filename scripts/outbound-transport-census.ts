@@ -41,6 +41,25 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "apps/web/src/lib/preload-error-recovery.ts",
+    class: "package-owned-client",
+    reason:
+      "Probes the bounded same-origin version manifest to distinguish deployment skew from transient chunk transport failures.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/api/src/db/sql-client.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Creates every Bun SQL client and drizzle database for the API.",
+    transports: ["module:bun"],
+  },
+  {
+    path: "packages/parameter-store/src/read-parameter.ts",
+    class: "vendor-sdk",
+    reason: "Reads one deployment parameter from the configured AWS account.",
+    transports: ["module:@aws-sdk/client-ssm"],
+  },
+  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:
@@ -151,24 +170,14 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "Requests identity assertions from the configured identity service.",
     transports: ["module:@stll/fetch", "module:jose"],
   },
-  {
-    path: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
-    class: "third-party",
-    reason: "Reads decision content from the selected public publisher.",
-    transports: ["module:@stll/fetch"],
-  },
+
   {
     path: "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
     class: "third-party",
     reason: "Paces requests to the Czech court publisher.",
     transports: ["module:@stll/fetch"],
   },
-  {
-    path: "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
-    class: "third-party",
-    reason: "Sends paged and document requests to public court publishers.",
-    transports: ["module:@stll/fetch"],
-  },
+
   {
     path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
     class: "package-owned-client",
@@ -284,10 +293,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-s3"],
   },
   {
-    path: "apps/api/src/lib/email/inbound/sqs.ts",
+    path: "apps/api/src/lib/email/sns-queue-drain.ts",
     class: "vendor-sdk",
     reason:
-      "Reads inbound email queue messages from the configured AWS account.",
+      "Reads inbound mail and delivery event queue messages from the configured AWS account.",
     transports: ["module:@aws-sdk/client-sqs"],
   },
   {
@@ -444,10 +453,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Queries the configured corpus index service and records registry request metadata.",
-    transports: [
-      "module:@stll/business-registries/shared/request-observer",
-      "module:@stll/fetch",
-    ],
+    transports: ["module:@stll/business-registries/shared/request-observer"],
   },
   {
     path: "apps/api/src/lib/visual-preview.ts",
@@ -456,17 +462,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-lambda"],
   },
   {
-    path: "apps/api/src/lib/scheduler/tasks/inbound-mail-receive.ts",
-    class: "vendor-sdk",
-    reason:
-      "Receives inbound mail notifications from the configured AWS account.",
-    transports: ["module:@aws-sdk/client-sqs"],
-  },
-  {
-    path: "apps/api/src/lib/observability/otel.ts",
+    path: "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
     class: "operator-configured-infrastructure",
-    reason: "Exports sanitized logs to the configured OTLP endpoint.",
-    transports: ["module:@opentelemetry/exporter-logs-otlp-http"],
+    reason:
+      "Posts analytics batches and log records to the endpoints configured in the API environment.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "apps/api/src/lib/stella-openrouter-text-adapter.ts",
@@ -504,12 +504,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/lib/s3.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads and writes objects using configured S3-compatible services.",
-    transports: [
-      "global:fetch",
-      "module:@aws-sdk/client-s3",
-      "module:@stll/fetch",
-      "module:bun",
-    ],
+    transports: ["global:fetch", "module:@aws-sdk/client-s3", "module:bun"],
   },
   {
     path: "apps/api/src/lib/safe-outbound-fetch.ts",
@@ -517,6 +512,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Validates destinations and pins resolved addresses for HTTP requests.",
     transports: [
+      "module:@stll/fetch",
       "module:node:dns/promises",
       "module:node:http",
       "module:node:https",
@@ -551,8 +547,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "module:@better-auth/cimd",
       "module:@better-auth/cimd/node",
       "module:better-auth",
-      "module:better-auth/adapters/drizzle",
-      "module:better-auth/api",
       "module:better-auth/plugins",
     ],
   },
@@ -563,82 +557,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:@tanstack/ai-mcp"],
   },
   {
-    path: "apps/api/src/lib/auth/demo-account-policy.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth middleware APIs for demo account policy.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/auth/session-bearer.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth plugin APIs for bearer session handling.",
-    transports: ["module:better-auth/plugins"],
-  },
-  {
-    path: "apps/api/src/lib/auth/oauth-consent-info.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth middleware for OAuth consent information.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/auth/review-account-plugin.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth APIs for review account handling.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/auth/registration-adapter.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth APIs for account registration handling.",
-    transports: ["module:better-auth/api"],
-  },
-  {
     path: "apps/api/src/lib/auth/session-lifetime.ts",
     class: "vendor-sdk",
     reason: "Uses Better Auth APIs and database helpers for session lifetimes.",
-    transports: ["module:better-auth/api", "module:better-auth/db"],
-  },
-  {
-    path: "apps/api/src/lib/auth/oauth-registration-policy.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth middleware for OAuth registration policy.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/auth/demo-account-hooks.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth middleware for demo account hooks.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/user-shortcuts.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth API errors for user shortcut handling.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/selfhost-auth.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth API errors for self-hosted authentication.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/membership-role-invariants.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth API errors for membership role checks.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/time-entry-offboarding.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth API errors when handling offboarding.",
-    transports: ["module:better-auth/api"],
-  },
-  {
-    path: "apps/api/src/lib/rate-limit/otp-account-budget.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth middleware in OTP account budget policy.",
-    transports: ["module:better-auth/api"],
+    transports: ["module:better-auth/db"],
   },
   {
     path: "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
@@ -677,12 +599,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/infosoud"],
   },
   {
-    path: "apps/api/src/lib/analytics/posthog-node.ts",
-    class: "vendor-sdk",
-    reason: "Sends configured analytics events to the PostHog service.",
-    transports: ["module:posthog-node"],
-  },
-  {
     path: "apps/api/src/lib/email/inbound/authentication.ts",
     class: "vendor-sdk",
     reason:
@@ -718,61 +634,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/scripts/better-auth-sign-in-replay.ts",
     class: "operator-configured-infrastructure",
     reason: "Runs an authentication replay against the configured API origin.",
-    transports: [
-      "global:fetch",
-      "module:better-auth",
-      "module:better-auth/adapters/drizzle",
-      "module:better-auth/plugins",
-      "module:bun",
-    ],
-  },
-  {
-    path: "apps/api/scripts/seed-reset.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Runs the database reset using Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/decision-analysis.db.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Queries the configured database for decision analysis.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/better-auth-migration-audit.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads migration state through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/seed-migration-rehearsal.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Runs migration rehearsal queries through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/better-auth-17-backfill.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads and writes migration records through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/database-census.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Collects database schema information through Bun SQL connections.",
-    transports: ["module:bun"],
+    transports: ["global:fetch", "module:better-auth"],
   },
   {
     path: "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads identity mapping data through Bun SQL connections.",
-    transports: ["module:bun", "module:jose"],
-  },
-  {
-    path: "apps/api/src/lib/public-law-read-db.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads public law data through Bun SQL connections.",
-    transports: ["module:bun"],
+    transports: ["module:jose"],
   },
   {
     path: "apps/api/src/lib/redis-client.ts",
@@ -799,38 +667,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Creates background workflow jobs through the configured queue service.",
     transports: ["module:bullmq"],
-  },
-  {
-    path: "apps/api/src/lib/health/database-login-probe.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Checks database access through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/long-running-connection.ts",
-    class: "operator-configured-infrastructure",
-    reason:
-      "Admits bounded work, maintenance and cancellation database sessions through Bun SQL.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/migrate.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Runs database migrations through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/root.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Creates root database connections through Bun SQL.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/online-index-observer.ts",
-    class: "operator-configured-infrastructure",
-    reason:
-      "Reads online index state and runs operator online repairs through Bun SQL connections.",
-    transports: ["module:bun"],
   },
   {
     path: "apps/collab/src/server.ts",
@@ -979,12 +815,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
-    path: "apps/web/src/components/workspaces/request-manual-ocr.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Submits manual OCR requests to the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/components/workspaces/row-actions.tsx",
     class: "operator-configured-infrastructure",
     reason:
@@ -1041,6 +871,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
+    path: "apps/web/src/lib/api.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Sends typed client requests to the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/web/src/lib/desktop-bridge.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -1079,6 +915,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "apps/web/src/lib/public-law-api.ts",
+    class: "package-owned-client",
+    reason:
+      "Classifies public law read failures with the fetch package's connection-failure helper.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/web/src/lib/public-law-sitemap.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads public law sitemap shards from the configured API.",
@@ -1109,19 +952,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/lib/workspaces/time-entries-api.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Sends time-entry requests to the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
     class: "operator-configured-infrastructure",
     reason: "Uploads extraction source documents to API-issued storage URLs.",
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    path: "apps/web/src/components/billing/invoice-pdf-download-button.tsx",
     class: "operator-configured-infrastructure",
     reason: "Downloads invoice PDFs from API-issued storage URLs.",
     transports: ["module:@stll/fetch"],
@@ -1146,10 +983,24 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
+    path: "apps/web/src/routes/sitemap[.]xml.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Passes the default fetch transport to public case-law and statute shard readers for the root sitemap.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/bun-docker/api.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Sends Docker API requests over the configured Unix socket with existing cancellation deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/api-client/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Typed stella API client; sends each route call to the configured API origin through the caller's fetcher or the global fetch.",
     transports: ["global:fetch"],
   },
   {
@@ -1174,24 +1025,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:node:http"],
   },
   {
-    path: "packages/cli/src/auth/oauth-client-registration.ts",
+    path: "packages/cli/src/api-fetch.ts",
     class: "package-owned-client",
     reason:
-      "Standalone CLI owns OAuth client registration requests to discovered endpoints.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/auth/oauth-metadata.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns OAuth authorization-server metadata discovery.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/auth/token-exchange.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns OAuth token exchange and refresh requests to discovered endpoints.",
+      "Standalone CLI stamps its client identity on API requests through the shared fetch owner.",
     transports: ["global:fetch"],
   },
   {
@@ -1202,18 +1039,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
-    path: "packages/cli/src/compatibility.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns compatibility discovery against the configured server.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "packages/cli/src/mcp-client.ts",
     class: "package-owned-client",
     reason:
       "Standalone CLI owns MCP transport and observes response evidence and action-admission refusals.",
-    transports: ["global:fetch", "module:@modelcontextprotocol/client"],
+    transports: ["module:@modelcontextprotocol/client"],
   },
   {
     path: "packages/cli/src/upload-document.ts",
@@ -1221,13 +1051,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Standalone CLI uploads document bytes to server-issued storage URLs with its upload deadline.",
     transports: ["global:fetch"],
-  },
-  {
-    path: "packages/test-kit/src/network.ts",
-    class: "package-owned-client",
-    reason:
-      "Test network guard wraps fetch and the socket factories to refuse non-loopback hosts; it opens no connection of its own.",
-    transports: ["global:fetch", "module:node:net", "module:node:tls"],
   },
   {
     path: "packages/fetch/src/index.ts",
@@ -1272,6 +1095,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:node:net"],
   },
   {
+    path: "packages/scripts/src/sanctions-startup-proof.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes the operator-configured API startup gate and public sanctions readiness before sending traffic.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",
     class: "third-party",
     reason:
@@ -1300,6 +1130,11 @@ export type OutboundPermitGrantOwner = {
 
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/get-exact.ts",
+    reason:
+      "Authenticated direct boundary for verified public connector and catalogue icon bytes.",
+  },
   {
     path: "apps/api/src/handlers/chat/link-icons/get.ts",
     reason: "Authenticated direct boundary for verified public favicon bytes.",
@@ -1366,6 +1201,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Issues request authority for the external preview routes.",
   },
   {
+    path: "apps/api/src/handlers/invoices/transition.ts",
+    reason:
+      "Issues request authority for the official VAT exchange rate an invoice finalize needs.",
+  },
+  {
     path: "apps/api/src/handlers/legislation/boe/law-structure/get.ts",
     reason: "Direct route boundary for BOE law structure reads.",
   },
@@ -1406,12 +1246,22 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Issues request authority for connector creation probes.",
   },
   {
+    path: "apps/api/src/handlers/mcp-connectors/delete-connection.ts",
+    reason:
+      "Issues request authority for token revocation after a user disconnect.",
+  },
+  {
     path: "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",
     reason: "Issues request authority for the validated OAuth callback.",
   },
   {
     path: "apps/api/src/handlers/mcp-connectors/probe-connector.ts",
     reason: "Issues request authority for the connector probe route.",
+  },
+  {
+    path: "apps/api/src/handlers/mobile-updates/read.ts",
+    reason:
+      "Public direct boundary relaying the mobile app's signed updates from the downloads CDN.",
   },
   {
     path: "apps/api/src/handlers/organization-settings/business-registry-credentials.ts",

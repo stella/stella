@@ -61,8 +61,8 @@ import type {
 } from "./model-catalog-capabilities";
 import { formatInteger } from "./model-catalog-rates-gen";
 import {
-  MODELS_DEV_KEY_BY_PROVIDER,
   loadModelCatalogSnapshot,
+  MODELS_DEV_KEY_BY_PROVIDER,
 } from "./model-catalog-snapshot";
 
 const OUTPUT_PATH = path.resolve(

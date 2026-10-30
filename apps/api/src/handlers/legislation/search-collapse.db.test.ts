@@ -2,6 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
@@ -61,6 +62,7 @@ import {
  */
 
 const GENERATION = "legislation_v2";
+const AS_OF = "2026-10-16";
 const INDEX_ID = corpusIndexId(GENERATION, "CZE");
 const FINGERPRINT = "a".repeat(64);
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -72,15 +74,15 @@ type VersionSeed = {
   id: SafeId<"legislationDocument">;
   eli: string;
   title: string;
-  validFrom: string;
-  validTo: string | null;
+  validFrom: string | SQL;
+  validTo: string | SQL | null;
 };
 
 const version = (
   tail: string,
   title: string,
-  validFrom: string,
-  validTo: string | null,
+  validFrom: string | SQL,
+  validTo: string | SQL | null,
 ): VersionSeed => ({
   id: createSafeId<"legislationDocument">(),
   eli: eli(tail),
@@ -99,7 +101,14 @@ const byteCapVersion = version(
 const CODE_TITLE = "89/2012 Sb., občanský zákoník";
 const code2014 = version("2012/89", CODE_TITLE, "2014-01-01", "2020-01-01");
 const code2020 = version("2012/89", CODE_TITLE, "2020-01-01", "2024-01-01");
-const codeCurrent = version("2012/89", CODE_TITLE, "2024-01-01", null);
+const futureBoundary = sql`(CURRENT_DATE + INTERVAL '1 year')::date`;
+const codeCurrent = version(
+  "2012/89",
+  CODE_TITLE,
+  "2024-01-01",
+  futureBoundary,
+);
+const codeFuture = version("2012/89", CODE_TITLE, futureBoundary, null);
 // An earlier act of the same name, repealed, in two versions.
 const OLD_TITLE = "40/1964 Sb., občanský zákoník";
 const old1964 = version("1964/40", OLD_TITLE, "1964-04-01", "1990-01-01");
@@ -128,6 +137,7 @@ const VERSIONS = [
   code2014,
   code2020,
   codeCurrent,
+  codeFuture,
   old1964,
   old1990,
   amendment,
@@ -191,7 +201,7 @@ const rehydrate = async (
   cursorId?: string,
 ) =>
   await rehydrateLegislationCandidates({
-    body: { query, jurisdiction: "CZE" },
+    body: { query, jurisdiction: "CZE", asOf: AS_OF },
     candidates: candidates(...hits),
     generation: GENERATION,
     legislationDb,
@@ -266,16 +276,16 @@ beforeAll(
     await db.execute(
       sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
     );
-    // The Postgres path's index: every version but the code's current one
-    // matches "smlouva", so that act is found only by its older versions.
+    // The Postgres path's index: the future code wording carries a provision
+    // that is absent from the consolidation in force today.
     await db.insert(legislationSearchDocuments).values(
       VERSIONS.filter((seed) => seed.id !== codeCurrent.id).map((seed) => ({
         documentId: seed.id,
         title: seed.title,
-        searchableText: `${seed.title} smlouva`,
+        searchableText: `${seed.title} smlouva${seed.id === codeFuture.id ? " paragraf 1830a" : ""}`,
         language: "cs",
         regconfig: "simple",
-        tsv: sql`to_tsvector('simple', ${`${seed.title} smlouva`})`,
+        tsv: sql`to_tsvector('simple', ${`${seed.title} smlouva${seed.id === codeFuture.id ? " paragraf 1830a" : ""}`})`,
       })),
     );
     await db.transaction(
@@ -354,7 +364,22 @@ const boundaryOf = (last: { score: number; id: string }): SearchCursor => ({
 });
 
 describe("one hit per act", () => {
-  test("several versions of an act become one hit, shown as the current version", async () => {
+  test("default search keeps the latest wording of an ended act findable", async () => {
+    const result = await rehydrateLegislationCandidates({
+      body: { query: "smlouva", jurisdiction: "CZE" },
+      candidates: candidates([old1990, 0.6], [old1964, 0.4]),
+      generation: GENERATION,
+      legislationDb,
+    });
+
+    expect(ids(result)).toEqual([String(old1990.id)]);
+    expect(result.context.byId.get(String(old1990.id))).toMatchObject({
+      versionValidFrom: old1990.validFrom,
+      versionValidTo: old1990.validTo,
+    });
+  });
+
+  test("only the matching version in force becomes the act's hit", async () => {
     const result = await rehydrate("smlouva", [
       [code2014, 0.9],
       [code2020, 0.8],
@@ -362,24 +387,24 @@ describe("one hit per act", () => {
       [codeCurrent, 0.3],
     ]);
 
-    expect(ids(result)).toEqual([String(codeCurrent.id), String(old1964.id)]);
-    expect(result.ranked[0]?.score).toBeCloseTo(0.9);
+    expect(ids(result)).toEqual([String(codeCurrent.id)]);
+    expect(result.ranked[0]?.score).toBeCloseTo(0.3);
     // The shown version is readable from the page context like any hit.
     expect(result.context.byId.get(String(codeCurrent.id))?.title).toBe(
       CODE_TITLE,
     );
   });
 
-  test("an act with no version in force is shown as its best-scoring version", async () => {
+  test("an act with no version in force is excluded", async () => {
     const result = await rehydrate("smlouva", [
       [old1990, 0.6],
       [old1964, 0.4],
     ]);
 
-    expect(ids(result)).toEqual([String(old1990.id)]);
+    expect(ids(result)).toEqual([]);
   });
 
-  test("the current version is the one the listing's definition selects", async () => {
+  test("a match in another validity window cannot select the current version", async () => {
     const documentRef = legislationVersionRef(legislationDocuments);
     const listed = await db
       .select({ id: legislationDocuments.id })
@@ -396,7 +421,7 @@ describe("one hit per act", () => {
     expect(listed.map((row) => String(row.id))).toEqual([
       String(codeCurrent.id),
     ]);
-    expect(ids(result)).toEqual(listed.map((row) => String(row.id)));
+    expect(ids(result)).toEqual([]);
   });
 
   test("an act shown on one page does not come back on the next", async () => {
@@ -420,7 +445,7 @@ describe("one hit per act", () => {
       isAfterSearchCursor(hit, boundaryOf(cursor)),
     );
 
-    expect(ids({ ranked: pageTwo })).toEqual([String(old1964.id)]);
+    expect(ids({ ranked: pageTwo })).toEqual([]);
   });
 });
 
@@ -508,11 +533,7 @@ describe("acts the query names come first", () => {
 
     // The repealed act of the same name is not pinned: a citation backs the
     // current code's name, and the current code applies today.
-    expect(ids(result)).toEqual([
-      String(codeCurrent.id),
-      String(old1964.id),
-      String(amendment.id),
-    ]);
+    expect(ids(result)).toEqual([String(codeCurrent.id), String(amendment.id)]);
   });
 
   test("a name only a citing title gives the act pins it, even unscanned", async () => {
@@ -545,9 +566,7 @@ describe("acts an earlier scan window showed", () => {
       corpusSearchGroupToken(
         legislationWorkRefKey({ sourceId, eli: seed.eli, language: "cs" }),
       );
-    expect(new Set(result.groups)).toEqual(
-      new Set([tokenOf(vat), tokenOf(code2014)]),
-    );
+    expect(new Set(result.groups)).toEqual(new Set([tokenOf(vat)]));
     expect(ids(result)).toContain(String(amendment.id));
 
     const continuation = await rehydrate(
@@ -636,6 +655,7 @@ describe("the Postgres search path", () => {
         {
           query,
           jurisdiction: "CZE",
+          asOf: AS_OF,
           limit,
           ...(cursor === undefined ? {} : { cursor }),
         },
@@ -695,19 +715,67 @@ describe("the Postgres search path", () => {
     const pages = await allPages("smlouva", 2);
     const shown = pages.flat().map((hit) => hit.documentId);
 
-    // Five acts match, each on exactly one page, and the code is shown as
-    // the version in force although only its older versions matched.
+    // Three acts match the text in force today; wording from another validity
+    // window cannot make the code appear without an explicit as-of date.
     expect(shown.toSorted()).toEqual(
-      [codeCurrent, old1990, amendment, vat, vatAmendment]
-        .map((seed) => String(seed.id))
-        .toSorted(),
+      [amendment, vat, vatAmendment].map((seed) => String(seed.id)).toSorted(),
     );
-    expect(pages.length).toBe(3);
-    // Another version's excerpt is not shown under the current one.
-    expect(
-      pages.flat().find((hit) => hit.documentId === String(codeCurrent.id))
-        ?.headline,
-    ).toBeNull();
+    expect(pages.length).toBe(2);
+  });
+
+  test("default Postgres search retains ended acts and excludes future-only text", async () => {
+    const result = await searchLegislationHandler(
+      { query: "smlouva", jurisdiction: "CZE", limit: 10 },
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in result)) {
+      panic("default historical search was refused");
+    }
+    expect(result.items.map(({ documentId }) => documentId)).toContain(
+      String(old1990.id),
+    );
+    expect(result.items.map(({ documentId }) => documentId)).not.toContain(
+      String(codeFuture.id),
+    );
+  });
+
+  test("finds future-only text only at that date and returns its snippet and validity window", async () => {
+    const [futureVersion] = await db
+      .select({ validFrom: legislationDocuments.versionValidFrom })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, codeFuture.id));
+    const futureDate =
+      futureVersion?.validFrom ?? panic("future fixture has no validity date");
+    const current = await searchLegislationHandler(
+      { query: "1830a", jurisdiction: "CZE", limit: 10 },
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    const future = await searchLegislationHandler(
+      {
+        query: "1830a",
+        jurisdiction: "CZE",
+        limit: 10,
+        asOf: futureDate,
+      },
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in current) || !("items" in future)) {
+      panic("future consolidation search was refused");
+    }
+    expect(current.items).toEqual([]);
+    expect(future.items).toHaveLength(1);
+    expect(future.items.at(0)).toMatchObject({
+      documentId: String(codeFuture.id),
+      headline: expect.stringContaining("<mark>1830a</mark>"),
+      versionValidFrom: futureDate,
+      versionValidTo: null,
+    });
   });
 
   test("places the act a query names first and never shows it again", async () => {

@@ -31,25 +31,30 @@ import {
 
 import {
   CASE_LAW_INDEX_GROUP_CONTRACT_OF,
-  CASE_LAW_INDEX_GROUP_NAMES,
-  CASE_LAW_INDEX_GROUPS,
-  caseLawIndexGroup,
-  isCaseLawIndexGroup,
   type CaseLawIndexGroup,
+  caseLawIndexGroupAt,
+  caseLawIndexGroupCountriesAt,
+  caseLawIndexGroupNamesAt,
   type CorpusIndexGroupContractVersion,
+  isCaseLawIndexGroup,
 } from "@/api/lib/legal-search/case-law-index-groups";
-import type { CorpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  type CorpusIndexConfig,
+  PROVISION_KEYS_FIELD,
+} from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexConfigWithId,
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
-  corpusIndexManifestDigest,
-  corpusIndexRoute,
   type CorpusIndexManifest,
+  corpusIndexManifestCoversJurisdiction,
+  corpusIndexManifestDigest,
   type CorpusIndexRoute,
+  corpusIndexRoute,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
+import { caseLawCorpusGenerationOrder } from "@/api/lib/legal-search/index-naming";
 
 /** The index field a court-partitioned group routes its splits by. */
 export const COURT_PARTITION_FIELD = "court_partition";
@@ -62,6 +67,12 @@ const COURT_FIELD = "court";
  * the court's partition on every passage, derived from the stored court id.
  */
 const COURT_PARTITION_PROJECTION_EXTENSION = "court-partition-every-passage-v1";
+
+/**
+ * What a `provision_keys_v1` projection writes beyond the base projection: the
+ * keys of the decision's recorded provision links on every passage.
+ */
+const PROVISION_KEYS_PROJECTION_EXTENSION = "provision-keys-every-passage-v1";
 
 type UnindexedConfig = Omit<CorpusIndexConfig, "index_id">;
 type FieldMapping = CorpusIndexConfig["doc_mapping"]["field_mappings"][number];
@@ -90,6 +101,25 @@ type CourtPartitionContractArtifact = {
   projectionExtension: typeof COURT_PARTITION_PROJECTION_EXTENSION;
 };
 
+/**
+ * The immutable artifact a `provision_keys_v1` group is bound to, with the
+ * same role as the court partition's: its digest is the group's
+ * effective-contract digest.
+ */
+type ProvisionKeysContractArtifact = {
+  contract: "provision_keys_v1";
+  family: "case_law";
+  generation: string;
+  indexGroup: string;
+  baseManifestDigest: string;
+  indexConfig: UnindexedConfig;
+  provisionKeys: {
+    field: typeof PROVISION_KEYS_FIELD;
+    keyFormat: "work-identifier-pipe-anchor-prefix";
+  };
+  projectionExtension: typeof PROVISION_KEYS_PROJECTION_EXTENSION;
+};
+
 type GroupContractCommon = {
   manifest: CorpusIndexManifest;
   indexGroup: string;
@@ -106,9 +136,14 @@ export type CourtPartitionGroupContract = GroupContractCommon & {
   effectiveDigest: string;
 };
 
+export type ProvisionKeysGroupContract = GroupContractCommon & {
+  type: "provision_keys_v1";
+  artifact: ProvisionKeysContractArtifact;
+  effectiveDigest: string;
+};
+
 export type CorpusIndexGroupContract =
-  | BaseGroupContract
-  | CourtPartitionGroupContract;
+  BaseGroupContract | CourtPartitionGroupContract | ProvisionKeysGroupContract;
 
 /** A group contract other than the manifest's own. */
 export type EnrolledGroupContract = Exclude<
@@ -172,6 +207,67 @@ const courtPartitionIndexConfig = (base: UnindexedConfig): UnindexedConfig => {
   };
 };
 
+const provisionKeysField = (): FieldMapping => ({
+  name: PROVISION_KEYS_FIELD,
+  type: "array<text>",
+  tokenizer: "raw",
+  indexed: true,
+  stored: false,
+  fast: false,
+  record: "basic",
+  fieldnorms: false,
+});
+
+/**
+ * The base configuration with the provision keys field mapped. Nothing else
+ * changes: the field is a raw keyword matched by exact term, so it is neither
+ * a tag, a default search field nor a partition key.
+ */
+const provisionKeysIndexConfig = (base: UnindexedConfig): UnindexedConfig => {
+  if (
+    base.doc_mapping.field_mappings.some(
+      ({ name }) => name === PROVISION_KEYS_FIELD,
+    )
+  ) {
+    return panic("Base configuration already maps the provision keys field");
+  }
+  const config = structuredClone(base);
+  return {
+    ...config,
+    doc_mapping: {
+      ...config.doc_mapping,
+      field_mappings: [
+        ...config.doc_mapping.field_mappings,
+        provisionKeysField(),
+      ],
+    },
+  };
+};
+
+/** The grouped generation order of a case-law manifest. */
+const caseLawGroupedOrder = (
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
+): number =>
+  caseLawCorpusGenerationOrder(manifest.generation) ??
+  panic(`Not a case-law generation: ${manifest.generation}`);
+
+/**
+ * The groups a case-law generation holds, in declaration order: the groups of
+ * the generation's own order that hold at least one jurisdiction it covers. A
+ * group of a later order is not one of its groups at all, so no read, no
+ * enrollment and no attestation of this generation names it.
+ */
+export const caseLawManifestGroups = (
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
+): readonly CaseLawIndexGroup[] => {
+  const order = caseLawGroupedOrder(manifest);
+  return caseLawIndexGroupNamesAt(order).filter((group) =>
+    caseLawIndexGroupCountriesAt(order, group).some((jurisdiction) =>
+      corpusIndexManifestCoversJurisdiction(manifest, jurisdiction),
+    ),
+  );
+};
+
 const groupIndexId = (
   manifest: CorpusIndexManifest,
   indexGroup: string,
@@ -182,8 +278,10 @@ const groupIndexId = (
         return panic(`Undeclared case-law index group: ${indexGroup}`);
       }
       const member =
-        CASE_LAW_INDEX_GROUPS.get(indexGroup)?.at(0) ??
-        panic(`Index group without members: ${indexGroup}`);
+        caseLawIndexGroupCountriesAt(
+          caseLawGroupedOrder(manifest),
+          indexGroup,
+        ).at(0) ?? panic(`Index group without members: ${indexGroup}`);
       return corpusIndexIdFromManifest(manifest, member);
     }
     case "legislation":
@@ -228,6 +326,36 @@ const courtPartitionContract = (
   };
 };
 
+const provisionKeysContract = (
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
+  indexGroup: CaseLawIndexGroup,
+  indexId: string,
+): ProvisionKeysGroupContract => {
+  const indexConfig = provisionKeysIndexConfig(manifest.engine.indexConfig);
+  const artifact: ProvisionKeysContractArtifact = {
+    contract: "provision_keys_v1",
+    family: manifest.family,
+    generation: manifest.generation,
+    indexGroup,
+    baseManifestDigest: corpusIndexManifestDigest(manifest),
+    indexConfig,
+    provisionKeys: {
+      field: PROVISION_KEYS_FIELD,
+      keyFormat: "work-identifier-pipe-anchor-prefix",
+    },
+    projectionExtension: PROVISION_KEYS_PROJECTION_EXTENSION,
+  };
+  return {
+    type: "provision_keys_v1",
+    manifest,
+    indexGroup,
+    indexId,
+    indexConfig,
+    artifact,
+    effectiveDigest: corpusIndexContractDigest(artifact),
+  };
+};
+
 const resolveUncached = (
   manifest: CorpusIndexManifest,
   indexGroup: string,
@@ -249,6 +377,8 @@ const resolveUncached = (
       return base;
     case "court_partition_v1":
       return courtPartitionContract(manifest, indexGroup, indexId);
+    case "provision_keys_v1":
+      return provisionKeysContract(manifest, indexGroup, indexId);
     default:
       version satisfies never;
       return panic(`Unhandled group contract: ${String(version)}`);
@@ -289,7 +419,7 @@ export const corpusIndexGroupContractForJurisdiction = (
     manifest,
     indexGroup:
       manifest.family === "case_law"
-        ? caseLawIndexGroup(jurisdiction)
+        ? caseLawIndexGroupAt(caseLawGroupedOrder(manifest), jurisdiction)
         : jurisdiction.toLowerCase(),
   });
 
@@ -303,7 +433,7 @@ export const enrolledCorpusIndexGroupContracts = (
   if (manifest.family !== "case_law") {
     return [];
   }
-  return [...CASE_LAW_INDEX_GROUPS.keys()].flatMap((indexGroup) => {
+  return caseLawManifestGroups(manifest).flatMap((indexGroup) => {
     const contract = resolveCorpusIndexGroupContract({ manifest, indexGroup });
     return contract.type === "base" ? [] : [contract];
   });
@@ -408,7 +538,7 @@ export const registeredCorpusIndexGroups = (
     return [];
   }
   const created = createdCaseLawBaseGroups(manifest);
-  return CASE_LAW_INDEX_GROUP_NAMES.flatMap((indexGroup) => {
+  return caseLawManifestGroups(manifest).flatMap((indexGroup) => {
     const contract = resolveCorpusIndexGroupContract({ manifest, indexGroup });
     return contract.type === "base" && created.has(indexGroup)
       ? []
@@ -450,6 +580,11 @@ export const corpusIndexReadTarget = ({
   enrolledGroups,
 }: CorpusIndexReadTargetOptions): CorpusIndexReadTargetResolution => {
   if (jurisdiction !== undefined) {
+    if (!corpusIndexManifestCoversJurisdiction(manifest, jurisdiction)) {
+      return panic(
+        `${manifest.generation} does not hold ${jurisdiction}: it is read through the generation that does`,
+      );
+    }
     const contract = corpusIndexGroupContractForJurisdiction(
       manifest,
       jurisdiction,
@@ -483,7 +618,7 @@ export const corpusIndexReadTarget = ({
     };
   }
   const created = createdCaseLawBaseGroups(manifest);
-  const reached = CASE_LAW_INDEX_GROUP_NAMES.flatMap(
+  const reached = caseLawManifestGroups(manifest).flatMap(
     (indexGroup): ReachedIndex[] => {
       const contract = resolveCorpusIndexGroupContract({
         manifest,

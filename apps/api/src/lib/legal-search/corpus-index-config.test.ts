@@ -16,6 +16,7 @@ import {
   TAG_FIELD_VALUE_LIMIT,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
+  caseLawManifestGroups,
   corpusIndexGroupConfig,
   resolveCorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -137,6 +138,7 @@ const COURT_DOMAIN_BOUND = {
   AUT: 200,
   CZE: 200,
   EU: 10,
+  GBR: 200,
   HUN: 200,
   POL: 400,
   SVK: 200,
@@ -166,7 +168,8 @@ test("court stays a viable tag field in every index", () => {
     CORPUS_INDEX_MANIFESTS.case_law_v6,
     CORPUS_INDEX_MANIFESTS.case_law_v7,
   ]) {
-    for (const [group, countries] of CASE_LAW_INDEX_GROUPS) {
+    for (const group of caseLawManifestGroups(manifest)) {
+      const countries = CASE_LAW_INDEX_GROUPS.get(group) ?? [];
       const tags = corpusIndexGroupConfig(
         resolveCorpusIndexGroupContract({ manifest, indexGroup: group }),
       ).doc_mapping.tag_fields;

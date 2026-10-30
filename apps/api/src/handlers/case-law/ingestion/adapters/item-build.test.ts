@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import {
-  EMPTY_AST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  encodeSourceRawEnvelope,
   decodeSourceRawEnvelope,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {

@@ -1,0 +1,157 @@
+name: Flaky-test quarantine
+
+defaults:
+  run:
+    shell: bash
+
+# Lifecycle of scripts/flaky-test-quarantine.json on main. Pull requests and
+# merge groups only annotate an elapsed entry (scripts/dated-waivers.ts), so a
+# date never fails an unrelated change; here an elapsed entry fails the run
+# with one error annotation per entry. The scan proposes entries for tests that
+# failed and then passed on the same commit across several commits.
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: flaky-test-quarantine
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+  PROPOSAL_BRANCH: chore/flaky-test-quarantine
+
+jobs:
+  expiry:
+    name: Enforce quarantine expiry
+    if: github.repository == 'stella/stella'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        timeout-minutes: 20
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Check quarantine expiry
+        id: expiry
+        run: bun scripts/flaky-test-quarantine.ts expired --json "$RUNNER_TEMP/expired.json"
+
+  propose:
+    name: Propose quarantine entries
+    if: >-
+      github.repository == 'stella/stella' &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # Pinned to the default branch: proposals are computed against main.
+      - name: Checkout default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        timeout-minutes: 20
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Scan flake evidence
+        id: scan
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bun scripts/flaky-test-history.ts scan \
+            --out "$RUNNER_TEMP/flaky-test-history" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --pr-body "$RUNNER_TEMP/proposal.md" \
+            --write-registry
+          if git diff --quiet -- scripts/flaky-test-quarantine.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bun test scripts/flaky-test-quarantine.test.ts
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<FLAKY_TEST_PROPOSAL_END"
+            cat "$RUNNER_TEMP/proposal.md"
+            echo "FLAKY_TEST_PROPOSAL_END"
+          } >> "$GITHUB_OUTPUT"
+
+      # CI test jobs read the newest copy for their quarantined tests' history.
+      - name: Upload flaky-test history
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flaky-test-history
+          path: ${{ runner.temp }}/flaky-test-history/flaky-test-history.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Mint app token
+        if: steps.scan.outputs.changed == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # A quarantine needs a reviewer's agreement, so the proposal is never
+      # queued automatically. Re-running refreshes it from current main.
+      - name: Open or update the quarantine proposal
+        if: steps.scan.outputs.changed == 'true'
+        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: refresh-pr
+          branch: ${{ env.PROPOSAL_BRANCH }}
+          base: main
+          paths: scripts/flaky-test-quarantine.json
+          commit-message: |
+            chore: quarantine flaky tests
+
+            Each test failed and then passed on the same commit on several
+            commits in the last seven days.
+          pr-title: "chore: quarantine flaky tests"
+          pr-body: ${{ steps.scan.outputs.body }}

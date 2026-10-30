@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Step, Steps } from "@stll/ui/steps";
 import {
   Table,
   TableBody,
@@ -51,14 +52,19 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
-import { useFormatter } from "@/i18n/formatting-context";
+import {
+  useFormatter,
+  useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/routes/-route-presentation";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
 import {
@@ -70,6 +76,13 @@ import {
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
 
 export const Route = createFileRoute("/_protected/contacts/import")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "contacts.importStudio.title",
+      to: "/contacts/import",
+    }),
+  },
   head: () => ({
     meta: [{ title: pageTitle("contacts.importStudio.title") }],
   }),
@@ -185,7 +198,8 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
 
 function ContactImportStudio() {
   const t = useTranslations();
-  const format = useFormatter();
+  const formattingLocale = useFormattingLocale();
+  const markerStyle = useStepsMarkerStyle();
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
   });
@@ -204,14 +218,14 @@ function ContactImportStudio() {
 
   const inspectFile = async (file: File) => {
     if (!isSupportedFile(file)) {
-      notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+      notifyUserProblem(t("contacts.importStudio.fileInvalid"));
       return;
     }
 
     setBusy("inspecting");
     const result = await Result.tryPromise(async () => {
       const response = await api.contacts.import.inspect.post({ file });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setBusy("idle");
 
@@ -251,7 +265,7 @@ function ContactImportStudio() {
         file: state.file,
         mapping: JSON.stringify(state.mapping),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setBusy("idle");
 
@@ -262,11 +276,14 @@ function ContactImportStudio() {
 
     review.seed({
       taxIdScheme: state.mapping.taxIdScheme,
-      rows: result.value.rows.map(({ contact, issues, rowNumber }) => ({
-        candidate: contact,
-        issues,
-        rowNumber,
-      })),
+      rows: result.value.rows.map(
+        ({ contact, issues, rowNumber, warnings }) => ({
+          candidate: contact,
+          issues,
+          rowNumber,
+          warnings,
+        }),
+      ),
     });
     setState({
       status: "review",
@@ -313,27 +330,30 @@ function ContactImportStudio() {
               {t("contacts.importStudio.description")}
             </p>
           </div>
-          <ol
+          <Steps
+            lang={formattingLocale}
+            markerStyle={markerStyle}
             aria-label={t("contacts.importStudio.title")}
-            className="grid grid-cols-4 gap-2"
+            variant="progress"
           >
-            {STEP_KEYS.map((key, index) => (
-              <li
-                aria-current={index === step ? "step" : undefined}
-                className={cn(
-                  "border-muted border-t-2 pt-2 text-sm",
-                  index <= step && "border-foreground font-medium",
-                  index !== step && "text-muted-foreground",
-                )}
-                key={key}
-              >
-                <span className="me-1 tabular-nums">
-                  {format.number(index + 1)}.
-                </span>
-                {t(key)}
-              </li>
-            ))}
-          </ol>
+            {STEP_KEYS.map((key, index) => {
+              let status: "completed" | "current" | "upcoming" = "upcoming";
+              if (index === step) {
+                status = "current";
+              } else if (index < step) {
+                status = "completed";
+              }
+              return (
+                <Step
+                  aria-current={index === step ? "step" : undefined}
+                  key={key}
+                  status={status}
+                >
+                  {t(key)}
+                </Step>
+              );
+            })}
+          </Steps>
         </div>
       </header>
 
@@ -427,10 +447,14 @@ const UploadStep = ({
   const t = useTranslations();
   const isInspecting = busy === "inspecting";
   const { ref, isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "UploadStep.useExternalFileDrop",
+    },
     onDrop: (files) => {
       const file = files.at(0);
       if (files.length !== 1 || !file) {
-        notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+        notifyUserProblem(t("contacts.importStudio.fileInvalid"));
         return;
       }
       onFile(file);
@@ -757,13 +781,12 @@ const ReviewStep = ({
       </div>
       <ImportReviewSummary review={review} />
       <div className="space-y-3">
-        {review.rows.map((row, index) => (
+        {review.rows.map((row) => (
           <ImportCandidateCard
             fields={fields}
             key={row.id}
             onChange={(candidate) => review.updateRow(row.id, candidate)}
             onRemove={() => review.removeRow(row.id)}
-            ordinal={index + 1}
             row={row}
           />
         ))}

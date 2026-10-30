@@ -119,6 +119,7 @@ export const generateBatchMock = async ({
         aiJustifications: [],
         skippedPropertyIds,
         unsupportedPropertyIds: [],
+        settlements: new Map(),
       });
     }
 
@@ -258,6 +259,9 @@ export const generateBatchMock = async ({
       aiJustifications,
       skippedPropertyIds,
       unsupportedPropertyIds: [],
+      settlements: new Map(
+        aiResults.map((result) => [result.propertyId, "answered" as const]),
+      ),
     });
   });
 

@@ -36,7 +36,7 @@ import { cn } from "@stll/ui/utils";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { roleOptions } from "@/lib/auth-queries";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -46,9 +46,12 @@ import {
 } from "@/lib/organization/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
 import { formatMemberDate } from "@/lib/organization/utils";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/routes/-route-presentation";
 import { OrganizationListToolbar } from "@/routes/_protected.admin/-components/organization/list-toolbar";
 import { RoleCell } from "@/routes/_protected.admin/-components/organization/member-role-cell";
+import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
 
 type SortKey = "name" | "role" | "joined";
 type SortDir = "asc" | "desc";
@@ -67,11 +70,16 @@ const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
 // trailing actions column has no header). `skeleton` shapes the placeholder.
 type MemberSkeletonShape = "identity" | "control" | "text" | "none";
 
+// Secondary columns give way on phones, so the columns people act on fit
+// without scrolling sideways.
+const SECONDARY_COLUMN_CLASS = "hidden sm:table-cell";
+
 type MemberColumn = {
   id: "user" | "role" | "joined" | "actions";
   sortKey: SortKey | null;
   label: "common.user" | "common.role" | "organization.members.joined" | null;
   skeleton: MemberSkeletonShape;
+  secondary?: true;
 };
 
 const MEMBER_COLUMNS: readonly MemberColumn[] = [
@@ -82,9 +90,13 @@ const MEMBER_COLUMNS: readonly MemberColumn[] = [
     sortKey: "joined",
     label: "organization.members.joined",
     skeleton: "text",
+    secondary: true,
   },
   { id: "actions", sortKey: null, label: null, skeleton: "none" },
 ];
+
+const isSecondaryMemberColumn = (id: MemberColumn["id"]) =>
+  MEMBER_COLUMNS.some((column) => column.id === id && column.secondary);
 
 type InvitationColumn = {
   id: "email" | "role" | "status" | "invited" | "expires" | "actions";
@@ -95,20 +107,37 @@ type InvitationColumn = {
     | "organization.invitations.invited"
     | "organization.invitations.expires"
     | null;
+  secondary?: true;
 };
 
 const INVITATION_COLUMNS: readonly InvitationColumn[] = [
   { id: "email", label: "common.email" },
   { id: "role", label: "common.role" },
   { id: "status", label: "common.status" },
-  { id: "invited", label: "organization.invitations.invited" },
-  { id: "expires", label: "organization.invitations.expires" },
+  {
+    id: "invited",
+    label: "organization.invitations.invited",
+    secondary: true,
+  },
+  {
+    id: "expires",
+    label: "organization.invitations.expires",
+    secondary: true,
+  },
   { id: "actions", label: null },
 ];
 
+const isSecondaryInvitationColumn = (id: InvitationColumn["id"]) =>
+  INVITATION_COLUMNS.some((column) => column.id === id && column.secondary);
+
 export const Route = createFileRoute("/_protected/admin/members")({
-  component: Members,
-  pendingComponent: MembersPendingComponent,
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.members",
+      to: "/admin/members",
+    }),
+  },
   loader: async ({ context }) => {
     // Prime the org + role queries the page suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
@@ -120,11 +149,14 @@ export const Route = createFileRoute("/_protected/admin/members")({
       ensureRouteQueryData(context.queryClient, roleOptions),
     ]);
   },
+  component: Members,
+  pendingComponent: MembersPendingComponent,
+  head: () => ({ meta: [{ title: pageTitle("common.members") }] }),
 });
 
 function Members() {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -148,17 +180,16 @@ function Members() {
     );
   };
 
+  const { invitations: filteredInvitations, members } = filterOrganizationLists(
+    {
+      invitations: data.invitations,
+      members: data.members,
+      query: q,
+    },
+  );
   const filteredMembers = (() => {
-    const filtered = q
-      ? data.members.filter(
-          (m) =>
-            m.user.name.toLowerCase().includes(q.toLowerCase()) ||
-            m.user.email.toLowerCase().includes(q.toLowerCase()),
-        )
-      : data.members;
-
     const compareName = compareByLocale(locale);
-    const sorted = filtered.toSorted((a, b) => {
+    const sorted = members.toSorted((a, b) => {
       let cmp: number;
       if (sort.key === "name") {
         cmp = compareName(a.user.name, b.user.name);
@@ -173,16 +204,6 @@ function Members() {
     });
 
     return sorted;
-  })();
-
-  const filteredInvitations = (() => {
-    if (!q) {
-      return data.invitations;
-    }
-    const query = q.toLowerCase();
-    return data.invitations.filter((inv) =>
-      inv.email.toLowerCase().includes(query),
-    );
   })();
 
   const removeMember = useRemoveMember();
@@ -226,7 +247,14 @@ function Members() {
                         memberRole={member.role}
                       />
                     </TableCell>
-                    <TableCell>{formatMemberDate(member.createdAt)}</TableCell>
+                    <TableCell
+                      className={cn(
+                        isSecondaryMemberColumn("joined") &&
+                          SECONDARY_COLUMN_CLASS,
+                      )}
+                    >
+                      {formatMemberDate(member.createdAt)}
+                    </TableCell>
                     <TableCell className="text-end">
                       {!isSelf && (
                         <Menu>
@@ -234,7 +262,7 @@ function Members() {
                             content={t("common.actions")}
                             render={
                               <MenuTrigger
-                                className="opacity-0! transition-opacity group-hover:opacity-100!"
+                                className="opacity-0! transition-opacity group-hover:opacity-100! focus-visible:opacity-100! pointer-coarse:opacity-100!"
                                 render={
                                   <Button size="icon-xs" variant="ghost" />
                                 }
@@ -295,10 +323,20 @@ function Members() {
                         `organization.invitations.statuses.${invitation.status}`,
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell
+                      className={cn(
+                        isSecondaryInvitationColumn("invited") &&
+                          SECONDARY_COLUMN_CLASS,
+                      )}
+                    >
                       {formatMemberDate(invitation.createdAt)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell
+                      className={cn(
+                        isSecondaryInvitationColumn("expires") &&
+                          SECONDARY_COLUMN_CLASS,
+                      )}
+                    >
                       {formatMemberDate(invitation.expiresAt)}
                     </TableCell>
                     <TableCell className="text-end">
@@ -385,10 +423,16 @@ type SortableHeadProps = {
   label: string;
   active: SortDir | null;
   onClick: () => void;
+  className: string | undefined;
 };
 
-const SortableHead = ({ label, active, onClick }: SortableHeadProps) => (
-  <TableHead>
+const SortableHead = ({
+  label,
+  active,
+  onClick,
+  className,
+}: SortableHeadProps) => (
+  <TableHead className={className}>
     <button
       className="text-foreground hover:text-foreground-strong-muted group inline-flex items-center gap-1 text-start"
       onClick={onClick}
@@ -427,12 +471,18 @@ const MembersTableHeader = ({ sort, toggleSort }: MembersTableHeaderProps) => {
       <TableRow>
         {MEMBER_COLUMNS.map((column) => {
           if (column.sortKey === null || column.label === null) {
-            return <TableHead key={column.id} />;
+            return (
+              <TableHead
+                className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+                key={column.id}
+              />
+            );
           }
           const sortKey = column.sortKey;
           return (
             <SortableHead
               active={sort.key === sortKey ? sort.dir : null}
+              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
               key={column.id}
               label={t(column.label)}
               onClick={() => toggleSort(sortKey)}
@@ -452,9 +502,17 @@ const InvitationsTableHeader = () => {
       <TableRow>
         {INVITATION_COLUMNS.map((column) =>
           column.label === null ? (
-            <TableHead key={column.id} />
+            <TableHead
+              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+              key={column.id}
+            />
           ) : (
-            <TableHead key={column.id}>{t(column.label)}</TableHead>
+            <TableHead
+              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+              key={column.id}
+            >
+              {t(column.label)}
+            </TableHead>
           ),
         )}
       </TableRow>
@@ -489,7 +547,10 @@ const MembersSkeletonRows = () =>
   SKELETON_ROW_KEYS.slice(0, MEMBERS_SKELETON_ROW_COUNT).map((rowKey) => (
     <TableRow key={rowKey}>
       {MEMBER_COLUMNS.map((column) => (
-        <TableCell key={column.id}>
+        <TableCell
+          className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+          key={column.id}
+        >
           <MemberSkeletonCell shape={column.skeleton} />
         </TableCell>
       ))}
@@ -500,7 +561,10 @@ const InvitationsSkeletonRows = () =>
   SKELETON_ROW_KEYS.slice(0, INVITATIONS_SKELETON_ROW_COUNT).map((rowKey) => (
     <TableRow key={rowKey}>
       {INVITATION_COLUMNS.map((column) => (
-        <TableCell key={column.id}>
+        <TableCell
+          className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+          key={column.id}
+        >
           {column.id === "actions" ? null : <Skeleton className="h-4 w-24" />}
         </TableCell>
       ))}

@@ -1,12 +1,14 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
-  caseLawCitations,
   caseLawCitationDoctrineReviews,
+  caseLawCitations,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -47,7 +49,6 @@ import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
-  grantPgliteDecisionCitationStatsReader,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
@@ -102,7 +103,7 @@ const summaryOf = async (
     throw new Error("expected a citation summary, got a status response");
   }
   const projected = projectResponseText(result, citationSummaryResponseSchema);
-  expect(Value.Check(citationSummaryResponseSchema, projected)).toBe(true);
+  expect(v.is(citationSummaryResponseSchema, projected)).toBe(true);
   return projected;
 };
 
@@ -132,7 +133,6 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
-    await grantPgliteDecisionCitationStatsReader(db);
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
@@ -523,6 +523,186 @@ test("citation pages reject malformed cursors", async () => {
   );
 
   expect("items" in page).toBe(false);
+});
+
+test("citation pages filter doctrine and polarity and bind cursors to filters", async () => {
+  const limitsId = citationId(0);
+  const distinguishesId = citationId(1);
+  await db
+    .update(caseLawCitations)
+    .set({ doctrinalTreatment: "limits", polarity: POLARITY.NEGATIVE })
+    .where(eq(caseLawCitations.id, limitsId));
+  await db
+    .update(caseLawCitations)
+    .set({ doctrinalTreatment: "distinguishes", polarity: POLARITY.NEGATIVE })
+    .where(eq(caseLawCitations.id, distinguishesId));
+  await db.execute(
+    sql`GRANT SELECT (citation_key, doctrinal_treatment) ON case_law_citations TO stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`GRANT SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews TO stella_public_law_reader`,
+  );
+
+  const read = async (
+    query: Parameters<typeof listDecisionCitationsHandler>[0]["query"],
+    limit = 50,
+  ) =>
+    await withSubject(
+      subjectId,
+      async (subject) =>
+        await listDecisionCitationsHandler({ subject, query, limit }),
+    );
+  const limits = await read({ direction: "incoming", doctrine: "limits" });
+  const negative = await read({ direction: "incoming", polarity: "negative" });
+  const combined = await read({
+    direction: "incoming",
+    doctrine: "limits",
+    polarity: "negative",
+  });
+  const empty = await read({
+    direction: "incoming",
+    doctrine: "limits",
+    polarity: "supportive",
+  });
+  if (
+    !("items" in limits) ||
+    !("items" in negative) ||
+    !("items" in combined) ||
+    !("items" in empty)
+  ) {
+    throw new Error("Expected filtered citation pages");
+  }
+  expect(limits.items.map(({ id }) => id)).toEqual([limitsId]);
+  expect(negative.items.some(({ id }) => id === limitsId)).toBe(true);
+  expect(combined.items.map(({ id }) => id)).toEqual([limitsId]);
+  expect(empty.items).toEqual([]);
+
+  const first = await read({ direction: "incoming", polarity: "negative" }, 1);
+  if (!("items" in first) || first.nextCursor === null) {
+    throw new Error("Expected a filtered cursor");
+  }
+  expect(
+    "items" in
+      (await read({
+        cursor: first.nextCursor,
+        direction: "incoming",
+        polarity: "positive",
+      })),
+  ).toBe(false);
+
+  await db.execute(
+    sql`REVOKE SELECT (citation_key, doctrinal_treatment) ON case_law_citations FROM stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`REVOKE SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews FROM stella_public_law_reader`,
+  );
+  await db
+    .update(caseLawCitations)
+    .set({ doctrinalTreatment: null, polarity: null })
+    .where(inArray(caseLawCitations.id, [limitsId, distinguishesId]));
+});
+
+test("unclassified polarity returns only unread stances across stable pages", async () => {
+  const read = async (cursor?: string) =>
+    await withSubject(
+      subjectId,
+      async (subject) =>
+        await listDecisionCitationsHandler({
+          subject,
+          query: {
+            direction: "incoming",
+            polarity: "unclassified",
+            ...(cursor === undefined ? {} : { cursor }),
+          },
+          limit: 5,
+        }),
+    );
+
+  const first = await read();
+  const repeatedFirst = await read();
+  if (
+    !("items" in first) ||
+    !("items" in repeatedFirst) ||
+    first.nextCursor === null
+  ) {
+    throw new Error("Expected a first unclassified citation page");
+  }
+  expect(repeatedFirst.nextCursor).toBe(first.nextCursor);
+
+  const items = [...first.items];
+  let cursor: string | null = first.nextCursor;
+  while (cursor !== null) {
+    const page = await read(cursor);
+    if (!("items" in page)) {
+      throw new Error("Expected a subsequent unclassified citation page");
+    }
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  }
+
+  expect(items).toHaveLength(2 * INCOMING_PER_POLARITY);
+  expect(new Set(items.map(({ id }) => id)).size).toBe(items.length);
+  expect(items.every(({ treatment }) => treatment === "unclassified")).toBe(
+    true,
+  );
+  expect(items.map(({ id }) => id)).toEqual(
+    Array.from({ length: 2 * INCOMING_PER_POLARITY }, (_, index) =>
+      citationId(index),
+    ),
+  );
+});
+
+test("doctrine filters report unavailable instead of an empty finding", async () => {
+  const page = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { direction: "incoming", doctrine: "distinguishes" },
+      }),
+  );
+
+  expect("items" in page).toBe(false);
+  if ("items" in page) {
+    throw new Error("Expected a doctrine availability refusal");
+  }
+  expect(page.code).toBe(422);
+  expect(page.response.message).toBe("Doctrine filtering is unavailable");
+});
+
+test("doctrine citation reads distinguish invalid cursors from unavailable doctrine", async () => {
+  const read = async (cursor: string | undefined) =>
+    await readGatedDecisionCitations({
+      caseLawDb,
+      cursor,
+      decisionId: subjectId,
+      direction: "cited_by",
+      doctrine: "distinguishes",
+      limit: 1,
+      surface: "search",
+    });
+
+  expect(await read("not-a-cursor")).toEqual({ type: "invalid_cursor" });
+
+  const differentFilterPage = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { direction: "incoming", polarity: "negative" },
+        limit: 1,
+      }),
+  );
+  if (
+    !("items" in differentFilterPage) ||
+    differentFilterPage.nextCursor === null
+  ) {
+    throw new Error("Expected a cursor issued for a different filter");
+  }
+  expect(await read(differentFilterPage.nextCursor)).toEqual({
+    type: "invalid_cursor",
+  });
+  expect(await read(undefined)).toEqual({ type: "doctrine_unavailable" });
 });
 
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
@@ -1230,6 +1410,106 @@ test("citation reads carry withheld text dispositions", async () => {
         },
       ],
     },
+  });
+});
+
+test("citation passages retry when sections replace the AST version they accompany", async () => {
+  const citingId = createSafeId<"caseLawDecision">();
+  const citedId = createSafeId<"caseLawDecision">();
+  const edgeId = createSafeId<"caseLawCitation">();
+  const citationText = "21 Cdo 500/2019";
+  const oldText = `Old version cites ${citationText}.`;
+  const newText = `New version cites ${citationText}.`;
+  const astOf = (text: string, anchorId: string): DocumentAst => ({
+    version: 1,
+    source: { system: "test", documentId: anchorId, webUrl: "", printUrl: "" },
+    metadata: {
+      caseNumber: "race",
+      court: "Court",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: anchorId,
+        anchorId,
+        type: "paragraph",
+        inlines: [{ type: "text", text }],
+        plainText: text,
+      },
+    ],
+  });
+  const oldUpdatedAt = new Date("2026-10-01T00:00:00.000Z");
+  const newUpdatedAt = new Date("2026-10-02T00:00:00.000Z");
+  const newAst = astOf(newText, "new-anchor");
+  await db.insert(caseLawDecisions).values([
+    {
+      id: citingId,
+      caseNumber: "racing-citing-decision",
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      sourceId: openSourceId,
+      documentAst: astOf(oldText, "old-anchor"),
+      sections: [{ index: 0, type: "unknown", title: null, text: oldText }],
+      contentHash: "a".repeat(64),
+      updatedAt: oldUpdatedAt,
+    },
+    {
+      id: citedId,
+      caseNumber: "cited-decision",
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      sourceId: openSourceId,
+    },
+  ]);
+  await db.insert(caseLawCitations).values({
+    id: edgeId,
+    citingDecisionId: citingId,
+    citedDecisionId: citedId,
+    citationText,
+    sectionIndex: 0,
+  });
+
+  let transactions = 0;
+  const racingDb = Object.assign(
+    async <T>(
+      read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+    ): Promise<T> => {
+      transactions += 1;
+      const result = await caseLawDb(read);
+      if (transactions === 2) {
+        await db
+          .update(caseLawDecisions)
+          .set({
+            documentAst: newAst,
+            sections: [
+              { index: 0, type: "unknown", title: null, text: newText },
+            ],
+            contentHash: "b".repeat(64),
+            updatedAt: newUpdatedAt,
+          })
+          .where(eq(caseLawDecisions.id, citingId));
+      }
+      return result;
+    },
+    caseLawDb,
+  );
+  const first = await readGatedDecisionCitations({
+    caseLawDb: racingDb,
+    cursor: undefined,
+    decisionId: citingId,
+    direction: "cites",
+    limit: 10,
+    surface: "search",
+  });
+  expect(first).toMatchObject({
+    type: "page",
+    page: { items: [{ passage: { anchorId: "new-anchor", text: newText } }] },
   });
 });
 

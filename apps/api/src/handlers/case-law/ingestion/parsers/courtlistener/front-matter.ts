@@ -1,13 +1,14 @@
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+// parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
+import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { parseHeadmatter } from "./html";
 import type { TextBudget } from "./outcome";
 import {
-  publishedTextDefects,
   type PublishedTextDefect,
+  publishedTextDefects,
 } from "./source-defects";
 import { courtListenerValidationPolicy } from "./validation-policy";
 
@@ -96,12 +97,11 @@ export const composeFrontMatter = ({
       };
     }
     const added = parsed.text.units.flatMap((unit) => [...unit.blocks]);
-    const validation = validateAndLog(
-      { parser: "courtlistener", caseNumber: `cl-${field}`, language: "en" },
-      parsed.text.validationHtml,
-      added,
-      { sourcePolicy: courtListenerValidationPolicy },
-    );
+    // Measured, not logged: the verdict decides whether this field is held,
+    // and the pipeline reports retention for the document it stores.
+    const validation = validateAst(parsed.text.validationHtml, added, {
+      sourcePolicy: courtListenerValidationPolicy,
+    });
     const defects = publishedTextDefects(parsed.text, validation);
     if (defects === null) {
       return { status: "held", reason: "no-usable-text" };

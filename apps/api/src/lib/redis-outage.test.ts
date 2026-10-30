@@ -16,9 +16,10 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 
 // Port 1 is privileged and unbound in every environment this runs in, so a
 // connect attempt fails immediately rather than hanging on a routing black
@@ -34,7 +35,7 @@ describe("link icons during a Valkey outage", () => {
     let outboundRequests = 0;
     const result = await settle(
       cache.readOrLease({
-        hostname: "example.com",
+        hostname: toRegistrableIconSite("example.com").unwrap(),
         userId: toSafeId<"user">("outage-user"),
         ip: "192.0.2.1",
       }),
@@ -58,6 +59,8 @@ const { createRedisClient } = await import("@/api/lib/redis-client");
 const { chargeMcpReadBytes, closeMcpReadFenceRedis } =
   await import("@/api/lib/rate-limit/mcp-read-fence");
 const { toSafeId } = await import("@/api/lib/branded-types");
+const { toRegistrableIconSite } =
+  await import("@/api/handlers/chat/link-icons/origin");
 const { Result } = await import("better-result");
 const { RedisRateLimitContext } =
   await import("@/api/lib/rate-limit/redis-context");
@@ -178,7 +181,7 @@ describe("rate limiting during a Valkey outage", () => {
     context.kill();
   });
 
-  test("the fail-closed policy exhausts the window instead of erroring", async () => {
+  test("the fail-closed policy reports its unavailable store", async () => {
     const context = new RedisRateLimitContext({
       failurePolicy: "fail_closed",
       onRedisError: () => undefined,
@@ -188,11 +191,9 @@ describe("rate limiting during a Valkey outage", () => {
     const result = await settle(
       context.increment("outage-closed", RATE_LIMIT_WINDOW_MS),
     );
-    expect(result.status).toBe("ok");
-    // Same shape as the fail-open path: a counter, never a rejection. The
-    // policy shows up in the count, which is already past any configured max.
-    expect(result.status === "ok" ? result.value.count : 0).toBeGreaterThan(
-      RATE_LIMIT_MAX,
+    expect(result.status).toBe("error");
+    expect(result.status === "error" ? result.error : null).toBeInstanceOf(
+      LimiterStoreUnavailableError,
     );
     context.kill();
   });
@@ -373,7 +374,7 @@ test(
         });
         expect(Result.isError(outcome)).toBe(true);
         if (Result.isError(outcome)) {
-          expect(outcome.error.code).toBe("action_admission_unavailable");
+          expect(outcome.error.code).toBe("limiter_store_unavailable");
         }
         closeMcpReadFenceRedis();
       }

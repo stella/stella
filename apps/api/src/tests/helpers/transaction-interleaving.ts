@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
@@ -138,6 +139,14 @@ export const withInterleaving = async <State>({
           ReturnType<typeof Promise.withResolvers<undefined>>
         >();
         const completed = new Set<InterleavingToken>();
+        // Settles whenever a step or a transaction finishes; the scheduler
+        // awaits it instead of polling `completed`.
+        let progress = Promise.withResolvers<undefined>();
+        const complete = (token: InterleavingToken) => {
+          completed.add(token);
+          progress.resolve(undefined);
+          progress = Promise.withResolvers<undefined>();
+        };
         const executed: InterleavingToken[] = [];
         const blocked: InterleavingToken[] = [];
         const outcomes = new Map<Actor, TransactionOutcome>();
@@ -207,7 +216,7 @@ export const withInterleaving = async <State>({
                     await afterCancellation();
                     stepPids.delete(session.pid);
                   }
-                  completed.add(token);
+                  complete(token);
                 }
                 await (
                   gates.get(`${actor}.commit`) ?? panic("Commit gate missing")
@@ -239,7 +248,7 @@ export const withInterleaving = async <State>({
             }
             ready[actor].reject(outcome.error);
           }
-          completed.add(`${actor}.commit`);
+          complete(`${actor}.commit`);
         });
         const deadline = performance.now() + timeoutMs;
         const checkDeadline = () => {
@@ -264,11 +273,15 @@ export const withInterleaving = async <State>({
                 pending.delete(actor);
               }
             }
+            if (remaining.length === 0 && pending.size === 0) {
+              break;
+            }
             const next = remaining.findIndex(
               (token) => !pending.has(token.startsWith("a.") ? "a" : "b"),
             );
             if (next === -1) {
-              await Bun.sleep(5);
+              // Both actors run a step: wait for one to finish.
+              await bounded(progress.promise);
               continue;
             }
             const token =
@@ -281,18 +294,31 @@ export const withInterleaving = async <State>({
             executed.push(token);
             (gates.get(token) ?? panic("Step gate missing")).resolve(undefined);
             pending.set(actor, token);
-            while (!completed.has(token) && !outcomes.get(actor)) {
-              checkDeadline();
-              const rows = await bounded(
-                observer.sql<
-                  { blocked: boolean }[]
-                >`SELECT cardinality(pg_blocking_pids(${sessions[actor].pid})) > 0 AS blocked`,
-              );
-              if (rows.at(0)?.blocked) {
-                blocked.push(token);
-                break;
-              }
-              await Bun.sleep(5);
+            // The step either finishes here or waits on the other session's
+            // lock, which only the server's lock graph shows.
+            const reached = await waitForExternalState({
+              description: `step ${token} finishes or waits on a lock`,
+              intervalMs: 5,
+              timeoutMs: Math.max(0, deadline - performance.now()),
+              read: async () => {
+                if (completed.has(token) || outcomes.get(actor)) {
+                  return "finished" as const;
+                }
+                const rows = await bounded(
+                  observer.sql<
+                    { blocked: boolean }[]
+                  >`SELECT cardinality(pg_blocking_pids(${sessions[actor].pid})) > 0 AS blocked`,
+                );
+                return rows.at(0)?.blocked === true && ("blocked" as const);
+              },
+              onTimeout: () => {
+                throw new InterleavingTimeout({
+                  message: "Interleaving exceeded its deadline",
+                });
+              },
+            });
+            if (reached === "blocked") {
+              blocked.push(token);
             }
           }
           await bounded(Promise.all(tasks));

@@ -20,6 +20,8 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
 
 type CorpusIndexFieldType =
   | "text"
+  // The engine takes several values for a field only when its type says so.
+  | "array<text>"
   | "u64"
   | "i64"
   | "f64"
@@ -70,10 +72,7 @@ type CorpusIndexFieldMapping = {
   // Built-in names plus whatever `CUSTOM_TOKENIZERS` declares, so a field can
   // never name a tokenizer the doc mapping does not ship.
   tokenizer?:
-    | "raw"
-    | "default"
-    | "en_stem"
-    | (typeof CUSTOM_TOKENIZERS)[number]["name"];
+    "raw" | "default" | "en_stem" | (typeof CUSTOM_TOKENIZERS)[number]["name"];
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
   /** Fast-field resolution for a datetime; coarser truncates harder. */
@@ -418,6 +417,21 @@ export const DECISION_TIMESTAMP_FIELD = "decision_date_ts";
 export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
 
 /**
+ * The index field carrying the provision keys of a decision's recorded
+ * provision links (`@/api/lib/case-law/provision-keys`): a raw, multi-valued
+ * keyword, written on every passage of the decision so a provision filter is
+ * one exact term on any passage a query reaches.
+ *
+ * Not part of any generation's manifest. Only a case-law index group created
+ * under the `provision_keys_v1` group contract maps it, and adding a field to
+ * a mapping an index was already created with does nothing, so it arrives with
+ * a group's index and never before one.
+ */
+export const PROJECTION_GENERATION_FIELD = "projection_generation";
+
+export const PROVISION_KEYS_FIELD = "provision_keys";
+
+/**
  * The index field carrying a decision's headnote: the publisher's own sentence
  * about the case, from `publisher-summary.ts`. Its own field rather than a
  * prefix of `text`, so a term matching the headnote is a document-level hit
@@ -549,7 +563,9 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       stored: true,
       fast: false,
     },
-    // current | historical | repealed
+    // The stored status. `current` and `historical` are the ingest day's
+    // reading of the window, so search filters only the other values here
+    // (see `legislationStatusToday`).
     {
       name: "status",
       type: "text",

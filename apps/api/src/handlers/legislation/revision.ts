@@ -1,4 +1,7 @@
+import { Result } from "better-result";
+
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
+import { compareCodeUnit } from "@stll/collation";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { corpusStorageMode } from "@/api/env-base";
@@ -14,13 +17,27 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
+import {
+  admitLegislationAmendmentTarget,
+  LegislationAmendmentObservationError,
+  sanitizeLegislationAmendments,
+} from "@/api/lib/legal-search/legislation-amendments";
+import type { SanitizedLegislationAmendmentSnapshot } from "@/api/lib/legal-search/legislation-amendments";
 import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
 
+type SanitizedLegislationDocumentInput = Omit<
+  LegislationDocumentInput,
+  "amendments"
+> & {
+  amendments?: SanitizedLegislationAmendmentSnapshot | undefined;
+};
+
 const sanitizeInput = (
   input: LegislationDocumentInput,
-): LegislationDocumentInput => ({
+  amendments: SanitizedLegislationAmendmentSnapshot | undefined,
+): SanitizedLegislationDocumentInput => ({
   ...input,
   eli: stripDangerousChars(input.eli),
   title: stripDangerousChars(input.title),
@@ -33,6 +50,8 @@ const sanitizeInput = (
       ? undefined
       : stripDangerousChars(input.sourceRaw),
   metadata: sanitizeMetadata(input.metadata ?? {}),
+  identifiers: input.identifiers?.map(stripDangerousChars),
+  amendments,
   expression:
     input.expression === undefined
       ? undefined
@@ -86,6 +105,12 @@ export const legislationSourceHash = (
       input.metadata ?? {},
       input.rawHash,
       input.sourceRawContentType ?? null,
+      ...(input.identifiers === undefined
+        ? []
+        : [[...new Set(input.identifiers)].toSorted(compareCodeUnit)]),
+      ...(input.amendments === undefined
+        ? []
+        : [[input.amendments.relations, input.amendments.coverage]]),
       ...(typed === null
         ? []
         : [
@@ -131,6 +156,11 @@ class RevisionProjection {
 
 export type LegislationRevisionProjection = RevisionProjection;
 
+export type LegislationAmendmentObservation =
+  | { type: "not-observed" }
+  | { type: "accepted" }
+  | { type: "rejected"; error: LegislationAmendmentObservationError };
+
 type WriteRevisionCorpusOptions = {
   documentId: string;
   stored: Parameters<typeof writeCorpusDocument>[0]["stored"];
@@ -145,13 +175,38 @@ type RevisionSourceRaw = {
 
 /** One fetched revision owns both its database fields and corpus payload. */
 export class LegislationRevision {
-  readonly #input: LegislationDocumentInput;
+  readonly #input: SanitizedLegislationDocumentInput;
   readonly #contentHash: string;
+  readonly #amendmentObservation: LegislationAmendmentObservation;
 
   constructor(input: LegislationDocumentInput) {
+    const observed = input.amendments;
+    const amendments =
+      observed === undefined
+        ? undefined
+        : admitLegislationAmendmentTarget(input.eli).andThen(() =>
+            sanitizeLegislationAmendments(observed),
+          );
+    if (amendments === undefined) {
+      this.#amendmentObservation = { type: "not-observed" };
+    } else if (Result.isOk(amendments)) {
+      this.#amendmentObservation = { type: "accepted" };
+    } else {
+      this.#amendmentObservation = {
+        type: "rejected",
+        error: amendments.error,
+      };
+    }
     // Sanitizing first turns values structuredClone rejects (functions,
     // symbols, promises in metadata) into storable ones before the snapshot.
-    this.#input = structuredClone(sanitizeInput(input));
+    this.#input = structuredClone(
+      sanitizeInput(
+        input,
+        amendments !== undefined && Result.isOk(amendments)
+          ? amendments.value
+          : undefined,
+      ),
+    );
     this.#contentHash = corpusContentHash({
       text: this.#input.fulltext ?? null,
       sections: this.#input.sections ?? null,
@@ -162,6 +217,18 @@ export class LegislationRevision {
   // Reads cannot mutate the snapshot used by either writer.
   get input() {
     return structuredClone(this.#input);
+  }
+  get amendmentObservation() {
+    if (this.#amendmentObservation.type !== "rejected") {
+      return this.#amendmentObservation;
+    }
+    return {
+      type: "rejected",
+      error: new LegislationAmendmentObservationError({
+        message: this.#amendmentObservation.error.message,
+        reason: this.#amendmentObservation.error.reason,
+      }),
+    } as const;
   }
   get window() {
     return storedWindow(this.#input.version);

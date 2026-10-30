@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
-  FolderPlusIcon,
   FilePlus2Icon,
+  FolderPlusIcon,
   LayoutTemplateIcon,
   PlusIcon,
   SquareCheckIcon,
@@ -32,6 +32,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
@@ -83,6 +84,7 @@ export const AddEntityMenu = ({
   showTaskOption = true,
   uploadOnly = false,
 }: AddEntityMenuProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [styleDialogOpen, setStyleDialogOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -159,13 +161,24 @@ export const AddEntityMenu = ({
     };
     const response =
       style.type === "stella"
-        ? await api.entities({ workspaceId })["blank-document"].put(input)
-        : await api
-            .entities({ workspaceId })
-            ["blank-document-from-style-set"].put({
+        ? await idempotentSubmit.run({
+            operation: 'api.entities({workspaceId})["blank-document"]',
+            body: input,
+            send: async (body) =>
+              api.entities({ workspaceId })["blank-document"].put(body),
+          })
+        : await idempotentSubmit.run({
+            operation:
+              'api.entities({workspaceId})["blank-document-from-style-set"]',
+            body: {
               ...input,
               styleSetId: toSafeId<"styleSet">(style.styleSetId),
-            });
+            },
+            send: async (body) =>
+              api
+                .entities({ workspaceId })
+                ["blank-document-from-style-set"].put(body),
+          });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return false;

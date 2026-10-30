@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 
 import { canonicalModuleId } from "../../../.oxlint-plugins/module-id";
+import { parseSource, walk } from "./syntax-tree";
+import { createProgram } from "./typescript-program";
 
 const packageRoot = path.resolve(import.meta.dirname, "../../decision-reader");
 const productionDependencyRoots = new Set([
@@ -29,70 +30,63 @@ const reactEffects = new Set([
   "useInsertionEffect",
 ]);
 
-const lifecycleViolations = (source: string) => {
-  const tree = ts.createSourceFile(
-    "source.tsx",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+const lifecycleViolations = (source: string, filename = "source.tsx") => {
+  const parsed = parseSource(filename, source);
   const violations: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === "react"
-    ) {
-      const bindings = node.importClause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings)) {
-        for (const element of bindings.elements) {
-          const imported = element.propertyName?.text ?? element.name.text;
-          if (reactEffects.has(imported)) {
-            violations.push(imported);
-          }
+  walk(parsed.program, (node, ancestors) => {
+    if (node.type === "ImportDeclaration" && node.source.value === "react") {
+      for (const binding of node.specifiers) {
+        if (binding.type !== "ImportSpecifier") {
+          continue;
+        }
+        const imported =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
+        if (reactEffects.has(imported)) {
+          violations.push(imported);
         }
       }
     }
-    // Count global references as well as calls: assigning fetch to an alias
-    // must not bypass the package's network boundary.
+    const parent = ancestors.at(-1);
     if (
-      ts.isIdentifier(node) &&
-      (node.text === "fetch" || node.text === "XMLHttpRequest") &&
-      (!ts.isPropertyAccessExpression(node.parent) || node.parent.name !== node)
+      node.type === "Identifier" &&
+      (node.name === "fetch" || node.name === "XMLHttpRequest") &&
+      !(
+        parent?.type === "MemberExpression" &&
+        !parent.computed &&
+        parent.property === node
+      )
     ) {
-      violations.push(node.text);
+      violations.push(node.name);
     }
-    if (ts.isPropertyAccessExpression(node)) {
-      const member = node.name.text;
-      const globalOwner =
-        ts.isIdentifier(node.expression) &&
-        ["window", "globalThis", "self"].includes(node.expression.text);
+    if (node.type !== "MemberExpression") {
+      return;
+    }
+    let member: string | undefined;
+    if (node.computed) {
       if (
-        reactEffects.has(member) ||
-        (globalOwner && (member === "fetch" || member === "XMLHttpRequest"))
+        node.property.type === "Literal" &&
+        typeof node.property.value === "string"
       ) {
-        violations.push(member);
+        member = node.property.value;
       }
+    } else if (node.property.type === "Identifier") {
+      member = node.property.name;
     }
+    if (member === undefined) {
+      return;
+    }
+    const globalOwner =
+      node.object.type === "Identifier" &&
+      ["window", "globalThis", "self"].includes(node.object.name);
     if (
-      ts.isElementAccessExpression(node) &&
-      ts.isStringLiteral(node.argumentExpression)
+      reactEffects.has(member) ||
+      (globalOwner && (member === "fetch" || member === "XMLHttpRequest"))
     ) {
-      const member = node.argumentExpression.text;
-      const globalOwner =
-        ts.isIdentifier(node.expression) &&
-        ["window", "globalThis", "self"].includes(node.expression.text);
-      if (
-        reactEffects.has(member) ||
-        (globalOwner && (member === "fetch" || member === "XMLHttpRequest"))
-      ) {
-        violations.push(member);
-      }
+      violations.push(member);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return violations;
 };
 
@@ -110,64 +104,54 @@ const dependencyRoot = (specifier: string) =>
     ? specifier.split("/").slice(0, 2).join("/")
     : specifier.split("/").at(0);
 
-const moduleSpecifiers = (source: string) => {
-  const tree = ts.createSourceFile(
-    "source.tsx",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+const moduleSpecifiers = (source: string, filename = "source.tsx") => {
+  const parsed = parseSource(filename, source);
   const specifiers: string[] = [];
-  const visit = (node: ts.Node) => {
+  walk(parsed.program, (node) => {
     if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      (node.type === "ImportDeclaration" ||
+        node.type === "ExportNamedDeclaration" ||
+        node.type === "ExportAllDeclaration") &&
+      node.source
     ) {
-      specifiers.push(node.moduleSpecifier.text);
+      specifiers.push(node.source.value);
+    }
+    if (node.type === "TSExternalModuleReference") {
+      specifiers.push(node.expression.value);
+    }
+    if (node.type === "TSImportType") {
+      specifiers.push(node.source.value);
     }
     if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference)
+      node.type !== "ImportExpression" &&
+      !(
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      )
     ) {
-      const expression = node.moduleReference.expression;
+      return;
+    }
+    const argument =
+      node.type === "ImportExpression" ? node.source : node.arguments.at(0);
+    if (argument?.type === "Literal" && typeof argument.value === "string") {
+      specifiers.push(argument.value);
+    } else if (
+      argument?.type === "TemplateLiteral" &&
+      argument.expressions.length === 0
+    ) {
       specifiers.push(
-        ts.isStringLiteral(expression)
-          ? expression.text
-          : "<computed module specifier>",
+        argument.quasis.map(({ value }) => value.cooked ?? value.raw).join(""),
       );
+    } else {
+      specifiers.push("<computed module specifier>");
     }
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      const argument = node.arguments.at(0);
-      specifiers.push(
-        argument &&
-          (ts.isStringLiteral(argument) ||
-            ts.isNoSubstitutionTemplateLiteral(argument))
-          ? argument.text
-          : "<computed module specifier>",
-      );
-    }
-    if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    ) {
-      specifiers.push(node.argument.literal.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return specifiers;
 };
 
 const boundaryViolations = (file: string, source: string) =>
-  moduleSpecifiers(source).filter((specifier) => {
+  moduleSpecifiers(source, file).filter((specifier) => {
     if (specifier.startsWith(".")) {
       const destination = path.resolve(path.dirname(file), specifier);
       return (
@@ -201,32 +185,38 @@ test("shared decision identity exports resolve to context-free package owners", 
     expect(
       boundaryViolations(resolved, readFileSync(resolved, "utf-8")),
     ).toEqual([]);
-    expect(lifecycleViolations(readFileSync(resolved, "utf-8"))).toEqual([]);
+    expect(
+      lifecycleViolations(readFileSync(resolved, "utf-8"), resolved),
+    ).toEqual([]);
   }
 });
 
-test("reader catalogue types compile without DOM or JSX dependencies", () => {
+test("reader catalogue types compile without DOM or JSX dependencies", async () => {
   const entry = Bun.resolveSync(
     "@stll/decision-reader/reader-message-types",
     path.join(repositoryRoot, "apps/api"),
   );
-  const program = ts.createProgram({
+  const opened = await createProgram({
     rootNames: [entry],
-    options: {
-      lib: ["lib.esnext.d.ts"],
+    compilerOptions: {
+      lib: ["ESNext"],
       types: [],
       noEmit: true,
       strict: true,
       skipLibCheck: true,
     },
   });
-  expect(
-    ts
-      .getPreEmitDiagnostics(program)
-      .map((diagnostic) =>
-        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-      ),
-  ).toEqual([]);
+  try {
+    expect(
+      [
+        ...(await opened.program.getProgramDiagnostics()),
+        ...(await opened.program.getSyntacticDiagnostics()),
+        ...(await opened.program.getSemanticDiagnostics()),
+      ].map(({ text }) => text),
+    ).toEqual([]);
+  } finally {
+    await opened.close();
+  }
 });
 
 test("reader production imports stay inside its context-free boundary", () => {
@@ -239,7 +229,7 @@ test("reader production imports stay inside its context-free boundary", () => {
     const file = path.join(packageRoot, relativeFile);
     const source = readFileSync(file, "utf-8");
     expect(boundaryViolations(file, source), relativeFile).toEqual([]);
-    expect(lifecycleViolations(source), relativeFile).toEqual([]);
+    expect(lifecycleViolations(source, file), relativeFile).toEqual([]);
   }
 });
 
@@ -312,7 +302,7 @@ const removedReaderImportViolations = (file: string, source: string) => {
           .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
           .matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gu),
       ].map((match) => match[1] ?? "")
-    : moduleSpecifiers(source);
+    : moduleSpecifiers(source, file);
   return specifiers.filter((specifier) =>
     removedReaderModules.has(
       canonicalModuleId(specifier.replace(/[?#].*$/u, ""), file),
@@ -412,44 +402,34 @@ test("removed reader stylesheet imports reject CSS import forms", () => {
 // Owns source entry definitions: a module painting decision text delegates its
 // renderer to the shared package. The metafile guard owns shipped reachability.
 const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
-  const tree = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const parsed = parseSource(file, source);
   const readerPath =
     /(?:^|\/)(?:decision-reader|decision-text|document-ast-text)(?:\/|\.)/u.test(
       file,
     );
   const imports = new Set<string>();
   const namespaces = new Set<string>();
-  for (const statement of tree.statements) {
+  for (const statement of parsed.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !statement.moduleSpecifier.text.startsWith("@stll/decision-reader/") ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+      statement.type !== "ImportDeclaration" ||
+      !statement.source.value.startsWith("@stll/decision-reader/") ||
+      statement.importKind === "type"
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if (!binding.isTypeOnly) {
-          imports.add(binding.name.text);
-        }
+    for (const binding of statement.specifiers) {
+      if (binding.type === "ImportSpecifier" && binding.importKind !== "type") {
+        imports.add(binding.local.name);
       }
-    }
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
+      if (binding.type === "ImportNamespaceSpecifier") {
+        namespaces.add(binding.local.name);
+      }
     }
   }
   const rendered = { reader: false, shared: false };
-  const visit = (node: ts.Node) => {
-    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      const name = node.tagName.getText(tree);
+  walk(parsed.program, (node) => {
+    if (node.type === "JSXOpeningElement") {
+      const name = source.slice(node.name.start, node.name.end);
       const rendersNative =
         /^(?:article|p|h[1-6]|table|blockquote|figure|pre)$/u.test(name);
       const readerElement =
@@ -459,13 +439,11 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
       rendered.reader ||= (readerPath && rendersNative) || readerElement;
       rendered.shared ||=
         imports.has(name) ||
-        (ts.isPropertyAccessExpression(node.tagName) &&
-          ts.isIdentifier(node.tagName.expression) &&
-          namespaces.has(node.tagName.expression.text));
+        (node.name.type === "JSXMemberExpression" &&
+          node.name.object.type === "JSXIdentifier" &&
+          namespaces.has(node.name.object.name));
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   // The build's metafile guard owns reachability. This source guard owns modules
   // that paint reader UI; data modules and bootstraps delegate that rendering.
   return rendered.reader && !rendered.shared;

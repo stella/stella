@@ -71,6 +71,7 @@ const statute = ({
   fulltext: null,
   id,
   language: "cs",
+  pendingChanges: null,
   sections: null,
   slug: SLUG,
   sourceUrl: null,
@@ -95,7 +96,7 @@ const version = (
     ...rest
   } = statute(seed);
 
-  return { ...rest, isDefault };
+  return { ...rest, amendedBy: null, isDefault };
 };
 
 /**

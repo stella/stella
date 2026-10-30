@@ -8,6 +8,7 @@ import {
   initialNextRunAt,
 } from "@/api/lib/scheduler/jobs";
 import { REGISTERED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/registry";
+import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import { FLOW_RUN_TASK } from "@/api/lib/scheduler/tasks/flow-run";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
@@ -64,6 +65,18 @@ describe("declared scheduler jobs", () => {
       id: "audit.purgeSystemRuns.day",
       mode: "recurring",
       schedule: { type: "interval", everyMs: DAY_IN_MS },
+    });
+  });
+
+  test("case-law freshness is reported hourly", () => {
+    expect(
+      DECLARED_SCHEDULER_JOBS.find(
+        ({ task }) => task === REPORT_CASE_LAW_FRESHNESS_TASK,
+      ),
+    ).toMatchObject({
+      id: "caseLaw.reportFreshness.fiveMinute",
+      mode: "recurring",
+      schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     });
   });
 

@@ -1,12 +1,12 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
-  INGESTION_STOP_KIND,
-  type IngestionStopKind,
-  type IngestionPipelineResult,
   CYCLE_HALT_REASON,
+  INGESTION_STOP_KIND,
+  type IngestionPipelineResult,
+  type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
 import type { IngestionScopedDb } from "@/api/db/safe-db";
@@ -35,9 +35,9 @@ import {
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
-  wrappedErrorDetail,
-  PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
+  PROCESS_DECISION_STATUS,
+  wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -76,6 +76,8 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -83,6 +85,14 @@ type DbSlot = {
   acquire: (signal?: AbortSignal) => Promise<void>;
   release: () => void;
 };
+
+const STOP_LOGGER = {
+  [INGESTION_STOP_KIND.DEADLINE]: logger.info,
+  [INGESTION_STOP_KIND.SOURCE_UNREACHABLE]: logger.error,
+  [INGESTION_STOP_KIND.PUBLISHER_REFUSAL]: logger.error,
+  [INGESTION_STOP_KIND.ADAPTER_ERROR]: logger.error,
+  [INGESTION_STOP_KIND.INTERNAL_ERROR]: logger.error,
+} as const satisfies Record<IngestionStopKind, typeof logger.info>;
 
 type PipelineInput = {
   onDocumentObservation?: DocumentStageObserver;
@@ -123,6 +133,8 @@ type PipelineInput = {
    * while capping concurrent DB pressure.
    */
   dbSlot?: DbSlot;
+  /** Revalidate the caller's grant before each bounded decision batch. */
+  acquireBatchAdmission?: () => Promise<"granted" | "paused">;
   corpus?: CaseLawCorpusDependencies;
 };
 
@@ -182,7 +194,7 @@ const batchHaltReason = (
         `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
       );
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return CYCLE_HALT_REASON.TIMEOUT;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
@@ -201,7 +213,7 @@ const batchStopKind = (
     case "failure-streak":
       return stop.stopKind;
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return INGESTION_STOP_KIND.DEADLINE;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
@@ -228,14 +240,7 @@ const PAGE_SLOT = {
 
 type PageSlot = (typeof PAGE_SLOT)[keyof typeof PAGE_SLOT];
 
-/**
- * Run the ingestion pipeline for a configured source.
- *
- * Fetches pages from the source adapter, processes each
- * decision (segment, extract citations, dedup), and stores
- * results in the database.
- */
-export const runIngestionPipeline = async ({
+const runScopedIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
@@ -247,6 +252,7 @@ export const runIngestionPipeline = async ({
   maxDecisions,
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
+  acquireBatchAdmission,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<IngestionPipelineResult> => {
   const resolveSourceContract = createSourceContractResolver(scopedDb);
@@ -329,7 +335,10 @@ export const runIngestionPipeline = async ({
           }
           const pageResult = fetched.value;
           if (Result.isError(pageResult)) {
-            return { error: pageResult.error, type: "fetch-error" } as const;
+            return {
+              error: pageResult.error,
+              type: "fetch-error",
+            } as const;
           }
           return {
             observationOrder: await allocateSourceObservationOrder({
@@ -401,7 +410,7 @@ export const runIngestionPipeline = async ({
         deadline?.signal.aborted || pageSignal.aborted
           ? INGESTION_STOP_KIND.DEADLINE
           : observedPageResult.value.error.stopKind;
-      logger.error(
+      STOP_LOGGER[pageStopKind](
         "case_law.ingestion.adapter_halted",
         sanitizeErrorAttributesForOutput({
           adapterKey: adapter.key,
@@ -462,7 +471,7 @@ export const runIngestionPipeline = async ({
       await dbSlot.acquire(deadline?.signal);
       return PAGE_SLOT.HELD;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (deadline?.signal.aborted) {
         return PAGE_SLOT.CYCLE_ENDED;
       }
       throw error;
@@ -488,6 +497,13 @@ export const runIngestionPipeline = async ({
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
+      if (
+        deadline?.signal.aborted ||
+        (await acquireBatchAdmission?.()) === "paused"
+      ) {
+        stopKind = INGESTION_STOP_KIND.DEADLINE;
+        return CYCLE_HALT_REASON.TIMEOUT;
+      }
       if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
         // A page's records are applied whatever their size; one over the
         // byte bound goes alone, and is reported.
@@ -514,6 +530,7 @@ export const runIngestionPipeline = async ({
           polarityRules,
           context: { adapterKey: adapter.key, cursor },
           failureStreak: consecutiveFailures,
+          signal: deadline?.signal,
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
         },
@@ -597,10 +614,13 @@ export const runIngestionPipeline = async ({
           ...pgErrorFields(error),
           "error.detail": wrappedErrorDetail(error),
         });
-        captureError(error, {
-          adapterKey: adapter.key,
-          step: "runIngestionPipeline.processSupplement",
-        });
+        captureError(
+          error,
+          handlerErrorContext("ingestion.placePageSupplements", {
+            adapterKey: adapter.key,
+            step: "runIngestionPipeline.processSupplement",
+          }),
+        );
         if (error instanceof TimeoutError) {
           await flushIngestionFailures(failures);
           return databaseTimeoutHaltReason(error);
@@ -779,7 +799,7 @@ export const runIngestionPipeline = async ({
 
       if (haltReason) {
         stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
-        logger.error("case_law.ingestion.adapter_halted", {
+        STOP_LOGGER[stopKind]("case_law.ingestion.adapter_halted", {
           adapterKey: adapter.key,
           cursor: cursor ?? "",
           reason: haltReason,
@@ -859,3 +879,18 @@ export const runIngestionPipeline = async ({
     ...(stopKind === undefined ? {} : { stopKind }),
   };
 };
+
+/**
+ * Run the ingestion pipeline for a configured source.
+ *
+ * Fetches pages from the source adapter, processes each
+ * decision (segment, extract citations, dedup), and stores
+ * results in the database.
+ */
+export const runIngestionPipeline = async (
+  input: PipelineInput,
+): Promise<IngestionPipelineResult> =>
+  await withExceptionScope(
+    { type: "ingestion", adapterKey: input.source.adapterKey },
+    async () => await runScopedIngestionPipeline(input),
+  );

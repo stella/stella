@@ -4,7 +4,7 @@ import apiPackage from "../apps/api/package.json" with { type: "json" };
 import {
   STELLA_API_CONTRACT,
   STELLA_MCP_API_CONTRACT_VERSION,
-} from "../apps/api/src/mcp/constants";
+} from "../apps/api/src/mcp/stella-api-contract";
 import cliPackage from "../packages/cli/package.json" with { type: "json" };
 import {
   CLI_DEFAULT_SCOPES,
@@ -17,30 +17,11 @@ import {
   CLI_SUPPORTED_API_PROTOCOLS,
 } from "../packages/cli/src/generated/api-contract";
 import { loadChangesetPolicy } from "./changeset-guard";
+import { LIBRARY_PACKAGE_ORDER } from "./publish-packages";
 
-const SHARED_NPM_PACKAGES = [
-  "agent-input",
-  "mcp-kit",
-  "auth-model",
-  "ai-catalog",
-  "anonymize-chat",
-  "business-registries",
-  "chat",
-  "calculations",
-  "country-codes",
-  "conditions",
-  "docx-utils",
-  "money",
-  "ssr-kit",
-  "ssr-testkit",
-  "stable-stringify",
-  "start-runtime",
-  "template-conditions",
-  "text-normalize",
-  "time",
-  "workspace-model",
-  "workspace-ui",
-] as const;
+// Every library publish-npm.yml releases; one list, so a package added to or
+// removed from the release cannot drift out of these assertions.
+const SHARED_NPM_PACKAGES = LIBRARY_PACKAGE_ORDER;
 
 /**
  * The release gate's pathspecs live in scripts/changeset-policy.json, and the
@@ -213,9 +194,7 @@ describe("API and CLI release contract", () => {
   test("release and pull-request smoke tests refuse corrupt history with pending SQL", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(
-        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
-      ).text(),
+      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
     ]);
 
     for (const source of [releaseSmoke, migrationSmoke]) {
@@ -248,9 +227,7 @@ describe("API and CLI release contract", () => {
   test("release and migration smoke tests wait for scheduler initialization", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(
-        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
-      ).text(),
+      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
     ]);
 
     expect(releaseSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
@@ -318,12 +295,18 @@ describe("API and CLI release contract", () => {
       if (!isRecord(packageExports)) {
         throw new TypeError(`${packageName} exports is not an object`);
       }
-      for (const target of Object.values(packageExports)) {
+      for (const [subpath, target] of Object.entries(packageExports)) {
         expect(typeof target).toBe("string");
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);
         }
-        expect(target).toMatch(/^\.\/src\/.*\.tsx?$/u);
+        // The manifest may export itself so a consumer can read the published
+        // version; every other entry point resolves to source.
+        if (subpath === "./package.json") {
+          expect(target).toBe("./package.json");
+          continue;
+        }
+        expect(target).toMatch(/^\.\/src\/.*\.(?:css|tsx?)$/u);
       }
     }
   });

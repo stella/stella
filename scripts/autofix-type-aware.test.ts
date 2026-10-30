@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import {
+  copyFileSync,
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -34,6 +35,14 @@ const cases = [
     failure: "prepare",
     extra: "",
   },
+  // Nothing to fix: the fixer leaves the file alone, so its project is not
+  // checked, even with a type error CI's typecheck reports instead.
+  {
+    name: "no fixable finding",
+    failure: "unfixed",
+    extra:
+      'import { missing } from "./absent";\nexport const broken = missing;\n',
+  },
 ] as const;
 
 test.each(cases)(
@@ -41,8 +50,13 @@ test.each(cases)(
   ({ failure, extra }) => {
     const root = mkdtempSync(path.join(tmpdir(), "autofix-type-aware-"));
     const repo = path.resolve(import.meta.dirname, "..");
-    const source =
+    const fixable =
       'export const value = { name: "fixture" };\nexport const name = value["name"];\n';
+    const guarded = `${fixable}export const truth = value.name ? true : false;\nexport const reversed = 1 === value.name.length;\ndebugger;\n`;
+    const source =
+      failure === "unfixed"
+        ? fixable.replace('value["name"]', "value.name")
+        : guarded;
     try {
       symlinkSync(
         path.join(repo, "node_modules"),
@@ -51,6 +65,7 @@ test.each(cases)(
       mkdirSync(path.join(root, "bin"));
       mkdirSync(path.join(root, "scripts"));
       for (const file of [
+        "autofix-safe-rules.ts",
         "autofix-protected-paths.ts",
         "baseline-paths.ts",
         "typecheck-coverage.ts",
@@ -61,11 +76,7 @@ test.each(cases)(
         );
       }
       mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
-      for (const file of [
-        "tsc-native.ts",
-        "child-exit-status.ts",
-        "tsgo-compiler-options.ts",
-      ]) {
+      for (const file of ["tsc-native.ts", "child-exit-status.ts"]) {
         writeFileSync(
           path.join(root, "packages/scripts/src", file),
           readFileSync(path.join(repo, "packages/scripts/src", file)),
@@ -94,16 +105,29 @@ test.each(cases)(
       }
       writeFileSync(
         path.join(root, "oxlint.config.ts"),
-        'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/dot-notation": "error" } };\n',
+        'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/dot-notation": "error", "no-debugger": "error", "no-unneeded-ternary": "error", "yoda": "error" } };\n',
       );
-      writeFileSync(path.join(root, ".oxfmtrc.json"), "{}");
+      for (const file of [
+        "bunfig.toml",
+        ".editorconfig",
+        "package.json",
+        ".prettierrc.yml",
+      ]) {
+        copyFileSync(path.join(repo, file), path.join(root, file));
+      }
+      mkdirSync(path.join(root, "apps/landing"), { recursive: true });
+      const imports =
+        'import {z} from "z-package";import {a} from "a-package";export const names=[z,a]';
+      writeFileSync(path.join(root, "apps/landing/changed.js"), imports);
+      writeFileSync(path.join(root, "unchanged.js"), imports);
+      writeFileSync(path.join(root, "changed.json"), '{"x":1,"y":[2,3]}');
       writeFileSync(path.join(root, "generated.html.txt"), "fixture");
       // The fixer steps read the push scope; a run without a settled
       // commit scopes every changed path.
       for (const name of ["autofix-changed-paths", "autofix-fix-paths"]) {
         writeFileSync(
           path.join(root, name),
-          "changed.ts\0generated.html.txt\0",
+          "changed.ts\0generated.html.txt\0apps/landing/changed.js\0changed.json\0",
         );
       }
       const finding = Bun.spawnSync(
@@ -118,17 +142,18 @@ test.each(cases)(
         ],
         { cwd: root, stdout: "pipe", stderr: "pipe" },
       );
-      expect(finding.exitCode).toBe(1);
-      expect(finding.stdout.toString() + finding.stderr.toString()).toContain(
-        "dot-notation",
-      );
+      if (failure !== "unfixed") {
+        expect(finding.exitCode).toBe(1);
+        expect(finding.stdout.toString() + finding.stderr.toString()).toContain(
+          "dot-notation",
+        );
+      }
       // Generated-source production is covered by its own integration tests;
       // this fixture verifies that the workflow prepares before the real lint fix.
       writeFileSync(
         path.join(root, "bin/bun"),
         `#!/bin/bash
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
-if [[ "$1" == run && "$2" == format:guard ]]; then exit 0; fi
 if [[ "$1" == scripts/autofix-plan.ts && "$2" == run ]]; then cp changed.ts generated.html.txt; exit 0; fi
 if [[ "$2" == oxlint && ! -f prepared ]]; then exit 2; fi
 if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; printf '%s\\n' "$@" > compiler_args; fi
@@ -178,12 +203,36 @@ exec '${process.execPath}' "$@"
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source.replace('value["name"]', "value.name"),
         );
-      } else {
-        expect(fixed.exitCode).not.toBe(0);
+      } else if (failure === "unfixed") {
+        expect(
+          fixed.exitCode,
+          fixed.stdout.toString() + fixed.stderr.toString(),
+        ).toBe(0);
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source + extra,
         );
-        expect(existsSync(path.join(root, "fixer_ran"))).toBe(false);
+      } else {
+        // Preparation errors stop the step; a fix its project rejects only
+        // drops the lint rewrites, so formatting and generators still run.
+        if (failure === "prepare") {
+          expect(fixed.exitCode).not.toBe(0);
+        } else {
+          expect(
+            fixed.exitCode,
+            fixed.stdout.toString() + fixed.stderr.toString(),
+          ).toBe(0);
+          expect(fixed.stdout.toString()).toContain(
+            "::warning title=Autofix lint fixes dropped::",
+          );
+        }
+        expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
+          source + extra,
+        );
+        // Preparation fails before the fixer; every later failure restores the
+        // fixer's rewrites, so the source above stays byte-identical.
+        expect(existsSync(path.join(root, "fixer_ran"))).toBe(
+          failure !== "prepare",
+        );
         if (failure === "coverage") {
           expect(fixed.stdout.toString() + fixed.stderr.toString()).toContain(
             "covered by no candidate project",
@@ -201,9 +250,9 @@ exec '${process.execPath}' "$@"
         }
       }
       expect(existsSync(path.join(root, "compiler_checked"))).toBe(
-        failure !== "prepare",
+        failure !== "prepare" && failure !== "unfixed",
       );
-      if (failure !== "prepare") {
+      if (failure !== "prepare" && failure !== "unfixed") {
         expect(
           readFileSync(path.join(root, "compiler_args"), "utf-8"),
         ).not.toContain("generated.html.txt");
@@ -216,8 +265,28 @@ exec '${process.execPath}' "$@"
         const rewritten = readFileSync(path.join(root, "changed.ts"), "utf-8");
         expect(rewritten).not.toBe(source);
         expect(generated).toBe(rewritten);
-      } else {
+      } else if (failure === "prepare") {
         expect(generated).toBe("fixture");
+      } else {
+        // Unfixed sources and rejected fixes both regenerate from the
+        // byte-identical source.
+        expect(generated).toBe(source + extra);
+      }
+      expect(readFileSync(path.join(root, "unchanged.js"), "utf-8")).toBe(
+        imports,
+      );
+      if (failure === "none") {
+        // Real oxfmt proves both changed-file formatting and configured sorting.
+        expect(readFileSync(path.join(root, "changed.json"), "utf-8")).toBe(
+          '{ "x": 1, "y": [2, 3] }\n',
+        );
+        const sorted = readFileSync(
+          path.join(root, "apps/landing/changed.js"),
+          "utf-8",
+        );
+        expect(sorted).toBe(
+          'import { a } from "a-package";\nimport { z } from "z-package";\nexport const names = [z, a];\n',
+        );
       }
       expect(readFileSync(path.join(root, "unchanged.ts"), "utf-8")).toBe(
         source,
@@ -299,11 +368,7 @@ test.each(projectCases)("autofix $name", ({ name, layout, invalid }) => {
       readFileSync(new URL("typecheck-coverage.ts", import.meta.url)),
     );
     mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
-    for (const file of [
-      "tsc-native.ts",
-      "child-exit-status.ts",
-      "tsgo-compiler-options.ts",
-    ]) {
+    for (const file of ["tsc-native.ts", "child-exit-status.ts"]) {
       writeFileSync(
         path.join(root, "packages/scripts/src", file),
         readFileSync(path.join(repo, "packages/scripts/src", file)),

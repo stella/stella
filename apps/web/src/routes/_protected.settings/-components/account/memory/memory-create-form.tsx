@@ -18,6 +18,7 @@ import { stellaToast } from "@stll/ui/toast";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   createFirmMemory,
   createMemory as createMemoryRequest,
@@ -26,11 +27,7 @@ import { invalidateMemories } from "@/routes/_protected.settings/-queries/memori
 import type { MemoryScope } from "@/routes/_protected.settings/-queries/memories";
 
 type MemoryKind =
-  | "preference"
-  | "instruction"
-  | "fact"
-  | "decision"
-  | "relationship";
+  "preference" | "instruction" | "fact" | "decision" | "relationship";
 
 type MemoryCreateFormProps =
   | { scope: "user"; workspaceId?: never }
@@ -72,6 +69,7 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
   const [kind, setKind] = useState<MemoryKind>(kinds[0]);
   const [content, setContent] = useState("");
 
+  const submitIntent = useIdempotentSubmit();
   const createMemory = useMutation({
     mutationFn: async () => {
       const trimmed = content.trim();
@@ -83,16 +81,20 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
       }
 
       return props.scope === "workspace"
-        ? await createMemoryRequest({
-            content: trimmed,
-            kind,
-            scope: props.scope,
-            workspaceId: props.workspaceId,
+        ? await submitIntent.run({
+            operation: "memories.create",
+            body: {
+              content: trimmed,
+              kind,
+              scope: props.scope,
+              workspaceId: props.workspaceId,
+            },
+            send: createMemoryRequest,
           })
-        : await createMemoryRequest({
-            content: trimmed,
-            kind,
-            scope: props.scope,
+        : await submitIntent.run({
+            operation: "memories.create",
+            body: { content: trimmed, kind, scope: props.scope },
+            send: createMemoryRequest,
           });
     },
     onSuccess: async (result) => {
@@ -109,7 +111,10 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
       stellaToast.add({ title: t(toastKey), type: "success" });
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryCreateForm:failure",
+        scope: { type: "handler", handlerId: "MemoryCreateForm:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });

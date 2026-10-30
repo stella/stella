@@ -1,19 +1,23 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
+import { is } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig } from "@stll/db-load-gate/health";
 
+import * as schema from "@/api/db/schema";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
-import { analyzeTable, validateConstraint } from "./online-ddl";
-import type { OnlineTableGate } from "./online-ddl";
+import { entityFeaturePolicyDefinitions } from "./entity-feature-policies";
+import { readConstraintValidated } from "./online-constraint-completion";
+import { analyzeTable, replacePolicy, validateConstraint } from "./online-ddl";
+import type { OnlineTableGate, PolicyDefinition } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
-import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
 const REPAIR_NAME = "entity-feature-row-gates";
 const BATCH_SIZE = 128;
@@ -45,28 +49,6 @@ const readRelations = async (
   });
 };
 
-const runMaintenanceTransaction = async (
-  connection: OnlineMigrationConnection,
-  work: () => Promise<void>,
-): Promise<void> => {
-  await connection.execute("BEGIN");
-  const outcome = await Result.tryPromise({
-    try: async () => {
-      await setSharedQueryTimeouts(connection.query, {
-        statementTimeoutMs: 60_000,
-        lockTimeoutMs: 1000,
-      });
-      await work();
-      await connection.execute("COMMIT");
-    },
-    catch: (cause: unknown) => cause,
-  });
-  if (outcome.isErr()) {
-    await connection.execute("ROLLBACK");
-    throw outcome.error;
-  }
-};
-
 /** Validated on every relation of the runtime gate graph. */
 export const ENTITY_FEATURE_GATE_CONSTRAINT_NAMES = [
   "entity_feature_gate_states_check",
@@ -87,8 +69,8 @@ const analyzeAndValidate = async (
     kind: "index_build",
     work: async (session) => {
       // Readiness is a durable no-pending proof. Cutover checks this catalog
-      // flag, avoiding a second scan under the locks that replace all 47
-      // policies.
+      // flag, avoiding a second scan under the lock that replaces the
+      // relation's policy.
       await session.run(analyzeTable(tableName));
       for (const constraintName of ENTITY_FEATURE_GATE_CONSTRAINT_NAMES) {
         await session.run(validateConstraint({ tableName, constraintName }));
@@ -162,12 +144,108 @@ const backfillRelation = async (
   return await analyzeAndValidate(tables, tableName);
 };
 
-export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
+const POLICY_NAME = "workspace_entity_feature";
+
+/**
+ * Whether a `pg_policies` row is the row-local gate policy the cutover
+ * installs: the entities fence reads the list item type, every other relation
+ * its backfilled gate column.
+ */
+const CUT_OVER_POLICY = `(CASE WHEN tablename = 'entities' THEN coalesce(
+    qual LIKE '%list_item_type IS NULL%' AND qual LIKE '%list_item_type = ''task''%'
+    AND qual LIKE '%app.enabled_features%' AND qual LIKE '%? ''legal-lists''%', false)
+  ELSE coalesce(qual LIKE '%entity_feature_gate%', false) END)
+  AND permissive = 'RESTRICTIVE' AND cmd = 'ALL' AND 'stella' = ANY(roles)`;
+
+const readCutOver = async (
+  connection: OnlineMigrationConnection,
+  tableName: string,
+): Promise<boolean> => {
+  const row = (
+    await connection.query(
+      `SELECT coalesce(bool_and(${CUT_OVER_POLICY}), false) AS "cutOver"
+      FROM pg_catalog.pg_policies
+      WHERE schemaname = 'public' AND policyname = $1 AND tablename = $2`,
+      [POLICY_NAME, tableName],
+    )
+  ).at(0);
+  if (!isRecord(row) || typeof row["cutOver"] !== "boolean") {
+    return panic("Invalid entity feature relation cutover state");
+  }
+  return row["cutOver"];
+};
+
+/**
+ * Replaces one relation's feature policy with its row-local gate policy,
+ * through the gate: a held or busy table defers the repair with the old
+ * policy in place, and a relation already cut over costs one catalog read.
+ */
+const cutOverRelation = async (
+  connection: OnlineMigrationConnection,
+  tables: OnlineTableGate,
+  policy: PolicyDefinition,
+): Promise<OnlineMigrationOutcome> => {
+  const { tableName } = policy;
+  if (await readCutOver(connection, tableName)) {
+    return { type: "complete" };
+  }
+  // The row-local policy is only as complete as the backfill under it.
+  if (
+    !(await readConstraintValidated({
+      connection,
+      tableName,
+      constraintName: "entity_feature_gate_ready_check",
+      reader: "Entity feature gate cutover",
+    }))
+  ) {
+    return panic(`Entity feature gate cutover: ${tableName} is not backfilled`);
+  }
+  return await tables.run({
+    target: { tableName, name: `${tableName}.${POLICY_NAME}` },
+    kind: "index_build",
+    work: async (session) => {
+      await session.run(replacePolicy(policy));
+    },
+  });
+};
+
+const cutOverRelations = async (
+  connection: OnlineMigrationConnection,
+  tables: OnlineTableGate,
+  policies: readonly PolicyDefinition[],
+  offset = 0,
+): Promise<OnlineMigrationOutcome> => {
+  const policy = policies.at(offset);
+  if (policy === undefined) {
+    return { type: "complete" };
+  }
+  const outcome = await cutOverRelation(connection, tables, policy);
+  if (outcome.type === "deferred") {
+    return outcome;
+  }
+  return await cutOverRelations(connection, tables, policies, offset + 1);
+};
+
+type EntityFeatureGateRepairOptions = {
+  /** Each relation's gate policy, as the schema owner defines it. */
+  readPolicies: () => readonly PolicyDefinition[];
+};
+
+const schemaPolicies = (): readonly PolicyDefinition[] =>
+  entityFeaturePolicyDefinitions(
+    Object.values(schema).filter((table) => is(table, PgTable)),
+    POLICY_NAME,
+  );
+
+export const createEntityFeatureGateRepair = ({
+  readPolicies,
+}: EntityFeatureGateRepairOptions): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20261009112500_entity_feature_row_gates",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const installed = (
       await connection.query(
-        `SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed`,
+        `SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed`,
       )
     ).at(0);
     if (!isRecord(installed) || typeof installed["installed"] !== "boolean") {
@@ -178,12 +256,8 @@ export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
     }
     const rows =
       await connection.query(`SELECT count(*) = (SELECT count(*) FROM jsonb_object_keys(public.entity_feature_gate_graph()))
-      AND bool_and((CASE WHEN tablename = 'entities' THEN coalesce(
-          qual LIKE '%list_item_type IS NULL%' AND qual LIKE '%list_item_type = ''task''%'
-          AND qual LIKE '%app.enabled_features%' AND qual LIKE '%? ''legal-lists''%', false)
-        ELSE coalesce(qual LIKE '%entity_feature_gate%', false) END)
-        AND permissive = 'RESTRICTIVE' AND cmd = 'ALL' AND 'stella' = ANY(roles)) AS complete
-      FROM pg_catalog.pg_policies WHERE schemaname = 'public' AND policyname = 'workspace_entity_feature'
+      AND bool_and(${CUT_OVER_POLICY}) AS complete
+      FROM pg_catalog.pg_policies WHERE schemaname = 'public' AND policyname = '${POLICY_NAME}'
         AND public.entity_feature_gate_graph() ? tablename`);
     const row = rows.at(0);
     if (!isRecord(row) || typeof row["complete"] !== "boolean") {
@@ -192,7 +266,8 @@ export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
     if (row["complete"]) {
       return { type: "complete" };
     }
-    const reason = "Entity feature gates await backfill and atomic cutover";
+    const reason =
+      "Entity feature gates await backfill and per-relation cutover";
     const checkpoint = (
       await connection.query(
         `SELECT cursor, batch FROM public.database_backfill_states
@@ -231,15 +306,29 @@ export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
     };
   },
   repair: async (connection, tables) => {
-    for (const relation of await readRelations(connection)) {
+    const relations = await readRelations(connection);
+    for (const relation of relations) {
       const outcome = await backfillRelation(connection, tables, relation);
       if (outcome.type === "deferred") {
         return outcome;
       }
     }
-    await runMaintenanceTransaction(connection, async () => {
-      await connection.execute("SELECT public.entity_feature_gate_finish()");
-    });
-    return { type: "complete" };
+    // Every relation is backfilled and validated before the first cutover,
+    // so a deferred cutover never leaves a relation behind its backfill.
+    const policies = new Map(
+      readPolicies().map((policy) => [policy.tableName, policy]),
+    );
+    return await cutOverRelations(
+      connection,
+      tables,
+      relations.map(
+        ({ tableName }) =>
+          policies.get(tableName) ??
+          panic(`Entity feature gate relation ${tableName} has no policy`),
+      ),
+    );
   },
-};
+});
+
+export const ENTITY_FEATURE_GATE_REPAIR: MigrationOwnedOnlineRepair =
+  createEntityFeatureGateRepair({ readPolicies: schemaPolicies });

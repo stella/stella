@@ -6,13 +6,13 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "./corpus-index-read-contract";
 import {
+  caseLawCorpusQuery,
   CORPUS_QUERY_LEAF_BUDGET,
   corpusFreeTextClause,
-  caseLawCorpusQuery,
-  quoteCorpusValue,
-  partitionCorpusFunctionWords,
-  tokenizeCorpusFreeText,
   type CorpusFreeTextOptions,
+  partitionCorpusFunctionWords,
+  quoteCorpusValue,
+  tokenizeCorpusFreeText,
 } from "./corpus-query";
 import type { CorpusIndexQueryVariant } from "./corpus-query-variant-policy";
 import { stemSlovakUpstream } from "./morphology/slovak";

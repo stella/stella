@@ -6,19 +6,28 @@ import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
 import { waiverKey } from "./dated-waiver-fix-task";
 import {
   collectWaivers,
   DAY_MS,
   DOC_SOURCE_FILE,
+  docProbeUrl,
   dueWaivers,
+  dueWaiverWarnings,
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
+  PENDING_CONTRACT_MIGRATIONS_SOURCE,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
 } from "./dated-waivers";
+import {
+  type QuarantineEntry,
+  REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
+  serializeRegistry,
+} from "./flaky-test-quarantine";
 
 const doc = {
   dependency: "doc-package",
@@ -27,8 +36,16 @@ const doc = {
   checkedAt: "2026-09-06T00:00:00.000Z",
   expiresAt: "2026-10-06T00:00:00.000Z",
 } as const;
+const flaky = {
+  id: "packages/example/src/b.test.ts::group > flaky case",
+  owner: "octocat",
+  reason: "Fails intermittently.",
+  created: "2026-09-25",
+  expires: "2026-10-05",
+} satisfies QuarantineEntry;
 const sources = {
   [DOC_SOURCE_FILE]: 'const exclusions = ["doc-package"];',
+  [FLAKY_TEST_QUARANTINE_FILE]: serializeRegistry({ entries: [flaky] }),
   "bunfig.toml":
     '[install]\nminimumReleaseAgeExcludes = [\n "new-package", # quarantine-expires: 2026-10-02T01:02:03.000Z\n]\n',
   "scripts/dependency-audit-baseline.json":
@@ -48,6 +65,8 @@ const sources = {
       },
     ],
   }),
+  [PENDING_CONTRACT_MIGRATIONS_SOURCE]:
+    'const migrations = [{ name: "pending-contract", expiresAt: "2026-10-01" }];',
 };
 const read = (file: string) => new Map(Object.entries(sources)).get(file) ?? "";
 const inventory = () =>
@@ -143,6 +162,80 @@ test("an elapsed waiver annotates the change instead of failing it", () => {
     expiredWaiverFailures(entries, new Date("2026-10-02T01:02:03.000Z")),
   ).toEqual([]);
 });
+test("a due waiver warns on its file ahead of its date and fails only the change touching that file", () => {
+  const entries = inventory().filter(({ kind }) => kind === "no-llms-txt");
+  const unrelated = new Set(["apps/web/src/unrelated.ts"]);
+  const owner = new Set([DOC_SOURCE_FILE]);
+  expect(
+    dueWaiverWarnings(entries, new Date("2026-09-30T23:59:59.999Z"), unrelated),
+  ).toEqual([]);
+  const ahead = dueWaiverWarnings(
+    entries,
+    new Date("2026-10-01T00:00:00.000Z"),
+    owner,
+  );
+  expect(ahead).toHaveLength(1);
+  expect(ahead[0]).toStartWith(`::warning file=${DOC_SOURCE_FILE},line=`);
+  expect(ahead[0]).toContain("doc-package (no-llms-txt) expires at");
+
+  const elapsed = new Date("2026-10-06T00:00:00.000Z");
+  expect(dueWaiverWarnings(entries, elapsed, unrelated)).toHaveLength(1);
+  expect(expiredWaiverFailures(entries, elapsed, unrelated)).toEqual([]);
+  expect(dueWaiverWarnings(entries, elapsed, owner)).toEqual([]);
+  expect(expiredWaiverFailures(entries, elapsed, owner)).toEqual([
+    `${DOC_SOURCE_FILE}:${String(entries[0]?.line)} dated waiver expired: doc-package`,
+  ]);
+});
+// The recheck reads the first llms.txt URL an explanation names; without one
+// the waiver could only ever expire, never be rechecked.
+test("every documentation waiver names the llms.txt its recheck probes", () => {
+  for (const { dependency, explanation } of DOC_SOURCE_EXCLUSIONS) {
+    expect({ dependency, url: docProbeUrl(explanation) }).toEqual({
+      dependency,
+      url: expect.stringMatching(/^https:\/\/\S+\/llms\.txt$/u),
+    });
+  }
+});
+test("an elapsed flaky-test quarantine annotates the change gate instead of failing it", () => {
+  const entries = collectWaivers({
+    read,
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    flakyTestQuarantines: [flaky],
+  }).filter(({ kind }) => kind === "flaky-test-quarantine");
+  expect(
+    entries.map(({ kind, line, probe }) => ({ kind, line, probe })),
+  ).toEqual([
+    {
+      kind: "flaky-test-quarantine",
+      line: 4,
+      probe: {
+        command: [
+          "bun",
+          "--cwd=packages/example",
+          "run",
+          "test",
+          "--",
+          "src/b.test.ts",
+          "-t",
+          "flaky case",
+        ],
+        attempts: 20,
+      },
+    },
+  ]);
+  const elapsed = new Date("2026-10-06T00:00:00.000Z");
+  expect(
+    expiredWaiverAnnotations(entries, new Date("2026-10-05T23:59:59.999Z")),
+  ).toEqual([]);
+  expect(expiredWaiverFailures(entries, elapsed)).toEqual([]);
+  expect(expiredWaiverAnnotations(entries, elapsed)).toEqual([
+    `::warning file=${FLAKY_TEST_QUARANTINE_FILE},line=4::${flaky.id} (flaky-test-quarantine) expired at 2026-10-05; ${RECHECK_INSTRUCTIONS["flaky-test-quarantine"]}`,
+  ]);
+});
+
 test("an elapsed test quarantine and other elapsed waivers still fail the check", () => {
   const quarantine = readTestQuarantines({
     "packages/example/src/a.test.ts":
@@ -166,7 +259,10 @@ test("an elapsed test quarantine and other elapsed waivers still fail the check"
     new Date("2026-10-07T00:00:00.000Z"),
   );
   expect(allElapsed).toHaveLength(
-    entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
+    entries.filter(
+      ({ kind }) =>
+        kind !== "release-age-exclusion" && kind !== "dependency-audit",
+    ).length,
   );
   expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
     false,
@@ -212,6 +308,32 @@ test("an expired waiver fails a change only when the change touches its source",
   ).toBe(true);
 });
 
+test("an expired pending contract fails its registry change and the full check only", () => {
+  const entries = collectWaivers({
+    read,
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    pendingContractMigrations: [
+      { name: "pending-contract", expiresAt: "2026-10-01" },
+    ],
+  });
+  const now = new Date("2026-10-03T00:00:00.000Z");
+  const expected = `${PENDING_CONTRACT_MIGRATIONS_SOURCE}:1 dated waiver expired: pending-contract`;
+  expect(expiredWaiverFailures(entries, now)).toEqual([expected]);
+  expect(
+    expiredWaiverFailures(
+      entries,
+      now,
+      new Set([PENDING_CONTRACT_MIGRATIONS_SOURCE]),
+    ),
+  ).toEqual([expected]);
+  expect(
+    expiredWaiverFailures(entries, now, new Set(["apps/web/src/unrelated.ts"])),
+  ).toEqual([]);
+});
+
 test("impossible dates, missing anchors and new expiry-bearing owners fail closed", () => {
   for (const value of ["2026-02-30", "2026-02-30T00:00:00.000Z", "tomorrow"]) {
     expect(() => expiryInstant(value)).toThrow("Invalid dated waiver expiry");
@@ -228,13 +350,14 @@ test("impossible dates, missing anchors and new expiry-bearing owners fail close
   expect(
     uncoveredExpirySources(
       {
+        "apps/example/src/deadline.ts": 'expiresAt: "2026-10-03"',
         "new.json": '{"expiresOn":"2026-10-02"}',
         "known.ts": 'expiresAt: "2026-10-02"',
         "history.json": '{"recordedAt":"2026-10-02"}',
       },
       new Set(["known.ts"]),
     ),
-  ).toEqual(["new.json"]);
+  ).toEqual(["apps/example/src/deadline.ts", "new.json"]);
 });
 test("documentation inventory derives from injected typed owners including none", () => {
   for (const docs of [
@@ -358,6 +481,10 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
       quarantineSources: {
         "a.test.ts": `${prefix}${quarantined}`,
       },
+      flakyTestQuarantines: [flaky],
+      pendingContractMigrations: [
+        { name: "pending-contract", expiresAt: "2026-10-01" },
+      ],
     });
   const original = entriesAt("");
   expect(Object.keys(RECHECK_INSTRUCTIONS).toSorted()).toEqual(
@@ -404,15 +531,19 @@ test("exception identity survives sibling removal and rejects ambiguous covered 
   );
 });
 
+// Scoped like an unrelated pull request: the real inventory must load and
+// validate, but no waiver's date can fail this test on the day it elapses.
 test("check consumes validated tracked files without spawning under the offline preload", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
   const trackedFiles = path.join(directory, "tracked-files");
+  const changedFiles = path.join(directory, "changed-files");
   try {
     const git = Bun.spawnSync(["git", "ls-files", "-z"], {
       cwd: path.resolve(import.meta.dir, ".."),
     });
     expect(git.exitCode).toBe(0);
     writeFileSync(trackedFiles, git.stdout);
+    writeFileSync(changedFiles, "apps/web/src/unrelated.ts\0");
 
     const checked = Bun.spawnSync(
       [
@@ -423,6 +554,8 @@ test("check consumes validated tracked files without spawning under the offline 
         "--check",
         "--tracked-files",
         trackedFiles,
+        "--changed-files",
+        changedFiles,
       ],
       { cwd: path.resolve(import.meta.dir, "..") },
     );
@@ -470,4 +603,21 @@ test("tracked-files input rejects absolute and parent paths", () => {
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+test("dependency acceptance expiry warns on main and refuses only its owning file", () => {
+  const entries = inventory().filter(({ kind }) => kind === "dependency-audit");
+  const now = new Date("2026-10-07T00:00:00Z");
+  const source = "scripts/dependency-audit-baseline.json";
+  expect(entries.length).toBeGreaterThan(0);
+  for (const changes of [undefined, new Set<string>(), new Set(["bun.lock"])]) {
+    expect(expiredWaiverFailures(entries, now, changes)).toEqual([]);
+    expect(dueWaiverWarnings(entries, now, changes)).toHaveLength(
+      entries.length,
+    );
+  }
+  expect(expiredWaiverFailures(entries, now, new Set([source]))).toHaveLength(
+    entries.length,
+  );
+  expect(dueWaiverWarnings(entries, now, new Set([source]))).toEqual([]);
 });

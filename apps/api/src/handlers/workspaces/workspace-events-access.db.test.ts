@@ -8,33 +8,45 @@ import {
   test,
 } from "bun:test";
 
+import {
+  newNotificationRealtimeEvent,
+  RESOURCE_TYPE,
+  resourceRef,
+  resourceUpdatedRealtimeEvent,
+} from "@stll/api-contract";
+import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
+
 import { rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb } from "@/api/db/scoped";
+import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { createHttpApp } from "@/api/http/app";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   brandActorSessionIdentity,
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { startSse, stopSse } from "@/api/lib/sse";
+import { broadcast, broadcastToUser, startSse, stopSse } from "@/api/lib/sse";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // A matter's event stream across the removal of one of its members: the real
-// stream route and its access macro, the real member-removal route, and the
-// real revocation it triggers.
+// stream route and its workspace access served over HTTP, the real
+// member-removal route, and the real revocation it triggers.
 
 setDefaultTimeout(120_000);
 
@@ -47,7 +59,19 @@ beforeAll(async () => {
   startSse(realtimeAuthorizers);
 });
 
+const server = serveForTest(
+  createHttpApp({
+    routes: [
+      ...workspaceEventsRoute,
+      ...notificationsRoute,
+      ...workspacesRoute,
+    ],
+    middleware: [errorBoundary],
+  }),
+);
+
 afterAll(async () => {
+  await server.stop();
   stopSse();
   await releaseAgentAuthTestDb();
 });
@@ -58,11 +82,58 @@ const BASE = "http://localhost";
 const STREAM_CLOSE_WAIT_MS = 2000;
 
 const openEventStream = async (browser: HumanBrowser, workspaceId: string) =>
-  await workspaceEventsRoute.handle(
+  await server.fetch(
     new Request(`${BASE}/workspaces/${workspaceId}/events`, {
       headers: { cookie: browser.cookieHeader() },
     }),
   );
+
+const openUserEventStream = async (browser: HumanBrowser) =>
+  await server.fetch(
+    new Request(`${BASE}/v1/notifications/events`, {
+      headers: { cookie: browser.cookieHeader() },
+    }),
+  );
+
+const heartbeatDecoder = new TextDecoder();
+
+/** A chunk of nothing but heartbeat frames, which carry no event. */
+const isHeartbeatOnly = (chunk: Uint8Array) =>
+  heartbeatDecoder
+    .decode(chunk)
+    .split(SSE_HEARTBEAT_FRAME)
+    .every((part) => part === "");
+
+const readNextChunk = async (response: Response) => {
+  const { body } = response;
+  if (!body) {
+    throw new Error("The event stream has no body");
+  }
+  const reader = body.getReader();
+  try {
+    const deadline = Bun.sleep(STREAM_CLOSE_WAIT_MS).then(
+      () => "timeout" as const,
+    );
+    // A heartbeat keeps an idle connection open and says nothing about
+    // delivery; a slow setup can queue one before the step under test.
+    for (;;) {
+      const result = await Promise.race([reader.read(), deadline]);
+      if (
+        result === "timeout" ||
+        result.done ||
+        !isHeartbeatOnly(result.value)
+      ) {
+        return result;
+      }
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
+  }
+};
 
 type StreamOutcome = "closed" | "open";
 
@@ -166,7 +237,7 @@ describe("a matter's event stream when a member is removed", () => {
     const ownerStream = await openEventStream(owner, workspaceId);
     expect(ownerStream.status).toBe(200);
 
-    const removal = await workspacesRoute.handle(
+    const removal = await server.fetch(
       new Request(
         `${BASE}/workspaces/${workspaceId}/members/${member.userId}`,
         {
@@ -221,5 +292,70 @@ describe("a matter's event stream when a member is removed", () => {
     expect(removal.isOk()).toBe(true);
 
     expect(await awaitStreamEnd(memberStream)).toBe("closed");
+  });
+});
+
+describe("event streams when their opening session ends", () => {
+  test("stops workspace and user delivery only for the revoked session", async () => {
+    const { member, organizationId, workspaceId } =
+      await createMatterWithMember();
+    const otherSession = await signInHuman(member.email);
+    await otherSession.setActiveOrganization(organizationId);
+
+    const revokedSession = await getAuth().api.getSession({
+      headers: member.headers(),
+    });
+    const liveSession = await getAuth().api.getSession({
+      headers: otherSession.headers(),
+    });
+    if (!revokedSession || !liveSession) {
+      throw new Error("Expected both signed-in sessions");
+    }
+
+    const revokedWorkspaceStream = await openEventStream(member, workspaceId);
+    const liveWorkspaceStream = await openEventStream(
+      otherSession,
+      workspaceId,
+    );
+    const revokedUserStream = await openUserEventStream(member);
+    const liveUserStream = await openUserEventStream(otherSession);
+    expect(revokedWorkspaceStream.status).toBe(200);
+    expect(liveWorkspaceStream.status).toBe(200);
+    expect(revokedUserStream.status).toBe(200);
+    expect(liveUserStream.status).toBe(200);
+
+    const revocation = await getAuth().api.revokeSession({
+      body: { token: revokedSession.session.token },
+      headers: otherSession.headers(),
+    });
+    expect(revocation.status).toBe(true);
+
+    broadcast(
+      workspaceId,
+      resourceUpdatedRealtimeEvent(
+        resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: createSafeId<"entity">(),
+        }),
+      ),
+    );
+    broadcastToUser(
+      brandPersistedUserId(member.userId),
+      brandPersistedOrganizationId(organizationId),
+      newNotificationRealtimeEvent(),
+    );
+
+    expect(await readNextChunk(revokedWorkspaceStream)).toEqual({
+      done: true,
+      value: undefined,
+    });
+    expect(await readNextChunk(revokedUserStream)).toEqual({
+      done: true,
+      value: undefined,
+    });
+    expect(await readNextChunk(liveWorkspaceStream)).toMatchObject({
+      done: false,
+    });
+    expect(await readNextChunk(liveUserStream)).toMatchObject({ done: false });
   });
 });

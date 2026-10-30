@@ -68,13 +68,13 @@ import {
   skCourtDirectoryMetadata,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
 import type {
-  SkCourtRegistryReader,
   SkCourtRegistryObservation,
+  SkCourtRegistryReader,
   SkCourtRegistryRecord,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   isNullishArrayOf,
   isNullishNumber,
   isNullishString,
@@ -84,22 +84,22 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
-  READ_OUTCOME_METADATA_KEY,
+  type AbsenceEvidence,
   isReadRefusal,
   isStoredReadAbsence,
+  READ_OUTCOME_METADATA_KEY,
   readAbsent,
-  readPresent,
-  readUnavailable,
-  type AbsenceEvidence,
   type ReadOutcome,
+  readPresent,
   type ReadRefusal,
+  readUnavailable,
   type ReadUnavailableCause,
   type StoredReadAbsence,
 } from "@/api/lib/errors/read-outcome";
@@ -759,8 +759,7 @@ type SkCourtsMetadata = Record<string, unknown> & {
   updateDate: string | undefined;
   updateDateIso: string | undefined;
   updateDateDefect:
-    | { type: "invalid-publisher-date"; value: string }
-    | undefined;
+    { type: "invalid-publisher-date"; value: string } | undefined;
   statedSourceUrl: string | undefined;
   sourceUrlStatus: SkCourtsSourceUrlStatus;
 };

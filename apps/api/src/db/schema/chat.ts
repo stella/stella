@@ -1,4 +1,5 @@
 import type { StreamChunk } from "@tanstack/ai";
+import type { SQL } from "drizzle-orm";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
@@ -11,6 +12,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
+import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
   CHAT_THREAD_NAME_KINDS,
@@ -29,20 +31,20 @@ import {
 import {
   aiMemoryPolicies,
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
-  chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
-  chatTurnPolicies,
+  chatMessageSearchDocumentPolicies,
   chatThreadCompactionPolicies,
   chatThreadNamePolicies,
+  chatThreadPolicies,
   chatThreadPreviewPassagePolicies,
   chatThreadSearchDocumentPolicies,
-  chatThreadPolicies,
+  chatTurnPolicies,
   fileChatThreadPolicies,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -50,9 +52,9 @@ import {
   safeWorkspaceId,
   sql,
   templateChatThreadPolicies,
+  timestamptz,
   tsvector,
   user,
-  timestamptz,
 } from "./common";
 import type {
   AnyPgColumn,
@@ -456,7 +458,9 @@ export const chatMessageRevisions = p.pgTable(
       .references(() => chatThreads.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
-      { onDelete: "restrict" },
+      {
+        onDelete: "restrict",
+      },
     ),
     /** Revision of the replaced content; revision zero is the original. */
     revision: p.integer().notNull(),
@@ -513,7 +517,9 @@ export const chatTurns = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
-      { onDelete: "restrict" },
+      {
+        onDelete: "restrict",
+      },
     ),
     userId: p
       .text("user_id")
@@ -735,6 +741,8 @@ export const chatTurns = p.pgTable(
 const chatRunLogOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_logs'::regclass)`;
 const chatRunLogEntryOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_log_entries'::regclass)`;
 
+export const CHAT_RUN_REFERENCE_STATE_MAX_BYTES = 64 * 1024;
+
 /** Transient delivery log for one execution run; the turn remains authoritative. */
 export const chatRunLogs = p.pgTable(
   "chat_run_logs",
@@ -746,6 +754,11 @@ export const chatRunLogs = p.pgTable(
       .references(() => chatTurns.id, { onDelete: "cascade" }),
     nextSeq: p.bigint("next_seq", { mode: "bigint" }).notNull().default(1n),
     bytesUsed: p.bigint("bytes_used", { mode: "bigint" }).notNull().default(0n),
+    /** Older producers use legacy mode; current producers explicitly start checkpointed summaries. */
+    referenceSummary: jsonb("reference_summary")
+      .$type<ChatRunReferenceState>()
+      .notNull()
+      .default({ type: "legacy" }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     closedAt: timestamptz("closed_at"),
   },
@@ -756,6 +769,10 @@ export const chatRunLogs = p.pgTable(
     }),
     p.check("chat_run_logs_next_seq_check", sql`${table.nextSeq} > 0`),
     p.check("chat_run_logs_bytes_used_check", sql`${table.bytesUsed} >= 0`),
+    p.check(
+      "chat_run_logs_reference_summary_size_check",
+      sql`octet_length(${table.referenceSummary}::text) <= ${CHAT_RUN_REFERENCE_STATE_MAX_BYTES}`,
+    ),
     p.index("chat_run_logs_turn_id_idx").on(table.turnId),
     p
       .index("chat_run_logs_closed_at_idx")
@@ -773,6 +790,12 @@ export const chatRunLogs = p.pgTable(
   ],
 );
 
+/** Text boundaries carry roles; no document payload participates in this index. */
+export const chatRunTextStartSql = (chunk: SQL) =>
+  sql`(${chunk}->>'type' = 'TEXT_MESSAGE_START' OR (${chunk}->>'type' = 'TEXT_MESSAGE_CHUNK' AND ${chunk} ? 'role'))`;
+
+export const CHAT_RUN_TEXT_BOUNDARY_INITIALIZATIONS = ["recorded"] as const;
+
 /** Ordered chunks; deleting a log header removes its whole transient prefix. */
 export const chatRunLogEntries = p.pgTable(
   "chat_run_log_entries",
@@ -783,6 +806,12 @@ export const chatRunLogEntries = p.pgTable(
     batchId: p.uuid("batch_id").notNull(),
     batchIndex: p.integer("batch_index").notNull(),
     chunk: jsonb("chunk").$type<StreamChunk>().notNull(),
+    /** Exclusive message end; NULL means no end has been recorded. */
+    textMessageEndSeq: p.bigint("text_message_end_seq", { mode: "bigint" }),
+    /** Recorded boundary initialization; NULL awaits the online repair for text starts. */
+    textBoundaryInitialization: p.text("text_boundary_initialization", {
+      enum: CHAT_RUN_TEXT_BOUNDARY_INITIALIZATIONS,
+    }),
   },
   (table) => [
     p.primaryKey({
@@ -799,6 +828,39 @@ export const chatRunLogEntries = p.pgTable(
     p
       .uniqueIndex("chat_run_log_entries_batch_uidx")
       .on(table.organizationId, table.runId, table.batchId, table.batchIndex),
+    p
+      .index("chat_run_log_entries_message_snapshot_idx")
+      .on(table.organizationId, table.runId, table.seq)
+      .where(sql`${table.chunk}->>'type' = 'MESSAGES_SNAPSHOT'`),
+    p
+      .index("chat_run_log_entries_text_start_idx")
+      .on(table.organizationId, table.runId, table.seq)
+      .where(chatRunTextStartSql(sql`${table.chunk}`)),
+    p
+      .index("chat_run_log_entries_text_open_idx")
+      .on(
+        table.organizationId,
+        table.runId,
+        table.textBoundaryInitialization,
+        table.textMessageEndSeq,
+        table.seq,
+      )
+      .where(chatRunTextStartSql(sql`${table.chunk}`)),
+    p
+      .index("chat_run_log_entries_text_boundary_id_idx")
+      .on(
+        table.organizationId,
+        table.runId,
+        sql`md5(${table.chunk}->>'messageId')`,
+        table.seq,
+      )
+      .where(
+        sql`(${chatRunTextStartSql(sql`${table.chunk}`)} OR ${table.chunk}->>'type' = 'TEXT_MESSAGE_END')`,
+      ),
+    p.check(
+      "chat_run_log_entries_text_end_check",
+      sql`(${table.textBoundaryInitialization} IS NULL AND ${table.textMessageEndSeq} IS NULL) OR (${table.textBoundaryInitialization} IS NOT NULL AND ${table.textBoundaryInitialization} = 'recorded' AND (${table.textMessageEndSeq} IS NULL OR ${table.textMessageEndSeq} > ${table.seq}))`,
+    ),
     p.check("chat_run_log_entries_seq_check", sql`${table.seq} > 0`),
     p.check(
       "chat_run_log_entries_batch_index_check",
@@ -1256,7 +1318,7 @@ const AI_MEMORY_SOURCE_SQL_VALUES = AI_MEMORY_SOURCES.map((source) =>
  * Persistent AI memory: typed facts and preferences the assistant
  * recalls across sessions, scoped to the firm (organization), the
  * lawyer (user), or a matter (workspace). Read precedence is matter
- * > user > firm. User-managed lifecycle changes are archive-only, while
+ * > user > firm. Users may archive, restore, or permanently erase memories;
  * deleting a source matter erases every memory derived from it. Memories are
  * tenant-isolated via RLS; matter-derived content is additionally gated by
  * `sourceDataWorkspaceIds` so it cannot cross matters.

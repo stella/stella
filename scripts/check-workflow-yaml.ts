@@ -4,14 +4,16 @@ import { panic, TaggedError } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const WORKFLOW_DIRECTORY = ".github/workflows";
 const ACTION_DIRECTORY = ".github/actions";
 // GitHub rejects a workflow file over 512,000 bytes and then runs none of
-// its jobs. Fail well before that, while there is still room to shrink it.
-export const WORKFLOW_SIZE_LIMIT_BYTES = 480_000;
+// its jobs. Fail at 80 % of that, while there is still room to shrink it.
+export const GITHUB_WORKFLOW_LIMIT_BYTES = 512_000;
+export const WORKFLOW_SIZE_LIMIT_BYTES = GITHUB_WORKFLOW_LIMIT_BYTES * 0.8;
 
 class WorkflowYamlError extends TaggedError("WorkflowYamlError")<{
   message: string;
@@ -52,7 +54,7 @@ export const parseWorkflowYaml = async (file: string): Promise<unknown> => {
 export const validateWorkflowSize = (bytes: number, file: string): void => {
   if (bytes > WORKFLOW_SIZE_LIMIT_BYTES) {
     throw new WorkflowYamlError({
-      message: `${file}: ${bytes} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit; share repeated steps through YAML anchors or a local action`,
+      message: `${file}: ${bytes} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit (80 % of GitHub's ${GITHUB_WORKFLOW_LIMIT_BYTES}-byte limit); move long step bodies into scripts checked out at github.workflow_sha, or share repeated steps through YAML anchors or a local action`,
       file,
     });
   }
@@ -113,7 +115,78 @@ export const validateActionMetadata = (value: unknown, file: string): void => {
 
 const YAML_EXTENSIONS = [".yml", ".yaml"] as const;
 
-const localActionReferences = (value: unknown): string[] => {
+export const validateNoRubyShell = (value: unknown, file: string): void => {
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      validateNoRubyShell(child, file);
+    }
+    return;
+  }
+  if (!isRecord(value)) {
+    return;
+  }
+  const shell = value["shell"];
+  // Any command word naming ruby, so a path or an env launcher cannot hide it.
+  if (
+    typeof shell === "string" &&
+    shell
+      .split(/\s+/u)
+      .some((word) => /^ruby[\d.]*$/u.test(word.split("/").at(-1) ?? ""))
+  ) {
+    throw new WorkflowYamlError({
+      message: `${file}: Ruby workflow shells are not allowed`,
+      file,
+    });
+  }
+  for (const child of Object.values(value)) {
+    validateNoRubyShell(child, file);
+  }
+};
+
+export const validateWorkflowJobTimeouts = (
+  value: unknown,
+  file: string,
+): void => {
+  if (!isRecord(value) || !isRecord(value["jobs"])) {
+    return;
+  }
+  for (const [jobName, job] of Object.entries(value["jobs"])) {
+    if (isRecord(job) && "steps" in job && !("timeout-minutes" in job)) {
+      throw new WorkflowYamlError({
+        message: `${file}: job ${jobName} runs steps and must define timeout-minutes; every step-running workflow job requires a timeout`,
+        file,
+      });
+    }
+  }
+};
+
+export const validateNoRubyProcessSpawns = async (
+  root: string,
+): Promise<void> => {
+  const scriptsDirectory = path.join(root, "scripts");
+  if (!existsSync(scriptsDirectory)) {
+    return;
+  }
+  const spawnPattern = new RegExp(
+    `${String.raw`(?:Bun\.(?:spawn|spawnSync)|\b(?:spawn|spawnSync|execFile|execFileSync)\s*\()\s*(?:\{[^}]*cmd\s*:\s*)?\[?\s*["']`}ruby${String.raw`["']`}`,
+    "su",
+  );
+  for await (const relative of new Bun.Glob(
+    "**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
+  ).scan({
+    cwd: scriptsDirectory,
+  })) {
+    const file = path.join(root, "scripts", relative);
+    if (spawnPattern.test(await Bun.file(file).text())) {
+      throw new WorkflowYamlError({
+        message: `${file}: spawning Ruby from scripts is not allowed`,
+        file,
+      });
+    }
+  }
+};
+
+const localActionSteps = (value: unknown): Record<string, unknown>[] => {
   if (!isRecord(value)) {
     return [];
   }
@@ -130,14 +203,19 @@ const localActionReferences = (value: unknown): string[] => {
   }
   return groups
     .flatMap((steps) => flattenWorkflowSteps(steps))
-    .flatMap((step) => {
+    .filter((step) => {
       const uses = step["uses"];
-      return typeof uses === "string" &&
+      return (
+        typeof uses === "string" &&
         (uses.startsWith("$/") || uses.startsWith("./"))
-        ? [uses]
-        : [];
+      );
     });
 };
+
+const localActionReferences = (value: unknown): string[] =>
+  localActionSteps(value).flatMap((step) =>
+    typeof step["uses"] === "string" ? [step["uses"]] : [],
+  );
 
 type LocalActionReferencesOptions = {
   value: unknown;
@@ -200,10 +278,13 @@ export const actionlintWorkflowSource = ({
 }: ActionlintWorkflowSourceOptions): string => {
   const value: unknown = Bun.YAML.parse(source);
   validateLocalActionReferences({ value, root, file });
-  const expected = localActionReferences(value).filter((uses) =>
-    uses.startsWith("$/"),
-  );
-  const rewritten: string[] = [];
+  const expected = structuredClone(value);
+  for (const step of localActionSteps(expected)) {
+    const uses = step["uses"];
+    if (typeof uses === "string" && uses.startsWith("$/")) {
+      step["uses"] = `.${uses.slice(1)}`;
+    }
+  }
   const normalized = source
     .split("\n")
     .map((line) => {
@@ -230,7 +311,6 @@ export const actionlintWorkflowSource = ({
       ) {
         end += 1;
       }
-      const uses = actionValue.slice(0, end);
       const remainder = actionValue.slice(end);
       if (quote !== "" && !remainder.startsWith(quote)) {
         return line;
@@ -239,14 +319,13 @@ export const actionlintWorkflowSource = ({
       if (tail !== "" && !tail.startsWith("#")) {
         return line;
       }
-      rewritten.push(uses);
       const offset = line.length - scalar.length + quote.length;
       return `${line.slice(0, offset)}.${line.slice(offset + 1)}`;
     })
     .join("\n");
-  if (
-    JSON.stringify(rewritten.toSorted()) !== JSON.stringify(expected.toSorted())
-  ) {
+  // An anchored source step can expand into several jobs. Compare the
+  // parsed trees so every reference changes while scripts and inputs survive.
+  if (!isDeepStrictEqual(Bun.YAML.parse(normalized), expected)) {
     throw new WorkflowYamlError({
       message: `${file}: archive action normalization must be one-to-one`,
       file,
@@ -268,8 +347,11 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
   for (const name of workflowNames) {
     const file = path.join(workflowDirectory, name);
     validateWorkflowSize(Bun.file(file).size, file);
+    const value = await parseWorkflowYaml(file);
+    validateWorkflowJobTimeouts(value, file);
+    validateNoRubyShell(value, file);
     validateLocalActionReferences({
-      value: await parseWorkflowYaml(file),
+      value,
       root,
       file,
     });
@@ -298,9 +380,11 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
       metadata[0] ?? panic("action metadata missing"),
     );
     const action = await parseWorkflowYaml(file);
+    validateNoRubyShell(action, file);
     validateActionMetadata(action, file);
     validateLocalActionReferences({ value: action, root, file });
   }
+  await validateNoRubyProcessSpawns(root);
 };
 
 if (import.meta.main) {

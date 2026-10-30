@@ -1,6 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+
+import type { WebRoutes } from "@/generated/api-routes.gen";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
@@ -12,7 +15,7 @@ const { useState } = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { act, cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -145,7 +148,7 @@ for (const controlled of [true, false]) {
                 role: "member",
                 ai: true,
                 deepl: true,
-                ocr: true,
+                ocr: DOCUMENT_OCR_AVAILABILITY.live,
                 desktop: "current",
                 settings: undefined,
               })}
@@ -220,3 +223,121 @@ for (const controlled of [true, false]) {
     });
   }
 }
+
+type AITranslationOutput = Extract<
+  WebRoutes["v1"]["workspaces"][":workspaceId"]["document-translations"]["runs"]["post"]["body"],
+  { engine: "ai" }
+>;
+
+const testAITranslationOutput = (output: AITranslationOutput["output"]) =>
+  test(`AI ${output} translation submits successfully without an idempotency header`, async () => {
+    const runRequests: Request[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const pathname = new URL(request.url).pathname;
+        if (pathname.endsWith("/document-translations/prepare")) {
+          return Response.json({
+            entityVersionId: "version",
+            hasComments: false,
+          });
+        }
+        if (
+          pathname.endsWith("/document-translations/runs") &&
+          request.method === "POST"
+        ) {
+          runRequests.push(request);
+          return Response.json({ type: "commentPolicyRequired" });
+        }
+        if (pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        return Response.json({ configured: false });
+      },
+      { preconnect: () => undefined },
+    );
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, refetchInterval: false } },
+    });
+    clients.push(client);
+    const Page = () => (
+      <TranslateDocumentDialog
+        workspaceId="matter"
+        viewId="view"
+        entityId="entity"
+        fieldId="field"
+        entityVersionKey="version"
+        isDocx
+        mode="controlled"
+        open
+        onOpenChange={() => undefined}
+      />
+    );
+    const root = router.createRootRoute({ component: router.Outlet });
+    const protectedRoute = router.createRoute({
+      getParentRoute: () => root,
+      id: "_protected",
+      beforeLoad: () => ({ user: { activeOrganizationId: "organization-a" } }),
+      component: router.Outlet,
+    });
+    const route = router.createRoute({
+      getParentRoute: () => protectedRoute,
+      path: "/document",
+      component: Page,
+    });
+    const appRouter = router.createRouter({
+      history: router.createMemoryHistory({ initialEntries: ["/document"] }),
+      routeTree: root.addChildren([protectedRoute.addChildren([route])]),
+      isServer: false,
+    });
+    await appRouter.load();
+    render(
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ActionCapabilitiesProvider
+            value={resolveActionCapabilities({
+              role: "member",
+              ai: true,
+              deepl: false,
+              ocr: DOCUMENT_OCR_AVAILABILITY.live,
+              desktop: "current",
+              settings: undefined,
+            })}
+          >
+            <FormattingProvider locale="en" timeZone="UTC">
+              <router.RouterProvider router={appRouter} />
+            </FormattingProvider>
+          </ActionCapabilitiesProvider>
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+
+    if (output === "bilingual") {
+      fireEvent.click(
+        screen.getByLabelText(messages.translate.dialog.bilingualDocument),
+      );
+    }
+    const translateButtons = screen.getAllByRole("button", {
+      name: messages.common.translate,
+    });
+    const startButton = translateButtons.at(-1);
+    if (startButton === undefined) {
+      throw new Error("Translation start button was not rendered");
+    }
+    await waitFor(() =>
+      expect(startButton.hasAttribute("disabled")).toBe(false),
+    );
+    fireEvent.click(startButton);
+
+    await waitFor(() => expect(runRequests).toHaveLength(1));
+    const request = runRequests[0];
+    expect(request?.headers.has("Idempotency-Key")).toBe(false);
+    expect(await request?.json()).toMatchObject({ output, engine: "ai" });
+    await waitFor(() => {
+      expect(screen.getByText(messages.folio.comments.visibility)).toBeTruthy();
+    });
+  });
+
+testAITranslationOutput("translated");
+testAITranslationOutput("bilingual");

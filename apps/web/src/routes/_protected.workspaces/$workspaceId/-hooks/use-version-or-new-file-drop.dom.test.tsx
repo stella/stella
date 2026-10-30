@@ -1,5 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import englishMessages from "@/i18n/langs/en.json";
@@ -15,8 +25,14 @@ const folderId = "019a0000-0000-7000-8000-000000000103";
 const fileEntityId = "019a0000-0000-7000-8000-000000000104";
 const filePropertyId = "019a0000-0000-7000-8000-000000000105";
 
-type RecordedRequest = { method: string; pathname: string; body: unknown };
+type RecordedRequest = {
+  method: string;
+  pathname: string;
+  body: unknown;
+  replayKey: string | null;
+};
 const requests: RecordedRequest[] = [];
+let successfulUpload = false;
 
 const readBody = async (request: Request): Promise<unknown> => {
   const contentType = request.headers.get("content-type") ?? "";
@@ -36,30 +52,88 @@ const readBody = async (request: Request): Promise<unknown> => {
 // The network is the only boundary: every drop below runs the real Files
 // rows, drop zone and upload paths up to the request that names where the
 // bytes go. That request is refused, so nothing continues past it.
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
+const fetchImplementation = Object.assign(
+  async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/api/auth/")) {
+      return Response.json(null);
+    }
+    requests.push({
+      method: request.method,
+      pathname,
+      body: await readBody(request),
+      replayKey: request.headers.get("Idempotency-Key"),
+    });
+    if (
+      successfulUpload &&
+      new URL(request.url).hostname === "upload.example.test"
+    ) {
+      return new Response(null, { status: 200 });
+    }
+    // The matter has no file column yet; the upload path creates it first.
+    if (request.method === "PUT" && pathname.startsWith("/v1/properties/")) {
+      return Response.json({ id: filePropertyId });
+    }
+    if (
+      successfulUpload &&
+      request.method === "POST" &&
+      pathname.endsWith("/entity-create/tree")
+    ) {
+      const body = requests.at(-1)?.body;
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("files" in body) ||
+        !Array.isArray(body.files)
+      ) {
+        throw new Error("expected a tree upload request body");
       }
-      requests.push({
-        method: request.method,
-        pathname,
-        body: await readBody(request),
+      const file = body.files.at(0);
+      if (
+        typeof file !== "object" ||
+        file === null ||
+        !("key" in file) ||
+        typeof file.key !== "string"
+      ) {
+        throw new Error("expected a reserved upload file");
+      }
+      return Response.json({
+        directories: [],
+        files: [
+          {
+            key: file.key,
+            uploadId: "019a0000-0000-7000-8000-000000000107",
+            parentId: currentFolderId,
+            url: "https://upload.example.test/file",
+            expiresAt: "2026-10-27T00:00:00.000Z",
+            headers: {},
+          },
+        ],
       });
-      // The matter has no file column yet; the upload path creates it first.
-      if (request.method === "PUT" && pathname.startsWith("/v1/properties/")) {
-        return Response.json({ id: filePropertyId });
-      }
-      return Response.json(
-        { error: { code: "test_refused", message: "refused by test" } },
-        { status: 422 },
-      );
-    },
-    { preconnect: () => undefined },
-  ),
+    }
+    if (
+      successfulUpload &&
+      request.method === "POST" &&
+      pathname.endsWith("/finalize")
+    ) {
+      return Response.json({
+        finalizedResult: {
+          type: "entity_create",
+          entityId: "019a0000-0000-7000-8000-000000000108",
+          fileId: "019a0000-0000-7000-8000-000000000109",
+          fileName: "brief.txt",
+          renamed: false,
+        },
+      });
+    }
+    return Response.json(
+      { error: { code: "test_refused", message: "refused by test" } },
+      { status: 422 },
+    );
+  },
+  { preconnect: () => undefined },
 );
 
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -75,6 +149,7 @@ const {
   Outlet,
 } = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
+const { ToastProvider, stellaToast } = await import("@stll/ui/toast");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ChatEditorProvider } =
@@ -258,26 +333,28 @@ const mountFilesView = async () => {
   });
   await router.load();
   const mounted = render(
-    <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-        <FormattingProvider locale="en" timeZone="UTC">
-          <AuthenticatedUserProvider
-            user={{
-              activeOrganizationId: "org-fixture",
-              id: "user-fixture",
-              email: "member@example.test",
-              image: null,
-              name: "Fixture member",
-              preferredName: null,
-              timezoneId: "UTC",
-              wordEditShortcut: null,
-            }}
-          >
-            <RouterProvider router={router} />
-          </AuthenticatedUserProvider>
-        </FormattingProvider>
-      </IntlProvider>
-    </QueryClientProvider>,
+    <ToastProvider>
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <AuthenticatedUserProvider
+              user={{
+                activeOrganizationId: "org-fixture",
+                id: "user-fixture",
+                email: "member@example.test",
+                image: null,
+                name: "Fixture member",
+                preferredName: null,
+                timezoneId: "UTC",
+                wordEditShortcut: null,
+              }}
+            >
+              <RouterProvider router={router} />
+            </AuthenticatedUserProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ToastProvider>,
   );
   await waitFor(() =>
     expect(document.querySelectorAll("[data-entity-row]")).toHaveLength(2),
@@ -347,8 +424,17 @@ const uploadParentIds = () =>
         : undefined,
     );
 
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    fetchImplementation,
+  );
+});
+
 afterEach(async () => {
+  mock.restore();
   await act(async () => cleanup());
+  await act(async () => stellaToast.dismiss());
+  successfulUpload = false;
   requests.length = 0;
 });
 afterAll(async () => {
@@ -408,6 +494,34 @@ describe("OS file drops in the Files view", () => {
     dispatchDrag("drop", emptySpace, transfer);
 
     await waitFor(() => expect(uploadParentIds()).toEqual([currentFolderId]));
+    client.clear();
+  });
+
+  test("a dropped file uploads successfully without replay headers", async () => {
+    successfulUpload = true;
+    const { mounted, client } = await mountFilesView();
+    const emptySpace = mounted.getByTestId("empty-space");
+    const file = new File(["brief"], "brief.txt", { type: "text/plain" });
+    const transfer = hoverWithOsFile(emptySpace, file);
+    dispatchDrag("drop", emptySpace, transfer);
+
+    await waitFor(() =>
+      expect(
+        mounted.getByText(
+          englishMessages.workspaces.files.uploadedSuccessfully,
+        ),
+      ).toBeDefined(),
+    );
+    const propertyRequest = requests.find(({ pathname }) =>
+      pathname.startsWith("/v1/properties/"),
+    );
+    expect(propertyRequest?.replayKey).toBeNull();
+    expect(
+      requests.some(({ pathname }) => pathname.endsWith("/entity-create/tree")),
+    ).toBe(true);
+    expect(
+      requests.some(({ pathname }) => pathname.endsWith("/finalize")),
+    ).toBe(true);
     client.clear();
   });
 

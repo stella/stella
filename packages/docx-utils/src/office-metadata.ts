@@ -83,16 +83,14 @@ export const officeIdentityFields = (
     }
     for (const attribute of element.attributes) {
       const attr = attribute.localName.toLowerCase();
-      if (
-        !(
-          (propertyField && PROPERTY_ATTRIBUTES.has(attr)) ||
-          (customField && attr === "name") ||
-          (!propertyPart &&
-            !customPart &&
-            (IDENTITY_ATTRIBUTES.has(attr) ||
-              (attr === "name" && NAMED_IDENTITIES.has(name))))
-        )
-      ) {
+      if (!(
+        (propertyField && PROPERTY_ATTRIBUTES.has(attr)) ||
+        (customField && attr === "name") ||
+        (!propertyPart &&
+          !customPart &&
+          (IDENTITY_ATTRIBUTES.has(attr) ||
+            (attr === "name" && NAMED_IDENTITIES.has(name))))
+      )) {
         continue;
       }
       result.push({

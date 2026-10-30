@@ -11,9 +11,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  type ChangedFile,
   checkOutBaseSource,
   classifyRun,
   decideVerdict,
+  type FileOutcome,
   formatReport,
   isTestSide,
   markChangedCases,
@@ -21,8 +23,6 @@ import {
   parseNameStatus,
   selectTestsToCheck,
   touchedLines,
-  type ChangedFile,
-  type FileOutcome,
 } from "./fix-tests-on-base";
 
 const API_TEST = "apps/api/src/handlers/chat/stream-chat.test.ts";

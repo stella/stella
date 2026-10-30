@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
-import { copyToClipboard } from "./index";
+import { copyRichToClipboard, copyToClipboard } from "./index";
 
 // `navigator` is a real global here and `navigator.clipboard` is absent, which
 // is also the shape an insecure browsing context has. Each test installs the
@@ -10,6 +10,10 @@ import { copyToClipboard } from "./index";
 const ORIGINAL_CLIPBOARD = Object.getOwnPropertyDescriptor(
   navigator,
   "clipboard",
+);
+const ORIGINAL_CLIPBOARD_ITEM = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "ClipboardItem",
 );
 
 const stubClipboard = (clipboard: unknown): void => {
@@ -23,10 +27,31 @@ const stubClipboard = (clipboard: unknown): void => {
 afterEach(() => {
   if (ORIGINAL_CLIPBOARD === undefined) {
     Reflect.deleteProperty(navigator, "clipboard");
-    return;
+  } else {
+    Object.defineProperty(navigator, "clipboard", ORIGINAL_CLIPBOARD);
   }
-  Object.defineProperty(navigator, "clipboard", ORIGINAL_CLIPBOARD);
+  if (ORIGINAL_CLIPBOARD_ITEM === undefined) {
+    Reflect.deleteProperty(globalThis, "ClipboardItem");
+  } else {
+    Object.defineProperty(globalThis, "ClipboardItem", ORIGINAL_CLIPBOARD_ITEM);
+  }
 });
+
+const stubClipboardItem = (): void => {
+  class FakeClipboardItem {
+    readonly data: Record<string, Blob>;
+    readonly types: string[];
+
+    constructor(data: Record<string, Blob>) {
+      this.data = data;
+      this.types = Object.keys(data);
+    }
+  }
+  Object.defineProperty(globalThis, "ClipboardItem", {
+    configurable: true,
+    value: FakeClipboardItem,
+  });
+};
 
 test("a successful write passes the text through and resolves ok", async () => {
   const written: string[] = [];
@@ -69,3 +94,63 @@ test("a missing clipboard API is an error Result, not a throw", async () => {
 
   expect(Result.isError(result)).toBe(true);
 });
+
+test("rich copy writes both HTML and plain text", async () => {
+  const written: ClipboardItem[][] = [];
+  stubClipboardItem();
+  class FakeClipboard {
+    async write(items: ClipboardItem[]) {
+      written.push(items);
+    }
+
+    async writeText() {
+      throw new Error("plain fallback must not run");
+    }
+  }
+  const clipboard = new FakeClipboard();
+  stubClipboard(clipboard);
+
+  expect(Object.hasOwn(clipboard, "write")).toBe(false);
+
+  const result = await copyRichToClipboard({
+    html: "<em>quoted</em>",
+    plain: "quoted",
+  });
+
+  expect(Result.isOk(result)).toBe(true);
+  expect(written).toHaveLength(1);
+  expect(written[0]?.[0]?.types.toSorted()).toEqual([
+    "text/html",
+    "text/plain",
+  ]);
+});
+
+test.each(["missing ClipboardItem", "missing write", "rejected write"])(
+  "rich copy falls back to plain text when write is %s",
+  async (condition) => {
+    const plainWrites: string[] = [];
+    if (condition === "missing ClipboardItem") {
+      Reflect.deleteProperty(globalThis, "ClipboardItem");
+    } else {
+      stubClipboardItem();
+    }
+    stubClipboard({
+      ...(condition === "rejected write"
+        ? {
+            write: async () => {
+              throw new Error("denied");
+            },
+          }
+        : {}),
+      writeText: async (text: string) => plainWrites.push(text),
+    });
+
+    const result = await copyRichToClipboard({
+      html: "<em>quoted</em>",
+      plain: "quoted",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(plainWrites).toEqual(["quoted"]);
+  },
+);

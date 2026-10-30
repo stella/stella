@@ -13,6 +13,8 @@ import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
+import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
+import type { PreviewBlock } from "@stll/legal-ast/statute-list";
 
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareShow } from "@/features/statutes/statute-compare-search";
@@ -24,13 +26,9 @@ import {
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 import {
   headingFromPreview,
-  paragraphFromPreview,
   prepareStatuteReader,
 } from "@/features/statutes/statute-reader-blocks";
-import type {
-  PreviewBlock,
-  PreviewHeading,
-} from "@/features/statutes/statute-reader-blocks";
+import type { PreviewHeading } from "@/features/statutes/statute-reader-blocks";
 
 /** What the comparison pairs blocks by: a heading only pairs a heading. */
 type CompareBlockKind = Extract<

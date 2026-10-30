@@ -199,8 +199,8 @@ const cases = [
     url: "/chat/thread",
     key: chatThreadTitleOptions({
       activeOrganizationId: user.activeOrganizationId,
-      enabled: true,
       key: { threadId: "thread" },
+      persistedThread,
     }).queryKey,
     component: () => <ChatBreadcrumb threadId="thread" />,
     seed: seedPersistedThread,
@@ -211,13 +211,14 @@ const cases = [
     url: "/file-chat",
     key: chatThreadTitleOptions({
       activeOrganizationId: user.activeOrganizationId,
-      enabled: true,
       key: { threadId: "thread" },
+      persistedThread,
     }).queryKey,
     component: () => (
       <FileChatTitleSlot
         activeOrganizationId={user.activeOrganizationId}
         hasMessages
+        persistedThread={persistedThread}
         threadRef={{ scope: "global", threadId: toChatThreadId("thread") }}
         usedAnonymization={false}
       />

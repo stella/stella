@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -6,12 +6,18 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { listApiTestPaths } from "./api-test-plan";
 import {
+  medianSeconds,
   readDurationWeights,
   readTimingArtifact,
+  TEST_DURATION_HISTORY_LIMIT,
   TEST_DURATION_SOURCE,
 } from "./test-timings";
 
-/** Later artifacts replace earlier measurements; output order is canonical. */
+/**
+ * Each artifact adds one sample per file to a bounded history and the weight
+ * is the median, so one slow run cannot inflate a shard plan. Output order is
+ * canonical.
+ */
 export const refreshedTestDurations = (
   liveFiles: readonly string[],
   base: string | undefined,
@@ -29,25 +35,34 @@ export const refreshedTestDurations = (
   if (previous === undefined) {
     console.log("::notice::Ignoring unreadable previous API test durations");
   }
-  const refreshed = new Map<string, number>(
-    Object.entries(previous ?? {}).map(([file, { seconds }]) => [
+  const refreshed = new Map<string, number[]>(
+    Object.entries(previous ?? {}).map(([file, { seconds, history }]) => [
       file,
-      seconds,
+      history ?? [seconds],
     ]),
   );
   for (const artifact of artifacts) {
     for (const [file, seconds] of Object.entries(
       readTimingArtifact(artifact),
     )) {
-      refreshed.set(file, seconds);
+      refreshed.set(
+        file,
+        [...(refreshed.get(file) ?? []), seconds].slice(
+          -TEST_DURATION_HISTORY_LIMIT,
+        ),
+      );
     }
   }
   return Object.fromEntries(
     Array.from(refreshed)
       .filter(([file]) => live.has(file))
-      .map(([file, seconds]) => [
+      .map(([file, history]) => [
         file,
-        { seconds, source: TEST_DURATION_SOURCE.measured },
+        {
+          seconds: medianSeconds(history),
+          source: TEST_DURATION_SOURCE.measured,
+          history,
+        },
       ]),
   );
 };
@@ -59,9 +74,17 @@ export const serializeTestDurations = (
     Object.fromEntries(
       Object.entries(weights)
         .toSorted(([a], [b]) => compareCodeUnit(a, b))
-        .map(([file, { seconds, source }]) => [
+        .map(([file, { seconds, source, history }]) => [
           file,
-          { seconds: Number(seconds.toFixed(6)), source },
+          {
+            seconds: Number(seconds.toFixed(6)),
+            source,
+            ...(history === undefined
+              ? {}
+              : {
+                  history: history.map((sample) => Number(sample.toFixed(6))),
+                }),
+          },
         ]),
     ),
     null,

@@ -8,6 +8,7 @@ import { fingerprintContactImport } from "@/api/handlers/contacts/contact-import
 import { feedbackFingerprint } from "@/api/handlers/feedback/sanitize-report";
 import { legislationSourceHash } from "@/api/handlers/legislation/revision";
 import { legislationQueryFingerprint } from "@/api/handlers/legislation/search";
+import type { SearchLegislationBody } from "@/api/handlers/legislation/search-schema";
 import { computeRulesHash } from "@/api/handlers/playbooks/derive-ask";
 import { suggestionFingerprint } from "@/api/handlers/time-entries/suggestions/cluster";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -136,6 +137,7 @@ for (const text of texts) {
           null,
           null,
           null,
+          null,
         ]),
       ),
     );
@@ -148,9 +150,10 @@ for (const text of texts) {
       language: "cs",
       dateFrom: "2020-01-01",
       dateTo: "2026-10-08",
+      asOf: "2026-10-09",
       limit: 5,
       cursor: "ignored",
-    } as const;
+    } as const satisfies SearchLegislationBody;
     expect(legislationQueryFingerprint(body)).toBe(
       sha256Hex(
         JSON.stringify([
@@ -163,6 +166,7 @@ for (const text of texts) {
           "cs",
           "2020-01-01",
           "2026-10-08",
+          "2026-10-09",
         ]),
       ),
     );

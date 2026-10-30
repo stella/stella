@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
-import ts from "typescript";
+
+import {
+  type Node,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 /**
  * Every consumer of the public country lists names the surface it serves.
@@ -56,6 +61,10 @@ const CONSUMERS = {
   "apps/web/src/components/chat/case-law-open.ts": "pages",
   "apps/web/src/components/chat/chat-decision-citation.tsx": "pages",
   "apps/web/src/features/statutes/statute-route-resolution.ts": "pages",
+  "apps/web/src/features/statutes/components/pending-statute-changes.logic.ts":
+    "pages",
+  // The iOS app opens decisions as the web's decision pages do.
+  "apps/mobile/src/state/case-law.ts": "pages",
   // Sitemaps.
   "apps/api/src/handlers/case-law/decisions/sitemap.ts": "sitemap",
   "apps/api/src/handlers/legislation/sitemap.ts": "sitemap",
@@ -90,12 +99,15 @@ const CONSUMERS = {
   "apps/api/src/handlers/legislation/search.ts": "search",
   "apps/api/src/handlers/legislation/search-schema.ts": "search",
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
+  "apps/api/src/lib/observability/data-invariants/catalog.ts": "search",
   "apps/web/src/lib/case-law-route.ts": "search",
   "apps/web/src/routes/law/index.tsx": "search",
   "apps/web/src/routes/law/cases/index.tsx": "search",
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
   "apps/web/src/routes/law/-law-home/jurisdictions.ts": "search",
   "apps/web/src/features/case-law/components/top-bar-country.tsx": "search",
+  "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts":
+    "search",
   // Tests and query-plan fixtures that mirror a surface's country filter.
   "apps/api/src/tests/query-plans/old-sitemap-refresh-fixture.ts": "sitemap",
   "apps/api/src/tests/query-plans/registry.ts": "search",
@@ -188,88 +200,104 @@ const helperCalls = (source: string): string[] => {
 
 /** Null marks a helper reference whose domain cannot be statically verified. */
 const countryReadDomains = (source: string): (string | null)[] => {
-  const parsed = ts.createSourceFile(
-    "country-reader.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const parsed = parseSource("country-reader.ts", source);
   const helperNames = new Set([
     "readPublicLawCountry",
     "publicLawCountryUnavailable",
   ]);
   const names = new Set(helperNames);
   const domains: (string | null)[] = [];
-  for (const statement of parsed.statements) {
+  for (const statement of parsed.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !statement.moduleSpecifier.text.endsWith("/public-law-country")
+      statement.type !== "ImportDeclaration" ||
+      !statement.source.value.endsWith("/public-law-country")
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+    // Empty named clauses and bare imports both have no specifiers in ESTree.
+    let prefix = source.slice(statement.start, statement.source.start);
+    for (const comment of parsed.comments.toReversed()) {
+      if (
+        comment.start >= statement.start &&
+        comment.end <= statement.source.start
+      ) {
+        prefix =
+          prefix.slice(0, comment.start - statement.start) +
+          prefix.slice(comment.end - statement.start);
+      }
+    }
+    if (!prefix.includes("{")) {
       domains.push(null);
       continue;
     }
-    for (const binding of bindings.elements) {
-      if (helperNames.has(binding.propertyName?.text ?? binding.name.text)) {
-        names.add(binding.name.text);
+    for (const binding of statement.specifiers) {
+      if (binding.type !== "ImportSpecifier") {
+        continue;
+      }
+      const imported =
+        binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value;
+      if (helperNames.has(imported)) {
+        names.add(binding.local.name);
       }
     }
   }
-  const visit = (node: ts.Node) => {
-    if (ts.isImportDeclaration(node)) {
-      return;
+  walk(parsed.program, (node, ancestors) => {
+    if (node.type === "ImportDeclaration") {
+      return "skip-children";
     }
-    if (ts.isIdentifier(node) && names.has(node.text)) {
-      if (ts.isTypeQueryNode(node.parent)) {
-        return;
-      }
-      let expression: ts.Node = node;
-      let parent = expression.parent;
-      while (
-        ts.isParenthesizedExpression(parent) ||
-        (ts.isBinaryExpression(parent) &&
-          parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
-      ) {
-        expression = parent;
-        parent = expression.parent;
-      }
-      if (!ts.isCallExpression(parent) || parent.expression !== expression) {
-        domains.push(null);
-        return;
-      }
-      const options = parent.arguments.at(1);
-      if (
-        options === undefined ||
-        !ts.isObjectLiteralExpression(options) ||
-        options.properties.some(ts.isSpreadAssignment)
-      ) {
-        domains.push(null);
-        return;
-      }
-      const domain = options.properties.filter(
-        (property) =>
-          property.name !== undefined &&
-          (ts.isIdentifier(property.name) ||
-            ts.isStringLiteral(property.name)) &&
-          property.name.text === "domain",
-      );
-      const property = domain.at(0);
-      domains.push(
-        domain.length === 1 &&
-          property !== undefined &&
-          ts.isPropertyAssignment(property) &&
-          ts.isStringLiteral(property.initializer)
-          ? property.initializer.text
-          : null,
-      );
+    if (node.type !== "Identifier" || !names.has(node.name)) {
+      return undefined;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+    if (ancestors.at(-1)?.type === "TSTypeQuery") {
+      return undefined;
+    }
+    let expression: Node = node;
+    let parentIndex = ancestors.length - 1;
+    let parent = ancestors.at(parentIndex);
+    while (
+      parent?.type === "ParenthesizedExpression" ||
+      (parent?.type === "LogicalExpression" && parent.operator === "??")
+    ) {
+      expression = parent;
+      parentIndex -= 1;
+      parent = parentIndex >= 0 ? ancestors.at(parentIndex) : undefined;
+    }
+    if (parent?.type !== "CallExpression" || parent.callee !== expression) {
+      domains.push(null);
+      return undefined;
+    }
+    const options = parent.arguments.at(1);
+    if (
+      options?.type !== "ObjectExpression" ||
+      options.properties.some((property) => property.type === "SpreadElement")
+    ) {
+      domains.push(null);
+      return undefined;
+    }
+    const domain = options.properties.filter(
+      (property) =>
+        property.type === "Property" &&
+        !property.computed &&
+        ((property.key.type === "Identifier" &&
+          property.key.name === "domain") ||
+          (property.key.type === "Literal" && property.key.value === "domain")),
+    );
+    const property = domain.at(0);
+    domains.push(
+      domain.length === 1 &&
+        property?.type === "Property" &&
+        property.kind === "init" &&
+        !property.method &&
+        !property.shorthand &&
+        property.value.type === "Literal" &&
+        typeof property.value.value === "string"
+        ? property.value.value
+        : null,
+    );
+    return undefined;
+  });
   return domains;
 };
 
@@ -339,6 +367,28 @@ describe("public law surface consumers", () => {
     expect(
       countryReadDomains(
         'import * as country from "@/api/lib/legal-search/public-law-country";',
+      ),
+    ).toEqual([null]);
+  });
+
+  test("country reads preserve import-clause and static-key distinctions", () => {
+    for (const bindings of ["{}", "defaultReader, {}", "/* { */ {} /* } */"]) {
+      expect(
+        countryReadDomains(`import ${bindings} from "./public-law-country";`),
+      ).toEqual([]);
+    }
+    for (const clause of [
+      "",
+      "defaultReader from ",
+      "/* { */ * as readers from ",
+    ]) {
+      expect(
+        countryReadDomains(`import ${clause}"./public-law-country";`),
+      ).toEqual([null]);
+    }
+    expect(
+      countryReadDomains(
+        'readPublicLawCountry(input, { ["domain"]: "caseLaw" });',
       ),
     ).toEqual([null]);
   });

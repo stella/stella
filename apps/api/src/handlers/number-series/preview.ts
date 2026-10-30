@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { renderMatterReference } from "@stll/api-contract";
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 
 import { numberSeriesAllocations, numberSeriesCounters } from "@/api/db/schema";
 import { numberSeriesParams } from "@/api/handlers/number-series/schema";
@@ -26,8 +27,14 @@ const config = {
   },
   access: "read",
   params: numberSeriesParams,
-  query: t.Object({
-    issueDate: t.String({ format: "date", minLength: 10, maxLength: 10 }),
+  query: v.object({
+    issueDate: v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.minLength(10),
+      v.maxLength(10),
+    ),
   }),
 } satisfies HandlerConfig;
 

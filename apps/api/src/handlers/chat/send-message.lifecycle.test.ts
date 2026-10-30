@@ -10,7 +10,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import {
   chatMessageContentFromMessage,
@@ -47,7 +51,7 @@ describe("send lifecycle checkpoint indexing", () => {
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
-            reason: "unavailable",
+            reason: "lease_lost",
           });
         }),
         recordAuditEvent: async () => undefined,
@@ -96,6 +100,7 @@ describe("send lifecycle checkpoint indexing", () => {
           await run.settle(async () => ({ type: "not-owned" }));
         })(),
         memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
       );
       await response.text();
       await lifecycle.cleanup();
@@ -131,6 +136,7 @@ describe("send lifecycle checkpoint indexing", () => {
       const writtenMessages: Record<string, unknown>[] = [];
       const writtenTurns: Record<string, unknown>[] = [];
       const db = createScopedDbMock({
+        select: () => createSelectQueryMock([]),
         query: {
           chatThreadCompactions: {
             findFirst: async () => await Promise.resolve(null),
@@ -194,7 +200,7 @@ describe("send lifecycle checkpoint indexing", () => {
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
-            reason: "unavailable",
+            reason: "lease_lost",
           });
         }),
         recordAuditEvent: async () => undefined,
@@ -225,7 +231,7 @@ describe("send lifecycle checkpoint indexing", () => {
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       if (run !== undefined) {

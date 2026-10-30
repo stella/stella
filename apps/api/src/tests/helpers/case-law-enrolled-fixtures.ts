@@ -28,6 +28,10 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  CZ_UOHS_SYNTHETIC_LISTING,
+  czUohsSyntheticPdf,
+} from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
@@ -67,6 +71,10 @@ import {
   fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import {
+  buildCzUohsDecision,
+  parseCzUohsListing,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
@@ -121,7 +129,12 @@ import {
   type UnreadPublisherOutcome,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { buildSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import {
+  buildSkUsDecision,
+  skUsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { fetchUkFclDecision } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
+import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -406,7 +419,9 @@ const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
       fieldId,
       CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
     ),
-).join("")}</body></html>`;
+).join(
+  "",
+)}<table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>
@@ -417,12 +432,14 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   zamítá.</p>
 </body></html>`;
 
-export const czNssFixture = (): EnrolledAdapterFixture => ({
+export const czNssFixture = (
+  detailHtml = CZ_NSS_DETAIL_PAGE,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
       const body = url.includes("/DokumentDetail/Index/")
-        ? CZ_NSS_DETAIL_PAGE
+        ? detailHtml
         : CZ_NSS_DOCUMENT_PAGE;
       return await Promise.resolve(
         new Response(body, {
@@ -1012,7 +1029,7 @@ export const plKioFixture = (): EnrolledAdapterFixture => ({
     const built = assemblePlKioDecision({
       item: { ...PL_KIO_LISTING_ROW },
       detailHtml: PL_KIO_DETAIL_PAGE,
-      documentHtml: PL_KIO_DOCUMENT,
+      document: { type: "read", html: PL_KIO_DOCUMENT },
     });
     return await Promise.resolve(
       built.type === "built"
@@ -1308,13 +1325,13 @@ const readGzipText = async (url: URL): Promise<string> =>
  * transport would answer for the fetch instead. It also keeps the
  * publisher's five-hundred-millisecond gate out of every run.
  */
-export const euEcjFixture = (): EnrolledAdapterFixture => ({
+export const euEcjFixture = (
+  documentUrl = new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     const parts = ecjRawParts({
       binding: { ...EU_ECJ_BINDING },
-      html: await readGzipText(
-        new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
-      ),
+      html: await readGzipText(documentUrl),
       notice: await readGzipText(
         new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
       ),
@@ -1602,8 +1619,62 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  * closes it, through the same derivation, so the guards read the envelope a
  * stored row holds rather than one this helper invented.
  */
-export const skUsFixture = (): EnrolledAdapterFixture => ({
+export const skUsFixture = (
+  documentUrl?: URL,
+  identity?: ParserParityIdentity,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
+    if (documentUrl !== undefined) {
+      const payload = await readGzipJson(documentUrl);
+      const content = isRecord(payload) ? payload["content"] : undefined;
+      if (typeof content !== "string") {
+        return panic("the sk-us capture has no document content");
+      }
+      const listing = {
+        ...SK_US_LISTING_ROW,
+        documentId:
+          identity?.documentId ?? "695d557a-08eb-41d2-8cea-2b895f9860e7",
+        mkRSAPNumberOfFile: identity?.caseNumber ?? "III. ÚS 265/2026",
+        mkDateOfDecision:
+          identity === undefined
+            ? "04/23/2026 00:00:00"
+            : identity.decisionDate.replace(
+                /^(\d{4})-(\d{2})-(\d{2})$/u,
+                "$2/$3/$1 00:00:00",
+              ),
+        mkECLI: identity?.ecli ?? null,
+        mkFormOfDecision: "Uznesenie",
+      };
+      const reparse = skUsAdapter.reparseStoredRaw;
+      if (reparse === undefined) {
+        return panic("the sk-us parity capture requires stored-raw replay");
+      }
+      const result = await reparse({
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope({
+            listing: JSON.stringify(listing),
+            document: Buffer.from(content, "base64").toString("utf-8"),
+          }),
+        ),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: listing.mkRSAPNumberOfFile,
+        sourceDocumentId: listing.documentId,
+        language: "sk",
+        court: "Ústavný súd SR",
+        ecli: listing.mkECLI,
+        decisionDate: identity?.decisionDate ?? "2026-04-23",
+        decisionType: listing.mkFormOfDecision,
+        sourceUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
+        documentUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
+        metadata: {},
+      });
+      return result.type === "parsed"
+        ? result.result
+        : panic(`the sk-us capture did not parse: ${result.type}`);
+    }
+    const documentContent = JSON.stringify({
+      content: Buffer.from(SK_US_DOCUMENT_XHTML).toBase64(),
+    });
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
@@ -1611,9 +1682,7 @@ export const skUsFixture = (): EnrolledAdapterFixture => ({
         );
         const body = ((): string | Uint8Array => {
           if (url.pathname === "/o/v1/dms/content") {
-            return JSON.stringify({
-              content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
-            });
+            return documentContent;
           }
           if (url.pathname === "/o/v1/dms/search") {
             const request: unknown = JSON.parse(
@@ -2178,11 +2247,11 @@ const HU_BHGY_DOCUMENT = new URL(
  * writer: the guards read the header labels back out of the stored document,
  * so a fixture that skipped the file would certify half the inventory.
  */
-export const huBhgyFixture = (): EnrolledAdapterFixture => ({
+export const huBhgyFixture = (
+  documentUrl = HU_BHGY_DOCUMENT,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const bytes = new Uint8Array(
-      await Bun.file(HU_BHGY_DOCUMENT).arrayBuffer(),
-    );
+    const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
     const document =
       huBhgyDocumentOf(bytes) ??
       panic("the hu-bhgy fixture is not a decision file");
@@ -2296,9 +2365,11 @@ const PL_NSA_ROWS = new URL(
  * opinion — in the form the dataset prints them, so every column the source
  * states is stated here.
  */
-export const plNsaFixture = (): EnrolledAdapterFixture => ({
+export const plNsaFixture = (
+  documentUrl = PL_NSA_ROWS,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const recorded: unknown = await Bun.file(PL_NSA_ROWS).json();
+    const recorded: unknown = await Bun.file(documentUrl).json();
     const entry = isUnknownArray(recorded)
       ? recorded.find(
           (candidate: unknown) =>
@@ -2489,7 +2560,9 @@ const plUodoUnionRow = (
  * Built from the captured record and body through the adapter's own
  * assembly, so the guards read back exactly the envelope a crawl stores.
  */
-export const plUodoFixture = (): EnrolledAdapterFixture => ({
+export const plUodoFixture = (
+  documentUrl = PL_UODO_BODY,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     const listed = await readGzipJson(PL_UODO_LISTING);
     const rows: unknown[] = Array.isArray(listed) ? listed : [];
@@ -2503,7 +2576,7 @@ export const plUodoFixture = (): EnrolledAdapterFixture => ({
     const row = normalizePlUodoRow(listing);
     const body = plUodoBodyFrom(
       row,
-      new Uint8Array(await Bun.file(PL_UODO_BODY).arrayBuffer()),
+      new Uint8Array(await Bun.file(documentUrl).arrayBuffer()),
     );
     const built = assemblePlUodoDecision({
       row,
@@ -2717,6 +2790,64 @@ export const plUokikRulingFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+export const czUohsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {},
+  buildDecision: async () => {
+    const document = czUohsSyntheticPdf();
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response(document)),
+    );
+    const record = parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING)[0];
+    const decision = await buildCzUohsDecision(
+      record ?? panic("the ÚOHS fixture lost its first record"),
+    );
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: ADAPTER_KEYS.CZ_UOHS,
+            documentId: decision.sourceDocumentId ?? "cz-uohs-fixture",
+            bytes,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
+  },
+});
+
+export const ukFclFixture = (
+  documentUrl = new URL(
+    "../../handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
+    import.meta.url,
+  ),
+): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const feed = await Bun.file(
+      new URL(
+        "../../handlers/case-law/ingestion/adapters/__fixtures__/uk-fcl.atom.xml",
+        import.meta.url,
+      ),
+    ).text();
+    const document = await Bun.file(documentUrl).text();
+    globalThis.fetch = asFetchMock(async () => new Response(document));
+    const built = await fetchUkFclDecision({
+      feed,
+      sourceDocumentId: "d-00000000-0000-4000-8000-000000000001",
+    });
+    if (built.isErr()) {
+      return await Promise.reject(built.error);
+    }
+    return built.value;
+  },
+});
+
 /** Total fixture coverage shared by field inventory and publication invariants. */
 export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
@@ -2724,6 +2855,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
@@ -2746,6 +2878,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,

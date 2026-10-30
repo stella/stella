@@ -1,60 +1,50 @@
 import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import {
-  oauthProvider,
   type ClientDiscovery,
   type OAuthOptions,
+  oauthProvider,
   type OAuthProviderExtension,
-  type Scope,
   type SchemaClient,
+  type Scope,
 } from "@better-auth/oauth-provider";
 import type { HookEndpointContext } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { panic } from "better-result";
 
-import type { McpOAuthScope } from "@stll/api-contract";
-
-import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
+import { mayMetadataDocumentClientHoldElevatedScopes } from "@/api/lib/auth/oauth-consent-info";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
+import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/db/oauth-scope-policy";
 import {
   isLoopbackRedirectUri,
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
 import {
-  isAuthRequestBudgetPath,
   type AuthRequestBudgetFrameworkApi,
+  isAuthRequestBudgetPath,
 } from "@/api/lib/rate-limit/auth-request-budget";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
 
-export const OAUTH_REGISTRATION_SCOPE_POLICY = {
-  openid: "open",
-  profile: "open",
-  email: "open",
-  offline_access: "open",
-  "stella:search": "open",
-  "stella:read": "open",
-  "stella:law_read": "open",
-  "stella:templates": "open",
-  "stella:documents_write": "open",
-  "stella:matters_write": "open",
-  "stella:contacts_write": "open",
-  "stella:chat": "open",
-  "stella:knowledge_write": "open",
-  "stella:billing_write": "open",
-  "stella:admin_read": "elevated",
-  "stella:admin_write": "elevated",
-  "stella:onboarding": "open",
-  "stella:skills": "open",
-  "stella:external_mcps": "elevated",
-  "stella:feedback": "open",
-  "stella:search_anonymized": "open",
-  "stella:read_anonymized": "open",
-  "stella:templates_anonymized": "open",
-} as const satisfies Record<McpOAuthScope, "open" | "elevated">;
+const OPEN_REGISTRATION_SCOPE_SET: ReadonlySet<string> = new Set(
+  OPEN_REGISTRATION_SCOPES,
+);
 
-export const OPEN_REGISTRATION_SCOPES = Object.entries(
-  OAUTH_REGISTRATION_SCOPE_POLICY,
-).flatMap(([scope, policy]) => (policy === "open" ? [scope] : []));
+/**
+ * The registrable part of a requested scope string. Clients in the wild
+ * request scopes this server does not offer (`mcp:tools`, identity scopes
+ * such as `name`); RFC 7591 §2 lets the server replace requested metadata, so
+ * those are dropped rather than failing the registration. An empty result
+ * makes the provider apply the default scope list, which the registration
+ * response reports.
+ */
+export const registrableScope = (requested: string): string =>
+  requested
+    .split(" ")
+    .filter((scope) => OPEN_REGISTRATION_SCOPE_SET.has(scope))
+    .join(" ");
 
 const ELEVATED_REGISTRATION_SCOPES = new Set(
   Object.entries(OAUTH_REGISTRATION_SCOPE_POLICY).flatMap(([scope, policy]) =>
@@ -64,12 +54,51 @@ const ELEVATED_REGISTRATION_SCOPES = new Set(
 
 const OAUTH_AUTHORIZATION_PATH = "/oauth2/authorize";
 
-const isNativeRedirectUri = (redirectUri: string): boolean => {
+const isPrivateUseRedirectUri = (redirectUri: string): boolean => {
   const url = URL.parse(redirectUri);
-  return (
-    isLoopbackRedirectUri(redirectUri) ||
-    (url !== null && url.protocol !== "https:" && url.protocol !== "http:")
-  );
+  return url !== null && url.protocol !== "https:" && url.protocol !== "http:";
+};
+
+const isNativeRedirectUri = (redirectUri: string): boolean =>
+  isLoopbackRedirectUri(redirectUri) || isPrivateUseRedirectUri(redirectUri);
+
+/**
+ * Native redirect URIs accepted although RFC 8252 §7.1 asks for a
+ * reverse-domain scheme without a naming authority. Each entry names the
+ * client it serves and is pinned by a test with that client's registration
+ * request; adding one is a security review decision. Every other native
+ * redirect rule still applies to these URIs.
+ */
+export const NATIVE_REDIRECT_URI_EXCEPTIONS = [
+  {
+    client: "Cursor desktop MCP client",
+    redirectUri: "cursor://anysphere.cursor-mcp/oauth/callback",
+  },
+] as const;
+
+/**
+ * RFC 7591 lets a client omit `application_type`, and the provider then
+ * validates it as a web client. A public client that lists a private-use
+ * redirect can only be a native client, so it registers as one; each of its
+ * redirects must then pass the native rules. Confidential clients and clients
+ * with only http(s) redirects keep the default.
+ */
+export const inferredApplicationType = (
+  body: Record<string, unknown>,
+): "native" | undefined => {
+  const redirectUris = body["redirect_uris"];
+  if (
+    body["application_type"] !== undefined ||
+    body["token_endpoint_auth_method"] !== "none" ||
+    !Array.isArray(redirectUris)
+  ) {
+    return undefined;
+  }
+  return redirectUris.some(
+    (uri) => typeof uri === "string" && isPrivateUseRedirectUri(uri),
+  )
+    ? "native"
+    : undefined;
 };
 
 /** RFC 8252 §8.6: a native redirect requires a fresh public-client grant. */
@@ -138,6 +167,7 @@ export const OAUTH_ENDPOINT_POLICY = {
   [OAUTH_CLIENT_REGISTRATION_PATH]: "scope-policy",
   "/oauth2/create-client": "disabled",
   "/oauth2/update-client": "disabled",
+  "/oauth2/client/rotate-keys": "disabled",
   "/oauth2/client/rotate-secret": "disabled",
   "/oauth2/delete-client": "disabled",
   "/oauth2/update-consent": "disabled",
@@ -194,19 +224,26 @@ export type OAuthScopeClient = {
 /**
  * The scopes an authorization for `client` may carry. `requested` is the
  * request's scope list, or `undefined` when the request names none, in which
- * case the client's own scope list (or the provider's) applies. Elevated
- * scopes remain only for a client identified by a verified client metadata
- * document.
+ * case the client's own scope list (or the provider's) applies. A requested
+ * scope the client was not offered is dropped, never granted; when nothing
+ * remains, the client's own list applies, as if it had named none, and the
+ * token response reports what was granted. Elevated scopes remain only for a
+ * client identified by a client metadata document whose location allows them.
  */
 export const grantableScopes = (
   client: OAuthScopeClient,
   requested: readonly string[] | undefined,
   policy: OAuthScopePolicyContext,
 ): string[] => {
-  const candidates = requested ?? client.scopes ?? policy.providerScopes;
+  const offered = client.scopes ?? policy.providerScopes;
+  const kept = requested?.filter((scope) => offered.includes(scope));
+  const candidates = kept !== undefined && kept.length > 0 ? kept : offered;
   const mayHoldElevated =
     Boolean(client.clientDiscoveryId) &&
-    isVerifiedClientMetadataDocument(client.clientId, policy.verifiedOrigins);
+    mayMetadataDocumentClientHoldElevatedScopes(
+      client.clientId,
+      policy.verifiedOrigins,
+    );
   return candidates.filter(
     (scope) => mayHoldElevated || !ELEVATED_REGISTRATION_SCOPES.has(scope),
   );
@@ -270,28 +307,48 @@ const resolveNativeAuthorizationClient = async (
   return null;
 };
 
+/** The one resource a partner client's authorizations target. */
+type PartnerResource = {
+  url: string;
+  isPartnerClient: (clientId: string) => Promise<boolean>;
+};
+
 type OAuthPolicyMiddlewareOptions = {
   policy: OAuthScopePolicyContext;
   discoveries: readonly ClientDiscovery[];
   noInteractionRequests: WeakSet<Request>;
+  partnerResource: PartnerResource;
 };
 
 const createOAuthPolicyMiddleware = ({
   policy,
   discoveries,
   noInteractionRequests,
+  partnerResource,
 }: OAuthPolicyMiddlewareOptions) =>
   createAuthMiddleware(async (ctx) => {
     if (ctx.path === OAUTH_CLIENT_REGISTRATION_PATH) {
       const body: unknown = ctx.body;
-      if (!isRecord(body) || typeof body["scope"] !== "string") {
+      if (!isRecord(body)) {
         return UNCHANGED;
       }
-      const downscopedScope = body["scope"]
-        .split(" ")
-        .filter((scope) => !ELEVATED_REGISTRATION_SCOPES.has(scope))
-        .join(" ");
-      return { context: { body: { scope: downscopedScope } } };
+      const scope = body["scope"];
+      const applicationType = inferredApplicationType(body);
+      if (typeof scope !== "string" && applicationType === undefined) {
+        return UNCHANGED;
+      }
+      return {
+        context: {
+          body: {
+            ...(typeof scope === "string"
+              ? { scope: registrableScope(scope) }
+              : {}),
+            ...(applicationType === undefined
+              ? {}
+              : { application_type: applicationType }),
+          },
+        },
+      };
     }
     if (ctx.path !== OAUTH_AUTHORIZATION_PATH) {
       return UNCHANGED;
@@ -315,6 +372,17 @@ const createOAuthPolicyMiddleware = ({
       model: "oauthClient",
       where: [{ field: "clientId", value: clientId }],
     });
+    // A partner's generic OAuth connector sends no `resource` (RFC 8707);
+    // without one the token carries no audience and the MCP endpoint refuses
+    // it. A partner client is linked to this one resource only. The client
+    // kind is not part of the provider's model, so it is read separately,
+    // and only for requests that name no resource.
+    const targetResource =
+      stored !== null &&
+      parameters["resource"] === undefined &&
+      (await partnerResource.isPartnerClient(clientId))
+        ? { resource: partnerResource.url }
+        : {};
     const resolved = await resolveNativeAuthorizationClient(ctx, {
       stored,
       clientId,
@@ -340,12 +408,17 @@ const createOAuthPolicyMiddleware = ({
     if (consentPrompt === "none" && ctx.request) {
       noInteractionRequests.add(ctx.request);
     }
-    if (grantable === scope && consentPrompt === undefined) {
+    if (
+      grantable === scope &&
+      consentPrompt === undefined &&
+      !("resource" in targetResource)
+    ) {
       return UNCHANGED;
     }
     const authorizationPolicy = {
       scope: grantable,
       ...(consentPrompt === undefined ? {} : { prompt: consentPrompt }),
+      ...targetResource,
     };
     return fromBody
       ? { context: { body: authorizationPolicy } }
@@ -411,9 +484,11 @@ export const createStellaOAuthProvider = (
   options: StellaOAuthProviderOptions,
   {
     verifiedOrigins,
+    partnerResource,
     requestBudget,
   }: {
     verifiedOrigins: readonly string[];
+    partnerResource: PartnerResource;
     requestBudget: {
       storage: ReturnType<typeof createAuthRateLimitStorage>;
       enabled: boolean;
@@ -434,6 +509,9 @@ export const createStellaOAuthProvider = (
   const noInteractionRequests = new WeakSet<Request>();
   const policyOptions = {
     ...options,
+    nativeRedirectUriExceptions: NATIVE_REDIRECT_URI_EXCEPTIONS.map(
+      ({ redirectUri }) => redirectUri,
+    ),
     extensions,
     postLogin: {
       ...options.postLogin,
@@ -494,6 +572,7 @@ export const createStellaOAuthProvider = (
             policy,
             discoveries,
             noInteractionRequests,
+            partnerResource,
           }),
         },
       ],

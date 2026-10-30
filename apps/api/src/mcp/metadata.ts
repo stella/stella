@@ -1,16 +1,21 @@
+import { STELLA_LOGO_FILE_NAME } from "@stll/api-contract/stella-logo";
+
 import { env } from "@/api/env";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { McpMode } from "@/api/mcp/constants";
 import {
-  getMcpResourceScopes,
   getMcpProtectedResourceMetadataUrl,
+  getMcpResourceScopes,
   getMcpResourceUrl,
   MCP_ALLOWED_HEADERS,
   MCP_DISCOVERY_ALLOW_HEADER,
+  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_EXPOSE_HEADERS,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
-  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_LATEST_HEADER,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_HEADER,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_HEADER,
@@ -21,10 +26,11 @@ export const createMcpMetadataHeaders = () =>
   new Headers({
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": MCP_DISCOVERY_ALLOW_HEADER,
-    "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS.join(", "),
+    "Access-Control-Allow-Headers": MCP_DISCOVERY_ALLOWED_HEADERS.join(", "),
     "Access-Control-Expose-Headers": MCP_EXPOSE_HEADERS.join(", "),
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
+    [STELLA_CLI_LATEST_HEADER]: STELLA_CLI_LATEST_VERSION,
   });
 
 export const createMcpCorsHeaders = () =>
@@ -33,9 +39,10 @@ export const createMcpCorsHeaders = () =>
     "Access-Control-Allow-Methods": MCP_STATELESS_ALLOW_HEADER,
     "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS.join(", "),
     "Access-Control-Expose-Headers": MCP_EXPOSE_HEADERS.join(", "),
-    "Access-Control-Max-Age": "86400",
+    "Access-Control-Max-Age": String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
+    [STELLA_CLI_LATEST_HEADER]: STELLA_CLI_LATEST_VERSION,
   });
 
 /**
@@ -55,19 +62,31 @@ export const createMcpPreflightHeaders = () => {
 export const createMcpDiscoveryPreflightHeaders = () => {
   const headers = createMcpMetadataHeaders();
   headers.set("Allow", MCP_DISCOVERY_ALLOW_HEADER);
+  headers.set(
+    "Access-Control-Max-Age",
+    String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+  );
   return headers;
 };
 
 // User-facing identifiers (auth.md PRM) shown to a person during the agent
-// claim ceremony. The logo is served from the web app's public assets.
+// claim ceremony and by MCP hosts listing the connector. The logo is a raster
+// PNG the web app serves from `@stll/api-contract`: several hosts do not render
+// SVG icons, so every advertised logo points at this one file.
 const RESOURCE_NAME = "stella";
-const getResourceLogoUri = () =>
-  new URL("favicon.svg", `${env.FRONTEND_URL.replace(/\/$/u, "")}/`).toString();
+export const MCP_LOGO_PATH = STELLA_LOGO_FILE_NAME;
+export const getMcpLogoUri = () =>
+  new URL(MCP_LOGO_PATH, `${env.FRONTEND_URL.replace(/\/$/u, "")}/`).toString();
+
+/** MCP `Implementation.icons` entry for `serverInfo`, same file as the PRM logo. */
+export const getMcpServerIcons = () => [
+  { src: getMcpLogoUri(), mimeType: "image/png", sizes: ["512x512"] },
+];
 
 export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
   resource: getMcpResourceUrl(mode),
   resource_name: RESOURCE_NAME,
-  resource_logo_uri: getResourceLogoUri(),
+  resource_logo_uri: getMcpLogoUri(),
   authorization_servers: [getAuthIssuerUrl()],
   scopes_supported: [...getMcpResourceScopes(mode)],
   bearer_methods_supported: ["header"],
@@ -84,7 +103,7 @@ export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
     api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
     cli_version: {
       minimum: STELLA_CLI_MINIMUM_VERSION,
-      maximum: STELLA_CLI_MAXIMUM_VERSION,
+      maximum: STELLA_CLI_LATEST_VERSION,
     },
   },
 });

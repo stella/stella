@@ -11,7 +11,7 @@
  * tool so both paths record the manifest and count fields identically.
  */
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -29,8 +29,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   cleanupObjectAfterWriter,
-  reserveObjectCleanupIntents,
   lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntents,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";

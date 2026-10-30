@@ -10,8 +10,8 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
-  DECISION_TEXT_WITHHELD_REASON,
   DECISION_TEXT_SOURCE,
+  DECISION_TEXT_WITHHELD_REASON,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -41,6 +41,7 @@ import {
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
@@ -52,6 +53,7 @@ import {
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
+import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
 import {
   SANCTIONS_CLASSIFICATIONS,
   SANCTIONS_ENTITY_TYPES,
@@ -467,10 +469,10 @@ const documentFieldContentProjection = v.variant("type", [
       version: v.literal(1),
       type: v.literal("clip"),
       url: v.string(),
-      snippet: v.optional(v.string()),
-      citation: v.optional(v.string()),
-      jurisdiction: v.optional(v.string()),
-      sourceType: v.optional(v.string()),
+      snippet: v.exactOptional(v.string()),
+      citation: v.exactOptional(v.string()),
+      jurisdiction: v.exactOptional(v.string()),
+      sourceType: v.exactOptional(v.string()),
     }),
   ),
 ]);
@@ -1220,22 +1222,38 @@ export const RESOLVE_RATE_PROJECTION = v.strictObject({
 /** One invoiced line item's matter entity card (`{ id, name }`). */
 const invoiceLineEntityProjection = () =>
   v.strictObject({
-    id: chatEntityRef({ from: "outputPath", path: "invoice.workspaceId" }),
+    id: chatEntityRef({ from: "sibling", key: "workspaceId" }),
+    workspaceId: chatRef("matter"),
     name: v.string(),
   });
+
+const invoiceEntityReferenceProjection = () =>
+  v.nullable(
+    v.union([
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("available"),
+          workspaceId: chatRef("matter"),
+          id: chatEntityRef({ from: "sibling", key: "workspaceId" }),
+        }),
+      ),
+      projectionBranch(v.strictObject({ type: v.literal("unavailable") })),
+    ]),
+  );
 
 /**
  * list_invoices. Source of truth: `handleListInvoicesTool`
  * (`billing-tools.ts`). Detail mode (invoice_id) may omit matter_id, so every
- * line item's entity recovers its workspace from the invoice's own resolved
- * `workspaceId` rather than from the (absent) input arg; list mode returns no
- * line items.
+ * line item carries its own matter for reference mediation; list mode returns
+ * no line items.
  */
 /** list_invoices, list branch: invoice cards, no line items. */
 export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
   invoices: v.array(
     v.strictObject({
       id: passthroughId(),
+      clientId: v.nullable(passthroughId()),
+      matterShare: v.number(),
       invoiceNumber: v.nullable(v.string()),
       documentType: v.picklist(NUMBER_SERIES_DOCUMENT_TYPES),
       originalInvoiceId: v.nullable(passthroughId()),
@@ -1245,6 +1263,8 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       dueDate: v.nullable(v.string()),
       currency: v.string(),
       totalAmount: v.number(),
+      paidAmount: v.number(),
+      outstandingAmount: v.number(),
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1258,8 +1278,9 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
 export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
   invoice: v.strictObject({
     id: passthroughId(),
-    // The detail invoice's own owning workspace is a matter ref.
+    // A participating matter anchors invoice navigation; each source keeps its own.
     workspaceId: chatRef("matter"),
+    clientId: v.nullable(passthroughId()),
     invoiceNumber: v.nullable(v.string()),
     documentType: v.picklist(NUMBER_SERIES_DOCUMENT_TYPES),
     originalInvoiceId: v.nullable(passthroughId()),
@@ -1270,6 +1291,8 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     dueDate: v.nullable(v.string()),
     currency: v.string(),
     totalAmount: v.number(),
+    paidAmount: v.number(),
+    outstandingAmount: v.number(),
     notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
@@ -1286,16 +1309,14 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     timeEntries: v.array(
       v.strictObject({
         id: passthroughId(),
+        workspaceId: chatRef("matter"),
         entityId: v.nullable(
           chatEntityRef({
-            from: "outputPath",
-            path: "invoice.workspaceId",
+            from: "sibling",
+            key: "workspaceId",
           }),
         ),
-        entityReference: contextEntityReference({
-          from: "outputPath",
-          path: "invoice.workspaceId",
-        }),
+        entityReference: invoiceEntityReferenceProjection(),
         dateWorked: v.string(),
         billedMinutes: v.number(),
         rateAtEntry: v.number(),
@@ -1310,16 +1331,14 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     expenses: v.array(
       v.strictObject({
         id: passthroughId(),
+        workspaceId: chatRef("matter"),
         entityId: v.nullable(
           chatEntityRef({
-            from: "outputPath",
-            path: "invoice.workspaceId",
+            from: "sibling",
+            key: "workspaceId",
           }),
         ),
-        entityReference: contextEntityReference({
-          from: "outputPath",
-          path: "invoice.workspaceId",
-        }),
+        entityReference: invoiceEntityReferenceProjection(),
         dateIncurred: v.string(),
         amount: v.number(),
         currency: v.string(),
@@ -1334,6 +1353,17 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     lines: v.array(
       v.strictObject({
         id: passthroughId(),
+        workspaceId: chatRef("matter"),
+        workspace: v.strictObject({
+          id: chatRef("matter"),
+          name: v.string(),
+          color: v.nullable(v.string()),
+        }),
+        recordedDescription: v.nullable(v.string()),
+        recordedQuantity: v.nullable(v.string()),
+        recordedUnit: v.nullable(v.string()),
+        recordedUnitPrice: v.nullable(v.number()),
+        recordedNetAmount: v.nullable(v.number()),
         position: v.number(),
         description: v.string(),
         quantity: v.string(),
@@ -1341,6 +1371,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         unitPrice: v.number(),
         vatRateBps: v.number(),
         vatTreatment: v.string(),
+        exemptionReason: v.nullable(contentText()),
         netAmount: v.number(),
         vatAmount: v.number(),
         grossAmount: v.number(),
@@ -1418,9 +1449,14 @@ const decisionIdentifiersProjection = v.optional(
 );
 
 /** Coverage keeps grouped court rows explicit when the public data has no names. */
-export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
+const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
     asOf: v.string(),
+    // refresh_pending: the figures are the last permitted answer, not a fresh one.
+    freshness: v.strictObject({
+      status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+      ageSeconds: v.number(),
+    }),
     countries: v.array(
       v.strictObject({
         country: v.string(),
@@ -1437,20 +1473,46 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
             knownGaps: v.variant("type", [
-              projectionBranch(v.strictObject({ type: v.literal("unknown") })),
               projectionBranch(
-                v.strictObject({ type: v.literal("none-recorded") }),
+                v.strictObject({
+                  type: v.literal("not_reconciled"),
+                  reason: v.string(),
+                }),
               ),
               projectionBranch(
                 v.strictObject({
-                  type: v.literal("known"),
-                  gaps: v.array(
-                    v.strictObject({
-                      from: v.string(),
-                      to: v.string(),
-                      reason: v.string(),
-                      evidenceRef: v.string(),
-                    }),
+                  type: v.literal("reconciled"),
+                  summary: v.strictObject({
+                    missing: v.number(),
+                    shortSlices: v.number(),
+                    unlistedSlices: v.number(),
+                  }),
+                  years: v.array(
+                    v.variant("type", [
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("complete"),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("gaps"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("unlisted"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                          unlistedSlices: v.number(),
+                        }),
+                      ),
+                    ]),
                   ),
                 }),
               ),
@@ -1489,6 +1551,16 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
     ),
   }),
 );
+
+/**
+ * case_law_coverage. A requested public country the corpus records nothing
+ * for answers with its admission state, the same refusal search_case_law
+ * returns, so every country the input advertises has a typed answer.
+ */
+export const CASE_LAW_COVERAGE_PROJECTION = v.union([
+  projectionBranch(publicCountryUnavailableSchema),
+  CASE_LAW_COVERAGE_COUNTRIES_PROJECTION,
+]);
 
 // Publisher-authored summaries, only those the publisher published: an
 // absent field is left out rather than spelled as an absence block.
@@ -1607,7 +1679,18 @@ const caseLawDecisionProjection = v.strictObject({
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  citations: v.optional(caseLawCitationSummaryProjection),
+  citations: v.optional(
+    v.union([
+      projectionBranch(caseLawCitationSummaryProjection),
+      projectionBranch(
+        v.strictObject({
+          status: v.literal("unavailable"),
+          reason: v.literal("country_not_search_admitted"),
+          country: v.string(),
+        }),
+      ),
+    ]),
+  ),
   country: v.optional(v.string()),
   court: v.optional(v.string()),
   // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
@@ -1754,7 +1837,42 @@ export { READ_CASE_LAW_CITATIONS_PROJECTION } from "./case-law-citation-projecti
  * Newest validity window first, bounded by the versions page size: enough to
  * see which consolidations exist, not the whole amendment history.
  */
+const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
+  v.strictObject({
+    items: v.array(
+      v.strictObject({
+        publisherId: v.string(),
+        amendingEli: v.string(),
+        amendingTitle: v.nullable(v.string()),
+        affectedAnchor: v.string(),
+        changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+        effectiveDate: v.nullable(v.string()),
+        effectiveText: v.nullable(v.string()),
+      }),
+    ),
+    observedAt: v.string(),
+    coverage: v.variant("type", [
+      projectionBranch(v.strictObject({ type: v.literal("complete") })),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("partial"),
+          unlocatedRelations: v.number(),
+          reason: v.string(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("not-stated"),
+          reason: v.string(),
+        }),
+      ),
+    ]),
+    truncated: v.boolean(),
+  }),
+);
+
 const STATUTE_VERSION_PROJECTION = v.strictObject({
+  amendedBy: STATUTE_AMENDMENT_PAGE_PROJECTION,
   documentId: passthroughId(),
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
@@ -1783,6 +1901,8 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
           effectiveDate: v.nullable(v.string()),
+          versionValidFrom: v.nullable(v.string()),
+          versionValidTo: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
           match: v.strictObject({
@@ -1852,6 +1972,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
     ...statuteExpressionLabel,
+    pendingChanges: STATUTE_AMENDMENT_PAGE_PROJECTION,
     versions: v.optional(v.array(STATUTE_VERSION_PROJECTION)),
   }),
 });
@@ -1912,6 +2033,18 @@ export const SEARCH_BOE_LEGISLATION_PROJECTION = v.union([
             titulo: v.optional(v.string()),
             fecha_publicacion: v.optional(v.string()),
             fecha_disposicion: v.optional(v.string()),
+            fecha_actualizacion: v.optional(v.string()),
+            fecha_vigencia: v.optional(v.string()),
+            numero_oficial: v.optional(v.string()),
+            diario: v.optional(v.string()),
+            diario_numero: v.optional(v.string()),
+            vigencia_agotada: v.optional(v.string()),
+            ambito: v.optional(
+              v.strictObject({
+                codigo: v.optional(v.string()),
+                texto: v.optional(v.string()),
+              }),
+            ),
             departamento: v.optional(
               v.strictObject({
                 codigo: v.optional(v.string()),
@@ -1978,6 +2111,12 @@ const businessRegistryHitProjection = v.strictObject({
   // unchanged.
   registryUrl: publicUrl(),
   details: v.optional(unenumeratedJson()),
+  provenance: v.optional(
+    v.strictObject({
+      identifierSource: v.literal("web-search"),
+      recordSource: v.literal("official-registry"),
+    }),
+  ),
 });
 
 /**
@@ -1998,6 +2137,26 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
       type: v.literal("search"),
       registry: v.string(),
       hits: v.array(businessRegistryHitProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-not-found"),
+      registry: v.string(),
+      candidates: v.array(
+        v.strictObject({
+          id: v.string(),
+          reason: v.picklist(["no-official-record", "name-mismatch"]),
+          officialName: v.optional(v.string()),
+        }),
+      ),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-unavailable"),
+      registry: v.string(),
+      reason: v.literal("web-search-unavailable"),
     }),
   ),
 ]);

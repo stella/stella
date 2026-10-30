@@ -278,3 +278,71 @@ export const corpusIndexGroupWithdrawals = p.pgTable(
     ...globalCaseLawPolicies(),
   ],
 );
+
+const jurisdictionServingOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_jurisdiction_serving'::regclass)`;
+
+/**
+ * The generation that serves one jurisdiction when it is not the family's
+ * serving generation. A row exists only after the gated flip
+ * (`case-law-serving-flip.ts`) moved the jurisdiction to a partial generation
+ * built beside the serving one; without a row, a jurisdiction is served by
+ * the family's serving generation, which is the routing every generation
+ * already has. Reads, the SQL acceptance of an indexed hit and the projection
+ * of what the old generation still holds all follow this row and nothing
+ * else.
+ *
+ * The row is deleted when a whole generation is promoted (that generation
+ * holds the jurisdiction itself) and cascades with the generation it names.
+ */
+export const corpusIndexJurisdictionServing = p.pgTable(
+  "corpus_index_jurisdiction_serving",
+  {
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    jurisdiction: p.varchar({ length: 3 }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    /**
+     * The generation the jurisdiction was served by until the flip: the one
+     * whose copies are erased, and the only one.
+     */
+    fromGeneration: p
+      .varchar("from_generation", {
+        length: CORPUS_INDEX_GENERATION_MAX_LENGTH,
+      })
+      .notNull(),
+    flippedAt: timestamptz("flipped_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "corpus_index_jurisdiction_serving_pkey",
+      columns: [t.family, t.jurisdiction],
+    }),
+    p
+      .foreignKey({
+        name: "corpus_index_jurisdiction_serving_generation_fk",
+        columns: [t.family, t.generation],
+        foreignColumns: [
+          corpusIndexGenerations.family,
+          corpusIndexGenerations.generation,
+        ],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "corpus_index_jurisdiction_serving_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_jurisdiction_serving_jurisdiction_shape",
+      sql`${t.jurisdiction} ~ '^[A-Z]{2,3}$'`,
+    ),
+    p.pgPolicy("corpus_index_jurisdiction_serving_owner_access", {
+      for: "all",
+      to: "public",
+      using: jurisdictionServingOwnerAccess,
+      withCheck: jurisdictionServingOwnerAccess,
+    }),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);

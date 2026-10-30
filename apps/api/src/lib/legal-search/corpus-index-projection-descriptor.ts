@@ -13,16 +13,16 @@ import {
 import {
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
+  type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
   corpusIndexStemFields,
-  type CorpusIndexManifest,
-  type CorpusIndexPublisherFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
-  typedLegislationClassification,
   type LegislationExpressionClassification,
+  typedLegislationClassification,
 } from "@/api/lib/legal-search/legislation-expression-classification";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
@@ -61,6 +61,23 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
    * is assembled per row inside the canonical transaction.
    */
   metadata: Record<string, unknown> | null;
+  /**
+   * The provision keys of the decision's recorded provision links, distinct
+   * and sorted (`@/api/lib/case-law/provision-keys`). Empty for a decision of
+   * a group whose contract carries no such field: only a `provision_keys_v1`
+   * group reads them, writes them and fingerprints them.
+   */
+  provisionKeys: readonly string[];
+  /**
+   * The generation the gated flip moved this decision's jurisdiction away
+   * from (the jurisdiction-serving pointer's `from_generation`), or null while
+   * no flip has happened. That generation, and only that one, holds no copy of
+   * the decision any more: its projection is an erasure, which is how what the
+   * vacated generation still holds is purged once readers have moved. Every
+   * other generation, a whole one being built for promotion included, projects
+   * the decision as usual.
+   */
+  vacatedFrom: string | null;
 };
 
 export type LegislationV2ProjectionInput = ProjectionInputBase &
@@ -75,8 +92,7 @@ export type LegislationV2ProjectionInput = ProjectionInputBase &
   };
 
 export type CorpusIndexProjectionInput =
-  | CaseLawProjectionInput
-  | LegislationV2ProjectionInput;
+  CaseLawProjectionInput | LegislationV2ProjectionInput;
 
 export type CorpusIndexProjectionDescriptor =
   | { action: "erase" }
@@ -151,12 +167,14 @@ const publisherFingerprintFields = (
  * manifest's contract, so every such fingerprint keeps its bytes. A
  * court-partitioned group covers its effective contract and the court
  * identity it writes, so a contract change or a court correction re-projects
- * the decision.
+ * the decision. A group with provision keys covers its effective contract and
+ * the sorted keys it writes, so a link recorded, corrected or removed
+ * re-projects the decision.
  */
 const groupContractFingerprintFields = (
   manifest: CorpusIndexManifest,
   input: CaseLawProjectionInput,
-): { groupContract?: Record<string, string> } => {
+): { groupContract?: Record<string, string | readonly string[]> } => {
   const contract = corpusIndexGroupContractForJurisdiction(
     manifest,
     input.jurisdiction,
@@ -174,6 +192,13 @@ const groupContractFingerprintFields = (
         },
       };
     }
+    case "provision_keys_v1":
+      return {
+        groupContract: {
+          effectiveDigest: contract.effectiveDigest,
+          provisionKeys: input.provisionKeys.toSorted(),
+        },
+      };
     default:
       contract satisfies never;
       return panic(`Unhandled group contract: ${String(contract)}`);
@@ -194,6 +219,8 @@ export const deriveCorpusIndexProjectionDescriptor = (
     EMPTY_CORPUS_CONTENT_HASHES.includes(input.contentHash) ||
     !input.redistributionEligible ||
     (input.family === "case_law" && (input.redacted || input.listingOnly)) ||
+    (input.family === "case_law" &&
+      input.vacatedFrom === manifest.generation) ||
     // A withdrawn version is a tombstone the publisher no longer lists: it
     // stays openable by id, and no search may find it.
     (input.family === "legislation" && input.windowDisposition === "withdrawn")

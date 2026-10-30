@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import ts from "typescript";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 const srcRoot = new URL("../../", import.meta.url);
 
@@ -20,9 +21,10 @@ const ALLOWED_FLAG_READS = {
   "lib/rate-limit/action-admission.ts": 2,
   // Request and response size bounds, not action counting.
   "lib/rate-limit/action-size-limits.ts": 1,
+  // The size-bound middleware.
   "lib/rate-limit/tenant-action-boundary.ts": 1,
-  // The size-bound wrapper and the admission store warmup.
-  "server.ts": 2,
+  // The admission store warmup.
+  "server.ts": 1,
   // A run without an actor has no caller to admit or count.
   "lib/flows/start-flow-run.ts": 1,
   // Cost-record storage and its retention, not admission.
@@ -31,11 +33,15 @@ const ALLOWED_FLAG_READS = {
   "lib/scheduler/tasks/action-cost-retention.ts": 1,
 } as const;
 
-const readsFlag = (node: ts.Node) =>
-  (ts.isStringLiteral(node) &&
-    ts.isCallExpression(node.parent) &&
-    ADMISSION_FLAGS.has(node.text)) ||
-  (ts.isPropertyAccessExpression(node) && ADMISSION_FLAGS.has(node.name.text));
+const readsFlag = (node: Node, parent: Node | undefined) =>
+  (node.type === "Literal" &&
+    typeof node.value === "string" &&
+    parent?.type === "CallExpression" &&
+    ADMISSION_FLAGS.has(node.value)) ||
+  (node.type === "MemberExpression" &&
+    !node.computed &&
+    node.property.type === "Identifier" &&
+    ADMISSION_FLAGS.has(node.property.name));
 
 describe("action admission flag readers", () => {
   test("only the admission owner and listed non-counting paths read admission flags", async () => {
@@ -50,19 +56,11 @@ describe("action admission flag readers", () => {
       if (![...ADMISSION_FLAGS].some((flag) => source.includes(flag))) {
         continue;
       }
-      const tree = ts.createSourceFile(
-        file,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      const visit = (node: ts.Node): void => {
-        if (readsFlag(node)) {
+      walk(parseSource(file, source).program, (node, ancestors) => {
+        if (readsFlag(node, ancestors.at(-1))) {
           reads[file] = (reads[file] ?? 0) + 1;
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(tree);
+      });
     }
     expect(reads).toEqual(ALLOWED_FLAG_READS);
   });

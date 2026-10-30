@@ -1,5 +1,85 @@
 # @stll/workspace-ui
 
+## 0.14.2
+
+### Patch Changes
+
+- Updated dependencies [[`9c0ea0e`](https://github.com/stella/stella/commit/9c0ea0e95c1e9f9edc9ffaa84cb18e4c43a85d8b), [`df53905`](https://github.com/stella/stella/commit/df5390529e1e6bc783d2e442b57bb959ad8acadd), [`b1db339`](https://github.com/stella/stella/commit/b1db33914f1bd2cb04d1760ffd8ff1a222c806c2), [`5e31c64`](https://github.com/stella/stella/commit/5e31c6433b4bf3400ebb7d137d137e81e419b236), [`cd78348`](https://github.com/stella/stella/commit/cd7834897fba75056fa30f8351ccc42dd46a16a0)]:
+  - @stll/ui@0.55.0
+
+## 0.14.1
+
+### Patch Changes
+
+- Updated dependencies [[`276fe8f`](https://github.com/stella/stella/commit/276fe8f46a263509a6e864505a9bdd75ffa75f56), [`dd1480b`](https://github.com/stella/stella/commit/dd1480bd335acd79fe88484b69416410c215786c), [`051ed71`](https://github.com/stella/stella/commit/051ed716e83bcc8d822317735bef0b06cd7cd6a0), [`85a8893`](https://github.com/stella/stella/commit/85a88937362ad495f74f167b557250608862b77d), [`58b429b`](https://github.com/stella/stella/commit/58b429b124f1a5ff110e20b31a0f8fc6143c8e65), [`106c7d6`](https://github.com/stella/stella/commit/106c7d6e21e240156f8d98305315cb5fe1ed1a84), [`0d610b6`](https://github.com/stella/stella/commit/0d610b62b0101f921a36b37439a0406a40db8797)]:
+  - @stll/ui@0.54.0
+
+## 0.14.0
+
+### Minor Changes
+
+- [#7018](https://github.com/stella/stella/pull/7018) [`16d1f58`](https://github.com/stella/stella/commit/16d1f58e9f0670401d13294d3199afedd92a4b9d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sort chips name their direction with the caller's wording for the property's sort kind. `SortableProperty` takes a required `sortKind` and `SortChipsLabels` a total `directions` record, both typed by the new `@stll/workspace-ui/column-sort` entry (`ColumnSortKind`, `SortDirection`, `SortDirectionLabels`). `sortDirectionHint` and its hard-coded `A→Z` / `1→9` / arrow hints are removed.
+
+- [#6956](https://github.com/stella/stella/pull/6956) [`650aa33`](https://github.com/stella/stella/commit/650aa3349fafcc7b0c69fc9e9375ed4eb52a369b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/workspace-ui/formatting` with `WorkspaceUiFormattingProvider`. Field values and column calculations format numbers, money and dates in the locale it supplies instead of `use-intl`'s locale, so a host can keep the UI language and the regional format apart. Rendering them outside the provider throws.
+
+## 0.13.2
+
+### Patch Changes
+
+- Updated dependencies [[`48c0025`](https://github.com/stella/stella/commit/48c002525572684e4c8e96ad50eec065313295b0), [`e4836e1`](https://github.com/stella/stella/commit/e4836e18472a659a03e9e7d80156685739ce3aed), [`4dde81d`](https://github.com/stella/stella/commit/4dde81dd999d620a00b9000f0d8431b9e4d5ae98), [`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b), [`7746519`](https://github.com/stella/stella/commit/774651920e9c2c16bdb352a117b2a51f21e35cc5), [`b942114`](https://github.com/stella/stella/commit/b9421146019be23569fb7f3cba3b8f094422d7a3)]:
+  - @stll/ui@0.53.0
+
+## 0.13.1
+
+### Patch Changes
+
+- [#6790](https://github.com/stella/stella/pull/6790) [`85c80dd`](https://github.com/stella/stella/commit/85c80dd20e5d55b981c60f58786fe18c88d1058f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ResponsiveActionToolbar` wraps its slots instead of scrolling them behind a hidden scrollbar, and the action slot aligns to the inline end by itself.
+- Updated dependencies [[`4fe45ad`](https://github.com/stella/stella/commit/4fe45ad8fc654bb759207c22008d38bc15344091)]:
+  - @stll/ui@0.52.0
+
+## 0.13.0
+
+### Minor Changes
+
+- [#6268](https://github.com/stella/stella/pull/6268) [`5fb50f0`](https://github.com/stella/stella/commit/5fb50f0fe6c2161d41c50a46cb961aaa8f037494) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow hosts to provide typed content for workspace feature previews while retaining the default scenes.
+
+- [#6247](https://github.com/stella/stella/pull/6247) [`d2ad946`](https://github.com/stella/stella/commit/d2ad946f78aa870f47a2f3e7cddf4028e7481c0c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/workspace-ui/feature-previews`: static product scenes (matters, documents, research, billing, contacts, time tracking) composed from the app's own components, for marketing pages, menus and slides. Each scene takes its interface labels and a formatting locale. Add `@stll/workspace-ui/task-status`, the glyph and colour of each task status.
+
+### Patch Changes
+
+- [#6472](https://github.com/stella/stella/pull/6472) [`83e4634`](https://github.com/stella/stella/commit/83e4634ae41525365ddcca368db1d128e6448729) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Paginate filesystem tree reads and expose bounded text previews in entity lists.
+- Updated dependencies [[`7835dfd`](https://github.com/stella/stella/commit/7835dfd514ad56fce2a4f00fd4bf0bd522188d34), [`281665b`](https://github.com/stella/stella/commit/281665baa193e2ab2b3acba0da3a259ec16a770a), [`a765cda`](https://github.com/stella/stella/commit/a765cdaeb5718de31b707958364dfde7b6c98594), [`2dd1699`](https://github.com/stella/stella/commit/2dd16994dfba74f35540d47b1582e428ba7b4bc1), [`85a56db`](https://github.com/stella/stella/commit/85a56dbbf73156b5b7e4a0e37c73db382aa02ada)]:
+  - @stll/ui@0.51.0
+
+## 0.12.7
+
+### Patch Changes
+
+- Updated dependencies [[`ab74b25`](https://github.com/stella/stella/commit/ab74b2560766d05d67c302c4b81639351ef33a64), [`8cb7fd4`](https://github.com/stella/stella/commit/8cb7fd43886be0ef8dc9be107eafac32613d504a), [`ae6605a`](https://github.com/stella/stella/commit/ae6605a93f22d05aab53205059032237f0e1cbd8), [`c48136a`](https://github.com/stella/stella/commit/c48136ad775ad38e1e7f4a9ca91caa485e827952)]:
+  - @stll/ui@0.50.0
+
+## 0.12.6
+
+### Patch Changes
+
+- Updated dependencies [[`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8), [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b)]:
+  - @stll/ui@0.49.0
+
+## 0.12.5
+
+### Patch Changes
+
+- Updated dependencies [[`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622)]:
+  - @stll/ui@0.48.0
+
+## 0.12.4
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+- Updated dependencies [[`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d)]:
+  - @stll/ui@0.47.1
+
 ## 0.12.3
 
 ### Patch Changes
@@ -258,8 +338,8 @@
 
 ### Minor Changes
 
-- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency. `toMinorUnits({
-  amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
+- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency.
+  `toMinorUnits({ amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
   currency's own exponent (100 for USD, 1 for JPY, 1000 for KWD), and
   `formatMoneyCents` takes an optional `fractionDigits` for a rounded summary.
 
@@ -269,8 +349,8 @@
   an amount it cannot store; `tryToMinorUnits` returns null instead, for callers
   holding text nobody has vouched for yet.
 
-  BREAKING: `cents()` now rejects an integer outside the safe range, where `x + 1
-  === x` and a running total silently stops moving. `@stll/workspace-ui` no
+  BREAKING: `cents()` now rejects an integer outside the safe range, where
+  `x + 1 === x` and a running total silently stops moving. `@stll/workspace-ui` no
   longer re-exports `currencyMinorUnitDigits`, `formatMoneyCents`, or
   `FormatMoneyCentsParams`; import them from `@stll/money`.
 

@@ -15,8 +15,7 @@
  * answer is built here, status included, so no handler spells its status.
  */
 
-import type { TSchema, TUnion } from "@sinclair/typebox";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import type { CountryAlpha3 } from "@stll/agent-input";
 import {
@@ -25,39 +24,31 @@ import {
   normalizeCountry,
 } from "@stll/agent-input";
 import {
+  PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
   PUBLIC_LAW_DOMAIN,
-  PUBLIC_COUNTRY_CAPABILITIES,
-  publicCountryUnavailableIn,
-  publicCountryUnavailableSchema,
   type PublicCountryCapabilities,
-  type PublicLawDomain,
   type PublicCountrySurface,
   type PublicCountryUnavailable,
+  publicCountryUnavailableIn,
+  publicCountryUnavailableSchema,
+  type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
 
+import { status } from "@/api/http/status";
 import { PUBLIC_ERROR_TEXT_BYTES } from "@/api/lib/search/public-error-response";
 import { boundedString } from "@/api/lib/search/response-text-bounds";
 
 const unavailableFields = publicCountryUnavailableSchema.entries;
-export const tPublicCountryUnavailable = t.Object(
-  {
-    code: t.Literal(unavailableFields.code.literal),
-    status: t.Literal(unavailableFields.status.literal),
-    domain: t.Enum(PUBLIC_LAW_DOMAIN),
-    country: t.Enum(
-      Object.fromEntries(
-        unavailableFields.country.options.map(
-          (country) => [country, country] as const,
-        ),
-      ),
-    ),
-    reason: t.UnionEnum(unavailableFields.reason.options),
-    message: boundedString(PUBLIC_ERROR_TEXT_BYTES.message),
-    hint: boundedString(PUBLIC_ERROR_TEXT_BYTES.hint),
-  } satisfies Record<keyof typeof unavailableFields, TSchema>,
-  { additionalProperties: false },
-);
+export const tPublicCountryUnavailable = v.object({
+  code: v.literal(unavailableFields.code.literal),
+  status: v.literal(unavailableFields.status.literal),
+  domain: v.enum(PUBLIC_LAW_DOMAIN),
+  country: v.picklist(unavailableFields.country.options),
+  reason: v.picklist(unavailableFields.reason.options),
+  message: boundedString(PUBLIC_ERROR_TEXT_BYTES.message),
+  hint: boundedString(PUBLIC_ERROR_TEXT_BYTES.hint),
+} satisfies Record<keyof typeof unavailableFields, v.GenericSchema>);
 
 /** The refusal as an HTTP answer, at the status the contract names. */
 export const publicCountryUnavailableAnswer = (
@@ -95,14 +86,20 @@ export const publicLawCountryUnavailable = (
 
 type PublicCountryUnavailableStatus = typeof PUBLIC_COUNTRY_UNAVAILABLE_STATUS;
 
+/** A status's own answer, or the refusal. */
+const orPublicCountryUnavailable = <TSchema extends v.GenericSchema>(
+  schema: TSchema,
+) => v.union([schema, tPublicCountryUnavailable]);
+
 type WithPublicCountryUnavailable<
-  TResponses extends { readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: TSchema },
+  TResponses extends {
+    readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: v.GenericSchema;
+  },
 > = Omit<TResponses, PublicCountryUnavailableStatus> & {
-  readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: TUnion<
-    [
-      TResponses[PublicCountryUnavailableStatus],
-      typeof tPublicCountryUnavailable,
-    ]
+  readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: ReturnType<
+    typeof orPublicCountryUnavailable<
+      TResponses[PublicCountryUnavailableStatus]
+    >
   >;
 };
 
@@ -113,15 +110,16 @@ type WithPublicCountryUnavailable<
  * status.
  */
 export const withPublicCountryUnavailable = <
-  TResponses extends { readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: TSchema },
+  TResponses extends {
+    readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: v.GenericSchema;
+  },
 >(
   responses: TResponses,
 ): WithPublicCountryUnavailable<TResponses> => ({
   ...responses,
-  [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: t.Union([
+  [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: orPublicCountryUnavailable(
     responses[PUBLIC_COUNTRY_UNAVAILABLE_STATUS],
-    tPublicCountryUnavailable,
-  ]),
+  ),
 });
 
 /**
@@ -136,9 +134,10 @@ export const withPublicCountryUnavailable = <
  * required, so an omitted one is still the framework's missing-parameter
  * error rather than a country read from nothing.
  */
-export const tPublicLawCountry = t.String({
-  maxLength: COUNTRY_INPUT_MAX_CHARS,
-});
+export const tPublicLawCountry = v.pipe(
+  v.string(),
+  v.maxLength(COUNTRY_INPUT_MAX_CHARS),
+);
 
 export type PublicLawCountryRead =
   | { kind: "read"; country: CountryAlpha3 }
@@ -150,6 +149,8 @@ type PublicLawCountryOptions = {
   /** The canonical codes this surface holds law for, named in the ask so a
    *  caller that guessed wrong can see what there is to ask for. */
   admitted: readonly string[];
+  /** EU provision targets can be cited by every admitted decision country. */
+  jurisdictionType?: "decision" | "provision";
   /** Which public surface is asking: `pages` serves decision and statute pages
    *  and sitemaps, `search` is search, listing and the agent surfaces. */
   surface: PublicCountrySurface;
@@ -172,6 +173,7 @@ export const readPublicLawCountry = (
     admitted,
     capabilities = PUBLIC_COUNTRY_CAPABILITIES,
     domain,
+    jurisdictionType = "decision",
     parameter,
     surface,
   }: PublicLawCountryOptions,
@@ -182,6 +184,9 @@ export const readPublicLawCountry = (
     parameter,
   });
   if (normalized.ok) {
+    if (jurisdictionType === "provision" && normalized.value.alpha3 === "EU") {
+      return { kind: "read", country: normalized.value.alpha3 };
+    }
     const answer = publicLawCountryUnavailable(normalized.value.alpha3, {
       domain,
       surface,

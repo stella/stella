@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { status } from "elysia";
-import type { ElysiaCustomStatusResponse } from "elysia/error";
 
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
+import { status } from "@/api/http/status";
+import type { HttpStatusResponse } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
@@ -9,14 +10,12 @@ import type {
 } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { fileFieldQuery } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 
 /**
  * Each thumbnail redirect is authorized and audited against the current
@@ -31,7 +30,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   access: "read",
-  params: workspaceParams({ fieldId: tSafeId("field") }),
+  params: workspaceParams({ fieldId: resourceIdSchema("field") }),
 } satisfies WorkspaceHandlerConfig;
 
 /**
@@ -47,11 +46,13 @@ export default createSafeHandler(
   config,
   async function* ({
     params: { fieldId },
-    session: { activeOrganizationId: organizationId },
+    session,
+    user,
     recordAuditEvent,
     scopedDb,
     workspaceId,
-  }): SafeHandlerGenerator<Response | ElysiaCustomStatusResponse<404>> {
+  }): SafeHandlerGenerator<Response | HttpStatusResponse<404, string>> {
+    const organizationId = session.activeOrganizationId;
     const rows = yield* Result.await(
       Result.tryPromise(
         async () => await fileFieldQuery(scopedDb, fieldId, workspaceId),
@@ -73,10 +74,13 @@ export default createSafeHandler(
           await scopedDb(
             async (tx) =>
               await auditedPresignDownload({
+                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
                 tx,
                 recordAuditEvent,
                 resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
                 resourceId: row.entityId,
+                userId: user.id,
+                source: callerDownloadSource(session),
                 s3Key: createFileKey({
                   organizationId,
                   workspaceId,

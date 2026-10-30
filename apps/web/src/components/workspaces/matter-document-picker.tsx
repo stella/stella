@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { foldSearchMatchText } from "@stll/text-normalize";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DialogFormState } from "@stll/ui/dialog";
@@ -12,11 +11,10 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { filterVisibleDocuments } from "@/components/workspaces/matter-document-picker.logic";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
-
-const MAX_VISIBLE_DOCUMENTS = 30;
 
 type MatterDocumentPickerProps = {
   workspaceId: string;
@@ -40,20 +38,11 @@ export const MatterDocumentPicker = ({
   const [search, setSearch] = useState("");
   const [initialPickedEntityIds] = useState(() => [...pickedEntityIds]);
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  const filesView = queryView(filesQuery);
+  useQueryViewError(filesView, "MatterDocumentPicker:query");
   const files = filesView.type === "items" ? filesView.items : undefined;
 
-  const availableFiles = files ?? [];
-  const documents = availableFiles
-    .filter(
-      (file) =>
-        (file.mimeType === DOCX_MIME || file.mimeType === PDF_MIME) &&
-        foldSearchMatchText(file.name ?? file.fileName).includes(
-          foldSearchMatchText(search),
-        ),
-    )
-    .slice(0, MAX_VISIBLE_DOCUMENTS);
+  const documents = filterVisibleDocuments(files ?? [], search);
 
   switch (filesView.type) {
     case "pending":

@@ -104,8 +104,7 @@ export const resolveDecisionModel = (
 };
 
 type DecisionModelProbeResult =
-  | { valid: true }
-  | { valid: false; error: string };
+  { valid: true } | { valid: false; error: string };
 
 /**
  * Prove a candidate decision model answers before its key is stored: one

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { evaluate, type Context } from "./github-expression";
+import { type Context, evaluate } from "./github-expression";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const configured = v.parse(
@@ -22,6 +22,7 @@ const configured = v.parse(
               if: v.optional(v.string()),
               uses: v.optional(v.string()),
               run: v.optional(v.string()),
+              with: v.optional(v.record(v.string(), v.unknown())),
             }),
           ),
         ),
@@ -44,15 +45,20 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
     expect(typeof result, `Unresolved condition: ${condition}`).toBe("boolean");
     return result === true;
   };
-  let setups = 0;
-  let consumers = 0;
+  // The planner installs Bun once from the trusted tooling copy before the
+  // checkout and once from the checkout's own package.json; each version
+  // source is set up at most once and every consumer runs after a setup.
+  const setups = new Map<string, number>();
+  const consumers: string[] = [];
   if (!enabled(candidate.if)) {
-    return { setups, consumers };
+    return { setups: 0, consumers };
   }
   for (const step of candidate.steps) {
     const runs = enabled(step.if);
     if (runs && step.uses?.startsWith("oven-sh/setup-bun@")) {
-      setups++;
+      const source = String(step.with?.["bun-version-file"]);
+      setups.set(source, (setups.get(source) ?? 0) + 1);
+      expect(setups.get(source), `Bun setup count for ${source}`).toBe(1);
     }
     if (
       runs &&
@@ -60,17 +66,21 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
         step.uses === "$/.github/actions/ci-install" ||
         step.uses === "./.github/actions/ci-install")
     ) {
-      consumers++;
-      expect(setups, `Bun setup count before ${step.name}`).toBe(1);
+      consumers.push(step.name);
+      expect(
+        setups.size,
+        `Bun setup count before ${step.name}`,
+      ).toBeGreaterThan(0);
     }
     if (step.id) {
       values[`steps.${step.id}.outcome`] = runs ? "success" : "skipped";
     }
   }
-  expect(setups, "Bun setup count at job completion").toBe(
-    consumers > 0 ? 1 : 0,
-  );
-  return { setups, consumers };
+  expect(
+    consumers.length > 0 || setups.size === 0,
+    "Bun setup count at job completion",
+  ).toBe(true);
+  return { setups: setups.size, consumers };
 };
 
 // Reusable workflows retain their caller's event: main heavy calls can originate
@@ -114,7 +124,13 @@ const axes = [
   readonly (string | boolean)[],
 ])[];
 
-let combinations: Context["values"][] = [{}];
+let combinations: Context["values"][] = [
+  {
+    "inputs.pr_depth_only": false,
+    "steps.changed-files.outputs.postgres_suites_required": "false",
+    "vars.CI_POSTGRES_PR_SELECTION": "off",
+  },
+];
 for (const [name, options] of axes) {
   combinations = combinations.flatMap((values) =>
     options.map((value) => ({ ...values, [name]: value })),
@@ -163,38 +179,59 @@ const contexts = combinations
     }
     return true;
   })
-  .map(
-    (values) =>
-      ({
-        values,
+  .flatMap((values) => {
+    // The lookup publishes arming only for a PR code run. Queue entries and
+    // reusable callers keep it unset; they select heavy planning by event/input.
+    const armedOutputs =
+      values["github.event_name"] === "pull_request" &&
+      values["github.event.action"] !== "enqueued" &&
+      values["inputs.heavy_only"] !== true &&
+      values["github.event.pull_request.draft"] !== true
+        ? ["false", "true"]
+        : [""];
+    return armedOutputs.map((armed) => {
+      const armedValues = { ...values };
+      armedValues["steps.completed-depth.outputs.armed"] = armed;
+      return {
+        values: armedValues,
         status: {
           always: true,
           success: true,
           failure: false,
           cancelled: false,
         },
-      }) satisfies Context,
-  );
+      } satisfies Context;
+    });
+  });
 
-test("ci-plan sets up Bun exactly once before every Bun consumer across event, depth and trust branches", () => {
+test("ci-plan sets up Bun exactly once before every Bun consumer across event, depth, trust and arming branches", () => {
   let consumingPaths = 0;
   let skippedPaths = 0;
+  const consumedArmingStates = { false: 0, true: 0 };
   for (const context of contexts) {
     const { consumers } = assertBunSetupContract(plan, context);
-    if (consumers > 0) {
+    if (consumers.length > 0) {
       consumingPaths++;
+      const armed = context.values["steps.completed-depth.outputs.armed"];
+      if (armed === "true" || armed === "false") {
+        consumedArmingStates[armed]++;
+      }
     } else {
       skippedPaths++;
     }
   }
   expect(consumingPaths).toBeGreaterThan(0);
   expect(skippedPaths).toBeGreaterThan(0);
+  expect(consumedArmingStates.false).toBeGreaterThan(0);
+  expect(consumedArmingStates.true).toBeGreaterThan(0);
 });
 
 test("Bun setup contract rejects duplicate setup and missing setup fixtures", () => {
   const setup = (step: (typeof plan.steps)[number]) =>
     step.uses?.startsWith("oven-sh/setup-bun@");
-  expect(plan.steps.filter(setup)).toHaveLength(1);
+  expect(
+    plan.steps.filter(setup).map((step) => step.with?.["bun-version-file"]),
+  ).toEqual([".workflow-tooling/package.json", "package.json"]);
   const duplicate = {
     ...plan,
     steps: plan.steps.flatMap((step) => (setup(step) ? [step, step] : [step])),
@@ -208,11 +245,36 @@ test("Bun setup contract rejects duplicate setup and missing setup fixtures", ()
         values["steps.check.outputs.trusted"] === "true" &&
         values["steps.completed-depth.outputs.run_required"] === "true",
     ) ?? panic("Missing trusted thin-queue fixture");
-  expect(assertBunSetupContract(plan, context).consumers).toBeGreaterThan(0);
+  expect(
+    assertBunSetupContract(plan, context).consumers.length,
+  ).toBeGreaterThan(0);
   expect(() => assertBunSetupContract(duplicate, context)).toThrow(
     "Bun setup count",
   );
   expect(() => assertBunSetupContract(missing, context)).toThrow(
     "Bun setup count",
+  );
+});
+
+test("Postgres planner fixture uses Bun from the checkout after trusted setup", () => {
+  const context =
+    contexts.find(
+      ({ values }) =>
+        values["github.event_name"] === "pull_request" &&
+        values["steps.check.outputs.trusted"] === "true" &&
+        values["steps.completed-depth.outputs.run_required"] === "true",
+    ) ?? panic("Missing trusted pull request fixture");
+  const postgresContext = {
+    ...context,
+    values: {
+      ...context.values,
+      "inputs.pr_depth_only": false,
+      "steps.changed-files.outputs.postgres_suites_required": "true",
+      "vars.CI_POSTGRES_PR_SELECTION": "on",
+    },
+  } satisfies Context;
+
+  expect(assertBunSetupContract(plan, postgresContext).consumers).toContain(
+    "Plan Postgres test shards",
   );
 });

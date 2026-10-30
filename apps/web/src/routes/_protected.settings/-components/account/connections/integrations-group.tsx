@@ -42,27 +42,31 @@ import {
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
+import {
+  McpReconnectButton,
+  useMcpConnectionOAuthRefresh,
+} from "@/components/mcp-reconnect-button";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
   canApproveIntegrationAuthorization,
-  integrationStatus,
-  matchesConnectionQuery,
   type IntegrationAuthorizationStatus,
   type IntegrationConnection,
+  integrationStatus,
+  matchesConnectionQuery,
 } from "@/lib/account/connections.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  isEffectivelyInstalled,
   type CatalogueMcp,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 import {
-  mcpConnectorsOptions,
   mcpConnectionsOptions,
+  mcpConnectorsOptions,
   type McpConnectorsResponse,
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
@@ -145,6 +149,7 @@ export const IntegrationsGroup = ({
   integrations: IntegrationsData;
 }) => {
   const t = useTranslations();
+  useMcpConnectionOAuthRefresh();
   const format = useFormatter();
   const canManageOrganizationSettings = usePermissions({
     organizationSettings: ["update"],
@@ -178,6 +183,11 @@ export const IntegrationsGroup = ({
       <List>
         {visible.map((entry) => {
           const connectorSlug = entry.installedConnectorSlug ?? entry.slug;
+          const connection = connectionBySlug.get(connectorSlug);
+          const canReconnect =
+            entry.authType !== "none" &&
+            (connection?.status === "needs_reauth" ||
+              connection?.status === "revoked");
           const review = authorizationReviewBySlug.get(connectorSlug);
           const canApprove =
             canApproveIntegrationAuthorization(
@@ -190,13 +200,13 @@ export const IntegrationsGroup = ({
           const status = integrationStatus({
             authType: entry.authType,
             authorizationStatus: authorizationStatusBySlug.get(connectorSlug),
-            connection: connectionBySlug.get(connectorSlug),
+            connection,
           });
           return (
             <ListItem
               key={entry.slug}
               render={
-                canApprove ? undefined : (
+                canApprove || canReconnect ? undefined : (
                   <Link search={{ slug: entry.slug }} to="/knowledge/tools" />
                 )
               }
@@ -212,7 +222,7 @@ export const IntegrationsGroup = ({
               </ListItemMedia>
               <ListItemContent>
                 <ListItemTitle>
-                  {canApprove ? (
+                  {canApprove || canReconnect ? (
                     <Link search={{ slug: entry.slug }} to="/knowledge/tools">
                       <BidiText>{entry.displayName}</BidiText>
                     </Link>
@@ -225,6 +235,15 @@ export const IntegrationsGroup = ({
                 )}
               </ListItemContent>
               <ListItemActions>
+                {canReconnect && (
+                  <McpReconnectButton
+                    oauthRefresh="owner"
+                    authType={
+                      entry.authType === "oauth" ? "oauth2" : entry.authType
+                    }
+                    slug={connectorSlug}
+                  />
+                )}
                 {canApprove && review.issuer !== null && (
                   <ApproveAuthorizationButton
                     connectorSlug={connectorSlug}
@@ -277,7 +296,7 @@ const ApproveAuthorizationButton = ({
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const approve = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.mcp
           .connectors({ slug: connectorSlug })
           ["approve-authorization"].post({
@@ -298,7 +317,13 @@ const ApproveAuthorizationButton = ({
       setOpen(false);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ApproveAuthorizationButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ApproveAuthorizationButton:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

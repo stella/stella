@@ -7,7 +7,7 @@ import {
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_ERROR_CODES,
 } from "@stll/api-contract/reader-answers";
-import { sleep } from "@stll/concurrency/sleep";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
@@ -65,7 +65,7 @@ const seedFixture = async (db: GatedTestDb) => {
   const answerId = createSafeId<"legalReaderAnswer">();
   const decisionId = createSafeId<"caseLawDecision">();
   const messageId = createSafeId<"legalReaderAnswerMessage">();
-  const anchor = {
+  const span = {
     paragraphId: "p-1",
     quote: "The holding",
     startOffset: 0,
@@ -100,7 +100,7 @@ const seedFixture = async (db: GatedTestDb) => {
             decisionId,
             kind: "explain",
             visibility: "private",
-            ...anchor,
+            ...span,
           })
           .returning()
       ).at(0) ?? panic("Reader deadline answer fixture is missing");
@@ -141,14 +141,15 @@ const seedFixture = async (db: GatedTestDb) => {
       deadlineAt: readerAnswerDeadlineAt(assistant.updatedAt),
       history,
       decision: {
+        language: "cs",
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
         paragraphs: [
-          { paragraphId: anchor.paragraphId, text: "The holding follows." },
+          { paragraphId: span.paragraphId, text: "The holding follows." },
         ],
       },
-      anchor,
+      anchor: [span],
       locale: "cs-CZ",
       modelId: undefined,
     } satisfies PreparedReaderAnswer;
@@ -179,31 +180,28 @@ const observeBlockedSettlement = async ({
   deadlineAt,
   messageId,
 }: ObserveBlockedSettlementOptions) => {
-  const observationDeadline = performance.now() + OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < observationDeadline) {
-    const row =
-      (
-        await scopedDb(
-          async (tx) =>
-            await tx
-              .select({
-                blocked: sql<boolean>`${holderPid} = ANY(pg_blocking_pids(${writerPid}))`,
-                beforeDeadline: sql<boolean>`clock_timestamp() < to_timestamp(${deadlineAt} / 1000.0)`,
-              })
-              .from(legalReaderAnswerMessages)
-              .where(eq(legalReaderAnswerMessages.id, messageId))
-              .limit(1),
-        )
-      ).at(0) ?? panic("Reader deadline lock observation is missing");
-    expect(row.beforeDeadline).toBe(true);
-    if (row.blocked) {
-      return;
-    }
-    await sleep(POLL_INTERVAL_MS);
-  }
-  throw new HandlerError({
-    status: 500,
-    message: "Reader settlement did not reach its row lock before expiry",
+  await waitForExternalState({
+    description: "the reader settlement reaches its row lock before expiry",
+    intervalMs: POLL_INTERVAL_MS,
+    timeoutMs: OBSERVATION_TIMEOUT_MS,
+    read: async () => {
+      const row =
+        (
+          await scopedDb(
+            async (tx) =>
+              await tx
+                .select({
+                  blocked: sql<boolean>`${holderPid} = ANY(pg_blocking_pids(${writerPid}))`,
+                  beforeDeadline: sql<boolean>`clock_timestamp() < to_timestamp(${deadlineAt} / 1000.0)`,
+                })
+                .from(legalReaderAnswerMessages)
+                .where(eq(legalReaderAnswerMessages.id, messageId))
+                .limit(1),
+          )
+        ).at(0) ?? panic("Reader deadline lock observation is missing");
+      expect(row.beforeDeadline).toBe(true);
+      return row.blocked;
+    },
   });
 };
 

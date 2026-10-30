@@ -46,8 +46,8 @@ import {
 } from "@/api/tests/helpers/agent-skill-db";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import {
   testModelAdmission,
@@ -391,7 +391,6 @@ const TASK_REQUESTS = {
     run: async (run) => {
       await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TASK_REQUEST_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
@@ -400,6 +399,8 @@ const TASK_REQUESTS = {
         safeDb: safeDbOf(),
         threadId: await seedThread(),
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
     },
   },

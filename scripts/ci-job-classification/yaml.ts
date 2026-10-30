@@ -1,0 +1,638 @@
+import { Result, TaggedError } from "better-result";
+import * as v from "valibot";
+
+import { sha256 } from "./classification-values";
+import { requestsRepositoryWrite, shapeWritesRepository } from "./review";
+
+export class AdmissionError extends TaggedError("AdmissionError")<{
+  message: string;
+}> {}
+
+export const CLASSIFICATION_EXCLUSIONS = {
+  document: ["name", "run-name"],
+  job: ["name", "timeout-minutes"],
+  step: ["name", "timeout-minutes", "run"],
+} as const;
+
+const DOCUMENT = v.strictObject({
+  digest: v.string(),
+  privileged: v.boolean(),
+  // Composite-action steps are not kept in the shape, so callers read this.
+  writesRepository: v.boolean(),
+  jobs: v.record(
+    v.string(),
+    v.strictObject({
+      digest: v.string(),
+      privilegedDigest: v.string(),
+      privileged: v.boolean(),
+      shape: v.strictObject({
+        document: v.record(v.string(), v.unknown()),
+        job: v.record(v.string(), v.unknown()),
+      }),
+      dependencies: v.record(
+        v.string(),
+        v.picklist(["action", "reusable-workflow"]),
+      ),
+    }),
+  ),
+  dependencies: v.record(
+    v.string(),
+    v.picklist(["action", "reusable-workflow"]),
+  ),
+  relocatedActions: v.record(
+    v.string(),
+    v.array(
+      v.strictObject({
+        repository: v.nullable(v.string()),
+        ref: v.nullable(v.string()),
+        path: v.string(),
+      }),
+    ),
+  ),
+});
+
+export type JobShape = v.InferOutput<typeof DOCUMENT>["jobs"][string]["shape"];
+export type ParsedDocument = v.InferOutput<typeof DOCUMENT>;
+
+type JsonRecord = Record<string, unknown>;
+type DependencyKind = "action" | "reusable-workflow";
+type RelocatedAction = {
+  repository: string | null;
+  ref: string | null;
+  path: string;
+};
+
+const MAX_SOURCE_BYTES = 4 * 1024 * 1024;
+const MAX_EXPANDED_NODES = 250_000;
+const MAX_EXPANDED_BYTES = 16 * 1024 * 1024;
+const MAX_DEPTH = 256;
+const encoder = new TextEncoder();
+
+const isRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const requireRecord = (value: unknown, message: string) => {
+  if (!isRecord(value)) {
+    throw new AdmissionError({ message });
+  }
+  return value;
+};
+
+const measure = (value: unknown, depth = 0): [number, number] => {
+  if (depth > MAX_DEPTH) {
+    throw new AdmissionError({ message: "YAML nesting limit exceeded" });
+  }
+  if (typeof value === "string") {
+    return [1, encoder.encode(value).byteLength];
+  }
+  let children: unknown[] = [];
+  if (Array.isArray(value)) {
+    children = value;
+  } else if (isRecord(value)) {
+    children = Object.entries(value).flat();
+  }
+  let nodes = 1;
+  let bytes = 0;
+  for (const child of children) {
+    const [childNodes, childBytes] = measure(child, depth + 1);
+    nodes += childNodes;
+    bytes += childBytes;
+    if (nodes > MAX_EXPANDED_NODES || bytes > MAX_EXPANDED_BYTES) {
+      throw new AdmissionError({
+        message: "YAML alias expansion limit exceeded",
+      });
+    }
+  }
+  return [nodes, bytes];
+};
+
+const canonicalize = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.keys(value)
+        .toSorted()
+        .map((key) => [key, canonicalize(value[key])]),
+    );
+  }
+  return value;
+};
+
+const digest = (value: unknown) => sha256(JSON.stringify(canonicalize(value)));
+
+const project = (
+  value: JsonRecord,
+  scope: keyof typeof CLASSIFICATION_EXCLUSIONS,
+) => {
+  const excluded: readonly string[] = CLASSIFICATION_EXCLUSIONS[scope];
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !excluded.includes(key)),
+  );
+};
+
+const secretRefs = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return [
+      ...value.matchAll(/secrets(?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])?/gu),
+    ]
+      .map(([match]) => match)
+      .filter((match, index, matches) => matches.indexOf(match) === index)
+      .toSorted();
+  }
+  let children: unknown[] = [];
+  if (Array.isArray(value)) {
+    children = value;
+  } else if (isRecord(value)) {
+    children = Object.values(value);
+  }
+  return [...new Set(children.flatMap(secretRefs))].toSorted();
+};
+
+const containsCredential = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return (
+      /secrets(?:\.|\[)(?!github_token\b)/iu.test(value) ||
+      /actions\/(?:create-github-app-token|github-app-token)@|steps\.[^.]+\.outputs\.token/iu.test(
+        value,
+      )
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.some(containsCredential);
+  }
+  return isRecord(value) && Object.values(value).some(containsCredential);
+};
+
+const hasWritePermission = (value: unknown) =>
+  value === "write-all" ||
+  (isRecord(value) &&
+    Object.values(value).some((permission) => permission === "write"));
+
+const hasEffectiveWritePermission = (
+  jobPermissions: unknown,
+  workflowPermissions: unknown,
+) => {
+  const effective = jobPermissions ?? workflowPermissions;
+  const REPOSITORY_DEFAULT_TOKEN_PERMISSIONS = "read";
+  return hasWritePermission(effective ?? REPOSITORY_DEFAULT_TOKEN_PERMISSIONS);
+};
+
+const PRIVILEGED_EVENTS = new Set([
+  "pull_request_target",
+  "workflow_run",
+  "issue_comment",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "discussion_comment",
+]);
+
+const workflowHasPrivilegedEvent = (trigger: unknown) => {
+  if (typeof trigger === "string") {
+    return PRIVILEGED_EVENTS.has(trigger);
+  }
+  if (Array.isArray(trigger)) {
+    return trigger.some(workflowHasPrivilegedEvent);
+  }
+  return (
+    isRecord(trigger) &&
+    Object.keys(trigger).some((event) => PRIVILEGED_EVENTS.has(event))
+  );
+};
+
+const isGithubHostedLabel = (label: string) =>
+  /^(?:ubuntu-(?:latest|\d+(?:\.\d+)?|\d+(?:\.\d+)?-arm)|windows-(?:latest|\d+)|macos-(?:latest|\d+(?:-large|-xlarge)?))$/u.test(
+    label,
+  );
+
+const literalMatrixValues = (
+  job: JsonRecord,
+  expression: string,
+): unknown[] => {
+  const match = /^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/u.exec(
+    expression,
+  );
+  const strategy = job["strategy"];
+  const matrix = isRecord(strategy) ? strategy["matrix"] : undefined;
+  const matrixKey = match?.at(1);
+  if (matrixKey === undefined || !isRecord(matrix)) {
+    return [expression];
+  }
+  const values = matrix[matrixKey];
+  return Array.isArray(values) ? values : [expression];
+};
+
+const runnerIsSelfHosted = (job: JsonRecord): boolean => {
+  const inspect = (value: unknown): boolean => {
+    if (typeof value === "string") {
+      return literalMatrixValues(job, value).some(
+        (label) =>
+          typeof label !== "string" ||
+          label === "self-hosted" ||
+          !isGithubHostedLabel(label),
+      );
+    }
+    if (Array.isArray(value)) {
+      return value.some(inspect);
+    }
+    if (!isRecord(value)) {
+      return false;
+    }
+    return "group" in value || inspect(value["labels"]);
+  };
+  return inspect(job["runs-on"]);
+};
+
+const UNTRUSTED_REF =
+  /github\.(?:head_ref|event\.(?:pull_request\.head\.|workflow_run\.head_|issue\.|issue_comment\.|comment\.))/iu;
+const checksOutUntrustedRef = (job: JsonRecord): boolean => {
+  const steps = job["steps"];
+  if (!Array.isArray(steps)) {
+    return false;
+  }
+  return steps.some((candidate) => {
+    if (!isRecord(candidate)) {
+      return false;
+    }
+    if ("parallel" in candidate) {
+      return checksOutUntrustedRef({ steps: candidate["parallel"] });
+    }
+    const uses = candidate["uses"];
+    const inputs = candidate["with"];
+    if (
+      typeof uses === "string" &&
+      uses.startsWith("actions/checkout@") &&
+      isRecord(inputs)
+    ) {
+      const ref = inputs["ref"];
+      const repository = inputs["repository"];
+      return [ref, repository].some(
+        (value) => typeof value === "string" && UNTRUSTED_REF.test(value),
+      );
+    }
+    const run = candidate["run"];
+    return (
+      typeof run === "string" &&
+      /\bgit\s+(?:fetch|checkout)\b/iu.test(run) &&
+      UNTRUSTED_REF.test(run)
+    );
+  });
+};
+
+/**
+ * Owns the complete job privilege decision.
+ *
+ * | Source | A job is privileged when |
+ * | --- | --- |
+ * | Token permissions | Its effective permissions contain `write` or are `write-all` (including `id-token: write`); an unset permission uses the read-only repository default. |
+ * | Credentials | It receives a non-default `secrets.*`, `secrets: inherit`, or an app-token action output; `secrets.GITHUB_TOKEN` and `github.token` count only with write permissions. |
+ * | Environment | It declares `environment`. |
+ * | Trigger | The workflow uses a base-branch privileged event; reusable callees inherit this through closure classification. |
+ * | Runner | Parsed `runs-on` selects `self-hosted`, a group, or a non-GitHub-hosted label, including literal matrix values. |
+ * | Untrusted checkout | A checkout or fetch consumes an untrusted event ref. |
+ */
+const jobIsPrivileged = (job: JsonRecord, workflow: JsonRecord) => {
+  const writes = hasEffectiveWritePermission(
+    job["permissions"],
+    workflow["permissions"],
+  );
+  const tokenCredential = /(?:secrets\.github_token|github\.token)/iu.test(
+    JSON.stringify(job),
+  );
+  const credential =
+    containsCredential(workflow["env"]) ||
+    containsCredential(workflow["defaults"]) ||
+    containsCredential(job) ||
+    job["secrets"] === "inherit" ||
+    (tokenCredential ? writes : false);
+  return (
+    writes ||
+    credential ||
+    "environment" in job ||
+    workflowHasPrivilegedEvent(workflow["on"]) ||
+    runnerIsSelfHosted(job) ||
+    checksOutUntrustedRef(job)
+  );
+};
+
+const privilegedStepSurface = (
+  candidate: unknown,
+  includeAll: boolean,
+): JsonRecord | undefined => {
+  const step = requireRecord(candidate, "step must be mapping");
+  if ("parallel" in step) {
+    if (!Array.isArray(step["parallel"])) {
+      throw new AdmissionError({ message: "parallel must be array" });
+    }
+    const parallel = step["parallel"].flatMap((child) => {
+      const surface = privilegedStepSurface(child, includeAll);
+      return surface ? [surface] : [];
+    });
+    return parallel.length ? { parallel } : undefined;
+  }
+  if (includeAll) {
+    return Object.fromEntries(
+      Object.entries(step).filter(
+        ([key]) => !["name", "timeout-minutes"].includes(key),
+      ),
+    );
+  }
+  const surface: JsonRecord = {};
+  const uses = step["uses"];
+  if (typeof uses === "string") {
+    surface["uses"] = uses;
+  }
+  for (const key of ["env", "with", "run"] as const) {
+    const value = step[key];
+    if (containsCredential(value)) {
+      surface[key] = value;
+    }
+  }
+  return Object.keys(surface).length ? surface : undefined;
+};
+
+const privilegedJobSurface = (
+  job: JsonRecord,
+  workflow: JsonRecord,
+  forcePrivileged = false,
+) => {
+  const inherited = Object.fromEntries(
+    ["permissions", "env", "defaults"].flatMap((key) =>
+      key in workflow ? [[key, workflow[key]]] : [],
+    ),
+  );
+  const includeAllSteps = forcePrivileged || jobIsPrivileged(job, workflow);
+  const surface: JsonRecord = {};
+  if (includeAllSteps) {
+    Object.assign(surface, inherited);
+  }
+  for (const key of ["permissions", "secrets", "uses"] as const) {
+    if (key in job) {
+      surface[key] = job[key];
+    }
+  }
+  for (const key of ["env", "with"] as const) {
+    if (containsCredential(job[key])) {
+      surface[key] = job[key];
+    }
+  }
+  if (includeAllSteps) {
+    for (const key of [
+      "env",
+      "with",
+      "if",
+      "environment",
+      "needs",
+      "runs-on",
+      "concurrency",
+      "container",
+      "services",
+      "defaults",
+      "strategy",
+    ] as const) {
+      if (key in job) {
+        surface[key] = job[key];
+      }
+    }
+  }
+  if (Array.isArray(job["steps"])) {
+    surface["steps"] = job["steps"].flatMap((step) => {
+      const projected = privilegedStepSurface(step, includeAllSteps);
+      return projected ? [projected] : [];
+    });
+  }
+  return surface;
+};
+
+const stepShapes = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    throw new AdmissionError({ message: "steps must be array" });
+  }
+  return value.flatMap((candidate) => {
+    const step = requireRecord(candidate, "step must be mapping");
+    const shape = project(step, "step");
+    const run = step["run"];
+    const publicationCommand =
+      typeof run === "string" && /publish|deploy|release|push/iu.test(run);
+    if ("parallel" in step) {
+      shape["parallel"] = stepShapes(step["parallel"]);
+    }
+    const refs = secretRefs(run);
+    if (
+      Object.keys(shape).length === 0 &&
+      refs.length === 0 &&
+      !publicationCommand
+    ) {
+      return [];
+    }
+    return [
+      {
+        definition: shape,
+        "run-secret-refs": refs,
+        "publication-command": publicationCommand,
+      },
+    ];
+  });
+};
+
+const canonicalSteps = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    throw new AdmissionError({ message: "steps must be array" });
+  }
+  return value.flatMap((candidate) => {
+    const step = requireRecord(candidate, "step must be mapping");
+    if ("parallel" in step) {
+      if ("uses" in step || "run" in step) {
+        throw new AdmissionError({
+          message: "parallel group cannot have leaf fields",
+        });
+      }
+      return canonicalSteps(step["parallel"]);
+    }
+    for (const key of ["uses", "run"] as const) {
+      if (key in step && typeof step[key] !== "string") {
+        throw new AdmissionError({ message: `${key} must be string` });
+      }
+    }
+    if ("uses" in step && "run" in step) {
+      throw new AdmissionError({ message: "step cannot have uses and run" });
+    }
+    return [
+      {
+        uses: step["uses"] ?? null,
+        run: step["run"] ?? null,
+        with: step["with"] ?? null,
+      },
+    ];
+  });
+};
+
+const addActionDependencies = (
+  dependencies: Record<string, DependencyKind>,
+  steps: JsonRecord[],
+  relocatedActions: Record<string, RelocatedAction[]>,
+) => {
+  const checkouts: RelocatedAction[] = [];
+  for (const step of steps) {
+    const uses = step["uses"];
+    if (typeof uses === "string") {
+      dependencies[uses] ??= "action";
+      if (uses.startsWith("./")) {
+        const localPath = uses.slice(2);
+        const checkout = checkouts
+          .filter(({ path }) => localPath.startsWith(`${path}/`))
+          .toSorted((left, right) => right.path.length - left.path.length)
+          .at(0);
+        if (checkout) {
+          (relocatedActions[uses] ??= []).push({
+            repository: checkout.repository,
+            ref: checkout.ref,
+            path: localPath.slice(checkout.path.length + 1),
+          });
+        }
+      }
+    }
+    const withInputs = step["with"];
+    if (
+      typeof uses === "string" &&
+      uses.startsWith("actions/checkout@") &&
+      isRecord(withInputs) &&
+      typeof withInputs["path"] === "string"
+    ) {
+      checkouts.push({
+        repository:
+          typeof withInputs["repository"] === "string"
+            ? withInputs["repository"]
+            : null,
+        ref: typeof withInputs["ref"] === "string" ? withInputs["ref"] : null,
+        path: withInputs["path"].replace(/^\.\//u, "").replace(/\/$/u, ""),
+      });
+    }
+  }
+};
+
+const privileged = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return /secrets(?:\.|\[)|publish|deploy|release|self-hosted/iu.test(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some(privileged);
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  return Object.entries(value).some(([key, child]) => {
+    if (key === "publication-command" && child === true) {
+      return true;
+    }
+    if (key === "secrets" && child !== null) {
+      return true;
+    }
+    if (
+      key === "permissions" &&
+      (child === "write-all" ||
+        (isRecord(child) && Object.values(child).includes("write")))
+    ) {
+      return true;
+    }
+    return privileged(child);
+  });
+};
+
+const parse = (text: string): ParsedDocument => {
+  if (encoder.encode(text).byteLength > MAX_SOURCE_BYTES) {
+    throw new AdmissionError({ message: "YAML source byte limit exceeded" });
+  }
+  const data = requireRecord(Bun.YAML.parse(text), "document must be mapping");
+  measure(data);
+  const shape = project(data, "document");
+  const runs = data["runs"];
+  if (isRecord(runs) && "steps" in runs) {
+    shape["runs"] = { ...runs, steps: stepShapes(runs["steps"]) };
+  }
+  const jobs: ParsedDocument["jobs"] = {};
+  const dependencies: Record<string, DependencyKind> = {};
+  const relocatedActions: Record<string, RelocatedAction[]> = {};
+  if ("jobs" in data) {
+    const jobValues = requireRecord(
+      data["jobs"],
+      "jobs must be nonempty mapping",
+    );
+    if (Object.keys(jobValues).length === 0) {
+      throw new AdmissionError({ message: "jobs must be nonempty mapping" });
+    }
+    for (const [id, candidate] of Object.entries(jobValues)) {
+      const job = requireRecord(
+        candidate,
+        "job must be mapping with string id",
+      );
+      const steps = "steps" in job ? canonicalSteps(job["steps"]) : [];
+      if ("uses" in job && typeof job["uses"] !== "string") {
+        throw new AdmissionError({ message: "job uses must be string" });
+      }
+      if (typeof job["uses"] === "string") {
+        dependencies[job["uses"]] = "reusable-workflow";
+      }
+      addActionDependencies(dependencies, steps, relocatedActions);
+      const jobDependencies: Record<string, DependencyKind> = {};
+      if (typeof job["uses"] === "string") {
+        jobDependencies[job["uses"]] = "reusable-workflow";
+      }
+      addActionDependencies(jobDependencies, steps, {});
+      const isPrivileged = jobIsPrivileged(job, data);
+      const workflowSurface =
+        isPrivileged && "on" in data ? { on: data["on"] } : {};
+      const jobShape = privilegedJobSurface(job, data);
+      const jobContext = { document: workflowSurface, job: jobShape };
+      const privilegedJobContext = {
+        document: "on" in data ? { on: data["on"] } : {},
+        job: privilegedJobSurface(job, data, true),
+      };
+      jobs[id] = {
+        digest: digest(jobContext),
+        privilegedDigest: digest(privilegedJobContext),
+        privileged: isPrivileged,
+        shape: jobContext,
+        dependencies: jobDependencies,
+      };
+    }
+  }
+  let actionSteps: JsonRecord[] = [];
+  if ("runs" in data) {
+    const actionRuns = requireRecord(runs, "action runs must be mapping");
+    actionSteps =
+      actionRuns["using"] === "composite"
+        ? canonicalSteps(actionRuns["steps"])
+        : [{ run: JSON.stringify(canonicalize(actionRuns)) }];
+  }
+  addActionDependencies(dependencies, actionSteps, relocatedActions);
+  if ("jobs" in data) {
+    shape["jobs"] = Object.fromEntries(
+      Object.entries(jobs).map(([id, job]) => [id, job.digest]),
+    );
+  }
+  return v.parse(DOCUMENT, {
+    digest: digest(shape),
+    privileged:
+      privileged(shape) ||
+      Object.values(jobs).some(({ shape: jobShape }) => privileged(jobShape)),
+    writesRepository:
+      requestsRepositoryWrite(actionSteps) ||
+      Object.values(jobs).some(({ shape: jobShape }) =>
+        shapeWritesRepository(jobShape),
+      ),
+    jobs,
+    dependencies,
+    relocatedActions,
+  });
+};
+
+export const parseDocument = (text: string) =>
+  Result.try({
+    try: () => parse(text),
+    catch: (cause) =>
+      new AdmissionError({
+        message: `YAML rejected: ${cause instanceof Error ? cause.message : "YAML parser failed"}`,
+      }),
+  });

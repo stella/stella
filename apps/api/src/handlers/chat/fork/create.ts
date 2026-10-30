@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -10,6 +10,7 @@ import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
+  chatMessageFromPersisted,
   createChatAttachmentPart,
   getAwaitingUserInteractions,
   getChatAttachmentFilename,
@@ -17,7 +18,6 @@ import {
   getChatAttachmentPlaceholder,
   getChatAttachmentUrl,
   isChatAttachmentPart,
-  chatMessageFromPersisted,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -29,28 +29,34 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { FileKey } from "@/api/lib/file-key";
+import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
   type CheckedFileCopy,
   OrganizationFileUsageError,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
-import type { S3PresignError } from "@/api/lib/s3-presign";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import {
+  copyObject,
+  headObject,
+  S3ObjectMissingError,
+  type S3PresignError,
+} from "@/api/lib/s3-presign";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
@@ -79,13 +85,11 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-  }),
-  body: t.Object({
-    newThreadId: tSafeId("chatThread"),
-    upToMessageId: tSafeId("chatMessage"),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({
+    newThreadId: resourceIdSchema("chatThread"),
+    upToMessageId: resourceIdSchema("chatMessage"),
   }),
 } satisfies HandlerConfig;
 
@@ -99,6 +103,7 @@ const FORKED_THREAD_COLUMNS = {
   dataWorkspaceIds: chatThreads.dataWorkspaceIds,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
+  subjectDecisionId: chatThreads.subjectDecisionId,
   usedAnonymization: chatThreads.usedAnonymization,
   webSearchEnabled: chatThreads.webSearchEnabled,
   workspaceId: chatThreads.workspaceId,
@@ -131,6 +136,7 @@ type SourceUserFileRow = {
   sha256Hex: string;
   sizeBytes: number;
   thumbnailFileId: string | null;
+  userId: string;
 };
 
 type UserFileCopy = {
@@ -254,29 +260,31 @@ type UserFileCopyOutcome =
 
 const stageUserFileCopies = (
   files: SourceUserFileRow[],
-  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
 ) =>
   files.map((file) => {
     const newFileId = createSafeId<"userFile">();
     const copiedThumbnailFileId =
       file.thumbnailFileId === null ? null : Bun.randomUUIDv7();
+    const copiedS3Key = createUserFileKey({
+      fileId: newFileId,
+      mimeType: file.mimeType,
+      organizationId,
+    });
     return {
       source: file,
       newFileId,
-      copiedS3Key: createUserFileKey({
-        fileId: newFileId,
-        mimeType: file.mimeType,
-        userId,
-      }),
+      copiedS3Key,
       copiedThumbnailFileId,
       thumbnailKey:
         copiedThumbnailFileId === null
           ? null
-          : createUserFileKey({
-              fileId: copiedThumbnailFileId,
-              mimeType: THUMBNAIL_MIME_TYPE,
-              userId,
-            }),
+          : (createUserFileThumbnailKey({
+              sourceKey: copiedS3Key,
+              thumbnailFileId: copiedThumbnailFileId,
+              organizationId,
+              uploaderUserId: brandPersistedUserId(file.userId),
+            }) ?? panic("The copied attachment key must have a valid owner")),
     };
   });
 
@@ -306,15 +314,16 @@ const prepareUserFileCopy = async (
 
 const prepareUserFileThumbnail = async (
   copy: ReturnType<typeof stageUserFileCopies>[number],
-  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
 ) => {
   const thumbnailSource =
     copy.source.thumbnailFileId === null
       ? null
-      : createUserFileKey({
-          fileId: copy.source.thumbnailFileId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId,
+      : createUserFileThumbnailKey({
+          sourceKey: copy.source.s3Key,
+          thumbnailFileId: copy.source.thumbnailFileId,
+          organizationId,
+          uploaderUserId: brandPersistedUserId(copy.source.userId),
         });
   const thumbnailHead =
     thumbnailSource !== null &&
@@ -329,15 +338,13 @@ const copyUserFiles = async ({
   files,
   fileUsageDb,
   organizationId,
-  userId,
 }: {
   copiedS3Keys: string[];
   files: SourceUserFileRow[];
   fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
 }): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
-  const staged = stageUserFileCopies(files, userId);
+  const staged = stageUserFileCopies(files, organizationId);
   const prepared: Awaited<ReturnType<typeof prepareUserFileCopy>>[] = [];
   for (const itemBatch of chunkItems(staged, FORK_COPY_CONCURRENCY)) {
     prepared.push(
@@ -370,8 +377,10 @@ const copyUserFiles = async ({
             ? Result.err(copied.error)
             : Result.ok(checked.objectKey);
         },
-        confirmedDestinationAbsentOnCopyError: (error: S3PresignError) =>
-          isMissingS3ObjectError(error.cause),
+        confirmedDestinationAbsentOnCopyError: (
+          error: S3ObjectMissingError | S3PresignError,
+        ) =>
+          S3ObjectMissingError.is(error) || isMissingS3ObjectError(error.cause),
       };
     });
     const copied = await copyOrganizationFiles({
@@ -392,7 +401,9 @@ const copyUserFiles = async ({
         ),
     );
   };
-  const copyFailure = (error: S3PresignError | OrganizationFileUsageError) =>
+  const copyFailure = (
+    error: S3ObjectMissingError | S3PresignError | OrganizationFileUsageError,
+  ) =>
     error instanceof OrganizationFileUsageError
       ? error
       : new HandlerError({
@@ -418,6 +429,13 @@ const copyUserFiles = async ({
       panic("Chat attachment copy must have a main storage result");
     }
     if (Result.isError(main)) {
+      if (S3ObjectMissingError.is(main.error)) {
+        outcomes.push({
+          kind: "source-object-missing",
+          fileId: copy.source.id,
+        });
+        continue;
+      }
       if (
         !(main.error instanceof OrganizationFileUsageError) &&
         isMissingS3ObjectError(main.error.cause)
@@ -437,7 +455,7 @@ const copyUserFiles = async ({
     inspected.push(
       ...(await Promise.all(
         itemBatch.map(
-          async (copy) => await prepareUserFileThumbnail(copy, userId),
+          async (copy) => await prepareUserFileThumbnail(copy, organizationId),
         ),
       )),
     );
@@ -450,7 +468,10 @@ const copyUserFiles = async ({
     }
     const head = copy.thumbnailHead;
     if (head !== undefined && Result.isError(head)) {
-      if (!isMissingS3ObjectError(head.error.cause)) {
+      if (
+        !S3ObjectMissingError.is(head.error) &&
+        !isMissingS3ObjectError(head.error.cause)
+      ) {
         return Result.err(copyFailure(head.error));
       }
       missingThumbnails.add(copy.thumbnailKey);
@@ -475,7 +496,8 @@ const copyUserFiles = async ({
     if (thumbnail !== undefined && Result.isError(thumbnail)) {
       if (
         thumbnail.error instanceof OrganizationFileUsageError ||
-        !isMissingS3ObjectError(thumbnail.error.cause)
+        (!S3ObjectMissingError.is(thumbnail.error) &&
+          !isMissingS3ObjectError(thumbnail.error.cause))
       ) {
         return Result.err(copyFailure(thumbnail.error));
       }
@@ -550,7 +572,12 @@ const rollbackCopiedS3Keys = async (
   });
   const completed = Result.flatten(deleted);
   if (Result.isError(completed)) {
-    captureError(completed.error, { source: "chat-fork-rollback" });
+    captureError(
+      completed.error,
+      handlerErrorContext("fork.rollbackCopiedS3Keys.completed_error", {
+        source: "chat-fork-rollback",
+      }),
+    );
   }
 };
 
@@ -607,6 +634,8 @@ export const createForkThread = ({
             id: chatThreads.id,
             parentThreadId: chatThreads.parentThreadId,
             title: chatThreads.title,
+            titleSource: chatThreads.titleSource,
+            subjectDecisionId: chatThreads.subjectDecisionId,
           })
           .from(chatThreads)
           .where(
@@ -705,6 +734,7 @@ export const createForkThread = ({
                     sha256Hex: userFiles.sha256Hex,
                     sizeBytes: userFiles.sizeBytes,
                     thumbnailFileId: userFiles.thumbnailFileId,
+                    userId: userFiles.userId,
                   })
                   .from(userFiles)
                   .where(
@@ -766,23 +796,33 @@ export const createForkThread = ({
             }),
           );
         }
+        const projection = yield* Result.await(
+          Result.tryPromise(async () =>
+            readWithdrawnCopyProjection({ values: existingFork }),
+          ),
+        );
         return Result.ok({
           threadId: existingFork.id,
-          title: existingFork.title,
+          title: projection.thread(existingFork).title,
         });
       }
 
       const { prefix, source, sourceFiles, unresolvedFileIds } = reads;
+      const projection = yield* Result.await(
+        Result.tryPromise(async () =>
+          readWithdrawnCopyProjection({ values: source }),
+        ),
+      );
       if (unresolvedFileIds.length > 0) {
         captureError(
           new ChatForkAttachmentRowMissingError({
             message:
               "Chat fork prefix references attachments with no user_files row",
           }),
-          {
+          handlerErrorContext("chat.fork.missingAttachmentRow", {
             fileIds: unresolvedFileIds.join(","),
             threadId: params.threadId,
-          },
+          }),
         );
       }
       const forkWorkspaceId = source.workspaceId;
@@ -792,7 +832,6 @@ export const createForkThread = ({
         files: sourceFiles,
         fileUsageDb,
         organizationId: session.activeOrganizationId,
-        userId: user.id,
       });
       if (Result.isError(copiedFiles)) {
         await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);
@@ -829,11 +868,11 @@ export const createForkThread = ({
             message:
               "Chat fork prefix references attachments whose storage objects are gone",
           }),
-          {
+          handlerErrorContext("chat.fork.missingAttachmentObject", {
             fileIds: missingObjectFileIds.join(","),
             threadId: params.threadId,
             thumbnailFileIds: missingThumbnailFileIds.join(","),
-          },
+          }),
         );
       }
       const copiedFileIds = new Map(
@@ -852,6 +891,7 @@ export const createForkThread = ({
           parentThreadId: params.threadId,
           title: source.title,
           titleSource: source.titleSource,
+          subjectDecisionId: source.subjectDecisionId,
           usedAnonymization: source.usedAnonymization,
           userId: user.id,
           webSearchEnabled: source.webSearchEnabled,
@@ -976,7 +1016,7 @@ export const createForkThread = ({
           }
           return Result.ok({
             threadId: raced.existingFork.id,
-            title: raced.existingFork.title,
+            title: projection.thread(raced.existingFork).title,
           });
         }
         await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);
@@ -986,9 +1026,16 @@ export const createForkThread = ({
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
-      indexChatThread(newThreadId).catch(captureError);
+      indexChatThread(newThreadId).catch(
+        createErrorCapture(
+          handlerErrorContext("createForkThread.indexChatThread"),
+        ),
+      );
 
-      return Result.ok({ threadId: newThreadId, title: source.title });
+      return Result.ok({
+        threadId: newThreadId,
+        title: projection.thread(source).title,
+      });
     },
   );
 

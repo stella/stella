@@ -34,6 +34,7 @@ import path from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 
 import { BASELINE_PATHS } from "./baseline-paths";
+import { validateKnipGeneratedEntries } from "./knip-generated-entries";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE_REL = BASELINE_PATHS.knipExports;
@@ -331,7 +332,13 @@ const runKnip = (): unknown => {
   // knip exits non-zero whenever it reports issues, which is the normal case
   // for a budget: only unparsable output is a failure.
   const stdout = knip.stdout.toString();
-  const parsed = Result.try((): unknown => JSON.parse(stdout));
+  // The generation preflight may report a cache hit before knip writes JSON.
+  // Anchor on the reporter's top-level shape rather than accepting arbitrary
+  // trailing output as a report.
+  const reportStart = stdout.indexOf('{"issues":');
+  const parsed = Result.try((): unknown =>
+    JSON.parse(reportStart === -1 ? stdout : stdout.slice(reportStart)),
+  );
   if (Result.isError(parsed)) {
     panic(
       `knip did not produce JSON output:\n${knip.stderr.toString().trim() || stdout.trim()}`,
@@ -449,9 +456,42 @@ const runCheck = (): number => {
   return 1;
 };
 
-if (import.meta.main) {
-  if (process.argv.includes("--write")) {
-    process.exit(runWrite());
+type RatchetRunners = {
+  readonly report: () => number;
+  readonly write: () => number;
+  readonly check: () => number;
+};
+
+type RunKnipExportsRatchetOptions = {
+  readonly args: readonly string[];
+  readonly repoRoot?: string;
+  readonly fileExists?: (file: string) => boolean;
+  readonly runners?: RatchetRunners;
+  readonly reportError?: (message: string) => void;
+};
+
+export const runKnipExportsRatchet = ({
+  args,
+  repoRoot = REPO_ROOT,
+  fileExists = existsSync,
+  runners = {
+    report: runReport,
+    write: runWrite,
+    check: runCheck,
+  },
+  reportError = console.error,
+}: RunKnipExportsRatchetOptions): number => {
+  const error = validateKnipGeneratedEntries(repoRoot, fileExists);
+  if (error !== undefined) {
+    reportError(`${error._tag}: ${error.message}`);
+    return 1;
   }
-  process.exit(process.argv.includes("--check") ? runCheck() : runReport());
+  if (args.includes("--write")) {
+    return runners.write();
+  }
+  return args.includes("--check") ? runners.check() : runners.report();
+};
+
+if (import.meta.main) {
+  process.exit(runKnipExportsRatchet({ args: process.argv }));
 }

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { anonymizationAllowlistEntries, entities } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -9,7 +9,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -23,6 +23,7 @@ const SCOPE_VALUES = ["document", "workspace"] as const;
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add a never-mask entry to a matter's anonymization allowlist, so a term " +
     "that detection finds is left in the clear. scope workspace covers the " +
@@ -40,11 +41,11 @@ const config = {
     reason: "anonymization_admin",
     consumesServices: false,
   },
-  body: t.Object({
-    canonical: t.String({ minLength: 1, maxLength: 512 }),
-    label: t.String({ minLength: 1, maxLength: 64 }),
-    scope: t.UnionEnum(SCOPE_VALUES),
-    entityId: t.Optional(tSafeId("entity")),
+  body: v.object({
+    canonical: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+    label: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+    scope: v.picklist(SCOPE_VALUES),
+    entityId: v.optional(resourceIdSchema("entity")),
   }),
 } satisfies WorkspaceHandlerConfig;
 

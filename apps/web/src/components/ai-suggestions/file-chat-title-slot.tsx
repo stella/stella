@@ -3,13 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import { chatThreadTitleOptions } from "@/features/chat/queries";
+import type { ChatThreadFetched } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type FileChatTitleSlotProps = {
   activeOrganizationId: string;
   hasMessages: boolean;
+  /** The server's read of the thread; the title is read once it has a row. */
+  persistedThread: ChatThreadFetched;
   threadRef: ChatThreadRef;
   usedAnonymization: boolean;
 };
@@ -20,25 +23,26 @@ type FileChatTitleSlotProps = {
 export const FileChatTitleSlot = ({
   activeOrganizationId,
   hasMessages,
+  persistedThread,
   threadRef,
   usedAnonymization,
 }: FileChatTitleSlotProps) => {
-  const titleQuery = useQuery(
-    chatThreadTitleOptions({
-      activeOrganizationId,
-      // A message-less thread has no server row yet; issuing GET /title for
-      // it would produce an expected but noisy 404.
-      enabled: hasMessages,
-      key: {
-        threadId: threadRef.threadId,
-        workspaceId:
-          threadRef.scope === "workspace" ? threadRef.workspaceId : undefined,
-      },
-    }),
-  );
-  const titleView = useQueryView(titleQuery);
+  const titleQueryOptions = chatThreadTitleOptions({
+    activeOrganizationId,
+    key: {
+      threadId: threadRef.threadId,
+      workspaceId:
+        threadRef.scope === "workspace" ? threadRef.workspaceId : undefined,
+    },
+    persistedThread,
+  });
+  const titleQuery = useQuery(titleQueryOptions);
+  const titleView = queryView(titleQuery);
   const byIdTitle = titleView.type === "items" ? titleView.items : undefined;
-  if (hasMessages && titleView.type !== "items") {
+  // Feedback belongs to a read that ran: a first message still being sent
+  // has no row to read yet, and its card shows the placeholder title.
+  const titleRead = titleQueryOptions.enabled === true;
+  if (titleRead && titleView.type !== "items") {
     return <QueryViewFeedback view={titleView} />;
   }
   const title =
@@ -48,7 +52,7 @@ export const FileChatTitleSlot = ({
 
   return (
     <span className="flex min-w-0 items-center text-xs font-medium">
-      {hasMessages && <QueryViewFeedback view={titleView} />}
+      {titleRead && <QueryViewFeedback view={titleView} />}
       <ChatTitleRename
         hasMessages={hasMessages}
         ownsRenameCommand

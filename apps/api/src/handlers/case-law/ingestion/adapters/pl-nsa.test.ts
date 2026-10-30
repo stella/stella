@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 /**
  * pl-nsa against rows the dataset serves.
@@ -25,6 +33,7 @@ import {
   encodePlNsaCursor,
   normalizePlNsaRow,
   parsePlNsaCursor,
+  PL_NSA_UNSTATED_COURT,
   plNsaAdapter,
   plNsaCourt,
   plNsaDecisionKind,
@@ -32,7 +41,6 @@ import {
   plNsaDocketRangeMembers,
   plNsaIdentityOf,
   plNsaQuarantineId,
-  PL_NSA_UNSTATED_COURT,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import type { PlNsaDecisionKind } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import {
@@ -120,7 +128,8 @@ const blocksOf = (decision: IngestionResult) =>
 
 const headingsOf = (decision: IngestionResult): string[] =>
   blocksOf(decision).flatMap((block) =>
-    block.type === "heading" && block.role === "section-heading"
+    block.type === "heading" &&
+    (block.role === "section-heading" || block.role === "publisher-heading")
       ? [block.plainText]
       : [],
   );
@@ -191,6 +200,11 @@ type ExpectedClassification = {
   branch?: string;
   finality?: string;
 };
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("the recorded dataset rows", () => {
   test("every row builds, keyed by the portal's own document id", async () => {
@@ -1130,7 +1144,6 @@ describe("the document is checked against the dataset's own text", () => {
     "Wojewódzki sąd rozpoznał skargę podatnika na interpretację indywidualną organu i uznał, że wnioskodawca prawidłowo ustalił przychód, a organ błędnie zastosował przepisy ustawy o podatku dochodowym od osób fizycznych w brzmieniu obowiązującym w dacie zdarzenia, co przesądziło o uchyleniu zaskarżonego aktu.";
 
   test("text only the full rendering carries is kept, from the rendering", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       reference: [
@@ -1143,11 +1156,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.textSource).toBe("full-text");
     expect(parsed.fulltext).toContain(REASONS);
     expect(parsed.validation.ok).toBe(true);
-    expect(error).not.toHaveBeenCalledWith(
-      "case_law.ingestion.ast_content_lost",
-      expect.anything(),
-    );
-    error.mockRestore();
   });
 
   test("with every section empty, the rendering is the document", () => {
@@ -1162,7 +1170,6 @@ describe("the document is checked against the dataset's own text", () => {
   });
 
   test("with no text anywhere, the check still runs and reports it", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       sections: { thesis: null, sentence: null, reasons: null, dissent: null },
@@ -1171,7 +1178,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.documentAst).toBeNull();
     expect(parsed.textSource).toBe("none");
     expect(parsed.validation.issues.length).toBeGreaterThan(0);
-    error.mockRestore();
   });
 
   test("sections that hold everything are used as sections", () => {

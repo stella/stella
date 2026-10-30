@@ -14,18 +14,28 @@ import {
 } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { declareFailureClass } from "@stll/errors";
-import { distance as levenshtein } from "@stll/fuzzy-search";
+import {
+  closestNames,
+  MAX_TOOL_NAME_CHARS,
+  toolNameDistance,
+  toolNameKey,
+} from "@stll/mcp-kit";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  servedBlockText,
+  type ServedTextBlock,
+} from "@/api/lib/case-law/served-paragraph-number";
+import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -34,9 +44,11 @@ import {
 } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { getCurrentRequestId } from "@/api/lib/observability/request-context";
+import { getRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -44,8 +56,8 @@ import {
 } from "@/api/lib/pagination";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import {
   projectMcpRefusal,
@@ -62,6 +74,7 @@ import type {
   McpEgressPlan,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -92,7 +105,6 @@ export const MAX_LIST_LIMIT = LIMITS.mcpListPageSizeMax;
 export const MAX_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeMax;
 export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
-export const ISO_DATE_SCHEMA = v.pipe(v.string(), v.isoDate());
 
 /**
  * Characters of long document text one tool response may carry. Every
@@ -671,7 +683,7 @@ export const oauthScopeRecoveryHint = ({
 
 /**
  * Structured tool-error envelope. The single text content is
- * `{"error":{"code","message","hint?","issues?","retryable?","requestId?"}}`;
+ * `{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?","requestId?"}}`;
  * `isError` is set so MCP clients still treat it as a failure. Undefined
  * `hint`/`issues`/`retryable` are omitted so the serialized shape stays minimal
  * (an empty `issues` array is treated as absent). Agents branch on `code`;
@@ -687,6 +699,7 @@ export const structuredErrorResult = ({
   issues,
   message,
   retryable,
+  retryAfterMs,
   contactUrl,
 }: {
   code: McpErrorCode;
@@ -694,15 +707,17 @@ export const structuredErrorResult = ({
   issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
-  const requestId = getCurrentRequestId();
+  const requestId = getRequestId();
   const fields = {
     type: "structured",
     message,
     ...(hint === undefined ? {} : { hint }),
     ...(issues === undefined || issues.length === 0 ? {} : { issues }),
     ...(retryable === undefined ? {} : { retryable }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     ...(contactUrl === undefined ? {} : { contactUrl }),
     ...(requestId === undefined ? {} : { requestId }),
   } as const;
@@ -723,11 +738,17 @@ export const structuredErrorResult = ({
  */
 export const mapValibotIssues = (
   issues: readonly v.BaseIssue<unknown>[],
+  pathAliases: Readonly<Record<string, string>> = {},
 ): McpValidationIssue[] =>
-  issues.map((issue) => ({
-    path: v.getDotPath(issue) ?? "",
-    message: issue.message,
-  }));
+  issues.map((issue) => {
+    const path = v.getDotPath(issue) ?? "";
+    const [root, ...rest] = path.split(".");
+    const aliasedRoot = pathAliases[root ?? ""] ?? root;
+    return {
+      path: [aliasedRoot, ...rest].filter(Boolean).join("."),
+      message: issue.message,
+    };
+  });
 
 /**
  * Build the shared validation envelope. Prefer an actionable cross-field issue
@@ -738,11 +759,12 @@ export const mapValibotIssues = (
 export const validationErrorResult = (
   issues: readonly v.BaseIssue<unknown>[],
   hint?: string,
+  pathAliases?: Readonly<Record<string, string>>,
 ): InternalToolErrorResult =>
   structuredErrorResult({
     code: "validation_error",
     hint,
-    issues: mapValibotIssues(issues),
+    issues: mapValibotIssues(issues, pathAliases),
     message:
       issues.find((issue) => issue.type === "partial_check")?.message ??
       issues.at(0)?.message ??
@@ -751,8 +773,9 @@ export const validationErrorResult = (
 
 /**
  * The status a reused backing handler answered with, when it answered with
- * one rather than a payload. Elysia's `status(code, body)` returns
- * `{ code, response }`; a bare `{ message }` is accepted too because some
+ * one rather than a payload. The HTTP core's `status(code, body)` returns an
+ * `HttpStatusResponse`, `{ code, response }`; a bare `{ message }` is
+ * accepted too because some
  * handlers return that shape directly. One reader for both, so a tool that
  * branches on a handler's refusal cannot read it differently from its
  * neighbour.
@@ -842,26 +865,40 @@ export const searchIndexUnavailableResult = (
  */
 export const internalFailureResult = (
   error: unknown,
+  fingerprintKey: StableExceptionKey,
 ): InternalToolErrorResult => {
   if (isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
-  if (HandlerError.is(error)) {
-    if (error.code === "upstream_unavailable") {
-      captureError(error, { source: "mcp" });
-      return structuredErrorResult({
-        code: "upstream_unavailable",
-        message: error.message,
-        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
-        retryable: true,
-      });
-    }
-    const code = statusCodeToErrorCode(error.status);
-    if (code !== "internal_error") {
-      return structuredErrorResult(projectMcpRefusal(error));
-    }
+  const timeout = publicReadTimeoutError(error);
+  if (
+    timeout === null &&
+    HandlerError.is(error) &&
+    error.code !== "upstream_unavailable" &&
+    statusCodeToErrorCode(error.status) !== "internal_error"
+  ) {
+    return structuredErrorResult(projectMcpRefusal(error));
   }
-  captureError(error, { source: "mcp" });
+  captureError(
+    timeout ?? error,
+    handlerErrorContext(fingerprintKey, { source: "mcp" }),
+  );
+  if (timeout !== null) {
+    return structuredErrorResult({
+      code: "public_read_timeout",
+      message: timeout.message,
+      hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+      retryable: true,
+    });
+  }
+  if (HandlerError.is(error) && error.code === "upstream_unavailable") {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: error.message,
+      hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
+      retryable: true,
+    });
+  }
   return structuredErrorResult({
     code: "internal_error",
     message: "Tool execution failed",
@@ -869,65 +906,16 @@ export const internalFailureResult = (
   });
 };
 
-// A name's words in sorted order, so `widgets.delete-part` and
-// `widgets.parts.delete` compare as `delete part widgets` / `delete parts widgets`.
-const sortedWords = (name: string): string =>
-  name.split(/[._-]/u).toSorted().join(" ");
+export { MAX_TOOL_NAME_CHARS, toolNameDistance, toolNameKey };
 
 /**
- * A tool name as an agent may have meant it: lowercased, without separators
- * and without a leading `external` (the prefix chat scripts put on read
- * functions). `listMatters`, `LIST_MATTERS`, `list-matters` and
- * `external_list_matters` all share the key of `list_matters`.
- */
-export const toolNameKey = (name: string): string =>
-  name
-    .toLowerCase()
-    .replaceAll(/[-_.]/gu, "")
-    .replace(/^external/u, "");
-
-/**
- * How far `target` is from the tool name `name`: the smallest of the plain
- * edit distance, the word-order-insensitive one (`widgets.delete-part` against
- * `widgets.parts.delete`) and the distance between their keys (case,
- * separators and an `external_` prefix ignored).
- */
-export const toolNameDistance = (target: string, name: string): number =>
-  Math.min(
-    levenshtein(target, name),
-    levenshtein(sortedWords(target), sortedWords(name)),
-    levenshtein(toolNameKey(target), toolNameKey(name)),
-  );
-
-/**
- * Up to `limit` known tool names closest to `target` by
- * {@link toolNameDistance}, used to hint an agent that fat-fingered a tool
- * name. Only candidates within a lenient edit budget (roughly half the longer
- * name) are kept, so an unrelated miss returns nothing rather than a confusing
- * suggestion. Distances count Unicode scalar values, so an astral character
- * contributes one edit.
+ * Up to three known tool names closest to `target`, through the shared bounded
+ * suggestion owner.
  */
 export const closestToolNames = (
   target: string,
   candidates: readonly string[],
-  limit = 3,
-): string[] => {
-  const scored: { name: string; distance: number }[] = [];
-  for (const name of candidates) {
-    const distance = toolNameDistance(target, name);
-    if (distance <= Math.ceil(name.length / 2)) {
-      scored.push({ name, distance });
-    }
-  }
-
-  return scored
-    .toSorted(
-      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- tool names are machine identifiers (agent-facing "did you mean"), not display text
-      (a, b) => a.distance - b.distance || a.name.localeCompare(b.name),
-    )
-    .slice(0, limit)
-    .map(({ name }) => name);
-};
+): string[] => closestNames(target, candidates);
 
 /** A tool name as agent-facing text quotes it. */
 export const quoteToolName = (name: string): string => `\`${name}\``;
@@ -1154,7 +1142,7 @@ export const ensureWorkspaceAccess = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }) => {
   const resolved = getAccessibleWorkspaceId({
@@ -1172,15 +1160,15 @@ export const getWorkspaceStatus = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }): AccessibleWorkspace["status"] | undefined =>
   context.accessibleWorkspaceStatusById.get(workspaceId);
 
 /**
  * Resolve an accessible workspace that is also writable. Mirrors the HTTP
- * `validateWorkspaceAccess` macro, which rejects any workspace whose status is
- * not "active": archived matters stay readable but are read-only through MCP
+ * core's `authorizeWorkspace`, which by default rejects any workspace whose
+ * status is not "active": archived matters stay readable but are read-only through MCP
  * write tools. Returns the branded id when active, or an error result naming
  * the reason (not accessible vs archived). Callers that need to allow an
  * unarchive (`save_matter` with status:"active") should use
@@ -1190,7 +1178,7 @@ export const ensureActiveWorkspace = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }): SafeId<"workspace"> | InternalToolErrorResult => {
   const resolved = getAccessibleWorkspaceId({
@@ -1255,7 +1243,7 @@ export const toPlainCorpusText = ({
   blocks,
   fulltext,
 }: {
-  blocks: readonly { plainText: string }[] | null;
+  blocks: readonly ServedTextBlock[] | null;
   fulltext: string | null;
 }): string | null => {
   if (typeof fulltext === "string" && fulltext.length > 0) {
@@ -1266,7 +1254,9 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
+    .flatMap((block, index) =>
+      block.plainText === "" ? [] : [servedBlockText(block, blocks[index - 1])],
+    )
     .join("\n\n");
 };
 

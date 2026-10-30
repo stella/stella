@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "@stll/ui gains its first DOM test (the outline rail opens from its tick strip and closes on Escape) and declares the happy-dom registrator as a development dependency at the version the web app, decision reader and MCP apps already pin; no new package resolves."
+}

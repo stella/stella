@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -26,33 +26,42 @@ describe.serial("suppression IDs follow their configured spelling", () => {
     );
     expect(entries.length).toBeGreaterThan(0);
     const reason = " --  keep spacing, punctuation: -- unchanged; café";
-    // oxlint's JSON report for one file is cut short on Linux once it outgrows
-    // a pipe buffer, so every alias is checked in batches of a bounded size.
-    const BATCH = 40;
+    const source = entries
+      .map(
+        ([alias]) => `// oxlint-disable-next-line ${alias}${reason}\nvoid 0;`,
+      )
+      .join("\n");
+    const expected = entries
+      .map(
+        ([, canonical]) =>
+          `// oxlint-disable-next-line ${canonical}${reason}\nvoid 0;`,
+      )
+      .join("\n");
+    // Only reporting needs bounded batches: oxlint truncates a large JSON
+    // diagnostic report, while the fix and fixed-point runs report no errors.
+    const BATCH = 250;
+    // Each reporting batch is its own oxlint run on purpose: concurrent batches
+    // of one configuration would share a run whose combined report exceeds that
+    // limit, so it would be rejected and every batch would rerun alone.
     for (let start = 0; start < entries.length; start += BATCH) {
       const batch = entries.slice(start, start + BATCH);
-      const source = batch
+      const batchSource = batch
         .map(
           ([alias]) => `// oxlint-disable-next-line ${alias}${reason}\nvoid 0;`,
         )
         .join("\n");
-      const expected = batch
-        .map(
-          ([, canonical]) =>
-            `// oxlint-disable-next-line ${canonical}${reason}\nvoid 0;`,
-        )
-        .join("\n");
-      expect(await lintSingleRule(RULE, source, options)).toHaveLength(
+      // oxlint-disable-next-line no-serial-lint-case/no-serial-lint-case -- bounded reporting batches must not share one oxlint run
+      expect(await lintSingleRule(RULE, batchSource, options)).toHaveLength(
         batch.length,
       );
-      const fixed = await runSingleRule(RULE, source, {
-        ...options,
-        fix: true,
-      });
-      expect(fixed.source).toBe(expected);
-      expect(fixed.lines).toEqual([]);
-      expect(await lintSingleRule(RULE, fixed.source, options)).toEqual([]);
     }
+    const fixed = await runSingleRule(RULE, source, {
+      ...options,
+      fix: true,
+    });
+    expect(fixed.source).toBe(expected);
+    expect(fixed.lines).toEqual([]);
+    expect(await lintSingleRule(RULE, fixed.source, options)).toEqual([]);
   });
 
   test("all directive forms and comma lists retain their exact layout", async () => {
@@ -125,10 +134,13 @@ describe.serial("suppression IDs follow their configured spelling", () => {
   });
 
   test("the installed rule catalog resolves identically under Node and Bun", async () => {
-    const output = path.join(
-      import.meta.dirname,
-      "../../scripts/.oxlint-rule-ids-node.mjs",
+    // A directory of its own: concurrent runs share this checkout. Like
+    // scripts/, it sits one level below the root, so the module's
+    // `../node_modules` still names the repository's packages.
+    const directory = mkdtempSync(
+      path.join(import.meta.dirname, "../../.oxlint-rule-ids-"),
     );
+    const output = path.join(directory, "node.mjs");
     const build = await Bun.build({
       entrypoints: [
         path.join(import.meta.dirname, "../../scripts/oxlint-rule-ids.ts"),
@@ -158,7 +170,7 @@ describe.serial("suppression IDs follow their configured spelling", () => {
       new Response(child.stderr).text(),
       child.exited,
     ]);
-    rmSync(output, { force: true });
+    rmSync(directory, { force: true, recursive: true });
     expect(
       childExitStatus({ exitCode, signalCode: child.signalCode }),
       stderr,

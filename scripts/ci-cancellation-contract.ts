@@ -22,6 +22,16 @@ try {
   const failures = jobs.flatMap((job) => (job.steps || [])
     .filter((step) => step.conclusion === "failure")
     .map((step) => \`\${job.name} / \${step.number}: \${step.name} (\${job.html_url})\`));
+  // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
+  // step and no such evidence the jobs API may still be catching up, so cancel as before.
+  const lost = jobs.filter((job) => job.conclusion === "failure"
+    && !(job.steps || []).some((step) => step.conclusion === "failure")
+    && (job.steps || []).every((step) => !step.status || step.status === "completed")
+    && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
+  if (!failures.length && lost.length) {
+    core.notice(\`\${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.\`);
+    return;
+  }
   failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
   diagnostic = \`\${context.job}: cancelling failed merge group; failed steps: \${failures.length ? failures.join("; ") : "not yet available from the jobs API"}\`;
 } catch {
@@ -64,7 +74,6 @@ export const isCanonicalFailureCancellation = (step: unknown) =>
 // requests get a read-only token that cannot cancel the run, so they skip it.
 export const PR_CODE_QUALITY_CANCEL_STEP = {
   name: "Cancel pull request run after code quality failure",
-  if: "failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
   uses: CANONICAL_CANCEL_STEP.uses,
   with: {
     retries: 0,
@@ -80,3 +89,11 @@ export const PR_CODE_QUALITY_JOBS = [
   "code-quality-api",
   "code-quality-web-rest",
 ] as const;
+
+export const PR_CODE_QUALITY_CANCEL_JOBS = {
+  "code-quality-api-cancel": "code-quality-api",
+  "code-quality-web-rest-cancel": "code-quality-web-rest",
+} as const;
+
+export const PR_CODE_QUALITY_CANCEL_IF =
+  "failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository";

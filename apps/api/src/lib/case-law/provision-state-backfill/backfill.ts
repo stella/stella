@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import {
-  PROVISION_EXTRACTION_ADMISSION,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
 import { Temporal } from "@stll/time";
 
@@ -13,10 +13,10 @@ import { PROVISION_PENDING_CLOCK_STEP } from "./pending-clock";
 import { inBackfillTransaction, PROVISION_BACKFILL_BUDGET } from "./step";
 import type {
   ProvisionBackfillCompletion,
-  ProvisionBackfillUnit,
-  ProvisionBackfillUnitError,
   ProvisionBackfillSession,
   ProvisionBackfillStep,
+  ProvisionBackfillUnit,
+  ProvisionBackfillUnitError,
 } from "./step";
 
 export const ID_PAGE_SIZE = 50;
@@ -24,10 +24,11 @@ export const BOOTSTRAP_PAGE_SIZE = 1000;
 /**
  * Units one run may commit. Keyset pages are cheap one by one, so without a
  * count a run would keep reading the decision table until its wall-clock
- * deadline. With this bound a run reads at most this many pages (up to
- * `BOOTSTRAP_PAGE_SIZE` decisions each) and the next scheduled run resumes.
+ * deadline. A unit reads one decision page or at most `SCOPE_PAGE_SIZE`
+ * transition pages; the next scheduled run resumes the committed cursors.
  */
 const PROVISION_BACKFILL_UNITS_PER_RUN = 200;
+const SCOPE_PAGE_SIZE = 50;
 const LOCK_TIMEOUT_MS = 30_000;
 const STATEMENT_TIMEOUT_MS = 60_000;
 
@@ -53,9 +54,9 @@ type Admission = { revision: number; scopes: readonly ScopeKey[] };
 
 const CURRENT_ADMISSION: Admission = {
   revision: PROVISION_EXTRACTION_ADMISSION_REVISION,
-  scopes: Object.values(PROVISION_EXTRACTION_ADMISSION)
-    .map(({ jurisdiction, language }) => ({ country: jurisdiction, language }))
-    .toSorted(compareScopeKeys),
+  scopes: PROVISION_EXTRACTION_ADMISSION_SCOPES.map(
+    ({ jurisdiction, language }) => ({ country: jurisdiction, language }),
+  ).toSorted(compareScopeKeys),
 };
 
 const readString = (row: unknown, key: string): string => {
@@ -100,8 +101,7 @@ const readCursorCompletion = async (
 };
 
 type ProvisionRepairCursor =
-  | { type: "complete" }
-  | { type: "pending"; cursor: string | null };
+  { type: "complete" } | { type: "pending"; cursor: string | null };
 
 const readCursor = async (
   connection: ProvisionBackfillSession,
@@ -251,32 +251,34 @@ const cursorStep = (
   advance: async (connection) => await repairCursorPage(connection, name),
 });
 
-const transitionScope = async (
+type ScopeTransition = ScopeKey & { action: "activate" | "retire" };
+
+const transitionScopes = async (
   connection: ProvisionBackfillSession,
-  { country, language }: ScopeKey,
-  action: "activate" | "retire",
+  transitions: readonly ScopeTransition[],
 ): Promise<void> => {
-  const status = action === "activate" ? "active" : "retired";
-  const row = (
-    await connection.query(
-      `INSERT INTO case_law_provision_extraction_scopes AS scope
-           (country, language, status, generation)
-         VALUES ($1, $2, $3, 1)
-         ON CONFLICT (country, language) DO UPDATE
-           SET status = EXCLUDED.status, generation = scope.generation + 1
-           WHERE scope.status IS DISTINCT FROM EXCLUDED.status
-         RETURNING generation::text AS generation`,
-      [country, language, status],
-    )
-  ).at(0);
-  if (row === undefined) {
-    return;
-  }
+  // One bounded mutation owns both the generation and its durable job.
+  // Ordering scope locks matches the transition worker's key order.
   await connection.execute(
-    `INSERT INTO case_law_provision_scope_transitions
+    `WITH changed AS (
+       INSERT INTO case_law_provision_extraction_scopes AS scope
+         (country, language, status, generation)
+       SELECT country, language,
+         CASE WHEN action = 'activate' THEN 'active' ELSE 'retired' END, 1
+       FROM jsonb_to_recordset($1::text::jsonb)
+         AS input(country varchar, language varchar, action text)
+       ORDER BY country, language
+       ON CONFLICT (country, language) DO UPDATE
+         SET status = EXCLUDED.status, generation = scope.generation + 1
+         WHERE scope.status IS DISTINCT FROM EXCLUDED.status
+       RETURNING country, language, generation, status
+     )
+     INSERT INTO case_law_provision_scope_transitions
        (country, language, generation, action)
-     VALUES ($1, $2, $3::bigint, $4)`,
-    [country, language, readString(row, "generation"), action],
+     SELECT country, language, generation,
+       CASE WHEN status = 'active' THEN 'activate' ELSE 'retire' END
+     FROM changed`,
+    [JSON.stringify(transitions)],
   );
 };
 
@@ -317,7 +319,7 @@ const readActiveScopes = async (
 /**
  * Reconciles the scopes to one build's admission. The admission row is
  * locked first (before any scope row) in every unit: a build first records
- * its revision, then applies one transition per unit, and a build whose
+ * its revision, then applies a bounded scope batch per unit, and a build whose
  * revision is below the recorded one changes nothing, so an older replica
  * cannot retire a scope a newer release admitted.
  */
@@ -363,17 +365,15 @@ const scopeSeedStep = (admission: Admission): ProvisionBackfillStep => ({
       const active = await readActiveScopes(connection);
       const activeKeys = new Set(active.map(keyOf));
       const desired = new Set(admission.scopes.map(keyOf));
-      const retiring = active.find((scope) => !desired.has(keyOf(scope)));
-      if (retiring !== undefined) {
-        await transitionScope(connection, retiring, "retire");
-        return;
-      }
-      const activating = admission.scopes.find(
-        (scope) => !activeKeys.has(keyOf(scope)),
-      );
-      if (activating !== undefined) {
-        await transitionScope(connection, activating, "activate");
-      }
+      const retiring = active
+        .filter((scope) => !desired.has(keyOf(scope)))
+        .slice(0, SCOPE_PAGE_SIZE)
+        .map((scope) => ({ ...scope, action: "retire" }) as const);
+      const activating = admission.scopes
+        .filter((scope) => !activeKeys.has(keyOf(scope)))
+        .slice(0, SCOPE_PAGE_SIZE - retiring.length)
+        .map((scope) => ({ ...scope, action: "activate" }) as const);
+      await transitionScopes(connection, [...retiring, ...activating]);
     }),
 });
 
@@ -389,29 +389,35 @@ const scopeTransitionsStep: ProvisionBackfillStep = {
       ? { type: "complete" }
       : { reason: "scope transitions remain", type: "incomplete" };
   },
-  advance: async (connection) => {
-    const row = (
+  advance: async (connection) =>
+    await inTransaction(connection, async () => {
+      // Empty admitted scopes still need the function's generation fence and
+      // completion write, but must not consume one scheduler unit each. Stop
+      // after the first non-empty decision page so the transaction's locks
+      // remain bounded to one page.
       await connection.query(
-        `SELECT country, language, generation::text AS generation
-         FROM case_law_provision_scope_transitions
-         WHERE completed_at IS NULL
-         ORDER BY created_at, country, language, generation LIMIT 1`,
-      )
-    ).at(0);
-    if (row === undefined) {
-      return Result.ok(undefined);
-    }
-    return await inTransaction(connection, async () => {
-      await connection.query(
-        `SELECT run_case_law_provision_scope_transition_page($1::varchar, $2::varchar, $3::bigint)`,
-        [
-          readString(row, "country"),
-          readString(row, "language"),
-          readString(row, "generation"),
-        ],
+        `WITH RECURSIVE pending AS MATERIALIZED (
+           SELECT country, language, generation,
+             row_number() OVER (ORDER BY country, language, generation) AS ordinal
+           FROM case_law_provision_scope_transitions
+           WHERE completed_at IS NULL
+           ORDER BY country, language, generation LIMIT ${SCOPE_PAGE_SIZE}
+         ), processed AS (
+           SELECT pending.ordinal,
+             run_case_law_provision_scope_transition_page(
+               pending.country, pending.language, pending.generation) AS non_empty
+           FROM pending WHERE pending.ordinal = 1
+           UNION ALL
+           SELECT pending.ordinal,
+             run_case_law_provision_scope_transition_page(
+               pending.country, pending.language, pending.generation) AS non_empty
+           FROM processed
+           JOIN pending ON pending.ordinal = processed.ordinal + 1
+           WHERE NOT processed.non_empty
+         )
+         SELECT non_empty FROM processed ORDER BY ordinal`,
       );
-    });
-  },
+    }),
 };
 
 /**

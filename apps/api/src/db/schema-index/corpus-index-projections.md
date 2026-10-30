@@ -10,8 +10,8 @@ One immutable Quickwit append attempt.
 
 ```text
 corpus_index_projection_intents.id                             pUuid        pk,not null       corpus-index-projections.ts:47
-corpus_index_projection_intents.family                         text         not null          corpus-index-projections.ts:48
-corpus_index_projection_intents.generation                     varchar      not null          corpus-index-projections.ts:49
+corpus_index_projection_intents.family                         text         fk,not null       corpus-index-projections.ts:48
+corpus_index_projection_intents.generation                     varchar      fk,not null       corpus-index-projections.ts:49
 corpus_index_projection_intents.entity_id                      uuid         not null          corpus-index-projections.ts:52
 corpus_index_projection_intents.epoch                          bigint       not null          corpus-index-projections.ts:53
 corpus_index_projection_intents.fingerprint                    varchar      not null          corpus-index-projections.ts:54
@@ -43,25 +43,26 @@ corpus_index_projection_intents.updated_at                     timestamptz  defa
 PostgreSQL-authoritative desired and applied state for one generation.
 
 ```text
-corpus_index_projection_states.family                text         not null          corpus-index-projections.ts:364
-corpus_index_projection_states.generation            varchar      not null          corpus-index-projections.ts:365
-corpus_index_projection_states.entity_id             uuid         not null          corpus-index-projections.ts:368
+corpus_index_projection_states.family                text         fk,not null       corpus-index-projections.ts:364
+corpus_index_projection_states.generation            varchar      fk,not null       corpus-index-projections.ts:365
+corpus_index_projection_states.entity_id             uuid         fk,not null       corpus-index-projections.ts:368
 corpus_index_projection_states.desired_action        text         not null          corpus-index-projections.ts:369
 corpus_index_projection_states.desired_epoch         bigint       not null          corpus-index-projections.ts:372
-corpus_index_projection_states.desired_fingerprint   varchar      null              corpus-index-projections.ts:373
-corpus_index_projection_states.desired_index_id      varchar      null              corpus-index-projections.ts:374
-corpus_index_projection_states.work_status           text         default,not null  corpus-index-projections.ts:375
-corpus_index_projection_states.append_mode           text         default,not null  corpus-index-projections.ts:379
-corpus_index_projection_states.retry_not_before      timestamptz  null              corpus-index-projections.ts:383
-corpus_index_projection_states.failure_attempts      integer      default,not null  corpus-index-projections.ts:384
-corpus_index_projection_states.last_failure_kind     text         null              corpus-index-projections.ts:385
-corpus_index_projection_states.last_failure_message  varchar      null              corpus-index-projections.ts:388
-corpus_index_projection_states.applied_action        text         null              corpus-index-projections.ts:389
-corpus_index_projection_states.applied_epoch         bigint       null              corpus-index-projections.ts:392
-corpus_index_projection_states.applied_revision      uuid         null              corpus-index-projections.ts:395  Exact successfully applied revision.
-corpus_index_projection_states.applied_fingerprint   varchar      null              corpus-index-projections.ts:398
-corpus_index_projection_states.applied_index_id      varchar      null              corpus-index-projections.ts:399
-corpus_index_projection_states.applied_at            timestamptz  null              corpus-index-projections.ts:400
-corpus_index_projection_states.created_at            timestamptz  default,not null  corpus-index-projections.ts:401
-corpus_index_projection_states.updated_at            timestamptz  default,not null  corpus-index-projections.ts:402
+corpus_index_projection_states.desired_at            timestamptz  default,null      corpus-index-projections.ts:374  When the current desired projection state was established.
+corpus_index_projection_states.desired_fingerprint   varchar      null              corpus-index-projections.ts:375
+corpus_index_projection_states.desired_index_id      varchar      null              corpus-index-projections.ts:376
+corpus_index_projection_states.work_status           text         default,not null  corpus-index-projections.ts:377
+corpus_index_projection_states.append_mode           text         default,not null  corpus-index-projections.ts:381
+corpus_index_projection_states.retry_not_before      timestamptz  null              corpus-index-projections.ts:385
+corpus_index_projection_states.failure_attempts      integer      default,not null  corpus-index-projections.ts:386
+corpus_index_projection_states.last_failure_kind     text         null              corpus-index-projections.ts:387
+corpus_index_projection_states.last_failure_message  varchar      null              corpus-index-projections.ts:390
+corpus_index_projection_states.applied_action        text         null              corpus-index-projections.ts:391
+corpus_index_projection_states.applied_epoch         bigint       fk,null           corpus-index-projections.ts:394
+corpus_index_projection_states.applied_revision      uuid         fk,null           corpus-index-projections.ts:397  Exact successfully applied revision.
+corpus_index_projection_states.applied_fingerprint   varchar      fk,null           corpus-index-projections.ts:400
+corpus_index_projection_states.applied_index_id      varchar      fk,null           corpus-index-projections.ts:401
+corpus_index_projection_states.applied_at            timestamptz  null              corpus-index-projections.ts:402
+corpus_index_projection_states.created_at            timestamptz  default,not null  corpus-index-projections.ts:403
+corpus_index_projection_states.updated_at            timestamptz  default,not null  corpus-index-projections.ts:404
 ```

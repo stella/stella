@@ -62,6 +62,9 @@ test("every deployable generation selects one explicit Quickwit cluster", () => 
   expect(corpusIndexClusterForGeneration("case_law", "case_law_v8")).toBe(
     "q09",
   );
+  expect(corpusIndexClusterForGeneration("case_law", "case_law_v9")).toBe(
+    "q09",
+  );
   expect(corpusIndexClusterForGeneration("legislation", "legislation_v2")).toBe(
     "q09",
   );
@@ -74,7 +77,7 @@ test("every deployable generation selects one explicit Quickwit cluster", () => 
     corpusIndexClusterForGeneration("case_law", "case_law_v2"),
   ).toThrow("Unknown case_law corpus index generation");
   expect(() =>
-    corpusIndexClusterForGeneration("case_law", "case_law_v9"),
+    corpusIndexClusterForGeneration("case_law", "case_law_v10"),
   ).toThrow("Unknown case_law corpus index generation");
   expect(() =>
     corpusIndexClusterForGeneration("legislation", "legislation_v1"),

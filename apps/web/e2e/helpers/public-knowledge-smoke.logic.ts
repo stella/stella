@@ -37,7 +37,7 @@ export const classifyPublicKnowledgeWebProbe = (
   const window = new Window({
     settings: {
       disableJavaScriptFileLoading: true,
-      disableCSSFileLoading: true,
+      enableCSSFileLoading: false,
     },
   });
   const document = new window.DOMParser().parseFromString(html, "text/html");

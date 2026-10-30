@@ -3,8 +3,8 @@ import * as v from "valibot";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
-  translationLanguageInstruction,
   type BilingualAIContext,
+  translationLanguageInstruction,
   type TranslationLanguages,
 } from "@/api/lib/bilingual/ai";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -72,6 +72,7 @@ export const translateTaggedSegments = async ({
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
     admission: context.admission,
+    userId: context.admission.userId,
     analytics,
     caching: resolveCaching({
       promptCachingEnabled: context.promptCachingEnabled,
@@ -89,10 +90,8 @@ ${preceding.map((segment) => `${segment.id}: ${segment.taggedText}`).join("\n") 
 
 Segments to translate:
 ${segments.map((segment) => `${segment.id}: ${segment.taggedText}`).join("\n")}`,
-    abortSignal: AbortSignal.any([
-      context.abortSignal,
-      AbortSignal.timeout(CALL_TIMEOUT_MS),
-    ]),
+    abortSignal: context.abortSignal,
+    deadlineMs: CALL_TIMEOUT_MS,
     outputSchema: translationSchema,
   });
 

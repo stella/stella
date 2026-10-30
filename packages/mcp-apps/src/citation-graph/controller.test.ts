@@ -149,6 +149,26 @@ const startWithPage = (
 };
 
 describe("citation graph controller", () => {
+  test("resends applied filters when loading another page", async () => {
+    const bridge = createBridge();
+    const controller = startWithPage(bridge, {
+      ...page({ nextCursor: "synthetic-cursor" }),
+      doctrine: "limits",
+      polarity: "negative",
+    });
+
+    const reading = controller.read("synthetic-subject");
+    expect(bridge.requests.at(0)?.arguments).toEqual({
+      decision_id: "synthetic-subject",
+      direction: "cites",
+      doctrine: "limits",
+      polarity: "negative",
+      cursor: "synthetic-cursor",
+    });
+    bridge.resolveNext(toolResult(page()));
+    await reading;
+  });
+
   test.each(["synthetic-subject", "synthetic-target"])(
     "rejects a non-advancing cursor without merging or losing retry state for %s",
     async (decisionId) => {

@@ -1,15 +1,22 @@
 import { panic, Result } from "better-result";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { buildImportGraph } from "./api-test-impact";
 import {
+  effectiveGeneratorInputs,
+  type Generator,
   GENERATORS,
   GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
-  type Generator,
 } from "./generated-files";
 
 const ROOT = new URL("..", import.meta.url);
+
+// The census's computed reads are workspace package manifests, never Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
 const decode = (value: Uint8Array) => new TextDecoder().decode(value);
 const splitPaths = (value: Uint8Array) =>
   decode(value).split("\0").filter(Boolean);
@@ -202,13 +209,351 @@ const checkManifest = async () => {
     }
   }
   await checkRouteGeneratorVersion();
+  const censusFailures = generatorInputCensus(GENERATORS);
+  if (censusFailures.length > 0) {
+    panic(`Generator input census failed:\n${censusFailures.join("\n")}`);
+  }
   console.log(`Manifest: ${GENERATORS.length} generator families`);
 };
 
+const packageScript = (directory: string, name: string): string => {
+  const manifest: unknown = JSON.parse(
+    readFileSync(path.join(ROOT.pathname, directory, "package.json"), "utf-8"),
+  );
+  const scripts = isRecord(manifest) ? manifest["scripts"] : undefined;
+  const command = isRecord(scripts) ? scripts[name] : undefined;
+  if (typeof command !== "string") {
+    panic(`Cannot resolve package script ${directory}:${name}`);
+  }
+  return command;
+};
+
+const commandModules = (command: readonly string[], base = "."): string[] => {
+  const joined = command.join(" ");
+  const cwdMatch = /\bbun\s+--cwd(?:=|\s+)([^\s]+)\s+(?:run\s+)?([^\s;&|]+)/gu;
+  const rootRunMatch = /\bbun\s+run\s+([^\s;&|]+)/gu;
+  // Options may take a module value (`--preload <file>`); the entry point is
+  // the first module after them, and each preload runs as well.
+  const fileMatch =
+    /\bbun\s+(?!run\b|--cwd\b)((?:--[^\s]+\s+(?:[^\s;&|-][^\s;&|]*\.[cm]?[jt]sx?\s+)?)*)([^\s;&|]+\.[cm]?[jt]sx?)/gu;
+  const modules: string[] = [];
+  const cwdRanges: (readonly [number, number])[] = [];
+  const cwdAt = (index: number) => {
+    let directory = base;
+    for (const match of joined
+      .slice(0, index)
+      .matchAll(/(?:^|[;&|]\s*)cd\s+([^\s;&|]+)/gu)) {
+      directory = path.posix.normalize(
+        path.posix.join(directory, match[1] ?? ""),
+      );
+    }
+    return directory;
+  };
+  for (const match of joined.matchAll(cwdMatch)) {
+    cwdRanges.push([match.index, match.index + match[0].length]);
+    const directory = path.posix.normalize(
+      path.posix.join(
+        cwdAt(match.index),
+        match[1] ?? panic("Missing command cwd"),
+      ),
+    );
+    const target = match[2] ?? panic("Missing cwd command target");
+    if (/\.[cm]?[jt]sx?$/u.test(target)) {
+      modules.push(path.posix.join(directory, target));
+    } else {
+      modules.push(
+        ...commandModules([packageScript(directory, target)], directory),
+      );
+    }
+  }
+  for (const match of joined.matchAll(rootRunMatch)) {
+    if (
+      cwdRanges.some(
+        ([start, end]) => match.index >= start && match.index < end,
+      )
+    ) {
+      continue;
+    }
+    const name = match[1] ?? panic("Missing root script name");
+    if (/\.[cm]?[jt]sx?$/u.test(name)) {
+      modules.push(
+        path.posix.normalize(path.posix.join(cwdAt(match.index), name)),
+      );
+    } else {
+      modules.push(...commandModules([packageScript(".", name)]));
+    }
+  }
+  for (const match of joined.matchAll(fileMatch)) {
+    if (
+      cwdRanges.some(
+        ([start, end]) => match.index >= start && match.index < end,
+      )
+    ) {
+      continue;
+    }
+    const preloads = [
+      ...(match[1] ?? "").matchAll(/--preload(?:=|\s+)([^\s;&|]+)/gu),
+    ].map((preload) => preload[1]);
+    for (const file of [...preloads, match[2]]) {
+      if (file !== undefined && !file.startsWith("-")) {
+        modules.push(
+          path.posix.normalize(path.posix.join(cwdAt(match.index), file)),
+        );
+      }
+    }
+  }
+  // Every `bun` invocation must resolve to modules: `--filter <package>
+  // <script>` through that workspace's package script, the forms above as
+  // matched. Any other form fails, so the census never skips a command.
+  const tokens = joined.split(/\s+/u);
+  for (const [index, token] of tokens.entries()) {
+    if (token !== "bun") {
+      continue;
+    }
+    const next = tokens[index + 1] ?? "";
+    if (next === "--filter" || next.startsWith("--filter=")) {
+      const name =
+        next === "--filter"
+          ? tokens[index + 2]
+          : next.slice("--filter=".length);
+      let scriptIndex = next === "--filter" ? index + 3 : index + 2;
+      if (tokens[scriptIndex] === "run") {
+        scriptIndex += 1;
+      }
+      const script = tokens[scriptIndex];
+      if (name === undefined || script === undefined) {
+        panic(`Census cannot resolve the command: ${joined}`);
+      }
+      const directory = workspaceDirectory(name);
+      modules.push(
+        ...commandModules([packageScript(directory, script)], directory),
+      );
+      continue;
+    }
+    const resolved =
+      BUN_BUILTIN_COMMANDS.has(next) ||
+      next === "run" ||
+      next.startsWith("--cwd") ||
+      tokens
+        .slice(index + 1)
+        .some((argument) => /\.[cm]?[jt]sx?$/u.test(argument));
+    if (!resolved) {
+      panic(`Census cannot resolve the command: ${joined}`);
+    }
+  }
+  return [...new Set(modules)];
+};
+
+/**
+ * Bun's own subcommands that run no repository module (the formatter reads
+ * only its configuration). Extend deliberately: an unlisted form fails.
+ */
+const BUN_BUILTIN_COMMANDS: ReadonlySet<string> = new Set(["fmt"]);
+
+/** The workspace directory of a package, by its manifest name. */
+const workspaceDirectory = (name: string): string => {
+  for (const manifest of new Bun.Glob(
+    "{apps,packages}/*/package.json",
+  ).scanSync({ cwd: ROOT.pathname })) {
+    const parsed: unknown = JSON.parse(
+      readFileSync(path.join(ROOT.pathname, manifest), "utf-8"),
+    );
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "name" in parsed &&
+      parsed.name === name
+    ) {
+      return path.posix.dirname(manifest);
+    }
+  }
+  return panic(`No workspace package named ${name}`);
+};
+
+const IMPLICIT_MODULE_INPUTS: Readonly<
+  Record<string, readonly string[] | undefined>
+> = {
+  "packages/scripts/src/generated-artifact-format.ts": [
+    "bunfig.toml",
+    ".prettierrc.yml",
+  ],
+};
+
+/** Static proof that every local module capable of influencing a family is declared. */
+export const generatorInputCensus = (
+  generators: readonly Generator[],
+  root = ROOT.pathname,
+): string[] => {
+  const failures: string[] = [];
+  const entries = generators.map((generator) => ({
+    generator,
+    starts: [
+      ...new Set([
+        ...commandModules(generator.write),
+        ...commandModules(generator.prepare ?? []),
+        ...commandModules(generator.check ?? generator.checkedWith ?? []),
+      ]),
+    ],
+  }));
+  const graph = buildImportGraph(
+    root,
+    entries.flatMap(({ starts }) => starts),
+  );
+  for (const { generator, starts } of entries) {
+    const closure = new Set(
+      starts.flatMap((start) => [...graph.closure(start)]),
+    );
+    const inputs = effectiveGeneratorInputs(generator);
+    const checkInputs = generator.checkInputs ?? [];
+    const prerequisiteOutputs = generators
+      .filter(({ id }) => generator.after.includes(id))
+      .flatMap(({ outputs }) => outputs);
+    const coveredInputs = [...inputs, ...checkInputs, ...prerequisiteOutputs];
+    for (const file of closure) {
+      if (!coveredInputs.some((glob) => matchesGeneratedGlob(glob, file))) {
+        failures.push(`${generator.id}: undeclared import ${file}`);
+      }
+    }
+    for (const file of closure) {
+      const implicitInputs = IMPLICIT_MODULE_INPUTS[file] ?? [];
+      for (const implicitInput of implicitInputs) {
+        if (
+          ![...inputs, ...checkInputs].some((glob) =>
+            matchesGeneratedGlob(glob, implicitInput),
+          )
+        ) {
+          failures.push(
+            `${generator.id}: undeclared implicit input ${implicitInput} from ${file}`,
+          );
+        }
+      }
+    }
+    // Readers and scanners are safe only when their own source, and therefore
+    // changes to the declarations of what they read, participates in the digest.
+    for (const file of [...graph.readers, ...graph.scanners]) {
+      if (
+        closure.has(file) &&
+        ![...inputs, ...checkInputs].some((glob) =>
+          matchesGeneratedGlob(glob, file),
+        )
+      ) {
+        failures.push(
+          `${generator.id}: reader or scanner is undeclared: ${file}`,
+        );
+      }
+    }
+  }
+  return [...new Set(failures)].toSorted();
+};
+
+const GUARD_ENTRY = "scripts/generated-files-guard.ts";
+/** This guard's own import closure: the manifest, the census and the selection. */
+export const guardSelectionSources = (root: string = ROOT.pathname) =>
+  buildImportGraph(root, [GUARD_ENTRY]).closure(GUARD_ENTRY);
+
+/**
+ * The families a change can affect. A change to the code that decides this
+ * (the manifest, this guard and their imports: `selectionSources`) can change
+ * any family's command or declarations, so it affects every family.
+ */
+export const affectedGeneratorIds = (
+  generators: readonly Generator[],
+  changedFiles: readonly string[] | null,
+  selectionSources: ReadonlySet<string> = new Set(),
+) => {
+  if (
+    changedFiles === null ||
+    changedFiles.some((file) => selectionSources.has(file))
+  ) {
+    return new Set(generators.map(({ id }) => id));
+  }
+  const affected = new Set(
+    generators
+      .filter((generator) =>
+        [
+          ...effectiveGeneratorInputs(generator),
+          ...(generator.checkInputs ?? []),
+          ...generator.outputs,
+        ].some((glob) =>
+          changedFiles.some((file) => matchesGeneratedGlob(glob, file)),
+        ),
+      )
+      .map(({ id }) => id),
+  );
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const generator of generators) {
+      if (
+        !affected.has(generator.id) &&
+        generator.after.some((id) => affected.has(id))
+      ) {
+        affected.add(generator.id);
+        expanded = true;
+      }
+    }
+  }
+  return affected;
+};
+
+const comparisonBase = (): string | undefined => {
+  const requested = process.env["CI_COMPARISON_BASE"]?.trim();
+  if (requested) {
+    const result = Bun.spawnSync(
+      ["git", "cat-file", "-e", `${requested}^{commit}`],
+      { cwd: ROOT.pathname },
+    );
+    return result.exitCode === 0 ? requested : undefined;
+  }
+  const baseRef = process.env["GITHUB_BASE_REF"]?.trim();
+  if (!baseRef) {
+    return undefined;
+  }
+  const result = Bun.spawnSync(
+    ["git", "merge-base", "HEAD", `origin/${baseRef}`],
+    { cwd: ROOT.pathname, stdout: "pipe", stderr: "ignore" },
+  );
+  return result.exitCode === 0 ? decode(result.stdout).trim() : undefined;
+};
+
+export const changedSince = (base: string, root = ROOT.pathname) => {
+  const result = Bun.spawnSync(
+    ["git", "diff", "--no-renames", "--name-only", "-z", `${base}...HEAD`],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    panic(`git diff failed: ${decode(result.stderr)}`);
+  }
+  return splitPaths(result.stdout);
+};
+
+export const undeclaredInputFailure = (
+  generator: Generator,
+  changedFromPreviousHead: readonly string[],
+  producedChanges: readonly string[],
+): string | undefined => {
+  const declared = [
+    ...effectiveGeneratorInputs(generator),
+    ...generator.outputs,
+  ];
+  const declaredChanged = changedFromPreviousHead.some((file) =>
+    declared.some((glob) => matchesGeneratedGlob(glob, file)),
+  );
+  if (declaredChanged || producedChanges.length === 0) {
+    return undefined;
+  }
+  return `${generator.id}: generated a diff although none of its files changed since HEAD~1; an input is undeclared`;
+};
+
+const worktreeChanges = () =>
+  new Set(splitPaths(git(["diff", "--name-only", "-z", "HEAD"])));
+
 // These commands only compare committed outputs or write private temporary
 // directories. Changed/new commands, compiler/AST guards and WASM builds stay
-// exclusive until audited. Reservations bound scheduling, not actual child RSS;
-// leave runner memory outside this 2 GiB budget for the parent and the OS.
+// exclusive until audited. A check whose peak RSS (its largest process, as the
+// kernel reports for the child and each descendant it waited for) exceeds its
+// reservation fails under its own name, so the reservations stay true; leave
+// runner memory outside this 2 GiB budget for the parent and the OS.
 const LIGHT_CHECK_COMMANDS = [
   ["bun", "scripts/generate-cloud-setup.ts"],
   ["bun", "scripts/generate-bun-toolchain.ts"],
@@ -257,18 +602,45 @@ const GENERATOR_MEMORY_BUDGET_MIB = 2048;
 const LIGHT_CHECK_MEMORY_MIB = 1024;
 const MAX_GENERATOR_PROCESSES = 2;
 
-const checkGenerator = async ({ id, check }: Generator) => {
+const MIB = 1024 * 1024;
+
+/** A finished check: its exit status and its peak RSS in MiB. */
+export type CheckOutcome = { exit: number; peakMiB: number };
+
+const checkGenerator = async ({
+  id,
+  check,
+}: Generator): Promise<CheckOutcome> => {
   if (check === null) {
-    return 0;
+    return { exit: 0, peakMiB: 0 };
   }
   console.log(`Checking ${id}`);
+  const started = performance.now();
   const child = Bun.spawn([...check], {
     cwd: ROOT.pathname,
     stdout: "inherit",
     stderr: "inherit",
   });
   await child.exited;
-  return childExitStatus(child);
+  // Bun reports maxRSS in bytes on every platform.
+  const peakMiB = Math.ceil((child.resourceUsage()?.maxRSS ?? 0) / MIB);
+  const seconds = ((performance.now() - started) / 1000).toFixed(1);
+  console.log(`Checked ${id} in ${seconds} s, peak RSS ${peakMiB} MiB`);
+  return { exit: childExitStatus(child), peakMiB };
+};
+
+/** Why a finished check fails: a non-zero exit, a peak above its reservation. */
+export const checkFailure = (
+  { exit, peakMiB }: CheckOutcome,
+  reservedMiB: number,
+): string | undefined => {
+  const reasons = [
+    ...(exit === 0 ? [] : [`exit ${exit}`]),
+    ...(peakMiB <= reservedMiB
+      ? []
+      : [`peak RSS ${peakMiB} MiB exceeds its ${reservedMiB} MiB reservation`]),
+  ];
+  return reasons.length === 0 ? undefined : reasons.join("; ");
 };
 
 export const runGeneratorChecks = async (
@@ -284,10 +656,11 @@ export const runGeneratorChecks = async (
   let reservedMemory = 0;
   const runReserved = async (generator: Generator, memory: number) => {
     const result = await Result.tryPromise(async () => run(generator));
-    if (Result.isError(result)) {
-      failures.set(generator.id, result.error.message);
-    } else if (result.value !== 0) {
-      failures.set(generator.id, `exit ${result.value}`);
+    const failure = Result.isError(result)
+      ? result.error.message
+      : checkFailure(result.value, memory);
+    if (failure !== undefined) {
+      failures.set(generator.id, failure);
     }
     reservedMemory -= memory;
     completed.add(generator.id);
@@ -336,13 +709,12 @@ export const runGeneratorChecks = async (
 };
 
 export const DELEGATED_CHECKS_ENV = "GENERATED_CHECKS_IN_OTHER_JOBS";
+export const UNCHANGED_CHECKS_ENV = "GENERATED_CHECKS_UNCHANGED";
 
-// CI names families whose `checkedBy` step runs the same check on the same
-// commit in another job of this run, so Guard B does not repeat that work.
-// Unset means none; anything that cannot be proven delegated panics.
-export const delegatedGeneratorIds = (value: string | undefined) => {
+// Unset means none; an empty entry (a condition that did not hold) names none.
+const generatorIdList = (env: string, value: string | undefined) => {
   if (value === undefined) {
-    return new Set<string>();
+    return [];
   }
   const parsed = Result.try((): unknown => JSON.parse(value));
   if (
@@ -350,32 +722,110 @@ export const delegatedGeneratorIds = (value: string | undefined) => {
     !Array.isArray(parsed.value) ||
     !parsed.value.every((id): id is string => typeof id === "string")
   ) {
-    panic(`${DELEGATED_CHECKS_ENV} must be a JSON array of generator ids`);
+    panic(`${env} must be a JSON array of generator ids`);
   }
-  for (const id of parsed.value) {
+  return parsed.value.filter((id) => id !== "");
+};
+
+// CI names families whose `checkedBy` step runs the same check on the same
+// commit in another job of this run, so Guard B does not repeat that work.
+// Anything that cannot be proven delegated panics.
+export const delegatedGeneratorIds = (value: string | undefined) => {
+  const ids = generatorIdList(DELEGATED_CHECKS_ENV, value);
+  for (const id of ids) {
     const generator = GENERATORS.find((candidate) => candidate.id === id);
     if (generator?.checkedBy === undefined || generator.check === null) {
       panic(`Generator ${id} has no check delegated to another CI step`);
     }
   }
-  return new Set(parsed.value);
+  return new Set(ids);
+};
+
+// CI names families whose inputs, outputs and check the run's plan proved
+// unchanged against its base, so the committed outputs are the ones the
+// owning job proved when they last changed and Guard B does not rebuild them.
+// scripts/generated-files-guard.test.ts binds each entry to the plan output
+// whose paths cover the family.
+export const unchangedGeneratorIds = (value: string | undefined) => {
+  const ids = generatorIdList(UNCHANGED_CHECKS_ENV, value);
+  for (const id of ids) {
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator?.checkedBy === undefined || generator.check === null) {
+      panic(`Generator ${id} has no owning CI step to prove its outputs`);
+    }
+  }
+  return new Set(ids);
 };
 
 const guardB = async () => {
   const delegated = delegatedGeneratorIds(process.env[DELEGATED_CHECKS_ENV]);
-  const failures = await runGeneratorChecks(GENERATORS, async (generator) => {
-    if (!delegated.has(generator.id)) {
-      return checkGenerator(generator);
-    }
+  const unchanged = unchangedGeneratorIds(process.env[UNCHANGED_CHECKS_ENV]);
+  const base = comparisonBase();
+  const changed = base === undefined ? null : changedSince(base);
+  const affected = affectedGeneratorIds(
+    GENERATORS,
+    changed,
+    guardSelectionSources(),
+  );
+  const shortBase = base?.slice(0, 7);
+  const previousChanges =
+    base === undefined
+      ? (() => {
+          const exists = Bun.spawnSync(
+            ["git", "rev-parse", "--verify", "HEAD~1"],
+            { cwd: ROOT.pathname, stdout: "ignore", stderr: "ignore" },
+          );
+          return exists.exitCode === 0 ? changedSince("HEAD~1") : [];
+        })()
+      : [];
+  const undeclaredFailures: string[] = [];
+  for (const generator of orderGenerators(GENERATORS)) {
     console.log(
-      `Skipping ${generator.id}: checked in this run by "${String(generator.checkedBy)}"`,
+      affected.has(generator.id)
+        ? `${generator.id}: checked`
+        : `${generator.id}: unaffected (no input or output changed since ${String(shortBase)})`,
     );
-    return 0;
+  }
+  const failures = await runGeneratorChecks(GENERATORS, async (generator) => {
+    if (!affected.has(generator.id)) {
+      return { exit: 0, peakMiB: 0 };
+    }
+    if (delegated.has(generator.id)) {
+      console.log(
+        `Skipping ${generator.id}: checked in this run by "${String(generator.checkedBy)}"`,
+      );
+      return { exit: 0, peakMiB: 0 };
+    }
+    if (unchanged.has(generator.id)) {
+      console.log(
+        `Skipping ${generator.id}: its inputs are unchanged in this run; "${String(generator.checkedBy)}" checks it when they change`,
+      );
+      return { exit: 0, peakMiB: 0 };
+    }
+    const before = worktreeChanges();
+    const result = await checkGenerator(generator);
+    if (base === undefined) {
+      const produced = [...worktreeChanges()].filter(
+        (file) => !before.has(file),
+      );
+      const failure = undeclaredInputFailure(
+        generator,
+        previousChanges,
+        produced,
+      );
+      if (failure !== undefined) {
+        undeclaredFailures.push(failure);
+      }
+    }
+    return result;
   });
   if (failures.length > 0) {
     panic(
       `Generator checks failed:\n${failures.map(({ id, failure }) => `${id}: ${failure}`).join("\n")}`,
     );
+  }
+  if (undeclaredFailures.length > 0) {
+    panic(`Undeclared generator inputs:\n${undeclaredFailures.join("\n")}`);
   }
 };
 

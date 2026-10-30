@@ -2,8 +2,7 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT as CITATION_SUMMARY_SCAN_LIMIT,
@@ -13,15 +12,16 @@ import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-iden
 import { Temporal } from "@stll/time";
 
 import {
-  caseLawCitations,
   caseLawCitationDoctrineReviews,
+  caseLawCitations,
   caseLawDecisionCitationStats,
   caseLawDecisionCitationStatsState,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
@@ -39,7 +39,7 @@ import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/lan
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -117,14 +117,49 @@ const doctrineEvidenceQuoteField = (available: boolean) =>
     : sql<string | null>`NULL::text`
   ).as("evidence_quote");
 
-export const listDecisionCitationsQuerySchema = t.Object({
-  direction: t.UnionEnum(CITATION_DIRECTIONS),
-  cursor: t.Optional(tPaginationCursor()),
+const [distinguishesDoctrine, limitsDoctrine] = DOCTRINAL_TREATMENTS;
+const [
+  negativePolarity,
+  neutralPolarity,
+  positivePolarity,
+  supportivePolarity,
+  mixedPolarity,
+  unclassifiedPolarity,
+] = CITATION_TREATMENTS;
+
+const listDecisionCitationsQueryEntries = v.object({
+  direction: v.picklist(CITATION_DIRECTIONS),
+  doctrine: v.optional(
+    v.union([v.literal(distinguishesDoctrine), v.literal(limitsDoctrine)]),
+  ),
+  polarity: v.optional(
+    v.union([
+      v.literal(negativePolarity),
+      v.literal(neutralPolarity),
+      v.literal(positivePolarity),
+      v.literal(supportivePolarity),
+      v.literal(mixedPolarity),
+      v.literal(unclassifiedPolarity),
+    ]),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
-type ListDecisionCitationsQuery = Static<
-  typeof listDecisionCitationsQuerySchema
+type ListDecisionCitationsQuery = v.InferOutput<
+  typeof listDecisionCitationsQueryEntries
 >;
+
+/** A cursor belongs to one direction and filter; any other is refused as input. */
+export const listDecisionCitationsQuerySchema = v.pipe(
+  listDecisionCitationsQueryEntries,
+  v.forward(
+    v.check(
+      (query) => decodeCitationCursor(query.cursor, query) !== null,
+      "Invalid cursor",
+    ),
+    ["cursor"],
+  ),
+);
 
 /** The decision at the far end of a citation, enough to address its page. */
 type RelatedDecision = {
@@ -230,8 +265,9 @@ const relatedDecisionLookup = (
     .as("graph_related_decision");
 const relatedSource = alias(caseLawSources, "graph_related_source");
 
-const decodeCitationCursor = (
+export const decodeCitationCursor = (
   cursor: string | undefined,
+  query: Omit<ListDecisionCitationsQuery, "cursor">,
 ): SafeId<"caseLawCitation"> | null | undefined => {
   if (cursor === undefined) {
     return undefined;
@@ -239,12 +275,36 @@ const decodeCitationCursor = (
 
   const parts = decodePaginationCursor(cursor);
   const id = parts?.at(0);
-  if (parts?.length !== 1 || !isUuidPaginationCursorPart(id)) {
+  if (
+    parts?.length !== 4 ||
+    !isUuidPaginationCursorPart(id) ||
+    parts.at(1) !== query.direction ||
+    parts.at(2) !== (query.doctrine ?? null) ||
+    parts.at(3) !== (query.polarity ?? null)
+  ) {
     return null;
   }
 
   return brandPersistedCaseLawCitationId(id);
 };
+
+export const encodeCitationCursor = (id: SafeId<"caseLawCitation">): string =>
+  encodePaginationCursor([id]);
+
+/** The citation page cursor `decodeCitationCursor` accepts: bound to its filter. */
+export const encodeCitationPageCursor = ({
+  id,
+  query,
+}: {
+  id: SafeId<"caseLawCitation">;
+  query: Omit<ListDecisionCitationsQuery, "cursor">;
+}): string =>
+  encodePaginationCursor([
+    id,
+    query.direction,
+    query.doctrine ?? null,
+    query.polarity ?? null,
+  ]);
 
 type ScannedRow = {
   id: SafeId<"caseLawCitation">;
@@ -262,6 +322,7 @@ type CreateScannedPageOptions = {
   rows: readonly ScannedRow[];
   limit: number;
   toRelatedDecision: (row: RankedRelatedDecisionRow) => RankedRelatedDecision;
+  query: Omit<ListDecisionCitationsQuery, "cursor">;
 };
 
 /**
@@ -274,6 +335,7 @@ const createScannedPage = ({
   rows,
   limit,
   toRelatedDecision,
+  query,
 }: CreateScannedPageOptions): Page<DecisionCitationRow> => {
   const scanned = rows.slice(0, limit);
   const items: DecisionCitationRow[] = [];
@@ -298,7 +360,7 @@ const createScannedPage = ({
     limit,
     nextCursor:
       rows.length > limit && lastScanned !== undefined
-        ? encodePaginationCursor([lastScanned.id])
+        ? encodeCitationPageCursor({ id: lastScanned.id, query })
         : null,
   };
 };
@@ -393,7 +455,8 @@ export const listDecisionCitationsHandler = async ({
   query,
   limit = LIMITS.caseLawDecisionCitationPageSize,
 }: ListDecisionCitationsOptions) => {
-  const cursorId = decodeCitationCursor(query.cursor);
+  const { cursor: _cursor, ...cursorQuery } = query;
+  const cursorId = decodeCitationCursor(query.cursor, cursorQuery);
   if (cursorId === null) {
     return status(400, { message: "Invalid cursor" });
   }
@@ -401,11 +464,16 @@ export const listDecisionCitationsHandler = async ({
     Math.min(limit, LIMITS.caseLawDecisionCitationPageSize),
   );
   const doctrineAvailable = await canReadCitationDoctrine(tx);
+  if (query.doctrine !== undefined && !doctrineAvailable) {
+    return status(422, { message: "Doctrine filtering is unavailable" });
+  }
   const rows = await decisionCitationPageQuery({
     doctrineAvailable,
     cursorId,
     decisionId,
     direction: query.direction,
+    ...(query.doctrine === undefined ? {} : { doctrine: query.doctrine }),
+    ...(query.polarity === undefined ? {} : { polarity: query.polarity }),
     limit: pageSize,
     countries,
     tx,
@@ -421,6 +489,7 @@ export const listDecisionCitationsHandler = async ({
       rows,
       limit: pageSize,
       toRelatedDecision,
+      query: cursorQuery,
     }),
     doctrineAvailability: doctrineAvailable
       ? ("available" as const)
@@ -434,6 +503,8 @@ type DecisionCitationPageQueryOptions = {
   cursorId: SafeId<"caseLawCitation"> | undefined;
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationDirection;
+  doctrine?: Exclude<DoctrineTreatment, "not_stated">;
+  polarity?: CitationTreatment;
   limit: number;
   countries: readonly string[];
   tx: CaseLawPublicReadTransaction;
@@ -444,11 +515,25 @@ export const decisionCitationPageQuery = ({
   cursorId,
   decisionId,
   direction,
+  doctrine,
+  polarity,
   limit,
   countries,
   tx,
 }: DecisionCitationPageQueryOptions) => {
   const spec = DIRECTION_SPECS[direction];
+  let doctrineFilter: SQL | undefined;
+  if (doctrine !== undefined) {
+    doctrineFilter = doctrineAvailable
+      ? eq(caseLawCitations.doctrinalTreatment, doctrine)
+      : sql`false`;
+  }
+  let polarityFilter: SQL | undefined;
+  if (polarity === "unclassified") {
+    polarityFilter = sql`(${caseLawCitations.polarity} IS NULL OR ${caseLawCitations.polarity} = ${POLARITY.UNKNOWN})`;
+  } else if (polarity !== undefined) {
+    polarityFilter = eq(caseLawCitations.polarity, polarity);
+  }
 
   const candidates = tx
     .select({
@@ -465,6 +550,8 @@ export const decisionCitationPageQuery = ({
       and(
         sql`${spec.anchor} = ${decisionId}`,
         precedentOnly,
+        doctrineFilter,
+        polarityFilter,
         cursorId === undefined ? undefined : gt(caseLawCitations.id, cursorId),
       ),
     )
@@ -1060,11 +1147,13 @@ export const listTopCitingDecisionsHandler = async ({
 /** How many decisions each treatment shows before the reader asks for all. */
 export const LEADING_CITATIONS_PER_TREATMENT = 3;
 
-export const listLeadingCitationsQuerySchema = t.Object({
-  direction: t.UnionEnum(CITATION_DIRECTIONS),
+export const listLeadingCitationsQuerySchema = v.object({
+  direction: v.picklist(CITATION_DIRECTIONS),
 });
 
-type ListLeadingCitationsQuery = Static<typeof listLeadingCitationsQuerySchema>;
+type ListLeadingCitationsQuery = v.InferOutput<
+  typeof listLeadingCitationsQuerySchema
+>;
 
 export type LeadingCitationRow = {
   id: SafeId<"caseLawCitation">;

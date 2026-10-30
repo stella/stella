@@ -1,10 +1,11 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   TIME_ENTRY_ACTIVITY_GROUP,
   TIME_ENTRY_SOURCE,
 } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { lockTimePolicy } from "@/api/lib/billing-time";
@@ -15,10 +16,12 @@ import {
   lockInternalTimeEntryCapacity,
   prepareInternalTimeEntryInsert,
 } from "@/api/lib/billing/time-entry-insert";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
 const createInternalTimeEntry = createSafeRootHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Record internal work for yourself in the active organization without a matter. Requires work date (YYYY-MM-DD), IANA timezoneId, positive whole durationMinutes, and narrative. Internal work has no billable value; monthly locks, edit windows, and narrative policy still apply. Returns the entry id and activityGroup. Internal entries await administrator approval when no approver is assigned.",
     permissions: { timeEntry: ["create"] },
@@ -30,16 +33,13 @@ const createInternalTimeEntry = createSafeRootHandler(
       reason: "billing_admin",
       consumesServices: false,
     },
-    body: t.Object(
-      {
-        dateWorked: t.String({ format: "date" }),
-        timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-        durationMinutes: t.Integer({ minimum: 1 }),
-        narrative: t.String({ maxLength: 10_000 }),
-        narrativeLanguage: t.Optional(narrativeLanguageSchema),
-      },
-      { additionalProperties: false },
-    ),
+    body: v.strictObject({
+      dateWorked: apiDateSchema,
+      timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+      durationMinutes: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      narrative: v.pipe(v.string(), v.maxLength(10_000)),
+      narrativeLanguage: v.optional(narrativeLanguageSchema),
+    }),
   },
   async function* ({
     safeDb,
@@ -84,5 +84,6 @@ const createInternalTimeEntry = createSafeRootHandler(
     );
     return outcome;
   },
+  { authorize: authorizeOrganizationReplay },
 );
 export default createInternalTimeEntry;

@@ -8,11 +8,13 @@ import {
   parseStatuteQuery,
   type StatuteQueryIntent,
 } from "@stll/api-contract/statute-query-intent";
+import { parsePlainDate } from "@stll/time";
 
 import {
   publicLawPageSearchSchema,
   publicLawPageSizeSearchSchema,
 } from "@/components/public-law-table/public-law-pagination.logic";
+import { routeSearchSchema } from "@/route-search-params";
 
 export const STATUTE_MAX_QUERY_LENGTH = 256;
 
@@ -26,10 +28,18 @@ const optionalStringSchema = (maxLength: number) =>
     ),
   );
 
-export const statutesIndexSearchSchema = v.object({
+export const statutesIndexSearchSchema = routeSearchSchema({
   page: publicLawPageSearchSchema,
   pageSize: publicLawPageSizeSearchSchema,
   q: optionalStringSchema(STATUTE_MAX_QUERY_LENGTH),
+  asOf: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.isoDate(),
+      v.check((value) => parsePlainDate(value) !== null),
+    ),
+  ),
   type: optionalStringSchema(128),
   year: lawYearSearchSchema,
   // A link is public and may be edited by hand or by a crawler; a status this
@@ -84,6 +94,7 @@ export const changeStatutesIndexQuery = ({
   return {
     page: undefined,
     pageSize: previous.pageSize,
+    ...(previous.asOf === undefined ? {} : { asOf: previous.asOf }),
     q,
     type: previous.type,
     year: intent.type === "text" ? undefined : previous.year,

@@ -1,4 +1,9 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+import { escapeRegExp } from "@stll/text-normalize";
 
 import {
   buildMarkedPair,
@@ -6,9 +11,11 @@ import {
   DIFF_LENGTH_LIMIT,
   diffHighlightRanges,
   KEY_TERM_KIND,
-  keyTermRanges,
   type KeyTermKind,
+  keyTermRanges,
   type MarkedSegment,
+  PHRASE_MATCHER_CACHE_CAPACITY,
+  phraseMatcher,
   phraseRanges,
   resolveMarkedSegments,
   splitClauseLabel,
@@ -189,6 +196,34 @@ describe("phraseRanges", () => {
     ).toEqual(["12 (twelve)\nmonths"]);
   });
 
+  test.each([
+    ["😀 ČAPKOVĚ\n návrhu", "čapkově návrhu", [[3, 18]]],
+    ["[a+b] [aab]", "[a+b]", [[0, 5]]],
+    ["a a a", "a a", [[0, 3]]],
+    ["a\uFEFFb", "a b", [[0, 3]]],
+    ["a\u0085b", "a b", []],
+    [
+      "ſoren SOREN",
+      "soren",
+      [
+        [0, 5],
+        [6, 11],
+      ],
+    ],
+    ["Čapek Capek", "capek", [[6, 11]]],
+    ["C\u030capek Čapek", "Čapek", [[7, 12]]],
+    ["Straße", "strasse", []],
+    ["\ud801", "\ud800", [[0, 1]]],
+    ["\ud800", "\ud800", [[0, 1]]],
+  ])(
+    "preserves whitespace, case and scalar boundary spans for %s",
+    (text, phrase, expected) => {
+      expect(
+        phraseRanges(text, phrase).map(({ start, end }) => [start, end]),
+      ).toEqual(expected);
+    },
+  );
+
   test("an empty phrase matches nothing", () => {
     expect(phraseRanges("anything", "   ")).toEqual([]);
   });
@@ -328,4 +363,95 @@ describe("buildMarkedSide", () => {
       ]).map((paragraph) => paragraph.blockId),
     ).toEqual(["s1", "s2"]);
   });
+});
+
+const phraseText = fc.string({
+  unit: fc.constantFrom(
+    "a",
+    "A",
+    "Č",
+    "ě",
+    "ſ",
+    "Σ",
+    "ς",
+    "[",
+    "]",
+    "+",
+    ".",
+    " ",
+    "\n",
+    "\uFEFF",
+    "\u0085",
+    "\u030c",
+    "😀",
+    "\ud800",
+    "\ud801",
+  ),
+  size: "medium",
+});
+
+test("phrase engine agrees with scalar JavaScript regex oracle", () => {
+  assertProperty(
+    "phrase engine agrees with scalar JavaScript regex oracle",
+    fc.property(phraseText, phraseText, (rawText, phrase) => {
+      const text = rawText.toWellFormed();
+      const words = phrase
+        .toWellFormed()
+        .trim()
+        .split(/\s+/u)
+        .filter((word) => word.length > 0);
+      const expected =
+        words.length === 0
+          ? []
+          : [
+              ...text.matchAll(
+                new RegExp(
+                  words.map(escapeRegExp).join(String.raw`\s+`),
+                  "giu",
+                ),
+              ),
+            ].map(({ index, 0: match }) => [index, index + match.length]);
+      expect(
+        phraseRanges(rawText, phrase).map(({ start, end }) => [start, end]),
+      ).toEqual(expected);
+    }),
+  );
+});
+
+test("phrase whitespace agrees with JavaScript across the BMP", () => {
+  const expectedWhitespace: string[] = [];
+  const actualWhitespace: string[] = [];
+  for (let codePoint = 0; codePoint < 0x1_00_00; codePoint++) {
+    const character = String.fromCodePoint(codePoint);
+    if (/\s/u.test(character)) {
+      expectedWhitespace.push(character);
+    }
+    if (phraseRanges(`a${character}b`, "a b").length > 0) {
+      actualWhitespace.push(character);
+    }
+  }
+  expect(actualWhitespace).toEqual(expectedWhitespace);
+});
+
+test("reuses alternating phrase configurations and evicts the oldest at capacity", () => {
+  expect(PHRASE_MATCHER_CACHE_CAPACITY).toBeGreaterThanOrEqual(2);
+  const standardMatcher = phraseMatcher("cache-standard");
+  const targetMatcher = phraseMatcher("cache-target");
+  expect(phraseMatcher("cache-standard")).toBe(standardMatcher);
+  expect(phraseMatcher("cache-target")).toBe(targetMatcher);
+
+  const entries = Array.from(
+    { length: PHRASE_MATCHER_CACHE_CAPACITY },
+    (_, index) => {
+      const source = `cache-order-${index}`;
+      return { source, matcher: phraseMatcher(source) };
+    },
+  );
+  const oldest = entries.at(0) ?? panic("Cache fixture missing oldest entry");
+  const nextOldest =
+    entries.at(1) ?? panic("Cache fixture missing second entry");
+  expect(phraseMatcher(oldest.source)).toBe(oldest.matcher);
+  phraseMatcher("cache-over-capacity");
+  expect(phraseMatcher(nextOldest.source)).toBe(nextOldest.matcher);
+  expect(phraseMatcher(oldest.source)).not.toBe(oldest.matcher);
 });

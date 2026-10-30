@@ -1,10 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
+import type { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
@@ -21,10 +24,11 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import {
-  currentActionCostIdentity,
   type ActionCostObservation,
+  currentActionCostIdentity,
 } from "@/api/lib/usage/action-costs/context";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -63,6 +67,38 @@ true satisfies [ResponseHandler, MixedResponseHandler] extends [never, never]
   ? true
   : false;
 
+const replayConfig = { ...config, idempotency: { type: "replay" } } as const;
+type ReplayResponseHandler = MustBeNever<
+  Parameters<typeof createSafeRootHandler<typeof replayConfig, Response>>[1]
+>;
+type ReplayStreamHandler = MustBeNever<
+  Parameters<
+    typeof createSafeRootHandler<typeof replayConfig, ReadableStream>
+  >[1]
+>;
+type ReplayBinaryHandler = MustBeNever<
+  Parameters<
+    typeof createSafeRootHandler<typeof replayConfig, Blob | { value: string }>
+  >[1]
+>;
+type ReplayWrappedResponseHandler = MustBeNever<
+  Parameters<
+    typeof createSafeRootHandler<
+      typeof replayConfig,
+      HttpStatusResponse<201, Response>
+    >
+  >[1]
+>;
+true satisfies ReplayWrappedResponseHandler extends never ? true : false;
+
+true satisfies [
+  ReplayResponseHandler,
+  ReplayStreamHandler,
+  ReplayBinaryHandler,
+] extends [never, never, never]
+  ? true
+  : false;
+
 const dependencies = (acquire: 0 | 1 = 1) => {
   let acquisitions = 0;
   let releases = 0;
@@ -70,7 +106,7 @@ const dependencies = (acquire: 0 | 1 = 1) => {
     send: async (_command: string, args: string[]) => {
       if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
         acquisitions += 1;
-        return acquire;
+        return acquire === 0 ? [0, 1000] : acquire;
       }
       if (args.at(0)?.includes("ZREM")) {
         releases += 1;
@@ -102,6 +138,70 @@ const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
 };
 
 describe("finite HTTP action admission", () => {
+  test.each([undefined, { type: "replay" } as const])(
+    "unkeyed calls execute independently with replay declaration %p",
+    async (idempotency) => {
+      let calls = 0;
+      const endpoint = createSafeRootHandler(
+        {
+          contract: "patch",
+          permissions: { chat: ["create"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "assistant_chat" },
+          ...(idempotency === undefined ? {} : { idempotency }),
+        },
+        async function* () {
+          calls += 1;
+          return Result.ok({ call: calls });
+        },
+        { authorize: async () => Result.ok(undefined) },
+      );
+      const requestContext = context();
+
+      expect(await endpoint.handler(asTestRaw(requestContext))).toEqual({
+        call: 1,
+      });
+      expect(await endpoint.handler(asTestRaw(requestContext))).toEqual({
+        call: 2,
+      });
+      expect(await endpoint.handler(asTestRaw(context()))).toEqual({ call: 3 });
+      expect(calls).toBe(3);
+    },
+  );
+
+  test("undeclared request replay rejects keys before running the handler", async () => {
+    let calls = 0;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { chat: ["create"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "assistant_chat" },
+      },
+      async function* () {
+        calls += 1;
+        return Result.ok({ ok: true });
+      },
+    );
+    const rejected = await endpoint.handler(
+      asTestRaw({
+        ...context(),
+        request: new Request("https://example.test/action", {
+          headers: { "Idempotency-Key": "unsupported-intent" },
+        }),
+      }),
+    );
+    expect(rejected).toMatchObject({
+      code: 400,
+      response: {
+        message: expect.stringContaining("does not support Idempotency-Key"),
+      },
+    });
+    expect(calls).toBe(0);
+    expect(await endpoint.handler(asTestRaw(context()))).toEqual({ ok: true });
+    expect(calls).toBe(1);
+  });
+
   test("each refusal preserves response headers and exposes only its curated contract", async () => {
     await withFeature(true, async () => {
       const previousContact = env.ACTION_LIMIT_CONTACT_URL;
@@ -110,7 +210,7 @@ describe("finite HTTP action admission", () => {
         "busy",
         "period_exhausted",
         "not_enabled",
-        "unavailable",
+        "store_unavailable",
       ] as const;
       try {
         for (const reason of reasons) {
@@ -128,15 +228,27 @@ describe("finite HTTP action admission", () => {
             },
             { admit: async () => Result.err(refusal) },
           );
-          const app = new Elysia().post("/action", async ({ set }) => {
-            set.headers["access-control-allow-origin"] = "https://example.test";
-            set.headers["x-content-type-options"] = "nosniff";
-            set.headers["x-request-id"] = "request_example";
-            return await endpoint.handler(asTestRaw({ ...context(), set }));
-          });
-          const response = await app.handle(
-            new Request("http://localhost/action", { method: "POST" }),
+          const action: RouteDefinition = {
+            access: "public",
+            config: {},
+            run: async ({ ctx }) => {
+              const { set } = ctx;
+              set.headers["access-control-allow-origin"] =
+                "https://example.test";
+              set.headers["x-content-type-options"] = "nosniff";
+              set.headers["x-request-id"] = "request_example";
+              return await endpoint.handler(asTestRaw({ ...context(), set }));
+            },
+          };
+          await using server = serveForTest(
+            createHttpApp({
+              middleware: [],
+              routes: routes({ "/action": { POST: action } }),
+            }),
           );
+          const response = await server.fetch("http://localhost/action", {
+            method: "POST",
+          });
           expect(response.status).toBe(metadata.status);
           expect(response.headers.get("access-control-allow-origin")).toBe(
             "https://example.test",
@@ -485,6 +597,7 @@ describe("finite HTTP action admission", () => {
             send: async () => {
               throw new HandlerError({
                 status: 503,
+                code: "internal_error",
                 message: "Coordination offline",
               });
             },
@@ -500,7 +613,7 @@ describe("finite HTTP action admission", () => {
       );
       expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
         code: 503,
-        response: { code: "action_admission_unavailable" },
+        response: { code: "limiter_store_unavailable" },
       });
       expect(calls).toBe(0);
     });
@@ -668,4 +781,23 @@ describe("finite HTTP action admission", () => {
       "A handler dispatched a model without its configured admission",
     );
   });
+});
+
+type RootReplayDependencies = Parameters<
+  typeof createSafeRootHandler<typeof replayConfig, { id: string }>
+>[2];
+true satisfies Record<never, never> extends RootReplayDependencies
+  ? false
+  : true;
+true satisfies undefined extends RootReplayDependencies ? false : true;
+
+test("root replay requires an authorization callback at construction", () => {
+  expect(() =>
+    Reflect.apply(createSafeRootHandler, undefined, [
+      replayConfig,
+      async function* () {
+        return Result.ok({ id: "created" });
+      },
+    ]),
+  ).toThrow("Replay-enabled root handlers require pre-replay authorization");
 });

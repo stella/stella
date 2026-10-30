@@ -12,8 +12,12 @@
 import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -49,14 +53,12 @@ setDefaultTimeout(120_000);
 
 const { testDb, ids } = await getRlsFixture();
 const fakeS3 = startFakeS3();
-const instanceProviderSpy = spyOn(
-  tanstackModels,
-  "hasTanStackInstanceProvider",
-).mockReturnValue(false);
-const instanceDecisionModelSpy = spyOn(
-  decisionModel,
-  "hasInstanceDecisionModel",
-).mockReturnValue(false);
+let instanceProviderSpy: Mock<
+  typeof tanstackModels.hasTanStackInstanceProvider
+>;
+let instanceDecisionModelSpy: Mock<
+  typeof decisionModel.hasInstanceDecisionModel
+>;
 
 afterAll(async () => {
   instanceProviderSpy.mockRestore();
@@ -117,14 +119,25 @@ const gatedDocx = async () => {
   return file;
 };
 
-const recordNothing: AuditRecorder = async () => {
-  await Promise.resolve();
-};
+beforeEach(() => {
+  instanceProviderSpy = spyOn(
+    tanstackModels,
+    "hasTanStackInstanceProvider",
+  ).mockReturnValue(false);
+  instanceDecisionModelSpy = spyOn(
+    decisionModel,
+    "hasInstanceDecisionModel",
+  ).mockReturnValue(false);
+});
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe("fill to workspace records the completion decision", () => {
   test("an undecided AI condition saves the document but records the fill as partial", async () => {
     const templateId = createSafeId<"template">();
-    const s3Key = `templates/${templateId}.docx`;
+    const s3Key = `${ids.orgA}/templates/${templateId}.docx`;
     const docx = await gatedDocx();
     fakeS3.put("stella", s3Key, new Uint8Array(docx.bytes));
     await testDb.insert(templates).values({
@@ -160,9 +173,8 @@ describe("fill to workspace records the completion decision", () => {
           user: { id: ids.userA1 },
           safeDb: toSafeDbMock(scopedDb),
           scopedDb,
-          audit: recordNothing,
-          // The handler rebinds its recorder to the validated workspace.
-          createAuditRecorder: () => recordTemplateEvents,
+          // The workspace caller's recorder, bound to the validated workspace.
+          audit: recordTemplateEvents,
           orgAIConfig: null,
           params: { workspaceId: ids.wsA1, templateId },
           body: { values: {}, name: "Consumer NDA" },

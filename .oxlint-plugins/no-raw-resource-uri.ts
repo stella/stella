@@ -6,8 +6,6 @@
 
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
-import { AhoCorasick } from "@stll/aho-corasick";
-
 import {
   getImportedName,
   getPropertyName,
@@ -25,9 +23,6 @@ const RAW_RESOURCE_URI_PREFIXES = [
   "#stella-workspace=",
   "stella://resource/",
 ] as const;
-const RAW_RESOURCE_URI_MATCHER = new AhoCorasick([
-  ...RAW_RESOURCE_URI_PREFIXES,
-]);
 
 const RESOURCE_URI_PREFIX_BINDINGS = new Set([
   "CHAT_MENTION_HREF_PREFIXES",
@@ -39,7 +34,7 @@ const RESOURCE_URI_PREFIX_BINDINGS = new Set([
 const RAW_SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 
 const containsRawResourceUriPrefix = (value: string): boolean =>
-  RAW_RESOURCE_URI_MATCHER.isMatch(value);
+  RAW_RESOURCE_URI_PREFIXES.some((prefix) => value.includes(prefix));
 
 type RawPrefixMessageId = "rawResourceUri" | "rawSkillRef";
 

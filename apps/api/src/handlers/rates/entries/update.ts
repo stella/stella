@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
@@ -8,23 +10,23 @@ import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-const updateRateEntryBodySchema = t.Object({
-  id: tSafeId("rateEntry"),
-  hourlyRate: t.Optional(tMinorUnitAmount(0)),
-  effectiveFrom: t.Optional(t.String({ format: "date" })),
-  effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
+const updateRateEntryBodySchema = v.object({
+  id: resourceIdSchema("rateEntry"),
+  hourlyRate: v.optional(minorUnitAmountSchema(0)),
+  effectiveFrom: v.optional(apiDateSchema),
+  effectiveTo: v.optional(v.nullable(apiDateSchema)),
 });
 
 const rateEntryParamsSchema = workspaceParams({
-  rateTableId: tSafeId("rateTable"),
+  rateTableId: resourceIdSchema("rateTable"),
 });
 
 const updateRateEntry = createSafeHandler(
@@ -86,6 +88,7 @@ const updateRateEntry = createSafeHandler(
             columns: {
               userId: true,
               role: true,
+              activityCodeId: true,
               effectiveFrom: true,
               effectiveTo: true,
             },
@@ -132,6 +135,9 @@ const updateRateEntry = createSafeHandler(
             locked.role === null
               ? isNull(rateEntries.role)
               : eq(rateEntries.role, locked.role),
+            locked.activityCodeId === null
+              ? isNull(rateEntries.activityCodeId)
+              : eq(rateEntries.activityCodeId, locked.activityCodeId),
             ne(rateEntries.id, body.id),
             overlapToCondition,
           ];

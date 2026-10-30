@@ -27,12 +27,28 @@ const quarantine = (expiresAt: string) =>
   ] as const;
 
 describe("documentation source policy rule", () => {
+  test("requires llms.txt indexes even when a source carries a retired index kind", () => {
+    const sources = {
+      CLDR: {
+        dependencies: ["cldr-misc-full"],
+        indexKind: "reviewed-markdown",
+        url: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/tr35.md",
+      },
+    } as const;
+    expect(
+      checkDocumentationSourcePolicy({
+        dependencies: new Set(["cldr-misc-full"]),
+        exclusions: [],
+        sources,
+      }),
+    ).toContain("CLDR must use an HTTPS URL ending in /llms.txt.");
+  });
+
   test("accepts exhaustive source coverage and a current quarantine", () => {
     expect(
       checkDocumentationSourcePolicy({
         dependencies: new Set(["documented-package", "undocumented-package"]),
         exclusions: quarantine("2026-09-25T00:00:00.000Z"),
-        now: new Date("2026-08-27T00:00:00.000Z"),
         sources: SOURCE,
       }),
     ).toEqual([]);
@@ -43,7 +59,6 @@ describe("documentation source policy rule", () => {
       checkDocumentationSourcePolicy({
         dependencies: new Set(["new-package"]),
         exclusions: quarantine("2026-09-25T00:00:00.000Z"),
-        now: new Date("2026-08-27T00:00:00.000Z"),
         sources: SOURCE,
       }),
     ).toEqual(
@@ -65,7 +80,6 @@ describe("documentation source policy rule", () => {
             dependency: "documented-package",
           },
         ],
-        now: new Date("2026-08-27T00:00:00.000Z"),
         sources: SOURCE,
       }),
     ).toContain(
@@ -73,23 +87,20 @@ describe("documentation source policy rule", () => {
     );
   });
 
-  test("rejects expired quarantines and quarantines longer than one month", () => {
+  test("never fails on time alone and rejects quarantines longer than one month", () => {
+    // An elapsed quarantine is the dated waiver check's to enforce.
     expect(
       checkDocumentationSourcePolicy({
         dependencies: new Set(["documented-package", "undocumented-package"]),
         exclusions: quarantine("2026-08-27T00:00:00.000Z"),
-        now: new Date("2026-08-27T00:00:00.000Z"),
         sources: SOURCE,
       }),
-    ).toContain(
-      "undocumented-package has an expired no-llms-txt quarantine (2026-08-27T00:00:00.000Z); recheck its canonical documentation.",
-    );
+    ).toEqual([]);
 
     expect(
       checkDocumentationSourcePolicy({
         dependencies: new Set(["documented-package", "undocumented-package"]),
         exclusions: quarantine("2026-10-01T00:00:00.000Z"),
-        now: new Date("2026-08-27T00:00:00.000Z"),
         sources: SOURCE,
       }),
     ).toContain(
@@ -109,7 +120,6 @@ describe("documentation source policy rule", () => {
             explanation: " ",
           },
         ],
-        now: new Date("2026-08-27T00:00:00.000Z"),
         sources: SOURCE,
       }),
     ).toEqual(

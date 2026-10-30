@@ -10,8 +10,8 @@ import {
 } from "./document-ast-text";
 import {
   readerHref,
-  SourceLinkPolicyProvider,
   sourceLinkPolicyOf,
+  SourceLinkPolicyProvider,
 } from "./source-link-policy";
 
 /**

@@ -22,6 +22,7 @@ import {
   FetchBoundaryError,
 } from "@stll/errors";
 
+import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
 import {
   aiHandlerError,
   classifyAIBoundaryFailure,
@@ -30,8 +31,8 @@ import {
 } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
-import { elysiaFailureReason } from "@/api/lib/errors/elysia-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { httpFailureAnswer } from "@/api/lib/errors/http-failure-answer";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -42,6 +43,7 @@ import {
   WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint, errorSystemFields } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type {
   ExpectedReason,
   FailureExpectation,
@@ -67,14 +69,16 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
-  initRequestContext,
   getRequestFailure,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { pgErrorFields } from "@/api/lib/pg-error";
+import { APP_VERSION } from "@/api/lib/version";
 import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 import {
   modelStepFailure,
@@ -88,6 +92,8 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+
+import { exceptionFingerprint } from "./exception-fingerprint";
 
 const SENTINEL = "PRIVILEGED-SENTINEL";
 
@@ -153,6 +159,10 @@ const awsException = (name: string, httpStatusCode: number): Error => {
 
 type Boundary = "ai" | "none";
 
+/** What the error boundary files a pipeline failure under. */
+const frameworkFailureOf = (error: HttpFailureError) =>
+  httpFailureAnswer(error).framework;
+
 type GradingRow = {
   readonly name: string;
   readonly error: () => unknown;
@@ -178,6 +188,9 @@ const SQL_STATE_EXPECTED = {
   "57014": ["pg_query_canceled", "defect"],
   "28P01": ["pg_auth_failed", "defect"],
   "28000": ["pg_auth_failed", "defect"],
+  "22007": ["pg_invalid_input", "defect"],
+  "22008": ["pg_invalid_input", "defect"],
+  "22P02": ["pg_invalid_input", "defect"],
 } as const satisfies Record<keyof typeof PG_SQL_STATE_REASON, Expected>;
 
 // SQLSTATEs no set grades: they stay defects whatever the shape.
@@ -363,7 +376,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
   {
     name: "this service's own TimeoutError",
     error: () =>
-      new TimeoutError({ message: SENTINEL, label: "probe", timeoutMs: 5 }),
+      new TimeoutError({ message: SENTINEL, label: "probe", timeoutMs: 5 }), // timeout under test
     reason: "timeout_unbounded",
     grade: "defect",
   },
@@ -377,7 +390,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     name: "a HandlerError 502 carrying a provider 429 code",
     error: () =>
       new HandlerError({ status: 502, code: "429", message: SENTINEL }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -422,7 +435,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
           }),
         }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -431,7 +444,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
       new Error("wrap", {
         cause: new HandlerError({ status: 404, message: SENTINEL }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -463,9 +476,26 @@ const GRADING_ROWS: readonly GradingRow[] = [
     grade: "anticipated",
   },
   {
+    name: "a cancelled generation through aiHandlerError",
+    error: () =>
+      aiHandlerError(
+        new HandlerError({
+          code: "internal_error",
+          status: 502,
+          message: SENTINEL,
+          cause: new AIGenerationCancelledError({ message: SENTINEL }),
+        }),
+        { status: 502, message: "fallback" },
+      ),
+    reason: "generation_cancelled",
+    grade: "anticipated",
+    rule: "brand",
+  },
+  {
     name: "a cancellation deeper than the immediate wrapper stays visible",
     error: () =>
       new HandlerError({
+        code: "internal_error",
         status: 502,
         message: SENTINEL,
         cause: new WorkflowIntegrationError({
@@ -473,7 +503,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
           cause: new AIGenerationCancelledError({ message: SENTINEL }),
         }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -481,6 +511,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     error: () =>
       classifyFailure(
         new HandlerError({
+          code: "internal_error",
           status: 502,
           message: SENTINEL,
           cause: new ChatEmptyCompletionError({ message: SENTINEL }),
@@ -566,10 +597,15 @@ const GRADING_ROWS: readonly GradingRow[] = [
   },
   {
     name: "a request validation failure the framework answered",
-    error: () => ({ type: "body" }),
+    error: () =>
+      new HttpFailureError(HTTP_FAILURE.invalidRequest, {
+        issues: [{ field: "name", constraint: "invalid" }],
+      }),
     request: {
       answeredStatus: 422,
-      framework: elysiaFailureReason("VALIDATION", { type: "body" }),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.invalidRequest),
+      ),
     },
     reason: "request_validation",
     grade: "client",
@@ -577,30 +613,49 @@ const GRADING_ROWS: readonly GradingRow[] = [
   },
   {
     name: "a route the framework did not find",
-    error: () => new Error("NOT_FOUND"),
+    error: () => new HttpFailureError(HTTP_FAILURE.notFound),
     request: {
       answeredStatus: 404,
-      framework: elysiaFailureReason("NOT_FOUND", undefined),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.notFound),
+      ),
     },
     reason: "route_not_found",
     grade: "client",
   },
   {
+    name: "a method the matched path does not serve",
+    error: () =>
+      new HttpFailureError(HTTP_FAILURE.methodNotAllowed, { allow: ["GET"] }),
+    request: {
+      answeredStatus: 405,
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.methodNotAllowed),
+      ),
+    },
+    reason: "method_not_allowed",
+    grade: "client",
+  },
+  {
     name: "a body the framework could not parse",
-    error: () => new Error("PARSE"),
+    error: () => new HttpFailureError(HTTP_FAILURE.malformed),
     request: {
       answeredStatus: 400,
-      framework: elysiaFailureReason("PARSE", undefined),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.malformed),
+      ),
     },
     reason: "request_malformed",
     grade: "client",
   },
   {
     name: "a handler output that broke its own response schema",
-    error: () => ({ type: "response" }),
+    error: () => new HttpFailureError(HTTP_FAILURE.invalidResponse),
     request: {
       answeredStatus: 500,
-      framework: elysiaFailureReason("VALIDATION", { type: "response" }),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.invalidResponse),
+      ),
     },
     reason: "response_invalid",
     grade: "defect",
@@ -663,7 +718,10 @@ describe("failure grading", () => {
       "busy",
       "period_exhausted",
       "not_enabled",
-      "unavailable",
+      "store_unavailable",
+      "configuration_incomplete",
+      "organization_state_unreadable",
+      "lease_lost",
     ] as const) {
       const refusal = new ActionAdmissionError({
         reason,
@@ -779,13 +837,14 @@ describe("wrapper properties", () => {
 
   test("a brand deep in the chain does not rescue an outer defect", () => {
     const deep = new HandlerError({
+      code: "internal_error",
       status: 502,
       message: "wrapped",
       cause: new ChatEmptyCompletionError({ message: "x" }),
     });
     const evidence = readEvidence(deep);
 
-    expect(gradeFailure(evidence, SINK).reason).toBe("unclassified");
+    expect(gradeFailure(evidence, SINK).reason).toBe("tagged_failure");
     expect(errorFields(evidence)["error.chain.1.brand"]).toBe(
       "chat_empty_completion",
     );
@@ -914,7 +973,7 @@ describe("sink expectations", () => {
     });
 
     expect(gradeFailure(readEvidence(error), shallow).reason).toBe(
-      "unclassified",
+      "tagged_failure",
     );
     expect(gradeFailure(readEvidence(error), deep).reason).toBe(
       "optional_file_absent",
@@ -953,6 +1012,21 @@ describe("the observation reads the boundary's decision, not the classifier", ()
       expect(answered.status).toBe(status);
       expect(readEvidence(answered).nodes[0]?.brand?.source).toBe("instance");
     }
+  });
+
+  test("a cancelled generation keeps the caller's fallback", () => {
+    const answered = aiHandlerError(
+      new HandlerError({
+        code: "internal_error",
+        status: 502,
+        message: SENTINEL,
+        cause: new AIGenerationCancelledError({ message: SENTINEL }),
+      }),
+      { status: 502, message: "fallback" },
+    );
+
+    expect(answered.status).toBe(502);
+    expect(answered.message).toBe("fallback");
   });
 
   test("an unknown failure keeps the caller's fallback unclassified", () => {
@@ -1030,7 +1104,12 @@ const LEGACY_ROWS: readonly LegacyRow[] = [
   {
     name: "a RUN_ERROR numeric-string code",
     error: () =>
-      new HandlerError({ status: 502, message: "run", cause: { code: "503" } }),
+      new HandlerError({
+        status: 502,
+        code: "provider_error",
+        message: "run",
+        cause: { code: "503" },
+      }),
   },
   {
     name: "a numeric errno and a syscall",
@@ -1212,11 +1291,8 @@ const OUTPUT_BY_GRADE = {
   { severity: string; captures: number }
 >;
 
-const scopedRequest = (): Request => {
-  const request = new Request("https://api.test/v1/contract");
-  initRequestContext(request);
-  return request;
-};
+const scopedRequest = (): Request =>
+  new Request("https://api.test/v1/contract");
 
 describe("observeFailure channels", () => {
   let analytics: RecordingAnalytics;
@@ -1248,7 +1324,15 @@ describe("observeFailure channels", () => {
       const expected = OUTPUT_BY_GRADE[row.grade];
       const request = scopedRequest();
 
-      observeFailure(materialize(row), { sink: SINK, request });
+      const failure = runWithRequestIdScope(() => {
+        openRequestContext();
+        observeFailure(materialize(row), {
+          sink: SINK,
+          request,
+          scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+        });
+        return getRequestFailure();
+      });
 
       expect(logs.records.map(({ severityText }) => severityText)).toEqual([
         expected.severity,
@@ -1260,7 +1344,7 @@ describe("observeFailure channels", () => {
       });
       expect(analytics.exceptions()).toHaveLength(expected.captures);
       expect(metricLines).toHaveLength(row.grade === "transient" ? 1 : 0);
-      expect(getRequestFailure(request)).toEqual({
+      expect(failure).toEqual({
         grade: row.grade,
         reason: row.reason,
         sink: "contract.sink",
@@ -1277,7 +1361,7 @@ describe("observeFailure channels", () => {
     expect(logs.at("ERROR")).toEqual([]);
   });
 
-  test("a legacy pin keeps the site's output whatever the grade", () => {
+  test("a legacy severity pin cannot capture a non-defect grade", () => {
     const pinned = failureSink({
       event: "pinned",
       expected: [],
@@ -1295,7 +1379,7 @@ describe("observeFailure channels", () => {
         }),
       }),
     ]);
-    expect(analytics.exceptions()).toHaveLength(1);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("a sustained transient episode raises the severity, not the capture", () => {
@@ -1308,10 +1392,11 @@ describe("observeFailure channels", () => {
     expect(analytics.exceptions()).toEqual([]);
   });
 
-  test("the transient metric carries only the sink and the reason", () => {
+  test("the transient metric carries only the sink, the reason and the release", () => {
     observeFailure(codedError("ECONNRESET"), {
       sink: SINK,
       request: scopedRequest(),
+      scope: { type: "request", method: "GET", routeTemplate: "/contract" },
     });
 
     const [line] = metricLines;
@@ -1327,12 +1412,14 @@ describe("observeFailure channels", () => {
       },
       sink: "contract.sink",
       reason: "network_reset",
+      "service.version": APP_VERSION,
       RequestTransientFailures: 1,
     });
     expect(Object.keys(JSON.parse(line ?? "{}")).toSorted()).toEqual([
       "RequestTransientFailures",
       "_aws",
       "reason",
+      "service.version",
       "sink",
     ]);
   });
@@ -1358,7 +1445,10 @@ describe("observeFailure channels", () => {
     });
     const [exception] = analytics.exceptions();
     expect(exception?.properties["$exception_fingerprint"]).toBe(
-      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+      exceptionFingerprint(readEvidence(error), {
+        fingerprintKey: "observe.contract.sink",
+        scope: { type: "handler", handlerId: "contract.sink" },
+      }),
     );
     // Suppression keys on that same identity: the second capture is throttled.
     expect(analytics.exceptions()).toHaveLength(1);
@@ -1427,6 +1517,7 @@ describe("privileged content never leaves the process", () => {
       () =>
         new HandlerError({
           status: 502,
+          code: "provider_error",
           message: SENTINEL,
           cause: {
             error: {
@@ -1470,8 +1561,13 @@ describe("privileged content never leaves the process", () => {
       const error = make();
       const request = scopedRequest();
       const defect = failureSink({ event: "sentinel.defect", expected: [] });
-      observeFailure(error, { sink: defect, request, ctx: hostileContext });
-      captureError(error);
+      observeFailure(error, {
+        sink: defect,
+        request,
+        scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+        ctx: hostileContext,
+      });
+      captureError(error, handlerErrorContext("observability.capture"));
       logger.warn("helper.record", {
         ...errorSystemFields(error),
         ...pgErrorFields(error),

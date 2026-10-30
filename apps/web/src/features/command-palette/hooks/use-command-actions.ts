@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -14,8 +14,9 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
@@ -27,13 +28,11 @@ import type { CommandAction, CommandActionContext } from "../lib/types";
 
 export type ResolvedCommandAction = CommandAction & {
   title: string;
-  keywordLabels: readonly string[];
-  hotkey?: Hotkey;
+  hotkey?: HotkeyChord;
 };
 
 type UploadRequest =
-  | { type: "closed" }
-  | { type: "open"; workspaceId: string | undefined };
+  { type: "closed" } | { type: "open"; workspaceId: string | undefined };
 
 type UseCommandActionsResult = {
   uploadRequest: UploadRequest;
@@ -64,16 +63,16 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     ...entitySummariesCountOptions(workspaceId ?? ""),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
-  const entityCountView = useQueryView(entityCountQuery);
-  useQueryViewError(entityCountView);
+  const entityCountView = queryView(entityCountQuery);
+  useQueryViewError(entityCountView, "useCommandActions:query");
   const entityCount =
     entityCountView.type === "items" ? entityCountView.items : undefined;
   const workflowQuery = useQuery({
     ...workflowOptions({ key: { workspaceId: workspaceId ?? "" } }),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
-  const workflowView = useQueryView(workflowQuery);
-  useQueryViewError(workflowView);
+  const workflowView = queryView(workflowQuery);
+  useQueryViewError(workflowView, "useCommandActions:query-2");
   const workflow =
     workflowView.type === "items" ? workflowView.items : undefined;
   const canCreateTask =
@@ -132,7 +131,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   );
 
   const effectiveHotkeys = useMemo(() => {
-    const hotkeys = new Map<CommandAction["shortcutId"], Hotkey>();
+    const hotkeys = new Map<CommandAction["shortcutId"], HotkeyChord>();
     for (const group of shortcutGroups) {
       for (const shortcut of group.shortcuts) {
         if (shortcut.binding.type === "hotkey") {
@@ -161,13 +160,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
           isAvailable: action.isAvailable,
           run: action.run,
           title: t(action.titleKey),
-          keywordLabels: action.keywords
-            ? action.keywords.map((keyword) => t(keyword))
-            : [],
         };
-        if (action.keywords) {
-          resolved.keywords = action.keywords;
-        }
         if (action.shortcutId === undefined) {
           return resolved;
         }

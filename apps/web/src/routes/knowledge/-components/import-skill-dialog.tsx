@@ -8,9 +8,9 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -32,8 +32,9 @@ import { stellaToast } from "@stll/ui/toast";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 
 import {
   listSkippedImportFiles,
@@ -119,6 +120,7 @@ const ImportSkillDialogBody = ({
   onImported,
   onOpenChange,
 }: ImportSkillDialogProps & { onBusyChange: (busy: boolean) => void }) => {
+  const submit = useIdempotentSubmit();
   const format = useFormatter();
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
@@ -137,7 +139,7 @@ const ImportSkillDialogBody = ({
       const response = await api.skills["discover-url"].post({
         url: url.trim(),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (result) => {
       setDiscovery(result);
@@ -158,16 +160,20 @@ const ImportSkillDialogBody = ({
     onMutate: () => onBusyChange(true),
     onSettled: () => onBusyChange(false),
     mutationFn: async (source: SkillDiscovery) => {
-      const response = await api.skills["import-urls"].post({
-        items: source.skills
-          .filter((skill) => selected.has(skill.sourceUrl))
-          .map((skill) => ({
-            integrity: skill.integrity,
-            sourceUrl: skill.sourceUrl,
-          })),
-        scope,
+      const response = await submit.run({
+        operation: "skill-import-urls",
+        send: async (body) => api.skills["import-urls"].post(body),
+        body: {
+          items: source.skills
+            .filter((skill) => selected.has(skill.sourceUrl))
+            .map((skill) => ({
+              integrity: skill.integrity,
+              sourceUrl: skill.sourceUrl,
+            })),
+          scope,
+        },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (result, source) => {
       if (result.installed.length > 0) {

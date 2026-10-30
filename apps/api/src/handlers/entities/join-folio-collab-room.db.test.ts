@@ -22,17 +22,23 @@ import {
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 import { createTestClock } from "@stll/test-kit";
 
+import { session } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   bufferObjectCleanupIntents,
+  entities,
   entityVersions,
   fields,
-  folioCollabRooms,
   folioCollabPublications,
+  folioCollabRooms,
   folioCollabRoomTokens,
+  properties,
+  syntheticSessionControl,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { resetFolioCollabUserState } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -56,6 +62,16 @@ import {
   storeFolioCollabSnapshot,
 } from "@/api/lib/folio-collab-rooms";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import {
+  SYNTHETIC_PRINCIPAL,
+  SYNTHETIC_SESSION_CONTROL_ID,
+} from "@/api/lib/synthetic-principal/constants";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -69,7 +85,9 @@ import type {
   TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
+import { createCheckpointFolioCollabRoom } from "./checkpoint-folio-collab-room";
 import joinFolioCollabRoom, {
+  createJoinFolioCollabRoom,
   decideFolioCollabSeedClaim,
   decideFolioCollabSnapshotRecovery,
   folioCollabSeedClaimPredicate,
@@ -200,6 +218,242 @@ const claimConcurrently = async ({
         }),
     ),
   );
+
+test("a dedicated principal joins only while its dedicated session is live", async () => {
+  await testDb
+    .insert(syntheticSessionControl)
+    .values({ id: SYNTHETIC_SESSION_CONTROL_ID, status: "enabled" })
+    .onConflictDoUpdate({
+      target: syntheticSessionControl.id,
+      set: { status: "enabled" },
+    });
+  const store = createSyntheticSessionStore(asTestRaw(testDb));
+  await store.revokeSyntheticSessions();
+  await testDb
+    .update(syntheticSessionControl)
+    .set({ status: "enabled" })
+    .where(eq(syntheticSessionControl.id, SYNTHETIC_SESSION_CONTROL_ID));
+  await store.mintSyntheticSession({
+    keyLabel: "join-fixture",
+    requestId: undefined,
+    userAgent: null,
+  });
+  const sourceSessions = await testDb
+    .select({ id: session.id })
+    .from(session)
+    .where(eq(session.userId, SYNTHETIC_PRINCIPAL.user.id))
+    .limit(1);
+  const sourceSession = sourceSessions.at(0);
+  expect(sourceSession).toBeDefined();
+  if (!sourceSession) {
+    throw new Error("Dedicated session fixture was not created");
+  }
+
+  const workspaceId = createSafeId<"workspace">();
+  const entityId = createSafeId<"entity">();
+  const entityVersionId = createSafeId<"entityVersion">();
+  const propertyId = createSafeId<"property">();
+  const fileId = createSafeId<"userFile">();
+  const organizationId = brandPersistedOrganizationId(
+    SYNTHETIC_PRINCIPAL.org.id,
+  );
+  const userId = brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id);
+  await testDb.insert(workspaces).values({
+    id: workspaceId,
+    organizationId,
+    name: "Dedicated session fixture",
+    reference: workspaceId,
+  });
+  await testDb.insert(workspaceMembers).values({
+    id: createSafeId<"workspaceMember">(),
+    workspaceId,
+    userId,
+  });
+  await testDb
+    .insert(entities)
+    .values({ id: entityId, workspaceId, kind: "document", name: "Document" });
+  await testDb
+    .insert(entityVersions)
+    .values({ id: entityVersionId, workspaceId, entityId });
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: entityVersionId })
+    .where(eq(entities.id, entityId));
+  await testDb.insert(properties).values({
+    id: propertyId,
+    workspaceId,
+    name: "File",
+    status: "fresh",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+  });
+  const sourceBytes = new Uint8Array(
+    await createDocx(createEmptyDocument({ initialText: "Dedicated file." })),
+  );
+  await testDb.insert(fields).values({
+    id: createSafeId<"field">(),
+    entityVersionId,
+    workspaceId,
+    propertyId,
+    content: {
+      version: 1,
+      type: "file",
+      id: fileId,
+      fileName: "dedicated.docx",
+      mimeType: DOCX_MIME_TYPE,
+      sizeBytes: sourceBytes.byteLength,
+      encrypted: false,
+      sha256Hex: legacyHex(sourceBytes),
+      pdfFileId: null,
+    },
+  });
+  const scopedDb = asTestRaw<
+    Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
+  >(
+    async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
+      await scopedQuery([workspaceId], organizationId, run, userId),
+  );
+  const noAudit = async () => undefined;
+  const join = async () => {
+    const authority = await readSyntheticSessionAuthority(testDb, {
+      sessionId: sourceSession.id,
+      userId,
+    });
+    const dedicatedJoinHandler = createJoinFolioCollabRoom(
+      async () => authority,
+    );
+    return await dedicatedJoinHandler.handler(
+      asTestRaw<Parameters<typeof dedicatedJoinHandler.handler>[0]>({
+        body: { entityId, propertyId },
+        safeDb: safeDbFromScoped(scopedDb),
+        session: { id: sourceSession.id, activeOrganizationId: organizationId },
+        user: { id: userId, email: SYNTHETIC_PRINCIPAL.user.email },
+        workspaceId,
+        memberRole: sessionMemberRole("owner"),
+        request: new Request("https://example.test/join"),
+        route:
+          "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
+        recordAuditEvent: noAudit,
+        createAuditRecorder: () => noAudit,
+      }),
+    );
+  };
+  const fake = startFakeS3();
+  try {
+    fake.put(
+      envBase.S3_BUCKET,
+      createFileKey({
+        fileId,
+        mimeType: DOCX_MIME_TYPE,
+        organizationId,
+        workspaceId,
+      }),
+      sourceBytes,
+      DOCX_MIME_TYPE,
+    );
+    const joined = await join();
+    if (!("seedDownloadUrl" in joined)) {
+      throw new Error("Dedicated principal did not join the room");
+    }
+    expect(typeof joined.token).toBe("string");
+    expect(typeof joined.seedDownloadUrl).toBe("string");
+    expect(
+      Number(new URL(joined.seedDownloadUrl).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(60);
+
+    const authorization = await authorizeFolioCollabRoom({
+      readSessionAuthority: async (options) =>
+        await readSyntheticSessionAuthority(testDb, options),
+      roomId: joined.roomId,
+      token: joined.token,
+      db: asTestRaw(testDb),
+      createScopedDb: asTestRaw(() => scopedDb),
+    });
+    if (authorization.status !== "authorized") {
+      throw new Error("Dedicated room token was not authorized");
+    }
+    const seeded = new yjs.Doc();
+    createHiddenEditorState({
+      document: await parseDocx(sourceBytes),
+      collaboration: {
+        shouldSeed: true,
+        yXmlFragment: seeded.getXmlFragment("prosemirror"),
+      },
+      collaborationModules: { yjs, yProseMirror },
+    });
+    const snapshot = yjs.encodeStateAsUpdate(seeded);
+    seeded.destroy();
+    expect(
+      (
+        await acknowledgeFolioCollabSeed({
+          value: authorization.value,
+          snapshotSha256Hex: legacyHex(snapshot),
+        })
+      ).unwrap(),
+    ).toEqual({ status: "acknowledged" });
+    expect(
+      (
+        await storeFolioCollabSnapshot({
+          authority: { type: "participant", userId },
+          expectedGeneration: joined.generation,
+          expectedSnapshotRevision: 0,
+          snapshotBytes: snapshot,
+          value: authorization.value,
+        })
+      ).unwrap(),
+    ).toMatchObject({ status: "stored", snapshotRevision: 1 });
+    const checkpoint = async () => {
+      const authority = await readSyntheticSessionAuthority(testDb, {
+        sessionId: sourceSession.id,
+        userId,
+      });
+      const checkpointHandler = createCheckpointFolioCollabRoom(
+        async () => authority,
+      );
+      return await checkpointHandler.handler(
+        asTestRaw<Parameters<typeof checkpointHandler.handler>[0]>({
+          body: {
+            expectedGeneration: joined.generation,
+            expectedSnapshotRevision: 1,
+            roomId: joined.roomId,
+          },
+          safeDb: safeDbFromScoped(scopedDb),
+          session: {
+            id: sourceSession.id,
+            activeOrganizationId: organizationId,
+          },
+          user: { id: userId, email: SYNTHETIC_PRINCIPAL.user.email },
+          workspaceId,
+          memberRole: sessionMemberRole("owner"),
+          request: new Request("https://example.test/checkpoint"),
+          route:
+            "/v1/entities/:workspaceId/folio-collab-rooms/checkpoint" satisfies ApiRoutePath,
+          recordAuditEvent: noAudit,
+          createAuditRecorder: () => noAudit,
+        }),
+      );
+    };
+    const checkpointed = await checkpoint();
+    if (!("downloadUrl" in checkpointed)) {
+      throw new Error("Dedicated principal did not checkpoint the room");
+    }
+    expect(
+      Number(
+        new URL(checkpointed.downloadUrl).searchParams.get("X-Amz-Expires"),
+      ),
+    ).toBeLessThanOrEqual(60);
+
+    await store.revokeSyntheticSessions();
+    const refused = await checkpoint();
+    expect(refused).toMatchObject({
+      code: 403,
+      response: { code: "account_access_unavailable" },
+    });
+  } finally {
+    fake.stop();
+    await testDb.delete(workspaces).where(eq(workspaces.id, workspaceId));
+  }
+});
 
 describe("folio collaboration room ownership", () => {
   test("rejects base and source versions outside the room target", async () => {
@@ -648,13 +902,16 @@ describe("folio collaboration room seed generation CAS", () => {
             asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
               body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
               safeDb: safeDbFromScoped(scopedDb),
-              session: { activeOrganizationId: ids.orgA },
+              session: {
+                id: "fixture-session",
+                activeOrganizationId: ids.orgA,
+              },
               user: { id: ids.userA1, email: "editor@example.test" },
               workspaceId: ids.wsA1,
               memberRole: sessionMemberRole("owner"),
               request: new Request("https://example.test/join"),
               route:
-                "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+                "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
               recordAuditEvent: noAudit,
               createAuditRecorder: () => noAudit,
             }),
@@ -672,6 +929,8 @@ describe("folio collaboration room seed generation CAS", () => {
           throw new Error("Recovered room did not return a successful join");
         }
         const authorization = await authorizeFolioCollabRoom({
+          readSessionAuthority: async (options) =>
+            await readSyntheticSessionAuthority(testDb, options),
           roomId,
           token: joined.token,
           db: asTestRaw<
@@ -828,6 +1087,7 @@ test("edits in the first durable snapshot remain unsaved after the pristine seed
     propertyId: ids.filePropertyA1,
     roomId,
     scopedDb,
+    sourceSessionExpiresAt: null,
     tokenExpiresAt: new Date(testClock.now() + 60_000),
     tokenId: createSafeId<"folioCollabRoomToken">(),
     userId: ids.userA1,
@@ -1054,13 +1314,16 @@ describe("stale pending seed recovery notices", () => {
             asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
               body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
               safeDb: safeDbFromScoped(scopedDb),
-              session: { activeOrganizationId: ids.orgA },
+              session: {
+                id: "fixture-session",
+                activeOrganizationId: ids.orgA,
+              },
               user: { id: ids.userA1, email: "editor@example.test" },
               workspaceId: ids.wsA1,
               memberRole: sessionMemberRole("owner"),
               request: new Request("https://example.test/join"),
               route:
-                "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+                "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
               recordAuditEvent: noAudit,
               createAuditRecorder: () => noAudit,
             }),
@@ -1180,6 +1443,8 @@ test("issued collaboration tokens store the legacy createHash digest", async () 
   const roomId = await insertRoom({ generation: 0, seedState: "empty" });
   const { token } = await testDb.transaction(async (tx) =>
     issueFolioCollabToken({
+      sourceSessionId: "ordinary-session",
+      readSessionAuthority: async () => null,
       generation: 0,
       permissions: { canEdit: true },
       roomId,
@@ -1189,10 +1454,15 @@ test("issued collaboration tokens store the legacy createHash digest", async () 
     }),
   );
   const stored = await testDb
-    .select({ tokenHash: folioCollabRoomTokens.tokenHash })
+    .select({
+      tokenHash: folioCollabRoomTokens.tokenHash,
+      sourceSessionId: folioCollabRoomTokens.sourceSessionId,
+    })
     .from(folioCollabRoomTokens)
     .where(eq(folioCollabRoomTokens.roomId, roomId));
-  expect(stored).toEqual([{ tokenHash: legacyHex(token) }]);
+  expect(stored).toEqual([
+    { tokenHash: legacyHex(token), sourceSessionId: null },
+  ]);
 });
 
 test("deleting a claimant before seed acknowledgement warns the next member about discarded edits", async () => {
@@ -1270,12 +1540,13 @@ test("deleting a claimant before seed acknowledgement warns the next member abou
       asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
         body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
         safeDb: safeDbFromScoped(nextMemberDb),
-        session: { activeOrganizationId: ids.orgA },
+        session: { id: "fixture-session", activeOrganizationId: ids.orgA },
         user: { id: ids.userA2, email: "member@example.test" },
         workspaceId: ids.wsA1,
         memberRole: sessionMemberRole("member"),
         request: new Request("https://example.test/join"),
-        route: "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+        route:
+          "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
         recordAuditEvent: noAudit,
         createAuditRecorder: () => noAudit,
       }),

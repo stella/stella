@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { listApiTestPaths } from "./api-test-plan";
+import { planPostgresTestShards } from "./postgres-test-shards";
 import {
   refreshedTestDurations,
   serializeTestDurations,
@@ -31,9 +32,9 @@ test("aggregation carries live weights forward, replaces measurements, and drops
     ],
   );
   expect(refreshed).toEqual({
-    new: { seconds: 2.3, source: "measured" },
-    replaced: { seconds: 4, source: "measured" },
-    unmeasured: { seconds: 1.5, source: "measured" },
+    new: { seconds: 2.3, source: "measured", history: [2.3] },
+    replaced: { seconds: 2, source: "measured", history: [1, 2, 4] },
+    unmeasured: { seconds: 1.5, source: "measured", history: [1.5] },
   });
 });
 
@@ -64,7 +65,7 @@ test("an unreadable previous weights file is ignored, not fatal", () => {
       refreshedTestDurations(["new"], unreadable, [
         '{"version":1,"files":{"new":1000}}',
       ]),
-    ).toEqual({ new: { seconds: 1, source: "measured" } });
+    ).toEqual({ new: { seconds: 1, source: "measured", history: [1] } });
   }
 });
 
@@ -97,9 +98,46 @@ test("a main run whose shards all replay cached results carries the base forward
     ]);
     expect(result.exitCode, result.stderr.toString()).toBe(0);
     expect(JSON.parse(readFileSync(destination, "utf-8"))).toEqual({
-      [live]: { seconds: 3, source: "measured" },
+      [live]: { seconds: 3, source: "measured", history: [3] },
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("history is bounded and the weight is the median of the recent samples", () => {
+  const artifacts = [1, 2, 3, 4, 5, 6, 7].map(
+    (seconds) => `{"version":1,"files":{"a":${seconds * 1000}}}`,
+  );
+  const refreshed = refreshedTestDurations(["a"], undefined, artifacts);
+  expect(refreshed["a"]?.history).toEqual([3, 4, 5, 6, 7]);
+  expect(refreshed["a"]?.seconds).toBe(5);
+});
+
+test("one outlier run does not change the shard plan", () => {
+  const files = ["a", "b", "c", "d"];
+  const stable = JSON.stringify(
+    Object.fromEntries(
+      files.map((file) => [
+        file,
+        { seconds: 100, source: "measured", history: [100, 100, 100, 100] },
+      ]),
+    ),
+  );
+  const plan = (durations: ReturnType<typeof refreshedTestDurations>) =>
+    planPostgresTestShards({
+      files,
+      durations: Object.fromEntries(
+        Object.entries(durations).map(([file, { seconds }]) => [file, seconds]),
+      ),
+      count: 2,
+    });
+  const calm = refreshedTestDurations(files, stable, [
+    '{"version":1,"files":{"a":100000,"b":100000,"c":100000,"d":100000}}',
+  ]);
+  const outlier = refreshedTestDurations(files, stable, [
+    '{"version":1,"files":{"a":900000,"b":100000,"c":100000,"d":100000}}',
+  ]);
+  expect(outlier["a"]?.seconds).toBe(100);
+  expect(plan(outlier)).toEqual(plan(calm));
 });

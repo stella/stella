@@ -73,7 +73,8 @@ globalThis.fetch = Object.assign(
 );
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -104,14 +105,14 @@ const drain = async () =>
   await testing.act(async () => await Promise.resolve());
 
 const mountCard = async () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
       mutations: { retry: false },
     },
   });
   const view = testing.render(
-    <query.QueryClientProvider client={client}>
+    <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
           <AuthenticatedUserProvider
@@ -130,7 +131,7 @@ const mountCard = async () => {
           </AuthenticatedUserProvider>
         </FormattingProvider>
       </IntlProvider>
-    </query.QueryClientProvider>,
+    </QueryClientProvider>,
   );
   await testing.waitFor(() => {
     expect(

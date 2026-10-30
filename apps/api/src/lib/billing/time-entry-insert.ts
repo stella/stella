@@ -16,7 +16,7 @@ import {
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
-import { resolveRate, type ResolvedRate } from "@/api/lib/billing/rates";
+import { type ResolvedRate, resolveRate } from "@/api/lib/billing/rates";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { lockTimerOwner } from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -146,6 +146,7 @@ export const prepareTimeEntryInsert = async function* ({
           workspaceId,
           userId,
           dateWorked: body.dateWorked,
+          activityCode: body.activityCode,
         })));
   const billable =
     body.billable ??

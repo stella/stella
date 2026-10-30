@@ -5,38 +5,40 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
-  SEARCH_TOTAL_NOT_COUNTED,
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
+  SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 
 import {
   caseLawDecisions,
   caseLawProvisionCitations,
-  caseLawSources,
   caseLawSearchDocuments,
+  caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  candidateDecisionRowsQuery,
+  candidateDecisionRowsStatement,
   caseLawSearchPlan,
   decisionHitsPage,
-  candidateDecisionRowsQuery,
   listCaseLawProvisionDecisions,
-  candidateDecisionRowsStatement,
   pageDecisionRowsQuery,
   pageDecisionRowsStatement,
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
   searchCorpusIndexDecisions,
+  searchPostgresDecisions,
 } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { citingDecisionIdsSubquery } from "@/api/lib/case-law/provision-filter";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -46,6 +48,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  corpusIndexLexicalScore,
   NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -54,6 +57,7 @@ import {
   rehydrateCorpusIndexProviderCandidatesQuery,
   rehydrateCorpusIndexProviderCandidatesStatement,
 } from "@/api/lib/legal-search/corpus-index-provider";
+import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import {
@@ -62,7 +66,10 @@ import {
 } from "@/api/lib/pagination";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { installCorpusDispositionScan } from "@/api/tests/helpers/corpus-disposition-scan";
+import {
+  installCorpusDispositionScan,
+  installCorpusRevisionScan,
+} from "@/api/tests/helpers/corpus-disposition-scan";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -87,6 +94,7 @@ const APPLIED_FINGERPRINT = "a".repeat(64);
 const DESIRED_FINGERPRINT = "b".repeat(64);
 const sourceId = createSafeId<"caseLawSource">();
 const withheldSourceId = createSafeId<"caseLawSource">();
+const withheldIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const withheldId = createSafeId<"caseLawDecision">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const czechId = createSafeId<"caseLawDecision">();
@@ -182,9 +190,18 @@ beforeAll(
     ) => {
       reads += 1;
       return await withPublicLawReaderRole(db, async (roleTx) => {
+        const adaptedTx = {
+          select: roleTx.select.bind(roleTx),
+          query: roleTx.query,
+          execute: async (statement: Parameters<typeof roleTx.execute>[0]) => {
+            const result = await roleTx.execute(statement);
+            // Public SQL readers accept postgres-js arrays and PGlite's rows envelope.
+            return Object.assign(result.rows, { rows: result.rows });
+          },
+        };
         // SAFETY: the role transaction supplies the select surface the reads use.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
-        const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+        const tx = adaptedTx as unknown as CaseLawPublicReadTransaction;
         return await fn(tx);
       });
     };
@@ -361,7 +378,7 @@ beforeAll(
         entityId: withheldId,
         generation: GENERATION,
         indexId: INDEX_ID,
-        intentId: createSafeId<"corpusIndexProjectionIntent">(),
+        intentId: withheldIntentId,
       },
       {
         entityId: czechId,
@@ -444,6 +461,207 @@ afterAll(async () => {
   await client.close();
 });
 
+test.each([
+  { selection: "count only", facets: [] },
+  { selection: "court only", facets: ["court"] },
+  { selection: "matrix only", facets: ["courtYear"] },
+] as const)(
+  "indexed search requests $selection while preserving its decision total",
+  async ({ selection, facets }) => {
+    const db = drizzle({ client });
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const indexId = corpusIndexId(manifest.generation, "CZE");
+    const projection = heldProjection({
+      entityId: czechId,
+      generation: manifest.generation,
+      indexId,
+      intentId: createSafeId<"corpusIndexProjectionIntent">(),
+    });
+    await db
+      .insert(corpusIndexGenerations)
+      .values({
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+        manifestDigest: corpusIndexManifestDigest(manifest),
+        status: "building",
+      })
+      .onConflictDoNothing();
+    await db.insert(corpusIndexProjectionIntents).values(projection.intent);
+    await db.insert(corpusIndexProjectionStates).values(projection.state);
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the Czech corpus group to be ready");
+    }
+    const engine = getCorpusIndexClient(manifest.cluster);
+    const requestedAggregations: string[] = [];
+    const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
+      async () =>
+        Result.ok({
+          numHits: 1,
+          hits: [
+            {
+              fields: {
+                document_id: czechId,
+                projection_revision: projection.intent.id,
+                anchor_id: "facet-selection-passage",
+              },
+              score: 1,
+            },
+          ],
+        }),
+    );
+    const searchSpy = spyOn(engine, "search").mockImplementation(async () =>
+      Result.ok({
+        numHits: 1,
+        hits: [
+          {
+            document_id: czechId,
+            projection_revision: projection.intent.id,
+            anchor_id: "facet-selection-passage",
+          },
+        ],
+        snippets: [{ text: ["<b>Facet</b> selection"] }],
+      }),
+    );
+    const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
+      async ({ aggs }) => {
+        requestedAggregations.push(...Object.keys(aggs));
+        const answered: Record<string, unknown> = {};
+        for (const name of Object.keys(aggs)) {
+          switch (name) {
+            case "total":
+              answered[name] = { value: 412 };
+              break;
+            case "courtYear":
+              answered[name] = {
+                sum_other_doc_count: 0,
+                doc_count_error_upper_bound: 0,
+                buckets: [
+                  {
+                    key: "Nejvyšší soud",
+                    years: {
+                      buckets: [
+                        {
+                          key: "2024",
+                          doc_count: 40,
+                          decisions: { value: 3 },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              };
+              break;
+            default:
+              answered[name] = {
+                buckets: [
+                  {
+                    key: "Nejvyšší soud",
+                    doc_count: 40,
+                    decisions: { value: 3 },
+                  },
+                ],
+              };
+          }
+        }
+        return Result.ok(answered);
+      },
+    );
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const result = await searchCorpusIndexDecisions({
+        body: {
+          country: "CZE",
+          query: `facet selection ${selection}`,
+          facets: [...facets],
+          strict: true,
+          limit: 1,
+        },
+        caseLawDb,
+        observer: "unobserved",
+        dependencies: {
+          configuredVariant: "off",
+          loadCourtWeights: async () => courtWeights,
+          readSourceRegistry: async () =>
+            Result.ok({
+              excludedSourceIds: [],
+              nameById: new Map(),
+            }),
+          readServingTarget: async () =>
+            Result.ok({
+              ...resolution.target,
+              manifest,
+              serving: {
+                family: "case_law",
+                generation: manifest.generation,
+                cluster: manifest.cluster,
+              },
+            }),
+        },
+      });
+      if (!("hits" in result)) {
+        panic("Expected a successful indexed search page");
+      }
+      expect(result.hits.map(({ decisionId }) => decisionId)).toEqual([
+        czechId,
+      ]);
+      expect(result.total).toEqual({ type: "estimate", count: 412 });
+      expect(requestedAggregations.toSorted()).toEqual(
+        [...facets, "total"].toSorted(),
+      );
+      if (selection === "count only") {
+        expect(result.facets).toBeNull();
+        return;
+      }
+      expect(result.facets).not.toBeNull();
+      expect(result.facets?.courtYear).toEqual(
+        selection === "matrix only"
+          ? {
+              buckets: [
+                {
+                  court: "Nejvyšší soud",
+                  courtName: "Nejvyšší soud",
+                  courtAbbreviation: "NS",
+                  tier: "supreme",
+                  year: 2024,
+                  count: 3,
+                  citationSum: null,
+                  treatment: null,
+                },
+              ],
+              truncated: false,
+            }
+          : null,
+      );
+      expect(result.facets?.court.flatMap(({ courts }) => courts).length).toBe(
+        selection === "court only" ? 1 : 0,
+      );
+    } finally {
+      aggregateSpy.mockRestore();
+      scoredSpy.mockRestore();
+      searchSpy.mockRestore();
+      resetPublicCaseLawConfigForTesting();
+      await db
+        .delete(corpusIndexProjectionStates)
+        .where(
+          and(
+            eq(corpusIndexProjectionStates.entityId, czechId),
+            eq(corpusIndexProjectionStates.generation, manifest.generation),
+          ),
+        );
+      await db
+        .delete(corpusIndexProjectionIntents)
+        .where(eq(corpusIndexProjectionIntents.id, projection.intent.id));
+    }
+  },
+);
+
 test("the blend read carries what ranking and the fold need, and nothing a card shows", async () => {
   const hydrated: HydratedRows = new Map();
   const ranking = await rehydrateCaseLawCandidates({
@@ -463,6 +681,7 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
   );
   for (const row of hydrated.values()) {
     expect(Object.keys(row ?? {}).toSorted()).toEqual([
+      "appliedGeneration",
       "appliedRevision",
       "canRecur",
       "citationAuthority",
@@ -620,7 +839,13 @@ test.each(["unchanged", "refreshed"] as const)(
       }
       return Result.ok({
         numHits: 1,
-        hits: [{ document_id: czechId, anchor_id: anchorId }],
+        hits: [
+          {
+            document_id: czechId,
+            anchor_id: anchorId,
+            projection_revision: originalRevision,
+          },
+        ],
         snippets: options.snippetFields?.includes("text")
           ? [{ text: [snippet] }]
           : [],
@@ -689,6 +914,504 @@ test.each(["unchanged", "refreshed"] as const)(
     }
   },
 );
+
+test("a short strict page is topped up with new partial matches only, after the strict hits", async () => {
+  const db = drizzle({ client });
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+  const indexId = corpusIndexId(manifest.generation, "CZE");
+  // The strict hit, its Slovak language sibling, and one other decision.
+  const held = [czechId, slovakId, projectedId].map((entityId) =>
+    heldProjection({
+      entityId,
+      generation: manifest.generation,
+      indexId,
+      intentId: createSafeId<"corpusIndexProjectionIntent">(),
+    }),
+  );
+  await db
+    .insert(corpusIndexGenerations)
+    .values({
+      family: "case_law",
+      generation: manifest.generation,
+      cluster: manifest.cluster,
+      manifestDigest: corpusIndexManifestDigest(manifest),
+      status: "building",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(corpusIndexProjectionIntents)
+    .values(held.map(({ intent }) => intent));
+  await db
+    .insert(corpusIndexProjectionStates)
+    .values(held.map(({ state }) => state));
+  const resolution = corpusIndexReadTarget({
+    manifest,
+    jurisdiction: "CZE",
+    attestedGroups: new Set(),
+    enrolledGroups: new Set(),
+  });
+  if (resolution.type !== "ready") {
+    panic("Expected the Czech corpus group to be ready");
+  }
+  // Relevance scans run through the scored endpoint: each request scans
+  // strictly first, and a second scan in the same request is the relaxed one,
+  // which returns the strict hit again, its sibling and one new partial
+  // match. Highlights run through the search endpoint, facets through the
+  // aggregate one.
+  let scans = 0;
+  const engine = getCorpusIndexClient(manifest.cluster);
+  const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
+    async () => {
+      scans += 1;
+      const ids = scans === 1 ? [czechId] : [czechId, slovakId, projectedId];
+      return await Promise.resolve(
+        Result.ok({
+          numHits: ids.length,
+          hits: ids.map((id, index) => ({
+            fields: { document_id: id, anchor_id: `${id}-p` },
+            score: 10 - index,
+          })),
+        }),
+      );
+    },
+  );
+  const searchSpy = spyOn(engine, "search").mockImplementation(
+    async (options) => {
+      const named = [czechId, slovakId, projectedId].filter((id) =>
+        options.query.includes(id),
+      );
+      const ids = named.length === 0 ? [czechId] : named;
+      return await Promise.resolve(
+        Result.ok({
+          numHits: ids.length,
+          hits: ids.map((id) => ({ document_id: id, anchor_id: `${id}-p` })),
+          snippets: ids.map(() => ({ text: ["<b>promlčení</b> nároku"] })),
+        }),
+      );
+    },
+  );
+  const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
+    async ({ aggs, query }) => {
+      if ("term_coverage" in aggs) {
+        const ids = query.includes("promlčení")
+          ? [czechId, slovakId, projectedId].filter((id) => query.includes(id))
+          : [];
+        return Result.ok({
+          term_coverage: {
+            buckets: ids.toSorted().map((key) => ({ key, doc_count: 1 })),
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+          },
+        });
+      }
+      const answered: Record<string, unknown> = {};
+      for (const name of Object.keys(aggs)) {
+        answered[name] =
+          name === "total"
+            ? { value: 1 }
+            : {
+                buckets: [
+                  {
+                    key: name === "year" ? "2024" : `${name}-value`,
+                    doc_count: 1,
+                    decisions: { value: 1 },
+                  },
+                ],
+              };
+      }
+      return await Promise.resolve(Result.ok(answered));
+    },
+  );
+  resetPublicCaseLawConfigForTesting(caseLawDb);
+  const search = async (strict: boolean) => {
+    scans = 0;
+    const result = await searchCorpusIndexDecisions({
+      body: { country: "CZE", query: "promlčení nároku", limit: 5, strict },
+      caseLawDb,
+      observer: "unobserved",
+      dependencies: {
+        configuredVariant: "off",
+        loadCourtWeights: async () => await Promise.resolve(courtWeights),
+        readSourceRegistry: async () =>
+          await Promise.resolve(
+            Result.ok({ excludedSourceIds: [], nameById: new Map() }),
+          ),
+        readServingTarget: async () =>
+          await Promise.resolve(
+            Result.ok({
+              ...resolution.target,
+              manifest,
+              serving: {
+                family: "case_law",
+                generation: manifest.generation,
+                cluster: manifest.cluster,
+              },
+            }),
+          ),
+      },
+    });
+    if (!("hits" in result)) {
+      panic("Expected a successful indexed search page");
+    }
+    return { result, scans };
+  };
+  try {
+    const strictOnly = await search(true);
+    expect(strictOnly.scans).toBe(1);
+    const relaxed = await search(false);
+    expect(relaxed.scans).toBe(2);
+    expect(
+      relaxed.result.hits.map(({ decisionId, match }) => ({
+        decisionId,
+        match,
+      })),
+    ).toEqual([
+      { decisionId: String(czechId), match: "all_terms" },
+      { decisionId: String(projectedId), match: "some_terms" },
+    ]);
+    // The total and facets stay the strict set's.
+    expect(relaxed.result.total).toEqual(strictOnly.result.total);
+    expect(relaxed.result.facets).toEqual(strictOnly.result.facets);
+  } finally {
+    scoredSpy.mockRestore();
+    searchSpy.mockRestore();
+    aggregateSpy.mockRestore();
+    resetPublicCaseLawConfigForTesting();
+    await db.delete(corpusIndexProjectionStates).where(
+      and(
+        inArray(
+          corpusIndexProjectionStates.entityId,
+          held.map(({ state }) => state.entityId),
+        ),
+        eq(corpusIndexProjectionStates.generation, manifest.generation),
+      ),
+    );
+    await db.delete(corpusIndexProjectionIntents).where(
+      inArray(
+        corpusIndexProjectionIntents.id,
+        held.map(({ intent }) => intent.id),
+      ),
+    );
+  }
+});
+
+test.each([
+  {
+    strictHitCount: 0,
+    configuredVariant: "off" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 1,
+    configuredVariant: "off" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 0,
+    configuredVariant: "core-stems-first" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 1,
+    configuredVariant: "core-stems-first" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 0,
+    configuredVariant: "off" as const,
+    snippetMode: "missing" as const,
+  },
+  {
+    strictHitCount: 0,
+    configuredVariant: "off" as const,
+    snippetMode: "truncated" as const,
+  },
+])(
+  "a six-word question with $strictHitCount full matches reports its matching mode ($configuredVariant, $snippetMode snippets)",
+  async ({ strictHitCount, configuredVariant, snippetMode }) => {
+    const db = drizzle({ client });
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const indexId = corpusIndexId(manifest.generation, "CZE");
+    const query = "promlčení nároku náhrada škody smlouva odpovědnost";
+    expect(query.split(" ")).toHaveLength(6);
+    const held = [czechId, projectedId].map((entityId) =>
+      heldProjection({
+        entityId,
+        generation: manifest.generation,
+        indexId,
+        intentId: createSafeId<"corpusIndexProjectionIntent">(),
+      }),
+    );
+    await db
+      .insert(corpusIndexGenerations)
+      .values({
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+        manifestDigest: corpusIndexManifestDigest(manifest),
+        status: "building",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(corpusIndexProjectionIntents)
+      .values(held.map(({ intent }) => intent));
+    await db
+      .insert(corpusIndexProjectionStates)
+      .values(held.map(({ state }) => state));
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the Czech corpus group to be ready");
+    }
+    let scans = 0;
+    const engine = getCorpusIndexClient(manifest.cluster);
+    const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
+      async () => {
+        scans += 1;
+        const strictIds = strictHitCount === 0 ? [] : [czechId];
+        const ids = scans === 1 ? strictIds : [czechId, projectedId];
+        return await Promise.resolve(
+          Result.ok({
+            numHits: ids.length,
+            hits: ids.map((id, index) => ({
+              fields: { document_id: id, anchor_id: `${id}-p` },
+              score: 10 - index,
+            })),
+          }),
+        );
+      },
+    );
+    const snippets = new Map([
+      [czechId, strictHitCount === 0 ? "promlčení" : query],
+      [projectedId, "promlčení nároku náhrada škody"],
+    ]);
+    const searchSpy = spyOn(engine, "search").mockImplementation(
+      async (options) => {
+        const ids = [czechId, projectedId].filter((id) =>
+          options.query.includes(id),
+        );
+        return await Promise.resolve(
+          Result.ok({
+            numHits: ids.length,
+            hits: ids.map((id) => ({ document_id: id, anchor_id: `${id}-p` })),
+            snippets:
+              snippetMode === "missing"
+                ? ids.map(() => ({}))
+                : ids.map((id) => ({
+                    text: [
+                      snippetMode === "truncated" && id === projectedId
+                        ? "promlčení"
+                        : (snippets.get(id) ??
+                          panic("Expected a fixture excerpt")),
+                    ],
+                  })),
+          }),
+        );
+      },
+    );
+    const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
+      async ({ aggs, query: aggregateQuery }) => {
+        if ("term_coverage" in aggs) {
+          // Whole-document coverage is independent of the optional excerpt:
+          // the lower-scored decision matches four terms, the other only one.
+          const projectedTerms = query.split(" ").slice(0, 4);
+          let candidates: SafeId<"caseLawDecision">[] = [];
+          if (aggregateQuery.includes("promlčení")) {
+            candidates = [czechId, projectedId];
+          } else if (
+            projectedTerms.some((term) => aggregateQuery.includes(term))
+          ) {
+            candidates = [projectedId];
+          }
+          return Result.ok({
+            term_coverage: {
+              buckets: candidates
+                .filter((id) => aggregateQuery.includes(id))
+                .toSorted()
+                .map((key) => ({ key, doc_count: 1 })),
+              sum_other_doc_count: 0,
+              doc_count_error_upper_bound: 0,
+            },
+          });
+        }
+        const answered: Record<string, unknown> = {};
+        for (const name of Object.keys(aggs)) {
+          answered[name] =
+            name === "total" ? { value: strictHitCount } : { buckets: [] };
+        }
+        return await Promise.resolve(Result.ok(answered));
+      },
+    );
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const result = await searchCorpusIndexDecisions({
+        body: { country: "CZE", query, limit: strictHitCount === 0 ? 2 : 1 },
+        caseLawDb,
+        observer: "unobserved",
+        dependencies: {
+          configuredVariant,
+          loadCourtWeights: async () => await Promise.resolve(courtWeights),
+          readSourceRegistry: async () =>
+            await Promise.resolve(
+              Result.ok({ excludedSourceIds: [], nameById: new Map() }),
+            ),
+          readServingTarget: async () =>
+            await Promise.resolve(
+              Result.ok({
+                ...resolution.target,
+                manifest,
+                serving: {
+                  family: "case_law",
+                  generation: manifest.generation,
+                  cluster: manifest.cluster,
+                },
+              }),
+            ),
+        },
+      });
+      if (!("hits" in result)) {
+        panic("Expected a successful indexed search page");
+      }
+      const warningCodes = result.warnings.map(({ code }) => code);
+      expect(warningCodes.includes("partial_matches_appended")).toBe(
+        strictHitCount === 0,
+      );
+      expect(warningCodes).not.toContain("no_hits");
+      expect(warningCodes).not.toContain("no_hits_filtered");
+      // The strict engine deliberately returns no candidate in the zero case;
+      // the lower-scored partial hit covers four terms and must rank first,
+      // even when its excerpt omits those terms or is absent.
+      expect(scans).toBe(strictHitCount === 0 ? 2 : 1);
+      expect(
+        result.hits.map(({ decisionId, match }) => ({ decisionId, match })),
+      ).toEqual(
+        strictHitCount === 0
+          ? [
+              { decisionId: String(projectedId), match: "some_terms" },
+              { decisionId: String(czechId), match: "some_terms" },
+            ]
+          : [{ decisionId: String(czechId), match: "all_terms" }],
+      );
+    } finally {
+      scoredSpy.mockRestore();
+      searchSpy.mockRestore();
+      aggregateSpy.mockRestore();
+      resetPublicCaseLawConfigForTesting();
+      await db.delete(corpusIndexProjectionStates).where(
+        and(
+          inArray(
+            corpusIndexProjectionStates.entityId,
+            held.map(({ state }) => state.entityId),
+          ),
+          eq(corpusIndexProjectionStates.generation, manifest.generation),
+        ),
+      );
+      await db.delete(corpusIndexProjectionIntents).where(
+        inArray(
+          corpusIndexProjectionIntents.id,
+          held.map(({ intent }) => intent.id),
+        ),
+      );
+    }
+  },
+);
+
+test("Postgres relaxes an empty six-term question using whole-document term coverage", async () => {
+  const db = drizzle({ client });
+  const query = "promlčení nároku náhrada škody smlouva odpovědnost";
+  const fixtures = [
+    { id: czechId, text: "promlčení" },
+    { id: projectedId, text: "promlčení nároku náhrada škody" },
+  ];
+  const prior = await db
+    .select()
+    .from(caseLawSearchDocuments)
+    .where(
+      inArray(
+        caseLawSearchDocuments.decisionId,
+        fixtures.map(({ id }) => id),
+      ),
+    );
+  resetPublicCaseLawConfigForTesting(caseLawDb);
+  try {
+    await db.delete(caseLawSearchDocuments).where(
+      inArray(
+        caseLawSearchDocuments.decisionId,
+        fixtures.map(({ id }) => id),
+      ),
+    );
+    await db.insert(caseLawSearchDocuments).values(
+      fixtures.map(({ id, text }) => ({
+        decisionId: id,
+        language: "cs",
+        regconfig: "simple",
+        searchableText: text,
+        tsv: sql`to_tsvector('simple', unaccent(${text}))`,
+      })),
+    );
+    const body = { country: "CZE", query, limit: 2 };
+    const strict = await searchPostgresDecisions(
+      { ...body, strict: true },
+      caseLawDb,
+    );
+    if (!("hits" in strict)) {
+      panic("Expected a successful strict Postgres search");
+    }
+    expect(strict.hits).toEqual([]);
+    const relaxed = await searchPostgresDecisions(body, caseLawDb);
+    if (!("hits" in relaxed)) {
+      panic("Expected a successful relaxed Postgres search");
+    }
+    expect(
+      relaxed.hits.map(({ decisionId, match }) => ({ decisionId, match })),
+    ).toEqual([
+      { decisionId: String(projectedId), match: "some_terms" },
+      { decisionId: String(czechId), match: "some_terms" },
+    ]);
+    expect(relaxed.total).toEqual(strict.total);
+    expect(relaxed.facets).toEqual(strict.facets);
+    expect(relaxed.nextCursor).toBeNull();
+    expect(relaxed.warnings.map(({ code }) => code)).toContain(
+      "partial_matches_appended",
+    );
+    expect(relaxed.warnings.map(({ code }) => code)).not.toContain("no_hits");
+    expect(relaxed.warnings.map(({ code }) => code)).not.toContain(
+      "no_hits_filtered",
+    );
+    await db
+      .update(caseLawSearchDocuments)
+      .set({
+        searchableText: query,
+        tsv: sql`to_tsvector('simple', unaccent(${query}))`,
+      })
+      .where(eq(caseLawSearchDocuments.decisionId, czechId));
+    const full = await searchPostgresDecisions(body, caseLawDb);
+    if (!("hits" in full)) {
+      panic("Expected a successful full-match Postgres search");
+    }
+    expect(
+      full.hits.map(({ decisionId, match }) => ({ decisionId, match })),
+    ).toEqual([{ decisionId: String(czechId), match: "all_terms" }]);
+    expect(full.warnings.map(({ code }) => code)).not.toContain(
+      "partial_matches_appended",
+    );
+  } finally {
+    resetPublicCaseLawConfigForTesting();
+    await db.delete(caseLawSearchDocuments).where(
+      inArray(
+        caseLawSearchDocuments.decisionId,
+        fixtures.map(({ id }) => id),
+      ),
+    );
+    if (prior.length > 0) {
+      await db.insert(caseLawSearchDocuments).values(prior);
+    }
+  }
+});
 
 test("a generation admits exactly what its projection state holds", async () => {
   const scoped = {
@@ -780,41 +1503,38 @@ test.each([
 test.each([
   {
     name: "a section matches a link to one of its subsections",
-    provision: { work: "262/2006 Sb.", section: 316 },
+    provision: { work: "262/2006 Sb.", anchor: "par_316" },
     expectedIds: [czechId],
   },
   {
     name: "a subsection matches its own links",
-    provision: { work: "262/2006 Sb.", section: 316, subsection: "2" },
+    provision: { work: "262/2006 Sb.", anchor: "par_316-odst_2" },
     expectedIds: [czechId],
   },
   {
     name: "a sibling subsection matches nothing",
-    provision: { work: "262/2006 Sb.", section: 316, subsection: "1" },
+    provision: { work: "262/2006 Sb.", anchor: "par_316-odst_1" },
     expectedIds: [],
   },
   {
     name: "a shorter section number is not a prefix of a longer one",
-    provision: { work: "262/2006 Sb.", section: 31 },
+    provision: { work: "262/2006 Sb.", anchor: "par_31" },
     expectedIds: [slovakId],
   },
   {
     name: "the work is part of the provision",
-    provision: { work: "89/2012 Sb.", section: 316 },
+    provision: { work: "89/2012 Sb.", anchor: "par_316" },
     expectedIds: [slovakId],
   },
   {
     name: "a section suffix the link lacks matches nothing",
-    provision: { work: "262/2006 Sb.", section: 316, sectionSuffix: "a" },
+    provision: { work: "262/2006 Sb.", anchor: "par_316a" },
     expectedIds: [],
   },
 ] as const)(
   "both indexed reads apply the provision filter: $name",
   async ({ provision, expectedIds }) => {
-    const body = {
-      ...SEARCH_BODY,
-      provision: { unit: "section" as const, ...provision },
-    };
+    const body = { ...SEARCH_BODY, provision };
     const ranking = await rehydrateCaseLawCandidates({
       body,
       candidates: candidatesOf(czechId, slovakId),
@@ -837,7 +1557,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   const listed = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
     },
     caseLawDb,
     dependencies: {
@@ -861,7 +1581,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   const none = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 317 },
+      provision: { work: "262/2006 Sb.", anchor: "par_317" },
     },
     caseLawDb,
     dependencies: {
@@ -903,7 +1623,7 @@ test("a provision-only list escapes the citing sentence it shows as markup", asy
     const listed = await listCaseLawProvisionDecisions({
       body: {
         ...SEARCH_BODY,
-        provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+        provision: { work: "262/2006 Sb.", anchor: "par_316" },
       },
       caseLawDb,
       dependencies: {
@@ -931,7 +1651,7 @@ test("a provision-only list under the Postgres provider says it needs corpus-ind
   const refused = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
     },
     caseLawDb,
     dependencies: { provider: "pg-fts" },
@@ -947,7 +1667,7 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
   await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
     },
     caseLawDb,
     dependencies: {
@@ -988,7 +1708,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
   try {
     const request = {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
       limit: 1,
     } as const;
     const list = async (
@@ -1029,13 +1749,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
       { court: "Nejvyšší správní soud" },
       { language: "sk" },
       { sort: "newest" as const },
-      {
-        provision: {
-          work: "262/2006 Sb.",
-          unit: "section" as const,
-          section: 317,
-        },
-      },
+      { provision: { work: "262/2006 Sb.", anchor: "par_317" } },
       { cursor: "not-a-list-cursor" },
     ]) {
       expect("hits" in (await list({ ...request, cursor, ...change }))).toBe(
@@ -1055,17 +1769,27 @@ test("a provision-only list cursor resumes only the request it was issued for", 
         false,
       );
     }
-    // `newest` lists dated decisions only; date both for its pages.
-    await db
-      .update(caseLawDecisions)
-      .set({ decisionDate: "2024-01-01" })
-      .where(inArray(caseLawDecisions.id, [czechId, slovakId]));
+    // Both decisions are undated, and `newest` lists them, in its last band.
     const newest = await list({ ...request, sort: "newest" });
     if (!("hits" in newest) || newest.nextCursor === null) {
       throw new Error("expected a newest first page with a continuation");
     }
-    const [newestContext, , newestId] =
+    const [newestContext, newestDate, newestId] =
       decodePaginationCursor(newest.nextCursor) ?? [];
+    expect(newestDate).toBeNull();
+    const newestRest = await list({
+      ...request,
+      sort: "newest",
+      cursor: newest.nextCursor,
+    });
+    if (!("hits" in newestRest)) {
+      throw new Error("expected the newest second page");
+    }
+    expect(
+      [...newest.hits, ...newestRest.hits]
+        .map(({ decisionId }) => decisionId)
+        .toSorted(),
+    ).toEqual([String(czechId), String(slovakId)].toSorted());
     if (typeof newestContext !== "string" || typeof newestId !== "string") {
       throw new TypeError("expected a context and an id in the cursor");
     }
@@ -1077,10 +1801,6 @@ test("a provision-only list cursor resumes only the request it was issued for", 
       ).toBe(false);
     }
   } finally {
-    await db
-      .update(caseLawDecisions)
-      .set({ decisionDate: null })
-      .where(inArray(caseLawDecisions.id, [czechId, slovakId]));
     if (extra !== undefined) {
       await db
         .delete(caseLawProvisionCitations)
@@ -1089,8 +1809,10 @@ test("a provision-only list cursor resumes only the request it was issued for", 
   }
 });
 
-// The planner picks the decision-id or the work index by the data's shape;
-// either probes the provision's own links, and neither scans the table.
+// The planner picks the decision-id or the work-subtree index by the data's
+// shape; either probes the provision's own links. Neither scans the table,
+// and neither walks every link of the act, which for a civil code is
+// millions of rows.
 test("the provision filter reads links through an index, never by scanning them", async () => {
   await caseLawDb(async (tx) => {
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
@@ -1099,8 +1821,7 @@ test("the provision filter reads links through an index, never by scanning them"
         ...SEARCH_BODY,
         provision: {
           work: "262/2006 Sb.",
-          unit: "section" as const,
-          section: 316,
+          anchor: "par_316-odst_2",
           subsection: "2",
         },
       },
@@ -1115,10 +1836,33 @@ test("the provision filter reads links through an index, never by scanning them"
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
       );
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_anchor|work)_idx/u,
+        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_citing)_idx/u,
       );
       expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
     }
+  });
+});
+
+test("every decision citing a provision is read from the provision's own anchor range, not the whole act", async () => {
+  await caseLawDb(async (tx) => {
+    await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+    const plan = JSON.stringify(
+      await tx.execute(
+        sql`EXPLAIN (COSTS OFF) ${citingDecisionIdsSubquery(tx, {
+          jurisdiction: "CZE",
+          // § 2910 písm. a): a level below a gap is compared within the
+          // seek, never in place of it.
+          provision: { work: "89/2012 Sb.", anchor: "par_2910", letter: "a" },
+        }).getSQL()}`,
+      ),
+    );
+    expect(plan).toMatch(
+      /Index (?:Only )?Scan using case_law_provision_citations_work_citing_idx/u,
+    );
+    // The anchor bounds are the seek, not a filter over the act's links.
+    // One plan row per object: `[^}]` keeps the match inside the row.
+    expect(plan).toMatch(/Index Cond: [^}]*anchor[^}]*>=/u);
+    expect(plan).not.toContain("case_law_provision_citations_work_idx");
   });
 });
 
@@ -1332,11 +2076,11 @@ test("the database returns no content columns for excluded canonical ids", async
 test("provider scan counts retained omissions once as eligible candidates grow", async () => {
   const hitDispositions = createCorpusHitDispositionCounter();
   const missingId = createSafeId<"caseLawDecision">();
-  const eligibleIds = [czechId, slovakId];
   const restoreFetch = installCorpusDispositionScan([
-    closedId,
-    missingId,
-    ...eligibleIds,
+    { id: closedId, revision: closedIntentId },
+    { id: missingId, revision: createSafeId<"corpusIndexProjectionIntent">() },
+    { id: czechId, revision: czechIntentId },
+    { id: slovakId, revision: slovakIntentId },
   ]);
   const candidateCounts: number[] = [];
   const eligibleCounts: number[] = [];
@@ -1358,7 +2102,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: () => 0,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
         candidateCounts.push(candidates.length);
         const result = await rankCorpusIndexProviderCandidates({
           generation: GENERATION,
@@ -1366,6 +2110,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
           hitDispositions,
           candidates,
           excludedGroups: undefined,
+          selectAppliedCandidates,
         });
         eligibleCounts.push(result.ranked.length);
         return result;
@@ -1417,6 +2162,7 @@ test("index search hits carry source text disposition and retain human excerpts"
       ),
     ),
     total: SEARCH_TOTAL_NOT_COUNTED,
+    match: "all_terms",
   });
   expect(
     page.hits.map(({ decisionId, textWithheldReason }) => ({
@@ -1464,3 +2210,170 @@ test("full text search reads the source permission beside human excerpts", async
     rows.find((row) => row["decision_id"] === withheldId)?.["headline"],
   ).toContain("sampleword");
 });
+
+test.each(["off", "bm25-ratio"] as const)(
+  "applied revision alone supplies query matches and candidate scores in %s scans",
+  async (rankingMode) => {
+    const oldRevision = createSafeId<"corpusIndexProjectionIntent">();
+    const oldText = "obsolete common common common common";
+    const currentText = "current common";
+    expect(oldRevision).not.toBe(czechIntentId);
+    expect(oldText).not.toBe(currentText);
+    expect(currentText).not.toContain("obsolete");
+    const restoreFetch = installCorpusRevisionScan([
+      { id: czechId, revision: oldRevision, text: oldText },
+      { id: czechId, revision: czechIntentId, text: currentText },
+      { id: withheldId, revision: withheldIntentId, text: "common common" },
+    ]);
+    try {
+      const search = async (query: string) =>
+        await readCorpusIndexSearchPage({
+          observer: "unobserved",
+          cluster: "q09",
+          indexId: INDEX_ID,
+          query: `text:${query}`,
+          limit: 40,
+          order: RELEVANCE_ORDER,
+          parsedCursor: null,
+          rankingMode,
+          scanTransport:
+            rankingMode === "bm25-ratio"
+              ? { type: "scored" }
+              : { type: "native" },
+          snippetFields: ["text"],
+          projectionRevisionField: "projection_revision",
+          extractId: (hit) =>
+            typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+          extractSnippet: () => null,
+          unseenScoreUpperBound: () => 0,
+          rankCandidates: async (candidates, scope) =>
+            await rehydrateCaseLawCandidates({
+              body: { country: "CZE", query, sort: "newest" },
+              caseLawDb,
+              courtWeights,
+              generation: GENERATION,
+              candidates,
+              selectAppliedCandidates: scope.selectAppliedCandidates,
+            }),
+        });
+      const obsolete = await search("obsolete");
+      expect(obsolete.scan.passagesScanned).toBe(1);
+      expect(reads).toBe(1);
+      expect(obsolete.pageRanked).toEqual([]);
+      const common = await search("common");
+      expect(common.scan.passagesScanned).toBe(3);
+      expect(reads).toBe(2);
+      expect(common.pageRanked.map(({ id }) => id)).toEqual([
+        withheldId,
+        czechId,
+      ]);
+      const applied = common.pageRanked.find(({ id }) => id === czechId);
+      expect(applied?.lexicalScore).toBeCloseTo(
+        rankingMode === "off"
+          ? corpusIndexLexicalScore(2)
+          : (1 / 4) ** CORPUS_BM25_RATIO_POWER,
+        10,
+      );
+      expect(common.passageCountById.get(czechId)).toBe(1);
+      expect(common.passageClauseById.get(czechId)).toContain("passage-1");
+    } finally {
+      restoreFetch();
+    }
+  },
+);
+
+test.each([
+  {
+    name: "publisher summary alone",
+    payload: {
+      fulltext: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    },
+    expected: "metadata_only",
+  },
+  {
+    name: "empty document",
+    payload: {
+      fulltext: "",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    },
+    expected: "metadata_only",
+  },
+  {
+    name: "stored text",
+    payload: {
+      fulltext: "sampleword decision text",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    },
+    expected: "available",
+  },
+  {
+    name: "completed object-storage document",
+    payload: {
+      fulltext: null,
+      textS3Key: "text-key",
+      normalizedS3Key: "normalized-key",
+      astS3Key: "ast-key",
+    },
+    expected: "available",
+  },
+] as const)(
+  "search reports text availability for $name on both providers",
+  async ({ payload, expected }) => {
+    const db = drizzle({ client });
+    await db
+      .update(caseLawDecisions)
+      .set({
+        ...payload,
+        metadata: { legalSentence: "sampleword publisher summary" },
+      })
+      .where(eq(caseLawDecisions.id, czechId));
+    const byId = await readCaseLawPageDecisionRows({
+      body: SEARCH_BODY,
+      caseLawDb,
+      generation: GENERATION,
+      ids: [czechId],
+    });
+    const page = decisionHitsPage({
+      alternatesByGroupKey: { alternatesFor: () => [] },
+      anchorIdById: new Map(),
+      byId,
+      courtWeights,
+      facets: null,
+      headnotePresentation: undefined,
+      nextCursor: null,
+      pageRanked: [
+        { id: czechId, score: 1, lexicalScore: 1, citationAuthority: 0 },
+      ],
+      passageCountById: new Map(),
+      snippetById: new Map(),
+      snippetRevisionById: new Map(),
+      total: SEARCH_TOTAL_NOT_COUNTED,
+      match: "all_terms",
+    });
+    expect(page.hits.map((hit) => hit.textAvailability)).toEqual([expected]);
+    expect(page.hits.at(0)?.headnote.type).toBe("present");
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const postgres = await searchPostgresDecisions(
+        { country: "CZE", query: "sampleword" },
+        caseLawDb,
+      );
+      if (!("hits" in postgres)) {
+        panic("Expected a successful Postgres search");
+      }
+      expect(
+        postgres.hits.find((hit) => hit.decisionId === czechId)
+          ?.textAvailability,
+      ).toBe(expected);
+    } finally {
+      resetPublicCaseLawConfigForTesting();
+    }
+  },
+);

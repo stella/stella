@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
 import { panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
@@ -29,18 +30,19 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
-  TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
+  TrackedRunContent,
 } from "@stll/docx-core/model";
 import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
   ParagraphBlock,
@@ -54,6 +56,7 @@ import {
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
 import { collapseSpacedLetters } from "@stll/text-normalize";
+import { parsePlainDate } from "@stll/time";
 
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -61,20 +64,14 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import {
-  createParagraphLineReader,
   type BodyDocumentLine,
+  createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";
-
-const HU_BHGY_PARSER = "hu-bhgy";
 
 // ── The document as lines ────────────────────────────────
 
@@ -228,6 +225,10 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         item satisfies never;
@@ -323,12 +324,16 @@ const itemsOf = (
         // A content control is a wrapper; its children are the document's.
         return itemsOf(block.content, notesAfter);
       // No line of the decision: a preserved block is opaque markup folio does
-      // not model and holds no text, and a bookmark marker is a position. This
-      // parser reads text, so it skips all three rather than round-tripping
-      // them.
+      // not model and holds no text, and a bookmark or move range marker is a
+      // position. This parser reads text, so it skips them rather than
+      // round-tripping them.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         block satisfies never;
@@ -365,7 +370,7 @@ const headingKey = (text: string): string =>
   ).toLocaleLowerCase("hu-HU");
 
 /** Where in the document the walk currently is, which decides a body role. */
-type Region = "front" | "operative" | "reasoning" | "apparatus" | "closing";
+type Region = "front" | "operative" | "reasoning" | "closing" | "certification";
 
 /**
  * The section headings the collection prints, and the depth each sits at.
@@ -386,11 +391,13 @@ type SectionHeading = {
 const SECTION_HEADINGS = [
   { key: "rendelkező rész", level: 1, region: "operative" },
   { key: "indokolás", level: 1, region: "reasoning" },
-  { key: "a döntés elvi tartalma", level: 1, region: "apparatus" },
+  { key: "a döntés elvi tartalma", level: 1, region: "reasoning" },
+  { key: "a határozat elvi tartalma", level: 1, region: "reasoning" },
+  { key: "alkalmazott jogszabályok", level: 1, region: "reasoning" },
   {
     key: "alkalmazott jogszabályok és joggyakorlat",
     level: 1,
-    region: "apparatus",
+    region: "reasoning",
   },
   { key: "záradék", level: 1, region: "closing" },
   { key: "a felülvizsgálat alapjául szolgáló tényállás", level: 2 },
@@ -591,11 +598,16 @@ const BENCH_ROLES = [
   { suffix: "bíró", role: DECISION_JUDGE_ROLE.PANEL_MEMBER },
 ] as const;
 
+const SIGNATURE_ROLE_SUFFIXES = BENCH_ROLES.map(({ suffix }) => suffix);
+
+/** `s.k.`, optionally followed by one of the publisher's bench roles. */
+const SIGNED_IN_ORIGINAL = new RegExp(
+  String.raw`\bs\.\s?k\.(?:\s+(?:${SIGNATURE_ROLE_SUFFIXES.join("|")}))?\s*$`,
+  "iu",
+);
+
 /** Members of one panel line, as the court separates them. */
 const PANEL_MEMBER_SEPARATOR = /[/,;]/u;
-
-/** `s.k.`, the signed-in-the-original mark, which is not part of a name. */
-const SIGNED_IN_ORIGINAL = /\bs\.\s?k\.\s*$/iu;
 
 type BenchRoleMatch = {
   readonly role: DecisionJudgeInput["role"];
@@ -686,54 +698,56 @@ const MONTH_NUMBERS = new Map<string, number>(
   HUNGARIAN_MONTHS.map((name, index) => [name, index + 1]),
 );
 
-const SPELLED_DATE = new RegExp(
-  String.raw`(?<year>\d{4})\.\s*(?<month>${MONTH_NAMES})\s*(?<day>\d{1,2})\.`,
+// The words év/évi (year) and hó (month) are optional parts of the
+// publisher's date formula, in both document eras.
+const DATE_SOURCE = String.raw`(?<year>\d{4})\.\s*(?:évi?\s+)?(?:(?<monthName>${MONTH_NAMES})\s*(?:hó\s+)?|(?<monthNumber>\d{1,2})\.\s*)(?<day>\d{1,2})(?:\.|-(?:án|én))`;
+const HU_DATE = new RegExp(String.raw`(?<!\d)${DATE_SOURCE}`, "iu");
+const DATE_ONLY = new RegExp(
+  String.raw`^${DATE_SOURCE}(?:\s*napján\.?)?$`,
   "iu",
 );
-
-const NUMERIC_DATE =
-  /(?<year>\d{4})\.\s*(?<month>\d{1,2})\.\s*(?<day>\d{1,2})\./u;
 
 const pad = (value: number): string => String(value).padStart(2, "0");
 
 /**
- * The decision's own date, read off a closing line.
- *
- * The listing states only `HatarozatEve`, the year, so a date derived from it
- * would be a guess wearing a day. Where the document prints none, the decision
- * carries no date rather than a wrong one.
+ * Read only a full calendar date. The listing's decisionYear remains a year;
+ * neither that nor a document's timestamp reference supplies a month or day.
  */
 export const huDecisionDateFrom = (line: string): string | undefined => {
-  const spelled = SPELLED_DATE.exec(line)?.groups;
-  const spelledYear = spelled?.["year"];
-  if (spelled !== undefined && spelledYear !== undefined) {
-    const month = MONTH_NUMBERS.get(
-      (spelled["month"] ?? "").toLocaleLowerCase("hu-HU"),
-    );
-    if (month !== undefined) {
-      return `${spelledYear}-${pad(month)}-${pad(Number(spelled["day"]))}`;
-    }
-  }
-  const numeric = NUMERIC_DATE.exec(line)?.groups;
-  const year = numeric?.["year"];
-  if (numeric === undefined || year === undefined) {
+  const groups = HU_DATE.exec(line)?.groups;
+  const year = groups?.["year"];
+  if (groups === undefined || year === undefined) {
     return undefined;
   }
-  const month = Number(numeric["month"]);
-  const day = Number(numeric["day"]);
-  return month >= 1 && month <= 12 && day >= 1 && day <= 31
-    ? `${year}-${pad(month)}-${pad(day)}`
-    : undefined;
+  const monthName = groups["monthName"];
+  const month =
+    monthName === undefined
+      ? Number(groups["monthNumber"])
+      : MONTH_NUMBERS.get(monthName.toLocaleLowerCase("hu-HU"));
+  if (month === undefined) {
+    return panic("Matched Hungarian month has no calendar number");
+  }
+  const date = `${year}-${pad(month)}-${pad(Number(groups["day"]))}`;
+  return parsePlainDate(date) === null ? undefined : date;
 };
 
 /**
- * A place-and-date line: `Budapest, 2025. október 1.` The place is the court's
- * seat, so the comma is what tells this line from a sentence ending in a date.
+ * A complete place-and-date formula. Anonymisation can replace, shorten or
+ * remove the place; a comma still separates it from the date. The publisher
+ * also prints the literal placeholder "helység neve" without that separator.
+ * Requiring the visual line to end here excludes dates inside running text.
  */
-const CLOSING_LINE = /^\p{Lu}[\p{L}\-\s]{2,30},\s*\d{4}\./u;
+const CLOSING_LINE = new RegExp(
+  String.raw`^(?:[\p{L}\d()\-\s]{0,40},|helység neve)\s*${DATE_SOURCE}(?:\s*napján\.?)?$`,
+  "iu",
+);
 
-/** The date is where the line ends: `2021. március 3.`, `30. napján`. */
-const DATE_ENDS_LINE = /\d{1,2}\.(?:\s*napján\.?)?$/u;
+const closingDateFrom = (text: string): string | undefined => {
+  const firstLine = text.split("\n").at(0)?.trim() ?? "";
+  return CLOSING_LINE.test(firstLine)
+    ? huDecisionDateFrom(firstLine)
+    : undefined;
+};
 
 /**
  * The date of a closing line a soft break put inside a longer paragraph.
@@ -759,11 +773,22 @@ const closingDateAfterSoftBreak = (text: string): string | undefined => {
     }
     const trimmed = rawLine.trim();
     const date =
-      index > 0 && CLOSING_LINE.test(trimmed) && DATE_ENDS_LINE.test(trimmed)
+      index > 0 && CLOSING_LINE.test(trimmed)
         ? huDecisionDateFrom(trimmed)
         : undefined;
     if (date !== undefined) {
       return date;
+    }
+    const nextLine = lines.at(index + 1)?.trim();
+    if (
+      DATE_ONLY.test(trimmed) &&
+      nextLine !== undefined &&
+      SIGNED_IN_ORIGINAL.test(nextLine)
+    ) {
+      const signedDate = huDecisionDateFrom(trimmed);
+      if (signedDate !== undefined) {
+        return signedDate;
+      }
     }
   }
   return undefined;
@@ -1007,7 +1032,7 @@ export type ParseHuBhgyInput = {
 };
 
 export type ParseHuBhgyOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: DecisionSection[];
   /** Read off the document; the listing states only the year. */
@@ -1094,8 +1119,8 @@ const BODY_ROLE = {
   front: "intro",
   operative: "holding",
   reasoning: "argumentation",
-  apparatus: "apparatus",
   closing: "closing",
+  certification: "closing",
 } as const satisfies Record<Region, ParagraphRole>;
 
 const HEADING_ROLE_BY_LEVEL = {
@@ -1119,8 +1144,8 @@ export const parseHuBhgyDecision = (
   /** The header label the lines below a labelled one still belong to. */
   let continuedRole: ParagraphRole | null = null;
   let region: Region = "front";
-  let titleEmitted = false;
   let decisionDate: string | undefined;
+  let dateBeforeSignature: string | undefined;
   /**
    * A closing line found after a soft break inside a body paragraph. Only a
    * fallback: a closing line that opens its own paragraph is the formula
@@ -1134,9 +1159,42 @@ export const parseHuBhgyDecision = (
   const classifyBodyLine = (body: BodyDocumentLine<DocLineData>): void => {
     const line = body.value;
     const key = headingKey(line.text);
+    const precedingDate = dateBeforeSignature;
+    dateBeforeSignature = undefined;
+
+    if (region === "certification") {
+      builder.paragraph({
+        type: "paragraph",
+        role: "signature",
+        inlines: inlinesOf(line.runs),
+        plainText: line.text,
+      });
+      return;
+    }
+    if (key.startsWith(KIADMANY)) {
+      region = "certification";
+      builder.paragraph({
+        type: "paragraph",
+        role: "closing",
+        inlines: inlinesOf(line.runs),
+        plainText: line.text,
+      });
+      return;
+    }
+    if (
+      precedingDate !== undefined &&
+      SIGNED_IN_ORIGINAL.test(line.text.trim())
+    ) {
+      decisionDate ??= precedingDate;
+      region = "closing";
+    }
 
     if (region === "front") {
       titleLines.push(line.text);
+      // Court numbering ends the caption even when its heading is absent.
+      if (COURT_PARAGRAPH_NUMBER.test(line.text.trim())) {
+        region = "reasoning";
+      }
     }
 
     // ── A section heading the publisher prints ──
@@ -1177,8 +1235,9 @@ export const parseHuBhgyDecision = (
     }
 
     // ── The document's own title block ──
-    if (!titleEmitted && region === "front" && builder.blocks.length === 0) {
-      titleEmitted = true;
+    // Every earlier region transition emits a block, so an empty builder
+    // means this is the document's first unclassified line.
+    if (builder.blocks.length === 0) {
       builder.heading({
         type: "heading",
         level: 1,
@@ -1187,6 +1246,23 @@ export const parseHuBhgyDecision = (
         plainText: line.text,
       });
       return;
+    }
+
+    // A closing formula ends even an unlabelled continuation of the header.
+    const closingDate = closingDateFrom(line.text);
+    if (closingDate !== undefined) {
+      decisionDate ??= closingDate;
+      region = "closing";
+      builder.paragraph({
+        type: "paragraph",
+        role: "closing",
+        inlines: inlinesOf(line.runs),
+        plainText: line.text,
+      });
+      return;
+    }
+    if (DATE_ONLY.test(line.text.trim())) {
+      dateBeforeSignature = huDecisionDateFrom(line.text);
     }
 
     // ── Header labels ──
@@ -1219,28 +1295,6 @@ export const parseHuBhgyDecision = (
       }
     }
 
-    // ── The closing formula and what follows it ──
-    if (CLOSING_LINE.test(line.text)) {
-      decisionDate ??= huDecisionDateFrom(line.text);
-      region = "closing";
-      builder.paragraph({
-        type: "paragraph",
-        role: "closing",
-        inlines: inlinesOf(line.runs),
-        plainText: line.text,
-      });
-      return;
-    }
-    if (key.startsWith(KIADMANY)) {
-      region = "closing";
-      builder.paragraph({
-        type: "paragraph",
-        role: "apparatus",
-        inlines: inlinesOf(line.runs),
-        plainText: line.text,
-      });
-      return;
-    }
     if (region === "closing") {
       builder.paragraph({
         type: "paragraph",
@@ -1263,7 +1317,7 @@ export const parseHuBhgyDecision = (
     );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
-    if (numbered === null || number === undefined) {
+    if (number === undefined) {
       builder.paragraph({
         type: "paragraph",
         role,
@@ -1292,6 +1346,15 @@ export const parseHuBhgyDecision = (
     lineTexts.push(value.text);
     if (line.kind === "body") {
       classifyBodyLine(line);
+      // Certification can begin after a soft break and continue in later
+      // paragraphs; keep the date found before it, but read no date past it.
+      if (
+        value.text
+          .split("\n")
+          .some((text) => headingKey(text).startsWith(KIADMANY))
+      ) {
+        region = "certification";
+      }
       return;
     }
     const { label, noteId } = line.note;
@@ -1309,6 +1372,7 @@ export const parseHuBhgyDecision = (
       emitLine(item.line);
       continue;
     }
+    dateBeforeSignature = undefined;
     const rows: TableCell[][] = item.table.rows.map((row) =>
       row.map((cell) => ({
         inlines: inlinesOf(cell.value.runs),
@@ -1331,20 +1395,9 @@ export const parseHuBhgyDecision = (
     .filter((text) => text.length > 0)
     .join("\n\n");
 
-  validateAndLog(
-    {
-      parser: HU_BHGY_PARSER,
-      caseNumber: input.listedCaseNumber,
-      language: "hu",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(lineTexts),
-    blocks,
-  );
-
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: HU_BHGY_SOURCE_SYSTEM,

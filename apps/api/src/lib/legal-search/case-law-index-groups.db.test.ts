@@ -35,6 +35,9 @@ const GENERATIONS: readonly string[] = [
   "case_law_v1",
   "case_law_v2",
   "case_law_v3",
+  // On both sides of the generation Czech decisions are rehomed at.
+  "case_law_v8",
+  "case_law_v9",
   "case_law_v12",
   // The last order the integer cast holds, and the first past it: the former
   // is grouped, the latter stays per country rather than failing the cast.
@@ -107,8 +110,10 @@ test("the query fragment and corpusIndexId derive the same id", async () => {
   expect(corpusIndexId("case_law_v3", "CZE")).not.toBe("case_law_v3_cze");
   expect(corpusIndexId("case_law_v2", "CZE")).toBe("case_law_v2_cze");
   expect(corpusIndexId("legislation_v1", "CZE")).toBe("legislation_v1_cze");
+  expect(corpusIndexId("case_law_v8", "CZE")).toBe("case_law_v8_cs_sk");
+  expect(corpusIndexId("case_law_v9", "CZE")).toBe("case_law_v9_cze");
   expect(corpusIndexId("case_law_v2147483647", "CZE")).toBe(
-    "case_law_v2147483647_cs_sk",
+    "case_law_v2147483647_cze",
   );
   expect(corpusIndexId("case_law_v2147483648", "CZE")).toBe(
     "case_law_v2147483648_cze",

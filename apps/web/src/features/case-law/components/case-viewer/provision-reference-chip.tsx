@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -31,19 +32,25 @@ type ProvisionDocument = Pick<
 >;
 
 type ProvisionReferenceChipProps = {
-  document: ProvisionDocument | null;
+  target:
+    | { type: "hosted"; document: ProvisionDocument | null }
+    | { type: "external"; href: string };
   label: string;
+  /** What the cited anchor is cut on to find its provision's heading. */
+  anchorSeparator: string | null;
   provision: ProvisionGroup;
   versionMarker: "group" | "exception";
 };
 
 /** A compact reference; wording is read only while its preview is open. */
 export const ProvisionReferenceChip = ({
-  document,
+  target,
   label,
+  anchorSeparator,
   provision,
   versionMarker,
 }: ProvisionReferenceChipProps) => {
+  const document = target.type === "hosted" ? target.document : null;
   const t = useTranslations();
   const format = useFormatter();
   const [open, setOpen] = useState(false);
@@ -54,7 +61,7 @@ export const ProvisionReferenceChip = ({
     refetch,
   } = useQuery({
     ...provisionPreviewOptions({
-      anchor: provisionHeadingAnchor(provision.anchor),
+      anchor: provisionHeadingAnchor(provision.anchor, anchorSeparator),
       citedAnchor: provision.anchor,
       documentId: document?.id ?? "",
     }),
@@ -160,6 +167,22 @@ export const ProvisionReferenceChip = ({
               ))}
             </div>
           </ScrollArea>
+          {target.type === "external" && (
+            <Button
+              size="xs"
+              variant="outline"
+              className="w-fit"
+              render={
+                <a
+                  href={sanitizeHref(target.href)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                />
+              }
+            >
+              {t("chat.webSearch.openSource", { source: "EUR-Lex" })}
+            </Button>
+          )}
           {document !== null && (
             <Button
               size="xs"

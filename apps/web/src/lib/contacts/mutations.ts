@@ -3,14 +3,17 @@ import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import type { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 
@@ -73,7 +76,6 @@ type ContactMetadataSection =
   | { customFields: ContactCustomField[]; dataBoxes?: never };
 
 type CreateContactVars = {
-  id: SafeId<"contact">;
   type: ContactType;
   displayName: string;
   firstName?: string;
@@ -89,6 +91,8 @@ type CreateContactVars = {
   color?: string;
   registrationNumber?: string;
   taxId?: string;
+  vatId?: string;
+  vatPayer?: boolean | null;
   bankAccounts?: BankAccount[];
   billingAddress?: BillingAddress;
   defaultHourlyRate?: number;
@@ -102,15 +106,23 @@ type CreateContactVars = {
 
 export const useCreateContact = () => {
   const analytics = useAnalytics();
+  const t = useTranslations();
 
-  return useMutation({
-    mutationFn: async (vars: CreateContactVars) => {
-      const response = await api.contacts.put(vars);
+  return useIdempotentMutation({
+    mutationFn: async (vars: CreateContactVars, request) => {
+      const response = await api.contacts.put({
+        ...vars,
+        id: toSafeId<"contact">(request.headers["Idempotency-Key"]),
+      });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateContact:failure",
+        scope: { type: "handler", handlerId: "useCreateContact:failure" },
+      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -131,6 +143,8 @@ export type ContactUpdateFields = {
   color: string | null;
   registrationNumber: string | null;
   taxId: string | null;
+  vatId: string | null;
+  vatPayer: boolean | null;
   bankAccounts: BankAccount[] | null;
   billingAddress: BillingAddress | null;
   defaultHourlyRate: number | null;
@@ -162,7 +176,7 @@ export const useUpdateContact = () => {
     }: UpdateContactVars) => {
       const response = await api.contacts({ contactId }).post(body);
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, vars) => {
       // Mutation callbacks outlive page observers. Use the submitted scope even
@@ -188,7 +202,10 @@ export const useUpdateContact = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateContact:failure",
+        scope: { type: "handler", handlerId: "useUpdateContact:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -210,7 +227,11 @@ export const useDeleteContact = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteContact:failure",
+        scope: { type: "handler", handlerId: "useDeleteContact:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

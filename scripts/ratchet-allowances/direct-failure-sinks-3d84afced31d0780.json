@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/legislation/ingestion.ts",
+  "delta": 1,
+  "reason": "Rejected publisher amendment observations must be reported while the valid legislation document continues through ingestion."
+}

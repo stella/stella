@@ -19,6 +19,10 @@ import { contentText, passthroughId, publicUrl } from "./projection-fields";
  */
 export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
   doctrineAvailability: v.picklist(["available", "unavailable"]),
+  doctrine: v.optional(
+    v.picklist(DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated")),
+  ),
+  polarity: v.optional(v.picklist(CITATION_TREATMENTS)),
   // The decision the citations were read from, echoed so a paged reply still
   // says what it is about.
   decisionId: passthroughId(),

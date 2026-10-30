@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  EU_PROVISION_ARTICLE_LABELS,
+  EU_PROVISION_PARAGRAPH_LABELS,
+  EU_PROVISION_POINT_LABELS,
+} from "@stll/legal-atlas/eu-provision-citations";
 
 import {
   locateProvisionAnchors,
@@ -350,4 +355,137 @@ test("more specific stored references reserve their own occurrences before secti
       );
     }
   }
+});
+
+test("Czech and Slovak article words place the complete printed reference", () => {
+  for (const articleWord of ["článek", "článok", "článku", "článkom"]) {
+    const printed = `${articleWord} 6`;
+    const sentence = `Použije se ${printed}.`;
+    const result = locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(6), unit: "article" },
+          sentenceText: sentence,
+          spanStart: sentence.indexOf(printed),
+          target: "eu-act",
+        },
+      ],
+    });
+    expect(result.failures).toEqual([]);
+    expect(
+      result.anchorsByPieceId["text"]?.map(({ start, end }) =>
+        sentence.slice(start, end),
+      ),
+    ).toEqual([printed]);
+  }
+});
+
+test("extracted article capitalization variants retain their placements", () => {
+  for (const printed of ["article 6 GDPR", "artikel 6 GDPR", "Článek 6 GDPR"]) {
+    const extracted =
+      /(?<word>article|artikel|článek)\s+(?<section>\d+)/iu.exec(printed);
+    expect(extracted).not.toBeNull();
+    const section = Number(extracted?.groups?.["section"]);
+    const result = locateProvisionAnchors({
+      blocks: [paragraph("text", printed)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(section), unit: "article" },
+          sentenceText: printed,
+          spanStart: extracted?.index ?? 0,
+          target: "gdpr",
+        },
+      ],
+    });
+    expect(result.failures).toEqual([]);
+    expect(
+      result.anchorsByPieceId["text"]?.map(({ start, end }) =>
+        printed.slice(start, end),
+      ),
+    ).toEqual([printed.slice(0, printed.indexOf(" GDPR"))]);
+  }
+});
+
+test("every extracted EU provision label is accepted by placement", () => {
+  const cases = [
+    ...EU_PROVISION_ARTICLE_LABELS.map(({ example }) => ({
+      printed: `${example} 6`,
+      reference: { ...reference(6), unit: "article" as const },
+    })),
+    ...EU_PROVISION_PARAGRAPH_LABELS.map(({ example }) => ({
+      printed: `Article 6 ${example} 2`,
+      reference: {
+        ...reference(6, "2"),
+        unit: "article" as const,
+      },
+    })),
+    ...EU_PROVISION_POINT_LABELS.map(({ example }) => ({
+      printed: `Article 6 ${example} a)`,
+      reference: {
+        ...reference(6),
+        letter: "a",
+        unit: "article" as const,
+      },
+    })),
+  ];
+
+  for (const { printed, reference: provisionReference } of cases) {
+    const result = locateProvisionAnchors({
+      blocks: [paragraph("text", printed)],
+      provisions: [
+        {
+          id: "article",
+          reference: provisionReference,
+          sentenceText: printed,
+          spanStart: 0,
+          target: "eu-act",
+        },
+      ],
+    });
+    expect(result.failures).toEqual([]);
+    expect(
+      result.anchorsByPieceId["text"]?.map(({ start, end }) =>
+        printed.slice(start, end),
+      ),
+    ).toEqual([printed]);
+  }
+});
+
+test("article words do not match related adjectives", () => {
+  const sentence = "Použije se článkový 6 přehled.";
+  expect(
+    locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(6), unit: "article" },
+          sentenceText: sentence,
+          spanStart: sentence.indexOf("článkový 6"),
+          target: "eu-act",
+        },
+      ],
+    }).failures,
+  ).toEqual([{ id: "article", reason: "reference-unlocatable" }]);
+});
+
+test("article words do not match inside longer words", () => {
+  const sentence = "See Part 6 of the annex.";
+  expect(
+    locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(6), unit: "article" },
+          sentenceText: sentence,
+          spanStart: sentence.indexOf("Part 6"),
+          target: "eu-act",
+        },
+      ],
+    }).failures,
+  ).toEqual([{ id: "article", reason: "reference-unlocatable" }]);
 });

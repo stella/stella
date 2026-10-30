@@ -100,19 +100,11 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
         class: "budget",
         owner: "code-health",
       },
-      "Dated waiver lifecycle guards": {
-        class: "time-based",
-        owner: "code-health",
-      },
     },
   },
   "ci-checks-rest": {
     class: "correctness",
     steps: {
-      "Quarantine-exclude guards": {
-        class: "time-based",
-        owner: "dependencies",
-      },
       "Query data state baseline": {
         class: "budget",
         owner: "api-performance",
@@ -127,15 +119,29 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       "Save generated sources": { class: "advisory", owner: "ci" },
     },
   },
-  "pr-heavy-gate": { class: "correctness" },
+  "pr-heavy-gate": {
+    class: "correctness",
+    steps: {
+      "dated-waiver-expiry: Check dated waiver expiry on the current tree": {
+        class: "time-based",
+        owner: "code-health",
+        enforcedBy:
+          "scripts/dated-waivers.ts scopes expiry failures to pull requests that touch the waiver",
+      },
+    },
+  },
   "ci-tests": { class: "correctness" },
   "api-test-durations": { class: "advisory" },
   "ci-browser": { class: "correctness" },
   "code-quality-api": { class: "correctness" },
+  "code-quality-api-cancel": { class: "advisory" },
   "code-quality-web-rest": { class: "correctness" },
+  "code-quality-web-rest-cancel": { class: "advisory" },
   "query-perf": { class: "correctness" },
   "postgres-service-suites": { class: "correctness" },
   "service-suites": { class: "correctness" },
+  "database-migrations-check": { class: "correctness" },
+  "database-migrations-apply-fresh": { class: "correctness" },
   "migration-upgrade-rehearsal": { class: "correctness" },
   "release-typecheck": { class: "correctness" },
   "fix-tests-on-base": {
@@ -243,6 +249,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "scan-engine-wasm-drift": { class: "correctness" },
   "desktop-rust-tests": { class: "correctness" },
   "desktop-rust-lint": { class: "correctness" },
+  "dependency-audit": { class: "correctness" },
+  "dependency-review": { class: "correctness" },
   "dependency-malware": { class: "correctness" },
   "ci-quick-checks": {
     class: "correctness",
@@ -255,5 +263,11 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
     },
   },
-  "ci-result": { class: "correctness" },
+  "ci-result": {
+    class: "correctness",
+    steps: {
+      "Write required-jobs record": { class: "advisory", owner: "ci" },
+      "Upload required-jobs record": { class: "advisory", owner: "ci" },
+    },
+  },
 };

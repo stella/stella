@@ -16,12 +16,13 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
   mock,
   setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -39,12 +40,16 @@ import { createExtractionRunStore } from "@/api/lib/extraction-runs/store";
 import type { ExtractionRunDb } from "@/api/lib/extraction-runs/store";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedExtractionRunId } from "@/api/lib/safe-id-boundaries";
-import { processWorkflowEntityRun } from "@/api/lib/workflow-queue";
+import {
+  processWorkflowEntityRun,
+  startWorkflow,
+} from "@/api/lib/workflow-queue";
 import * as batchGenerator from "@/api/lib/workflow/generate-batch-provider";
 import type { ExecutionLevel } from "@/api/lib/workflow/get-execution-plan";
 import { WORKFLOW_QUEUE_CLASSES } from "@/api/lib/workflow/queue-topology";
 import * as rootRunStateStore from "@/api/lib/workflow/root-run-state-store";
 import * as stragglerCatchUp from "@/api/lib/workflow/straggler-catchup";
+import type { StragglerRunStarter } from "@/api/lib/workflow/straggler-catchup";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -109,17 +114,23 @@ const executionPlan: ExecutionLevel[] = [
 
 const EXTRACTED_VALUE = "Laws of England and Wales";
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
 type BatchGenerator = ReturnType<typeof batchGenerator.getBatchGenerator>;
 
 const generateSpy = mock<BatchGenerator>();
-const generatorSpy = spyOn(batchGenerator, "getBatchGenerator");
-const stragglerSpy = spyOn(stragglerCatchUp, "startStragglerCatchUp");
-const runStateSpy = spyOn(rootRunStateStore, "getRootWorkflowRunStateStore");
+let generatorSpy: Mock<typeof batchGenerator.getBatchGenerator>;
+const runActualStragglerCatchUp = stragglerCatchUp.startStragglerCatchUp;
+let stragglerSpy: Mock<typeof stragglerCatchUp.startStragglerCatchUp>;
+let runStateSpy: Mock<typeof rootRunStateStore.getRootWorkflowRunStateStore>;
 const clearedWorkspaceIds: string[] = [];
 const createdRunIds: string[] = [];
 
 beforeEach(() => {
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  generatorSpy = spyOn(batchGenerator, "getBatchGenerator");
+  stragglerSpy = spyOn(stragglerCatchUp, "startStragglerCatchUp");
+  runStateSpy = spyOn(rootRunStateStore, "getRootWorkflowRunStateStore");
+
   settingsSpy.mockReset();
   generateSpy.mockReset();
   generatorSpy.mockReset();
@@ -145,6 +156,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb.delete(fields).where(eq(fields.propertyId, extractedPropertyId));
   for (const runId of createdRunIds.splice(0)) {
     // db-await-in-loop: test cleanup of at most one run per test.
@@ -175,6 +187,7 @@ afterAll(async () => {
 const queueRun = async (
   serviceTier: "standard" | "flex",
   plan: ExecutionLevel[] = executionPlan,
+  now?: () => string,
 ) => {
   const runId = createSafeId<"extractionRun">();
   createdRunIds.push(runId);
@@ -237,6 +250,7 @@ const queueRun = async (
       },
       signal: new AbortController().signal,
       extractionRuns,
+      ...(now === undefined ? {} : { now }),
     });
   return { actor, run, runId };
 };
@@ -252,7 +266,7 @@ const readRun = async (runId: string) => {
 
 const readCells = async () =>
   await testDb
-    .select({ content: fields.content })
+    .select({ content: fields.content, aiSettlement: fields.aiSettlement })
     .from(fields)
     .where(
       and(
@@ -291,6 +305,12 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        settlements: new Map(
+          batch.properties.map((property) => [
+            property.id,
+            "answered" as const,
+          ]),
+        ),
       });
     });
     stragglerSpy.mockImplementation(async () => {
@@ -304,7 +324,14 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
     expect(generateOptions?.scopedDb).toBe(actor.inputDb);
     expect(generateOptions?.entityVersionId).toBe(ids.entityVersionA1);
     expect(await readCells()).toEqual([
-      { content: { version: 1, type: "text", value: EXTRACTED_VALUE } },
+      {
+        content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+        aiSettlement: {
+          type: "value",
+          runId,
+          settledAt: expect.any(String),
+        },
+      },
     ]);
     expect(await readRun(runId)).toMatchObject({ status: "completed" });
     // The successor run starts as the same requester and plans through the
@@ -314,6 +341,297 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
       userId: ids.userA1,
       scopedDb: actor.inputDb,
     });
+  });
+
+  test("terminal empty outcomes persist and a rerun replaces the settlement", async () => {
+    stragglerSpy.mockImplementation(async () => {
+      await Promise.resolve();
+    });
+    for (const outcome of ["notStated", "refused"] as const) {
+      const first = await queueRun(serviceTier);
+      generateSpy.mockImplementation(async ({ batch }) =>
+        Result.ok({
+          aiResults: [],
+          aiJustifications: [],
+          skippedPropertyIds: [],
+          unsupportedPropertyIds: [],
+          settlements: new Map(
+            batch.properties.map((property) => [property.id, outcome]),
+          ),
+        }),
+      );
+      await first.run();
+      const expectedSettlement =
+        outcome === "refused"
+          ? {
+              type: "refused" as const,
+              reason: "modelRefusal" as const,
+              runId: first.runId,
+              settledAt: expect.any(String),
+            }
+          : {
+              type: "notStated" as const,
+              runId: first.runId,
+              settledAt: expect.any(String),
+            };
+      expect(await readCells()).toEqual([
+        {
+          content: { version: 1, type: "unsupported" },
+          aiSettlement: expectedSettlement,
+        },
+      ]);
+
+      const rerun = await queueRun(serviceTier);
+      generateSpy.mockImplementation(async ({ batch }) =>
+        Result.ok({
+          aiResults: batch.properties.map((property) => ({
+            fieldId: createSafeId<"field">(),
+            propertyId: property.id,
+            content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+          })),
+          aiJustifications: [],
+          skippedPropertyIds: [],
+          unsupportedPropertyIds: [],
+          settlements: new Map(
+            batch.properties.map((property) => [property.id, "answered"]),
+          ),
+        }),
+      );
+      await rerun.run();
+      expect(await readCells()).toEqual([
+        {
+          content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+          aiSettlement: {
+            type: "value",
+            runId: rerun.runId,
+            settledAt: expect.any(String),
+          },
+        },
+      ]);
+      await testDb
+        .delete(fields)
+        .where(eq(fields.propertyId, extractedPropertyId));
+    }
+  });
+
+  test("an input-skipped property does not violate the settlement invariant", async () => {
+    const { run, runId } = await queueRun(serviceTier);
+    stragglerSpy.mockImplementation(async () => await Promise.resolve());
+    generateSpy.mockImplementation(async ({ batch }) =>
+      Result.ok({
+        aiResults: [],
+        aiJustifications: [],
+        skippedPropertyIds: batch.properties.map((property) => property.id),
+        unsupportedPropertyIds: [],
+        settlements: new Map(),
+      }),
+    );
+
+    await run();
+
+    expect(await readRun(runId)).toMatchObject({ status: "completed" });
+    expect(await readCells()).toEqual([]);
+  });
+
+  test("each terminal outcome captures the time it settles", async () => {
+    const secondPropertyId = createSafeId<"property">();
+    const times = ["2026-10-28T12:00:01Z", "2026-10-28T12:00:02Z"];
+    await testDb.insert(properties).values({
+      id: secondPropertyId,
+      workspaceId: ids.wsA1,
+      name: "Contract type",
+      content: { version: 1, type: "text" },
+      tool: extractedTool,
+      status: "stale",
+    });
+    const level = executionPlan.at(0)?.at(0) ?? panic("batch fixture exists");
+    const plan = [
+      [
+        {
+          ...level,
+          properties: [
+            ...level.properties,
+            {
+              ...(level.properties.at(0) ?? panic("property fixture exists")),
+              id: secondPropertyId,
+            },
+          ],
+        },
+      ],
+    ];
+    const { run } = await queueRun(
+      serviceTier,
+      plan,
+      () => times.shift() ?? panic("settlement clock exhausted"),
+    );
+    stragglerSpy.mockImplementation(async () => await Promise.resolve());
+    generateSpy.mockImplementation(async ({ batch }) =>
+      Result.ok({
+        aiResults: [],
+        aiJustifications: [],
+        skippedPropertyIds: [],
+        unsupportedPropertyIds: [],
+        settlements: new Map([
+          [batch.properties[0]?.id ?? panic("first property"), "notStated"],
+          [batch.properties[1]?.id ?? panic("second property"), "refused"],
+        ]),
+      }),
+    );
+
+    try {
+      await run();
+      const settlements = await testDb
+        .select({
+          propertyId: fields.propertyId,
+          aiSettlement: fields.aiSettlement,
+        })
+        .from(fields)
+        .where(
+          and(
+            eq(fields.entityVersionId, ids.entityVersionA1),
+            inArray(fields.propertyId, [extractedPropertyId, secondPropertyId]),
+          ),
+        );
+      expect(
+        new Map(
+          settlements.map((row) => [
+            row.propertyId,
+            row.aiSettlement?.settledAt,
+          ]),
+        ),
+      ).toEqual(
+        new Map([
+          [extractedPropertyId, "2026-10-28T12:00:01Z"],
+          [secondPropertyId, "2026-10-28T12:00:02Z"],
+        ]),
+      );
+    } finally {
+      await testDb
+        .delete(fields)
+        .where(eq(fields.propertyId, secondPropertyId));
+      await testDb
+        .delete(properties)
+        .where(eq(properties.id, secondPropertyId));
+    }
+  });
+
+  test("a superseded run marks its owned pending field failed", async () => {
+    const { run, runId } = await queueRun(serviceTier);
+    await testDb.insert(fields).values({
+      id: createSafeId<"field">(),
+      workspaceId: ids.wsA1,
+      entityVersionId: ids.entityVersionA1,
+      propertyId: extractedPropertyId,
+      content: { type: "pending", version: 1 },
+      ownerRunId: runId,
+      ownerBatchId: "batch-1",
+      deadlineAt: new Date("2026-10-28T12:30:00Z"),
+      attempt: 0,
+    });
+    let checks = 0;
+    const runStateStore = rootRunStateStore.getRootWorkflowRunStateStore();
+    runStateSpy.mockImplementation(() => ({
+      ...runStateStore,
+      isCurrentRequest: async () => await Promise.resolve(checks++ === 0),
+    }));
+
+    await run();
+
+    expect(await readCells()).toEqual([
+      {
+        content: { type: "error", version: 1 },
+        aiSettlement: {
+          type: "failed",
+          runId,
+          settledAt: expect.any(String),
+        },
+      },
+    ]);
+    expect(generateSpy).not.toHaveBeenCalled();
+  });
+
+  test("completing a cell-scoped run starts catch-up for a column whose start was deferred", async () => {
+    const { actor, run, runId } = await queueRun(serviceTier);
+    const deferredPropertyId = createSafeId<"property">();
+    const successors: Parameters<StragglerRunStarter>[0][] = [];
+    stragglerSpy.mockImplementation(
+      async (args) =>
+        await runActualStragglerCatchUp({
+          ...args,
+          startWorkflow: async (successor) => {
+            successors.push(successor);
+            return { status: "started" };
+          },
+        }),
+    );
+    generateSpy.mockImplementation(async ({ batch }) => {
+      // A playbook materializes its new column before asking the busy matter
+      // to start it. The active cell run's plan does not contain that column.
+      await testDb.insert(properties).values({
+        id: deferredPropertyId,
+        workspaceId: ids.wsA1,
+        name: "Deferred governing law",
+        content: { version: 1, type: "text" },
+        tool: extractedTool,
+        status: "stale",
+      });
+      expect(
+        await startWorkflow({
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          userId: ids.userA1,
+          scopedDb: actor.inputDb,
+          extractionRunStore: extractionRuns,
+          runStateStore: asTestRaw<
+            NonNullable<Parameters<typeof startWorkflow>[0]["runStateStore"]>
+          >({ tryClaim: async () => false }),
+        }),
+      ).toEqual({ status: "already-running" });
+      expect(successors).toEqual([]);
+      return Result.ok({
+        aiResults: batch.properties.map((property) => ({
+          fieldId: createSafeId<"field">(),
+          propertyId: property.id,
+          content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+        })),
+        aiJustifications: [],
+        skippedPropertyIds: [],
+        unsupportedPropertyIds: [],
+        settlements: new Map(
+          batch.properties.map((property) => [
+            property.id,
+            "answered" as const,
+          ]),
+        ),
+      });
+    });
+
+    try {
+      await run();
+      expect(generateSpy).toHaveBeenCalledTimes(1);
+      expect(await readRun(runId)).toMatchObject({ status: "completed" });
+      expect(successors).toHaveLength(1);
+      expect(successors.at(0)).toMatchObject({
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        serviceTier,
+      });
+      expect(successors.at(0)?.scopedDb).toBe(actor.inputDb);
+      expect(
+        await actor.inputDb((tx) =>
+          tx
+            .select({ status: properties.status })
+            .from(properties)
+            .where(eq(properties.id, deferredPropertyId)),
+        ),
+      ).toEqual([{ status: "stale" }]);
+      expect(clearedWorkspaceIds).toEqual([ids.wsA1]);
+    } finally {
+      await testDb
+        .delete(properties)
+        .where(eq(properties.id, deferredPropertyId));
+    }
   });
 
   test("a run stops when its requester no longer has access to the matter", async () => {
@@ -344,6 +662,12 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        settlements: new Map(
+          batch.properties.map((property) => [
+            property.id,
+            "answered" as const,
+          ]),
+        ),
       });
     });
 

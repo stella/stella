@@ -1,8 +1,8 @@
 import {
   RESOURCE_TYPE,
-  toResourceName,
   type ResourceRef,
   type ResourceType,
+  toResourceName,
 } from "@stll/api-contract";
 
 type SearchDisposition = { type: "searchable" } | { type: "not_searched" };

@@ -12,8 +12,8 @@ import { AssistantSetup } from "@/components/assistant-setup";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { externalApiOrigin } from "@/lib/api-origins";
 import {
-  mcpConnectorsOptions,
   mcpConnectionsOptions,
+  mcpConnectorsOptions,
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { ensureRouteQueryData } from "@/lib/react-query";

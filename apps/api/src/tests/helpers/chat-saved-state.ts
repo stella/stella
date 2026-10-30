@@ -8,9 +8,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
+  pendingApprovalCallOf,
   PLAIN_TOOL_ARGUMENTS,
   PLAIN_TOOL_NAME,
-  pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

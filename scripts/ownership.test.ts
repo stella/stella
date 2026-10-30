@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
 import {
@@ -23,10 +23,11 @@ import {
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
+  renderOwnershipDocument,
   ROOT_CONNECTION_DOORS,
   SCHEMA_INTROSPECTION,
-  renderOwnershipDocument,
   validateOwnership,
+  withSchemaIntrospection,
 } from "./ownership";
 import { loadOwnershipDeclarations } from "./ownership-loader.ts";
 
@@ -67,6 +68,31 @@ const run = (root: string, command: string[]) => {
 };
 
 describe("ownership file loading", () => {
+  test("imports the receipt ownership declaration without handler files", () => {
+    withDirectory((root) => {
+      const directory = path.join(root, "scripts/ownership");
+      mkdirSync(directory, { recursive: true });
+      copyFileSync(
+        path.join(
+          repoRoot,
+          "scripts/ownership/request-idempotency-receipts.ts",
+        ),
+        path.join(directory, "request-idempotency-receipts.ts"),
+      );
+      symlinkSync(
+        path.join(repoRoot, "node_modules"),
+        path.join(root, "node_modules"),
+        "dir",
+      );
+      const output = run(root, [
+        process.execPath,
+        "-e",
+        'const {default: entry} = await import("./scripts/ownership/request-idempotency-receipts.ts"); console.log(entry.id);',
+      ]);
+      expect(output.trim()).toBe("request-idempotency-receipts");
+    });
+  });
+
   test("loads every row in filename order and ignores documentation", () => {
     withDirectory((root) => {
       for (const id of ["z-last", "a-first"]) {
@@ -103,9 +129,12 @@ describe("ownership file loading", () => {
       process.execPath,
       "--input-type=module",
       "-e",
-      'const { OWNERSHIP } = await import("./scripts/ownership.ts"); console.log(JSON.stringify(OWNERSHIP));',
+      'const { OWNERSHIP, renderOwnershipDocument } = await import("./scripts/ownership.ts"); console.log(JSON.stringify({entries: OWNERSHIP.map(({summary, ...entry}) => entry), document: renderOwnershipDocument(OWNERSHIP)}));',
     ]);
-    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual(OWNERSHIP);
+    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual({
+      entries: OWNERSHIP.map(({ summary, ...declaration }) => declaration),
+      document: renderOwnershipDocument(OWNERSHIP),
+    });
   });
 });
 
@@ -121,13 +150,14 @@ test("independent row additions merge cleanly and pass the production check", ()
       "scripts/ownership-loader.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "scripts/schema-introspection.ts",
       "scripts/ownership/status-transition.ts",
       ".oxlint-plugins/module-id.ts",
       ".oxlint-plugins/database-access.ts",
       "apps/api/src/lib/db/status-tables.gen.ts",
       "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ]) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       copyFileSync(path.join(repoRoot, file), path.join(root, file));
@@ -236,6 +266,28 @@ describe("renderOwnershipDocument", () => {
         ).toBe(true);
       }
     }
+  });
+
+  test("evaluates dynamic scope only when rendering its document", () => {
+    let calls = 0;
+    const declaration = withSchemaIntrospection(
+      entry({
+        summary: () => {
+          calls += 1;
+          return "Declared create scope";
+        },
+        enforcement: {
+          kind: "import",
+          specifiers: ["@/api/db/schema"],
+          allowed: [],
+        },
+      }),
+    );
+    expect(calls).toBe(0);
+    expect(renderOwnershipDocument([declaration])).toContain(
+      "Declared create scope",
+    );
+    expect(calls).toBe(1);
   });
 
   test("renders the same bytes for the same table", () => {
@@ -356,6 +408,46 @@ describe("validateOwnership", () => {
     expect(validateOwnership([entry({}), entry({})], repoRoot)).toEqual([
       "duplicate ownership id: example",
     ]);
+  });
+});
+
+describe("AI config decrypt ownership", () => {
+  const boundary = OWNERSHIP.find(({ id }) => id === "ai-config-decrypt");
+  const ruleOptions = { entries: [boundary] };
+
+  test.each([
+    [
+      "a non-allowlisted importer",
+      'import { decryptAIConfig } from "@/api/lib/ai-config-crypto";',
+    ],
+    ["an export-all barrel", 'export * from "@/api/lib/ai-config-crypto";'],
+    [
+      "a local import-then-export barrel",
+      'import { decryptAIConfig } from "@/api/lib/ai-config-crypto"; export { decryptAIConfig };',
+    ],
+  ])("rejects %s", async (_label, source) => {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions,
+        sourcePath: "apps/api/src/lib/unapproved-ai-config-reader.ts",
+      }),
+    ).toEqual([1]);
+  });
+
+  test("admits every explicitly allowlisted importer", async () => {
+    if (boundary?.enforcement.kind !== "import") {
+      throw new TypeError("AI config decryption must be import-confined");
+    }
+    const source =
+      'import { decryptAIConfig } from "@/api/lib/ai-config-crypto";';
+    for (const { path: sourcePath } of boundary.enforcement.allowed) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ruleOptions,
+          sourcePath,
+        }),
+      ).toEqual([]);
+    }
   });
 });
 

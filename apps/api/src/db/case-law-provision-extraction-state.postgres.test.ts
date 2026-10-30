@@ -11,6 +11,8 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { waitForExternalState } from "@stll/property-testing/external-state";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
@@ -18,8 +20,8 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
@@ -36,18 +38,27 @@ const COUNTRY = "ZZP";
 const uniqueLanguage = (): string =>
   `x${Bun.randomUUIDv7().replaceAll("-", "").slice(-7)}`;
 
-/** Wait until `pid` is blocked on a lock, so timing cannot make a test vacuous. */
-const waitUntilBlocked = async (observer: SQL, pid: number) => {
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    const [row] =
-      await observer`SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
-    if (row?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  throw new Error(`backend ${String(pid)} never blocked`);
+/** Observe server state before exercising or asserting a session transition. */
+const waitForBackendState = async (
+  observer: SQL,
+  { pid, state }: { pid: number; state: "blocked" | "sleeping" | "closed" },
+) => {
+  await waitForExternalState({
+    description: `backend ${String(pid)} is ${state}`,
+    timeoutMs: 3000,
+    read: async () => {
+      const [row] = await observer`
+        SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked,
+          EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+              AND state = 'active' AND query = 'SELECT pg_sleep(30)'
+          ) AS sleeping,
+          NOT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+          ) AS closed`;
+      return row?.[state] === true;
+    },
+  });
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
@@ -118,6 +129,122 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("provision extraction state (postgres)", () => {
+    test("EU identity expansion preserves old national writers and nullable primary identities", async () => {
+      await withFixture(async ({ observer, fixture }) => {
+        const decisionId = await insertDecision(
+          observer,
+          fixture,
+          uniqueLanguage(),
+        );
+        const nationalId = createSafeId<"caseLawProvisionCitation">();
+        const primaryId = createSafeId<"caseLawProvisionCitation">();
+        const secondaryId = createSafeId<"caseLawProvisionCitation">();
+        // The old national writer names only the pre-expansion columns.
+        await observer`
+          INSERT INTO case_law_provision_citations
+            (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
+             work_collection, unit, section, anchor, sentence_text, span_start,
+             span_end, confidence)
+          VALUES (${nationalId}::uuid, ${decisionId}::uuid, 'CZE', '89/2012 Sb.',
+            89, 2012, 'Sb.', 'section', 1, 'section-1', '§ 1', 0, 3, 1)`;
+        // New EU writers omit the old integer columns, including for primary
+        // law, whose canonical identity has no act number or year.
+        await observer`
+          INSERT INTO case_law_provision_citations
+            (id, decision_id, jurisdiction, work_identifier, eu_work_number,
+             eu_work_year, work_collection, work_eli, unit, section, anchor,
+             sentence_text, span_start, span_end, confidence)
+          VALUES
+            (${primaryId}::uuid, ${decisionId}::uuid, 'EU', '12016M/TXT', NULL,
+             NULL, 'EUR-Lex', 'http://data.europa.eu/eli/treaty/teu_2016/oj',
+             'article', 5, 'article-5', 'Article 5 TEU', 10, 23, 1),
+            (${secondaryId}::uuid, ${decisionId}::uuid, 'EU', '32016R0679', 679,
+             2016, 'EUR-Lex', 'http://data.europa.eu/eli/reg/2016/679/oj',
+             'article', 6, 'article-6', 'Article 6 GDPR', 30, 44, 1)`;
+        expect(
+          Array.from(
+            await observer`
+          SELECT jurisdiction, work_identifier, work_number, work_year,
+            eu_work_number, eu_work_year FROM case_law_provision_citations
+          WHERE decision_id = ${decisionId}::uuid ORDER BY work_identifier
+        `,
+          ),
+        ).toEqual([
+          {
+            jurisdiction: "EU",
+            work_identifier: "12016M/TXT",
+            work_number: 0,
+            work_year: 0,
+            eu_work_number: null,
+            eu_work_year: null,
+          },
+          {
+            jurisdiction: "EU",
+            work_identifier: "32016R0679",
+            work_number: 0,
+            work_year: 0,
+            eu_work_number: 679,
+            eu_work_year: 2016,
+          },
+          {
+            jurisdiction: "CZE",
+            work_identifier: "89/2012 Sb.",
+            work_number: 89,
+            work_year: 2012,
+            eu_work_number: null,
+            eu_work_year: null,
+          },
+        ]);
+        expect(
+          Array.from(
+            await observer`
+          SELECT attname, attnotnull FROM pg_attribute
+          WHERE attrelid = 'case_law_provision_citations'::regclass
+            AND attname IN ('work_number', 'work_year', 'eu_work_number', 'eu_work_year')
+          ORDER BY attname
+        `,
+          ),
+        ).toEqual([
+          { attname: "eu_work_number", attnotnull: false },
+          { attname: "eu_work_year", attnotnull: false },
+          { attname: "work_number", attnotnull: true },
+          { attname: "work_year", attnotnull: true },
+        ]);
+        for (const id of [primaryId, nationalId]) {
+          expect(
+            await rejectionOf(observer`
+            UPDATE case_law_provision_citations SET eu_work_number = 1
+            WHERE id = ${id}::uuid
+          `),
+          ).toMatchObject({
+            message: expect.stringContaining(
+              "provision_citations_work_number_shape",
+            ),
+          });
+        }
+        expect(
+          await rejectionOf(observer`
+          UPDATE case_law_provision_citations SET eu_work_year = NULL
+          WHERE id = ${secondaryId}::uuid
+        `),
+        ).toMatchObject({
+          message: expect.stringContaining(
+            "provision_citations_work_number_shape",
+          ),
+        });
+        expect(
+          await rejectionOf(observer`
+          UPDATE case_law_provision_citations SET work_number = DEFAULT,
+            work_year = DEFAULT WHERE id = ${nationalId}::uuid
+        `),
+        ).toMatchObject({
+          message: expect.stringContaining(
+            "provision_citations_work_number_shape",
+          ),
+        });
+      });
+    });
+
     /**
      * The trigger's scope insert waits for a concurrent insert of the same
      * key, and routes on the row that won, read in a later statement: here
@@ -144,7 +271,7 @@ if (!databaseUrl || !runPostgresTests) {
             await activated.promise;
             const pid = await backendPid(writer.sql);
             const write = insertDecision(writer.sql, fixture, language);
-            await waitUntilBlocked(observer, pid);
+            await waitForBackendState(observer, { pid, state: "blocked" });
             release.resolve(undefined);
             // swallow-ok: deliberate activation rollback is distinguished by the scope and decision-state assertions below
             await transition.catch(() => undefined);
@@ -388,7 +515,7 @@ if (!databaseUrl || !runPostgresTests) {
           // Started now: a Bun SQL query runs only once awaited.
           const ensuring = (async () =>
             await caller`SELECT ensure_case_law_provision_extraction_state(ARRAY[${id}::uuid], 'reconcile') AS written`)();
-          await waitUntilBlocked(observer, pid);
+          await waitForBackendState(observer, { pid, state: "blocked" });
           const [free] = await observer.begin(
             async (tx) =>
               await tx`
@@ -442,7 +569,7 @@ if (!databaseUrl || !runPostgresTests) {
           const running = (async () =>
             await runner`SELECT run_case_law_provision_scope_transition_page(
               ${COUNTRY}, ${language}, ${activeGeneration}::bigint) AS more`)();
-          await waitUntilBlocked(observer, pid);
+          await waitForBackendState(observer, { pid, state: "blocked" });
 
           const retiredGeneration = await observer.begin(async (tx) => {
             const [retired] = await tx`
@@ -492,11 +619,7 @@ if (!databaseUrl || !runPostgresTests) {
             execute: async (
               query: string,
               params: readonly (
-                | string
-                | number
-                | bigint
-                | boolean
-                | null
+                string | number | bigint | boolean | null
               )[] = [],
             ) => {
               await reserved.unsafe(query, [...params]);
@@ -504,11 +627,7 @@ if (!databaseUrl || !runPostgresTests) {
             query: async (
               query: string,
               params: readonly (
-                | string
-                | number
-                | bigint
-                | boolean
-                | null
+                string | number | bigint | boolean | null
               )[] = [],
             ): Promise<readonly unknown[]> =>
               await reserved.unsafe(query, [...params]),
@@ -533,7 +652,7 @@ if (!databaseUrl || !runPostgresTests) {
             WHERE conname LIKE 'provision_citations_%' AND NOT convalidated`;
           expect(pending?.count).toBe(0);
         } finally {
-          reserved.release();
+          await reserved.release();
         }
       });
     }, 120_000);
@@ -545,7 +664,7 @@ if (!databaseUrl || !runPostgresTests) {
      */
     test("an abort stops the statement in flight and discards its connection", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const pool = openClient({ max: 2 }).sql;
+        const pool = openClient({ max: 1 }).sql;
         const observer = openClient().sql;
         const controller = new AbortController();
         let reservedPid: unknown;
@@ -561,21 +680,38 @@ if (!databaseUrl || !runPostgresTests) {
               row !== null && typeof row === "object" && "pid" in row
                 ? row.pid
                 : undefined;
-            setTimeout(() => {
-              controller.abort();
-            }, 200);
-            return await session.query("SELECT pg_sleep(30)").then(
+            if (typeof reservedPid !== "number") {
+              throw new TypeError(
+                "Expected the reserved PostgreSQL backend pid",
+              );
+            }
+            const statement = session.query("SELECT pg_sleep(30)").then(
               () => "finished",
               () => "cancelled",
             );
+            try {
+              await waitForBackendState(observer, {
+                pid: reservedPid,
+                state: "sleeping",
+              });
+              controller.abort();
+              return await statement;
+            } finally {
+              controller.abort();
+              await statement;
+            }
           },
         });
         expect(outcome).toBe("cancelled");
         expect(Date.now() - started).toBeLessThan(10_000);
-        const [alive] = await observer`
-          SELECT count(*)::int AS count FROM pg_stat_activity
-          WHERE pid = ${Number(reservedPid)}`;
-        expect(alive?.count).toBe(0);
+        if (typeof reservedPid !== "number") {
+          throw new TypeError("Expected the discarded PostgreSQL backend pid");
+        }
+        expect(await backendPid(pool)).not.toBe(reservedPid);
+        await waitForBackendState(observer, {
+          pid: reservedPid,
+          state: "closed",
+        });
       });
     }, 30_000);
   });

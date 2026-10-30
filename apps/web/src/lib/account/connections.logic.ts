@@ -1,4 +1,4 @@
-import { stripUnicodeMarks } from "@stll/text-normalize";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 import type { StatusTone } from "@stll/ui/list";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -7,27 +7,19 @@ import type {
   McpConnectorsResponse,
 } from "@/lib/knowledge/queries";
 
-/** Case- and accent-insensitive folding, so "cesky" finds "Český". */
-const fold = (value: string): string =>
-  stripUnicodeMarks(value, {
-    form: "NFD",
-    markClass: "combining",
-  }).toLocaleLowerCase();
-
 /**
- * True when every word of the query appears in one of the fields. An empty
- * query matches everything.
+ * True when every word of the query appears in one of the fields, ignoring
+ * case and accents, so "cesky" finds "Český". An empty query matches
+ * everything.
  */
 export const matchesConnectionQuery = (
   query: string,
   fields: readonly (string | null | undefined)[],
 ): boolean => {
-  const words = fold(query).split(/\s+/u).filter(Boolean);
-  if (words.length === 0) {
-    return true;
-  }
-  const haystack = fold(fields.filter(Boolean).join(" "));
-  return words.every((word) => haystack.includes(word));
+  const haystack = fields.filter(Boolean).join(" ");
+  return query
+    .split(/\s+/u)
+    .every((word) => createSearchQueryMatcher(word)(haystack));
 };
 
 export type IntegrationConnection = Pick<
@@ -81,7 +73,7 @@ export const integrationStatus = ({
     }
     return {
       tone: "neutral",
-      labelKey: "settings.connections.notConnected",
+      labelKey: "common.notConnected",
     } as const satisfies IntegrationStatus;
   }
   if (connection.status === "needs_reauth") {
@@ -104,6 +96,6 @@ export const integrationStatus = ({
   }
   return {
     tone: "success",
-    labelKey: "settings.connections.connected",
+    labelKey: "common.connected",
   } as const satisfies IntegrationStatus;
 };

@@ -15,7 +15,11 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { isPublicLawMiss, unwrapPublicLawEden } from "@/lib/public-law-api";
+import {
+  isPublicLawMiss,
+  PUBLIC_LAW_READ_TIMEOUT_MS,
+  unwrapPublicLawResponse,
+} from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -55,7 +59,7 @@ export type StatuteSlugKey = {
   slug: string;
 };
 
-const statuteKeys = {
+export const statuteKeys = {
   all: ["statutes"],
   list: (key: StatuteListKey) => [
     ...statuteKeys.all,
@@ -123,10 +127,15 @@ const readStatutesPage = async ({
       ...(filters.validity !== undefined && { validity: filters.validity }),
       ...(filters.year !== undefined && { year: Number(filters.year) }),
     },
-    fetch: { signal },
+    fetch: {
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+      ]),
+    },
   });
 
-  const data = unwrapPublicLawEden(response, "listPublicStatutes");
+  const data = unwrapPublicLawResponse(response, "listPublicStatutes");
 
   return data;
 };
@@ -158,6 +167,7 @@ export const statutesInfiniteOptions = (
 const PUBLIC_STATUTE_SEARCH_PAGE_SIZE = PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX;
 
 export type StatuteSearchFilters = {
+  asOf?: string;
   country: string;
   query: string;
   documentType?: string;
@@ -178,9 +188,14 @@ const readStatuteSearchPage = async ({
       limit: PUBLIC_STATUTE_SEARCH_PAGE_SIZE,
       ...(cursor === null ? {} : { cursor }),
     },
-    fetch: { signal },
+    fetch: {
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+      ]),
+    },
   });
-  return unwrapPublicLawEden(response, "searchPublicStatutes");
+  return unwrapPublicLawResponse(response, "searchPublicStatutes");
 };
 
 export type StatuteSearchHit = Awaited<
@@ -210,7 +225,7 @@ export const statuteFacetsOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "readPublicStatuteFacets");
+      const data = unwrapPublicLawResponse(response, "readPublicStatuteFacets");
 
       return data;
     },
@@ -230,7 +245,10 @@ export const legislationShelfOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "readPublicLegislationShelf");
+      const data = unwrapPublicLawResponse(
+        response,
+        "readPublicLegislationShelf",
+      );
 
       return data;
     },
@@ -242,7 +260,7 @@ const readStatute = async (documentId: string, signal: AbortSignal) => {
     .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
     .get({ fetch: { signal } });
 
-  const data = unwrapPublicLawEden(response, "readPublicStatute");
+  const data = unwrapPublicLawResponse(response, "readPublicStatute");
 
   return data;
 };
@@ -278,7 +296,7 @@ export const publicStatuteOptions = (documentId: string) =>
         return null;
       }
 
-      return unwrapPublicLawEden(response, "readPublicStatute");
+      return unwrapPublicLawResponse(response, "readPublicStatute");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -328,7 +346,7 @@ export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
         return windowGap;
       }
 
-      return unwrapPublicLawEden(response, "readPublicStatuteBySlug");
+      return unwrapPublicLawResponse(response, "readPublicStatuteBySlug");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -354,7 +372,7 @@ const readStatuteVersionsPage = async ({
       fetch: { signal },
     });
 
-  const data = unwrapPublicLawEden(response, "listPublicStatuteVersions");
+  const data = unwrapPublicLawResponse(response, "listPublicStatuteVersions");
 
   return data;
 };
@@ -391,6 +409,13 @@ const readStatuteVersionsFrom = async ({
         action: "statutes.versions-walk",
         message: "Statute version walk stopped at the page cap",
       }),
+      {
+        fingerprintKey: "readStatuteVersionsFrom:ClientOperationError",
+        scope: {
+          type: "handler",
+          handlerId: "readStatuteVersionsFrom:ClientOperationError",
+        },
+      },
     );
 
     return collected;

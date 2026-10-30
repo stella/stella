@@ -9,14 +9,20 @@ import {
 import type { ComponentProps } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 import { useIsMobile } from "@stll/ui/use-mobile";
@@ -34,21 +40,15 @@ import type {
   AskUserOutput,
   ChatPart,
   ChatUITools,
-  ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
   consumePlaybookSaveToolCalls,
-  getExternalMcpConnectorApprovalGrant,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getCurrentApprovalPendingMessageId,
-  getExternalMcpConnectorSlugFromToolName,
-  getToolApprovalGrant,
-  isApprovalToolName,
   isChatClientRequestActive,
-  isExternalMcpToolName,
+  isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
-  isToolApprovalGrant,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -64,19 +64,19 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
+  buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
-  createDocumentDraftTabId,
   type CreateDocumentDraft,
+  createDocumentDraftTabId,
   findReadyCreateDocumentDraftMessageId,
   isCreateDocumentDraftPayload,
   isCreateDocumentDraftSettlementActive,
   isSameCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
-  selectTerminalCreateDocumentDraftIds,
   selectSettleableCreateDocumentDrafts,
+  selectTerminalCreateDocumentDraftIds,
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
@@ -84,17 +84,24 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
-import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
+import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
-  isChatMessageStartError,
-  sendThreadChatMessage,
   type ChatRuntime,
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
+  isChatMessageStartError,
+  sendThreadChatMessage,
 } from "@/features/chat/chat-runtime";
+import {
+  chatToolGrantsOptions,
+  projectChatToolGrants,
+  readChatToolGrantCoverage,
+  storeChatToolGrant,
+} from "@/features/chat/chat-tool-grants";
 import { LazyChatTableChart } from "@/features/chat/components/lazy-chat-table-chart";
 import {
   invalidateCreatedDocumentQueries,
@@ -114,11 +121,11 @@ import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/u
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
-  reduceSendQueue,
-  snapshotChatRequestOptions,
   type QueuedChatEntry,
+  reduceSendQueue,
   type SendQueueEvent,
   type SendQueueState,
+  snapshotChatRequestOptions,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -127,17 +134,11 @@ import {
 } from "@/features/chat/queries";
 import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { browserStateStorage } from "@/lib/account/browser-storage";
-import { useOwnerScopedState } from "@/lib/account/use-owner-scoped-state";
-import {
-  isCurrentStorageOwner,
-  userStorageKey,
-} from "@/lib/account/user-scoped-storage";
-import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
+import type { ChatTimingSurface } from "@/lib/analytics/types";
+import { api, chatConnectorReceipt } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type {
   ChatEditApplyMode,
@@ -150,7 +151,7 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -160,14 +161,9 @@ import {
   PLAYBOOK_DRAFT_VIEW,
   playbookDraftTabId,
 } from "@/lib/knowledge/playbook-draft-view";
-import {
-  knowledgeKeys,
-  mcpConnectorsOptions,
-  playbookDetailOptions,
-} from "@/lib/knowledge/queries";
+import { knowledgeKeys, playbookDetailOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -176,6 +172,10 @@ import {
 } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
@@ -186,11 +186,11 @@ type CreateDocumentMatterSuccess = Extract<
 >;
 
 type UseChatSessionOptions = {
+  exceptionScope: HandlerExceptionScope;
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
-    | (() => DocxEditRepresentation | undefined)
-    | undefined;
+    (() => DocxEditRepresentation | undefined) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
@@ -208,12 +208,9 @@ type UseChatSessionOptions = {
   /** Whether a playbook this thread saves opens beside it by itself. */
   playbookPane: PlaybookPaneMode;
   threadRef: ChatThreadRef;
+  /** Where the conversation is shown; every send is timed under it. */
+  timingSurface: ChatTimingSurface;
   workspaceId?: string | undefined;
-};
-
-type McpConnectorApprovalIdentity = {
-  id: string;
-  slug: string;
 };
 
 export type ResendLatestMessageOptions = {
@@ -221,8 +218,6 @@ export type ResendLatestMessageOptions = {
   sendMode?: ChatSendMode | undefined;
 };
 
-const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
-  [];
 const EMPTY_CONTEXT_MATTER_IDS: readonly string[] = [];
 
 type PreparedCreateDocumentDraft = {
@@ -259,7 +254,13 @@ const prepareCreateDocumentDraft = async (
   });
   switch (prepared.status) {
     case "failed":
-      getAnalytics().captureError(prepared.error);
+      getAnalytics().captureError(prepared.error, {
+        fingerprintKey: "prepareCreateDocumentDraft:failure",
+        scope: {
+          type: "handler",
+          handlerId: "prepareCreateDocumentDraft:failure",
+        },
+      });
       return null;
     case "ready":
       return { buffer: prepared.buffer, fileName };
@@ -271,14 +272,32 @@ const prepareCreateDocumentDraft = async (
   }
 };
 
+const downloadCreateDocumentDraft = async (
+  toolCallId: string,
+  input: CreateDocumentInput,
+) =>
+  Result.tryPromise(async () => {
+    const draft = await prepareCreateDocumentDraft(toolCallId, input);
+    if (draft === null) {
+      return { status: "invalid-source" } as const;
+    }
+    downloadFile(
+      new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
+      draft.fileName,
+    );
+    return { status: "downloaded", fileName: draft.fileName } as const;
+  });
+
 const openCreatedDocumentInInspector = async (
   output: CreateDocumentMatterSuccess,
+  documentOnScreen: CurrentWorkspaceDocument,
 ) => {
-  await openEntityInInspector(
-    output.entityId,
-    output.fileName,
-    output.workspaceId,
-  );
+  await openEntityInInspector({
+    documentOnScreen,
+    entityId: output.entityId,
+    label: output.fileName,
+    workspaceId: output.workspaceId,
+  });
   const tab = useInspectorTabsStore
     .getState()
     .tabs.find(
@@ -310,9 +329,8 @@ const resetAskUserToolCall = (
 
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
-const emptyApprovedTools = () => new Set<ToolApprovalGrant>();
-
 export const useChatSession = ({
+  exceptionScope: { handlerId: exceptionHandlerId },
   chat,
   conversationId,
   getDocxEditRepresentation,
@@ -323,61 +341,34 @@ export const useChatSession = ({
   onError,
   playbookPane,
   threadRef,
+  timingSurface,
   workspaceId,
 }: UseChatSessionOptions) => {
-  useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
   const queryClient = useQueryClient();
-  const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
-  const mcpCatalogView = useQueryView(mcpCatalogQuery);
-  useQueryViewError(mcpCatalogView);
-  const mcpCatalog =
-    mcpCatalogView.type === "items" ? mcpCatalogView.items : undefined;
-  const mcpConnectorIdentities =
-    mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
-  const readConversationGrants = useCallback(
-    (owner: StorageOwner) =>
-      readConversationApprovedTools(conversationId, owner),
-    [conversationId],
+  const router = useRouter();
+  const chatToolGrantsQuery = useQuery(
+    chatToolGrantsOptions({
+      activeOrganizationId: organizationId,
+      threadId: conversationId,
+      userId,
+    }),
   );
-  const writeConversationGrants = useCallback(
-    (tools: Set<ToolApprovalGrant>, owner: StorageOwner) =>
-      writeStoredApprovedTools(
-        getConversationApprovedToolsStorageKey(conversationId, owner),
-        tools,
-        "session",
-      ),
-    [conversationId],
-  );
+  const chatToolGrantsView = queryView(chatToolGrantsQuery);
+  useQueryViewError(chatToolGrantsView, "useChatSession:query");
+  const storedChatToolGrants =
+    chatToolGrantsView.type === "items"
+      ? chatToolGrantsView.items.grants
+      : undefined;
   const {
-    owner: conversationGrantsOwner,
-    value: conversationApprovedTools,
-    updateValue: updateConversationApprovedTools,
-    refresh: refreshConversationApprovedTools,
-  } = useOwnerScopedState({
-    getDefaultValue: emptyApprovedTools,
-    read: readConversationGrants,
-    write: writeConversationGrants,
-  });
-  const readAlwaysGrants = useCallback(
-    (owner: StorageOwner) =>
-      readAlwaysApprovedTools({
-        organizationId,
-        mcpConnectorIdentities,
-        owner,
-      }),
-    [organizationId, mcpConnectorIdentities],
+    always: alwaysApprovedTools,
+    conversation: conversationApprovedTools,
+  } = useMemo(
+    () => projectChatToolGrants(storedChatToolGrants),
+    [storedChatToolGrants],
   );
-  const {
-    owner: alwaysGrantsOwner,
-    value: alwaysApprovedTools,
-    refresh: refreshAlwaysApprovedTools,
-  } = useOwnerScopedState({
-    read: readAlwaysGrants,
-    getDefaultValue: emptyApprovedTools,
-  });
 
   const snapshot = useSyncExternalStore(
     chat.subscribe,
@@ -583,7 +574,10 @@ export const useChatSession = ({
           });
           if (settleResult.status === "failed") {
             settlingCreateDocumentDraftIdsRef.current.delete(draft.toolCallId);
-            getAnalytics().captureError(settleResult.error);
+            getAnalytics().captureError(settleResult.error, {
+              fingerprintKey: "useChatSession:failure",
+              scope: { type: "handler", handlerId: exceptionHandlerId },
+            });
             chat.setMessages(
               terminalizeUnsettledCreateDocumentDraft(
                 chat.getSnapshot().messages,
@@ -599,12 +593,15 @@ export const useChatSession = ({
         "use-chat-session.settle-create-document-draft-with-retry",
       );
     }
-  }, [addToolResult, chat, messages, status, t]);
+  }, [addToolResult, chat, messages, status, t, exceptionHandlerId]);
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      await sendThreadChatMessage(chat, message, options);
+      await sendThreadChatMessage(chat, message, {
+        ...options,
+        timingSurface,
+      });
     },
-    [chat],
+    [chat, timingSurface],
   );
   const setMessages = chat.setMessages;
   const stop = chat.stop;
@@ -706,7 +703,10 @@ export const useChatSession = ({
       // for telemetry and surface a toast so the user knows the older history
       // failed to load. Keep the cursor but flag the error so auto-loading
       // pauses (the manual button retries) instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useChatSession:failure-2",
+        scope: { type: "handler", handlerId: exceptionHandlerId },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("chat.loadEarlierMessagesError"));
       return;
@@ -733,7 +733,7 @@ export const useChatSession = ({
     }
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [chat, setMessages, t, threadRef]);
+  }, [chat, setMessages, t, threadRef, exceptionHandlerId]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
@@ -915,76 +915,81 @@ export const useChatSession = ({
     },
     [resolveToolApproval],
   );
-  const handleAllowInConversation = useCallback(
-    async (id: string, toolName: ApprovalToolName) => {
-      if (requiresPerCallChatApproval(toolName)) {
-        await resolveToolApproval({ id, approved: true });
-        return;
+  // The API stores the grant and decides what it covers; it refuses tools
+  // that ask on every call. This call is approved either way, since the user
+  // approved it.
+  const approveAndStoreGrant = useCallback(
+    async (
+      id: string,
+      toolName: ApprovalToolName,
+      scope: ChatToolGrantScope,
+    ) => {
+      if (
+        !requiresPerCallChatApproval(toolName) &&
+        !isNonPersistentGrantChatToolName(toolName)
+      ) {
+        const stored = await Result.tryPromise({
+          try: async () =>
+            await storeChatToolGrant({
+              scope,
+              threadId: conversationId,
+              toolName,
+            }),
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error("Could not store the approval"),
+        });
+        if (Result.isError(stored)) {
+          notifyError(stored.error);
+        }
+        await queryClient.invalidateQueries({
+          queryKey: chatKeys.toolGrants(organizationId, userId, conversationId),
+        });
       }
-      if (!isCurrentStorageOwner(conversationGrantsOwner)) {
-        return;
-      }
-      updateConversationApprovedTools((previous) =>
-        new Set(previous).add(getToolApprovalGrant(toolName)),
-      );
-      dispatchApprovedToolsChanged({
-        conversationId,
-        scope: "session",
-      });
       await resolveToolApproval({ id, approved: true });
     },
     [
-      resolveToolApproval,
-      conversationGrantsOwner,
-      updateConversationApprovedTools,
       conversationId,
+      notifyError,
+      organizationId,
+      queryClient,
+      resolveToolApproval,
+      userId,
     ],
+  );
+  const confirmStoredApprovalGrant = useCallback(
+    async (toolName: ApprovalToolName): Promise<boolean> => {
+      // The API resolves the exact tool or connector; the cached grants only
+      // decide whether to ask.
+      const coverage = await Result.tryPromise(
+        async () =>
+          await readChatToolGrantCoverage({
+            threadId: conversationId,
+            toolName,
+          }),
+      );
+      if (Result.isError(coverage) || !coverage.value.covered) {
+        await queryClient.invalidateQueries({
+          queryKey: chatKeys.toolGrants(organizationId, userId, conversationId),
+        });
+        return false;
+      }
+      return true;
+    },
+    [conversationId, organizationId, queryClient, userId],
+  );
+  const handleAllowInConversation = useCallback(
+    async (id: string, toolName: ApprovalToolName) => {
+      await approveAndStoreGrant(id, toolName, "conversation");
+    },
+    [approveAndStoreGrant],
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
-      if (requiresPerCallChatApproval(toolName)) {
-        await resolveToolApproval({ id, approved: true });
-        return;
-      }
-      if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
-        return;
-      }
-      const approvalKey = getAlwaysApprovalKey({
-        mcpConnectorIdentities,
-        organizationId,
-        toolName,
-      });
-      if (approvalKey === null) {
-        await resolveToolApproval({ id, approved: true });
-        return;
-      }
-
-      const nextStored = new Set(
-        readStoredStrings(
-          userStorageKey(
-            CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
-            alwaysGrantsOwner,
-          ),
-        ),
-      ).add(approvalKey);
-      writeStoredApprovedStrings(
-        userStorageKey(
-          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
-          alwaysGrantsOwner,
-        ),
-        nextStored,
-      );
-      refreshAlwaysApprovedTools();
-      dispatchApprovedToolsChanged({ scope: "local" });
-      await resolveToolApproval({ id, approved: true });
+      await approveAndStoreGrant(id, toolName, "always");
     },
-    [
-      resolveToolApproval,
-      alwaysGrantsOwner,
-      refreshAlwaysApprovedTools,
-      mcpConnectorIdentities,
-      organizationId,
-    ],
+    [approveAndStoreGrant],
   );
   const handleDeny = useCallback(
     async (id: string) => {
@@ -1011,7 +1016,7 @@ export const useChatSession = ({
       toolCallId: string,
       decision: RequestSecretDecision,
     ): Promise<RequestSecretOutput> =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(conversationId) })
           .secrets({ toolCallId })
@@ -1023,6 +1028,30 @@ export const useChatSession = ({
     async (toolCallId: string, receipt: RequestSecretOutput) => {
       await addToolResult({
         tool: "request_secret",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
+  // Same two steps as private input: the server confirms the connection and
+  // returns the receipt, then the chat continues with it.
+  const handleConnectConnector = useCallback(
+    async (
+      toolCallId: string,
+      decision: ConnectConnectorDecision,
+    ): Promise<ConnectConnectorOutput> =>
+      chatConnectorReceipt.submit({
+        threadId: toSafeId<"chatThread">(conversationId),
+        toolCallId,
+        decision,
+      }),
+    [conversationId],
+  );
+  const continueConnectConnector = useCallback(
+    async (toolCallId: string, receipt: ConnectConnectorOutput) => {
+      await addToolResult({
+        tool: "connect_connector",
         toolCallId,
         output: receipt,
       });
@@ -1041,7 +1070,7 @@ export const useChatSession = ({
         query: { connectorSlug },
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     [conversationId],
   );
@@ -1142,7 +1171,7 @@ export const useChatSession = ({
     [addToolResult, getSendMode, messages, setMessages],
   );
 
-  const createDocumentMattersView = useQueryView(
+  const createDocumentMattersView = queryView(
     useQuery({
       ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
@@ -1381,30 +1410,24 @@ export const useChatSession = ({
       input: CreateDocumentInput,
     ) => {
       if (destination.type === "download") {
-        const downloadResult = await Result.tryPromise(async () => {
-          const draft = await prepareCreateDocumentDraft(toolCallId, input);
-          if (draft === null) {
-            return { status: "invalid-source" } as const;
-          }
-          downloadFile(
-            new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
-            draft.fileName,
-          );
-          return { status: "downloaded", fileName: draft.fileName } as const;
-        });
-
+        const downloadResult = await downloadCreateDocumentDraft(
+          toolCallId,
+          input,
+        );
+        if (Result.isError(downloadResult)) {
+          getAnalytics().captureError(downloadResult.error, {
+            fingerprintKey: "useChatSession:failure-3",
+            scope: { type: "handler", handlerId: exceptionHandlerId },
+          });
+        }
         if (
           Result.isError(downloadResult) ||
           downloadResult.value.status === "invalid-source"
         ) {
-          if (Result.isError(downloadResult)) {
-            getAnalytics().captureError(downloadResult.error);
-          }
           notifyUserError(
             Result.isError(downloadResult) ? downloadResult.error : undefined,
             t("chat.createDocument.failedHeader"),
           );
-          return;
         }
         return;
       }
@@ -1528,7 +1551,10 @@ export const useChatSession = ({
           getInspector: useInspectorTabsStore.getState,
           toolCallId,
         });
-        getAnalytics().captureError(createResult.error);
+        getAnalytics().captureError(createResult.error, {
+          fingerprintKey: "useChatSession:failure-4",
+          scope: { type: "handler", handlerId: exceptionHandlerId },
+        });
         notifyUserError(
           createResult.error,
           APIError.is(createResult.error)
@@ -1585,17 +1611,23 @@ export const useChatSession = ({
       );
 
       if (!promotedDraftInPlace) {
-        await openCreatedDocumentInInspector(output);
+        await openCreatedDocumentInInspector(
+          output,
+          getCurrentWorkspaceDocument(router.state.matches),
+        );
       }
     },
-    [chat, queryClient, setMessages, t, threadRef],
+    [chat, queryClient, router, setMessages, t, threadRef, exceptionHandlerId],
   );
 
   const handleOpenCreatedDocument = useCallback(
     async (output: CreateDocumentMatterSuccess) => {
-      await openCreatedDocumentInInspector(output);
+      await openCreatedDocumentInInspector(
+        output,
+        getCurrentWorkspaceDocument(router.state.matches),
+      );
     },
-    [],
+    [router],
   );
   const streamdownComponents = useMemo(
     () => ({
@@ -1681,9 +1713,12 @@ export const useChatSession = ({
       return;
     }
     lastStopFailureRef.current = stopState.error;
-    getAnalytics().captureError(stopState.error);
+    getAnalytics().captureError(stopState.error, {
+      fingerprintKey: "useChatSession:failure-5",
+      scope: { type: "handler", handlerId: exceptionHandlerId },
+    });
     notifyUserError(stopState.error, t("chat.stopFailed"));
-  }, [stopState, t]);
+  }, [stopState, t, exceptionHandlerId]);
 
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "conversation-switched", conversationId });
@@ -1732,58 +1767,6 @@ export const useChatSession = ({
     status,
   ]);
 
-  useExternalSyncEffect(() => {
-    const handleApprovedToolsChanged = (event: Event) => {
-      const detail = getApprovedToolsChangedDetail(event);
-      if (!detail) {
-        return;
-      }
-
-      if (detail.scope === "local") {
-        refreshAlwaysApprovedTools();
-        return;
-      }
-
-      if (detail.conversationId !== conversationId) {
-        return;
-      }
-
-      refreshConversationApprovedTools();
-    };
-    const handleStorage = (event: StorageEvent) => {
-      if (
-        event.key !==
-        userStorageKey(
-          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
-          alwaysGrantsOwner,
-        )
-      ) {
-        return;
-      }
-
-      refreshAlwaysApprovedTools();
-    };
-
-    window.addEventListener(
-      CHAT_APPROVED_TOOLS_CHANGED_EVENT,
-      handleApprovedToolsChanged,
-    );
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      window.removeEventListener(
-        CHAT_APPROVED_TOOLS_CHANGED_EVENT,
-        handleApprovedToolsChanged,
-      );
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, [
-    conversationId,
-    alwaysGrantsOwner,
-    refreshAlwaysApprovedTools,
-    refreshConversationApprovedTools,
-  ]);
-
   return {
     activitySession: chat,
     clientStatus: status,
@@ -1812,10 +1795,13 @@ export const useChatSession = ({
     handleAskUserSubmit,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
+    confirmStoredApprovalGrant,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
@@ -1825,269 +1811,4 @@ export const useChatSession = ({
     streamdownComponents,
     approvalPendingMessageId,
   };
-};
-
-// Kept per signed-in user.
-const CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY =
-  "stella.chat.alwaysApprovedTools";
-const CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX =
-  "stella.chat.conversationApprovedTools:";
-const CHAT_APPROVED_TOOLS_CHANGED_EVENT = "stella:chat-approved-tools-changed";
-
-type ApprovedToolsChangedDetail =
-  | {
-      scope: "local";
-    }
-  | {
-      scope: "session";
-      conversationId: string;
-    };
-
-const getConversationApprovedToolsStorageKey = (
-  conversationId: string,
-  owner: StorageOwner,
-) =>
-  userStorageKey(
-    `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`,
-    owner,
-  );
-
-const readConversationApprovedTools = (
-  conversationId: string,
-  owner: StorageOwner,
-) =>
-  readStoredApprovedTools(
-    getConversationApprovedToolsStorageKey(conversationId, owner),
-  );
-
-const readAlwaysApprovedTools = ({
-  mcpConnectorIdentities,
-  organizationId,
-  owner,
-}: {
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-  organizationId: string;
-  owner: StorageOwner;
-}) => {
-  const stored = readStoredStrings(
-    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY, owner),
-  );
-  const approvedTools: ToolApprovalGrant[] = [];
-
-  for (const value of stored) {
-    if (isApprovalToolName(value) && !isExternalMcpToolName(value)) {
-      approvedTools.push(value);
-      continue;
-    }
-
-    const scopedMcpTool = parseScopedMcpApprovalKey({
-      mcpConnectorIdentities,
-      organizationId,
-      value,
-    });
-    if (scopedMcpTool) {
-      approvedTools.push(scopedMcpTool);
-    }
-  }
-
-  return new Set(approvedTools);
-};
-
-const getStorage = (scope: "local" | "session") => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return scope === "local"
-    ? browserStateStorage("local")
-    : browserStateStorage("session");
-};
-
-const readStoredApprovedTools = (
-  key: string,
-  scope: "local" | "session" = "session",
-) => {
-  const stored = readStoredStrings(key, scope);
-  return new Set(stored.filter(isToolApprovalGrant));
-};
-
-// Top-level shape only: elements are filtered to strings below, so one
-// non-string entry drops just that entry rather than the whole list.
-const JsonArraySchema = v.array(v.unknown());
-
-const readStoredStrings = (
-  key: string,
-  scope: "local" | "session" = "local",
-) => {
-  const storage = getStorage(scope);
-  if (!storage) {
-    return [];
-  }
-
-  const raw = storage.getItem(key);
-  const parsed = readStoredJson(raw, JsonArraySchema);
-  return parsed
-    ? parsed.filter((value): value is string => typeof value === "string")
-    : [];
-};
-
-const writeStoredApprovedTools = (
-  key: string,
-  tools: ReadonlySet<ToolApprovalGrant>,
-  scope: "local" | "session",
-) => {
-  const storage = getStorage(scope);
-  if (!storage) {
-    return;
-  }
-
-  writeStoredJson(storage, key, [...tools]);
-};
-
-const writeStoredApprovedStrings = (
-  key: string,
-  values: ReadonlySet<string>,
-) => {
-  const storage = getStorage("local");
-  if (!storage) {
-    return;
-  }
-
-  writeStoredJson(storage, key, [...values]);
-};
-
-const getAlwaysApprovalKey = ({
-  mcpConnectorIdentities,
-  organizationId,
-  toolName,
-}: {
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-  organizationId: string;
-  toolName: ApprovalToolName;
-}): string | null => {
-  if (!isExternalMcpToolName(toolName)) {
-    return toolName;
-  }
-
-  const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
-  if (!connectorSlug) {
-    return null;
-  }
-
-  const connector = findMcpConnectorIdentity({
-    connectorSlug,
-    mcpConnectorIdentities,
-  });
-  if (!connector) {
-    return null;
-  }
-
-  return [
-    "mcp-approval",
-    encodeURIComponent(organizationId),
-    encodeURIComponent(connector.id),
-    encodeURIComponent(connectorSlug),
-  ].join(":");
-};
-
-const parseScopedMcpApprovalKey = ({
-  mcpConnectorIdentities,
-  organizationId,
-  value,
-}: {
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-  organizationId: string;
-  value: string;
-}): ToolApprovalGrant | null => {
-  const [
-    kind,
-    encodedOrganizationId,
-    encodedConnectorId,
-    encodedConnectorSlug,
-    extra,
-  ] = value.split(":");
-  if (
-    kind !== "mcp-approval" ||
-    encodedOrganizationId !== encodeURIComponent(organizationId) ||
-    !encodedConnectorId ||
-    !encodedConnectorSlug ||
-    extra !== undefined
-  ) {
-    return null;
-  }
-
-  const connectorId = safeDecodeURIComponent(encodedConnectorId);
-  const connectorSlug = safeDecodeURIComponent(encodedConnectorSlug);
-  if (!connectorId || !connectorSlug) {
-    return null;
-  }
-
-  const connector = findMcpConnectorIdentity({
-    connectorSlug,
-    mcpConnectorIdentities,
-  });
-  if (connector?.id !== connectorId) {
-    return null;
-  }
-
-  return getExternalMcpConnectorApprovalGrant(connectorSlug);
-};
-
-const findMcpConnectorIdentity = ({
-  connectorSlug,
-  mcpConnectorIdentities,
-}: {
-  connectorSlug: string;
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-}) =>
-  mcpConnectorIdentities.find(
-    (connector) => connector.slug === connectorSlug,
-  ) ?? null;
-
-const safeDecodeURIComponent = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
-};
-
-const dispatchApprovedToolsChanged = (detail: ApprovedToolsChangedDetail) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.dispatchEvent(
-    new CustomEvent(CHAT_APPROVED_TOOLS_CHANGED_EVENT, { detail }),
-  );
-};
-
-const getApprovedToolsChangedDetail = (
-  event: Event,
-): ApprovedToolsChangedDetail | null => {
-  if (!(event instanceof CustomEvent)) {
-    return null;
-  }
-
-  const detail: unknown = event.detail;
-  if (typeof detail !== "object" || detail === null || !("scope" in detail)) {
-    return null;
-  }
-
-  if (detail.scope === "local") {
-    return { scope: "local" };
-  }
-
-  if (
-    detail.scope === "session" &&
-    "conversationId" in detail &&
-    typeof detail.conversationId === "string"
-  ) {
-    return {
-      scope: "session",
-      conversationId: detail.conversationId,
-    };
-  }
-
-  return null;
 };

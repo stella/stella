@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -11,21 +12,21 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tCurrencyCode, tDefaultVarchar } from "@/api/lib/custom-schema";
+import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const createRateTableBodySchema = t.Object({
-  name: tDefaultVarchar,
-  currency: tCurrencyCode,
-  isDefault: t.Optional(t.Boolean()),
+const createRateTableBodySchema = v.object({
+  name: defaultVarcharSchema,
+  currency: currencyCodeSchema,
+  isDefault: v.optional(v.boolean()),
 });
 
 export type CreateRateTableHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createRateTableBodySchema>;
+  body: v.InferOutput<typeof createRateTableBodySchema>;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -128,6 +129,7 @@ export const createRateTableHandler = async function* ({
 const createRateTable = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Create a rate table, a named set of hourly rates in a single " +
       "currency, in a matter. Pass isDefault to make it the matter's " +

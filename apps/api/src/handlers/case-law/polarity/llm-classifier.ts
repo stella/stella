@@ -49,6 +49,7 @@ export const polarityGeneration = ({
   ({
     dataClass: "public_corpus",
     task: "classify",
+    userId: null,
     serviceTier: "flex",
     orgAIConfig: null,
     organizationId: null,

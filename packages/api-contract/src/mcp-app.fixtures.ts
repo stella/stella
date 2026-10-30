@@ -50,6 +50,8 @@ export const APP_SEARCH_FIXTURE = {
       language: "cs",
       matchedQueries: [0],
       matchingPassages: 1,
+      textAvailability: "available" as const,
+      match: "all_terms" as const,
       sourceUrl: "https://example.test/decision",
       snippet: "Náhrada škody: <b>právní jistota</b>.",
       keywords: {
@@ -79,6 +81,8 @@ export const APP_RESOLVE_FIXTURE = {
     ecli: "ECLI:CZ:US:2024:1.US.123.24.1",
     court: "Ústavní soud",
     decisionDate: "2024-04-15",
+    language: "cs",
+    languageAlternates: [],
     readerUrl: "https://stll.app/case-law/fixture-decision",
     text: {
       status: "readable",

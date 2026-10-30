@@ -2,21 +2,25 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
+import { parseSource } from "../packages/scripts/src/syntax-tree";
 import {
-  removeWaiver,
-  runWaiverProbe,
-  probeDocUrl,
   createProbeBudget,
   PROBE_PHASE_BUDGET_MS,
   PROBE_TIMEOUT_MS,
+  probeDocUrl,
+  removeWaiver,
+  runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
+  type DatedWaiver,
   readTestQuarantines,
   ZERO_AGE_OVERRIDE,
-  type DatedWaiver,
 } from "./dated-waivers";
+import {
+  type QuarantineEntry,
+  serializeRegistry,
+} from "./flaky-test-quarantine";
 
 const waiver = (
   kind: DatedWaiver["kind"],
@@ -99,13 +103,7 @@ test("AST docs edits preserve comments, unrelated objects, separators and remain
     expect(changed).toContain('expiresAt: "2026-10-06T00:00:00.000Z"');
     expect(changed).not.toContain('expiresAt: "2026-10-05T00:00:00.000Z"');
     expect(changed).toContain('url: "https://example.com/llms.txt"');
-    expect(
-      ts
-        .transpileModule(changed, { reportDiagnostics: true })
-        .diagnostics?.filter(
-          ({ category }) => category === ts.DiagnosticCategory.Error,
-        ) ?? [],
-    ).toEqual([]);
+    expect(parseSource("doc-sources.ts", changed).program.type).toBe("Program");
   }
   expect(() =>
     removeWaiver(
@@ -260,6 +258,52 @@ test("test green requires exactly one named passing selected receipt", async () 
     );
     expect(evidence.status).toBe(expected);
   }
+});
+
+test("a flaky-test quarantine probe passes only on its full test name", async () => {
+  const id = "packages/example/src/a.test.ts::group > case";
+  for (const [output, expected] of [
+    ["(pass) group > case [0.10ms]\n1 pass\n0 fail", "green"],
+    ["(pass) other > case [0.10ms]\n1 pass\n0 fail", "red"],
+    ["(pass) case [0.10ms]\n1 pass\n0 fail", "red"],
+    ["(fail) group > case [0.10ms]\n0 pass\n1 fail", "red"],
+  ] as const) {
+    const evidence = await runWaiverProbe(
+      waiver("flaky-test-quarantine", "scripts/flaky-test-quarantine.json", id),
+      { run: async () => ({ passed: true, output }) },
+    );
+    expect(evidence.status).toBe(expected);
+  }
+});
+
+test("flaky-test quarantine removal drops only the probed entry", () => {
+  const entry = (id: string, expires: string): QuarantineEntry => ({
+    id,
+    owner: "octocat",
+    reason: "Fails intermittently.",
+    created: "2026-10-01",
+    expires,
+  });
+  const kept = entry("packages/example/src/a.test.ts::kept", "2026-10-06");
+  const probed = entry("packages/example/src/b.test.ts::probed", "2026-10-05");
+  const source = serializeRegistry({ entries: [kept, probed] });
+  const target = {
+    ...waiver(
+      "flaky-test-quarantine",
+      "scripts/flaky-test-quarantine.json",
+      probed.id,
+    ),
+    expiresAt: probed.expires,
+  };
+  expect(
+    removeWaiver(target, reader({ [target.source]: source })).at(0)?.after,
+  ).toBe(serializeRegistry({ entries: [kept] }));
+  expect(() =>
+    removeWaiver(
+      { ...target, expiresAt: "2026-10-04" },
+      reader({ [target.source]: source }),
+    ),
+  ).toThrow("Flaky-test quarantine anchor missing");
 });
 
 test("real Bun filtered receipts accept only the selected passing declaration", async () => {

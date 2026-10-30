@@ -1,35 +1,94 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
+import fc from "fast-check";
 import nodePath from "node:path";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import { DECISION_LIST_SORTS } from "@stll/api-contract/search";
+import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";
+import {
+  decodeCitationCursor,
+  encodeCitationCursor,
+  encodeCitationPageCursor,
+} from "@/api/handlers/case-law/decisions/citation-graph";
+import {
+  decodeDecisionCitationCursor,
+  encodeDecisionCitationCursor,
+} from "@/api/handlers/case-law/decisions/get";
+import { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
+import {
+  decodeCitingDecisionsCursor,
+  encodeCitingDecisionsCursor,
+} from "@/api/handlers/case-law/provisions/citing-decisions";
+import {
+  decodeProvisionCursor,
+  encodeProvisionCursor,
+} from "@/api/handlers/case-law/provisions/list-for-decision";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import {
+  decodeListCursor,
+  encodeListCursor,
+} from "@/api/handlers/legislation/list";
+import {
+  decodeProvisionHistoryCursor,
+  encodeProvisionHistoryCursor,
+} from "@/api/handlers/legislation/provision-history";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import {
+  decodeVersionCursor,
+  encodeVersionCursor,
+} from "@/api/handlers/legislation/versions";
+import { createHttpApp } from "@/api/http/app";
+import type { RouteDefinition, RouteEntry } from "@/api/http/route";
 import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  decodeDecisionDateCursor,
+  encodeDecisionDateCursor,
+} from "@/api/lib/case-law/decision-date-order";
+import {
+  decodeDecisionSearchCursor,
+  encodeDecisionSearchCursor,
+} from "@/api/lib/case-law/decision-search-cursor";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import {
   publishedCaseLawDecisionFor,
   publishedCaseLawDecisionSqlFor,
 } from "@/api/lib/case-law/published-decisions-sql";
+import { isValibotSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
+import {
+  decodeCorpusSearchCursor,
+  encodeCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  brandPersistedCaseLawCitationId,
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 type ScopedDbIsPublicReadDb = ScopedDb extends CaseLawPublicReadDb
   ? true
@@ -92,11 +151,9 @@ const CITATION_AUTHORITY_FILE =
 /**
  * Every route this slice mounts, sorted.
  *
- * The factory census below filters Elysia's internal entries out before it
- * asks which handlers carry the stamp. Pinning the surviving set here is what
- * stops that filter from excusing the census: a filter that dropped real
- * routes, or a route that quietly disappeared, fails this list rather than
- * passing an empty check.
+ * The factory census below asks which mounted handlers carry the stamp.
+ * Pinning the mounted set here is what stops the census from passing an
+ * empty check: a route that quietly disappeared fails this list instead.
  */
 const PUBLIC_CASE_LAW_ROUTES = [
   "GET /case/coverage",
@@ -106,6 +163,7 @@ const PUBLIC_CASE_LAW_ROUTES = [
   "GET /case/decisions/:decisionId/citations/leading",
   "GET /case/decisions/:decisionId/citations/summary",
   "GET /case/decisions/:decisionId/provisions",
+  "GET /case/decisions/:decisionId/summary",
   "GET /case/decisions/by-slug/:slug",
   "GET /case/decisions/facets",
   "GET /case/decisions/latest",
@@ -142,8 +200,6 @@ const readBrowseFacetsCacheSource = async () =>
 const readNonRedistributableSourcesSource = async () =>
   await readSource(NON_REDISTRIBUTABLE_SOURCES_FILE);
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
-const readSearchSchemaSource = async () =>
-  await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
 const readLanguageAlternatesSource = async () =>
   await readSource(LANGUAGE_ALTERNATES_FILE);
 const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
@@ -151,6 +207,161 @@ const readPublicReadDbSource = async () =>
   await readSource(PUBLIC_READ_DB_FILE);
 
 const DECISION_TABLE_MENTION = /caseLawDecisions|case_law_decisions/u;
+
+const TEST_DECISION_ID = brandPersistedCaseLawDecisionId(
+  "00000000-0000-4000-8000-000000000001",
+);
+const TEST_CITATION_ID = brandPersistedCaseLawCitationId(
+  "00000000-0000-4000-8000-000000000002",
+);
+const TEST_DOCUMENT_ID = brandPersistedLegislationDocumentId(
+  "00000000-0000-4000-8000-000000000003",
+);
+const TEST_CONTEXT = "a".repeat(64);
+const CITATION_QUERY = { direction: "outgoing" } as const;
+
+const publicCursorRouteKey = (method: string, path: string, field: string) =>
+  `${method} ${path}#${field}`;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The field names a valibot object schema (or each option of a union) reads. */
+const schemaFields = (schema: unknown): string[] => {
+  if (!isRecord(schema)) {
+    return [];
+  }
+  const entries = schema["entries"];
+  if (isRecord(entries)) {
+    return Object.keys(entries);
+  }
+  const options = schema["options"];
+  return Array.isArray(options) ? options.flatMap(schemaFields) : [];
+};
+
+const cursorFields = (schema: unknown) => [
+  ...new Set(
+    schemaFields(schema).filter((field) =>
+      field.toLowerCase().endsWith("cursor"),
+    ),
+  ),
+];
+
+const PUBLIC_LAW_ROUTES: readonly RouteEntry[] = [
+  ...publicCaseLawRoute,
+  ...publicLegislationRoute,
+];
+
+const publicCursorRoutes = PUBLIC_LAW_ROUTES.flatMap((route) =>
+  (["query", "body"] as const).flatMap((location) => {
+    const schema = route.definition.config[location];
+    return cursorFields(schema).map((field) => ({
+      field,
+      key: publicCursorRouteKey(route.method, route.path, field),
+      location,
+      schema: isValibotSchema(schema) ? schema : undefined,
+    }));
+  }),
+);
+
+/**
+ * Whether the route's own schema refuses the request's cursor, read the way
+ * the core reads that slot. A route whose schema decodes the cursor (on the
+ * field, or across fields as a citation cursor bound to its direction does)
+ * refuses it as an invalid request; one that decodes it in the handler
+ * answers it there.
+ */
+const schemaRefusesCursor = async (
+  schema: v.GenericSchema | undefined,
+  location: "query" | "body",
+  field: string,
+  request: Request,
+): Promise<boolean> => {
+  if (schema === undefined) {
+    return false;
+  }
+  const input: unknown =
+    location === "query"
+      ? Object.fromEntries(new URL(request.url).searchParams)
+      : await request.json();
+  const { issues } = await v.safeParseAsync(schema, input);
+  return (issues ?? []).some((issue) =>
+    (issue.path ?? []).some((item) => item.key === field),
+  );
+};
+
+/** The public law routes alone, behind the boundary that answers failures. */
+const publicLawServer = serveForTest(
+  createHttpApp({ routes: PUBLIC_LAW_ROUTES, middleware: [errorBoundary] }),
+);
+afterAll(async () => {
+  await publicLawServer.stop();
+});
+
+/** The safe factory's handler a definition carries, when a factory built it. */
+const handlerOf = (definition: RouteDefinition): unknown =>
+  "handler" in definition ? definition.handler : undefined;
+
+const publicCursorRouteRequests: Record<string, () => Request> = {
+  "GET /case/decisions#cursor": () =>
+    new Request(
+      "http://localhost/case/decisions?country=CZE&cursor=not-a-cursor",
+    ),
+  "GET /case/decisions/by-slug/:slug#caseFileCursor": () =>
+    new Request(
+      "http://localhost/case/decisions/by-slug/test?country=CZE&caseFileCursor=not-a-cursor",
+    ),
+  "GET /case/decisions/by-slug/:slug#citationsCursor": () =>
+    new Request(
+      "http://localhost/case/decisions/by-slug/test?country=CZE&citationsCursor=not-a-cursor",
+    ),
+  "GET /case/decisions/:decisionId#caseFileCursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}?caseFileCursor=not-a-cursor`,
+    ),
+  "GET /case/decisions/:decisionId#citationsCursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}?citationsCursor=not-a-cursor`,
+    ),
+  "GET /case/decisions/:decisionId/citations#cursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}/citations?direction=incoming&cursor=not-a-cursor`,
+    ),
+  "GET /case/decisions/:decisionId/provisions#cursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}/provisions?cursor=not-a-cursor`,
+    ),
+  "GET /case/provisions/citing-decisions#cursor": () =>
+    new Request(
+      "http://localhost/case/provisions/citing-decisions?jurisdiction=CZE&work=test&cursor=not-a-cursor",
+    ),
+  "POST /case/decisions/search#cursor": () =>
+    new Request("http://localhost/case/decisions/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        country: "CZE",
+        query: "test",
+        cursor: "not-a-cursor",
+      }),
+    }),
+  "GET /law/statutes#cursor": () =>
+    new Request(
+      "http://localhost/law/statutes?country=CZE&cursor=not-a-cursor",
+    ),
+  "GET /law/statutes/search#cursor": () =>
+    new Request(
+      "http://localhost/law/statutes/search?country=CZE&query=test&cursor=not-a-cursor",
+    ),
+  "GET /law/statutes/:documentId/versions#cursor": () =>
+    new Request(
+      `http://localhost/law/statutes/${TEST_DOCUMENT_ID}/versions?cursor=not-a-cursor`,
+    ),
+  "GET /law/statutes/:documentId/provisions/:anchor/history#cursor": () =>
+    new Request(
+      `http://localhost/law/statutes/${TEST_DOCUMENT_ID}/provisions/p-1/history?cursor=not-a-cursor`,
+    ),
+};
 
 const publicRouteBlock = (source: string): string => {
   const start = source.indexOf("export const publicCaseLawRoute");
@@ -170,16 +381,14 @@ describe("public case-law route boundary", () => {
     try {
       // Each route mounts its own response schema; the gate's 404 must be
       // served for all of them, not rejected by response validation.
-      for (const [route, path] of [
-        [publicCaseLawRoute, "/case/coverage"],
-        [publicCaseLawRoute, "/case/decisions"],
-        [publicCaseLawRoute, "/case/decisions/status"],
-        [publicLegislationRoute, "/law/statutes"],
-        [publicLegislationRoute, "/law/statutes/search?q=zakon"],
-      ] as const) {
-        const response = await route.handle(
-          new Request(`http://localhost${path}`),
-        );
+      for (const path of [
+        "/case/coverage",
+        "/case/decisions",
+        "/case/decisions/status",
+        "/law/statutes",
+        "/law/statutes/search?q=zakon",
+      ]) {
+        const response = await publicLawServer.fetch(`http://localhost${path}`);
 
         expect({ path, status: response.status }).toEqual({
           path,
@@ -229,7 +438,7 @@ describe("public case-law route boundary", () => {
       source.indexOf("export const configureReadTransaction"),
     );
     const readConfiguration = source.slice(
-      source.indexOf("const configureReadTransaction"),
+      source.indexOf("export const configureReadTransaction"),
       source.indexOf("const publicLawReadGuards"),
     );
     const validation = source.slice(
@@ -247,7 +456,14 @@ describe("public case-law route boundary", () => {
     expect(source).toContain(
       "connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS",
     );
-    expect(validation).toContain(".transaction(async (tx) =>");
+    expect(validation).toContain('withPublicReadIo("database", async (io) =>');
+    expect(validation).toContain(
+      "openPublicReadDatabase(external.database, io.signal)",
+    );
+    expect(validation).toContain(
+      "await io.readTransaction(resource.database, async (tx) =>",
+    );
+    expect(validation).toContain("await resource.close()");
     expect(guards).toContain('["statement_timeout", "30s"]');
     expect(guards).toContain('["lock_timeout", "1s"]');
     expect(guards).toContain('["idle_in_transaction_session_timeout", "30s"]');
@@ -267,9 +483,19 @@ describe("public case-law route boundary", () => {
       "set_config('idle_in_transaction_session_timeout',",
     );
     expect(validation).toContain("configureReadTransaction(");
-    expect(validation).toContain("validateExternalPublicLawDatabase(tx)");
+    expect(validation).toContain(
+      "const observedTransaction = observePublicLawReadTransaction(tx)",
+    );
+    expect(validation).toContain(
+      'observedTransaction,\n          "read-committed",\n          EXTERNAL_PUBLIC_LAW_READ_GUARDS,',
+    );
+    expect(validation).toContain(
+      "validateExternalPublicLawDatabase(observedTransaction)",
+    );
     expect(validation.indexOf("configureReadTransaction(")).toBeLessThan(
-      validation.indexOf("validateExternalPublicLawDatabase(tx)"),
+      validation.indexOf(
+        "validateExternalPublicLawDatabase(observedTransaction)",
+      ),
     );
     expect(publicRead).toContain("configureReadTransaction(");
     expect(publicRead).toContain("return await fn(tx)");
@@ -301,11 +527,19 @@ describe("public case-law route boundary", () => {
   });
 
   test("public read routes are not protected by auth middleware", async () => {
+    // Who may call a route is its definition's own decision: every public
+    // read is answered without resolving a caller.
+    expect(
+      publicCaseLawRoute
+        .filter((route) => route.definition.access !== "public")
+        .map((route) => `${route.method} ${route.path}`),
+    ).toEqual([]);
+
     const block = publicRouteBlock(await readRoutesSource());
 
-    expect(block).not.toContain("authMacro");
-    expect(block).not.toContain("permissionMacro");
-    expect(block).not.toContain("workspaceAccessMacro");
+    expect(block).not.toContain("authenticateMember");
+    expect(block).not.toContain("authenticateSession");
+    expect(block).not.toContain("authorizeWorkspace");
     expect(block).not.toContain("validateAuth");
     expect(block).not.toContain("permissions:");
   });
@@ -314,22 +548,20 @@ describe("public case-law route boundary", () => {
     // Was a grep for nine `const x = createSafePublicHandler` lines, which
     // could not see a tenth route or a handler renamed around it. The factory
     // now stamps what it produces, so the census covers every mounted route
-    // and cannot be satisfied by naming.
-    //
-    // Elysia mounts internal entries (HEAD, error pages) whose handler is not
-    // one of ours; they carry no stamp and would read as ungoverned. The
-    // filter below drops them, and the path census that follows keeps the
-    // filter from becoming the escape hatch: dropping everything fails there.
-    const declared = publicCaseLawRoute.routes.filter(
-      (route) => typeof route.handler === "function",
-    );
-    const ungoverned = declared
-      .filter((route) => !isPublicReadBudgetHandler(route.handler))
+    // and cannot be satisfied by naming. The path census that follows pins
+    // the routes the stamp check saw, so a route that quietly disappeared
+    // fails here rather than passing an empty check.
+    const ungoverned = publicCaseLawRoute
+      .filter(
+        (route) => !isPublicReadBudgetHandler(handlerOf(route.definition)),
+      )
       .map((route) => `${route.method} ${route.path}`);
 
     expect(ungoverned).toEqual([]);
     expect(
-      declared.map((route) => `${route.method} ${route.path}`).toSorted(),
+      publicCaseLawRoute
+        .map((route) => `${route.method} ${route.path}`)
+        .toSorted(),
     ).toEqual([...PUBLIC_CASE_LAW_ROUTES]);
   });
 
@@ -407,20 +639,276 @@ describe("public case-law route boundary", () => {
     expect(source).not.toContain("languageAlternateCount");
   });
 
-  test("public search validates source IDs before SQL filters", async () => {
-    const source = await readSearchSchemaSource();
+  test("public search validates source IDs before SQL filters", () => {
+    const sourceIdIssues = (sourceId: string) =>
+      (
+        v.safeParse(searchDecisionsBodySchema, {
+          country: "CZE",
+          query: "test",
+          sourceId,
+        }).issues ?? []
+      ).filter((issue) =>
+        (issue.path ?? []).some((item) => item.key === "sourceId"),
+      );
 
-    expect(source).toContain('sourceId: t.Optional(tSafeId("caseLawSource"))');
+    expect(sourceIdIssues("' OR 1=1 --").length).toBeGreaterThan(0);
+    expect(sourceIdIssues("not-a-uuid").length).toBeGreaterThan(0);
+    expect(sourceIdIssues("00000000-0000-4000-8000-000000000004")).toEqual([]);
   });
 
-  test("public cursors validate IDs before SQL filters", async () => {
-    const [listSource, searchSource] = await Promise.all([
-      readListSource(),
-      readSearchSource(),
-    ]);
+  test("every public pagination cursor route has a behavioural guard", async () => {
+    const enumerated = publicCursorRoutes.map(({ key }) => key).toSorted();
+    const covered = Object.keys(publicCursorRouteRequests).toSorted();
 
-    expect(listSource).toContain("!isUuid(id)");
-    expect(searchSource).toContain("!isUuid(parsedCursor.id)");
+    expect(covered).toEqual(enumerated);
+
+    for (const { key, field, location, schema } of publicCursorRoutes) {
+      const requestForRoute = publicCursorRouteRequests[key];
+      if (requestForRoute === undefined) {
+        throw new Error(`Missing public cursor route guard for ${key}`);
+      }
+      const schemaRefuses = await schemaRefusesCursor(
+        schema,
+        location,
+        field,
+        requestForRoute(),
+      );
+      const response = await publicLawServer.fetch(requestForRoute());
+      const body: unknown = await response.json();
+
+      // Either way the cursor alone is refused, before any read: the core
+      // names it as the one invalid field (422), or the handler's decoder
+      // answers it (400).
+      expect({ key, status: response.status, body }).toEqual(
+        schemaRefuses
+          ? {
+              key,
+              status: 422,
+              body: {
+                code: "validation",
+                message: "Invalid request",
+                issues: [{ field, constraint: "invalid" }],
+              },
+            }
+          : { key, status: 400, body: { message: "Invalid cursor" } },
+      );
+    }
+  });
+
+  test("public cursor decoders reject invalid IDs and round-trip issued cursors", () => {
+    const invalidId = fc.constantFrom(
+      "",
+      "' OR 1=1 --",
+      "x".repeat(513),
+      "v2:00000000-0000-4000-8000-000000000001",
+    );
+
+    assertProperty(
+      "public cursor decoders reject invalid IDs and round-trip issued cursors",
+      fc.property(invalidId, (id) => {
+        const invalidCursors = [
+          ...DECISION_LIST_SORTS.map(
+            (sort) =>
+              [
+                (cursor: string) => decodeDecisionDateCursor(cursor, sort),
+                encodePaginationCursor([sort, "2026-01-01", id]),
+              ] as const,
+          ),
+          [
+            (cursor: string) => decodeCitationCursor(cursor, CITATION_QUERY),
+            encodePaginationCursor([id, CITATION_QUERY.direction, null, null]),
+          ],
+          [
+            decodeCitingDecisionsCursor,
+            encodePaginationCursor([TEST_CONTEXT, "2026-01-01", id]),
+          ],
+          [
+            decodeListCursor,
+            encodePaginationCursor(["recent-v1", "2026-01-01", id]),
+          ],
+          [decodeVersionCursor, encodePaginationCursor(["2026-01-01", id])],
+          [
+            decodeProvisionHistoryCursor,
+            encodePaginationCursor(["2026-01-01", id]),
+          ],
+          [
+            (cursor: string) => decodeDecisionSearchCursor(cursor, "relevance"),
+            encodeCursor(1, `relevance:${id}`),
+          ],
+          [
+            (cursor: string) => decodeDecisionSearchCursor(cursor, "newest"),
+            encodePaginationCursor(["newest", "2026-01-01", id]),
+          ],
+          [decodeCorpusSearchCursor, encodeCursor(1, `0:none:relevance:${id}`)],
+        ] as const;
+
+        for (const [index, [decode, cursor]] of invalidCursors.entries()) {
+          const value = decode(cursor);
+          if (value !== null) {
+            throw new Error(`decoder ${index} accepted ${JSON.stringify(id)}`);
+          }
+        }
+
+        // A citation page cursor decodes to the citation id alone.
+        expect(
+          decodeCitationCursor(
+            encodeCitationPageCursor({
+              id: TEST_CITATION_ID,
+              query: CITATION_QUERY,
+            }),
+            CITATION_QUERY,
+          ),
+        ).toBe(TEST_CITATION_ID);
+
+        const roundTrips = [
+          ...DECISION_LIST_SORTS.flatMap((sort) =>
+            [
+              {
+                band: "dated",
+                decisionDate: "2026-01-01",
+                id: TEST_DECISION_ID,
+              } as const,
+              { band: "undated", id: TEST_DECISION_ID } as const,
+            ].map((position) => ({
+              decoded: decodeDecisionDateCursor(
+                encodeDecisionDateCursor(sort, position),
+                sort,
+              ),
+              expected: position,
+            })),
+          ),
+          {
+            decoded: decodeDecisionCitationCursor(
+              encodeDecisionCitationCursor({
+                from: {
+                  after: encodeCitationCursor(TEST_CITATION_ID),
+                  status: "continue",
+                },
+                to: {
+                  after: encodeCitationCursor(TEST_CITATION_ID),
+                  status: "continue",
+                },
+              }),
+            ),
+            expected: {
+              from: {
+                after: encodeCitationCursor(TEST_CITATION_ID),
+                status: "continue",
+              },
+              to: {
+                after: encodeCitationCursor(TEST_CITATION_ID),
+                status: "continue",
+              },
+            },
+          },
+          {
+            decoded: decodeProvisionCursor(
+              encodeProvisionCursor({
+                generation: "1",
+                spanStart: 0,
+                anchor: "p-1",
+              }),
+            ),
+            expected: {
+              generation: "1",
+              spanStart: 0,
+              anchor: "p-1",
+            },
+          },
+          {
+            decoded: decodeCitingDecisionsCursor(
+              encodeCitingDecisionsCursor({
+                context: TEST_CONTEXT,
+                decisionDate: "2026-01-01",
+                decisionId: TEST_DECISION_ID,
+              }),
+            ),
+            expected: {
+              context: TEST_CONTEXT,
+              decisionDate: "2026-01-01",
+              decisionId: TEST_DECISION_ID,
+            },
+          },
+          {
+            decoded: decodeListCursor(
+              encodeListCursor({
+                type: "recent-v1",
+                validFrom: "2026-01-01",
+                id: TEST_DOCUMENT_ID,
+              }),
+            ),
+            expected: {
+              type: "recent-v1",
+              validFrom: "2026-01-01",
+              id: TEST_DOCUMENT_ID,
+            },
+          },
+          {
+            decoded: decodeVersionCursor(
+              encodeVersionCursor({
+                validFrom: "2026-01-01",
+                id: TEST_DOCUMENT_ID,
+              }),
+            ),
+            expected: {
+              validFrom: "2026-01-01",
+              id: TEST_DOCUMENT_ID,
+            },
+          },
+          {
+            decoded: decodeProvisionHistoryCursor(
+              encodeProvisionHistoryCursor({
+                validFrom: "2026-01-01",
+                id: TEST_DOCUMENT_ID,
+              }),
+            ),
+            expected: {
+              validFrom: "2026-01-01",
+              id: TEST_DOCUMENT_ID,
+            },
+          },
+          {
+            decoded: decodeDecisionSearchCursor(
+              encodeDecisionSearchCursor({
+                id: TEST_DECISION_ID,
+                sort: "relevance",
+                sortKey: 1,
+              }),
+              "relevance",
+            ),
+            expected: {
+              id: TEST_DECISION_ID,
+              sort: "relevance",
+              sortKey: 1,
+            },
+          },
+          {
+            decoded: decodeCorpusSearchCursor(
+              encodeCorpusSearchCursor({
+                dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+                id: TEST_DECISION_ID,
+                score: 1,
+                sort: "relevance",
+                target: null,
+                windowStart: 0,
+              }),
+            ),
+            expected: {
+              dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+              id: TEST_DECISION_ID,
+              score: 1,
+              sort: "relevance",
+              target: null,
+              windowStart: 0,
+            },
+          },
+        ];
+        for (const { decoded, expected } of roundTrips) {
+          expect(decoded).toMatchObject(expected);
+        }
+      }),
+      { numRuns: 40 },
+    );
   });
 
   test("public language alternates are gated, bounded and route-safe", async () => {

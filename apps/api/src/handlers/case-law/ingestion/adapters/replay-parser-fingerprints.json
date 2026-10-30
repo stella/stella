@@ -1,0 +1,126 @@
+{
+  "at-asylgh": {
+    "version": 9,
+    "fingerprint": "8da0f37528f35ff75a989dc8429f49a4392504af0a9434955fac9c4e42dcee85"
+  },
+  "at-bks": {
+    "version": 9,
+    "fingerprint": "665860aee439d7ce146b5f36818a5ecc5f26dd4e539135191c548f34069f4788"
+  },
+  "at-bvwg": {
+    "version": 9,
+    "fingerprint": "a24daec4ef9f2872e5deb5bc627c3e6ea20b8eb4707f1ac832cfe25c1c6f3100"
+  },
+  "at-courts": {
+    "version": 9,
+    "fingerprint": "3bece9ee49cbf1286ca8acfc0a6dffe0d830c33a7383d95885b1258d22cd1d05"
+  },
+  "at-findok": {
+    "version": 11,
+    "fingerprint": "da35d21d29747a66335012c0cc684cabac059ce891ceb912bca115c6dfa228ea"
+  },
+  "at-lvwg": {
+    "version": 9,
+    "fingerprint": "8b87838bba5e6f4697d46c0f38da69d362dffe4b3ecdaef1c5c7605fe7a64c79"
+  },
+  "at-ubas": {
+    "version": 9,
+    "fingerprint": "2e02de0a0359dc121e0bbf7d6bffda290639a3e454fa410f562481c6a9d4536c"
+  },
+  "at-umse": {
+    "version": 9,
+    "fingerprint": "0d6b39dad3df852bc098580c677cd565f441bcd71f002def03ebb6be815fd16d"
+  },
+  "at-uvs": {
+    "version": 9,
+    "fingerprint": "207e23b5ebbc379612b9c0a1fdf262af55767960acf792d11bccb31c5cb29af3"
+  },
+  "at-verg": {
+    "version": 9,
+    "fingerprint": "bc0e4370d5d63a1f11ddbfd358a65f512e85d371aeb05cebd87adef81c86d471"
+  },
+  "at-vfgh": {
+    "version": 9,
+    "fingerprint": "6893c9469c61f859673ae51e9518d8bb39991abec3b5816af098ff2334249ec5"
+  },
+  "at-vwgh": {
+    "version": 9,
+    "fingerprint": "5a5d80b8ffc3748af0beb39effef98c210a6d2a81167c0486af45f58013e4238"
+  },
+  "cz-ns": {
+    "version": 21,
+    "fingerprint": "97f28c0697b8c5642c0b556edd8157c6be61848f1c4561cc61720035c4618815"
+  },
+  "cz-nss": {
+    "version": 24,
+    "fingerprint": "d315becfc9fbe7e68973dd09e03bd79fd40238396cae5fb649d92f59dd3d290c"
+  },
+  "cz-regional": {
+    "version": 16,
+    "fingerprint": "f40a59c585f891277f57aa997e19d405bace1d7a327f66afc7985c382297cd5e"
+  },
+  "cz-uohs": {
+    "version": 5,
+    "fingerprint": "d5b3cb226823f3a4010b738714b86826b522bbd33bf06ae98c39a39c4d3b756d"
+  },
+  "cz-us": {
+    "version": 32,
+    "fingerprint": "c56603fb8a346b1cdf33b0e3e704eda1ebd00008e99a6176dc091a8ecc3073a9"
+  },
+  "eu-ecj": {
+    "version": 18,
+    "fingerprint": "9cbc7e11190f3a0d7b9c5a2f4a66a028e8247b1c52bc49475ec491d9d0b9e4d9"
+  },
+  "hu-bhgy": {
+    "version": 22,
+    "fingerprint": "678f4b82450dd985d68cc4aa447832bbdbbe36b40dbb328574aad88e501c02dc"
+  },
+  "pl-courts": {
+    "version": 17,
+    "fingerprint": "7afc2d8dc2b0ce50bde928f1dd65d9d107bfb86630c86b97ffc0d6f58ec22fe3"
+  },
+  "pl-kio": {
+    "version": 11,
+    "fingerprint": "b268f57a8200115e9f74f3c4d549c822ca2b684a0cea193e5aad50e0b9af5324"
+  },
+  "pl-kis": {
+    "version": 11,
+    "fingerprint": "b390d86578e891a8e55b5140418237914ea79b3680a3831ef8a2f342234603ca"
+  },
+  "pl-ncourt": {
+    "version": 16,
+    "fingerprint": "d3b13ab320cb82247d6ff03e0e8930e7af8d376fd5d73650e91fb37f96af0898"
+  },
+  "pl-nsa": {
+    "version": 10,
+    "fingerprint": "8a85e91c0c5a975f06a9ceb9374027bbd24302a9f38432b618e4dbc2595ac7a3"
+  },
+  "pl-sn": {
+    "version": 10,
+    "fingerprint": "4ab5cc1b47f8f51d124c1d890b61dc7d7e61782b603d0465f43d2af443b28aed"
+  },
+  "pl-tk": {
+    "version": 10,
+    "fingerprint": "05b9cec8f825cdeace1605259ff98601d4dfb2aa08557553212fc86cd884fd9d"
+  },
+  "pl-uodo": {
+    "version": 15,
+    "fingerprint": "844fcb4ec430ad13b50d7968f50aafecf24892a792873c735134c19646a6501f"
+  },
+  "pl-uokik": {
+    "version": 12,
+    "fingerprint": "87f8ed54e625d08b2d6c4970bed98b515e622c96bcf408aa8317861877153f9c"
+  },
+  "sk-courts": {
+    "version": 20,
+    "fingerprint": "3ddd4c3643ba1f0af0c187ef04def3f2fc389833361ae01a45b683d1611bfef7"
+  },
+  "sk-us": {
+    "version": 17,
+    "fingerprint": "a71dab3444ed54cb940678ec1f514cae1e6931180b45cde06964db07ab6bd60c"
+  },
+  "uk-fcl": {
+    "version": 4,
+    "fingerprint": "fe19fe8c32b8050cacbdc5ed0d1065ce1699d69af452409624111a577c416cd3"
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Result, panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
@@ -24,9 +24,9 @@ import { childExitStatus } from "./child-exit-status";
 import {
   dockerCommand,
   DockerEndpointError,
-  resolveInstalledDevDockerKeeper,
   type DockerTarget,
   resolveDockerTarget,
+  resolveInstalledDevDockerKeeper,
 } from "./dev-docker";
 import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
@@ -38,9 +38,9 @@ import {
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
-  MAX_PORT_OFFSET,
   type DevMode,
   type InfraOffsetSetting,
+  MAX_PORT_OFFSET,
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {
@@ -1421,6 +1421,7 @@ export const createApiEnv = ({
   // balance to read; an older apps/api/.env must not block migrations.
   DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: `http://localhost:${String(ports.web)}`,
+  DEPLOY_ENVIRONMENT: "development",
   NODE_ENV: "development",
   // Local development capabilities require an explicit runtime opt-in.
   STELLA_LOCAL_DEV: "1",
@@ -2026,6 +2027,9 @@ const buildApiScriptStep = ({
 // file then fails the API's startup check instead of serving another corpus.
 const SEEDED_STACK_LEGAL_SEARCH_PROVIDER = "pg-fts";
 
+const SEEDED_ORGANIZATION_GRANTS_PRELOAD =
+  "./scripts/grant-seeded-organization-features.ts";
+
 const withSeededStackSearch = (env: NodeJS.ProcessEnv) => ({
   ...env,
   LEGAL_SEARCH_PROVIDER: SEEDED_STACK_LEGAL_SEARCH_PROVIDER,
@@ -2155,6 +2159,11 @@ export const buildPersistentSteps = ({
   // included, and cannot exclude paths. Seeded stacks are driven by agents that
   // restart them explicitly, so only interactive dev pays for hot reload.
   const watchArgs = seeded ? [] : ["--watch"];
+  // The seeded organization sees every invitation feature; grants in
+  // apps/api/.env stay in place alongside it.
+  const seededGrantArgs = seeded
+    ? ["--preload", SEEDED_ORGANIZATION_GRANTS_PRELOAD]
+    : [];
 
   if (modeIncludesApi(mode)) {
     primary.push({
@@ -2164,6 +2173,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
+        ...seededGrantArgs,
         ...watchArgs,
         "src/server.ts",
       ],
@@ -2193,27 +2203,40 @@ export const buildPersistentSteps = ({
   }
 
   // Uploads only become searchable, extractable, and readable by AI once the
-  // document-processing worker drains their runs; without it every upload
-  // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position. With
-  // background workers disabled (always for a seeded stack, or by the
-  // developer's env) the process would exit at once and the runner would
-  // treat that as a crash, so it is not started.
-  if (modeIncludesApi(mode) && apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled") {
-    primary.push({
-      cmd: [
-        resolveCommandPath("bun"),
-        "--no-clear-screen",
-        "--no-env-file",
-        "--preload",
-        "./src/dev/register-mock-ai.ts",
-        ...watchArgs,
-        "src/scripts/document-processing-worker.ts",
-      ],
-      cwd: path.resolve(rootDir, "apps/api"),
-      env: apiEnv,
-      label: "Document processing worker",
-    });
+  // document-processing and file-derivative workers drain their runs; without
+  // them every upload stays queued forever. Workers have no HTTP surface, so
+  // they follow readiness-checked steps: checks pair with steps by position. Seeded stacks
+  // keep the scheduler disabled in the API process, but run the
+  // queue workers separately so uploaded documents are processed locally.
+  if (
+    modeIncludesApi(mode) &&
+    (seeded || apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled")
+  ) {
+    for (const { entrypoint, label } of [
+      {
+        entrypoint: "src/scripts/document-processing-worker.ts",
+        label: "Document processing worker",
+      },
+      {
+        entrypoint: "src/scripts/file-derivative-worker.ts",
+        label: "File derivative worker",
+      },
+    ]) {
+      primary.push({
+        cmd: [
+          resolveCommandPath("bun"),
+          "--no-clear-screen",
+          "--no-env-file",
+          "--preload",
+          "./src/dev/register-mock-ai.ts",
+          ...watchArgs,
+          entrypoint,
+        ],
+        cwd: path.resolve(rootDir, "apps/api"),
+        env: seeded ? { ...apiEnv, SCHEDULED_JOBS_MODE: "enabled" } : apiEnv,
+        label,
+      });
+    }
   }
 
   if (modeIncludesDesktop(mode)) {

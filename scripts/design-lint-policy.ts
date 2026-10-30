@@ -132,6 +132,31 @@ export const BUILTIN_LINT_BACKLOG_RULES = [
 type BuiltinLintBacklogRule = (typeof BUILTIN_LINT_BACKLOG_RULES)[number];
 
 /**
+ * The `no-native-ui` rules (one per `@stll/ui` component that wraps native
+ * markup, from `.oxlint-plugins/no-native-ui-registry.ts`) that product code
+ * still breaks. A rule with no offenders is not listed: it is an error across
+ * its whole scope.
+ */
+const NO_NATIVE_UI_BACKLOG_RULES = [
+  "no-native-ui/no-native-accordion",
+  "no-native-ui/no-native-button",
+  "no-native-ui/no-native-checkbox",
+  "no-native-ui/no-native-details-grid",
+  "no-native-ui/no-native-dialog",
+  "no-native-ui/no-native-form",
+  "no-native-ui/no-native-input",
+  "no-native-ui/no-native-label",
+  "no-native-ui/no-native-menu",
+  "no-native-ui/no-native-number-input",
+  "no-native-ui/no-native-secret-input",
+  "no-native-ui/no-native-select",
+  "no-native-ui/no-native-separator",
+  "no-native-ui/no-native-table",
+  "no-native-ui/no-native-textarea",
+  "no-native-ui/no-native-tooltip",
+] as const;
+
+/**
  * Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`.
  *
  * `require-bounded-request-schema` and `no-unbounded-response-body` are not
@@ -151,6 +176,8 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "no-unbounded-response-body/no-unbounded-response-body",
   "no-computed-key-record-assignment/no-computed-key-record-assignment",
   "no-direct-status-set/no-direct-status-set",
+  "require-polite-publisher-fetch/require-polite-publisher-fetch",
+  ...NO_NATIVE_UI_BACKLOG_RULES,
   ...SIZE_LINT_BACKLOG_RULES,
   ...BUILTIN_LINT_BACKLOG_RULES,
 ] as const;
@@ -408,6 +435,10 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "no-unbounded-response-body/no-unbounded-response-body": "off",
   "no-computed-key-record-assignment/no-computed-key-record-assignment": "off",
   "no-direct-status-set/no-direct-status-set": "off",
+  "require-polite-publisher-fetch/require-polite-publisher-fetch": "off",
+  ...Object.fromEntries(
+    NO_NATIVE_UI_BACKLOG_RULES.map((rule) => [rule, "off"] as const),
+  ),
 } satisfies DummyRuleMap &
   Record<keyof typeof SHADCN_LINT_RULES, DummyRuleMap[string]>;
 

@@ -29,16 +29,16 @@ import { createOpenAIDecisionsClient } from "@/api/lib/workflow/decisions/openai
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 import {
-  disagreements,
   DISAGREEMENT_EXAMPLES,
+  disagreements,
   parseCompareArgs,
   planSampleBuckets,
   renderComparisonReport,
   renderPairedComparisonReport,
-  summarisePairedComparison,
   STORED_LABEL_ABSENT,
   storedLabelOf,
   summariseComparison,
+  summarisePairedComparison,
   truncateExcerpt,
   USAGE,
 } from "@/api/scripts/polarity-system-one-compare.logic";

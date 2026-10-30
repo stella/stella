@@ -31,6 +31,14 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+import rootManifest from "../../../../package.json" with { type: "json" };
+
+const routeServer = serveRoutesForTest(meRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const tokenSchema = v.looseObject({
@@ -56,7 +64,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     }
   });
   beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
+    expect(provider.version).toBe(
+      rootManifest.catalog["@better-auth/oauth-provider"],
+    );
   });
   const fixture = async () => {
     const browser = await signInHuman(
@@ -279,7 +289,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         .limit(1);
       const consentId =
         consent.at(0)?.id ?? panic("Connection consent required");
-      const disconnected = await meRoute.handle(
+      const disconnected = await routeServer.fetch(
         new Request(`http://localhost/me/oauth-connections/${consentId}`, {
           method: "DELETE",
           headers: { cookie: browser.cookieHeader() },

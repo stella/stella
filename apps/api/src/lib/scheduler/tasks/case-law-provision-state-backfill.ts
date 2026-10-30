@@ -17,9 +17,9 @@ import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-ba
 import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
 import {
+  logSchedulerBackfillStatus,
   SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
-  logSchedulerBackfillStatus,
 } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
@@ -40,7 +40,7 @@ const CONNECTION_LOCK_TIMEOUT_MS = 30_000;
 /** The part of a reserved Bun SQL connection the backfill uses. */
 type ReservedConnection = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
-  release: () => void;
+  release: () => Promise<void>;
   close: () => Promise<void>;
 };
 

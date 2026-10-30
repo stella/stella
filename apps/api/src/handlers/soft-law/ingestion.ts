@@ -1,34 +1,38 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  writeRawSourcePayload,
   RAW_SOURCE_FAMILY,
+  writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 import { SoftLawBlockedError } from "@/api/lib/legal-search/soft-law-access-types";
+import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-authority-policy";
 import {
-  softLawIdentityKey,
   softLawContentHash,
+  softLawIdentityKey,
 } from "@/api/lib/legal-search/soft-law-fingerprint";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
-  SoftLawObservation,
   SoftLawAttempt,
+  SoftLawObservation,
 } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import {
+  isTextlessExtraction,
+  SOFT_LAW_BATCH_LIMIT,
   SoftLawIngestionError,
   SoftLawItemError,
   SoftLawListingIncompleteError,
-  SOFT_LAW_BATCH_LIMIT,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
-  SoftLawSourceAdapter,
-  SoftLawEntry,
+  SoftLawDiscoveryEntry,
   SoftLawDocumentInput,
+  SoftLawEntry,
+  SoftLawMetadata,
+  SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
 import { createSoftLawFetch } from "./publisher-access";
@@ -84,7 +88,7 @@ const assertPublisherAvailable = (fetch: SoftLawFetch) => {
   return Result.ok();
 };
 type PrepareSoftLawPageOptions = {
-  entries: readonly SoftLawEntry[];
+  entries: readonly SoftLawDiscoveryEntry[];
   store: ReturnType<typeof createSoftLawIngestionStore>;
   adapter: SoftLawSourceAdapter;
   sourceId: SafeId<"softLawSource">;
@@ -93,6 +97,9 @@ type PrepareSoftLawPageOptions = {
   fetch: SoftLawFetch;
   writeRaw: WriteRawSourcePayload;
 };
+class SoftLawPageCapacityError extends TaggedError("SoftLawPageCapacityError")<{
+  message: string;
+}> {}
 type FetchedSoftLawItem = {
   entry: SoftLawEntry;
   input: SoftLawDocumentInput;
@@ -100,6 +107,57 @@ type FetchedSoftLawItem = {
   contentHash: string;
   count: number;
   rawByteLength: number;
+};
+type SoftLawIdentityResolution =
+  | {
+      kind: "create" | "attach";
+      documentId: SafeId<"softLawDocument">;
+    }
+  | {
+      kind: "merge_repaired_placeholder";
+      documentId: SafeId<"softLawDocument">;
+      placeholderDocumentId: SafeId<"softLawDocument">;
+    };
+type SoftLawIdentityOwner =
+  | {
+      kind: "persisted" | "accepted" | "locator";
+      documentId: SafeId<"softLawDocument">;
+    }
+  | { kind: "new" };
+type StoredSoftLawMatch = Awaited<
+  ReturnType<ReturnType<typeof createSoftLawIngestionStore>["loadMatches"]>
+>[number];
+type ExtractionPlaceholderMatch = StoredSoftLawMatch & {
+  version: NonNullable<StoredSoftLawMatch["version"]>;
+};
+const isUnnumberedExtractionPlaceholder = (
+  row: StoredSoftLawMatch,
+): row is ExtractionPlaceholderMatch =>
+  row.document.statedReferenceState === "not_stated" &&
+  row.version !== null &&
+  isTextlessExtraction(
+    row.version.extractedText,
+    row.version.extractionQuality,
+  );
+const hasCompatibleRecoveredExpression = (
+  stored: SoftLawMetadata,
+  incoming: SoftLawMetadata,
+) => {
+  if (
+    stored.kind !== incoming.kind ||
+    stored.expression?.type !== "identified" ||
+    incoming.expression?.type !== "identified" ||
+    stored.expression.language !== incoming.expression.language
+  ) {
+    return false;
+  }
+  if (stored.expression.revision.state === "not_stated") {
+    return true;
+  }
+  return (
+    incoming.expression.revision.state === "stated" &&
+    stored.expression.revision.value === incoming.expression.revision.value
+  );
 };
 type FetchSoftLawItemOptions = Pick<
   PrepareSoftLawPageOptions,
@@ -118,7 +176,7 @@ const fetchSoftLawItem = async ({
     return fetched;
   }
   const input = fetched.value;
-  const identity = softLawIdentityKey(adapter.authority, input.metadata);
+  const identity = softLawIdentityKey(adapter.authority, input.metadata, input);
   if (identity.status === "error") {
     return identity;
   }
@@ -126,7 +184,10 @@ const fetchSoftLawItem = async ({
   if (
     !input.raw.length ||
     input.raw.length > DOCUMENT_RAW_PART_LIMIT ||
-    new Set(input.raw.map((part) => part.role)).size !== input.raw.length
+    new Set(input.raw.map((part) => part.role)).size !== input.raw.length ||
+    (SOFT_LAW_AUTHORITY_POLICIES[adapter.authority].expression === "required" &&
+      (!input.raw.some((part) => part.purpose === "document") ||
+        input.raw.some((part) => part.purpose === undefined)))
   ) {
     return Result.err(
       new SoftLawItemError({
@@ -139,11 +200,18 @@ const fetchSoftLawItem = async ({
     (total, part) => total + part.bytes.byteLength,
     0,
   );
-  if (rawByteLength > maxRawBytes) {
+  if (rawByteLength > PAGE_RAW_BYTE_LIMIT) {
     return Result.err(
       new SoftLawItemError({
-        message: "Page raw byte limit exceeded",
+        message: "Document exceeds the page raw byte limit",
         tag: "invalid_document",
+      }),
+    );
+  }
+  if (rawByteLength > maxRawBytes) {
+    return Result.err(
+      new SoftLawPageCapacityError({
+        message: "Page raw byte capacity exhausted",
       }),
     );
   }
@@ -157,19 +225,31 @@ const fetchSoftLawItem = async ({
   });
 };
 const rejectedAttempt = (
-  entry: SoftLawEntry,
+  entry: SoftLawDiscoveryEntry,
   error: unknown,
   count: number,
 ): SoftLawAttempt => {
   if (SoftLawItemError.is(error)) {
-    return { entry, status: "rejected", tag: error.tag, count };
+    return { entry, status: "rejected", tag: error.tag, count, rawObjects: [] };
   }
   if (SoftLawIngestionError.is(error)) {
-    return { entry, status: "rejected", tag: "invalid_document", count };
+    return {
+      entry,
+      status: "rejected",
+      tag: "invalid_document",
+      count,
+      rawObjects: [],
+    };
   }
   return count >= ITEM_ATTEMPT_LIMIT
-    ? { entry, status: "rejected", tag: "retry_exhausted", count }
-    : { entry, status: "retryable", tag: null, count };
+    ? {
+        entry,
+        status: "rejected",
+        tag: "retry_exhausted",
+        count,
+        rawObjects: [],
+      }
+    : { entry, status: "retryable", tag: null, count, rawObjects: [] };
 };
 const fetchSoftLawPage = async ({
   entries,
@@ -195,10 +275,37 @@ const fetchSoftLawPage = async ({
     )
     .map((attempt) => attempt.entry);
   let retainedRawBytes = 0;
+  let capacity: "available" | "exhausted" = "available";
   for (const entry of [...entries, ...pendingEntries]) {
     signal.throwIfAborted();
     const previous = prior.get(entry.url);
     if (previous && previous.status !== "retryable") {
+      continue;
+    }
+    switch (entry.type) {
+      case "rejected":
+        attempts.push({
+          entry,
+          status: "rejected",
+          tag: entry.rejection.tag,
+          count: (previous?.count ?? 0) + 1,
+          rawObjects: [],
+        });
+        continue;
+      case "document":
+        break;
+      default:
+        entry satisfies never;
+        return panic("Unknown soft-law discovery entry");
+    }
+    if (capacity === "exhausted" || retainedRawBytes === PAGE_RAW_BYTE_LIMIT) {
+      attempts.push({
+        entry,
+        status: "retryable",
+        tag: null,
+        count: previous?.count ?? 0,
+        rawObjects: [],
+      });
       continue;
     }
     const count = (previous?.count ?? 0) + 1;
@@ -229,6 +336,17 @@ const fetchSoftLawPage = async ({
     }
     signal.throwIfAborted();
     if (result.status === "error") {
+      if (SoftLawPageCapacityError.is(result.error)) {
+        capacity = "exhausted";
+        attempts.push({
+          entry,
+          status: "retryable",
+          tag: null,
+          count: previous?.count ?? 0,
+          rawObjects: [],
+        });
+        continue;
+      }
       attempts.push(rejectedAttempt(entry, result.error, count));
       continue;
     }
@@ -266,12 +384,24 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       (row) => row.document.identityKey === identityKey,
     );
     const locator = known.find((row) => row.locator?.url === entry.url);
-    if (locator && locator.document.identityKey !== identityKey) {
+    const repairsExtractionPlaceholder =
+      locator !== undefined &&
+      isUnnumberedExtractionPlaceholder(locator) &&
+      hasCompatibleRecoveredExpression(
+        locator.version.metadata,
+        input.metadata,
+      );
+    if (
+      locator &&
+      locator.document.identityKey !== identityKey &&
+      !repairsExtractionPlaceholder
+    ) {
       attempts.push({
         entry,
         count,
         status: "rejected",
         tag: "ambiguous_locator",
+        rawObjects: [],
       });
       continue;
     }
@@ -303,14 +433,66 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
         status: "rejected",
         tag: "identity_collision",
         identityKey,
+        rawObjects: [],
       });
       continue;
     }
     const existing = matches.at(0);
-    const documentId =
-      existing?.document.id ??
-      accepted?.documentId ??
-      createSafeId<"softLawDocument">();
+    const owner: SoftLawIdentityOwner = (() => {
+      if (existing) {
+        return { kind: "persisted", documentId: existing.document.id };
+      }
+      if (accepted) {
+        return { kind: "accepted", documentId: accepted.documentId };
+      }
+      if (locator) {
+        return { kind: "locator", documentId: locator.document.id };
+      }
+      return { kind: "new" };
+    })();
+    const resolution: SoftLawIdentityResolution = (() => {
+      switch (owner.kind) {
+        case "persisted":
+        case "accepted":
+          if (
+            repairsExtractionPlaceholder &&
+            locator.document.id !== owner.documentId
+          ) {
+            return {
+              kind: "merge_repaired_placeholder",
+              documentId: owner.documentId,
+              placeholderDocumentId: locator.document.id,
+            };
+          }
+          return { kind: "attach", documentId: owner.documentId };
+        case "locator":
+          return { kind: "attach", documentId: owner.documentId };
+        case "new":
+          return {
+            kind: "create",
+            documentId: createSafeId<"softLawDocument">(),
+          };
+        default:
+          owner satisfies never;
+          return panic("Unknown soft-law identity owner");
+      }
+    })();
+    let identityResolution: SoftLawObservation["identityResolution"];
+    switch (resolution.kind) {
+      case "create":
+      case "attach":
+        identityResolution = { kind: resolution.kind };
+        break;
+      case "merge_repaired_placeholder":
+        identityResolution = {
+          kind: resolution.kind,
+          placeholderDocumentId: resolution.placeholderDocumentId,
+        };
+        break;
+      default:
+        resolution satisfies never;
+        return panic("Unknown soft-law identity resolution");
+    }
     const written = await Result.tryPromise(async () => {
       const rawObjects: SoftLawObservation["rawObjects"] = [];
       for (const part of input.raw) {
@@ -325,9 +507,19 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
           role: part.role,
           key,
           contentType: part.contentType,
+          ...(part.purpose ? { purpose: part.purpose } : {}),
+          ...(part.provenance ? { provenance: part.provenance } : {}),
         });
       }
-      return { entry, input, documentId, identityKey, contentHash, rawObjects };
+      return {
+        entry,
+        input,
+        documentId: resolution.documentId,
+        identityKey,
+        contentHash,
+        rawObjects,
+        identityResolution,
+      };
     });
     if (written.status === "error") {
       attempts.push(rejectedAttempt(entry, written.error.cause, count));
@@ -338,6 +530,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
     attempts.push({
       entry,
       count,
+      rawObjects: written.value.rawObjects,
       status:
         existing?.version?.contentHash === contentHash
           ? "unchanged"
@@ -414,7 +607,11 @@ export const runSoftLawIngestion = async ({
         if (renewed.status === "error") {
           return renewed;
         }
-        const page = await adapter.discover({ cursor, signal, fetch });
+        const discovered = await adapter.discover({ cursor, signal, fetch });
+        if (discovered.status === "error") {
+          return discovered;
+        }
+        const page = discovered.value;
         const pageAvailable = assertPublisherAvailable(fetch);
         if (pageAvailable.status === "error") {
           return pageAvailable;

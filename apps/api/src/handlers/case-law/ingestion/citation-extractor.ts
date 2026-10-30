@@ -7,10 +7,10 @@ import {
   PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE,
   PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE,
   PL_AUTHORITY_FILE_NUMBER_SOURCE,
-  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   PL_KIO_DOCKET_SOURCE,
   PL_TK_DISTINCTIVE_DOCKET_SOURCE,
   PL_TK_DOCKET_SOURCE,
+  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   polishAdministrativeDocketOf,
   polishConstitutionalDocketKey,
   polishKioDocketKey,
@@ -544,8 +544,7 @@ const hungarianConstitutionalDesignation = (value: string): string | null => {
  * opinion, a Constitutional Court decision). Null for text that is neither.
  */
 type HungarianCitationForm =
-  | { type: "docket"; registry: string }
-  | { type: "published" };
+  { type: "docket"; registry: string } | { type: "published" };
 
 export const hungarianCitationForm = (
   citationText: string,
@@ -588,11 +587,13 @@ const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s{0,3}(?::\s{0,3})?(?:[Aa]kt\.?:?\s{
 // PL_TK_PATTERN/PL_TK_BARE_PATTERN's phantom-duplicate lookbehind exactly,
 // or a whitespace run this pattern still combines into one citation but
 // the lookbehind no longer recognizes lets the Tribunal symbol at the
-// tail phantom-duplicate as a second, separate citation. Group
+// tail phantom-duplicate as a second, separate citation. A division
+// code may carry a trailing dot ("IV P. 498/99", "VIII Kz. 123/15"); the
+// dedup key drops it. Group
 // `caseNumber` captures the bare case number to deduplicate against the
 // unprefixed pattern below.
 const PL_PREFIXED_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}(?:[\s/]{1,3}[A-Za-z]{1,5})?\s*\d{1,6}\/\d{2,4})`,
+  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}\.?(?:[\s/]{1,3}[A-Za-z]{1,5}\.?)?\s*\d{1,6}\/\d{2,4})`,
   "gu",
 );
 
@@ -647,7 +648,7 @@ const PL_TK_PATTERN = new RegExp(
 // whitespace run: "I SK 12/20" is a Supreme Court docket, and its tail read
 // past a wide gap would key it as the Tribunal's.
 const PL_TK_BARE_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -657,72 +658,198 @@ const PL_TK_BARE_PATTERN = new RegExp(
 // ("sygn. akt II    K 12/20" -> "K 12/20") would otherwise pass the cue
 // gate as a different, Tribunal docket.
 const PL_TK_CUED_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
-/**
- * What marks a nearby bare "K 2/19" as the Tribunal's: its name or
- * abbreviation, a "sygn." label, or a judgment introduced by its date, in
- * any capitalisation ("Sygn.", a sentence-initial "Wyrok").
- */
-const PL_TK_CUE_RE =
-  /\bTK\b|Trybuna(?:ł|l)\p{L}*\s+Konstytucyjn|sygn\.|\bwyrok\p{L}*[^;]{0,80}?\bz\s+dnia\b/iu;
-
-/** How far before a bare Tribunal docket a cue may sit. */
-const PL_TK_CUE_WINDOW = 120;
-
-/** Patterns whose capture only counts next to a Tribunal cue. */
-const PL_TK_CUE_GATED_PATTERNS: ReadonlySet<RegExp> = new Set([
-  PL_TK_CUED_PATTERN,
-]);
-
-// A data protection authority's file number: "znak sprawy DKN.5131.6.2024".
-// The shape is also how other bodies number their files, so it is read only
-// near its own cue (PL_AUTHORITY_FILE_NUMBER_CUE_RE).
-const PL_AUTHORITY_FILE_NUMBER_PATTERN = new RegExp(
-  String.raw`(?<![\p{L}\d.\-])(?<caseNumber>${PL_AUTHORITY_FILE_NUMBER_SOURCE})(?![\p{L}\d\-]|\.[\p{L}\d])`,
-  "gu",
-);
-
-// National Appeal Chamber (KIO) dockets, joined ones included, from the same
-// source the search grammar reads: "KIO 1234/24", "KIO/UZP 1188/08",
-// "KIO 2845/25, KIO 2846/25". The all-caps mark is distinctive enough to
-// read without a cue.
 const PL_KIO_PATTERN = new RegExp(
   String.raw`(?<![\p{L}\d])(?<caseNumber>${PL_KIO_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
-// A decision number of the competition and consumer protection authority,
-// as a court or another decision cites it: "decyzji Prezesa UOKiK nr
-// DOK-1/2020", "od decyzji Prezesa Urzędu Ochrony Konkurencji i Konsumentów
-// z 29 lutego 2024 r. Nr DOZIK 3/2024". Its shape is shared with other
-// bodies' file numbers, so it is read only near its own cue
-// (PL_UOKIK_DECISION_CUE_RE). As PL_TK_BARE_PATTERN does, it rejects a
-// Roman division before the unit: "I CSK 123/2019" is a court docket, and
-// its tail is not a decision number.
-const PL_UOKIK_DECISION_PATTERN = new RegExp(
-  String.raw`(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
-  "gu",
+/** The official-language words that introduce a Commission competition case. */
+export const COMMISSION_CASE_CUES = [
+  { language: "Bulgarian", cue: "дело" },
+  { language: "Croatian", cue: "predmet" },
+  { language: "Czech", cue: "věc" },
+  { language: "Danish", cue: "sag" },
+  { language: "Dutch", cue: "zaak" },
+  { language: "English", cue: "case" },
+  { language: "Estonian", cue: "kohtuasi" },
+  { language: "Finnish", cue: "asia" },
+  { language: "French", cue: "affaire" },
+  { language: "German", cue: "Rechtssache" },
+  { language: "German", cue: "Sache" },
+  { language: "Greek", cue: "υπόθεση" },
+  { language: "Hungarian", cue: "ügy" },
+  { language: "Irish", cue: "cás" },
+  { language: "Italian", cue: "causa" },
+  { language: "Latvian", cue: "lieta" },
+  { language: "Lithuanian", cue: "byla" },
+  { language: "Maltese", cue: "kawża" },
+  { language: "Polish", cue: "sprawa" },
+  { language: "Portuguese", cue: "processo" },
+  { language: "Romanian", cue: "cauza" },
+  { language: "Slovak", cue: "vec" },
+  { language: "Slovenian", cue: "zadeva" },
+  { language: "Spanish", cue: "asunto" },
+  { language: "Spanish/Italian/Portuguese", cue: "caso" },
+  { language: "Swedish", cue: "mål" },
+] as const;
+
+const COMMISSION_CASE_CUE_SOURCE = COMMISSION_CASE_CUES.map(
+  ({ cue }) => cue,
+).join("|");
+const COMMISSION_CASE_CUE_RE = new RegExp(
+  String.raw`(?<!\p{L})(?:${COMMISSION_CASE_CUE_SOURCE})(?!\p{L})`,
+  "iu",
 );
 
-/** What marks a nearby decision number as the competition authority's. */
-const PL_UOKIK_DECISION_CUE_RE =
-  /\bUOKiK\b|Urz[ęe]d\p{L}*\s+Ochrony\s+Konkurencji|Ochrony\s+Konkurencji\s+i\s+Konsument/iu;
+/** A cue cannot license a number elsewhere in the sentence or paragraph. */
+const COMMISSION_CASE_CUE_WINDOW = 40;
 
-/** How far before a decision number its cue may sit. */
-const PL_UOKIK_DECISION_CUE_WINDOW = 160;
+const COMMISSION_CASE_NUMBER_PATTERN =
+  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
+const COMMISSION_SHORT_CASE_NUMBER_RE = /^(?:C|N|NN)\s/iu;
+const ROMAN_NUMERALS = new Set(["I", "V", "X", "L", "C", "D", "M"]);
+const MAX_ROMAN_DIVISION_LENGTH = 8;
 
 /**
- * How far after it: "decyzja nr DOK-1/2020 Prezesa UOKiK" names its author
- * right after the number, so the window is short.
+ * Whether a short `C|N|NN 123/2020` form is the tail of a national docket:
+ * a senate number (`21 C 123/2020`) or a Roman court division
+ * (`IV C 123/2020`) precedes it across any amount of whitespace. A linear
+ * backwards scan, so neither whitespace runs nor long sections cost more.
  */
-const PL_UOKIK_DECISION_TRAILING_CUE_WINDOW = 60;
+const followsNationalDocketDivision = (
+  text: string,
+  matchIndex: number,
+): boolean => {
+  let end = matchIndex - 1;
+  while (end >= 0 && /\s/u.test(text.charAt(end))) {
+    end -= 1;
+  }
+  if (end < 0 || end === matchIndex - 1) {
+    return false;
+  }
+  if (/\d/u.test(text.charAt(end))) {
+    return true;
+  }
+  let start = end;
+  while (
+    start >= 0 &&
+    end - start < MAX_ROMAN_DIVISION_LENGTH &&
+    ROMAN_NUMERALS.has(text.charAt(start).toUpperCase())
+  ) {
+    start -= 1;
+  }
+  return start < end && (start < 0 || !/[\p{L}\d]/u.test(text.charAt(start)));
+};
 
-/** What marks a nearby authority file number as the data protection authority's. */
-const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
-  /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu;
+export type CueGatedCitationPattern = {
+  id: string;
+  pattern: RegExp;
+  cue: RegExp;
+  windowBefore: number;
+  windowAfter: number;
+  identifierType: DecisionIdentifierType;
+  /** A cued match this shape still refuses; null when the cue decides alone. */
+  refuses:
+    | ((context: {
+        caseNumber: string | undefined;
+        text: string;
+        matchIndex: number;
+      }) => boolean)
+    | null;
+};
+
+// A proceeding number may carry the decision's own reference after a hyphen
+// ("ÚOHS-S0123/2024/VZ-12345/2024/500/JNe"); it is part of the identity, and
+// any other continuation is refused rather than cut to the proceeding.
+const CZ_UOHS_PATTERN =
+  /(?<![\p{L}\d])(?<caseNumber>ÚOHS-(?:[SR]\d{1,6}\/\d{4}\/[A-Z]{2}(?:-\d{1,6}\/\d{4}\/\d{3}(?:\/\p{L}{2,6})?)?|\d{1,6}\/\d{4}\/\d{3}(?:\/\p{L}{2,6})?))(?![\p{L}\d/-])/gu;
+const CZ_UOOU_PATTERN =
+  /(?<![\p{L}\d])(?<caseNumber>UOOU-(?:\d{1,6}\/\d{2}-\d{1,4}|\d{6,10}-\d{1,4}))(?![\p{L}\d-])/gu;
+
+/** Citation shapes that are too ambiguous without a nearby authority cue. */
+export const CUE_GATED_CITATION_PATTERNS = [
+  {
+    id: "pl-tk",
+    pattern: PL_TK_CUED_PATTERN,
+    cue: /\bTK\b|Trybuna(?:ł|l)\p{L}*\s+Konstytucyjn|sygn\.|\bwyrok\p{L}*[^;]{0,80}?\bz\s+dnia\b/iu,
+    windowBefore: 120,
+    windowAfter: 0,
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "pl-uodo",
+    pattern: new RegExp(
+      String.raw`(?<![\p{L}\d.\-])(?<caseNumber>${PL_AUTHORITY_FILE_NUMBER_SOURCE})(?![\p{L}\d\-]|\.[\p{L}\d])`,
+      "gu",
+    ),
+    cue: /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu,
+    windowBefore: 120,
+    windowAfter: 0,
+    // The type the authority's own adapter stores: citations resolve only
+    // to identifiers of the same type.
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "pl-uokik",
+    // The leading capital check runs the unbounded division lookbehind only
+    // where a number can start: tried at every position of a whitespace run,
+    // it rescans the run each time.
+    pattern: new RegExp(
+      String.raw`(?=\p{Lu})(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
+      "gu",
+    ),
+    cue: /\bUOKiK\b|Urz[ęe]d\p{L}*\s+Ochrony\s+Konkurencji|Ochrony\s+Konkurencji\s+i\s+Konsument/iu,
+    windowBefore: 160,
+    windowAfter: 60,
+    // The type the authority's own adapter stores: citations resolve only
+    // to identifiers of the same type.
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "cz-uohs",
+    pattern: CZ_UOHS_PATTERN,
+    // Letter-aware boundaries (`\b` is ASCII-only), refusing a hyphen: the
+    // `ÚOHS-` prefix of a neighbouring number is not a cue.
+    cue: /(?<![\p{L}\d])(?:ÚOHS|OHS)(?![\p{L}\d-])|Úřad\s+pro\s+ochranu\s+hospodářské\s+soutěže|rozhodnutí\s+předsedy/iu,
+    windowBefore: 180,
+    windowAfter: 80,
+    identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "cz-uoou",
+    pattern: CZ_UOOU_PATTERN,
+    cue: /(?<![\p{L}\d])(?:ÚOOÚ|UOOU)(?![\p{L}\d-])|Úřad\s+pro\s+ochranu\s+osobních\s+údajů|rozhodnutí\s+předsedy/iu,
+    windowBefore: 180,
+    windowAfter: 80,
+    identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "eu-commission",
+    pattern: COMMISSION_CASE_NUMBER_PATTERN,
+    cue: COMMISSION_CASE_CUE_RE,
+    // A cue cannot license a number elsewhere in the sentence or paragraph.
+    windowBefore: COMMISSION_CASE_CUE_WINDOW,
+    windowAfter: 0,
+    identifierType: DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+    refuses: ({ caseNumber, text, matchIndex }) =>
+      caseNumber !== undefined &&
+      COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
+      followsNationalDocketDivision(text, matchIndex),
+  },
+] as const satisfies readonly CueGatedCitationPattern[];
+
+const CUE_GATED_PATTERN_BY_PATTERN = new Map(
+  CUE_GATED_CITATION_PATTERNS.map((entry) => [entry.pattern, entry] as const),
+);
 
 // Polish bare-symbol pattern: other tribunals and disciplinary registries
 // cite by a 1-3 letter symbol with no Roman-numeral chamber at all --
@@ -748,9 +875,23 @@ const PL_BARE_SYMBOL_PATTERN = new RegExp(
 // division, a ninth one ("IX SA/Wa") or one past a wide gap ("II      SA/Wa"),
 // rejects the match rather than leaving a docket with its division cut off.
 const PL_NSA_WSA_PATTERN = new RegExp(
-  String.raw`(?:${PL_SYGN_PREFIX})?(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
+
+// The seated register spelled with dots, "II S.A./Po 1234/01". The capture
+// is loose about the seat; it stands only when the undotted spelling parses
+// as an administrative docket (`foldPolishDottedRegister`).
+const PL_NSA_WSA_DOTTED_PATTERN = new RegExp(
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>(?:[IVX]{1,4}\s{0,3})?S\.\s?A\.\s{0,3}\/\s{0,3}\p{Lu}\p{Ll}?\s{1,3}\d{1,6}\/\d{2}(?:\d{2})?)(?!\d)`,
+  "gu",
+);
+
+const POLISH_DOTTED_REGISTER_RE = /(?<![\p{L}\d.])S\.\s?A\.(?=\s{0,3}\/)/gu;
+
+/** "II S.A./Po 1234/01" in the register's undotted spelling, "II SA/Po". */
+const foldPolishDottedRegister = (text: string): string =>
+  text.replace(POLISH_DOTTED_REGISTER_RE, "SA");
 
 // The pre-2004 seatless Warsaw form, including a joined range of numbers
 // the bare Polish pattern does not read ("I SA 1234-1236/98"). The range
@@ -765,7 +906,7 @@ const PL_NSA_SEATLESS_PATTERN = new RegExp(
 // "OPS 3/98". The lookbehind leaves a divided mark ("I OPS 3/22") to the
 // bare Polish pattern, so its tail is not read as a second citation.
 const PL_NSA_PRE_REFORM_RESOLUTION_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -991,12 +1132,11 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_THREE_TOKEN_PATTERN,
   PL_TK_PATTERN,
   PL_TK_BARE_PATTERN,
-  PL_TK_CUED_PATTERN,
-  PL_AUTHORITY_FILE_NUMBER_PATTERN,
-  PL_UOKIK_DECISION_PATTERN,
+  ...CUE_GATED_CITATION_PATTERNS.map(({ pattern }) => pattern),
   PL_KIO_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
+  PL_NSA_WSA_DOTTED_PATTERN,
   PL_NSA_SEATLESS_PATTERN,
   PL_NSA_PRE_REFORM_RESOLUTION_PATTERN,
 
@@ -1242,7 +1382,8 @@ const canonicalizeDedupKey = (text: string): string => {
     .trim();
   // A leading `N/` some registers print ahead of an administrative docket
   // ("12/II SA/Po 1234/99") is not part of it.
-  const spaced = polishAdministrativeDocketOf(normalized) ?? normalized;
+  const undotted = foldPolishDottedRegister(normalized);
+  const spaced = polishAdministrativeDocketOf(undotted) ?? normalized;
 
   // Read before the registry dot is stripped below: in a Hungarian docket
   // that dot is the separator ("Pfv. 20.187/2017/12").
@@ -1581,8 +1722,10 @@ export const normalizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
 ): string => {
   switch (identifier.type) {
+    case DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER:
     case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
       return bareCitationKey(identifier.value);
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
     case DECISION_IDENTIFIER_TYPES.ECLI:
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
       return normalizeStructuredDecisionIdentifier(identifier);
@@ -1606,7 +1749,11 @@ export const normalizeDecisionIdentifierValue = (
   value: string,
 ): string => {
   switch (type) {
+    case DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER:
+      return normalizeDecisionIdentifier({ type, value });
     case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
+      return normalizeDecisionIdentifier({ type, value });
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
       return normalizeDecisionIdentifier({ type, value });
     case DECISION_IDENTIFIER_TYPES.ECLI:
       return normalizeDecisionIdentifier({ type, value });
@@ -1913,47 +2060,40 @@ export const extractCitations = (
           continue;
         }
         if (
-          PL_TK_CUE_GATED_PATTERNS.has(pattern) &&
-          !PL_TK_CUE_RE.test(
-            section.text.slice(
-              Math.max(0, match.index - PL_TK_CUE_WINDOW),
-              match.index,
-            ),
-          )
+          pattern === PL_NSA_WSA_DOTTED_PATTERN &&
+          (caseNumber === undefined ||
+            polishAdministrativeDocketOf(
+              foldPolishDottedRegister(caseNumber),
+            ) === null)
         ) {
           continue;
         }
-        if (
-          pattern === PL_AUTHORITY_FILE_NUMBER_PATTERN &&
-          !PL_AUTHORITY_FILE_NUMBER_CUE_RE.test(
-            section.text.slice(
-              Math.max(0, match.index - PL_TK_CUE_WINDOW),
-              match.index,
-            ),
-          )
-        ) {
-          continue;
+        const cueGate = CUE_GATED_PATTERN_BY_PATTERN.get(pattern);
+        if (cueGate !== undefined) {
+          const before = section.text.slice(
+            Math.max(0, match.index - cueGate.windowBefore),
+            match.index,
+          );
+          const after = section.text.slice(
+            match.index + match[0].length,
+            match.index + match[0].length + cueGate.windowAfter,
+          );
+          if (!cueGate.cue.test(before) && !cueGate.cue.test(after)) {
+            continue;
+          }
+          if (
+            cueGate.refuses?.({
+              caseNumber,
+              text: section.text,
+              matchIndex: match.index,
+            }) === true
+          ) {
+            continue;
+          }
         }
-        if (
-          pattern === PL_UOKIK_DECISION_PATTERN &&
-          !PL_UOKIK_DECISION_CUE_RE.test(
-            section.text.slice(
-              Math.max(0, match.index - PL_UOKIK_DECISION_CUE_WINDOW),
-              match.index,
-            ),
-          ) &&
-          !PL_UOKIK_DECISION_CUE_RE.test(
-            section.text.slice(
-              match.index + match[0].length,
-              match.index +
-                match[0].length +
-                PL_UOKIK_DECISION_TRAILING_CUE_WINDOW,
-            ),
-          )
-        ) {
-          continue;
-        }
-        const identifierType = decisionIdentifierTypeOfCitation(citationText);
+        const identifierType =
+          cueGate?.identifierType ??
+          decisionIdentifierTypeOfCitation(citationText);
         // For patterns with a capture group (e.g. the Polish prefixed
         // pattern), use the bare case number as the canonical dedup key
         // so both "sygn. akt II CSK 123/20" and "II CSK 123/20" resolve
@@ -2074,8 +2214,7 @@ export type DecisionCitationExtraction = {
 };
 
 export type DecisionCitationRejection =
-  | CitationScopesRejectedError
-  | UsCitationRejection;
+  CitationScopesRejectedError | UsCitationRejection;
 
 /** A cited decision as the citation graph's row source reads it. */
 const extractedCitationOf = ({

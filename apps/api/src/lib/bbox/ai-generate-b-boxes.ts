@@ -2,13 +2,13 @@ import type { DocumentPart } from "@tanstack/ai";
 import type { AnthropicDocumentMetadata } from "@tanstack/ai-anthropic";
 import { Result } from "better-result";
 
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   BBOX_SYSTEM_PROMPT,
+  type BBoxItem,
   bboxOutputSchema,
   buildBBoxUserMessage,
-  type BBoxItem,
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -23,6 +23,7 @@ type GenerateBBoxDataProps = {
   fieldContent: string;
   justificationText: string;
   abortSignal: AbortSignal;
+  deadlineMs: number;
   justificationId: string;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
@@ -41,6 +42,7 @@ export const generateBBoxData = async ({
   fieldContent,
   justificationText,
   abortSignal,
+  deadlineMs,
   justificationId,
   organizationId,
   admission,
@@ -81,11 +83,12 @@ export const generateBBoxData = async ({
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(pdfData).toString("base64"),
+          value: Buffer.from(pdfData).toBase64(),
           mimeType: "application/pdf",
         },
       };
       const result = await generateObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "pdf",
         serviceTier: "standard",
@@ -115,6 +118,7 @@ export const generateBBoxData = async ({
         ],
         outputSchema: bboxOutputSchema,
         abortSignal,
+        deadlineMs,
       });
 
       return result.boxes;

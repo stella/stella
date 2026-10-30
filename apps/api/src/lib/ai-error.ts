@@ -8,10 +8,11 @@ import { panic, Result } from "better-result";
  * The wire values live in @stll/api-contract so producers and consumers are
  * checked against one source.
  */
-import type { AIErrorKind } from "@stll/api-contract";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { AI_FAILURE_CODES, isAIFailureCode } from "@stll/api-contract";
+import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
-import { classifyFailure } from "@stll/errors";
-import type { FailureReason } from "@stll/errors";
+import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
@@ -25,6 +26,7 @@ import {
   ModelOutputInvalidError,
   ModelOutputModeratedError,
   ModelRunUnfinishedError,
+  PROVIDER_CALL_FAILURE_REASON,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import {
@@ -39,6 +41,7 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import type { AwsExceptionName } from "@/api/lib/observability/failure";
 import {
+  NETWORK_ERROR_CODE_REASON,
   providerStatusFieldsOf,
   shadowGradeFields,
 } from "@/api/lib/observability/failure";
@@ -50,6 +53,15 @@ import {
 export type { AIErrorKind };
 
 const HTTP_SERVER_ERROR_MIN = 500;
+
+// Derive transport recovery from the failure owner's policy. A refused
+// connection or socket that never opened can indicate a bad endpoint, so it
+// remains unknown unless the destination owner explicitly classifies it.
+const TRANSIENT_PROVIDER_NETWORK_CODES = new Set(
+  Object.entries(NETWORK_ERROR_CODE_REASON)
+    .filter(([, reason]) => FAILURE_REASON_GRADE[reason] === "transient")
+    .map(([code]) => code),
+);
 
 // The run error codes of a stream that ended before its terminal event: the
 // provider stream contract's own, and the one TanStack's adapters report
@@ -130,22 +142,44 @@ const PROVIDER_CREDENTIAL_REJECTION_MARKERS = new Set([
 const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
   typeof value === "string" && PROVIDER_CREDENTIAL_REJECTION_MARKERS.has(value);
 
-/**
- * The provider HTTP status one link of an error chain carries, or `null` when
- * that link carries none of its own.
- *
- * Exported because every decision taken on a provider status has to read it
- * the same way: naming the failure here, and the service-tier retry predicate
- * in `tanstack-ai-generate`. A second reader drifts, and it drifts silently,
- * because both agree on the shape the tests happen to use and disagree on the
- * one production sends. The `HandlerError` exclusion is exactly such a
- * disagreement: a reader without it names every wrapped failure 502 and reads
- * a permanent credential, billing or retired-model answer as a server error.
- * The rule lives with the failure snapshot, so the status a failure is graded
- * and logged with is the one it is answered with.
- */
+type ProviderResponsePurpose = "classification" | "facts";
+
+/** A classified provider error owns its kind; its response still owns the facts. */
+const selectProviderResponse = (
+  error: unknown,
+  purpose: ProviderResponsePurpose,
+) => {
+  const seen = new Set<object>();
+  let current = error;
+  while (isNonNullObject(current) && !seen.has(current)) {
+    seen.add(current);
+    if (purpose === "classification" && current instanceof ProviderCallError) {
+      return undefined;
+    }
+    const { status } = providerResponseEvidence(current);
+    if (status !== undefined) {
+      return { status: status.status, source: current };
+    }
+    current = errorCause(current);
+  }
+  return undefined;
+};
+
+export const providerFailureFacts = (error: unknown) => {
+  const response = selectProviderResponse(error, "facts");
+  if (response === undefined) {
+    return undefined;
+  }
+  const isRetryable = response.source["isRetryable"];
+  return {
+    status: response.status,
+    ...(typeof isRetryable === "boolean" ? { isRetryable } : {}),
+  };
+};
+
+/** Read the upstream status through wrappers without using HandlerError's own status. */
 export const providerStatusCode = (error: unknown): number | null =>
-  readProviderStatus(error)?.status ?? null;
+  providerFailureFacts(error)?.status ?? null;
 
 const isProviderCredentialRejection = (error: unknown): boolean => {
   if (!isNonNullObject(error)) {
@@ -203,10 +237,6 @@ const awsExceptionKind = (error: unknown): AIErrorKind | null => {
   return isAwsExceptionName(name) ? AWS_EXCEPTION_KINDS[name] : null;
 };
 
-const isProviderError = (error: unknown): boolean =>
-  isNonNullObject(error) &&
-  (providerStatusCode(error) !== null || isProviderCredentialRejection(error));
-
 /**
  * The provider's structured error body, recovered from a stream error message.
  *
@@ -224,16 +254,48 @@ const isProviderError = (error: unknown): boolean =>
 export const providerErrorBody = (
   message: string,
 ): Record<string, unknown> | undefined => {
-  // `JSON.parse` skips leading whitespace, so the guard must too; otherwise a
-  // body an adapter passed through verbatim would be dropped over a newline.
-  if (!message.trimStart().startsWith("{")) {
+  const trimmed = message.trimStart();
+  // TanStack's OpenAI-compatible adapters prefix an in-stream HTTP error
+  // rather than forwarding rawEvent. Only this complete envelope is accepted;
+  // arbitrary prose containing JSON is not provider status evidence.
+  const prefixed = /^got status: ([1-5]\d{2})\.\s*(\{[\s\S]*\})\s*$/u.exec(
+    trimmed,
+  );
+  const body = prefixed?.[2] ?? trimmed;
+  if (!body.startsWith("{")) {
     return undefined;
   }
-  const parsed = Result.try((): unknown => JSON.parse(message));
-  if (Result.isError(parsed)) {
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  if (Result.isError(parsed) || !isNonNullObject(parsed.value)) {
     return undefined;
   }
-  return isNonNullObject(parsed.value) ? parsed.value : undefined;
+  if (prefixed === null) {
+    return parsed.value;
+  }
+  const status = parseIntegerToken(prefixed[1]);
+  return Result.isError(status)
+    ? undefined
+    : { ...parsed.value, status: status.value };
+};
+
+// Both classification and status extraction normalize messages at this boundary.
+const providerMessageBody = (error: unknown) =>
+  error instanceof Error ? providerErrorBody(error.message) : undefined;
+
+// Structured status owns the response. Only recover message evidence when it
+// is absent, so classification and preserved facts cannot disagree.
+const providerResponseEvidence = (error: unknown) => {
+  const structuredStatus = readProviderStatus(error);
+  if (structuredStatus !== undefined) {
+    return { status: structuredStatus, credentialsRejected: false };
+  }
+  const body = providerMessageBody(error);
+  return {
+    status: readProviderStatus(body),
+    credentialsRejected:
+      isProviderCredentialRejection(error) ||
+      isProviderCredentialRejection(body),
+  };
 };
 
 const errorCause = (error: unknown): unknown => {
@@ -241,6 +303,56 @@ const errorCause = (error: unknown): unknown => {
     return undefined;
   }
   return error["cause"];
+};
+
+const providerResponseKind = (error: unknown): AIErrorKind | null => {
+  const response = selectProviderResponse(error, "classification");
+  const statusCode = response?.status ?? null;
+  const { credentialsRejected } = providerResponseEvidence(error);
+  if (response === undefined && !credentialsRejected) {
+    return null;
+  }
+  if (response !== undefined) {
+    const awsKind = awsExceptionKind(response.source);
+    if (awsKind !== null) {
+      return awsKind;
+    }
+  }
+  if (statusCode !== null || credentialsRejected) {
+    if (statusCode === 429) {
+      return "quota_exhausted";
+    }
+    // A provider 402 is the upstream account's billing/credit problem,
+    // distinct from Stella's own usage preflight, which returns a
+    // structured 402 before the model call and never reaches this
+    // classifier.
+    if (statusCode === 402) {
+      return "provider_billing";
+    }
+    // A provider 401 means it rejected the credentials it was called with:
+    // the configured key is missing, revoked, or expired. Like a retired
+    // model, that is a config problem an administrator has to fix, so
+    // retrying won't help.
+    //
+    // Only a provider status or explicit provider-owned credential marker
+    // counts, which is what keeps a 401 this service raised itself out of
+    // here: its curated copy would otherwise be replaced by the provider's.
+    // A provider 403 stays unmapped because it is ambiguous (permission,
+    // region, or account state) where a 401 is not.
+    if (statusCode === 401 || (statusCode === null && credentialsRejected)) {
+      return "provider_credentials_rejected";
+    }
+    // A 404 on a generate/stream call means the provider no longer
+    // serves the configured model (retired or renamed upstream) — a
+    // config problem, not a transient outage, so retrying won't help.
+    if (statusCode === 404) {
+      return "model_unavailable";
+    }
+    if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
+      return "provider_unavailable";
+    }
+  }
+  return "unknown";
 };
 
 const classifyAIErrorInternal = (
@@ -289,6 +401,12 @@ const classifyAIErrorInternal = (
   ) {
     return "provider_stream_incomplete";
   }
+  // Finding a response is terminal even when its status has no mapped kind.
+  // Otherwise a later cause can disagree with the status retained above.
+  const providerKind = providerResponseKind(error);
+  if (providerKind !== null) {
+    return providerKind;
+  }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
   // recognised provider cause so a permanent provider response does not look
   // like a transient transport outage.
@@ -302,43 +420,12 @@ const classifyAIErrorInternal = (
   if (awsKind !== null) {
     return awsKind;
   }
-  if (isProviderError(error)) {
-    const statusCode = providerStatusCode(error);
-    if (statusCode === 429) {
-      return "quota_exhausted";
-    }
-    // A provider 402 is the upstream account's billing/credit problem,
-    // distinct from Stella's own usage preflight, which returns a
-    // structured 402 before the model call and never reaches this
-    // classifier.
-    if (statusCode === 402) {
-      return "provider_billing";
-    }
-    // A provider 401 means it rejected the credentials it was called with:
-    // the configured key is missing, revoked, or expired. Like a retired
-    // model, that is a config problem an administrator has to fix, so
-    // retrying won't help.
-    //
-    // Only a provider status or explicit provider-owned credential marker
-    // counts, which is what keeps a 401 this service raised itself out of
-    // here: its curated copy would otherwise be replaced by the provider's.
-    // A provider 403 stays unmapped because it is ambiguous (permission,
-    // region, or account state) where a 401 is not.
-    if (
-      statusCode === 401 ||
-      (statusCode === null && isProviderCredentialRejection(error))
-    ) {
-      return "provider_credentials_rejected";
-    }
-    // A 404 on a generate/stream call means the provider no longer
-    // serves the configured model (retired or renamed upstream) — a
-    // config problem, not a transient outage, so retrying won't help.
-    if (statusCode === 404) {
-      return "model_unavailable";
-    }
-    if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
-      return "provider_unavailable";
-    }
+  if (
+    isNonNullObject(error) &&
+    typeof error["code"] === "string" &&
+    TRANSIENT_PROVIDER_NETWORK_CODES.has(error["code"])
+  ) {
+    return "provider_unavailable";
   }
   // Walk through any wrapper that carries the original provider error
   // on `cause` (e.g. our own `WorkflowIntegrationError`, or generic
@@ -473,20 +560,7 @@ type AIHandlerErrorFallback = {
 
 // The failure reason each named kind is observed as. Total over the named
 // kinds, so a new kind cannot ship without deciding how a sink grades it.
-export const AI_ERROR_KIND_FAILURE_REASON = {
-  quota_exhausted: "quota_exhausted",
-  provider_billing: "provider_billing",
-  provider_credentials_rejected: "provider_credentials_rejected",
-  model_unavailable: "model_unavailable",
-  provider_unavailable: "provider_unavailable",
-  provider_stream_incomplete: "provider_stream_incomplete",
-  output_incomplete: "model_output_incomplete",
-  output_invalid: "model_output_invalid",
-  output_moderated: "model_output_moderated",
-  deadline_exceeded: "model_deadline_exceeded",
-  loop_detected: "chat_loop_detected",
-  empty_completion: "chat_empty_completion",
-} as const satisfies Record<Exclude<AIErrorKind, "unknown">, FailureReason>;
+export const AI_ERROR_KIND_FAILURE_REASON = PROVIDER_CALL_FAILURE_REASON;
 
 /**
  * Name a failure at the AI boundary, and classify it for every sink that
@@ -527,9 +601,11 @@ const aiKindHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  const code = AI_FAILURE_CODES[kind];
   switch (kind) {
     case "quota_exhausted":
       return new HandlerError({
+        code,
         status: 429,
         message:
           "The AI provider's quota is exhausted. Try again shortly, or contact your workspace admin.",
@@ -537,6 +613,7 @@ const aiKindHandlerError = (
       });
     case "provider_billing":
       return new HandlerError({
+        code,
         status: 402,
         message:
           "The AI provider reported a billing or credit problem. An administrator should check the provider account.",
@@ -544,6 +621,7 @@ const aiKindHandlerError = (
       });
     case "provider_credentials_rejected":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider rejected the configured credentials. An administrator should check the provider API key in organization settings.",
@@ -551,6 +629,7 @@ const aiKindHandlerError = (
       });
     case "model_unavailable":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The configured AI model is no longer available from the provider. An administrator should update the model in organization settings.",
@@ -558,6 +637,7 @@ const aiKindHandlerError = (
       });
     case "provider_unavailable":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider is temporarily unavailable. Please try again in a moment.",
@@ -565,6 +645,7 @@ const aiKindHandlerError = (
       });
     case "provider_stream_incomplete":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model's reply was cut off before it finished. Please try again.",
@@ -572,6 +653,7 @@ const aiKindHandlerError = (
       });
     case "output_incomplete":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model's answer was cut off before it was complete. Please try again.",
@@ -579,6 +661,7 @@ const aiKindHandlerError = (
       });
     case "output_invalid":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model's answer did not have the expected structure. Please try again.",
@@ -586,6 +669,7 @@ const aiKindHandlerError = (
       });
     case "output_moderated":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider stopped the answer under its content policy. Rephrase the request or choose another model.",
@@ -593,6 +677,7 @@ const aiKindHandlerError = (
       });
     case "deadline_exceeded":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model did not answer in time. Please try again in a moment.",
@@ -600,6 +685,7 @@ const aiKindHandlerError = (
       });
     case "loop_detected":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
@@ -607,13 +693,14 @@ const aiKindHandlerError = (
       });
     case "empty_completion":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
     case "unknown":
-      return new HandlerError({ ...fallback, cause: error });
+      return new HandlerError({ ...fallback, code, cause: error });
     default: {
       kind satisfies never;
       return panic(`Unhandled kind: ${String(kind)}`);
@@ -630,7 +717,8 @@ const aiKindHandlerError = (
  * status answers the caller, the classification tells a failure sink what
  * happened. A provider 429 answered 429 is still an exhausted quota, not a
  * client error. For everything else, returns the caller's fallback so
- * unrelated bugs aren't masked as "AI unavailable".
+ * unrelated bugs aren't masked as "AI unavailable"; a cancelled generation
+ * keeps that fallback and is classified as cancelled.
  */
 export const aiHandlerError = (
   error: unknown,
@@ -643,7 +731,7 @@ export const aiHandlerError = (
       ? new ProviderCallError({
           model: { provider: error.provider, keySource: error.keySource },
           status: mapped.status,
-          code: error.code,
+          code: error.code ?? AI_FAILURE_CODES[kind],
           kind: error.kind,
           requestId: error.requestId,
           providerDiagnostic: error.providerDiagnostic,
@@ -660,18 +748,27 @@ export const aiHandlerError = (
                 },
         })
       : mapped;
-  return kind === "unknown"
-    ? handlerError
-    : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  if (kind !== "unknown") {
+    return classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  }
+  // The fallback wraps the helper's cancelled 502, and a grader reads a brand
+  // only at the failure node, so the wrapper carries the cancellation itself.
+  return isCancelledGeneration(error)
+    ? classifyFailure(handlerError, "generation_cancelled")
+    : handlerError;
 };
 
 type AIErrorStatusBody = {
   status: HandlerErrorStatusCode;
-  body: { message: string; providerDiagnostic?: ProviderDiagnostic };
+  body: {
+    code: AIFailureCode;
+    message: string;
+    providerDiagnostic?: ProviderDiagnostic;
+  };
 };
 
 /**
- * Variant of `aiHandlerError` for handlers that build an Elysia
+ * Variant of `aiHandlerError` for handlers that build an HTTP core
  * `status()` response directly instead of returning `HandlerError`.
  * Returns `{ status, body }` so callers can spread it into
  * `status(status, body)`.
@@ -684,6 +781,11 @@ export const aiErrorStatusBody = (
   return {
     status: handlerError.status,
     body: {
+      // A code the handler error already carries (a configuration refusal such
+      // as the managed-provider one) is more precise than the classified kind.
+      code: isAIFailureCode(handlerError.code)
+        ? handlerError.code
+        : AI_FAILURE_CODES[classifyAIError(error)],
       message: handlerError.message,
       ...(handlerError instanceof ProviderCallError &&
       handlerError.providerDiagnostic !== undefined
