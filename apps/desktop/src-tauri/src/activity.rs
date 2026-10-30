@@ -422,7 +422,6 @@ pub struct ActivityDaySnapshot {
   drafted_entries: Vec<ActivityDraftedEntry>,
   manual_assignments: Vec<ActivityManualAssignment>,
   pending_batch: Option<ActivityPendingBatch>,
-  pub(crate) time_billing_enabled: bool,
 }
 
 #[derive(Deserialize)]
@@ -2114,6 +2113,9 @@ impl ActivityManager {
         .document
         .as_deref()
         .and_then(|path| path.rsplit(['/', '\\']).next())
+        // Terminals report their working directory as the document; a
+        // folder name says less than the app.
+        .filter(|name| std::path::Path::new(name).extension().is_some())
         .and_then(|name| foreground_app::bounded_metadata(name, MAX_DETAIL_BYTES))
         .unwrap_or_else(|| open.segment.app_name.clone())
     });
@@ -2288,7 +2290,6 @@ impl ActivityManager {
       manual_assignments,
       pending_batch,
       drafted_entries,
-      time_billing_enabled: false,
     }
   }
 }
@@ -3765,9 +3766,10 @@ mod tests {
     assert_eq!(tray.now.as_deref(), Some("WORD"));
     assert_eq!(tray.total_ms, 5000);
     manager.set_capture_details(true, at(5)).unwrap();
-    for path in [
-      "/private/folder/draft.docx",
-      "C:\\private\\folder\\draft.docx",
+    for (path, now) in [
+      ("/private/folder/draft.docx", "draft.docx"),
+      ("C:\\private\\folder\\draft.docx", "draft.docx"),
+      ("/Users/someone", "Word"),
     ] {
       let mut path_manager = recording_manager();
       path_manager.set_capture_details(true, at(0)).unwrap();
@@ -3784,7 +3786,7 @@ mod tests {
         );
       }
       let tray = path_manager.tray_snapshot(at(5)).unwrap();
-      assert_eq!(tray.now.as_deref(), Some("draft.docx"));
+      assert_eq!(tray.now.as_deref(), Some(now));
     }
     manager
       .set_app_detail_capture(

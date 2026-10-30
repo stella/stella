@@ -1,0 +1,20 @@
+import type { GuardRollout } from "../guard-rollout-policy.ts";
+
+export default {
+  id: "require-fetch-after-all",
+  rules: ["bun-test-hygiene/require-fetch-after-all"],
+  type: "changed-lines",
+  expiresAt: "2026-11-06T00:00:00.000Z",
+  check: [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "bun-test-hygiene/require-fetch-after-all",
+    ".",
+  ],
+} as const satisfies GuardRollout;

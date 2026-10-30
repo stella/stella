@@ -46,7 +46,6 @@ pub fn activity_get_day(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-  gates: State<'_, crate::feature_gate::FeatureGates>,
   date: Option<String>,
 ) -> Result<ActivityDaySnapshot, String> {
   let now = Utc::now();
@@ -74,8 +73,6 @@ pub fn activity_get_day(
   );
   drop(manager);
   snapshot.resolve_app_visuals();
-  snapshot.time_billing_enabled =
-    gates.is_enabled(crate::feature_gate::DesktopFeature::TimeBilling);
   Ok(snapshot)
 }
 

@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
-      "remove": "Filter {filter} entfernen"
+      "countryMismatch": "Filter entfernt, da sie nicht zu {country} gehören: {filters}.",
+      "remove": "Filter {filter} entfernen",
+      "showInCountry": "{filter} in {country} anzeigen"
     },
     "languages": {
       "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
     "activity": {
+      "newerVersion": "Dieser Inhalt wird in einer neueren Version angezeigt.",
       "review": "Aktualisierung zur Prüfung"
     },
     "aiPrompt": "KI-Nachrichtenfeld",
@@ -2357,6 +2360,7 @@
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
     "unsavedChanges": "Ungespeicherte Änderungen",
+    "unsavedChangesClose": "Ungespeicherte Änderungen. Erneut schließen, um sie zu verwerfen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
@@ -2398,6 +2402,8 @@
     "returnToAgent": "Kehren Sie zu Ihrem Agenten zurück, um fortzufahren.",
     "returnsLocally": "Sie kehren auf diesem Computer zu {clientName} zurück",
     "returnsTo": "Sie kehren zu {clientName} zurück",
+    "scopeAccountExportRead": "Ihre personenbezogenen Datenexporte lesen",
+    "scopeAccountExportWrite": "Exporte Ihrer personenbezogenen Daten anfordern",
     "scopeAdminRead": "Das Audit-Protokoll Ihrer Organisation lesen",
     "scopeAdminWrite": "Mitglieder und Einstellungen der Organisation verwalten",
     "scopeBillingWrite": "Ihre Zeiteinträge erstellen, bearbeiten und löschen",
@@ -5077,6 +5083,15 @@
       "displayNameSaved": "Anzeigename aktualisiert",
       "enterOtp": "Bestätigungscode",
       "otpSentSuccess": "Bestätigungscode an Ihre E-Mail-Adresse gesendet.",
+      "personalDataExportDescription": "Fordern Sie eine herunterladbare Kopie der personenbezogenen Daten in Ihrem Konto an. Der Download ist eine Stunde verfügbar.",
+      "personalDataExportExpired": "Dieser Export ist abgelaufen.",
+      "personalDataExportExpiresAt": "Verfügbar bis {expiresAt}.",
+      "personalDataExportFailed": "Ihr Export konnte nicht erstellt werden.",
+      "personalDataExportReady": "Ihr Export ist bereit.",
+      "personalDataExportRequest": "Export anfordern",
+      "personalDataExportRequestNew": "Neuen Export anfordern",
+      "personalDataExportTitle": "Meine Daten exportieren",
+      "personalDataExportWorking": "Ihr Export wird vorbereitet…",
       "preferredName": "Bevorzugter Name",
       "preferredNameDescription": "Wird als Autor für DOCX-Änderungsverfolgung und Kommentare verwendet.",
       "preferredNamePlaceholder": "Ihr Name",
@@ -5414,6 +5429,7 @@
     "showCitedPartOnly": "Nur zitierten Teil anzeigen",
     "showFullProvision": "Ganze Vorschrift anzeigen",
     "showInText": "Im Text anzeigen",
+    "sortNeedsYear": "Wählen Sie in den Filtern ein Jahr, um nach dieser Spalte zu sortieren.",
     "statedWindow": "Vom Herausgeber angegebene Daten: {range}",
     "status": {
       "current": "In Kraft",

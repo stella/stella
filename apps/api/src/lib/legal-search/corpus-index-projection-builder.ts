@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { normalizeNumericIndices } from "@stll/text-normalize";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { PROVISION_KEYS_MAX_COUNT } from "@/api/lib/case-law/provision-keys";
@@ -286,8 +287,10 @@ export const buildCaseLawProjectionDocuments = ({
     );
   const documents: CaseLawProjectionDocument[] = [];
   for (const chunk of chunks) {
+    // Source-supplied plain text and fallback text can bypass inline projection.
+    const text = normalizeNumericIndices(chunk.text);
     const textStem =
-      stemmed === null ? null : stemCorpusText(chunk.text, stemmed.language);
+      stemmed === null ? null : stemCorpusText(text, stemmed.language);
     documents.push({
       ...shared,
       // The manifest owns whether passages can be addressed independently;
@@ -295,7 +298,7 @@ export const buildCaseLawProjectionDocuments = ({
       ...(passageIdentity
         ? { chunk_id: `${input.documentId}:${chunk.seq}` }
         : {}),
-      text: chunk.text,
+      text,
       is_opening: chunk.seq === 0,
       ...(chunk.seq === 0 ? { title } : {}),
       ...(chunk.seq === 0 && decisionYear !== null

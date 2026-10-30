@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
-      "remove": "Usuń filtr {filter}"
+      "countryMismatch": "Usunięto filtry, które nie dotyczą kraju {country}: {filters}.",
+      "remove": "Usuń filtr {filter}",
+      "showInCountry": "Pokaż {filter} dla kraju {country}"
     },
     "languages": {
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "Pełny widok niedostępny"
     },
     "activity": {
+      "newerVersion": "Ta treść jest wyświetlana w nowszej wersji.",
       "review": "Aktualizacja przeglądu"
     },
     "aiPrompt": "Pole wiadomości AI",
@@ -2357,6 +2360,7 @@
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
     "unsavedChanges": "Niezapisane zmiany",
+    "unsavedChangesClose": "Niezapisane zmiany. Zamknij ponownie, aby je odrzucić",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
@@ -2398,6 +2402,8 @@
     "returnToAgent": "Wróć do swojego agenta, aby kontynuować.",
     "returnsLocally": "Wrócisz do {clientName} na tym komputerze",
     "returnsTo": "Wrócisz do {clientName}",
+    "scopeAccountExportRead": "Odczyt eksportów Twoich danych osobowych",
+    "scopeAccountExportWrite": "Zamawianie eksportów Twoich danych osobowych",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -5077,6 +5083,15 @@
       "displayNameSaved": "Zaktualizowano nazwę wyświetlaną",
       "enterOtp": "Kod weryfikacyjny",
       "otpSentSuccess": "Kod weryfikacyjny został wysłany na Twój adres e-mail.",
+      "personalDataExportDescription": "Poproś o kopię danych osobowych z konta do pobrania. Plik będzie dostępny przez godzinę.",
+      "personalDataExportExpired": "Ten eksport wygasł.",
+      "personalDataExportExpiresAt": "Dostępny do {expiresAt}.",
+      "personalDataExportFailed": "Nie udało się przygotować eksportu.",
+      "personalDataExportReady": "Eksport jest gotowy.",
+      "personalDataExportRequest": "Poproś o eksport",
+      "personalDataExportRequestNew": "Poproś o nowy eksport",
+      "personalDataExportTitle": "Eksportuj moje dane",
+      "personalDataExportWorking": "Przygotowywanie eksportu…",
       "preferredName": "Preferowane imię",
       "preferredNameDescription": "Używane jako autor śledzonych zmian i komentarzy w plikach DOCX.",
       "preferredNamePlaceholder": "Twoje imię",
@@ -5414,6 +5429,7 @@
     "showCitedPartOnly": "Pokaż tylko cytowaną część",
     "showFullProvision": "Pokaż cały przepis",
     "showInText": "Pokaż w tekście",
+    "sortNeedsYear": "Aby sortować według tej kolumny, wybierz rok w filtrach.",
     "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {
       "current": "Obowiązujący",

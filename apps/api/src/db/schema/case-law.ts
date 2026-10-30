@@ -10,6 +10,7 @@ import {
   CASE_LAW_RESEARCH_ANSWER_TYPES,
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -658,6 +659,12 @@ export const caseLawDecisions = p.pgTable(
     }),
     decisionDate: p.date("decision_date"),
     decisionType: p.varchar("decision_type", { length: 128 }),
+    /** Extraction defects in the stored document, independent of parser and jurisdiction. */
+    extractionWarnings: p
+      .jsonb("extraction_warnings")
+      .$type<ExtractionWarnings>()
+      .notNull()
+      .default([]),
     fulltext: p.text(),
     /** Last reconciliation attempt to re-read a textless listing-only detail. */
     textlessDetailRecheckedAt: timestamptz("textless_detail_rechecked_at"),
@@ -2791,6 +2798,10 @@ export const caseLawBrowseFacetCounts = p.pgTable(
       "case_law_browse_facet_counts_kind_valid",
       sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
     ),
+    // Trailing keys keep each source's court buckets available to index-only reads.
+    p
+      .index("case_law_browse_facet_counts_source_kind_idx")
+      .on(t.sourceId, t.kind, t.value, t.total),
     ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_browse_facet_count_owner_access", {
       for: "all",
