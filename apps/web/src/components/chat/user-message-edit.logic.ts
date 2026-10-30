@@ -116,35 +116,119 @@ const referenceMarkup = (
   }
 };
 
-/** The composer markup of a link to a stella reference; null for any other
- *  link, which stays text. */
-const linkChipMarkup = (href: string, label: string): string | null => {
+const anchorMarkup = (href: string, label: string): string =>
+  `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+
+/**
+ * A link of the message as a chip: the token the text spells it with and the
+ * composer markup that sends it back. A link to a stella reference reads as
+ * `@label`; any other link keeps its destination, as its bare URL when its
+ * text is the URL (an autolink) and as `[label](url)` otherwise.
+ */
+const linkChip = (
+  href: string,
+  label: string,
+): { html: string; tokenBase: string } => {
   if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
-    return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+    return { html: anchorMarkup(href, label), tokenBase: `@${label}` };
   }
   const parsed = referenceFromHref(href, label);
-  return parsed?.type === "reference"
-    ? referenceMarkup(href, parsed.reference)
-    : null;
+  const reference =
+    parsed?.type === "reference"
+      ? referenceMarkup(href, parsed.reference)
+      : null;
+  if (reference !== null) {
+    return { html: reference, tokenBase: `@${label}` };
+  }
+  return {
+    html: anchorMarkup(href, label),
+    tokenBase: label === href ? href : `[${label}](${href})`,
+  };
+};
+
+/** Where a chip's token stands in an edited text. */
+export type UserMessageEditChipSpan = {
+  chip: UserMessageEditChip;
+  end: number;
+  start: number;
 };
 
 /**
- * The chips of one edited message. While the message is read, each chip
- * stands in the text as a placeholder; once all of the message's text is
- * known, every chip gets a token that neither another chip nor the text the
- * user typed spells. `Ask @Acme about` plus a reference labelled Acme reads
- * `Ask @Acme about @Acme (2)`: the literal `@Acme` stays text, and the token
- * names the one reference wherever the user moves it.
+ * Where the text spells each chip, in text order. Tokens are read left to
+ * right, a longer token winning over one it starts with, and each chip is read
+ * once; a chip whose token the text no longer spells has no span.
+ */
+export const findUserMessageEditChipSpans = (
+  chips: readonly UserMessageEditChip[],
+  text: string,
+): UserMessageEditChipSpan[] => {
+  const longestFirst = chips.toSorted(
+    (left, right) => right.token.length - left.token.length,
+  );
+  const placed = new Set<UserMessageEditChip>();
+  const chipAt = (position: number): UserMessageEditChip | undefined =>
+    longestFirst.find(
+      (candidate) =>
+        !placed.has(candidate) && text.startsWith(candidate.token, position),
+    );
+  const spans: UserMessageEditChipSpan[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const chip = chipAt(index);
+    if (chip === undefined) {
+      index += 1;
+      continue;
+    }
+    placed.add(chip);
+    spans.push({ chip, end: index + chip.token.length, start: index });
+    index += chip.token.length;
+  }
+  return spans;
+};
+
+/**
+ * The chips of one edited message: its references and its links. While the
+ * message is read, each chip stands in the text as a placeholder; once all of
+ * the message's text is known, every chip gets a token that neither another
+ * chip nor the text the user typed spells, and that reading the text back
+ * finds exactly where the chip stands. `Ask @Acme about` plus a reference
+ * labelled Acme reads `Ask @Acme about @Acme (2)`: the literal `@Acme` stays
+ * text, and the token names the one reference wherever the user moves it.
  */
 type ChipCollector = {
-  /** Records a chip and returns the placeholder that stands for it. */
-  add: (label: string, html: string) => string;
-  /** The chips under their tokens, and `texts` with each placeholder replaced
-   *  by its chip's token. */
-  finish: (texts: readonly string[]) => {
+  /** Records a chip spelled `tokenBase` (plus ` (2)`, ` (3)`… where that is
+   *  taken) and returns the placeholder that stands for it. */
+  add: (tokenBase: string, html: string) => string;
+  /** The chips under their tokens, and `texts` joined by `separator` with
+   *  each placeholder replaced by its chip's token. */
+  finish: (
+    texts: readonly string[],
+    separator: string,
+  ) => {
     chips: UserMessageEditChip[];
-    texts: string[];
+    text: string;
   };
+};
+
+/** Bounds the token search; each round lengthens one ambiguous token. */
+const MAX_TOKEN_ROUNDS_PER_CHIP = 8;
+
+/** A message's text with its chips under candidate tokens, and where each
+ *  chip's token was written. */
+type BuiltEditText = {
+  chips: UserMessageEditChip[];
+  starts: number[];
+  text: string;
+};
+
+/** The first chip reading the text back does not find where it was written,
+ *  or -1 when every chip reads back in place. */
+const firstMisreadChip = ({ chips, starts, text }: BuiltEditText): number => {
+  const found = findUserMessageEditChipSpans(chips, text);
+  return chips.findIndex(
+    (chip, chipIndex) =>
+      found.find((span) => span.chip === chip)?.start !== starts[chipIndex],
+  );
 };
 
 /** A private-use character none of `sources` contains, to mark placeholders. */
@@ -161,40 +245,64 @@ const unusedMarker = (sources: readonly string[]): string => {
 const createChipCollector = (sources: readonly string[]): ChipCollector => {
   const marker = unusedMarker(sources);
   const placeholder = new RegExp(`${marker}(\\d+)${marker}`, "gu");
-  const pending: { html: string; label: string }[] = [];
+  const pending: { html: string; tokenBase: string }[] = [];
   return {
-    add: (label, html) => {
-      pending.push({ html, label });
+    add: (tokenBase, html) => {
+      pending.push({ html, tokenBase });
       return `${marker}${String(pending.length - 1)}${marker}`;
     },
-    finish: (texts) => {
+    finish: (texts, separator) => {
+      const template = texts.join(separator);
       // Everything the user typed, each chip a break so no token is read
       // across one.
-      const typed = texts
-        .map((text) => text.replaceAll(placeholder, "\n"))
-        .join("\n");
-      const taken = new Set<string>();
-      const chips = pending.map(({ html, label }) => {
-        let token = `@${label}`;
-        for (
-          let copy = 2;
-          taken.has(token) || typed.includes(token);
-          copy += 1
-        ) {
-          token = `@${label} (${String(copy)})`;
+      const typed = template.replaceAll(placeholder, "\n");
+      // Split by the placeholder's capture: typed text at even indexes, a
+      // chip's index at odd ones.
+      const pieces = template.split(placeholder);
+      const build = (copies: readonly number[]): BuiltEditText => {
+        const taken = new Set<string>();
+        const chips = pending.map(({ html, tokenBase }, chipIndex) => {
+          const tokenFor = (copy: number) =>
+            copy === 1 ? tokenBase : `${tokenBase} (${String(copy)})`;
+          let copy = copies[chipIndex] ?? 1;
+          while (taken.has(tokenFor(copy)) || typed.includes(tokenFor(copy))) {
+            copy += 1;
+          }
+          taken.add(tokenFor(copy));
+          return { html, token: tokenFor(copy) };
+        });
+        const starts: number[] = Array.from(pending, () => 0);
+        let text = "";
+        for (const [pieceIndex, piece] of pieces.entries()) {
+          if (pieceIndex % 2 === 0) {
+            text += piece;
+          } else {
+            const chipIndex = Number(piece);
+            starts[chipIndex] = text.length;
+            text += chips[chipIndex]?.token ?? "";
+          }
         }
-        taken.add(token);
-        return { html, token };
-      });
-      return {
-        chips,
-        texts: texts.map((text) =>
-          text.replaceAll(
-            placeholder,
-            (_placeholder, index: string) => chips[Number(index)]?.token ?? "",
-          ),
-        ),
+        return { chips, starts, text };
       };
+      // The token a chip gets must be read back at the chip's own place: a
+      // token the typed text around another chip completes (`@Acme` before a
+      // typed ` (2)`) is lengthened until reading the text finds every chip
+      // where it stands.
+      const copies = pending.map(() => 1);
+      let built = build(copies);
+      for (
+        let round = 0;
+        round < (pending.length + 1) * MAX_TOKEN_ROUNDS_PER_CHIP;
+        round += 1
+      ) {
+        const misread = firstMisreadChip(built);
+        if (misread === -1) {
+          break;
+        }
+        copies[misread] = (copies[misread] ?? 1) + 1;
+        built = build(copies);
+      }
+      return { chips: built.chips, text: built.text };
     },
   };
 };
@@ -209,8 +317,10 @@ const BLOCK_SEPARATOR: Partial<Record<MarkdownNode["type"], string>> = {
 };
 
 /**
- * The stored message's markdown as the plain text the user typed. Formatting
- * marks are dropped; a link to a stella reference becomes a chip token.
+ * The stored message's markdown as the plain text the user typed: its words,
+ * its links and its references, each block on its own lines. Formatting
+ * (emphasis, headings, list bullets, quotes) is not text and is not carried;
+ * every link keeps its destination as a chip.
  */
 const flattenMarkdown = (
   nodes: readonly MarkdownNode[],
@@ -222,35 +332,13 @@ const flattenMarkdown = (
       switch (node.type) {
         case "break":
           return "\n";
-        case "thematicBreak":
-          return "---";
         case "image":
           return node.alt ?? "";
         case "link": {
           const label = flattenMarkdown(node.children, "", chips);
-          const markup = linkChipMarkup(node.url, label);
-          if (markup !== null) {
-            return chips.add(label, markup);
-          }
-          return label === node.url ? node.url : `${label} (${node.url})`;
+          const chip = linkChip(node.url, label);
+          return chips.add(chip.tokenBase, chip.html);
         }
-        case "listItem": {
-          const body = flattenMarkdown(node.children, "\n", chips);
-          return node.checked === null || node.checked === undefined
-            ? body
-            : `[${node.checked ? "x" : " "}] ${body}`;
-        }
-        case "list":
-          return node.children
-            .map((item, itemIndex) => {
-              const marker = node.ordered
-                ? `${String((node.start ?? 1) + itemIndex)}. `
-                : "- ";
-              return `${marker}${flattenMarkdown([item], "", chips)}`;
-            })
-            .join("\n");
-        case "heading":
-          return `${"#".repeat(node.depth)} ${flattenMarkdown(node.children, "", chips)}`;
         default:
           if ("value" in node) {
             return node.value;
@@ -271,7 +359,6 @@ const flattenMarkdown = (
 const TAG_NAME = {
   anchor: "A",
   break: "BR",
-  listItem: "LI",
   mention: "ENTITY-MENTION",
 } as const;
 
@@ -300,7 +387,7 @@ const flattenComposerHtml = (html: string, chips: ChipCollector): string => {
         // the text after it as its content, which stays the user's text.
         const tag = node.cloneNode(false);
         const token = chips.add(
-          label,
+          `@${label}`,
           tag instanceof Element ? tag.outerHTML : "",
         );
         return (
@@ -309,12 +396,13 @@ const flattenComposerHtml = (html: string, chips: ChipCollector): string => {
       }
       case TAG_NAME.anchor: {
         const label = node.textContent ?? "";
-        const href = node.getAttribute("href") ?? "";
-        const markup = linkChipMarkup(href, label);
-        return markup === null ? label : chips.add(label, markup);
+        const href = node.getAttribute("href");
+        if (href === null) {
+          return label;
+        }
+        const chip = linkChip(href, label);
+        return chips.add(chip.tokenBase, chip.html);
       }
-      case TAG_NAME.listItem:
-        return `- ${Array.from(node.childNodes, (child) => visit(child)).join("")}`;
       default: {
         const children = Array.from(node.childNodes, (child) => visit(child));
         if (LIST_TAGS.has(node.tagName)) {
@@ -366,8 +454,7 @@ export const userMessageEditText = (
   content: string,
 ): { chips: UserMessageEditChip[]; text: string } => {
   const collector = createChipCollector([content]);
-  const { chips, texts } = collector.finish([editableText(content, collector)]);
-  return { chips, text: texts.join("") };
+  return collector.finish([editableText(content, collector)], "");
 };
 
 const isEditAttachmentPart = (
@@ -394,10 +481,11 @@ export const createUserMessageEditDraft = (
   // One collector for every text part, so no chip's token is spelled by
   // another chip or by anything the user typed anywhere in the message.
   const collector = createChipCollector(textContents);
-  const { chips, texts } = collector.finish(
+  const { chips, text } = collector.finish(
     textContents.map((content) => editableText(content, collector)),
+    "\n\n",
   );
-  return { attachments, chips, text: texts.join("\n\n") };
+  return { attachments, chips, text };
 };
 
 /** Typed text as composer markup: a blank line starts a paragraph, a line
@@ -422,32 +510,17 @@ export const composeUserMessageEdit = ({
   removedChips: UserMessageEditChip[];
 } => {
   const trimmed = text.trim();
-  const longestFirst = chips.toSorted(
-    (left, right) => right.token.length - left.token.length,
-  );
-  const placed = new Set<UserMessageEditChip>();
-  const chipAt = (position: number): UserMessageEditChip | undefined =>
-    longestFirst.find(
-      (candidate) =>
-        !placed.has(candidate) && trimmed.startsWith(candidate.token, position),
-    );
+  const spans = findUserMessageEditChipSpans(chips, trimmed);
   // Chips are inline, so the text between them carries every paragraph and
   // line break; each stretch converts on its own.
   let html = "";
   let stretchStart = 0;
-  let index = 0;
-  while (index < trimmed.length) {
-    const chip = chipAt(index);
-    if (chip === undefined) {
-      index += 1;
-      continue;
-    }
-    placed.add(chip);
-    html += textToComposerHtml(trimmed.slice(stretchStart, index)) + chip.html;
-    index += chip.token.length;
-    stretchStart = index;
+  for (const { chip, end, start } of spans) {
+    html += textToComposerHtml(trimmed.slice(stretchStart, start)) + chip.html;
+    stretchStart = end;
   }
   html += textToComposerHtml(trimmed.slice(stretchStart));
+  const placed = new Set(spans.map(({ chip }) => chip));
   return {
     html: trimmed.length === 0 ? "" : `<p>${html}</p>`,
     removedChips: chips.filter((chip) => !placed.has(chip)),

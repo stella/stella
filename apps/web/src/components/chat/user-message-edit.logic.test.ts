@@ -27,7 +27,7 @@ describe("the text an edit starts from", () => {
     const editable = userMessageEditText(stored);
 
     expect(editable.text).toBe(
-      "Compare @NDA.docx in @Acme with @ARES, see the guide (https://example.com/guide) and 2 * 3",
+      "Compare @NDA.docx in @Acme with @ARES, see [the guide](https://example.com/guide) and 2 * 3",
     );
     expect(editable.chips).toEqual([
       {
@@ -41,6 +41,10 @@ describe("the text an edit starts from", () => {
       {
         html: `<entity-mention data-id="ares" data-label="ARES" data-category="registry"></entity-mention>`,
         token: "@ARES",
+      },
+      {
+        html: '<a href="https://example.com/guide">the guide</a>',
+        token: "[the guide](https://example.com/guide)",
       },
     ]);
   });
@@ -91,7 +95,12 @@ describe("the text an edit starts from", () => {
     expect(
       userMessageEditText("<https://example.com/terms> has the terms"),
     ).toEqual({
-      chips: [],
+      chips: [
+        {
+          html: '<a href="https://example.com/terms">https://example.com/terms</a>',
+          token: "https://example.com/terms",
+        },
+      ],
       text: "https://example.com/terms has the terms",
     });
   });
@@ -106,10 +115,10 @@ describe("the text an edit starts from", () => {
     );
   });
 
-  test("paragraphs, lists and line breaks keep their lines", () => {
+  test("paragraphs, list items and line breaks keep their lines", () => {
     expect(
       userMessageEditText("First paragraph\\\nnext line\n\n- one\n- two").text,
-    ).toBe("First paragraph\nnext line\n\n- one\n- two");
+    ).toBe("First paragraph\nnext line\n\none\ntwo");
   });
 });
 

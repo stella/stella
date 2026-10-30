@@ -238,6 +238,36 @@ describe("editing a sent message", () => {
     }
   });
 
+  test("a just-sent link keeps its destination", () => {
+    const { actions, submitted } = createActions();
+    const view = renderMessage({
+      actions,
+      target: {
+        id: MESSAGE_ID,
+        parts: [
+          {
+            type: "text",
+            content:
+              '<p>Read the <a href="https://example.com/terms">terms</a> first</p>',
+          },
+        ],
+        role: "user",
+      },
+    });
+
+    expect(openEditor(view).value).toBe(
+      "Read the [terms](https://example.com/terms) first",
+    );
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    const [, draft] = submitted.at(0) ?? [];
+    expect(draft?.chips).toEqual([
+      {
+        html: '<a href="https://example.com/terms">terms</a>',
+        token: "[terms](https://example.com/terms)",
+      },
+    ]);
+  });
+
   test("offers no edit without actions or on another role", () => {
     const withoutActions = renderMessage({ actions: undefined });
     expect(
