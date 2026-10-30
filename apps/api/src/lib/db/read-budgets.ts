@@ -23,7 +23,7 @@ type ReadBudget = {
   pages: number;
   reason: string;
   /**
-   * Set only while a measured statement is over its budget and a change to
+   * Set only while a measured statement or job is over its budget and a change to
    * bring it under is in progress. The gate then requires the measurement to
    * stay above the budget, so the entry is removed as soon as it passes.
    */

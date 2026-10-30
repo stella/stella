@@ -163,7 +163,6 @@
     "newest": "Jaunākie nolēmumi",
     "noResults": "Nekas neatbilst vārdiem, ko pieprasīja šī meklēšana.",
     "noResultsHint": "Mēģiniet mazāk vai citus vārdus: jēdzienus, ko lietotu nolēmums, nevis teikumu, kādā tiek uzdots jautājums.",
-    "unavailable": "Meklēšana īslaicīgi nav pieejama",
     "retry": "Mēģināt vēlreiz",
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
@@ -179,6 +178,14 @@
   "writes": {
     "consentNeeded": "Lai lietotnē veiktu izmaiņas, stella nepieciešama jūsu atļauja. Piesakieties vēlreiz, lai to piešķirtu.",
     "signInAgain": "Pieteikties vēlreiz"
+  },
+  "loads": {
+    "offline": "stella nevarēja sazināties ar jūsu serveri. Pārbaudiet savienojumu un mēģiniet vēlreiz.",
+    "outdated": "Serveris atbildēja formātā, ko šī lietotnes versija nesaprot. Atjauniniet lietotni vai serveri, ja to pārvaldāt.",
+    "consent": "Šī pieteikšanās neļauj lietotnei to lasīt. Piesakieties vēlreiz, lai piešķirtu piekļuvi.",
+    "session": "Jūsu pieteikšanās ir beigusies. Piesakieties vēlreiz.",
+    "server": "Serverī radās problēma (kļūdas kods {status}). Pēc brīža mēģiniet vēlreiz.",
+    "refused": "Serveris noraidīja pieprasījumu (kļūdas kods {status})."
   },
   "timers": {
     "title": "Taimeri",
