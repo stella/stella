@@ -17,6 +17,8 @@ export {
   findSearchMatchRanges,
   foldSearchMatchText,
   foldSearchMatchTextWithOffsets,
+  foldSearchMatchTextWithOffsetsAndOptions,
+  foldSearchMatchTextWithOptions,
   hasFoldedSearchMatch,
 } from "./search-match.js";
 export type {

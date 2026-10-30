@@ -3,8 +3,8 @@ import { panic, Result } from "better-result";
 import type { TextDirection } from "@stll/locales";
 import {
   findSearchMatchRanges,
-  foldSearchMatchText,
-  foldSearchMatchTextWithOffsets,
+  foldSearchMatchTextWithOffsetsAndOptions,
+  foldSearchMatchTextWithOptions,
   hasFoldedSearchMatch,
 } from "@stll/text-normalize";
 import type {
@@ -384,7 +384,7 @@ const clipboardQueryTerms = (
   query: string,
   options: ClipboardSearchOptions,
 ) => {
-  const folded = foldSearchMatchText(query, options);
+  const folded = foldSearchMatchTextWithOptions(query, options);
   const normalizedTerms = options.exactPhrase
     ? [folded.trim()].filter(Boolean)
     : folded.split(/\s+/u).filter(Boolean);
@@ -403,7 +403,7 @@ export const highlightClipboardText = (
     return [{ match: false, start: 0, text }] satisfies ClipboardTextSegment[];
   }
 
-  const foldedText = foldSearchMatchTextWithOffsets(text, options);
+  const foldedText = foldSearchMatchTextWithOffsetsAndOptions(text, options);
   const ranges: SearchMatchRange[] = [];
   for (const term of terms) {
     ranges.push(...findSearchMatchRanges(foldedText, term, options));
@@ -541,7 +541,10 @@ const foldedPlainText = (
   if (cached) {
     return cached;
   }
-  const folded = foldSearchMatchTextWithOffsets(item.plainText ?? "", options);
+  const folded = foldSearchMatchTextWithOffsetsAndOptions(
+    item.plainText ?? "",
+    options,
+  );
   folds.set(key, folded);
   foldedPlainTextCache.set(item, folds);
   return folded;
@@ -747,7 +750,7 @@ const clipboardSearchableText = (
   if (cached !== undefined) {
     return cached;
   }
-  const searchableText = foldSearchMatchText(
+  const searchableText = foldSearchMatchTextWithOptions(
     `${item.name ?? ""}\n${item.type === "image" ? "" : item.plainText}`,
     options,
   );

@@ -4,6 +4,7 @@ import {
   findSearchMatchRanges,
   foldSearchMatchText,
   foldSearchMatchTextWithOffsets,
+  foldSearchMatchTextWithOptions,
   hasFoldedSearchMatch,
 } from "./search-match.js";
 
@@ -167,8 +168,9 @@ describe("search match options", () => {
 
   test("hasFoldedSearchMatch agrees with the ranges", () => {
     const options = { matchDiacritics: true, wholeWords: true };
-    const folded = foldSearchMatchText(content, options);
-    const query = (value: string) => foldSearchMatchText(value, options);
+    const folded = foldSearchMatchTextWithOptions(content, options);
+    const query = (value: string) =>
+      foldSearchMatchTextWithOptions(value, options);
     expect(hasFoldedSearchMatch(folded, query("cez"), options)).toBe(true);
     expect(hasFoldedSearchMatch(folded, query("esc"), options)).toBe(false);
     expect(hasFoldedSearchMatch(folded, query("čezký"), options)).toBe(true);
@@ -176,7 +178,9 @@ describe("search match options", () => {
   });
 
   test("default options keep the existing folds", () => {
-    expect(foldSearchMatchText("Čapek", {})).toBe(foldSearchMatchText("Čapek"));
+    expect(foldSearchMatchTextWithOptions("Čapek", {})).toBe(
+      foldSearchMatchText("Čapek"),
+    );
     expect(matched("cez", {})).toEqual(["ČEZ", "čez", "cez"]);
   });
 });

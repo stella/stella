@@ -80,14 +80,23 @@ const caseFold = (
 ): string =>
   matchCase ? value : value.toLowerCase().replace(FINAL_SIGMA, "σ");
 
-export const foldSearchMatchText = (
+/**
+ * The fold under explicit options. A separate function rather than an
+ * optional parameter on `foldSearchMatchText`, which callers pass point-free
+ * to `.map`, where the index would arrive as options.
+ */
+export const foldSearchMatchTextWithOptions = (
   value: string,
-  options: SearchFoldOptions = {},
+  options: SearchFoldOptions,
 ): string => caseFold(foldSearchMatchTextBeforeCase(value, options), options);
 
-export const foldSearchMatchTextWithOffsets = (
+export const foldSearchMatchText = (value: string): string =>
+  foldSearchMatchTextWithOptions(value, {});
+
+/** `foldSearchMatchTextWithOffsets` under explicit options. */
+export const foldSearchMatchTextWithOffsetsAndOptions = (
   content: string,
-  options: SearchFoldOptions = {},
+  options: SearchFoldOptions,
 ): FoldedSearchText => {
   const units: { range: SearchMatchRange; text: string }[] = [];
   let originalOffset = 0;
@@ -134,6 +143,10 @@ export const foldSearchMatchTextWithOffsets = (
   }
   return { text: loweredParts.join(""), originalRanges };
 };
+
+export const foldSearchMatchTextWithOffsets = (
+  content: string,
+): FoldedSearchText => foldSearchMatchTextWithOffsetsAndOptions(content, {});
 
 const WORD_CHARACTER = /^[\p{L}\p{N}\p{M}]$/u;
 const MARK_CHARACTER = /^\p{M}$/u;
@@ -302,10 +315,10 @@ export const findSearchMatchRanges = (
   return findFoldedRanges({
     content:
       typeof content === "string"
-        ? foldSearchMatchTextWithOffsets(content, match)
+        ? foldSearchMatchTextWithOffsetsAndOptions(content, match)
         : content,
     maxMatches,
-    query: foldSearchMatchText(query.trim(), match),
+    query: foldSearchMatchTextWithOptions(query.trim(), match),
     match,
   });
 };
