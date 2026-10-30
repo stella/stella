@@ -23,6 +23,7 @@ import { apiFetch } from "./api-fetch.js";
 import { CLI_LATEST_HEADER, CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
+import { timingEnd } from "./timing.js";
 
 // Most `tools/call` requests keep the default bounded client ceiling. A
 // generated leaf may carry a larger API-owned finite deadline when its bounded
@@ -31,6 +32,7 @@ import { MCP_HTTP_PATH } from "./mcp-constants.js";
 // on the startup refresh path and is awaited before the command executes, so a
 // tighter ceiling bounds how long an offline/slow client stalls before it falls
 // back to the baked-in tree.
+
 const REQUEST_TIMEOUT_MS = 30_000;
 const LIST_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -230,6 +232,7 @@ export const callTool = async ({
   args: Record<string, unknown>;
   timeoutMs?: number;
 }): Promise<Result<CallToolResult, McpClientError>> => {
+  const started = performance.now();
   const result = await runMcpOperation({
     serverUrl,
     token,
@@ -237,6 +240,7 @@ export const callTool = async ({
     operation: async (client, timeout) =>
       await client.callTool({ name, arguments: args }, { timeout }),
   });
+  timingEnd("api-call", started);
   if (Result.isError(result)) {
     return Result.err(result.error);
   }

@@ -1035,7 +1035,7 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
 describe("toolErrorLines", () => {
   const FLAGS = new Set(["matter_id", "entity_id"]);
 
-  test("an unknown tool is an actionable outdated-CLI error", () => {
+  test("an unknown tool explains organization availability", () => {
     expect(
       toolErrorLines({
         code: "unknown_tool",
@@ -1044,7 +1044,7 @@ describe("toolErrorLines", () => {
         issues: [],
       }),
     ).toEqual([
-      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
+      "This tool is not enabled for this organization. Check enabled features and your access.",
     ]);
   });
 

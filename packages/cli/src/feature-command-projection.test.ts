@@ -490,3 +490,55 @@ test("the real legal-list catalogue projects every granted command", () => {
     }
   }
 });
+
+test("vendor annotations preserve authenticated feature projection while unsupported constraints fall back closed", async () => {
+  const env = await cacheEnv();
+  for (const keyword of ["x-ai-input", "unsupportedConstraint"]) {
+    const response = {
+      result: {
+        tools: listings.map((listing, index) => ({
+          ...listing,
+          inputSchema:
+            index === 0
+              ? { ...listing.inputSchema, [keyword]: { kind: "annotation" } }
+              : listing.inputSchema,
+        })),
+        _meta: { featureAccess: enabled },
+      },
+    };
+    const outcome = await refreshRegistryCache({
+      serverOrigin: ORIGIN,
+      token: "caller-a",
+      env,
+      force: true,
+      fetchRaw: async () =>
+        Result.ok({
+          rawBody: JSON.stringify(response),
+          featureOmittedTools: [],
+          featureOmittedCapabilities: [],
+        }),
+      bakedListings: listings,
+    });
+    expect(outcome.status).toBe(
+      keyword === "x-ai-input" ? "refreshed" : "failed",
+    );
+    const current = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+      bakedTree: tree,
+      loadCatalog: async () => entries,
+      annotations,
+      ...(outcome.status === "refreshed"
+        ? {
+            registry: outcome.registry,
+            featureAccess: outcome.featureAccess,
+          }
+        : {}),
+    });
+    expect(leafIds(current.tree).includes(CAPABILITY)).toBe(
+      keyword === "x-ai-input",
+    );
+    expect(leafIds(current.tree).includes(TOOL)).toBe(keyword === "x-ai-input");
+    expect(leafIds(current.tree)).toContain("list_matters");
+  }
+});

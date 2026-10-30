@@ -1,7 +1,7 @@
-import { Result } from "better-result";
-// Runtime registry fetches validate caller listings for this invocation only.
-// resolveCommandTree consumes a current response or the baked-in baseline;
-// refreshRegistryCache persists deployment omissions and version metadata.
+import { panic, Result } from "better-result";
+// Runtime and disk-backed caller listings cross the same registry trust boundary.
+// Short-lived projections are bound to the server, organization, CLI version and
+// credential generation; deployment metadata has a separate origin cache.
 // Both paths share the build-time route generator and annotation table.
 import { access, readFile } from "node:fs/promises";
 import { Temporal } from "temporal-polyfill/full";
@@ -38,7 +38,15 @@ import {
   type RegistryDelta,
   writeCacheFile,
 } from "./registry-cache.js";
-import { validateFetchedToolsList } from "./registry-trust.js";
+import {
+  projectionCachePath,
+  readProjectionCache,
+  writeProjectionCache,
+} from "./registry-projection-cache.js";
+import {
+  type TrustResult,
+  validateFetchedToolsList,
+} from "./registry-trust.js";
 import type {
   RegistryToolListing,
   RouteNode,
@@ -144,7 +152,7 @@ export const requiresFeatureAccessRefresh = (
   tree: RouteNode = generatedRouteMap,
 ): boolean => hasFeatureCommands(tree);
 
-/** Validated caller projection held only during its authenticated invocation. */
+/** Validated caller projection fetched now or restored from its bounded cache. */
 export type CurrentRegistry = {
   serverOrigin: string;
   listings: readonly RegistryToolListing[];
@@ -288,6 +296,7 @@ export type RefreshOutcome =
   | {
       status: "refreshed";
       deltaEmpty: boolean;
+      cacheWarning?: string;
       nudge?: string;
       unsupported?: boolean;
       featureAccess?: CallerFeatureAccess;
@@ -317,9 +326,11 @@ export const refreshRegistryCache = async ({
   currentVersion = CLI_VERSION,
   fetchRaw,
   bakedListings,
+  configDir,
 }: {
   serverOrigin: string;
   token: string;
+  configDir?: string;
   env: CacheEnv;
   now?: number;
   force?: boolean;
@@ -331,7 +342,7 @@ export const refreshRegistryCache = async ({
   const filePath = cachePathFor(serverOrigin, env);
   const existing = await readCacheFile(filePath);
 
-  if (!force) {
+  if (!force && configDir === undefined) {
     if (existing === undefined) {
       // Only a genuinely absent cache stays offline-instant (seeded at login).
       // A file that exists but no longer validates (an older schema version
@@ -349,7 +360,30 @@ export const refreshRegistryCache = async ({
   const fetcher: FetchRaw =
     fetchRaw ??
     (async () => await fetchToolsListRaw({ serverUrl: serverOrigin, token }));
-  const raw = await fetcher();
+  const projectionPath =
+    configDir === undefined
+      ? undefined
+      : projectionCachePath({ configDir, serverOrigin, token, currentVersion });
+  const cachedProjection =
+    projectionPath === undefined || force
+      ? { status: "miss" as const }
+      : await readProjectionCache(projectionPath, now);
+  const { raw, projectionSource } = await (async () => {
+    switch (cachedProjection.status) {
+      case "hit":
+        return {
+          raw: Result.ok(cachedProjection.raw),
+          projectionSource: "cache" as const,
+        };
+      case "miss":
+      case "invalid":
+      case "unreadable":
+        return { raw: await fetcher(), projectionSource: "server" as const };
+      default:
+        cachedProjection satisfies never;
+        return panic("Unexpected registry cache read outcome");
+    }
+  })();
   if (Result.isError(raw)) {
     if (raw.error.admission !== undefined) {
       return { status: "admission-refused", refusal: raw.error.admission };
@@ -368,6 +402,49 @@ export const refreshRegistryCache = async ({
     };
   }
 
+  return await persistTrustedRegistry({
+    filePath,
+    existing,
+    serverOrigin,
+    raw: raw.value,
+    trust,
+    bakedListings,
+    now,
+    ttlSeconds,
+    currentVersion,
+    projectionPath,
+    projectionSource,
+  });
+};
+
+type PersistTrustedRegistryOptions = {
+  filePath: string;
+  existing: RegistryCacheFile | undefined;
+  serverOrigin: string;
+  raw: RawToolsList;
+  trust: Extract<TrustResult, { ok: true }>;
+  bakedListings: readonly RegistryToolListing[] | undefined;
+  now: number;
+  ttlSeconds: number;
+  currentVersion: string;
+  projectionPath: string | undefined;
+  projectionSource: "cache" | "server";
+};
+
+/** Persist only trusted caller data and the independently reusable deployment metadata. */
+const persistTrustedRegistry = async ({
+  filePath,
+  existing,
+  serverOrigin,
+  raw,
+  trust,
+  bakedListings,
+  now,
+  ttlSeconds,
+  currentVersion,
+  projectionPath,
+  projectionSource,
+}: PersistTrustedRegistryOptions): Promise<RefreshOutcome> => {
   const baked = bakedListings ?? (await loadBakedListings());
   // Every omission the server attested, whatever the reason. Diffing against a
   // projection without them counts a tool the server still owns as removed, and
@@ -376,15 +453,15 @@ export const refreshRegistryCache = async ({
     baked,
     fetched: trust.listings,
     omittedTools: [
-      ...(raw.value.scopeOmittedTools ?? []),
-      ...(raw.value.featureOmittedTools ?? []),
+      ...(raw.scopeOmittedTools ?? []),
+      ...(raw.featureOmittedTools ?? []),
     ],
   });
 
   const nudge = buildVersionNudge({
     current: currentVersion,
-    latest: raw.value.cliLatest,
-    minimum: raw.value.cliMinimum,
+    latest: raw.cliLatest,
+    minimum: raw.cliMinimum,
     lastNudged: existing?.lastNudgedVersion,
   });
   const lastNudgedVersion = nudge.nudgeVersion ?? existing?.lastNudgedVersion;
@@ -394,18 +471,18 @@ export const refreshRegistryCache = async ({
     toolsListHash: trust.toolsListHash,
     listings: trust.listings,
     delta,
-    ...(raw.value.grantedScopes === undefined
+    ...(raw.grantedScopes === undefined
       ? {}
-      : { grantedScopes: raw.value.grantedScopes }),
-    ...(raw.value.scopeOmittedTools === undefined
+      : { grantedScopes: raw.grantedScopes }),
+    ...(raw.scopeOmittedTools === undefined
       ? {}
-      : { scopeOmittedTools: raw.value.scopeOmittedTools }),
-    ...(raw.value.featureOmittedTools === undefined
+      : { scopeOmittedTools: raw.scopeOmittedTools }),
+    ...(raw.featureOmittedTools === undefined
       ? {}
-      : { featureOmittedTools: raw.value.featureOmittedTools }),
-    ...(raw.value.featureOmittedCapabilities === undefined
+      : { featureOmittedTools: raw.featureOmittedTools }),
+    ...(raw.featureOmittedCapabilities === undefined
       ? {}
-      : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
+      : { featureOmittedCapabilities: raw.featureOmittedCapabilities }),
   };
   const file: RegistryCacheFile = {
     version: CACHE_SCHEMA_VERSION,
@@ -414,19 +491,34 @@ export const refreshRegistryCache = async ({
       fractionalSecondDigits: 3,
     }),
     ttlSeconds,
-    ...(raw.value.featureOmittedTools === undefined
+    ...(raw.featureOmittedTools === undefined
       ? {}
-      : { featureOmittedTools: raw.value.featureOmittedTools }),
-    ...(raw.value.featureOmittedCapabilities === undefined
+      : { featureOmittedTools: raw.featureOmittedTools }),
+    ...(raw.featureOmittedCapabilities === undefined
       ? {}
-      : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
+      : { featureOmittedCapabilities: raw.featureOmittedCapabilities }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
-    ...cachedVersionPolicy(raw.value),
+    ...cachedVersionPolicy(raw),
   };
-  await writeCacheFile(filePath, file);
+  const savedMetadata = await Result.tryPromise(
+    async () => await writeCacheFile(filePath, file),
+  );
+  const savedProjection =
+    projectionPath !== undefined && projectionSource === "server"
+      ? await writeProjectionCache({
+          filePath: projectionPath,
+          raw,
+          now,
+        })
+      : Result.ok(undefined);
+  const cacheWarning =
+    savedMetadata.isErr() || savedProjection.isErr()
+      ? "Registry cache could not be saved; the next command will fetch it again."
+      : undefined;
   return {
     status: "refreshed",
     registry,
+    ...(cacheWarning === undefined ? {} : { cacheWarning }),
     deltaEmpty: isDeltaEmpty(delta),
     ...(trust.featureAccess === undefined
       ? {}

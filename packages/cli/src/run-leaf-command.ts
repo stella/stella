@@ -67,6 +67,7 @@ import type {
   FlagSpec,
   LeafCommandSpec,
 } from "./route-types.js";
+import { timingEnd } from "./timing.js";
 
 export { flagKey } from "./flag-name.js";
 export { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -1143,7 +1144,7 @@ export const toolErrorLines = (
 ): string[] => {
   if (envelope.code === "unknown_tool") {
     return [
-      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
+      "This tool is not enabled for this organization. Check enabled features and your access.",
     ];
   }
   const admission = readCliActionAdmissionRefusal(envelope);
@@ -1433,6 +1434,7 @@ export const runLeafCommand = async ({
       ? "table"
       : readOutputFormat(flags, context);
   const renderCall = (result: CallToolResult) => {
+    const started = performance.now();
     renderCommandResult({
       context,
       format,
@@ -1443,6 +1445,7 @@ export const runLeafCommand = async ({
       writers,
       flagPaths: leafFlagPaths(spec),
     });
+    timingEnd("output", started);
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
 

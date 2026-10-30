@@ -42,6 +42,7 @@ import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolOutputContract,
   MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
 import {
@@ -111,18 +112,35 @@ type RegistryToolListing = {
   name: string;
   description: string;
   inputSchema: unknown;
+  outputSchema: unknown;
   annotations?: unknown;
 };
 
 const listings: RegistryToolListing[] = [];
 for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+  const output = getStaticMcpToolOutputContract(tool.name);
+  if (output === undefined) {
+    panic(`Static MCP tool is missing its output contract: ${tool.name}`);
+  }
   listings.push({
     cli: deriveCliAnnotation(tool),
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
+    outputSchema: output.outputSchema,
     annotations: tool.annotations,
   });
+}
+
+const projectionOutputPath = process.argv
+  .find((argument) => argument.startsWith("--projection-output="))
+  ?.slice("--projection-output=".length);
+if (projectionOutputPath !== undefined) {
+  await Bun.write(
+    projectionOutputPath,
+    `${JSON.stringify({ tools: listings, httpPath: MCP_ADVANCED_HTTP_PATH, contract: STELLA_API_CONTRACT })}\n`,
+  );
+  process.exit(0);
 }
 
 const snapshotPath = new URL(

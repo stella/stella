@@ -20,9 +20,14 @@ import {
   writeCredentialFile,
 } from "./credential-store.js";
 import type { CredentialFile, StoredCredential } from "./credential-store.js";
-import { CredentialNotFoundError, NoRefreshTokenError } from "./errors.js";
+import {
+  CredentialNotFoundError,
+  NoRefreshTokenError,
+  TokenRefreshError,
+} from "./errors.js";
 import type { CliAuthError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
+import { acquireRefreshLock } from "./refresh-lock.js";
 import { refreshAccessToken } from "./token-exchange.js";
 
 /** How much of a credential's remaining lifetime triggers a proactive refresh. */
@@ -98,15 +103,8 @@ const checkForNewerStoredGeneration = async (
   input: EnsureFreshCredentialInput,
   now: number,
 ): Promise<StoredGenerationCheck> => {
-  // Re-read right before deciding rather than trusting any snapshot the
-  // caller took earlier: both the token exchange and metadata discovery
-  // that precede this check are network round trips, during which another
-  // `stella` process (a concurrent command, or `auth login`/`logout`) may
-  // have written to `credentials.json`. This keeps that window as small as
-  // this process can make it without a lock (full read-modify-write
-  // atomicity — a store-level lock or true compare-and-swap across the
-  // whole critical section — is a separate, tracked follow-up: this is a
-  // compare-and-skip, not a swap).
+  // Re-read under the refresh lock; login/logout can still change the store
+  // while the exchange is in flight, so their newer generation takes priority.
   const latestCredentialFile = await readCredentialFile(input.configDir);
   const stillPresent = findCredentialByOrgId(
     latestCredentialFile,
@@ -150,7 +148,7 @@ const checkForNewerStoredGeneration = async (
   // terminates once nothing further races in.
   return {
     kind: "resolved",
-    result: await ensureFreshCredential({
+    result: await refreshCredentialUnderLock({
       ...input,
       credential: stillPresent,
       now,
@@ -176,7 +174,7 @@ const checkForNewerStoredGeneration = async (
  * refreshed token is valid in memory regardless, so it comes back as
  * `Result.ok` with `persistWarning` set, not as an error.
  */
-export const ensureFreshCredential = async (
+const refreshCredentialUnderLock = async (
   input: EnsureFreshCredentialInput,
 ): Promise<Result<EnsureFreshCredentialOutcome, CliAuthError>> => {
   const now = input.now ?? Temporal.Now.instant().epochMilliseconds;
@@ -242,4 +240,53 @@ export const ensureFreshCredential = async (
   }
 
   return Result.ok({ credential: updated });
+};
+
+export const ensureFreshCredential = async (
+  input: EnsureFreshCredentialInput,
+): Promise<Result<EnsureFreshCredentialOutcome, CliAuthError>> => {
+  const now = input.now ?? Temporal.Now.instant().epochMilliseconds;
+  if (!credentialNeedsRefresh(input.credential, now)) {
+    return Result.ok({ credential: input.credential });
+  }
+  if (!input.credential.refreshToken) {
+    return Result.err(
+      new NoRefreshTokenError({ message: NO_REFRESH_TOKEN_MESSAGE }),
+    );
+  }
+  const lock = await acquireRefreshLock(input.configDir);
+  if (Result.isError(lock)) {
+    return Result.err(lock.error);
+  }
+  const outcome = await Result.tryPromise(async () => {
+    const check = await checkForNewerStoredGeneration(input, now);
+    if (check.kind === "resolved") {
+      return check.result;
+    }
+    return await refreshCredentialUnderLock(input);
+  });
+  const released = await Result.tryPromise(lock.value);
+  if (Result.isError(outcome)) {
+    return Result.err(
+      new TokenRefreshError({
+        message: "Could not refresh the stored credential.",
+        cause: outcome.error,
+      }),
+    );
+  }
+  if (Result.isError(released)) {
+    if (Result.isError(outcome.value)) {
+      return outcome.value;
+    }
+    return Result.ok({
+      credential: outcome.value.value.credential,
+      persistWarning: [
+        outcome.value.value.persistWarning,
+        "Could not remove the credential refresh lock. Confirm no command is refreshing credentials, then remove credentials.refresh.lock before retrying.",
+      ]
+        .filter((warning) => warning !== undefined)
+        .join(" "),
+    });
+  }
+  return outcome.value;
 };

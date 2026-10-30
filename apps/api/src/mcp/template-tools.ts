@@ -175,6 +175,7 @@ import {
   internalFailureResult,
   invalidCursorResult,
   isToolErrorResult,
+  MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
   structuredEgressPlan,
@@ -747,6 +748,15 @@ const listTemplatesArgsSchema = nullAsAbsent(
         "Template id to describe its fields in detail; omit to list templates",
       ),
     ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(LIMITS.mcpListPageSizeMin),
+        v.maxValue(MAX_LIST_LIMIT),
+        v.description("Max templates to return (list mode)"),
+      ),
+    ),
     cursor: cursorInput({
       description:
         "Opaque cursor from a previous list_templates call to fetch the next page",
@@ -1003,7 +1013,7 @@ const handleListTemplatesTool: TypedMcpToolHandler<
     boundaryId = decoded;
   }
 
-  const limit = LIMITS.templatesCount;
+  const limit = routed.output.limit ?? LIMITS.templatesCount;
   const rows = await context.scopedDb((tx) =>
     tx
       .select({

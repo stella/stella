@@ -1,14 +1,25 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import * as v from "valibot";
 
 import {
   MCP_TOOL_NAME_MAX_LENGTH as SHARED_MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN,
 } from "../../api-contract/src/mcp-tool-name.ts";
+import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import { buildCliRouteTree } from "./generate-capability-tree.js";
+import { CLI_SUPPORTED_API_PROTOCOLS } from "./generated/api-contract.js";
 import {
+  MCP_CAPABILITY_EXECUTORS,
+  MCP_HTTP_PATH,
   MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN_FLAGS,
   MCP_TOOL_NAME_PATTERN_SOURCE,
 } from "./generated/mcp-contract.js";
+import { generatedRouteMap } from "./generated/route-map.js";
+import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import {
   MAX_ENUM,
   MAX_LISTING_BYTES,
@@ -18,6 +29,7 @@ import {
   MAX_TOOLS,
   validateFetchedToolsList,
 } from "./registry-trust.js";
+import type { RouteNode } from "./route-types.js";
 
 type ToolEntry = Record<string, unknown>;
 
@@ -288,6 +300,56 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
     }
   });
 
+  test("vendor annotations remain opaque at every schema position", () => {
+    for (const keyword of [
+      "x-stella-agent-input",
+      "x-ai-input",
+      "x-vendor-future",
+    ]) {
+      const inputSchema = {
+        type: "object",
+        properties: {
+          value: {
+            type: "string",
+            [keyword]: {
+              $ref: "https://example.invalid",
+              futureConstraint: true,
+            },
+          },
+        },
+      };
+      const result = validateFetchedToolsList(
+        body([validTool({ inputSchema })]),
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.listings.at(0)?.inputSchema).toEqual(inputSchema);
+      }
+    }
+  });
+
+  test("opaque vendor annotations retain the schema size and nesting bounds", () => {
+    let annotation: unknown = "value";
+    for (let index = 0; index <= MAX_SCHEMA_DEPTH; index += 1) {
+      annotation = { child: annotation };
+    }
+    for (const value of [annotation, "x".repeat(64 * 1024)]) {
+      expect(
+        validateFetchedToolsList(
+          body([
+            validTool({
+              inputSchema: {
+                type: "object",
+                properties: {},
+                "x-vendor": value,
+              },
+            }),
+          ]),
+        ).ok,
+      ).toBe(false);
+    }
+  });
+
   test("unknown schema vocabulary fails closed by default", () => {
     const tool = validTool({
       inputSchema: {
@@ -455,3 +517,126 @@ describe("validateFetchedToolsList: the committed registry clears every cap", ()
     expect(validateFetchedToolsList(body(tools)).ok).toBe(true);
   });
 });
+
+// timeout: the exporter initializes the API registry in a subprocess bounded to 25 seconds.
+test("every curated command binding matches the current server registry and protocol", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "stella-live-registry-"));
+  const projectionPath = path.join(directory, "registry.json");
+  try {
+    const exporter = Bun.spawn(
+      [
+        process.execPath,
+        "scripts/export-mcp-tool-registry.ts",
+        `--projection-output=${projectionPath}`,
+      ],
+      {
+        cwd: new URL("../../../apps/api/", import.meta.url).pathname,
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 25_000,
+      },
+    );
+    const [exitCode, stderr] = await Promise.all([
+      exporter.exited,
+      new Response(exporter.stderr).text(),
+      new Response(exporter.stdout).text(),
+    ]);
+    expect({ exitCode, stderr: exitCode === 0 ? "" : stderr }).toEqual({
+      exitCode: 0,
+      stderr: "",
+    });
+    const projection: unknown = await Bun.file(projectionPath).json();
+    const metadata = v.parse(
+      v.object({
+        httpPath: v.string(),
+        contract: v.object({ protocol: v.number() }),
+      }),
+      projection,
+    );
+    const result = validateFetchedToolsList(JSON.stringify(projection));
+    expect(result.ok ? { ok: true } : result).toEqual({ ok: true });
+    if (!result.ok) {
+      throw new TypeError(result.violation);
+    }
+    expect(metadata.httpPath).toBe(MCP_HTTP_PATH);
+    expect(
+      CLI_SUPPORTED_API_PROTOCOLS.some(
+        (protocol) => protocol === metadata.contract.protocol,
+      ),
+    ).toBe(true);
+    const liveTools = new Map(result.listings.map((tool) => [tool.name, tool]));
+    const entries = loadBakedCapabilityCatalog();
+    if (entries === null) {
+      throw new TypeError("Expected capability catalogue");
+    }
+    const currentTree = buildCliRouteTree({
+      listings: result.listings,
+      entries,
+      annotations: generatedToolAnnotations,
+    }).tree;
+    const capabilitySchemas = new Map<string, Record<string, unknown>>();
+    const collectCapabilities = (node: RouteNode): void => {
+      switch (node.kind) {
+        case "route":
+          for (const child of Object.values(node.children)) {
+            collectCapabilities(child);
+          }
+          return;
+        case "capability-leaf":
+          capabilitySchemas.set(node.spec.capabilityId, node.spec.inputSchema);
+          return;
+        case "leaf":
+          return;
+        default:
+          node satisfies never;
+          throw new TypeError("Unexpected command node");
+      }
+    };
+    collectCapabilities(currentTree);
+    let checked = 0;
+    const check = (node: RouteNode): void => {
+      switch (node.kind) {
+        case "route":
+          for (const child of Object.values(node.children)) {
+            check(child);
+          }
+          return;
+        case "leaf": {
+          const tool = liveTools.get(node.spec.toolName);
+          expect(tool, node.spec.commandPath.join(" ")).toBeDefined();
+          if (tool === undefined) {
+            throw new TypeError(`Missing live tool ${node.spec.toolName}`);
+          }
+          expect(node.spec.inputSchema, node.spec.toolName).toEqual(
+            tool.inputSchema,
+          );
+          checked += 1;
+          return;
+        }
+        case "capability-leaf": {
+          expect(
+            liveTools.has(MCP_CAPABILITY_EXECUTORS[node.spec.access]),
+            node.spec.capabilityId,
+          ).toBe(true);
+          const schema = capabilitySchemas.get(node.spec.capabilityId);
+          expect(schema, node.spec.capabilityId).toBeDefined();
+          if (schema === undefined) {
+            throw new TypeError(
+              `Missing capability schema ${node.spec.capabilityId}`,
+            );
+          }
+          expect(node.spec.inputSchema, node.spec.capabilityId).toEqual(schema);
+          checked += 1;
+          return;
+        }
+        default:
+          node satisfies never;
+          throw new TypeError("Unexpected command node");
+      }
+    };
+    check(generatedRouteMap);
+    expect(checked).toBeGreaterThan(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 30_000);

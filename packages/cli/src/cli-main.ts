@@ -33,9 +33,10 @@ import { removedCommandError } from "./registry-drift.js";
 import type { CurrentRegistry } from "./registry-refresh.js";
 import {
   refreshRegistryCache,
-  requiresFeatureAccessRefresh,
   resolveCommandTree,
 } from "./registry-refresh.js";
+import { timingEnd } from "./timing.js";
+import { unavailableCommandError } from "./unavailable-command.js";
 
 const resolvePreamble = async (
   serverFlag: string | undefined,
@@ -63,7 +64,9 @@ const resolvePreamble = async (
   // so the command path's established "Not signed in" / exit-`auth` contract
   // still applies, and the startup registry refresh below is skipped rather
   // than firing a doomed request that 401-warns on a stale token.
+  const tokenStarted = performance.now();
   const resolved = await resolveAccessToken({ configDir, serverUrl });
+  timingEnd("token-load-refresh", tokenStarted);
   if (resolved.status === "refresh-failed") {
     // Surface the specific reason (e.g. "no refresh token, run `stella auth
     // login` again") instead of letting the command path's generic "Not
@@ -138,6 +141,10 @@ const cachedUnsupportedLine = async ({
 };
 
 const main = async (): Promise<void> => {
+  timingEnd(
+    "process-start-to-main",
+    performance.now() - process.uptime() * 1000,
+  );
   const argv = process.argv.slice(2);
   const isAuthLogin = argv.at(0) === "auth" && argv.at(1) === "login";
   // Purely local commands (`--help`, `auth whoami`, `tools list`, ...) read no
@@ -157,24 +164,23 @@ const main = async (): Promise<void> => {
   const versionExempt = isVersionAdmissionExempt(argv);
   let unsupportedLine: string | undefined;
 
-  // Keep an EXISTING per-origin cache current before building the tree; a
-  // missing cache stays offline-instant (seeded at `auth login` below). Any
-  // transport/trust failure warns and falls back to the baked-in tree (S5.5).
-  const requiresFeatureSnapshot = requiresFeatureAccessRefresh();
+  // Use a trusted caller projection within its short TTL; fetch on a cache
+  // miss. Transport or trust failures warn and fall back to the built-in tree.
   let currentRegistry: CurrentRegistry | undefined;
   let featureAccess: CallerFeatureAccess | undefined;
-  if (
-    serverUrl !== undefined &&
-    token !== undefined &&
-    (needsRegistry || requiresFeatureSnapshot)
-  ) {
+  if (serverUrl !== undefined && token !== undefined && needsRegistry) {
+    const registryStarted = performance.now();
     const outcome = await refreshRegistryCache({
       serverOrigin: serverUrl,
       token,
       env: cacheEnv,
-      force: requiresFeatureSnapshot,
+      configDir,
     });
+    timingEnd("registry-load-refresh", registryStarted);
     if (outcome.status === "refreshed") {
+      if (outcome.cacheWarning !== undefined) {
+        process.stderr.write(`${outcome.cacheWarning}\n`);
+      }
       featureAccess = outcome.featureAccess;
       currentRegistry = outcome.registry;
       if (outcome.unsupported === true) {
@@ -201,14 +207,24 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  // Only this invocation's validated response can project caller commands.
-  // Disk supplies deployment metadata; resolution itself performs no network.
+  // Projection resolution itself performs no network; registry trust applies
+  // equally to a fresh response and a restored caller projection.
   const { tree, drift } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
     ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
     ...(featureAccess === undefined ? {} : { featureAccess }),
   });
+  const unavailable = unavailableCommandError({
+    argv,
+    baked: generatedRouteMap,
+    current: tree,
+  });
+  if (unavailable !== undefined) {
+    process.stderr.write(unavailable);
+    process.exitCode = EXIT_CODES.server;
+    return;
+  }
   if (drift !== undefined) {
     // The one place the drift is reported, so "once per process" is structural
     // rather than a latch. Always stderr: a `--json` caller pipes stdout into a
@@ -248,6 +264,7 @@ const main = async (): Promise<void> => {
         token: refreshed.token,
         env: cacheEnv,
         force: true,
+        configDir,
       });
       if (outcome.status === "admission-refused") {
         refuseAdmission(outcome.refusal, argv);

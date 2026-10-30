@@ -900,7 +900,8 @@
       "dependsOn": ["transit", "codegen:runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
+        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts",
+        "$TURBO_ROOT$/apps/api/**"
       ]
     },
     "@stll/agent-engine#test": {

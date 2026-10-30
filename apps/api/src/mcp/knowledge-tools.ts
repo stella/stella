@@ -671,7 +671,7 @@ const listClausesArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(LIMITS.clausesPageSizeMax),
+          v.maxValue(LIMITS.mcpListPageSizeMax),
           v.description("Max clauses to return"),
         ),
       ),

@@ -116,7 +116,6 @@ const SUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
   "source",
   "title",
   "type",
-  "x-stella-agent-input",
 ]);
 
 const UNSUPPORTED_SCHEMA_KEYWORDS = [
@@ -172,6 +171,28 @@ const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
   return undefined;
 };
 
+// Vendor annotations are opaque data, never schema constraints. Bound their
+// nesting too, so ignoring their vocabulary does not bypass the work caps.
+const annotationDepthViolation = (
+  value: unknown,
+  depth: number,
+): string | undefined => {
+  if (depth > MAX_SCHEMA_DEPTH) {
+    return `schema nested deeper than ${MAX_SCHEMA_DEPTH}`;
+  }
+  if (!isUnknownArray(value) && !isRecord(value)) {
+    return undefined;
+  }
+  const children = isUnknownArray(value) ? value : Object.values(value);
+  for (const child of children) {
+    const violation = annotationDepthViolation(child, depth + 1);
+    if (violation !== undefined) {
+      return violation;
+    }
+  }
+  return undefined;
+};
+
 /**
  * Walk one `inputSchema` subtree enforcing the depth/enum/props caps and the
  * supported schema-vocabulary rule. Interpreted recursion with an explicit
@@ -197,6 +218,13 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   }
 
   for (const keyword of Object.keys(schema)) {
+    if (keyword.startsWith("x-")) {
+      const violation = annotationDepthViolation(schema[keyword], depth);
+      if (violation !== undefined) {
+        return violation;
+      }
+      continue;
+    }
     if (!SUPPORTED_SCHEMA_KEYWORDS.has(keyword)) {
       return `${keyword} schema constraints are unsupported`;
     }

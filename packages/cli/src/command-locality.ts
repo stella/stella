@@ -26,7 +26,18 @@ const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
  * so purely local commands never round-trip to the server.
  */
 export const commandNeedsRegistry = (argv: readonly string[]): boolean => {
-  const first = argv.at(0);
+  let index = 0;
+  while (index < argv.length) {
+    const arg = argv.at(index);
+    if (arg === "--server") {
+      index += 2;
+    } else if (arg?.startsWith("--server=")) {
+      index += 1;
+    } else {
+      break;
+    }
+  }
+  const first = argv.at(index);
   if (first === undefined || first.startsWith("-")) {
     return false;
   }
