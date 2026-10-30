@@ -28,8 +28,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -66,6 +64,8 @@ import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
