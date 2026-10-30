@@ -275,7 +275,8 @@ can observe needs a real bump.
 
 Published packages also commit `packages/<name>/api-report.json`. After changing
 an entrypoint, export, or signature, run `bun run update:package-api` and commit
-the updated reports. Check them with `bun run check:package-api -- --base origin/main`.
+the updated reports. Check them with `bun run check:package-api` (against
+`origin/main`; pass another base ref as its argument).
 Removing or renaming an export, or narrowing a signature, requires a major
 changeset for that package: published packages have consumers outside this
 repository. CI compares the reports with the target branch and rejects stale

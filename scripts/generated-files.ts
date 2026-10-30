@@ -1717,6 +1717,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/capabilities/*.json",
       "packages/*/tsconfig*.json",
       "scripts/package-api-report.ts",
+      "scripts/package-api-report-write.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "bunfig.toml",
@@ -1728,20 +1729,22 @@ const GENERATOR_DECLARATIONS = [
       ".prettierrc.yml",
       "scripts/changeset-entry.ts",
       "scripts/offline-network-preload.ts",
+      "scripts/package-api-base.sh",
       ".changeset/*.md",
     ],
-    write: ["bun", "scripts/package-api-report.ts", "--write"],
+    write: ["bun", "scripts/package-api-report-write.ts"],
     check: null,
     checkedBy: "Published package API reports",
-    // The check compares against the pull request's Git base.
+    // The check compares against the pull request's Git base, which
+    // scripts/package-api-base.sh materialises before the offline check runs.
     checkedWith: [
       "bun",
       "--preload",
       "./scripts/offline-network-preload.ts",
       "scripts/package-api-report.ts",
       "--check",
-      "--base",
-      '"$RATCHET_BASE_REF"',
+      "--base-dir",
+      '"$base_dir"',
     ],
     // API changes require explicit review and release intent.
     autofix: false,

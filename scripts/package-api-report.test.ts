@@ -74,10 +74,26 @@ const fixture = async (): Promise<string> => {
   return root;
 };
 
-const run = async (root: string) =>
-  await checkPackageApi({
+const BASE_SCRIPT = path.join(import.meta.dir, "package-api-base.sh");
+const PRELOAD = path.join(import.meta.dir, "offline-network-preload.ts");
+
+/** The fixture's Git base, materialised as the CI step does. */
+const baseDir = (root: string): string => {
+  const directory = mkdtempSync(path.join(tmpdir(), "package-api-base-"));
+  roots.push(directory);
+  const result = Bun.spawnSync(["bash", BASE_SCRIPT, "baseline", directory], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  return directory;
+};
+
+const run = (root: string) =>
+  checkPackageApi({
     root,
-    base: "baseline",
+    baseDir: baseDir(root),
     packageDirs: ["packages/fixture"],
   });
 const write = async (root: string): Promise<void> => {
@@ -104,7 +120,7 @@ test("a removed re-export still fails after committing the regenerated report", 
   await write(root);
   git(root, ["add", "."]);
   git(root, ["commit", "-qm", "remove export"]);
-  const errors = (await run(root)).join("\n");
+  const errors = run(root).join("\n");
   expect(errors).toContain(".#convert: removed export");
   expect(errors).toContain("consumers outside this repository");
 });
@@ -116,9 +132,9 @@ test("additions require regeneration and then pass without a major changeset", a
     "src/index.ts",
     'export { convert } from "./model";\nexport type { Input } from "./model";\nexport const added = 1;\n',
   );
-  expect((await run(root)).join("\n")).toContain("bun run update:package-api");
+  expect(run(root).join("\n")).toContain("bun run update:package-api");
   await write(root);
-  expect(await run(root)).toEqual([]);
+  expect(run(root)).toEqual([]);
   const packageDir = path.join(root, "packages/fixture");
   const report = generateApiReport(packageDir);
   expect(report.entrypoints["."]).toMatchObject({
@@ -144,20 +160,20 @@ test("only a package-specific major changeset introduced by this PR authorizes b
   git(root, ["branch", "-f", "baseline"]);
   replace(root, "src/index.ts", "export {};\n");
   await write(root);
-  expect((await run(root)).join("\n")).toContain("removed export");
+  expect(run(root).join("\n")).toContain("removed export");
   writeFileSync(
     path.join(root, ".changeset/current.md"),
     '---\n"@stll/other": major\n"@stll/fixture": minor\n---\nRelease.\n',
   );
   git(root, ["add", "."]);
-  expect((await run(root)).join("\n")).toContain("removed export");
+  expect(run(root).join("\n")).toContain("removed export");
   writeFileSync(
     path.join(root, ".changeset/current.md"),
     '---\n"@stll/fixture": major\n---\nRemove old exports.\n',
   );
-  expect(await run(root)).toEqual([]);
+  expect(run(root)).toEqual([]);
   replace(root, "src/index.ts", "export const extra = 1;\n");
-  expect((await run(root)).join("\n")).toContain("stale");
+  expect(run(root).join("\n")).toContain("stale");
 });
 
 test("narrowing a referenced parameter type fails, while widening a parameter passes", async () => {
@@ -168,7 +184,7 @@ test("narrowing a referenced parameter type fails, while widening a parameter pa
     "export type Input = string;\nexport const convert = (input: Input): string => input;\n",
   );
   await write(root);
-  const errors = (await run(root)).join("\n");
+  const errors = run(root).join("\n");
   expect(errors).toContain("convert: incompatible value signature");
   expect(errors).toContain("Input: incompatible type signature");
   const packageDir = path.join(root, "packages/fixture");
@@ -199,7 +215,7 @@ test("entrypoint removals, overload removals and asset removals are visible", as
     "export type Input = string | number;\nexport function convert(input: string): string { return input; }\n",
   );
   await write(root);
-  expect((await run(root)).join("\n")).toContain(
+  expect(run(root).join("\n")).toContain(
     "convert: incompatible value signature",
   );
   replace(
@@ -211,7 +227,7 @@ test("entrypoint removals, overload removals and asset removals are visible", as
     }),
   );
   await write(root);
-  const removals = (await run(root)).join("\n");
+  const removals = run(root).join("\n");
   expect(removals).toContain("./model: removed entrypoint");
   expect(removals).toContain("./theme.css: removed entrypoint");
 });
@@ -234,9 +250,7 @@ test("runtime exports cannot silently become type-only, including export stars",
   ]) {
     replace(root, "src/index.ts", `${statement}\n`);
     await write(root);
-    expect((await run(root)).join("\n")).toContain(
-      "Input: removed runtime export",
-    );
+    expect(run(root).join("\n")).toContain("Input: removed runtime export");
   }
 });
 
@@ -257,7 +271,7 @@ test("removing a namespace type export is a breaking API change", async () => {
     "export namespace Model { export const value = 1; }\n",
   );
   await write(root);
-  expect((await run(root)).join("\n")).toContain("Model.Input: removed export");
+  expect(run(root).join("\n")).toContain("Model.Input: removed export");
 });
 
 test("unsupported JavaScript exports and unresolved declaration imports fail visibly", async () => {
@@ -306,7 +320,75 @@ test("wildcard asset entrypoints stay in the report and cannot lose a match", as
   });
   rmSync(path.join(packageDir, "capabilities/first.json"));
   await write(root);
-  expect((await run(root)).join("\n")).toContain(
+  expect(run(root).join("\n")).toContain(
     "removed asset ./capabilities/first.json",
+  );
+});
+
+test("the check spawns nothing: it runs to its verdict under the offline preload", async () => {
+  const root = await fixture();
+  replace(root, "src/index.ts", 'export type { Input } from "./model";\n');
+  await write(root);
+  const base = baseDir(root);
+  // The preload arms on `--check` and fails the process on any spawn attempt,
+  // even a caught one; the exit code is read before the probe proves it armed.
+  const script = `
+    import { checkPackageApi } from ${JSON.stringify(path.join(import.meta.dir, "package-api-report"))};
+    const errors = checkPackageApi({
+      root: ${JSON.stringify(root)},
+      baseDir: ${JSON.stringify(base)},
+      packageDirs: ["packages/fixture"],
+    });
+    const exitCode = process.exitCode ?? 0;
+    let denied = false;
+    try { Bun.spawnSync(["true"]); } catch { denied = true; }
+    console.log(JSON.stringify({ denied, errors, exitCode }));
+    process.exitCode = 0;
+  `;
+  const result = Bun.spawnSync(
+    [process.execPath, "--preload", PRELOAD, "--eval", script, "--", "--check"],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  const verdict: { denied: boolean; errors: string[]; exitCode: number } =
+    JSON.parse(result.stdout.toString());
+  expect(verdict.denied).toBe(true);
+  expect(verdict.exitCode).toBe(0);
+  expect(verdict.errors.join("\n")).toContain(".#convert: removed export");
+});
+
+const reorderKeys = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(reorderKeys);
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .toReversed()
+      .map(([key, entry]) => [key, reorderKeys(entry)]),
+  );
+};
+
+test("a committed report is compared as JSON: key order and layout never make it stale", async () => {
+  const root = await fixture();
+  const file = path.join(root, "packages/fixture/api-report.json");
+  const committed: unknown = JSON.parse(readFileSync(file, "utf-8"));
+  const reordered = JSON.stringify(reorderKeys(committed));
+  expect(reordered).not.toBe(JSON.stringify(committed));
+  writeFileSync(file, reordered);
+  expect(run(root)).toEqual([]);
+  replace(
+    root,
+    "src/index.ts",
+    'export { convert } from "./model";\nexport type { Input } from "./model";\nexport const added = 1;\n',
+  );
+  expect(run(root).join("\n")).toContain(
+    "stale packages/fixture/api-report.json",
+  );
+  writeFileSync(file, "{ not json");
+  expect(run(root).join("\n")).toContain(
+    "stale packages/fixture/api-report.json",
   );
 });

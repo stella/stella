@@ -312,6 +312,10 @@
       "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
     },
     {
+      "path": "scripts/package-api-base.sh",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
       "path": "scripts/package-api-compatibility.test.ts",
       "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
     },

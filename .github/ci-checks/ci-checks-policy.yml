@@ -13,7 +13,9 @@ checks:
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     run: |
       bun test scripts/package-api-report.test.ts scripts/changeset-entry.test.ts scripts/package-api-compatibility.test.ts scripts/package-api-export-space.test.ts
-      bun --preload ./scripts/offline-network-preload.ts scripts/package-api-report.ts --check --base "$RATCHET_BASE_REF"
+      base_dir="$(mktemp -d)"
+      bash scripts/package-api-base.sh "$RATCHET_BASE_REF" "$base_dir"
+      bun --preload ./scripts/offline-network-preload.ts scripts/package-api-report.ts --check --base-dir "$base_dir"
 
   - name: Format
     env:

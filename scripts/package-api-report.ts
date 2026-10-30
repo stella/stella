@@ -1,22 +1,24 @@
 #!/usr/bin/env bun
 
-import { TaggedError } from "better-result";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { Result, TaggedError } from "better-result";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { parseChangesetReleases } from "./changeset-entry";
-import { formattedLikeRepository } from "./generated-artifacts";
 import { normalizeCompatibilityDeclarations } from "./package-api-compatibility";
 import { hasRuntimeExport } from "./package-api-export-space";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
-const REPORT_FILE = "api-report.json";
+// This module is the check under the offline network preload: it spawns
+// nothing and never formats. Writing reports lives in package-api-report-write.ts.
+export const REPORT_FILE = "api-report.json";
 const REGENERATE = "bun run update:package-api";
-const ROOT = path.resolve(import.meta.dirname, "..");
+export const ROOT = path.resolve(import.meta.dirname, "..");
 
 class PackageApiError extends TaggedError("PackageApiError")<{
   message: string;
@@ -551,42 +553,47 @@ export const breakingApiChanges = ({
   return breaks;
 };
 
-const git = (root: string, args: string[]): string => {
-  const result = Bun.spawnSync(["git", ...args], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    return fail(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
-  }
-  return result.stdout.toString();
+/**
+ * What the check reads from its Git base, as scripts/package-api-base.sh
+ * materialises it: the merge base's API reports and changesets under `tree/`,
+ * and the changesets added or modified since, one per line, in
+ * `changed-changesets`. The check itself reads files only.
+ */
+type CheckPackageApiOptions = {
+  root: string;
+  baseDir: string;
+  packageDirs: readonly string[];
 };
 
-export const checkPackageApi = async ({
-  root,
-  base,
-  packageDirs,
-  write = false,
-}: {
-  root: string;
-  base: string;
-  packageDirs: readonly string[];
-  write?: boolean;
-}): Promise<string[]> => {
-  const errors: string[] = [];
-  const mergeBase = git(root, ["merge-base", base, "HEAD"]).trim();
-  const baseFiles = new Set(
-    git(root, ["ls-tree", "-r", "--name-only", mergeBase]).trim().split("\n"),
+/**
+ * The committed report's value; a missing or unreadable file has none. A
+ * report is compared as a value, so key order and layout never count.
+ */
+const committedReportValue = (file: string): unknown => {
+  if (!existsSync(file)) {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown =>
+    JSON.parse(readFileSync(file, "utf-8")),
   );
-  const changedChangesets = git(root, [
-    "diff",
-    "--name-only",
-    "--diff-filter=AM",
-    mergeBase,
-    "--",
-    ".changeset",
-  ])
+  return Result.isOk(parsed) ? parsed.value : undefined;
+};
+
+export const checkPackageApi = ({
+  root,
+  baseDir,
+  packageDirs,
+}: CheckPackageApiOptions): string[] => {
+  const errors: string[] = [];
+  const baseTree = path.join(baseDir, "tree");
+  const baseText = (file: string): string | undefined =>
+    existsSync(path.join(baseTree, file))
+      ? readFileSync(path.join(baseTree, file), "utf-8")
+      : undefined;
+  const changedChangesets = readFileSync(
+    path.join(baseDir, "changed-changesets"),
+    "utf-8",
+  )
     .trim()
     .split("\n");
   const majors = new Set(
@@ -596,9 +603,11 @@ export const checkPackageApi = async ({
           /^\.changeset\/[^/]+\.md$/u.test(file) && !file.endsWith("README.md"),
       )
       .flatMap((file) => {
-        const existing = baseFiles.has(file)
-          ? parseChangesetReleases(git(root, ["show", `${mergeBase}:${file}`]))
-          : [];
+        const baseChangeset = baseText(file);
+        const existing =
+          baseChangeset === undefined
+            ? []
+            : parseChangesetReleases(baseChangeset);
         return parseChangesetReleases(
           readFileSync(path.join(root, file), "utf-8"),
         )
@@ -616,28 +625,18 @@ export const checkPackageApi = async ({
     const packageDir = path.join(root, relative);
     const file = `${relative}/${REPORT_FILE}`;
     const report = generateApiReport(packageDir);
-    const rendered = await formattedLikeRepository(
-      JSON.stringify(report, null, 2),
-      "json",
-    );
-    if (write) {
-      writeFileSync(path.join(root, file), rendered);
-      continue;
-    }
     if (
-      !existsSync(path.join(root, file)) ||
-      readFileSync(path.join(root, file), "utf-8") !== rendered
+      !isDeepStrictEqual(committedReportValue(path.join(root, file)), report)
     ) {
       errors.push(
         `${report.package}: stale ${file}; regenerate and commit with ${REGENERATE}`,
       );
     }
-    if (!baseFiles.has(file)) {
+    const baseReport = baseText(file);
+    if (baseReport === undefined) {
       continue;
     }
-    const before: ApiReport = JSON.parse(
-      git(root, ["show", `${mergeBase}:${file}`]),
-    );
+    const before: ApiReport = JSON.parse(baseReport);
     const breaks = breakingApiChanges({ before, after: report, packageDir });
     if (breaks.length > 0 && !majors.has(report.package)) {
       errors.push(
@@ -645,28 +644,27 @@ export const checkPackageApi = async ({
       );
     }
   }
-  if (!write) {
-    for (const file of baseFiles) {
-      if (
-        !/^packages\/[^/]+\/api-report\.json$/u.test(file) ||
-        packageDirs.includes(file.slice(0, -`/${REPORT_FILE}`.length))
-      ) {
-        continue;
-      }
-      const before: ApiReport = JSON.parse(
-        git(root, ["show", `${mergeBase}:${file}`]),
+  const basePackages = path.join(baseTree, "packages");
+  const basePackageNames = existsSync(basePackages)
+    ? readdirSync(basePackages).toSorted(compareCodeUnit)
+    : [];
+  for (const name of basePackageNames) {
+    const relative = `packages/${name}`;
+    const baseReport = baseText(`${relative}/${REPORT_FILE}`);
+    if (baseReport === undefined || packageDirs.includes(relative)) {
+      continue;
+    }
+    const before: ApiReport = JSON.parse(baseReport);
+    if (!majors.has(before.package)) {
+      errors.push(
+        `${before.package}: removed published package entrypoints; published packages have consumers outside this repository. A major changeset is required.`,
       );
-      if (!majors.has(before.package)) {
-        errors.push(
-          `${before.package}: removed published package entrypoints; published packages have consumers outside this repository. A major changeset is required.`,
-        );
-      }
     }
   }
   return errors;
 };
 
-const publishedPackageDirs = (): string[] => {
+export const publishedPackageDirs = (): string[] => {
   const config: { ignore: string[] } = JSON.parse(
     readFileSync(path.join(ROOT, ".changeset/config.json"), "utf-8"),
   );
@@ -704,46 +702,29 @@ const publishedPackageDirs = (): string[] => {
     .map((name) => `packages/${name}`);
 };
 
+const USAGE =
+  "Usage: bun scripts/package-api-report.ts --check --base-dir <directory from scripts/package-api-base.sh>";
+
 if (import.meta.main) {
-  let base = "origin/main";
-  let mode: "write" | "check" | undefined;
-  const args = process.argv.slice(2);
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--base") {
-      const value = args.at(index + 1);
-      base =
-        value === undefined || value.startsWith("--")
-          ? fail("--base requires a Git ref")
-          : value;
-      index += 1;
-      continue;
-    }
-    if ((arg !== "--write" && arg !== "--check") || mode !== undefined) {
-      fail(
-        "Usage: bun scripts/package-api-report.ts --write | --check [--base <ref>]",
-      );
-    }
-    mode = arg === "--write" ? "write" : "check";
+  const [mode, option, baseDir, ...extra] = process.argv.slice(2);
+  if (
+    mode !== "--check" ||
+    option !== "--base-dir" ||
+    baseDir === undefined ||
+    extra.length > 0
+  ) {
+    throw new PackageApiError({ message: USAGE });
   }
-  if (mode === undefined) {
-    fail(
-      "Usage: bun scripts/package-api-report.ts --write | --check [--base <ref>]",
-    );
-  }
-  const errors = await checkPackageApi({
+  const errors = checkPackageApi({
     root: ROOT,
-    base,
+    baseDir,
     packageDirs: publishedPackageDirs(),
-    write: mode === "write",
   });
   for (const error of errors) {
     console.error(error);
   }
   if (errors.length === 0) {
-    console.log(
-      `Published package API reports: ${mode === "write" ? "regenerated" : "up to date and compatible"}.`,
-    );
+    console.log("Published package API reports: up to date and compatible.");
   }
   process.exit(errors.length === 0 ? 0 : 1);
 }
