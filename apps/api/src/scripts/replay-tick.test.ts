@@ -100,13 +100,12 @@ describe("scheduled replay entrypoint", () => {
   // stays a reviewed step of its own. The committed map's type already admits
   // no enrolled source, so this checks the preview budget.
   test("committed enrolment only previews, within the preview budget, and enrols nothing", () => {
-    const declared = Object.values(REPLAY_ENROLMENT);
-    expect(
-      declared.filter(
-        (enrolment) =>
-          enrolment.mode === "dry-run" && enrolment.dailyBudget > 10_000,
-      ),
-    ).toEqual([]);
+    const previews = Object.values(REPLAY_ENROLMENT).filter(
+      ({ mode }) => mode !== "off",
+    );
+    for (const preview of previews) {
+      expect(preview).toEqual({ mode: "dry-run", dailyBudget: 10_000 });
+    }
     expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US]).toEqual({
       mode: "dry-run",
       dailyBudget: 10_000,

@@ -265,7 +265,7 @@ test(
         fc.boolean(),
         (value, act, withClaim) => {
           const verdict = judgeLexLink({
-            anchor: `${labelled(value).at(-1)} ${act}`,
+            anchor: `${labelled(value).at(-1) ?? panic("A chain has at least an article")} ${act}`,
             articles: withClaim ? claimOf(value) : "",
             title: KPC_TITLE,
           });
