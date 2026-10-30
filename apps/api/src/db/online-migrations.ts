@@ -46,6 +46,7 @@ import {
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_POPULATION_REPAIR } from "./case-law-population-repair";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
@@ -251,6 +252,35 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    name: "case_law_population_deltas_source_kind_idx",
+    introducedBy: "20261030222000_case_law_population_counts",
+    tableName: "case_law_population_deltas",
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_population_deltas_source_kind_idx" ON public."case_law_population_deltas" USING btree ("source_id", "kind", "value")',
+    definitionBody:
+      "ON public.case_law_population_deltas USING btree (source_id, kind, value)",
+    isUnique: false,
+  },
+  {
+    name: "case_law_population_projection_activity_idx",
+    introducedBy: "20261030222000_case_law_population_counts",
+    tableName: "case_law_population_projections",
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_population_projection_activity_idx" ON public."case_law_population_projections" USING btree ("country", "court", "updated_at" DESC, "source_id", "created_at") WHERE publication = 'published'`,
+    definitionBody:
+      "ON public.case_law_population_projections USING btree (country, court, updated_at DESC, source_id, created_at) WHERE (publication = 'published'::text)",
+    isUnique: false,
+  },
+  {
+    name: "case_law_population_counts_source_kind_idx",
+    introducedBy: "20261030222000_case_law_population_counts",
+    tableName: "case_law_population_counts",
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_population_counts_source_kind_idx" ON public."case_law_population_counts" USING btree ("source_id", "kind", "value", "total")',
+    definitionBody:
+      "ON public.case_law_population_counts USING btree (source_id, kind, value, total)",
+    isUnique: false,
+  },
   {
     name: "chat_run_log_entries_message_snapshot_idx",
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
@@ -970,6 +1000,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
   CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
+  CASE_LAW_POPULATION_REPAIR,
 ];
 
 /**

@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -24,6 +24,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { populationCountsCacheVersion } from "@/api/lib/case-law/population-count-freshness";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -47,6 +48,7 @@ import {
  * search box that points there.
  */
 export type CaseLawCorpusStatus = {
+  countsFreshness?: LegalBrowseFacets["countsFreshness"];
   /**
    * Decisions of the requested country the corpus index serves, so the number
    * beside the search box is the number a search can find. It is read from the
@@ -159,6 +161,7 @@ export const readCaseLawSourceHealthQuery = definePublicLawSharedQuery(
 );
 
 type CorpusStatusLoad = CorpusUpdatedAtRead & {
+  populationVersion?: string;
   /**
    * The facets with their failure kept: a facets read that degraded to an
    * empty set would count as a corpus of zero decisions beside a real
@@ -253,6 +256,9 @@ export const loadCaseLawCorpusSnapshot = async ({
   );
   const withheld = new Set<string>(excludedSourceIds.map(String));
   return Result.ok({
+    ...(facets.value.value.countsFreshness
+      ? { countsFreshness: facets.value.value.countsFreshness }
+      : {}),
     decisions: bucket?.count ?? 0,
     updatedAt: updatedAt.value,
     sources: sources.value.rows
@@ -267,9 +273,10 @@ export const loadCaseLawCorpusSnapshot = async ({
 
 /** The snapshot as the badge states it at `now`. */
 export const caseLawCorpusStatusAt = (
-  { decisions, updatedAt, sources }: CaseLawCorpusSnapshot,
+  { decisions, updatedAt, sources, countsFreshness }: CaseLawCorpusSnapshot,
   now: Date,
 ): CaseLawCorpusStatus => ({
+  ...(countsFreshness ? { countsFreshness } : {}),
   decisions,
   updatedAt,
   health: caseLawCountryHealth(
@@ -292,14 +299,15 @@ const corpusStatus = createTtlResultCache({
   load: loadCaseLawCorpusSnapshot,
   // Source policy is an input to the answer, so a revocation changes the key
   // instead of waiting out the window; sorted because the set has no order.
-  key: ({ country, excludedSourceIds }: CorpusStatusLoad) =>
-    `${country}:${excludedSourceIds.toSorted().join(",")}`,
+  key: ({ country, excludedSourceIds, populationVersion }: CorpusStatusLoad) =>
+    `${populationVersion ?? ""}:${country}:${excludedSourceIds.toSorted().join(",")}`,
   ttlMs: STATUS_CACHE_TTL_MS,
   failureTtlMs: STATUS_CACHE_FAILURE_TTL_MS,
   maxEntries: STATUS_CACHE_MAX_ENTRIES,
 });
 
 const EMPTY_STATUS: CaseLawCorpusStatus = {
+  countsFreshness: { status: "unavailable" },
   decisions: 0,
   updatedAt: null,
   health: CASE_LAW_COVERAGE_HEALTH.UNKNOWN,
@@ -334,10 +342,24 @@ export const readCaseLawCorpusStatusHandler = async (
     return EMPTY_STATUS;
   }
 
+  const facets = await readBrowseFacetsUnderPolicy({
+    country: publicCountry,
+    excludedSourceIds: excludedSourceIds.value,
+  });
+  if (Result.isError(facets)) {
+    logger.warn("case_law.corpus_status.unavailable", {
+      "error.type": errorTag(facets.error),
+    });
+    return EMPTY_STATUS;
+  }
   const result = await corpusStatus({
     country: publicCountry,
     excludedSourceIds: excludedSourceIds.value,
-    readFacets: readBrowseFacetsUnderPolicy,
+    populationVersion: populationCountsCacheVersion(
+      facets.value.countsFreshness ??
+        panic("Maintained facets returned no population freshness"),
+    ),
+    readFacets: async () => facets,
     readUpdatedAt: async (read) =>
       await caseLawDb(
         async (tx) => await readCaseLawCorpusStatusQuery(tx, read),

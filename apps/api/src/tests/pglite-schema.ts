@@ -1559,3 +1559,30 @@ export const installPgliteDecisionDocketFilingYear = async (
 ): Promise<void> => {
   await db.execute(sql.raw(readDecisionDocketFilingYearMigration()));
 };
+
+/** Install the production population projection triggers omitted by schema push. */
+export const installPgliteCaseLawPopulationCounts = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261030222000_case_law_population_counts",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("GRANT EXECUTE ON FUNCTION") ||
+      source.startsWith("INSERT INTO public.case_law_population_seed_state") ||
+      source.startsWith("CREATE VIEW public.case_law_population_counts_live")
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+  await db.execute(sql`SELECT public.seed_case_law_population_counts(128)`);
+};
