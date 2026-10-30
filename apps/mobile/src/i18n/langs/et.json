@@ -127,6 +127,22 @@
     "currentVersion": "Praegune versioon",
     "loadFailed": "Kirjet ei õnnestunud laadida."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dokumenti ei õnnestunud avada",
+    "failure": {
+      "offline": "Olete võrguühenduseta. Looge internetiühendus ja proovige uuesti.",
+      "noFile": "Sellel dokumendil pole veel faili.",
+      "failed": "Avamisel läks midagi valesti. Proovige hetke pärast uuesti.",
+      "unsupported": "Dokumentide avamiseks värskendage rakendust.",
+      "android": "Androidi rakenduses ei saa dokumente veel avada."
+    },
+    "retry": "Proovi uuesti",
+    "preview": "Ava eelvaade",
+    "previewDescription": "See fail avaneb süsteemi eelvaates.",
+    "unrendered": "Seda dokumenti ei saa siin kuvada, kuid süsteemi eelvaade võib selle avada.",
+    "details": "Üksikasjad"
+  },
   "signIn": {
     "beta": "Beeta",
     "headline": "Selgus igas asjas.",

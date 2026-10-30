@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+
+import { GUARD_ROLLOUT_FILES } from "./guard-rollouts.gen.ts";
+
 export type GuardRollout = {
   id: string;
   check: readonly string[];
@@ -8,108 +12,25 @@ export type GuardRollout = {
   | { type: "autofix"; generator: string }
 );
 
-export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
-  {
-    id: "portable-path",
-    rules: ["no-raw-path-relative/no-raw-path-relative"],
-    type: "full",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-raw-path-relative/no-raw-path-relative",
-      ".",
-    ],
-  },
-  {
-    id: "central-test-timeout",
-    type: "full",
-    check: ["bun", "scripts/check-oxlint-test-timeouts.ts"],
-  },
-  {
-    id: "worker-database-login-posture",
-    rules: [
-      "require-worker-database-login-posture/require-worker-database-login-posture",
-    ],
-    type: "full",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "require-worker-database-login-posture/require-worker-database-login-posture",
-      "apps/api/src",
-    ],
-  },
-  {
-    id: "tracked-symlinks",
-    type: "full",
-    check: ["bun", "scripts/check-tracked-symlinks.ts"],
-  },
-  {
-    id: "no-direct-decision-identifier-column-write",
-    rules: [
-      "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write",
-    ],
-    type: "changed-lines",
-    expiresAt: "2026-11-05T00:00:00.000Z",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write",
-      ".",
-    ],
-  },
-  {
-    id: "no-inert-autofocus",
-    rules: ["no-inert-autofocus/no-inert-autofocus"],
-    type: "changed-lines",
-    expiresAt: "2026-11-05T00:00:00.000Z",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-inert-autofocus/no-inert-autofocus",
-      ".",
-    ],
-  },
-  {
-    id: "no-parser-inline-flatten",
-    rules: ["no-parser-inline-flatten/no-parser-inline-flatten"],
-    type: "changed-lines",
-    expiresAt: "2026-11-05T00:00:00.000Z",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-parser-inline-flatten/no-parser-inline-flatten",
-      "apps/api/src/handlers/case-law/ingestion/parsers",
-      "apps/api/src/lib/legal-search/parsers",
-    ],
-  },
-] as const;
+// One rollout per file, so pull requests that add rules in parallel never
+// edit the same file. scripts/generate-guard-rollouts.ts lists them in
+// scripts/guard-rollouts.gen.ts.
+export const GUARD_ROLLOUT_DIRECTORY = "scripts/guard-rollouts";
+
+export const guardRolloutSource = (id: string) =>
+  `${GUARD_ROLLOUT_DIRECTORY}/${id}.ts`;
+
+// Ids are unique because file names are: a second file declaring an existing
+// id fails here as a mismatch.
+export const guardRolloutsFromFiles = (
+  files: Readonly<Record<string, GuardRollout>>,
+): readonly GuardRollout[] =>
+  Object.entries(files).map(([file, rollout]) =>
+    rollout.id === file
+      ? rollout
+      : panic(
+          `guard rollout filename must match id: ${file}.ts (${rollout.id})`,
+        ),
+  );
+
+export const GUARD_ROLLOUTS = guardRolloutsFromFiles(GUARD_ROLLOUT_FILES);

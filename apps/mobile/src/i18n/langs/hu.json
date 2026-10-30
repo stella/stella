@@ -127,6 +127,22 @@
     "currentVersion": "Aktuális verzió",
     "loadFailed": "Az elemet nem sikerült betölteni."
   },
+  "document": {
+    "title": "Dokumentum",
+    "failedTitle": "A dokumentumot nem sikerült megnyitni",
+    "failure": {
+      "offline": "Nincs internetkapcsolat. Csatlakozzon az internethez, és próbálja újra.",
+      "noFile": "Ehhez a dokumentumhoz még nincs fájl.",
+      "failed": "Hiba történt a megnyitáskor. Próbálja újra egy kis idő múlva.",
+      "unsupported": "Frissítse az alkalmazást a dokumentumok megnyitásához.",
+      "android": "Az Android-alkalmazásban még nem lehet dokumentumokat megnyitni."
+    },
+    "retry": "Újra",
+    "preview": "Előnézet megnyitása",
+    "previewDescription": "Ez a fájl a rendszer előnézetében nyílik meg.",
+    "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",
+    "details": "Részletek"
+  },
   "signIn": {
     "beta": "Béta",
     "headline": "Tisztán látás minden ügyben.",

@@ -127,6 +127,22 @@
     "currentVersion": "Aktuálna verzia",
     "loadFailed": "Položku sa nepodarilo načítať."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dokument sa nedá otvoriť",
+    "failure": {
+      "offline": "Ste offline. Pripojte sa na internet a skúste to znova.",
+      "noFile": "Tento dokument zatiaľ nemá súbor.",
+      "failed": "Pri otváraní sa niečo pokazilo. Skúste to o chvíľu znova.",
+      "unsupported": "Na otváranie dokumentov aktualizujte aplikáciu.",
+      "android": "V aplikácii pre Android zatiaľ dokumenty nemožno otvoriť."
+    },
+    "retry": "Skúsiť znova",
+    "preview": "Otvoriť náhľad",
+    "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
+    "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
+    "details": "Podrobnosti"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Jasno v každom prípade.",

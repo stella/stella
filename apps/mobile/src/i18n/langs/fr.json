@@ -127,6 +127,22 @@
     "currentVersion": "Version actuelle",
     "loadFailed": "Cet élément n’a pas pu être chargé."
   },
+  "document": {
+    "title": "Document",
+    "failedTitle": "Ce document n’a pas pu être ouvert",
+    "failure": {
+      "offline": "Vous êtes hors ligne. Connectez-vous à Internet et réessayez.",
+      "noFile": "Ce document n’a pas encore de fichier.",
+      "failed": "Une erreur s’est produite à l’ouverture. Réessayez dans un instant.",
+      "unsupported": "Mettez à jour l’app pour ouvrir les documents.",
+      "android": "Les documents ne peuvent pas encore être ouverts dans l’app Android."
+    },
+    "retry": "Réessayer",
+    "preview": "Ouvrir l’aperçu",
+    "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
+    "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
+    "details": "Détails"
+  },
   "signIn": {
     "beta": "Bêta",
     "headline": "La clarté pour chaque affaire.",
