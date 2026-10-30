@@ -132,6 +132,7 @@ function ContactsPage() {
   const t = useTranslations();
   const tContacts = useTranslations("contacts");
   const canCreateContact = usePermissions({ contact: ["create"] });
+  const canDeleteContact = usePermissions({ contact: ["delete"] });
   const [createContactOpen, setCreateContactOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [filter, setFilter] = useState<ContactFilter>("all");
@@ -206,15 +207,19 @@ function ContactsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <BulkDeleteContacts
-        contactIds={selectedIds}
-        onResolved={(resolvedIds) =>
-          setSelectedIds((currentIds) =>
-            currentIds.filter((contactId) => !resolvedIds.includes(contactId)),
-          )
-        }
-        organizationId={activeOrganizationId}
-      />
+      {canDeleteContact && (
+        <BulkDeleteContacts
+          contactIds={selectedIds}
+          onResolved={(resolvedIds) =>
+            setSelectedIds((currentIds) =>
+              currentIds.filter(
+                (contactId) => !resolvedIds.includes(contactId),
+              ),
+            )
+          }
+          organizationId={activeOrganizationId}
+        />
+      )}
       <ResponsiveActionToolbar>
         <ResponsiveActionToolbarItem slot="primary">
           <SearchField
