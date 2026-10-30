@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
@@ -105,6 +106,7 @@ export const listDecisionsResponseSchema = page(
     caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
     courtAbbreviation: nullableBoundedString(512),
     courtTier: v.picklist(COURT_TIER_LABELS),
+    decisionTypeKind: v.union([v.picklist(DECISION_TYPE_KINDS), v.null()]),
     sourceUrl: nullableBoundedString(8192),
     headnote,
     citationCount: v.number(),
