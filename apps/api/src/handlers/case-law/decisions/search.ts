@@ -1,12 +1,14 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, getColumns, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import {
   type DecisionQueryIntent,
   parseDecisionQuery,
@@ -134,6 +136,7 @@ import {
   decisionTypeFilterSql,
   decisionTypeKindSql,
 } from "@/api/lib/case-law/decision-type-filter-sql";
+import { readCaseLawFilterScope } from "@/api/lib/case-law/filter-country-scope";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
@@ -161,6 +164,7 @@ import {
   bodyPreviewJoin,
   publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
+import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
@@ -418,6 +422,23 @@ export const searchDecisionsHandler = async ({
   if (pageRefusal !== null) {
     return status(400, { message: pageRefusal });
   }
+  const filterScope = await readCaseLawFilterScope({
+    country,
+    courts: body.courts,
+    filters: {
+      court: body.court,
+      lang: body.language,
+      type: body.decisionType,
+      sourceId: body.sourceId,
+    },
+    caseLawDb,
+  });
+  if (filterScope.removed.length > 0) {
+    return status(400, {
+      message: `Filters do not belong to ${country}: ${filterScope.removed.map((filter) => filter.field).join(", ")}`,
+    });
+  }
+
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
     const { provision } = scopedBody;
@@ -674,6 +695,7 @@ export const caseLawSearchPlan = ({
       d.decision_date,
       d.decision_type,
       d.source_url,
+      ${publicRowHoldsDocumentFor(alias(publishedCaseLawDecisions, "d"))} AS has_document,
       coalesce((src.descriptor ->> 'allowsDerivedAi')::boolean, true) AS allows_derived_ai,
       ${publisherHeadnoteMetadataSql(sql.raw("d.metadata"))} AS headnote,
       ${publisherKeywordsMetadataSql(sql.raw("d.metadata"))} AS keywords,
@@ -926,6 +948,13 @@ const searchCursorAfterRow = (
   }
 };
 
+const readSearchDocumentPresence = (value: unknown): boolean => {
+  if (typeof value !== "boolean") {
+    return panic("Search row is missing its document presence projection");
+  }
+  return value;
+};
+
 const presentPostgresSearchPage = async ({
   body,
   caseLawDb,
@@ -984,6 +1013,9 @@ const presentPostgresSearchPage = async ({
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
+      textAvailability: readSearchDocumentPresence(row["has_document"])
+        ? DECISION_TEXT_AVAILABILITY.AVAILABLE
+        : DECISION_TEXT_AVAILABILITY.METADATA_ONLY,
       textWithheldReason: decisionTextWithheldReason({
         allowsDerivedAi: readSearchSourceAiPermission(row["allows_derived_ai"]),
       }),
@@ -1673,6 +1705,9 @@ export const pageDecisionRowsStatement = (
   const eligibleRows = tx
     .select({
       ...columns,
+      hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions).as(
+        "has_document",
+      ),
       sourceDescriptor: caseLawSources.descriptor,
       headnote: columns.headnote.as("headnote"),
       keywords: columns.keywords.as("keywords"),
@@ -2199,6 +2234,9 @@ export const decisionHitsPage = ({
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
+        textAvailability: row.hasDocument
+          ? DECISION_TEXT_AVAILABILITY.AVAILABLE
+          : DECISION_TEXT_AVAILABILITY.METADATA_ONLY,
         textWithheldReason: decisionTextWithheldReason(row.sourceDescriptor),
         keywords: readDecisionKeywords(row.keywords),
         headnote: readDecisionHeadnote({

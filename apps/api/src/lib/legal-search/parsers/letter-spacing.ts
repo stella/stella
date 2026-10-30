@@ -10,7 +10,8 @@
  *
  * A run of single letters joined by single spaces is a spaced word when it
  * is long enough that no sentence produces it, four letters at least. A
- * shorter run (`s e`) is a spaced word only beside one, across a wide gap.
+ * shorter run (`s e`) is a spaced word beside one, across a wide gap,
+ * or set apart by wide gaps within the same spaced phrase.
  * Punctuation spaced after the last letter belongs to the word.
  *
  * Some courts space short words on their own: `zákonov   n i e   j e   v`
@@ -136,31 +137,104 @@ const isSetApartRun = (tokens: readonly Token[], run: Run): boolean => {
   );
 };
 
-/** The runs that are spaced words: long ones, and short ones beside them. */
+/**
+ * Most words a short run may sit from a long spaced word, every gap between
+ * them wide: `s e   mu   v r a c í` is one spaced phrase.
+ */
+const MAX_WORDS_TO_SPACED_WORD = 2;
+
+/**
+ * Whether a short run belongs to the spaced phrase of a long spaced word:
+ * wide gaps on both of its sides, and a chain of wide gaps over at most
+ * {@link MAX_WORDS_TO_SPACED_WORD} words to a long spaced word. A text that
+ * spaces one word elsewhere ("Soud rozhodoval   i o   nákladech; … z a m í
+ * t á") is no evidence for a short run in its ordinary prose.
+ */
+const inSpacedPhrase = (
+  run: Run,
+  tokens: readonly Token[],
+  strongTokens: ReadonlySet<number>,
+): boolean => {
+  if (
+    run.end === tokens.length ||
+    (run.start > 0 && !isWideGap(tokens[run.start]?.gap)) ||
+    !isWideGap(tokens[run.end]?.gap)
+  ) {
+    return false;
+  }
+  // Rightwards: each token reached across a wide gap.
+  for (
+    let index = run.end;
+    index < tokens.length && index <= run.end + MAX_WORDS_TO_SPACED_WORD;
+    index++
+  ) {
+    if (!isWideGap(tokens[index]?.gap)) {
+      break;
+    }
+    if (strongTokens.has(index)) {
+      return true;
+    }
+  }
+  // Leftwards: each token before a wide gap.
+  for (
+    let index = run.start;
+    index > 0 && index >= run.start - MAX_WORDS_TO_SPACED_WORD;
+    index--
+  ) {
+    if (!isWideGap(tokens[index]?.gap)) {
+      break;
+    }
+    if (strongTokens.has(index - 1)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/** The runs that are spaced words: long ones, nearby short ones and opt-in isolated runs. */
 const spacedRunsOf = (
   tokens: readonly Token[],
   runs: readonly Run[],
   options: LetterSpacingOptions,
 ): Run[] => {
-  const ordinary = runs.map(
-    (run) =>
-      options.setApart === true &&
-      tokens
-        .slice(run.start, run.start + run.letters)
-        .every(({ text }) =>
-          ONE_LETTER_WORDS.has(text.replaceAll(/[.,:;!?]/gu, "").toLowerCase()),
-        ),
+  const hasOrdinaryWords = tokens.some(
+    ({ text }) =>
+      !LETTER_RE.test(text) &&
+      !MARKED_LETTER_RE.test(text) &&
+      !TRAILING_MARK_RE.test(text),
+  );
+  const ordinaryRuns = new Set(
+    hasOrdinaryWords || options.setApart === true
+      ? runs.filter((run) =>
+          tokens
+            .slice(run.start, run.start + run.letters)
+            .every(({ text }) =>
+              ONE_LETTER_WORDS.has(
+                text.replaceAll(/[.,:;!?]/gu, "").toLowerCase(),
+              ),
+            ),
+        )
+      : [],
+  );
+  const strongTokens = new Set(
+    runs
+      .filter((run) => run.letters >= STRONG_RUN_LETTERS)
+      .flatMap((run) =>
+        Array.from({ length: run.end - run.start }, (_, i) => run.start + i),
+      ),
   );
   const spaced = runs.map(
-    (run, index) =>
-      (run.letters >= STRONG_RUN_LETTERS && ordinary[index] !== true) ||
-      (options.setApart === true && isSetApartRun(tokens, run)),
+    (run) =>
+      !ordinaryRuns.has(run) &&
+      (run.letters >= STRONG_RUN_LETTERS ||
+        inSpacedPhrase(run, tokens, strongTokens) ||
+        (options.setApart === true && isSetApartRun(tokens, run))),
   );
   let changed = true;
   while (changed) {
     changed = false;
     for (const [index, run] of runs.entries()) {
-      if (spaced[index] === true || ordinary[index] === true) {
+      if (spaced[index] === true || ordinaryRuns.has(run)) {
         continue;
       }
       const before = runs[index - 1];

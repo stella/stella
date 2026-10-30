@@ -25,7 +25,9 @@ import {
   STATUTE_STATUS_LABEL_KEYS,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
 
+import { CaseFileSwitcher } from "./-components/public-decision-case-file";
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
 
 /*
@@ -90,6 +92,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
         statusLabelKey === null ? trail.status : t(statusLabelKey);
       return (
         <>
+          <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
+          <BreadcrumbItem className={LAW_ANCESTOR_CRUMB_CLASS}>
+            <Link {...trail.country.link} activeOptions={{ exact: true }}>
+              {caseLawCountryName(format, trail.country.code)}
+            </Link>
+          </BreadcrumbItem>
           {trail.yearLink !== null && (
             <>
               <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
@@ -158,6 +166,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
       return (
         <>
           <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
+          <BreadcrumbItem className={LAW_ANCESTOR_CRUMB_CLASS}>
+            <Link {...trail.country.link} activeOptions={{ exact: true }}>
+              {caseLawCountryName(format, trail.country.code)}
+            </Link>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
           {/* A court's name can outgrow the bar on its own, so this crumb
               shrinks and truncates the name rather than keeping its width. */}
           <BreadcrumbItem className={cn("min-w-0", LAW_CRUMB_FOLD_CLASS)}>
@@ -189,6 +203,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                 {trail.caseNumber}
               </BidiText>
             </BreadcrumbPage>
+            {trail.caseFile !== null && (
+              <CaseFileSwitcher
+                caseFile={trail.caseFile}
+                caseNumber={trail.caseNumber}
+              />
+            )}
             {trail.legalArea !== null && (
               <span className="text-muted-foreground min-w-0 truncate">
                 {DECISION_TITLE_SEPARATOR} {trail.legalArea}

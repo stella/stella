@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Builds, pushes and attests API image digests for the resolved release.",
+  "reviewedDigest": "c953827dbe5b33cb00ac2a12cf7d3ba203ea7c2a2279589527f4e0dcc243b4fe"
+}

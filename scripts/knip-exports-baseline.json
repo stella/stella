@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 123,
+    "count": 122,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -54,7 +54,6 @@
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
       "apps/api/src/mcp/tool-types.ts": 7,
-      "apps/api/src/mcp/upload-purpose-gate.ts": 1,
       "apps/api/src/tests/helpers/provider-wire-contract.ts": 3,
       "apps/api/src/tests/pglite-test-db.ts": 1
     }
@@ -66,20 +65,17 @@
     }
   },
   "apps/web": {
-    "count": 17,
+    "count": 14,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 3,
       "apps/web/src/components/ai-suggestions/review-position-header.tsx": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 1,
-      "apps/web/src/components/document-language-picker.logic.ts": 1,
       "apps/web/src/components/workspaces/property-helpers.tsx": 2,
       "apps/web/src/features/statutes/components/statute-table.tsx": 1,
       "apps/web/src/lib/api-contract.ts": 1,
       "apps/web/src/lib/api.ts": 1,
       "apps/web/src/lib/workspaces/format-duration.ts": 1,
-      "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3,
-      "apps/web/src/lib/workspaces/queries/billing-codes.ts": 1,
-      "apps/web/src/lib/workspaces/queries/rates.ts": 1
+      "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3
     }
   },
   "packages/business-registries": {

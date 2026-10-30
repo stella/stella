@@ -412,13 +412,15 @@ if (!databaseUrl || !runPostgresTests) {
       input: IngestionResult,
       order: bigint,
     ): Promise<void> => {
-      await processDecision({
-        input,
-        observationOrder: order,
-        sourceId,
-        scopedDb,
-        observedAt: new Date(`2026-08-11T12:00:0${String(order)}.000Z`),
-      });
+      (
+        await processDecision({
+          input,
+          observationOrder: order,
+          sourceId,
+          scopedDb,
+          observedAt: new Date(`2026-08-11T12:00:0${String(order)}.000Z`),
+        })
+      ).unwrap();
     };
 
     for (const { adapterKey, documents } of SOURCE_CASES) {

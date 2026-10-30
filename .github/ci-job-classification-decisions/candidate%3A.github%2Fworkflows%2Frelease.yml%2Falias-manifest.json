@@ -1,5 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Points the final release image tags and manifest at the proven release-candidate digests, without rebuilding, and attests the aliased web image's publication under the final release.",
-  "reviewedDigest": "586a282d4510f0d6d70ab59daa2f4b945d5eb94a634ea6cf1075248d63e9f730"
-}

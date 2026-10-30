@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { Query, QueryKey } from "@tanstack/react-query";
 import { Result } from "better-result";
 
+import type { CaseLawScopedFilters } from "@stll/api-contract/case-law-filter-scope";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
   type DecisionListSort,
@@ -201,6 +202,25 @@ export const decisionFacetsOptions = (country: string) =>
     retry: shouldRetryAPIRequest,
   });
 
+type DecisionFilterValidationOptions = CaseLawScopedFilters & {
+  country: string;
+};
+export const decisionFilterValidationOptions = (
+  filters: DecisionFilterValidationOptions,
+) =>
+  queryOptions({
+    queryKey: ["case-law", "filter-validation", filters],
+    queryFn: async ({ signal }) => {
+      const response = await api.case.decisions["filter-validation"].get({
+        query: filters,
+        fetch: { signal },
+      });
+      return unwrapPublicLawResponse(response, "validatePublicCaseLawFilters");
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    retry: shouldRetryAPIRequest,
+  });
+
 /** The newest decisions of a jurisdiction's largest courts: the browse page's shelf. */
 export const latestDecisionsOptions = (country: string) =>
   queryOptions({
@@ -352,6 +372,7 @@ export const decisionsPageOptions = ({
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
+            textAvailability: h.textAvailability,
             match: h.match,
             anchorId: h.anchorId,
             citationCount: h.citationCount,

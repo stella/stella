@@ -1691,6 +1691,7 @@ type ChatToolsInput = Parameters<typeof getChatTools>[0];
 
 type PrepareValidatedIncomingMessageOptions = {
   dependencies: {
+    caseLawDb?: SendMessageDependencies["caseLawDb"];
     loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
     uploadMessageFiles: typeof uploadMessageFilesWithRollback;
   };
@@ -1743,7 +1744,7 @@ type PrepareValidatedIncomingMessageOptions = {
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
 const prepareValidatedIncomingMessage = async ({
-  dependencies: { loadWebSearchProviders, uploadMessageFiles },
+  dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
     accessibleWorkspaceIds,
     memberRole,
@@ -1914,6 +1915,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const thread = yield* Result.await(
       loadThread({
+        caseLawDb,
         initialDataWorkspaceIds:
           activeDraftContext === null
             ? []
@@ -2503,6 +2505,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          caseLawDb: dependencies.caseLawDb,
           initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
@@ -2595,6 +2598,7 @@ export const createSendMessage = (
         const preparedIncomingMessage = yield* Result.await(
           prepareValidatedIncomingMessage({
             dependencies: {
+              caseLawDb: dependencies.caseLawDb,
               loadWebSearchProviders: dependencies.loadWebSearchProviders,
               uploadMessageFiles: dependencies.uploadMessageFiles,
             },
@@ -2798,6 +2802,7 @@ export const createSendMessage = (
           ),
         );
         const messagesForContextInput = await selectMessagesForContextInput({
+          caseLawDb: dependencies.caseLawDb,
           messages: authorizedHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,

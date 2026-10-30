@@ -9,6 +9,8 @@ import {
   missingPreparedApiTypecheckConfigs,
   validateApiTypecheckProjects,
 } from "./api-typecheck-projects";
+import { childExitStatus } from "./child-exit-status";
+import { INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS } from "./generated-files";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -143,7 +145,7 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    specifier: "^0.9.9",
+    specifier: "^0.9.11",
   },
   compilerApi: {
     dependency: "typescript6",
@@ -157,6 +159,34 @@ export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 export type WorkspaceIssue = {
   message: string;
   path: string;
+};
+
+export const regenerateInstallOwnedIgnoredGeneratedOutputs = (
+  rootDir: string,
+  runCommand: (command: readonly string[], cwd: string) => number = (
+    command,
+    cwd,
+  ) =>
+    childExitStatus(
+      Bun.spawnSync([...command], {
+        cwd,
+        // Output streams straight to the install log; the limit only binds piped output.
+        maxBuffer: 2 ** 30,
+        stderr: "inherit",
+        stdout: "inherit",
+      }),
+    ),
+) => {
+  for (const { command, outputs } of INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS) {
+    if (outputs.some((output) => !existsSync(path.join(rootDir, output)))) {
+      continue;
+    }
+    const status = runCommand(command, rootDir);
+    if (status !== 0) {
+      return status;
+    }
+  }
+  return 0;
 };
 
 type WorkspacePackageReadResult =
@@ -1050,6 +1080,14 @@ if (import.meta.main) {
   // CI runs this as a verification step (STELLA_VERIFY=check) after it has
   // generated the API typecheck configs; the install-time postinstall has not.
   const requirePreparedApiTypecheck = process.env["STELLA_VERIFY"] === "check";
+  if (!requirePreparedApiTypecheck) {
+    const regenerationStatus = regenerateInstallOwnedIgnoredGeneratedOutputs(
+      process.cwd(),
+    );
+    if (regenerationStatus !== 0) {
+      process.exit(regenerationStatus);
+    }
+  }
   const unprepared = missingPreparedApiTypecheckConfigs(process.cwd());
   if (unprepared.length > 0 && !requirePreparedApiTypecheck) {
     console.log(
