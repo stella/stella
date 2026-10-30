@@ -134,16 +134,12 @@ const readProviderConfig = async ({
   });
   switch (resolution.type) {
     case "unavailable":
-      return Result.err(
-        storedAIConfigUnreadableError(
-          decrypted.status === "corrupt" ? decrypted.error : undefined,
-        ),
-      );
+      return Result.err(storedAIConfigUnreadableError());
     case "orgSettings":
     case "defaultProvider":
       // A configured or absent provider requires a successful decryption read.
       if (decrypted.status === "corrupt") {
-        return Result.err(storedAIConfigUnreadableError(decrypted.error));
+        return Result.err(storedAIConfigUnreadableError());
       }
       return Result.ok(decrypted.config);
     default:
@@ -240,7 +236,7 @@ export const loadOrgAIConfig = async (
   const { organizationId } = checkedReader;
   const settings = await selectAISettingsRow(db, organizationId);
   if (settings.type === "unavailable") {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
   const configResult = await readProviderConfig({ organizationId, settings });
   if (Result.isError(configResult)) {
@@ -286,7 +282,7 @@ export const loadOrgAISettings = async (
   const { organizationId } = checkedReader;
   const settings = await selectAISettingsRow(db, organizationId);
   if (settings.type === "unavailable") {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
   const { row } = settings;
   const configResult = await readProviderConfig({ organizationId, settings });

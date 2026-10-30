@@ -25,6 +25,7 @@ import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
@@ -55,16 +56,20 @@ import {
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
-import type { SearchRankingTier } from "@/api/lib/search/pagination";
+import type {
+  GlobalSearchCursor,
+  SearchRankingTier,
+} from "@/api/lib/search/pagination";
 import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
 import {
-  buildPlainSearchTsQuery,
+  buildSearchCandidateTsQuery,
   buildSearchTsQuery,
 } from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
+import { searchTitleTierSql } from "@/api/lib/search/search-ranking";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
   ChatGlobalSearchHit,
@@ -75,24 +80,16 @@ import type {
   GlobalSearchResultType,
   MatterGlobalSearchHit,
 } from "@/api/lib/search/types";
+import {
+  projectChatSearchCandidates,
+  readChatCandidateBatches,
+} from "@/api/lib/search/withdrawn-chat-candidates";
+import type { ChatSearchCandidateRow } from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
 const MATTER_RELEVANCE_BOOST = 0.15;
-// File extensions a query typed as a filename may end with; matched against
-// the lower-cased, unaccented query.
-const FILENAME_EXTENSION_PATTERN =
-  "\\.(pdf|docx?|dotx?|xlsx?|pptx?|odt|ods|odp|rtf|txt|md|csv|html?|eml|msg|jpe?g|png|gif|tiff?|zip)$";
-
-const SEARCH_TIER = {
-  FILTER_ONLY: 0,
-  LOOSE: 1,
-  ALL_TITLE_TOKENS: 2,
-  TITLE_PREFIX: 3,
-  EXACT_TITLE: 4,
-} as const satisfies Record<string, SearchRankingTier>;
-
 type RawRow = Record<string, unknown>;
 type CountRow = { total?: unknown };
 
@@ -101,8 +98,6 @@ type ScoredGlobalSearchHit = {
   tier: SearchRankingTier;
   score: number;
 };
-
-type SearchPromise = Promise<RawRow[]>;
 
 type ReadLanguageAlternates = (
   languageGroupKeys: readonly string[],
@@ -490,10 +485,10 @@ const facetBuckets = (
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
-const rowsWhen = async (
+const rowsWhen = async <Row extends RawRow>(
   condition: boolean,
-  query: () => SearchPromise,
-): SearchPromise => {
+  query: () => Promise<Row[]>,
+) => {
   if (!condition) {
     return [];
   }
@@ -576,7 +571,6 @@ const buildSearchFilterFragments = ({
   const hasSearchQuery = query.trim().length > 0;
   const restrictToEntities = hasEditorFilter || hasMimeTypeFilter;
   const tsQuery = buildSearchTsQuery(query);
-  const titleTsQuery = buildPlainSearchTsQuery(query);
   const normalizedUpdatedFrom =
     updatedFrom === undefined
       ? undefined
@@ -631,10 +625,11 @@ const buildSearchFilterFragments = ({
     hasSearchQuery,
     () => sql`AND clsd.tsv @@ ${tsQuery}`,
   );
-  const chatTextSearchFilter = sqlWhen(
-    hasSearchQuery,
-    () => sql`AND cst.tsv @@ ${tsQuery}`,
-  );
+  const chatCandidateTsQuery = buildSearchCandidateTsQuery(query);
+  const chatTextSearchFilter =
+    hasSearchQuery && chatCandidateTsQuery !== null
+      ? sql`AND cst.tsv @@ ${chatCandidateTsQuery}`
+      : sql``;
   // The truncation belongs here, not at the call sites: `ts_headline` cost
   // grows with the document it is handed, and a per-branch `left(...)` is a
   // bound each new branch has to remember. Snippets come from the head of the
@@ -670,24 +665,7 @@ const buildSearchFilterFragments = ({
     updatedAt: SQL;
     relevanceBoost?: number | undefined;
   }): SQL => sql`${searchScoreValue(options)} AS score`;
-  const searchTierValue = (title: SQL): SQL => {
-    if (!hasSearchQuery) {
-      return sql`${SEARCH_TIER.FILTER_ONLY}::int`;
-    }
-    const foldedTitle = sql`lower(unaccent(arabic_normalize(${title})))`;
-    const foldedQuery = sql`lower(unaccent(arabic_normalize(${query.trim()})))`;
-    // Only a recognised file extension is dropped, so a query typed as a
-    // filename still prefixes its title while dotted legal references such as
-    // "Article 1.2" stay whole.
-    const foldedQueryStem = sql`regexp_replace(${foldedQuery}, ${FILENAME_EXTENSION_PATTERN}, '')`;
-    return sql`CASE
-      WHEN ${foldedTitle} = ${foldedQuery} THEN ${SEARCH_TIER.EXACT_TITLE}::int
-      WHEN starts_with(${foldedTitle}, ${foldedQueryStem}) THEN ${SEARCH_TIER.TITLE_PREFIX}::int
-      WHEN to_tsvector('simple', unaccent(arabic_normalize(${title}))) @@ ${titleTsQuery}
-        THEN ${SEARCH_TIER.ALL_TITLE_TOKENS}::int
-      ELSE ${SEARCH_TIER.LOOSE}::int
-    END`;
-  };
+  const searchTierValue = (title: SQL): SQL => searchTitleTierSql(title, query);
   const searchTier = (title: SQL): SQL =>
     sql`${searchTierValue(title)} AS tier`;
   const searchOrderBy = ({
@@ -714,7 +692,6 @@ const buildSearchFilterFragments = ({
     hasEditorFilter,
     hasMimeTypeFilter,
     restrictToEntities,
-    tsQuery,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -1024,17 +1001,44 @@ const readGlobalSearch = async (
     selectedWorkspaceIds,
   });
 
+  const chatSourceOrder = hasSearchQuery
+    ? sql`ms.created_at, ms.message_id`
+    : sql`ms.created_at DESC, ms.message_id DESC`;
   const chatPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "chat"),
-    () =>
-      database.execute(sql`
+    async () => {
+      const readPage = async (
+        pageCursor: GlobalSearchCursor | null,
+        rowLimit: number,
+      ) =>
+        await database.execute<ChatSearchCandidateRow>(sql`
       SELECT
         t.id AS id,
         t.workspace_id,
         w.name AS workspace_name,
-        cst.title,
-        ${searchHeadline(sql`cst.title || ' ' || cst.searchable_text`)},
+        t.title,
+        t.title_source,
+        t.subject_decision_id,
+        (SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'role', source_message.role,
+          'content', CASE WHEN source_message.source_bytes <= ${LIMITS.searchChatCandidateSourceBytesMax}
+            AND source_message.source_position <= ${LIMITS.searchChatCandidateSourceMessagesMax}
+            THEN source_message.content ELSE NULL END,
+          'overflow', source_message.source_bytes > ${LIMITS.searchChatCandidateSourceBytesMax}
+            OR source_message.source_position > ${LIMITS.searchChatCandidateSourceMessagesMax}
+        ) ORDER BY source_message.source_position), '[]'::jsonb) FROM (
+          SELECT m.role, m.content,
+            sum(octet_length(m.content::text)) OVER (ORDER BY ${chatSourceOrder}) AS source_bytes,
+            row_number() OVER (ORDER BY ${chatSourceOrder}) AS source_position
+          FROM chat_message_search_documents ms
+          JOIN chat_messages m ON m.id = ms.message_id AND m.thread_id = ms.thread_id
+          WHERE ms.thread_id = t.id
+          ORDER BY ${chatSourceOrder}
+          LIMIT ${hasSearchQuery ? LIMITS.searchChatCandidateSourceMessagesMax + 1 : LIMITS.searchChatPreviewMessageLimit}
+        ) source_message) AS source_messages,
+        NULL::text AS headline,
         ${searchTier(sql`cst.title`)},
+
         ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
         t.updated_at
       FROM chat_thread_search_documents cst
@@ -1047,7 +1051,7 @@ const readGlobalSearch = async (
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         ${globalSearchCursorSql({
-          cursor: searchCursor,
+          cursor: pageCursor,
           tier: searchTierValue(sql`cst.title`),
           score: searchScoreValue({
             tsv: sql`cst.tsv`,
@@ -1056,8 +1060,20 @@ const readGlobalSearch = async (
           id: sql`'chat:' || cst.thread_id::text`,
         })}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
-      LIMIT ${fetchLimit}
-    `),
+      LIMIT ${rowLimit}
+    `);
+      if (!hasSearchQuery) {
+        return await readPage(searchCursor, fetchLimit);
+      }
+      const read = await readChatCandidateBatches({
+        readBatch: async (batchCursor) =>
+          await readPage(batchCursor, LIMITS.searchChatCandidateThreadsMax + 1),
+      });
+      if (read.isErr()) {
+        return abortTransaction(read.error);
+      }
+      return read.value;
+    },
   );
 
   const hasAlternativeFacetPredicate =
@@ -1365,12 +1381,19 @@ const readGlobalSearch = async (
     mimeTypeFacetPromise,
   ]);
 
+  const projectedChatRows = await projectChatSearchCandidates({
+    database,
+    rows: chatRows,
+    query,
+    cursor: searchCursor,
+    limit: fetchLimit,
+  });
   const scoredHits = [
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
     ...caseLawRows.map(mapCaseLawHit),
-    ...chatRows.map(mapChatHit),
+    ...projectedChatRows.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);
 

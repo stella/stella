@@ -95,6 +95,37 @@ describe("corpus reader schema at persistence boundaries", () => {
     }
   });
 
+  test("refuses head matter after body with a typed structural rejection", () => {
+    const report = spyOn(logger, "error");
+    try {
+      const ast = decisionAst();
+      const late = ast.blocks.at(1) ?? expect.unreachable();
+      const invalid = {
+        ...ast,
+        blocks: [
+          ast.blocks.at(0) ?? expect.unreachable(),
+          { ...late, role: "apparatus" },
+        ],
+      };
+      expect(
+        prepareCorpusAst({
+          ast: invalid,
+          source: "synthetic",
+          parserVersion: 1,
+        }),
+      ).toEqual({ type: "text-only", ast: EMPTY_AST });
+      expect(report).toHaveBeenLastCalledWith(
+        "case_law.ingestion.ast_schema_rejected",
+        expect.objectContaining({
+          "error.type": "IngestedAstRejectedError",
+          checks: ["Head matter must precede the decision body"],
+        }),
+      );
+    } finally {
+      report.mockRestore();
+    }
+  });
+
   test("reports validator kinds without rejected document values", () => {
     const report = spyOn(logger, "error");
     try {

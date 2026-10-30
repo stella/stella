@@ -9,6 +9,8 @@ const tokenResponseSchema = v.object({
   access_token: v.pipe(v.string(), v.minLength(1)),
   expires_in: v.pipe(v.number(), v.minValue(1)),
   refresh_token: v.optional(v.pipe(v.string(), v.minLength(1))),
+  /** Present when the grant includes `openid`, which the app always asks for. */
+  id_token: v.optional(v.pipe(v.string(), v.minLength(1))),
   token_type: v.string(),
 });
 

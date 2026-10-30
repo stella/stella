@@ -28,10 +28,6 @@
     "reason": "not a row projection: the replay-batch row type supplies only an internal boolean readmission predicate; replay responses contain classified outcomes, never reservation rows"
   },
   {
-    "file": "apps/api/src/handlers/case-law/matter-links/list.ts",
-    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
-  },
-  {
     "file": "apps/api/src/handlers/case-law/polarity/rule-engine.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

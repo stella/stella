@@ -1,15 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 
 import { createFetchWithTimeout } from "./index";
-
-const waitForAbort = async (signal: AbortSignal): Promise<void> => {
-  if (signal.aborted) {
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    signal.addEventListener("abort", () => resolve(), { once: true });
-  });
-};
 
 describe("createFetchWithTimeout", () => {
   for (const code of [
@@ -131,7 +122,8 @@ describe("createFetchWithTimeout", () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 
-  test("applies the required timeout", async () => {
+  test("clears the total timeout after a bodyless response completes", async () => {
+    jest.useFakeTimers();
     let capturedSignal: AbortSignal | null | undefined;
     const fetchWithTimeout = createFetchWithTimeout(async (_input, init) => {
       capturedSignal = init?.signal;
@@ -142,8 +134,10 @@ describe("createFetchWithTimeout", () => {
     if (!capturedSignal) {
       throw new Error("Missing fetch signal");
     }
-    await waitForAbort(capturedSignal);
+    jest.advanceTimersByTime(1);
 
-    expect(capturedSignal.aborted).toBe(true);
+    expect(capturedSignal.aborted).toBe(false);
+    expect(jest.getTimerCount()).toBe(0);
+    jest.useRealTimers();
   });
 });

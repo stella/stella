@@ -1011,6 +1011,11 @@ export const OUTPUT_RULES = {
             "patches/*",
             "scripts/check-published-exports.ts",
             "scripts/prepare-publish.ts",
+            "scripts/publish-declarations.ts",
+            "scripts/pack-reproducibly.sh",
+            "scripts/check-publish-reproducibility.sh",
+            "scripts/publish-packages.ts",
+            "scripts/generate-npm-release-jobs.ts",
             "scripts/publish-manifest.ts",
             "scripts/published-export-guards.ts",
             "bun.lock",
@@ -1243,6 +1248,10 @@ if (import.meta.main) {
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;
+  writeFileSync(
+    path.join(runnerTemp, "changed-scope.json"),
+    `${JSON.stringify(scope)}\n`,
+  );
   if (Bun.env["GITHUB_OUTPUT"]) {
     await Bun.write(Bun.file(Bun.env["GITHUB_OUTPUT"]), output);
   } else {
