@@ -62,6 +62,16 @@ describe("TruncatedText", () => {
     expect(markup).toContain('data-slot="truncated-text"');
   });
 
+  test("lets the text take every line it needs, still contained", () => {
+    const markup = renderToStaticMarkup(
+      <TruncatedText lines="none">An expanded description</TruncatedText>,
+    );
+
+    expect(markup).toContain("max-w-full");
+    expect(markup).not.toContain("line-clamp");
+    expect(markup).not.toContain(" truncate");
+  });
+
   test("renders through another element", () => {
     const markup = renderToStaticMarkup(
       <TruncatedText render={<p />}>Matter title</TruncatedText>,

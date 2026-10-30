@@ -45,8 +45,14 @@ const TruncatedText = ({
       return;
     }
     const element = ref.current;
-    // A tap focuses the text before it clicks; the popover answers taps.
-    if (element === null || LAST_POINTER_TYPE.get(element) === "touch") {
+    // A tap focuses the text before it clicks; the popover answers taps. A
+    // tooltip around the text already answers the pointer, and two at once
+    // cover each other.
+    if (
+      element === null ||
+      LAST_POINTER_TYPE.get(element) === "touch" ||
+      isInsideTooltipTrigger(element)
+    ) {
       return;
     }
     if (isTextOverflowing(element)) {
@@ -119,8 +125,12 @@ const TruncatedText = ({
 
 type TruncatedTextSurface = "tooltip" | "popover";
 
-/** How many lines the text may take before it is cut. */
-type TruncatedTextLines = 1 | 2 | 3 | 4 | 5 | 6 | 8;
+/**
+ * How many lines the text may take before it is cut; `"none"` lets it take
+ * as many as it needs, for text that is cut only in some states (collapsed,
+ * compact) and shown whole in the others.
+ */
+type TruncatedTextLines = 1 | 2 | 3 | 4 | 5 | 6 | 8 | "none";
 
 type TruncatedTextProps = useRender.ComponentProps<"span"> & {
   /**
@@ -172,6 +182,7 @@ const TRUNCATED_TEXT_LINES_CLASS = {
   5: "line-clamp-5 min-w-0 max-w-full wrap-anywhere",
   6: "line-clamp-6 min-w-0 max-w-full wrap-anywhere",
   8: "line-clamp-8 min-w-0 max-w-full wrap-anywhere",
+  none: "min-w-0 max-w-full",
 } as const satisfies Record<TruncatedTextLines, string>;
 
 /** Whether the element's text is cut by its box, in either direction. */
@@ -192,6 +203,14 @@ function isTextOverflowing(
 
 const CONTROL_SELECTOR =
   "a[href], button, label, summary, [role=button], [role=link], [role=menuitem], [role=option], [role=tab]";
+
+/** Whether a tooltip around the element already opens on its pointer. */
+function isInsideTooltipTrigger(element: HTMLElement): boolean {
+  const parent = element.parentElement;
+  return (
+    parent !== null && parent.closest('[data-slot="tooltip-trigger"]') !== null
+  );
+}
 
 /** Whether a tap on the element already belongs to a control around it. */
 function isInsideControl(element: HTMLElement): boolean {
