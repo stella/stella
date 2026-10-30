@@ -59,3 +59,10 @@ export const CASE_LAW_COVERAGE_FILING_DATE_INDEX = {
   createSql: string;
   introducedBy: OnlineStepIntroduction;
 };
+
+/** The coverage indexes in the order the online phase builds them. */
+export const CASE_LAW_COVERAGE_INDEXES = [
+  CASE_LAW_COVERAGE_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_COURT_INDEX,
+] as const;

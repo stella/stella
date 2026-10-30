@@ -20,9 +20,9 @@ import type { CorpusReadBudgetSeed, ServedCaseLaw } from "./corpus-seed";
 import {
   CASE_LAW_SCENARIOS,
   coverageRefreshWroteSummary,
-  isolateCoverageRefreshMeasurement,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  prepareCoverageRefreshMeasurement,
   seedSitemapReadBudget,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
@@ -105,7 +105,7 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
 > = {
   [SCHEDULER_BACKFILL_IDS.coverage]: {
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
-    prepare: isolateCoverageRefreshMeasurement,
+    prepare: prepareCoverageRefreshMeasurement,
     executed: coverageRefreshWroteSummary,
     scenarios: [
       {
