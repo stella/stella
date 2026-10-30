@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { CalendarCell } from "@stll/ui/calendar";
+import { CalendarCell } from "@stll/ui/calendar-primitives";
 import { PlusIcon, SquareCheckIcon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";

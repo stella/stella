@@ -175,13 +175,13 @@ const createRedemptionFixture = async (
 
 describe("desktop link redemption over HTTP", () => {
   for (const scenario of ["credential", "connected"] as const) {
-    for (const protocol of [null, "3", "4", "invalid", "5"] as const) {
+    for (const protocol of [null, "3", "4", "5", "invalid", "6"] as const) {
       test(`${scenario} redemption requires supported protocol ${String(protocol)}`, async () => {
         const fixture = await createRedemptionFixture(scenario, protocol);
         await using server = fixture.serve();
         const response = await server.fetch(fixture.request);
-        if (protocol === "5") {
-          expect(DESKTOP_ACCOUNT_POLICY.linkProtocol).toBe(5);
+        if (protocol === "6") {
+          expect(DESKTOP_ACCOUNT_POLICY.linkProtocol).toBe(6);
           expect(response.status).toBe(200);
           expect(fixture.grantBodies).toEqual([fixture.body]);
           if (scenario === "credential") {
