@@ -1,7 +1,9 @@
+import { panic } from "better-result";
+
 /**
  * Subset of IANA timezones covering major population centers.
- * Intl.supportedValuesOf("timeZone") returns 400+; this curated
- * list keeps the picker manageable while covering all UTC offsets.
+ * Used for automatic zone detection during sign-in. The searchable
+ * picker offers all runtime-supported zones.
  */
 export const COMMON_TIMEZONES = [
   "Pacific/Midway",
@@ -45,4 +47,7 @@ export const COMMON_TIMEZONES = [
   "Pacific/Auckland",
 ] as const;
 
-export type CommonTimezone = (typeof COMMON_TIMEZONES)[number];
+/** CLDR's country-zone list, supplied by the runtime rather than a second map. */
+export const jurisdictionTimeZones = (countryCode: string): string[] =>
+  new Intl.Locale(`und-${countryCode}`).getTimeZones() ??
+  panic(`Missing time zones for country ${countryCode}`);

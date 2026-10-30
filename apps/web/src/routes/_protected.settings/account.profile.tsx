@@ -70,8 +70,8 @@ import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import { COMMON_TIMEZONES } from "@/lib/timezones";
-import type { CommonTimezone } from "@/lib/timezones";
+import { TimeZonePicker } from "@/lib/time-zone-picker";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
@@ -88,9 +88,18 @@ import {
 
 export const Route = createFileRoute("/_protected/settings/account/profile")({
   loader: async ({ context }) => {
-    // Prime the session query the page suspends on so the fetch starts during
-    // navigation instead of after the component mounts and suspends.
-    await ensureRouteQueryData(context.queryClient, sessionOptions);
+    // Prime both reads in parallel so jurisdiction suggestions do not add a
+    // waterfall after the profile mounts.
+    await Promise.all([
+      ensureRouteQueryData(context.queryClient, sessionOptions),
+      ensureRouteQueryData(
+        context.queryClient,
+        organizationSettingsOptions({
+          organizationId: context.user.activeOrganizationId,
+          userId: context.user.id,
+        }),
+      ),
+    ]);
   },
   staticData: {
     presentation: routePresentation({
@@ -210,11 +219,6 @@ function ProfilePagePending() {
   );
 }
 
-function isCommonTimezone(tz: string): tz is CommonTimezone {
-  const timezones: readonly string[] = COMMON_TIMEZONES;
-  return timezones.includes(tz);
-}
-
 function ProfilePage() {
   const { data: session } = useSuspenseQuery(sessionOptions);
   const user = session?.user;
@@ -240,7 +244,12 @@ function ProfilePageBody() {
     t("settings.account.deleteAccountConfirmationPhrase"),
   );
   const storedTz = session?.user.timezoneId ?? "UTC";
-  const currentTz = isCommonTimezone(storedTz) ? storedTz : "UTC";
+  const { data: organizationSettings } = useSuspenseQuery(
+    organizationSettingsOptions({
+      organizationId: authenticatedUser.activeOrganizationId,
+      userId: authenticatedUser.id,
+    }),
+  );
   const [displayName, setDisplayName] = useState(
     () => session?.user.name ?? "",
   );
@@ -518,28 +527,20 @@ function ProfilePageBody() {
             <Label className="sr-only" htmlFor="timezone-select">
               {t("settings.account.timezone")}
             </Label>
-            <Select
+            <TimeZonePicker
+              id="timezone-select"
+              label={t("settings.account.timezone")}
               disabled={updateTimezone.isPending}
+              jurisdictionCountries={organizationSettings.practiceJurisdictions.map(
+                ({ countryCode }) => countryCode,
+              )}
               onValueChange={(tz) => {
-                if (!tz || tz === storedTz) {
-                  return;
+                if (tz !== storedTz) {
+                  updateTimezone.mutate(tz);
                 }
-
-                updateTimezone.mutate(tz);
               }}
-              value={currentTz}
-            >
-              <SelectTrigger className="w-72" id="timezone-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                {COMMON_TIMEZONES.map((tz) => (
-                  <SelectItem key={tz} value={tz}>
-                    {tz.replace(/_/gu, " ")}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+              value={storedTz}
+            />
           </div>
           <form
             action={async () => {
