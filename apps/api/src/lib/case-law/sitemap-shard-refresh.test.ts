@@ -67,8 +67,8 @@ type RefreshDb = Parameters<typeof refreshCaseLawSitemapShards>[0];
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const removableId = createSafeId<"caseLawDecision">();
-/** One month past the split threshold, so the refresh lists it by bucket. */
-const BULK_MONTH_DECISIONS = SITEMAP_SHARD_SPLIT_THRESHOLD + 100;
+/** A natural month larger than the preceding 5,000-URL ceiling. */
+const BULK_MONTH_DECISIONS = 6000;
 const NEWEST_UPDATE = new Date("2024-07-02T09:30:00.000Z");
 const EXTRA_UNDATED_DECISIONS = 30;
 const LISTING_ONLY_METADATA = {
@@ -150,15 +150,16 @@ beforeAll(async () => {
     // Not a public country: counted, never listed.
     decision({ country: "XAA", decisionDate: "2017-05-05", language: "xx" }),
   ]);
-  await db.insert(caseLawDecisions).values(
-    Array.from({ length: BULK_MONTH_DECISIONS }, (_, index) =>
-      decision({
-        decisionDate: `2024-06-${String((index % 28) + 1).padStart(2, "0")}`,
-        updatedAt:
-          index === 0 ? NEWEST_UPDATE : new Date("2024-07-01T00:00:00.000Z"),
-      }),
-    ),
-  );
+  await db.execute(sql`
+    INSERT INTO case_law_decisions
+      (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
+    SELECT md5('sitemap-bulk-' || i::text)::uuid, ${openSourceId}::uuid,
+      'sitemap-bulk-' || i::text, 'Fixture court', 'CZE', 'cs', 'sitemap-mono-' || i::text,
+      ('2024-06-01'::date + (i % 28)::int),
+      CASE WHEN i = 0 THEN ${NEWEST_UPDATE.toISOString()}::timestamptz ELSE '2024-07-01'::timestamptz END
+    FROM generate_series(0, ${BULK_MONTH_DECISIONS - 1}) AS i
+  `);
+  await client.query("VACUUM ANALYZE case_law_decisions");
 }, propertyTestTimeout(DB_TEST_TIMEOUT_MS)); // timeout: the full schema push runs on an embedded Postgres
 
 afterAll(async () => {
@@ -362,10 +363,9 @@ test(
 test(
   "a refresh lists each published, redistributable month of a public country once",
   async () => {
-    // Three unsplit months, and the split month in its 64 buckets (with this
-    // many decisions, every bucket holds some). XAA is counted, not listed.
+    // Each natural month stays whole below the protocol ceiling. XAA is counted, not listed.
     const { outcome } = await refreshUntilDone(refreshDb);
-    expect(outcome).toMatchObject({ shards: 3 + 64 });
+    expect(outcome).toMatchObject({ shards: 4 });
     expect(await loggedMonths()).toEqual([]);
     expect(await snapshot()).toEqual(await fullRecount());
 
@@ -373,22 +373,20 @@ test(
     const unsplit = shards.filter((shard) => shard.bucket === "all");
     expect(
       unsplit.map(({ country, year, month }) => `${country}/${year}/${month}`),
-    ).toEqual(["cze/undated/00", "cze/2021/01", "cze/2020/03"]);
+    ).toEqual(["cze/undated/00", "cze/2024/06", "cze/2021/01", "cze/2020/03"]);
     expect(unsplit.every((shard) => shard.lastmod !== null)).toBe(true);
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
-  "a month past the split threshold is listed by bucket, and its buckets hold every decision",
+  "a natural month larger than the preceding cap serves every decision once",
   async () => {
     const buckets = (await listedShards()).filter(
       (shard) => shard.year === "2024" && shard.month === "06",
     );
-    expect(buckets.length).toBeGreaterThan(1);
-    expect(buckets.every((shard) => /^[0-9]{2}$/u.test(shard.bucket))).toBe(
-      true,
-    );
+    expect(buckets).toHaveLength(1);
+    expect(buckets.at(0)?.bucket).toBe(SITEMAP_ALL_BUCKET);
     expect(buckets.map((shard) => shard.lastmod)).toContain(
       NEWEST_UPDATE.toISOString().slice(0, 10),
     );
@@ -409,7 +407,7 @@ test(
 );
 
 test(
-  "a split month shrinks back to one row below the threshold, and splits again above it",
+  "moving decisions between months keeps natural-month counts consistent",
   async () => {
     const june = and(
       eq(caseLawDecisions.country, "CZE"),
@@ -447,7 +445,7 @@ test(
       (await snapshot()).filter(
         (shard) => shard.year === "2024" && shard.month === "06",
       ).length,
-    ).toBeGreaterThan(1);
+    ).toBe(1);
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
@@ -1336,4 +1334,81 @@ test(
     );
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS * 3), // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres
+);
+
+// timeout: seeds language alternates and reads their weighted protocol boundary in embedded PostgreSQL.
+test(
+  "language alternates retain the 5000 document budget while monolingual group keys stay cheap",
+  async () => {
+    const multilingualLimit = 5000;
+    const seedGroups = async (start: number, end: number) => {
+      await db.execute(sql`
+        INSERT INTO case_law_decisions
+          (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
+        SELECT md5('sitemap-weighted-' || i::text || language)::uuid, ${openSourceId}::uuid,
+          'sitemap-weighted-' || i::text || '-' || language, 'Fixture court', 'CZE', language,
+          'sitemap-weighted-' || i::text, '2025-01-15'::date, '2025-02-01'::timestamptz
+        FROM generate_series(${start}::int, ${end}::int) AS i CROSS JOIN (VALUES ('cs'), ('en')) AS languages(language)
+      `);
+    };
+    await seedGroups(1, multilingualLimit);
+    const query = {
+      country: "cze",
+      year: "2025",
+      month: "01",
+      bucket: SITEMAP_ALL_BUCKET,
+    };
+    await refreshUntilDone(refreshDb);
+    expect(
+      (await listedShards()).filter(
+        ({ year, month }) => year === "2025" && month === "01",
+      ),
+    ).toMatchObject([{ bucket: SITEMAP_ALL_BUCKET }]);
+    const full = await listSitemapShardDecisionsHandler(query, caseLawDb);
+    if (!("items" in full)) {
+      panic("Expected the weighted ceiling to remain readable");
+    }
+    expect(full.items).toHaveLength(multilingualLimit);
+    expect(
+      full.items.every(
+        ({ languageAlternates }) => languageAlternates.length === 2,
+      ),
+    ).toBe(true);
+    await seedGroups(multilingualLimit + 1, multilingualLimit + 1);
+    const oversized = await listSitemapShardDecisionsHandler(query, caseLawDb);
+    expect("items" in oversized).toBe(false);
+    expect(oversized).toMatchObject({ code: 500 });
+    await refreshUntilDone(refreshDb);
+    const split = (await listedShards()).filter(
+      ({ year, month }) => year === "2025" && month === "01",
+    );
+    expect(split).toHaveLength(64);
+    expect(split.every(({ bucket }) => bucket !== SITEMAP_ALL_BUCKET)).toBe(
+      true,
+    );
+    await db.execute(sql`
+      UPDATE case_law_decisions SET language = 'cs'
+      WHERE case_number LIKE 'sitemap-weighted-%' AND language = 'en'
+    `);
+    await refreshUntilDone(refreshDb);
+    expect(
+      (await listedShards()).filter(
+        ({ year, month }) => year === "2025" && month === "01",
+      ),
+    ).toMatchObject([{ bucket: SITEMAP_ALL_BUCKET }]);
+    const monolingual = await listSitemapShardDecisionsHandler(
+      query,
+      caseLawDb,
+    );
+    if (!("items" in monolingual)) {
+      panic("Expected language-only changes to release the hreflang budget");
+    }
+    expect(monolingual.items).toHaveLength(multilingualLimit + 1);
+    expect(
+      monolingual.items.every(
+        ({ languageAlternates }) => languageAlternates.length === 0,
+      ),
+    ).toBe(true);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
 );

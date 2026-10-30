@@ -45,6 +45,7 @@ export {
 } from "@/api/lib/rate-limit/budget-config";
 
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
+const SITEMAP_PROTOCOL_URL_LIMIT = 50_000;
 
 export const LIMITS = {
   matterNumberPatternMinLength: 1,
@@ -649,9 +650,11 @@ export const LIMITS = {
    *  malformed/over-merged group key cannot load an unbounded set. */
   caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
-  caseLawSitemapUrlLimit: 50_000,
-  /** Conservative per-shard case-law sitemap cap; leaves room for hreflang alternates under the XML byte limit. */
-  caseLawSitemapShardUrlLimit: 5000,
+  caseLawSitemapUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** URL ceiling; XML serialization separately enforces the byte ceiling. */
+  caseLawSitemapShardUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** Hreflang groups reserve room for their language alternates. */
+  caseLawSitemapMultilingualShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawSourceFacetCountCap: 1000,
@@ -1036,10 +1039,8 @@ export const getPublicCorpusLimits = (
         global: aggregateGlobal,
       },
       sitemap: {
-        address: addressBudget({
-          configuredMax: 10,
-          globalMax: sitemapGlobal.max,
-        }),
+        // Shared crawler origins keep an address quota independent of fleet capacity.
+        address: { duration: 60_000, max: 600 },
         global: sitemapGlobal,
       },
       browse: { address: API_RATE_LIMITS.api },

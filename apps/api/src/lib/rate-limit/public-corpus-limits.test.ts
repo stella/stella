@@ -68,7 +68,7 @@ describe("public corpus capacity configuration", () => {
           global: { duration: 60_000, max: 120, localMax: 60 },
         },
         sitemap: {
-          address: { duration: 60_000, max: 10 },
+          address: { duration: 60_000, max: 600 },
           global: { duration: 60_000, max: 24, localMax: 12 },
         },
         browse: { address: API_RATE_LIMITS.api },
@@ -182,7 +182,7 @@ describe("public corpus capacity configuration", () => {
     }
   });
 
-  test("every budgeted class reserves at least half its fleet budget for other addresses", () => {
+  test("interactive classes reserve at least half their fleet budget for other addresses", () => {
     for (const rootPool of [10, 20]) {
       for (const override of [undefined, 2, 3, 7, 31, 100]) {
         const limits = getPublicCorpusLimits({
@@ -193,7 +193,10 @@ describe("public corpus capacity configuration", () => {
           PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: override,
           PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: override,
         });
-        for (const policy of Object.values(limits.classes)) {
+        for (const policy of [
+          limits.classes.search,
+          limits.classes.aggregate,
+        ]) {
           if (!("global" in policy)) {
             continue;
           }
