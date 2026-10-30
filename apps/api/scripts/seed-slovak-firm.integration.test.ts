@@ -1,6 +1,6 @@
 import { panic } from "better-result";
-import { afterEach, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -33,7 +33,11 @@ import {
   SLOVAK_SEED_PEOPLE,
 } from "./seed-slovak-firm.data";
 
-afterEach(releaseRlsFixture);
+let rlsFixture: Awaited<ReturnType<typeof getRlsFixture>>;
+beforeAll(async () => {
+  rlsFixture = await getRlsFixture();
+});
+afterAll(releaseRlsFixture);
 
 type TransitionContext = Parameters<typeof transitionInvoice.handler>[0];
 
@@ -83,7 +87,7 @@ const createTransitionContext = ({
 };
 
 test("Slovak seeded documents pass actual finalize, send and partial-payment operations", async () => {
-  const { testDb, ids } = await getRlsFixture();
+  const { testDb, ids } = rlsFixture;
   const now = new Date("2026-10-30T10:15:00Z");
   const fixture = buildSlovakFirmSeed(now);
   await testDb
@@ -185,10 +189,31 @@ test("Slovak seeded documents pass actual finalize, send and partial-payment ope
     expect(paidInvoice?.status).toBe("sent");
     expect(paidInvoice?.paidAt).toBeNull();
   }
+  await testDb.delete(invoiceLines).where(
+    inArray(
+      invoiceLines.id,
+      fixture.lines.map(({ id }) => id),
+    ),
+  );
+  await testDb.delete(timeEntries).where(
+    inArray(
+      timeEntries.id,
+      fixture.time.map(({ id }) => id),
+    ),
+  );
+  await testDb.delete(invoices).where(
+    inArray(
+      invoices.id,
+      fixture.invoiceRows.map(({ id }) => id),
+    ),
+  );
+  await testDb
+    .delete(sellerProfiles)
+    .where(eq(sellerProfiles.id, fixture.seller.id));
 }, 120_000); // timeout: measured PGlite schema setup and billing transitions take up to 9 seconds per test.
 
 test("Slovak persistence converges when the seed is replayed", async () => {
-  const { testDb, ids } = await getRlsFixture();
+  const { testDb, ids } = rlsFixture;
   await testDb
     .update(user)
     .set({ emailVerified: true })
@@ -270,11 +295,11 @@ test("Slovak persistence converges when the seed is replayed", async () => {
   if (
     submitted === undefined ||
     untouched === undefined ||
-    originalIssued === undefined ||
+    originalIssued?.invoiceNumber === undefined ||
     originalIssued.invoiceNumber === null ||
     originalIssued.finalizedAt === null
   ) {
-    return panic(
+    panic(
       "Slovak replay fixture requires submitted time, untouched draft time and an issued invoice",
     );
   }
@@ -286,8 +311,11 @@ test("Slovak persistence converges when the seed is replayed", async () => {
   const discardedInvoice = later.invoiceRows.find(
     ({ status }) => status === "sent",
   );
-  if (discardedInvoice === undefined || discardedInvoice.finalizedAt === null) {
-    return panic("Slovak replay fixture requires an issued invoice");
+  if (
+    discardedInvoice?.finalizedAt === undefined ||
+    discardedInvoice.finalizedAt === null
+  ) {
+    panic("Slovak replay fixture requires an issued invoice");
   }
   expect(discardedInvoice.invoiceNumber).not.toBe(originalIssued.invoiceNumber);
   expect(later.today).not.toBe(untouched.dateWorked);
@@ -331,14 +359,8 @@ test("Slovak persistence converges when the seed is replayed", async () => {
   );
   const draft = fixture.invoiceRows.find(({ status }) => status === "draft");
   expect(draft).toBeDefined();
-  if (
-    draft === undefined ||
-    draft.workspaceId === undefined ||
-    draft.workspaceId === null
-  ) {
-    return panic(
-      "Slovak seed must contain a draft attached to its original matter",
-    );
+  if (draft?.workspaceId === undefined) {
+    panic("Slovak seed must contain a draft attached to its original matter");
   }
   const before = await testDb.query.invoices.findFirst({
     where: { id: { eq: draft.id } },
