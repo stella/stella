@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * What rozhodnuti.nsoud.cz served as a Supreme Court decision's text.
  *

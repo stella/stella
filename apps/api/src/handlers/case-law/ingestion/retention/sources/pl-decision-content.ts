@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * The publisher text of one Polish decision document, as the shared Polish
  * decision reader receives it: an HTML document or fragment, or plain text

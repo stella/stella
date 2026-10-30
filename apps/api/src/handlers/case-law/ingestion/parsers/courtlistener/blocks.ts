@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * Block machinery shared by the CourtListener text formats: a builder that

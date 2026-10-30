@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * Test support for recorded opinion fixtures and a text-conservation oracle.
  * HTML is read by a lexical source walk; fixture tests declare excluded source

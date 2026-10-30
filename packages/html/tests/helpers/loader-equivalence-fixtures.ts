@@ -1,9 +1,10 @@
 import { Glob } from "bun";
 import { fileURLToPath } from "node:url";
 
-import { EMAIL_PREVIEW_DOM_OPTIONS } from "@stll/html/email";
-import type { CheerioOptions } from "@stll/html/selection";
 import { sha256Hex } from "@stll/sha256/bun";
+
+import { EMAIL_PREVIEW_DOM_OPTIONS } from "../../src/email";
+import type { CheerioOptions } from "../../src/selection";
 
 export const loaderModes = [
   { name: "document", options: undefined, document: true },
@@ -29,7 +30,9 @@ export const loaderModes = [
 }[];
 
 export const readLoaderFixtures = async () => {
-  const root = fileURLToPath(new URL("../../../", import.meta.url));
+  const root = fileURLToPath(
+    new URL("../../../../apps/api/src/", import.meta.url),
+  );
   const fixtures = [
     {
       path: "synthetic",
@@ -37,11 +40,11 @@ export const readLoaderFixtures = async () => {
     },
   ];
   const paths = Array.from(
-    new Glob("src/**/*.{html,xml}").scanSync({ cwd: root }),
+    new Glob("**/*.{html,xml}").scanSync({ cwd: root }),
   ).toSorted();
   for (const path of paths) {
     const html = await Bun.file(root + path).text();
-    fixtures.push({ path, html });
+    fixtures.push({ path: `src/${path}`, html });
   }
   return fixtures;
 };

@@ -1,9 +1,11 @@
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+import { panic } from "better-result";
 import { load as loadSlim } from "cheerio/slim";
-import type { CheerioAPI, CheerioOptions } from "cheerio/slim";
 import { isDocument } from "domhandler";
 import { parse, parseFragment, serializeOuter } from "parse5";
 import { adapter } from "parse5-htmlparser2-tree-adapter";
+
+import type { CheerioAPI, CheerioOptions } from "./selection";
 
 export const htmlTreeAdapter = adapter;
 
@@ -13,7 +15,7 @@ export const load = (
   options?: CheerioOptions | null,
   document = true,
 ) => {
-  if (options?.xml || options?.xmlMode) {
+  if (usesXmlParser(options)) {
     return loadSlim(content, options, document);
   }
 
@@ -26,8 +28,14 @@ export const load = (
     ? parse(content, parseOptions)
     : parseFragment(content, parseOptions);
   const $ = loadSlim(root, options, document);
-  const slimParse = $.fn._parse;
-  const slimRender = $.fn._render;
+  // Hooks retain their original class closure and the calling selection as receiver.
+  const methods = Object.getOwnPropertyDescriptors($.fn);
+  const slimParse =
+    methods._parse.value ?? panic("Cheerio must own its parse hook");
+  const slimRender =
+    methods._render.value ?? panic("Cheerio must own its render hook");
+  const slimMake =
+    methods._make.value ?? panic("Cheerio must own its selection hook");
 
   // Cheerio uses these hooks for inserted markup and selection serialization too.
   $.fn._parse = function (markup, opts, isDoc, context) {
@@ -53,21 +61,15 @@ export const load = (
       .map((node) => serializeOuter(node, { treeAdapter: adapter }))
       .join("");
   };
-  $.fn._make = new Proxy($.fn._make, {
-    apply(
-      target,
-      receiver: unknown,
-      [selector, context]: Parameters<typeof $.fn._make>,
-    ) {
-      return target.call(
-        receiver,
-        isMarkup(selector)
-          ? parseFragment(selector, parseOptions).children
-          : selector,
-        isMarkup(context) ? parseFragment(context, parseOptions) : context,
-      );
-    },
-  });
+  $.fn._make = function (selector, context) {
+    return slimMake.call(
+      this,
+      isMarkup(selector)
+        ? parseFragment(selector, parseOptions).children
+        : selector,
+      isMarkup(context) ? parseFragment(context, parseOptions) : context,
+    );
+  };
 
   // Slim's initializer parses markup separately from the instance hooks.
   return new Proxy($, {
@@ -76,7 +78,7 @@ export const load = (
       _thisArg,
       [selector, context, scope, opts]: Parameters<CheerioAPI>,
     ) {
-      if (opts?.xml || opts?.xmlMode) {
+      if (usesXmlParser(opts)) {
         return target(selector, context, scope, opts);
       }
       const parserOptions = { ...parseOptions, ...opts };
@@ -104,3 +106,8 @@ const isMarkup = (value: unknown): value is string => {
     value.includes(">", start + 2)
   );
 };
+
+const usesXmlParser = (options: CheerioOptions | null | undefined) =>
+  options?.xml === true ||
+  typeof options?.xml === "object" ||
+  options?.xmlMode === true;

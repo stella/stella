@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * What a CourtListener text parser returns, and the bounds every parser of
  * one cluster shares.

@@ -11,7 +11,7 @@ HTML through the per-document Cheerio hooks. XML options retain slim's parser
 and serializer.
 
 Fixture equivalence goldens live beside the API's HTML fixtures test in
-`apps/api/src/lib/html/loader-equivalence.test.ts`. They contain SHA-256 hashes
+`packages/html/src/loader-equivalence.test.ts`. They contain SHA-256 hashes
 of the original Cheerio 1.2.0 HTML, XML, text, and post-insertion HTML output,
 plus input hashes, across every enrolled input and parser mode.
 

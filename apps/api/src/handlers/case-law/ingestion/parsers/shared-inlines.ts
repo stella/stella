@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
 // parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.

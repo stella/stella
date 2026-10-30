@@ -190,6 +190,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "chat-transcripts": ["packages/scripts/src/child-exit-status.ts"],
   "cli-registry": [
+    "packages/html/src/*",
     "apps/api/src/lib/idempotency/*",
     "apps/api/src/agent-auth/credential-storage.ts",
     "apps/api/src/agent-auth/credentials.ts",
@@ -530,6 +531,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "failure-tags": ["scripts/generated-artifacts.ts"],
   "mcp-app-bundles": [
+    "packages/html/src/*",
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/*",
     "packages/text-normalize/src/*",

@@ -1081,12 +1081,14 @@
       "name": "@stll/html",
       "version": "0.0.0",
       "dependencies": {
+        "better-result": "catalog:",
         "cheerio": "^1.2.0",
         "domhandler": "^6.0.1",
         "parse5": "catalog:",
         "parse5-htmlparser2-tree-adapter": "catalog:",
       },
       "devDependencies": {
+        "@stll/sha256": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },

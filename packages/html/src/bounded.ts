@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { isText } from "domhandler";
 import { adapter } from "parse5-htmlparser2-tree-adapter";
 

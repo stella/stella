@@ -1385,7 +1385,7 @@ describe("replaying a stored envelope", () => {
       ).arrayBuffer(),
     );
     expect(legacySha256Hex(bytes)).not.toBe(legacySha256Hex(secondBytes));
-    const $ = cheerio.load(await pageOf(WITH_RULINGS));
+    const $ = load(await pageOf(WITH_RULINGS));
     const decisionCell = $("tr")
       .filter(
         (_, element) => $(element).find("b").first().text() === "Decyzja:",

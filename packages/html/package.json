@@ -21,10 +21,12 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/html"
   },
   "devDependencies": {
+    "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   },
   "dependencies": {
+    "better-result": "catalog:",
     "cheerio": "^1.2.0",
     "domhandler": "^6.0.1",
     "parse5": "catalog:",
