@@ -201,6 +201,49 @@ const ownedIconRestrictions = (
   });
 
 const RESTRICTED_IMPORT_RULES = {
+  "require-oauth-grant-admission": [
+    {
+      messageId: "requireOwner",
+      message:
+        "Raw OAuth resource verifiers belong to mcp/auth.ts; use verifyOAuthToken from mcp/auth for admitted token results.",
+      modules: ["@better-auth/oauth-provider/resource-client"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/api/src/mcp/auth.ts"],
+    },
+    {
+      messageId: "requireAdmittedVerifier",
+      message:
+        "The raw OAuth provider verifier is private to mcp/auth.ts; import verifyOAuthToken, which couples verification with grant admission.",
+      modules: ["apps/api/src/mcp/auth"],
+      restriction: {
+        type: "exports",
+        names: new Set(["getVerifyBearerToken"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [],
+    },
+    {
+      messageId: "requireJwtOwner",
+      message:
+        "OAuth access tokens must use the admitted verifier. Raw JWT verification is confined to the existing identity-assertion owners.",
+      modules: ["jose"],
+      restriction: {
+        type: "exports",
+        names: new Set(["jwtVerify"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/api/src/agent-auth/id-jag.ts",
+        "apps/api/src/lib/agent-auth-idjag.ts",
+        "apps/api/src/lib/business-registries/desktop/proof.ts",
+        "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts",
+      ],
+    },
+  ],
   // One icon module decides what each glyph means (a skill, an AI action),
   // so a call site cannot pick a lucide glyph that means something else
   // elsewhere. See packages/ui/src/icons.ts for how to add one.

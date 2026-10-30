@@ -67,11 +67,11 @@ afterAll(async () => {
  *    owner's membership (4).
  *  - A personal API key additionally reads the organization's personal key
  *    policy (5).
+ *  - An OAuth client reads revocation and registration together (1).
  *
  * Context, for every credential: the membership read, which also carries the
  * feature-access facts (1), then one scoped transaction, a `set_config` plus
- * the authorized workspaces (2). An OAuth client token also looks up its
- * agent registration (1).
+ * the authorized workspaces (2).
  *
  * The organization's reachable business registries are not part of the
  * context: the first projection in a request that offers the registry tool
@@ -80,7 +80,7 @@ afterAll(async () => {
  */
 const CONTEXT_TRANSACTIONS = 1;
 const CONTEXT_STATEMENTS = 1 + CONTEXT_TRANSACTIONS * 2;
-const AGENT_REGISTRATION_READ = 1;
+const OAUTH_ADMISSION_READ = 1;
 const MACHINE_KEY_STATEMENTS = 4;
 const PERSONAL_POLICY_READ = 1;
 const REGISTRY_LOAD = { statements: 3, transactions: 1 } as const;
@@ -95,8 +95,8 @@ type QueryPlan = {
 
 const QUERY_PLAN = {
   oauth_client: {
-    authenticate: 0,
-    context: CONTEXT_STATEMENTS + AGENT_REGISTRATION_READ,
+    authenticate: OAUTH_ADMISSION_READ,
+    context: CONTEXT_STATEMENTS,
     contextTransactions: CONTEXT_TRANSACTIONS,
   },
   delegated_user: {

@@ -150,6 +150,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "oauth_client_assertion",
   "oauth_client_resource",
   "oauth_consent",
+  "oauth_grant_revocations",
   "oauth_refresh_token",
   "oauth_resource",
   "office_file_evidence",

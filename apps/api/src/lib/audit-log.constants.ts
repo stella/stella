@@ -112,6 +112,7 @@ export const ACCOUNT_AUDIT_EVENT_TYPES = [
   "account.data_export.downloaded",
   "account.data_export.expired",
   "account.sign_in_method.disconnected",
+  "account.oauth_connection.disconnected",
 ] as const;
 
 export type AccountAuditEventType = (typeof ACCOUNT_AUDIT_EVENT_TYPES)[number];

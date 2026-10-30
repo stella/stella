@@ -19,7 +19,11 @@ describe("account export consent", () => {
   });
 
   test("organization grants and opposite access grants convey no account consent", () => {
-    const credential = { type: "oauth_client", clientId: "client" } as const;
+    const credential = {
+      type: "oauth_client",
+      clientId: "client",
+      issuedAt: 1_700_000_000,
+    } as const;
     const organizationScopes = [
       "stella:read",
       "stella:admin_read",

@@ -38,6 +38,17 @@ const PUBLIC_URL = "https://stella-api.example.com";
 const testState = createTestState({ file: import.meta.path, config: {} });
 testState.setEnv("PUBLIC_URL", PUBLIC_URL);
 
+const { eq, and } = await import("drizzle-orm");
+const { decodeJwt } = await import("jose");
+const { oauthConsent } = await import("@/api/db/auth-schema");
+const { resolveRequestAuth } = await import("@/api/lib/auth");
+const { authenticateMcpRequest } = await import("@/api/mcp/auth");
+const { authenticateLegalResolveToken } =
+  await import("@/api/handlers/legal-resolve/authentication");
+const { resolveMachineApiKeySession } = await import("@/api/mcp/api-key-auth");
+const { getMcpResourceUrl } = await import("@/api/mcp/constants");
+const { memberSessionStreamBinding, sseResponse, sweepBoundStreams } =
+  await import("@/api/lib/sse");
 const { env } = await import("@/api/env");
 const { getAuth } = await import("@/api/lib/auth");
 const { apiApp } = await import("@/api/server");
@@ -414,6 +425,118 @@ describe("stella mobile client document", () => {
       clientIdHost: "stella-api.example.com",
       client: { type: "verified", brand: "stella_ios" },
     });
+  });
+
+  test("disconnecting the app ends REST access and its open event stream", async () => {
+    const browser = await signInWithOrganization(
+      "mobile-disconnect@example.test",
+    );
+    const signedIn = await mobileSignIn(browser);
+    const token = signedIn.access.token;
+    const resolve = async (accessToken: string) =>
+      await resolveRequestAuth({
+        request: new Request(`${SERVER_URL}/v1/workspaces`, {
+          headers: bearer(accessToken),
+        }),
+        route: "/v1/workspaces",
+        params: {},
+        query: {},
+        server: null,
+        set: { headers: {} },
+      });
+    const admitted = await resolve(token);
+    if (!admitted.ok) {
+      expect.unreachable("The app must authenticate before disconnect");
+    }
+    let cancelled = false;
+    const source = new ReadableStream<Uint8Array>({
+      cancel: () => {
+        cancelled = true;
+      },
+    });
+    const response = sseResponse(
+      source,
+      memberSessionStreamBinding(admitted.value),
+    );
+    const reader =
+      response.body?.getReader() ?? expect.unreachable("The stream has a body");
+    await sweepBoundStreams(async () => new Set<string>());
+    expect(cancelled).toBe(false);
+    const connection = (
+      await rootDb
+        .select({ id: oauthConsent.id })
+        .from(oauthConsent)
+        .where(
+          and(
+            eq(oauthConsent.clientId, MOBILE_CLIENT_ID),
+            eq(oauthConsent.userId, browser.userId),
+            eq(oauthConsent.referenceId, browser.organizationId),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (!connection) {
+      expect.unreachable("The app must have a consent");
+    }
+    const disconnected = await serveInProcess(
+      new URL(`/v1/me/oauth-connections/${connection.id}`, SERVER_URL),
+      { method: "DELETE", headers: { cookie: browser.cookieHeader() } },
+    );
+    expect(disconnected.status).toBe(200);
+    const refused = await serveInProcess(
+      new URL("/v1/workspaces", SERVER_URL),
+      { headers: bearer(token) },
+    );
+    expect(refused.status).toBe(401);
+    await sweepBoundStreams(async () => new Set<string>());
+    expect(cancelled).toBe(true);
+    expect(await reader.read()).toMatchObject({ done: true });
+  });
+
+  test("organization-less user grants open no resource or event stream", async () => {
+    const browser = await signInWithOrganization("mobile-scope@example.test");
+    const signedIn = await mobileSignIn(browser);
+    const { org_id: _organizationId, ...claims } = decodeJwt(
+      signedIn.access.token,
+    );
+    const sign = async (audience: string) =>
+      (
+        await getAuth().api.signJWT({
+          body: { payload: { ...claims, aud: audience } },
+        })
+      ).token;
+    const mcpToken = await sign(getMcpResourceUrl());
+    expect(
+      (
+        await authenticateMcpRequest(mcpToken, {
+          resolveApiKeySession: resolveMachineApiKeySession,
+        })
+      ).isErr(),
+    ).toBe(true);
+    expect(
+      (
+        await authenticateLegalResolveToken(mcpToken, { mode: "default" })
+      ).isErr(),
+    ).toBe(true);
+    const apiToken = await sign(apiOAuthResourceUrl(SERVER_URL));
+    expect(
+      (
+        await serveInProcess(new URL("/v1/workspaces", SERVER_URL), {
+          headers: bearer(apiToken),
+        })
+      ).status,
+    ).toBe(401);
+    const streamAdmission = await resolveRequestAuth({
+      request: new Request(`${SERVER_URL}/v1/workspaces`, {
+        headers: bearer(apiToken),
+      }),
+      route: "/v1/workspaces",
+      params: {},
+      query: {},
+      server: null,
+      set: { headers: {} },
+    });
+    expect(streamAdmission.ok).toBe(false);
   });
 
   test("the app's token opens no route it is not listed for, and no MCP audience", async () => {

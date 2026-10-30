@@ -431,4 +431,6 @@ an autofix entry names an eligible generator in `scripts/generated-files.ts`.
 
 - [`no-ad-hoc-chat-link`](./no-ad-hoc-chat-link.ts) (`no-ad-hoc-chat-link`): chat content renderers use `ChatLink` from `@stll/chat/link` for external anchors and delegate markdown through citation classification. Rejects raw external/dynamic anchors and browser favicon URLs; shared owner, same-document navigation, internal legal labels and file attachment controls retain their contracts. Chat settings and matter navigation are outside content scope.
 
+- [`require-oauth-grant-admission`](./require-oauth-grant-admission.ts) (`require-oauth-grant-admission`): confines OAuth resource verifier acquisition to the MCP authentication owner, including aliased, namespace and dynamic imports; token admission remains in the shared grant-admission operation.
+
 - [`no-parser-inline-flatten`](./no-parser-inline-flatten.ts) (`no-parser-inline-flatten`): rejects leaf-text reads in parser helpers with imported `Inline[]` parameters and declared text returns; delegate to the legal-ast projection owner so numeric superscript indices retain their boundary. Raw renderer offsets use `plainTextOf`. Inferred returns and local type aliases are outside this syntactic guard.

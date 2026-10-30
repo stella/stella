@@ -535,6 +535,7 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    "oauth_grant_revocations",
     // Root-owned OAuth state denies all app-role access.
     "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
@@ -1542,6 +1543,7 @@ describe("policy coverage", () => {
       "jwks",
       "oauth_access_token",
       "oauth_client",
+      "oauth_grant_revocations",
       "service_oauth_clients",
       "mcp_web_handoff",
       "oauth_consent",

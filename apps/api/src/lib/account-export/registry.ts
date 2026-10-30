@@ -292,6 +292,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  oauth_grant_revocations: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   oauth_refresh_token: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,

@@ -13,8 +13,7 @@
  * MCP audience therefore never verifies here, and a token minted for the API
  * never verifies on MCP.
  *
- * This module imports no MCP or session code, since `lib/auth.ts` resolves it
- * and the MCP modules import `lib/auth.ts`.
+ * The lazy provider verifier is shared with the MCP resource boundary.
  */
 
 import { Result, TaggedError } from "better-result";
@@ -28,16 +27,17 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import type { AdmittedOAuthCredential } from "@/api/lib/auth/oauth-grant-admission";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
-import { isTokenRejectionError } from "@/api/lib/auth/token-verification-errors";
 import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { getApiOAuthResourceIdentifier } from "@/api/lib/oauth-resource-policy";
-import { getVerifyBearerToken } from "@/api/mcp/auth";
+import { verifyOAuthToken } from "@/api/mcp/auth";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
+import { McpAuthenticationError } from "@/api/mcp/errors";
 
 /**
  * Every REST route an API access token may open, by route pattern,
@@ -222,6 +222,7 @@ export class ApiAccessTokenError extends TaggedError("ApiAccessTokenError")<{
 }
 
 export type ApiAccessTokenSession = {
+  readonly credential: AdmittedOAuthCredential;
   readonly userId: string;
   readonly organizationId: string;
   /** The membership the token was issued under; a later membership does not inherit it. */
@@ -265,7 +266,7 @@ const apiAccessTokenClaimsSchema = v.looseObject({
 
 const readClaims = (
   payload: JWTPayload,
-): Result<ApiAccessTokenSession, ApiAccessTokenError> => {
+): Result<Omit<ApiAccessTokenSession, "credential">, ApiAccessTokenError> => {
   if (payload[SERVICE_CLIENT_PRINCIPAL_CLAIM] === SERVICE_CLIENT_PRINCIPAL) {
     return Result.err(
       new ApiAccessTokenError({
@@ -300,42 +301,57 @@ export const authenticateApiAccessToken = async (
   {
     reviewAccount,
     verifyToken,
+    admissionOptions,
   }: {
     readonly reviewAccount: Pick<ReviewAccountConfig, "organizationId">;
     readonly verifyToken?: VerifyBearerToken | undefined;
+    readonly admissionOptions?: Parameters<
+      typeof verifyOAuthToken
+    >[1]["admissionOptions"];
   },
 ): Promise<Result<ApiAccessTokenSession, ApiAccessTokenError>> => {
-  const verify = verifyToken ?? getVerifyBearerToken();
-  const payload = await Result.tryPromise({
-    try: async () =>
-      await verify(token, {
-        jwksUrl: getAuthEndpointUrl("jwks"),
-        verifyOptions: {
-          audience: getApiOAuthResourceIdentifier(),
-          issuer: getAuthIssuerUrl(),
-        },
-      }),
-    catch: (cause) =>
-      isTokenRejectionError(cause)
-        ? new ApiAccessTokenError({
-            message: "Invalid or expired token",
-            reason: "rejected",
-            cause,
-          })
-        : new ApiAccessTokenError({
-            message: "Token verification is temporarily unavailable",
-            reason: "unavailable",
-            cause,
-          }),
+  const verified = await verifyOAuthToken(token, {
+    verificationOptions: {
+      jwksUrl: getAuthEndpointUrl("jwks"),
+      verifyOptions: {
+        audience: getApiOAuthResourceIdentifier(),
+        issuer: getAuthIssuerUrl(),
+      },
+    },
+    verifyToken,
+    admissionOptions,
   });
-  return payload
-    .andThen(readClaims)
-    .map((session) =>
-      narrowReviewOrganizationScopes(
-        { ...session, scopes: [...session.scopes] },
-        reviewAccount,
-      ),
+  if (verified.isErr()) {
+    return Result.err(
+      new ApiAccessTokenError({
+        message: verified.error.message,
+        reason:
+          verified.error instanceof McpAuthenticationError
+            ? "rejected"
+            : "unavailable",
+        cause: verified.error,
+      }),
     );
+  }
+  if (
+    verified.value.type !== "user" ||
+    verified.value.session.credential?.type !== "oauth_client"
+  ) {
+    return Result.err(
+      new ApiAccessTokenError({
+        message: "A user token is required",
+        reason: "rejected",
+      }),
+    );
+  }
+  const credential = verified.value.session.credential;
+  return readClaims(verified.value.payload).map((session) => ({
+    ...narrowReviewOrganizationScopes(
+      { ...session, scopes: [...session.scopes] },
+      reviewAccount,
+    ),
+    credential,
+  }));
 };
 
 export type ApiRouteAdmission =

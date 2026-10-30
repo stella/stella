@@ -1854,6 +1854,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/require-oauth-grant-admission.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
@@ -2103,6 +2104,16 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/require-oauth-grant-admission.fixture.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "require-oauth-grant-admission/require-oauth-grant-admission": "error",
+      },
+    },
     {
       // Page-level narrative copy owns a readable measure. Reusable component
       // internals and task-shaped surfaces are outside this narrow enrolment.

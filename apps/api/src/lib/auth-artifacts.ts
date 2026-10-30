@@ -432,11 +432,9 @@ type RevokeOAuthClientAuthArtifactsOptions = {
  * rows: disconnecting an OAuth app ends that app's access, not the
  * user's own web sessions.
  *
- * Access tokens are verified statelessly (JWT via JWKS), so an already
- * issued token keeps working until its expiry (15 minutes, see
- * `ACCESS_TOKEN_EXPIRES_IN`); deleting the refresh token guarantees it
- * cannot be renewed. Checking the DB on every MCP request to close that
- * window was deliberately rejected as a hot-path cost.
+ * Access tokens are verified as JWTs; the disconnect caller also records the
+ * grant revocation that the existing MCP client-registration read checks.
+ * Deleting the refresh token guarantees the grant cannot be renewed.
  */
 export const revokeOAuthClientAuthArtifacts = async (
   tx: Transaction,

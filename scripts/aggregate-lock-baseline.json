@@ -3546,12 +3546,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/notifications.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/oauth-connections.ts",
-    "fingerprint": "744b3e4b2d3bc4385fbfb13548b1d0f816179b492d141d72557d51d03e61ec30",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/oauth-connections.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/organization-storage-teardown.ts",
     "fingerprint": "33d1c6792fd938df33d3cb07e4c16ab85588a984e42cd156e9535c6968f9f8be",
     "count": 1,

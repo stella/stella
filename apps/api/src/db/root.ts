@@ -1,4 +1,8 @@
+import { and, eq, sql } from "drizzle-orm";
+
+import { agentRegistration } from "@/api/db/agent-auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
+import { oauthGrantRevocations } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
@@ -245,3 +249,51 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
+
+type ReadOAuthGrantAdmissionOptions = {
+  clientId: string;
+  organizationId: string;
+  userId: string;
+  grantId: string | undefined;
+  issuedAtCutoff: number;
+  db?: Pick<RootDatabase, "select"> | undefined;
+};
+
+/** Reads only control-plane attribution and revocation for one user grant. */
+export const readOAuthGrantAdmission = async ({
+  clientId,
+  organizationId,
+  userId,
+  grantId,
+  issuedAtCutoff,
+  db = rootDb,
+}: ReadOAuthGrantAdmissionOptions) =>
+  (
+    await db
+      .select({
+        registrationId: agentRegistration.id,
+        revokedAt: oauthGrantRevocations.revokedAt,
+      })
+      .from(sql`(SELECT 1) AS oauth_session`)
+      .leftJoin(
+        agentRegistration,
+        and(
+          eq(agentRegistration.clientId, clientId),
+          eq(agentRegistration.boundUserId, userId),
+          eq(agentRegistration.boundOrganizationId, organizationId),
+          eq(agentRegistration.status, "claimed"),
+        ),
+      )
+      .leftJoin(
+        oauthGrantRevocations,
+        and(
+          eq(oauthGrantRevocations.oauthClientId, clientId),
+          eq(oauthGrantRevocations.userId, userId),
+          eq(oauthGrantRevocations.organizationId, organizationId),
+          grantId === undefined
+            ? sql`${oauthGrantRevocations.revokedAt} >= to_timestamp(${issuedAtCutoff})`
+            : eq(oauthGrantRevocations.grantId, grantId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
