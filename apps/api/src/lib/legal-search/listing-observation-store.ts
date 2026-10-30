@@ -33,7 +33,7 @@ export const storeListingObservations = async (
     rows,
     async (batch) =>
       await scopedDb(async (tx) => {
-        // audit: skip — background public-corpus observations, not user actions; provenance remains in the immutable ledger and ingestion run records
+        // audit: skip — publisher observations are corpus bookkeeping, not user actions; raw JSON excludes this table from PUBLIC_CORPUS_BOOKKEEPING_TABLES, and provenance remains in the immutable ledger and ingestion run records
         await tx
           .insert(caseLawListingObservations)
           .values(batch)
