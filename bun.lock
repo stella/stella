@@ -739,7 +739,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "@stll/text-normalize": "workspace:*",
@@ -817,7 +817,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.13.5",
+      "version": "0.13.6",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -868,7 +868,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.13",
+      "version": "0.2.14",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -1530,7 +1530,7 @@
     },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -1578,7 +1578,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.56.0",
+      "version": "0.57.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1673,7 +1673,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.14.3",
+      "version": "0.14.4",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
