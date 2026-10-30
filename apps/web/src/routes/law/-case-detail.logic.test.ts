@@ -82,6 +82,7 @@ const UNPUBLISHED_DECISION = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: ABSENT_TEXT_FIELD,

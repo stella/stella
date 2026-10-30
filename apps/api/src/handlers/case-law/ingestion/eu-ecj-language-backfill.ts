@@ -173,8 +173,8 @@ export const runEcjLanguageBackfill = async (
     if (report.monthsWalked >= maxMonths) {
       return { ...report, status: "month-budget", cursor };
     }
-    // db-await-in-loop: one listed month at a time, so the cursor names a
-    // month whose every variant is terminal
+    // One listed month at a time, so the cursor names a month whose every
+    // variant is terminal.
     const listed = await options.listMonth(month);
     report.listed += listed.length;
     const keyed = listed.flatMap((variant) => {
@@ -198,7 +198,7 @@ export const runEcjLanguageBackfill = async (
           return { ...report, status: "ingest-budget", cursor };
         }
         ingests += 1;
-        // db-await-in-loop: paced publisher fetch and pipeline write per variant
+        // Paced: one publisher fetch and pipeline write per variant.
         const outcome = await options.ingest(variant);
         await options.journal({
           month,

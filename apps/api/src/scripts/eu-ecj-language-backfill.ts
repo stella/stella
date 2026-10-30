@@ -188,7 +188,7 @@ const heldIdentitiesIn =
   async (identities: readonly string[]): Promise<Set<string>> => {
     const held = new Set<string>();
     for (const identityChunk of chunkItems(identities, HELD_LOOKUP_CHUNK)) {
-      // db-await-in-loop: bounded IN-list chunks over the (source, document) identity index
+      // Bounded IN-list chunks over the (source, document) identity index.
       const rows = await ingestionDb((tx) =>
         tx
           .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
