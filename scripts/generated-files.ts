@@ -887,7 +887,6 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generate-main-heavy-infrastructure-steps.ts",
       "--check",
     ],
-    checkedBy: "Generated files manifest guard",
     autofix: true,
     after: [],
   },
