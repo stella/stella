@@ -4,7 +4,8 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { isDeepStrictEqual } from "node:util";
+import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -18,6 +19,17 @@ import {
   readTemporaryExcludes,
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
+import {
+  DAY_MS,
+  DOC_SOURCE_FILE,
+  expiryInstant,
+  readTestQuarantines,
+  TEST_ATTEMPTS,
+  testProbeCommand,
+  ZERO_AGE_OVERRIDE,
+} from "./dated-waiver-core";
+import { waiverEntryFields } from "./dated-waiver-entry";
+import { waiverKey } from "./dated-waiver-fix-task";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
 import {
   parseRegistry,
@@ -32,22 +44,11 @@ import {
 } from "./guard-rollout-policy.ts";
 import { parseLedger } from "./suppression-waivers";
 
-export const DAY_MS = 86_400_000;
 export const WARNING_DAYS = 5;
 // Network checks get three independent samples; test/rule probes get twenty
 // to catch intermittent failures before removing their quarantine.
 export const NETWORK_ATTEMPTS = 3;
-export const TEST_ATTEMPTS = 20;
 export type WaiverProbe = { command: readonly string[]; attempts: number };
-/**
- * The documented zero-age override as one complete argument: `=` or any
- * spaces or tabs, then a zero that ends the argument (so `0.5` is not one).
- * Inventory and removal share it, so every inventoried spelling is removable.
- */
-export const ZERO_AGE_OVERRIDE =
-  /[ \t]--minimum-release-age(?:=|[ \t]+)0(?=$|[\s"'`;&|)])/u;
-
-export const DOC_SOURCE_FILE = ".claude/mcp/doc-sources.ts";
 export const PENDING_CONTRACT_MIGRATIONS_SOURCE =
   "apps/api/src/lib/db/pending-contract-migrations/registry.ts";
 
@@ -88,16 +89,6 @@ export type DatedWaiver = {
   expiresAt: string;
   probe: WaiverProbe;
   checkedAt?: string;
-};
-
-// Date-only owners accept through the entire UTC day. Preserve that boundary.
-export const expiryInstant = (date: string): string => {
-  const instant = date.length === 10 ? `${date}T00:00:00.000Z` : date;
-  const ms = Date.parse(instant);
-  if (!Number.isFinite(ms) || new Date(ms).toISOString() !== instant) {
-    panic(`Invalid dated waiver expiry: ${date}`);
-  }
-  return date.length === 10 ? new Date(ms + DAY_MS).toISOString() : instant;
 };
 
 const sourceLine = (content: string, id: string): number => {
@@ -342,15 +333,8 @@ export const waiverWarnings = (
       `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expires at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
   );
 
-// How the per-change gate treats an elapsed waiver. An elapsed release-age
-// exclusion is the owner's cleanup (dated-waiver-healing opens it) and stops
-// exempting new pins in scripts/check-lockfile-release-ages.ts, and an
-// elapsed flaky-test quarantine is enforced on main by the scheduled
-// flaky-test-quarantine workflow, which fails naming its owner: neither is a defect
-// of whichever change is under review, so pull requests and merge groups only
-// annotate them. Dependency acceptance dates warn unless their source changes.
-// Every other elapsed waiver, including a dated test quarantine
-// that still skips its test, keeps failing the gate.
+// Main keeps the existing per-kind enforcement owners. Every expired entry
+// added or edited by a change fails that change, including annotate-only kinds.
 export const EXPIRY_AT_CHANGE_GATE = {
   "no-llms-txt": "fail",
   "release-age-exclusion": "annotate",
@@ -369,10 +353,12 @@ const isExpired = (entry: DatedWaiver, now: Date): boolean =>
 export const expiredWaiverAnnotations = (
   entries: readonly DatedWaiver[],
   now: Date,
+  changedEntries?: ReadonlySet<string>,
 ): string[] =>
   entries
     .filter(
       (entry) =>
+        !changedEntries?.has(waiverKey(entry)) &&
         EXPIRY_AT_CHANGE_GATE[entry.kind] === "annotate" &&
         isExpired(entry, now),
     )
@@ -381,173 +367,77 @@ export const expiredWaiverAnnotations = (
         `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expired at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
     );
 
-/**
- * Expired waivers that fail this check. A pull request or merge group passes
- * `changedFiles`: an expiry fails it only when the change touches the file that
- * declares the waiver (adding, renewing or editing it, or the waived code a
- * test quarantine sits on). Time alone never fails an unrelated change; the
- * scheduled run checks other waivers; dependency acceptance dates remain warnings
- * until a change touches the acceptance file.
- */
+type ChangedWaiverKeysOptions = {
+  entries: readonly DatedWaiver[];
+  changedFiles: ReadonlySet<string>;
+  read: (file: string) => string;
+  baseSources: Readonly<Record<string, string>>;
+};
+
+export const changedWaiverKeys = ({
+  entries,
+  changedFiles,
+  read,
+  baseSources,
+}: ChangedWaiverKeysOptions): ReadonlySet<string> =>
+  new Set(
+    entries
+      .filter((entry) => {
+        if (!changedFiles.has(entry.source)) {
+          return false;
+        }
+        const current = waiverEntryFields(entry, read(entry.source));
+        if (current === undefined) {
+          panic(`Dated waiver entry missing: ${entry.source}:${entry.id}`);
+        }
+        const base = baseSources[entry.source];
+        return (
+          base === undefined ||
+          !isDeepStrictEqual(current, waiverEntryFields(entry, base))
+        );
+      })
+      .map(waiverKey),
+  );
+
+const failsExpiry = (
+  entry: DatedWaiver,
+  changedEntries?: ReadonlySet<string>,
+): boolean =>
+  changedEntries === undefined
+    ? EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
+      entry.kind !== "dependency-audit"
+    : changedEntries.has(waiverKey(entry));
+
+/** An absent change scope is the full default-branch check. */
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
   now: Date,
-  changedFiles?: ReadonlySet<string>,
+  changedEntries?: ReadonlySet<string>,
 ): string[] =>
   entries
     .filter(
-      (entry) =>
-        EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
-        isExpired(entry, now) &&
-        (entry.kind === "dependency-audit"
-          ? changedFiles?.has(entry.source) === true
-          : changedFiles === undefined || changedFiles.has(entry.source)),
+      (entry) => isExpired(entry, now) && failsExpiry(entry, changedEntries),
     )
     .map(
       (entry) =>
         `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
     );
 
-/**
- * Due waivers this check neither fails nor already annotates: each warns on
- * the file declaring it from WARNING_DAYS before its expiry, so the owner
- * renews or removes it before the date, and keeps warning after the date on
- * changes that do not touch that file.
- */
+/** Untouched expired entries keep warning, including siblings in edited files. */
 export const dueWaiverWarnings = (
   entries: readonly DatedWaiver[],
   now: Date,
-  changedFiles?: ReadonlySet<string>,
+  changedEntries?: ReadonlySet<string>,
 ): string[] =>
   waiverWarnings(
     entries.filter(
       (entry) =>
         !isExpired(entry, now) ||
-        (EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
-          (entry.kind === "dependency-audit"
-            ? changedFiles?.has(entry.source) !== true
-            : changedFiles !== undefined && !changedFiles.has(entry.source))),
+        (!failsExpiry(entry, changedEntries) &&
+          EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail"),
     ),
     now,
   );
-
-// Runs one test through its owning package script, filtered by its title.
-type TestProbeOptions = { file: string; title: string };
-const testProbeCommand = ({
-  file,
-  title,
-}: TestProbeOptions): readonly string[] => {
-  const owner = /^(?:apps|packages)\/[^/]+/u.exec(file)?.at(0);
-  const pattern = title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const relative = owner ? file.slice(owner.length + 1) : file;
-  return owner
-    ? ["bun", `--cwd=${owner}`, "run", "test", "--", relative, "-t", pattern]
-    : ["bun", "test", file, "-t", pattern];
-};
-
-// A dated test quarantine is an adjacent comment on a literal test.skip/it.skip
-// call. The inventory guard blocks at expiry even while the source still skips.
-export const readTestQuarantines = (
-  sources: Readonly<Record<string, string>>,
-): DatedWaiver[] => {
-  const entries: DatedWaiver[] = [];
-  for (const [source, contents] of Object.entries(sources)) {
-    const ast = ts.createSourceFile(
-      source,
-      contents,
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const consumed = new Set<number>();
-    const markers = new Map<number, string>();
-    const recordedComments = new Set<number>();
-    const recordComments = (
-      ranges: readonly ts.CommentRange[] | undefined,
-    ): void => {
-      for (const range of ranges ?? []) {
-        if (recordedComments.has(range.pos)) {
-          continue;
-        }
-        recordedComments.add(range.pos);
-        const match = /test-quarantine-expires:\s*(\S+)/u.exec(
-          contents.slice(range.pos, range.end),
-        );
-        if (match) {
-          markers.set(range.pos, match.at(1) ?? "");
-        }
-      }
-    };
-    const collectComments = (node: ts.Node): void => {
-      recordComments(ts.getLeadingCommentRanges(contents, node.getFullStart()));
-      recordComments(ts.getTrailingCommentRanges(contents, node.getEnd()));
-      ts.forEachChild(node, collectComments);
-    };
-    collectComments(ast);
-    if (markers.size === 0) {
-      continue;
-    }
-    const diagnostics =
-      ts.transpileModule(contents, {
-        fileName: source,
-        reportDiagnostics: true,
-      }).diagnostics ?? [];
-    if (
-      diagnostics.some(
-        ({ category }) => category === ts.DiagnosticCategory.Error,
-      )
-    ) {
-      panic(`Test quarantine owner does not parse: ${source}`);
-    }
-    const visit = (node: ts.Node): void => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "skip" &&
-        ["test", "it"].includes(node.expression.expression.getText(ast))
-      ) {
-        const markersHere = [...markers].filter(
-          ([offset]) =>
-            offset >= node.getFullStart() && offset < node.getStart(ast),
-        );
-        if (markersHere.length > 0) {
-          const marker = markersHere.at(0);
-          const title = node.arguments.at(0);
-          if (
-            markersHere.length !== 1 ||
-            !marker ||
-            !title ||
-            !ts.isStringLiteral(title)
-          ) {
-            panic(
-              `Test quarantine needs one literal test title and expiry: ${source}`,
-            );
-          }
-          const [offset, expiresAt] = marker;
-          expiryInstant(expiresAt);
-          consumed.add(offset);
-          entries.push({
-            source,
-            line:
-              ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1,
-            id: title.text,
-            kind: "quarantined-test",
-            expiresAt,
-            probe: {
-              command: testProbeCommand({ file: source, title: title.text }),
-              attempts: TEST_ATTEMPTS,
-            },
-          });
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(ast);
-    if (consumed.size !== markers.size) {
-      panic(`Unowned dated test quarantine marker: ${source}`);
-    }
-  }
-  return entries;
-};
 
 // Expiry-bearing declarations in policy/config files and application/package
 // source enter the census. Ordinary timestamps and historical dates do not.
@@ -690,9 +580,6 @@ if (import.meta.main) {
   const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
   if (check) {
     const now = new Date();
-    for (const annotation of expiredWaiverAnnotations(entries, now)) {
-      console.log(annotation);
-    }
     const changedFiles =
       changedFilesPath === undefined
         ? undefined
@@ -701,10 +588,47 @@ if (import.meta.main) {
               .split("\0")
               .filter((file) => file !== ""),
           );
-    for (const warning of dueWaiverWarnings(entries, now, changedFiles)) {
+    const baseFilesFlag = process.argv.indexOf("--base-files");
+    const baseFilesPath =
+      baseFilesFlag === -1 ? undefined : process.argv.at(baseFilesFlag + 1);
+    if (baseFilesFlag !== -1 && !baseFilesPath) {
+      panic("--base-files requires a path");
+    }
+    if (
+      changedFiles !== undefined &&
+      changedFiles.size > 0 &&
+      baseFilesPath === undefined
+    ) {
+      panic("--changed-files requires --base-files for a non-empty change");
+    }
+    const baseSources =
+      baseFilesPath === undefined
+        ? {}
+        : v.parse(
+            v.record(v.string(), v.string()),
+            JSON.parse(readFileSync(baseFilesPath, "utf-8")),
+          );
+    const changedEntries =
+      changedFiles === undefined
+        ? undefined
+        : changedWaiverKeys({
+            entries,
+            changedFiles,
+            baseSources,
+            read: (file) =>
+              readFileSync(path.resolve(import.meta.dir, "..", file), "utf-8"),
+          });
+    for (const annotation of expiredWaiverAnnotations(
+      entries,
+      now,
+      changedEntries,
+    )) {
+      console.log(annotation);
+    }
+    for (const warning of dueWaiverWarnings(entries, now, changedEntries)) {
       console.log(warning);
     }
-    const failures = expiredWaiverFailures(entries, now, changedFiles);
+    const failures = expiredWaiverFailures(entries, now, changedEntries);
     if (failures.length > 0) {
       console.error(failures.join("\n"));
       process.exitCode = 1;
@@ -719,3 +643,12 @@ if (import.meta.main) {
     console.log(JSON.stringify(entries, null, 2));
   }
 }
+
+export {
+  DAY_MS,
+  DOC_SOURCE_FILE,
+  expiryInstant,
+  readTestQuarantines,
+  TEST_ATTEMPTS,
+  ZERO_AGE_OVERRIDE,
+} from "./dated-waiver-core";

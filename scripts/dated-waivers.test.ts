@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,7 +16,9 @@ import { assertProperty } from "@stll/property-testing";
 import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
 import { waiverKey } from "./dated-waiver-fix-task";
 import {
+  changedWaiverKeys,
   collectWaivers,
+  type DatedWaiver,
   DAY_MS,
   DOC_SOURCE_FILE,
   docProbeUrl,
@@ -19,6 +28,7 @@ import {
   expiredWaiverFailures,
   expiryInstant,
   PENDING_CONTRACT_MIGRATIONS_SOURCE,
+  type ProbeKind,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
@@ -162,10 +172,10 @@ test("an elapsed waiver annotates the change instead of failing it", () => {
     expiredWaiverFailures(entries, new Date("2026-10-02T01:02:03.000Z")),
   ).toEqual([]);
 });
-test("a due waiver warns on its file ahead of its date and fails only the change touching that file", () => {
+test("a due waiver warns ahead of its date and fails only the change touching that entry", () => {
   const entries = inventory().filter(({ kind }) => kind === "no-llms-txt");
-  const unrelated = new Set(["apps/web/src/unrelated.ts"]);
-  const owner = new Set([DOC_SOURCE_FILE]);
+  const unrelated = new Set<string>();
+  const owner = new Set(entries.map(waiverKey));
   expect(
     dueWaiverWarnings(entries, new Date("2026-09-30T23:59:59.999Z"), unrelated),
   ).toEqual([]);
@@ -268,7 +278,7 @@ test("an elapsed test quarantine and other elapsed waivers still fail the check"
     false,
   );
 });
-test("an expired waiver fails a change only when the change touches its source", () => {
+test("an expired waiver fails a change only when the change touches its identity", () => {
   const quarantine = readTestQuarantines({
     "packages/example/src/a.test.ts":
       'import { test } from "bun:test";\n// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("a case", () => {});',
@@ -286,19 +296,18 @@ test("an expired waiver fails a change only when the change touches its source",
     ),
   ).toEqual([]);
   expect(expiredWaiverFailures(entries, later, new Set())).toEqual([]);
-  // Touching the declaring file (renewing, editing, or the quarantined test
-  // itself) fails exactly that waiver's expiry.
+  // Editing the quarantined test fails exactly that waiver's expiry.
   expect(
-    expiredWaiverFailures(
-      entries,
-      later,
-      new Set(["packages/example/src/a.test.ts"]),
-    ),
+    expiredWaiverFailures(entries, later, new Set(quarantine.map(waiverKey))),
   ).toEqual(["packages/example/src/a.test.ts:3 dated waiver expired: a case"]);
   const suppression = expiredWaiverFailures(
     entries,
     later,
-    new Set(["scripts/suppression-waivers.json"]),
+    new Set(
+      entries
+        .filter(({ kind }) => kind === "suppression-waiver")
+        .map(waiverKey),
+    ),
   );
   expect(suppression.length).toBeGreaterThan(0);
   expect(
@@ -308,7 +317,7 @@ test("an expired waiver fails a change only when the change touches its source",
   ).toBe(true);
 });
 
-test("an expired pending contract fails its registry change and the full check only", () => {
+test("an expired pending contract fails its entry change and the full check only", () => {
   const entries = collectWaivers({
     read,
     docs: [],
@@ -323,11 +332,7 @@ test("an expired pending contract fails its registry change and the full check o
   const expected = `${PENDING_CONTRACT_MIGRATIONS_SOURCE}:1 dated waiver expired: pending-contract`;
   expect(expiredWaiverFailures(entries, now)).toEqual([expected]);
   expect(
-    expiredWaiverFailures(
-      entries,
-      now,
-      new Set([PENDING_CONTRACT_MIGRATIONS_SOURCE]),
-    ),
+    expiredWaiverFailures(entries, now, new Set(entries.map(waiverKey))),
   ).toEqual([expected]);
   expect(
     expiredWaiverFailures(entries, now, new Set(["apps/web/src/unrelated.ts"])),
@@ -549,6 +554,7 @@ test("check consumes validated tracked files without spawning under the offline 
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
   const trackedFiles = path.join(directory, "tracked-files");
   const changedFiles = path.join(directory, "changed-files");
+  const baseFiles = path.join(directory, "base-files");
   try {
     const git = Bun.spawnSync(["git", "ls-files", "-z"], {
       cwd: path.resolve(import.meta.dir, ".."),
@@ -556,6 +562,7 @@ test("check consumes validated tracked files without spawning under the offline 
     expect(git.exitCode).toBe(0);
     writeFileSync(trackedFiles, git.stdout);
     writeFileSync(changedFiles, "apps/web/src/unrelated.ts\0");
+    writeFileSync(baseFiles, "{}");
 
     const checked = Bun.spawnSync(
       [
@@ -568,6 +575,8 @@ test("check consumes validated tracked files without spawning under the offline 
         trackedFiles,
         "--changed-files",
         changedFiles,
+        "--base-files",
+        baseFiles,
       ],
       { cwd: path.resolve(import.meta.dir, "..") },
     );
@@ -667,10 +676,9 @@ test("changed-lines guard rollouts enter the dated inventory with a full-scope p
   ]);
 });
 
-test("dependency acceptance expiry warns on main and refuses only its owning file", () => {
+test("dependency acceptance expiry warns on main and refuses only an edited entry", () => {
   const entries = inventory().filter(({ kind }) => kind === "dependency-audit");
   const now = new Date("2026-10-07T00:00:00Z");
-  const source = "scripts/dependency-audit-baseline.json";
   expect(entries.length).toBeGreaterThan(0);
   for (const changes of [undefined, new Set<string>(), new Set(["bun.lock"])]) {
     expect(expiredWaiverFailures(entries, now, changes)).toEqual([]);
@@ -678,8 +686,407 @@ test("dependency acceptance expiry warns on main and refuses only its owning fil
       entries.length,
     );
   }
-  expect(expiredWaiverFailures(entries, now, new Set([source]))).toHaveLength(
-    entries.length,
+  expect(
+    expiredWaiverFailures(entries, now, new Set(entries.map(waiverKey))),
+  ).toHaveLength(entries.length);
+  expect(
+    dueWaiverWarnings(entries, now, new Set(entries.map(waiverKey))),
+  ).toEqual([]);
+});
+
+type EntryFixtureOptions = {
+  expiresAt: string;
+  edited: boolean;
+  sibling: boolean;
+};
+type EntryFixture = {
+  source: string;
+  id: string;
+  render: (options: EntryFixtureOptions) => string;
+};
+
+const entryFixtures = {
+  "no-llms-txt": {
+    kind: "no-llms-txt",
+    source: DOC_SOURCE_FILE,
+    id: doc.dependency,
+    render: ({ expiresAt, edited, sibling }) => {
+      const entry = {
+        ...doc,
+        expiresAt,
+        explanation: edited
+          ? "https://example.com/llms.txt still returns 404"
+          : doc.explanation,
+      };
+      return `export const DOC_SOURCES = {};\nexport const DOC_SOURCE_EXCLUSIONS = ${JSON.stringify([entry, ...(sibling ? [{ ...entry, dependency: "new-documentation-package", expiresAt: "2026-10-20T00:00:00.000Z" }] : [])])};`;
+    },
+  },
+  "release-age-exclusion": {
+    kind: "release-age-exclusion",
+    source: "bunfig.toml",
+    id: "old-package",
+    render: ({ expiresAt, edited, sibling }) =>
+      `[install]\nminimumReleaseAgeExcludes = [\n"old-package", # quarantine-expires: ${edited ? "2026-10-02T00:00:00.000Z" : expiresAt}\n${sibling ? '"new-package", # quarantine-expires: 2026-10-20T00:00:00.000Z\n' : ""}]\n`,
+  },
+  "release-age-exception": {
+    kind: "release-age-exception",
+    source: "docker-compose.yml",
+    id: "command: bun install --minimum-release-age 0",
+    render: ({ expiresAt, edited, sibling }) =>
+      `command: bun install --minimum-release-age 0\n# release-age-quarantine-exception: ${edited ? "2026-10-02T00:00:00.000Z" : expiresAt}\n${sibling ? "command: bun install --production --minimum-release-age 0\n# release-age-quarantine-exception: 2026-10-20T00:00:00.000Z\n" : ""}`,
+  },
+  "dependency-audit": {
+    kind: "dependency-audit",
+    source: "scripts/dependency-audit-baseline.json",
+    id: "GHSA-original",
+    render: ({ expiresAt, edited, sibling }) => {
+      const entry = {
+        id: "GHSA-original",
+        package: edited ? "edited-package" : "original-package",
+        expiresOn: expiresAt,
+      };
+      return JSON.stringify({
+        accepted: [
+          entry,
+          ...(sibling
+            ? [
+                {
+                  ...entry,
+                  id: "GHSA-sibling",
+                  expiresOn: "2026-10-20T00:00:00.000Z",
+                },
+              ]
+            : []),
+        ],
+      });
+    },
+  },
+  "quarantined-test": {
+    kind: "quarantined-test",
+    source: "packages/example/src/dated.test.ts",
+    id: "old case",
+    render: ({ expiresAt, edited, sibling }) =>
+      `// test-quarantine-expires: ${expiresAt}\ntest.skip("old case", () => { expect(${edited ? "2" : "1"}).toBe(1); });\n${sibling ? '// test-quarantine-expires: 2026-10-20T00:00:00.000Z\ntest.skip("new case", () => {});\n' : ""}`,
+  },
+  "guard-rollout": {
+    kind: "guard-rollout",
+    source: "scripts/guard-rollouts/fixture-guard.ts",
+    id: "fixture-guard",
+    render: ({ expiresAt, edited, sibling }) =>
+      `export default ${JSON.stringify({ id: "fixture-guard", type: "changed-lines", expiresAt, check: ["bun", edited ? "scripts/check-edited.ts" : "scripts/check-original.ts"] })};\n${sibling ? 'const unrelated = "new declaration";\n' : ""}`,
+  },
+  "flaky-test-quarantine": {
+    kind: "flaky-test-quarantine",
+    source: FLAKY_TEST_QUARANTINE_FILE,
+    id: flaky.id,
+    render: ({ expiresAt, edited, sibling }) => {
+      const entry = {
+        ...flaky,
+        expires: expiresAt.slice(0, 10),
+        owner: edited ? "another-owner" : flaky.owner,
+      };
+      return serializeRegistry({
+        entries: [
+          entry,
+          ...(sibling
+            ? [
+                {
+                  ...entry,
+                  id: "packages/example/src/b.test.ts::group > new case",
+                  expires: "2026-10-20",
+                },
+              ]
+            : []),
+        ],
+      });
+    },
+  },
+  "suppression-waiver": {
+    kind: "suppression-waiver",
+    source: "scripts/suppression-waivers.json",
+    id: "SW-0001",
+    render: ({ expiresAt, edited, sibling }) => {
+      const entry = {
+        id: "SW-0001",
+        kind: "temporary",
+        rule: "test/test",
+        file: "example.ts",
+        symbol: "example",
+        count: 1,
+        reason: edited ? "Changed invariant" : "Fixture invariant",
+        evidence: "example.test.ts",
+        expires: expiresAt.slice(0, 10),
+      };
+      return JSON.stringify({
+        waivers: [
+          entry,
+          ...(sibling
+            ? [{ ...entry, id: "SW-0002", expires: "2026-10-20" }]
+            : []),
+        ],
+      });
+    },
+  },
+  "pending-contract-migration": {
+    kind: "pending-contract-migration",
+    source: PENDING_CONTRACT_MIGRATIONS_SOURCE,
+    id: "old-contract",
+    render: ({ expiresAt, edited, sibling }) => {
+      const entry = {
+        name: "old-contract",
+        expiresAt: expiresAt.slice(0, 10),
+        relations: [edited ? "changed_relation" : "original_relation"],
+      };
+      return `export const PENDING_CONTRACT_MIGRATIONS = ${JSON.stringify([entry, ...(sibling ? [{ ...entry, name: "new-contract", expiresAt: "2026-10-20" }] : [])])};`;
+    },
+  },
+} satisfies { [Kind in ProbeKind]: EntryFixture & { kind: Kind } };
+
+const entryAt = (
+  fixture: EntryFixture & { kind: ProbeKind },
+  expiresAt = "2026-10-01T00:00:00.000Z",
+) =>
+  ({
+    source: fixture.source,
+    line: 1,
+    id: fixture.id,
+    kind: fixture.kind,
+    expiresAt,
+    probe: { command: ["fixture-probe"], attempts: 20 },
+  }) satisfies DatedWaiver;
+
+const matrixNow = new Date("2026-10-10T00:00:00.000Z");
+const originalOptions = {
+  expiresAt: "2026-10-01T00:00:00.000Z",
+  edited: false,
+  sibling: false,
+};
+
+test("entry expiry coverage includes every registered waiver kind", () => {
+  expect(Object.keys(RECHECK_INSTRUCTIONS).toSorted()).toEqual(
+    Object.values(entryFixtures)
+      .map(({ kind }) => kind)
+      .toSorted(),
   );
-  expect(dueWaiverWarnings(entries, now, new Set([source]))).toEqual([]);
+});
+
+for (const fixture of Object.values(entryFixtures)) {
+  test(`${fixture.kind}: default-branch expiry stays with its existing enforcement owner`, () => {
+    const entry = entryAt(fixture);
+    const failures = expiredWaiverFailures([entry], matrixNow);
+    switch (fixture.kind) {
+      case "release-age-exclusion":
+      case "flaky-test-quarantine":
+      case "dependency-audit":
+        expect(failures).toEqual([]);
+        expect([
+          ...dueWaiverWarnings([entry], matrixNow),
+          ...expiredWaiverAnnotations([entry], matrixNow),
+        ]).toHaveLength(1);
+        break;
+      case "no-llms-txt":
+      case "release-age-exception":
+      case "quarantined-test":
+      case "guard-rollout":
+      case "suppression-waiver":
+      case "pending-contract-migration":
+        expect(failures).toEqual([
+          `${entry.source}:1 dated waiver expired: ${entry.id}`,
+        ]);
+        break;
+      default:
+        fixture satisfies never;
+    }
+  });
+
+  test(`${fixture.kind}: adding a sibling to an expired entry's file passes with a warning`, () => {
+    const entry = entryAt(fixture);
+    const base = fixture.render(originalOptions);
+    const head = `\n\n${fixture.render({ ...originalOptions, sibling: true })}`;
+    expect(head).not.toBe(base);
+    const changed = changedWaiverKeys({
+      entries: [entry],
+      changedFiles: new Set([fixture.source]),
+      read: () => head,
+      baseSources: { [fixture.source]: base },
+    });
+    expect(changed.has(waiverKey(entry))).toBe(false);
+    expect(expiredWaiverFailures([entry], matrixNow, changed)).toEqual([]);
+    const warnings = [
+      ...dueWaiverWarnings([entry], matrixNow, changed),
+      ...expiredWaiverAnnotations([entry], matrixNow, changed),
+    ];
+    expect(warnings).toHaveLength(1);
+    expect(warnings.at(0)).toContain(entry.id);
+  });
+
+  test(`${fixture.kind}: editing an expired entry without renewing it fails`, () => {
+    const entry = entryAt(fixture);
+    const base = fixture.render(originalOptions);
+    const head = fixture.render({ ...originalOptions, edited: true });
+    expect(head).not.toBe(base);
+    const changed = changedWaiverKeys({
+      entries: [entry],
+      changedFiles: new Set([fixture.source]),
+      read: () => head,
+      baseSources: { [fixture.source]: base },
+    });
+    expect(changed.has(waiverKey(entry))).toBe(true);
+    expect(expiredWaiverFailures([entry], matrixNow, changed)).toEqual([
+      `${entry.source}:1 dated waiver expired: ${entry.id}`,
+    ]);
+  });
+
+  test(`${fixture.kind}: a new expired entry fails and a future renewal passes`, () => {
+    const expired = entryAt(fixture);
+    const source = fixture.render(originalOptions);
+    const added = changedWaiverKeys({
+      entries: [expired],
+      changedFiles: new Set([fixture.source]),
+      read: () => source,
+      baseSources: {},
+    });
+    expect(added.has(waiverKey(expired))).toBe(true);
+    expect(expiredWaiverFailures([expired], matrixNow, added)).toHaveLength(1);
+    let otherIdentity = `${fixture.id}-other`;
+    if (fixture.kind === "release-age-exception") {
+      otherIdentity =
+        "command: bun install --production --minimum-release-age 0";
+    }
+    if (fixture.kind === "suppression-waiver") {
+      otherIdentity = "SW-0002";
+    }
+    const existingOwner = source.replace(fixture.id, () => otherIdentity);
+    expect(existingOwner).not.toBe(source);
+    const inserted = changedWaiverKeys({
+      entries: [expired],
+      changedFiles: new Set([fixture.source]),
+      read: () => source,
+      baseSources: { [fixture.source]: existingOwner },
+    });
+    expect(inserted.has(waiverKey(expired))).toBe(true);
+    expect(expiredWaiverFailures([expired], matrixNow, inserted)).toHaveLength(
+      1,
+    );
+    const expiresAt = "2026-10-20T00:00:00.000Z";
+    const renewed = entryAt(fixture, expiresAt);
+    const changed = changedWaiverKeys({
+      entries: [renewed],
+      changedFiles: new Set([fixture.source]),
+      read: () => fixture.render({ ...originalOptions, expiresAt }),
+      baseSources: { [fixture.source]: source },
+    });
+    expect(changed.has(waiverKey(renewed))).toBe(true);
+    expect(expiredWaiverFailures([renewed], matrixNow, changed)).toEqual([]);
+  });
+}
+
+test("mapped documentation entries follow shared fields without inheriting sibling edits", () => {
+  const fixture = entryFixtures["no-llms-txt"];
+  const entry = entryAt(fixture);
+  const render = ({
+    explanation,
+    sibling,
+  }: {
+    explanation: string;
+    sibling: boolean;
+  }) => `
+    export const DOC_SOURCES = {};
+    const dependency = "unrelated top-level";
+    const CHECKED_AT = "2026-09-01T00:00:00.000Z";
+    const EXPIRES_AT = "2026-10-01T00:00:00.000Z";
+    const EXPLANATION = ${JSON.stringify(explanation)};
+    export const DOC_SOURCE_EXCLUSIONS = ${JSON.stringify([entry.id, ...(sibling ? ["sibling-package"] : [])])}.map(dependency => ({
+      dependency,
+      reason: "no-llms-txt",
+      explanation: EXPLANATION,
+      checkedAt: CHECKED_AT,
+      expiresAt: EXPIRES_AT,
+    }));
+  `;
+  const explanation = "https://example.com/llms.txt returns 404";
+  const base = render({ explanation, sibling: false });
+  const scopeFor = (head: string) =>
+    changedWaiverKeys({
+      entries: [entry],
+      changedFiles: new Set([fixture.source]),
+      read: () => head,
+      baseSources: { [fixture.source]: base },
+    });
+  const sibling = render({ explanation, sibling: true });
+  expect(sibling).not.toBe(base);
+  expect(scopeFor(sibling).has(waiverKey(entry))).toBe(false);
+  const unrelated = base.replace("unrelated top-level", "changed top-level");
+  expect(unrelated).not.toBe(base);
+  expect(scopeFor(unrelated).has(waiverKey(entry))).toBe(false);
+  const edited = render({
+    explanation: "https://example.com/llms.txt still returns 404",
+    sibling: false,
+  });
+  expect(edited).not.toBe(base);
+  const changed = scopeFor(edited);
+  expect(changed.has(waiverKey(entry))).toBe(true);
+  expect(expiredWaiverFailures([entry], matrixNow, changed)).toHaveLength(1);
+});
+
+test("base materialization preserves owner blobs, distinguishes new files, and fails on unreadable history", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "waiver-base-"));
+  try {
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], { cwd: directory });
+      expect(result.exitCode).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    git("init", "--quiet", "--initial-branch=main");
+    git("config", "user.email", "ci@example.invalid");
+    git("config", "user.name", "CI");
+    writeFileSync(path.join(directory, "readme.md"), "fixture\n");
+    git("add", ".");
+    git("commit", "-qm", "initial");
+    const before = git("rev-parse", "HEAD");
+    const owner = path.join(directory, PENDING_CONTRACT_MIGRATIONS_SOURCE);
+    mkdirSync(path.dirname(owner), { recursive: true });
+    const blob =
+      'export const PENDING_CONTRACT_MIGRATIONS = [{ name: "original", expiresAt: "2026-10-29", relations: ["table"] }];\n';
+    writeFileSync(owner, blob);
+    git("add", ".");
+    git("commit", "-qm", "owner");
+    const withOwner = git("rev-parse", "HEAD");
+    const tracked = path.join(directory, "tracked");
+    const changed = path.join(directory, "changed");
+    const output = path.join(directory, "base.json");
+    writeFileSync(tracked, `${PENDING_CONTRACT_MIGRATIONS_SOURCE}\0`);
+    writeFileSync(changed, `${PENDING_CONTRACT_MIGRATIONS_SOURCE}\0`);
+    const materialize = (base: string) =>
+      Bun.spawnSync(
+        [
+          "bun",
+          path.join(import.meta.dir, "dated-waiver-base.ts"),
+          base,
+          tracked,
+          changed,
+          output,
+        ],
+        {
+          cwd: directory,
+        },
+      );
+    expect(materialize(withOwner).exitCode).toBe(0);
+    expect(JSON.parse(readFileSync(output, "utf-8"))).toEqual({
+      [PENDING_CONTRACT_MIGRATIONS_SOURCE]: blob,
+    });
+    for (const base of [before, ""]) {
+      expect(materialize(base).exitCode).toBe(0);
+      expect(JSON.parse(readFileSync(output, "utf-8"))).toEqual({});
+    }
+    rmSync(output);
+    const invalid = materialize("missing-ref");
+    expect(invalid.exitCode).not.toBe(0);
+    expect(invalid.stderr.toString()).toContain(
+      "Cannot read dated waiver base",
+    );
+    expect(existsSync(output)).toBe(false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

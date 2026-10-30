@@ -12,9 +12,16 @@ and is the only check that compares an expiry with the clock. Owning checks
 validate the shape of their dates, never their expiry. CI validates dates for
 every merge candidate, including changes that do not select package checks. An
 expired entry fails a pull request or merge group only when the change touches
-the file that declares it; time alone never fails an unrelated change. The
+that entry’s identity or fields relative to the merge base; adding a sibling
+to the same file or shifting line numbers only warns about the elapsed entry.
+New entries and edits to expired entries require a future expiry. Time alone
+never fails an unrelated change. The
 daily `dated-waiver-healing.yml` run checks every entry on the default branch,
-so an expiry nobody touches still fails there and alerts its owner. Dates
+so an expiry nobody touches still fails there and alerts its owner. Ownership
+comes from the entry's recorded owner or originating PR where available;
+otherwise, use `git blame` on the entry's identity in its source file to find
+its introducing commit and PR. The warning identifies that source and identity;
+the existing scheduled task and expiry-alert routing remain the alert path. Dates
 never advance automatically, with one exception: a documentation waiver whose
 recheck confirms its premise (see below).
 
@@ -111,7 +118,7 @@ for the external watcher. The workflow sends no mail; the watcher routes this
 signal to its designated recipient. Repeated runs reuse the task and label.
 
 At expiry the waiver lapses. Kinds that fail the gate (`EXPIRY_AT_CHANGE_GATE`)
-fail the default-branch check and every change that touches their owner file
+fail the default-branch check and every change that adds or edits that entry
 until the entry is removed or renewed. An elapsed temporary release-age
 exclusion only annotates; `quarantine-prune.yml` proposes its removal, and the
 lockfile release-age guard stops exempting new pins of its package. Healing
