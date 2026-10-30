@@ -403,39 +403,11 @@
       ]
     },
     "sk-us": {
-      "conformance (synthetic field census; recorded documents where supplied)": [
-        {
-          "rule": "ast-missing",
-          "anchorId": "document",
-          "excerpt": "NÁLEZ\n\nÚstavný súd Slovenskej republiky v senáte o ústavnej sťažnosti sťažovateľa\n\nanonymizované takto\n\nrozhodol:\n\nZákla"
-        }
-      ],
       "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-iii-us-265-2026.content.json.gz (recorded document; census metadata)": [
         {
           "rule": "sentence-cut",
           "anchorId": "p18",
           "excerpt": "ústavnej sťažnosti sťažovateľa. Je tomu tak preto, že hoci 4 ⏎ fakulta univerzity nemá na rozdiel od univerzity právnu s"
-        }
-      ],
-      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-15-98.content.json.gz (recorded document; census metadata)": [
-        {
-          "rule": "ast-missing",
-          "anchorId": "document",
-          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 15/98\n\nÚstavný súd "
-        }
-      ],
-      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-24-2014.content.json.gz (recorded document; census metadata)": [
-        {
-          "rule": "ast-missing",
-          "anchorId": "document",
-          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nPL. ÚS 24/2014-22\n\nÚstavný súd Slovenskej republiky"
-        }
-      ],
-      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-10-2014.content.json.gz (recorded document; census metadata)": [
-        {
-          "rule": "ast-missing",
-          "anchorId": "document",
-          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 10/2014-78\n\nÚstavný"
         }
       ]
     },

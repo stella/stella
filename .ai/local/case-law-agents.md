@@ -763,7 +763,15 @@ and nowhere else. Writers validate against the strict schema; the
 persisted reader degrades vocabulary it does not declare instead of
 failing the document — a role becomes the declared fallback, an unknown
 inline kind collapses to the text its children carried, an unknown block
-kind is dropped — and reports each one through `StoredAstDegradedError`.
+kind is dropped, and repeated block identities are re-keyed by
+`withUniqueBlockIdentities`, reporting each degradation through
+`StoredAstDegradedError`. The same persisted schema is used by the writer's
+`prepareCorpusAst` owner, so a repaired document reads as it was written.
+Malformed stored payloads retain `StoredCorpusValidationError` with its stable
+code and path-only diagnostics. A reader chooses recovery through the typed
+`readCorpusForRecovery` result after trying its usable row copy. A write or
+index path may recover absent structure only beside usable text; otherwise
+it propagates the validation failure.
 
 ## Decision analysis
 
