@@ -23,6 +23,8 @@ const { act, cleanup, fireEvent, render, waitFor } =
 const { clearMocks, mockIPC, mockWindows } =
   await import("@tauri-apps/api/mocks");
 const { ActivityDayReview } = await import("../src/activity/ActivityDayReview");
+const { useBillingDraftSettings, BillingDraftSettingsSection } =
+  await import("../src/activity/ActivityBillingDrafts");
 const { DesktopIntlProvider, defaultMessages: messages } =
   await import("../src/i18n");
 
@@ -112,7 +114,11 @@ const snapshot = (activitySegments = segments): ActivityDaySnapshot => ({
   unreadable: false,
 });
 
+const { BillingDraftConsent } =
+  await import("../src/activity/billing-draft-transport");
+
 const billingDrafts = {
+  consent: new BillingDraftConsent("granted"),
   settings: { type: "ready", consent: "granted", preference: null },
   setConsent: async () => await Promise.resolve(true),
   setPreference: async () => await Promise.resolve(true),
@@ -126,10 +132,29 @@ type DeferredReview = {
 const installNativeBoundary = (matterCandidates = candidates) => {
   const draftRequests: DeferredReview[] = [];
   const submissions: unknown[] = [];
+  const consentSaves: {
+    value: "granted" | "revoked";
+    deferred: ReturnType<typeof Promise.withResolvers<unknown>>;
+  }[] = [];
   mockWindows("activity");
   mockIPC(
     async (command, args) => {
       switch (command) {
+        case "billing_draft_get_settings":
+          return {
+            organizationMode: "enabled",
+            consent: "granted",
+            preference: null,
+          };
+        case "billing_draft_set_consent": {
+          const value = args && "consent" in args ? args["consent"] : undefined;
+          if (value !== "granted" && value !== "revoked") {
+            return panic("Expected consent value");
+          }
+          const deferred = Promise.withResolvers<unknown>();
+          consentSaves.push({ value, deferred });
+          return await deferred.promise;
+        }
         case "time_entry_candidates":
           return matterCandidates;
         case "billing_draft_create_confirmed": {
@@ -173,7 +198,7 @@ const installNativeBoundary = (matterCandidates = candidates) => {
     },
     { shouldMockEvents: true },
   );
-  return { draftRequests, submissions };
+  return { draftRequests, submissions, consentSaves };
 };
 
 const mountReview = (
@@ -259,6 +284,7 @@ for (const dialog of ["closed", "open"] as const) {
       const boundary = installNativeBoundary();
       const consent = Promise.withResolvers<boolean>();
       const savedConsent: string[] = [];
+      const permission = new BillingDraftConsent("revoked");
       const firstSegment = segments.at(0) ?? panic("Expected activity");
       const view = mountReview(
         snapshot([
@@ -272,9 +298,14 @@ for (const dialog of ["closed", "open"] as const) {
         ]),
         {
           settings: { type: "ready", consent: "revoked", preference: null },
+          consent: permission,
           setConsent: async (value) => {
             savedConsent.push(value);
-            return await consent.promise;
+            const saved = await consent.promise;
+            if (saved) {
+              permission.grant();
+            }
+            return saved;
           },
           setPreference: billingDrafts.setPreference,
         },
@@ -1357,4 +1388,128 @@ test("a merge participant stays editable and recoverable after its owner disappe
       },
     ],
   });
+});
+
+const ConsentReview = () => {
+  const control = useBillingDraftSettings(true);
+  return (
+    <>
+      <BillingDraftSettingsSection control={control} />
+      <ActivityDayReview
+        snapshot={snapshot()}
+        header={<span>Review</span>}
+        billingDrafts={control}
+        onCopy={(_text, onSettled) => onSettled(true)}
+        onReviewStatusChange={() => undefined}
+      />
+    </>
+  );
+};
+const mountConsentReview = () =>
+  render(
+    <DesktopIntlProvider language="en" messages={messages}>
+      <ConsentReview />
+    </DesktopIntlProvider>,
+  );
+const saveConsent = async (
+  request:
+    | ReturnType<typeof installNativeBoundary>["consentSaves"][number]
+    | undefined,
+) => {
+  if (request === undefined) {
+    panic("Expected consent save");
+  }
+  await act(async () => {
+    request.deferred.resolve({
+      organizationMode: "enabled",
+      consent: request.value,
+      preference: null,
+    });
+    await request.deferred.promise;
+  });
+};
+
+for (const route of ["steer", "refine"] as const) {
+  test(`withdrawal blocks ${route} before persistence and re-grant permits drafting again`, async () => {
+    const boundary = installNativeBoundary();
+    const view = mountConsentReview();
+    const request = await startDrafting(view, boundary.draftRequests);
+    await resolveDraft(request, review([draft("entry_1", "Initial AI work")]));
+    if (route === "refine") {
+      fireEvent.click(
+        view.getByRole("button", { name: messages.activity.aiRefine }),
+      );
+    }
+    const placeholder =
+      route === "steer"
+        ? messages.activity.aiSteerAllPlaceholder
+        : messages.activity.aiRefinePlaceholder;
+    const input = view.getByPlaceholderText(placeholder);
+    fireEvent.change(input, { target: { value: "Please adjust this" } });
+    const form = input.closest("form") ?? panic("Expected adjustment form");
+    fireEvent.click(
+      view.getByRole("button", { name: messages.activity.aiSettingsRevoke }),
+    );
+    expect(boundary.consentSaves.at(0)?.value).toBe("revoked");
+    expect(view.queryByPlaceholderText(placeholder)).toBeNull();
+    expect(
+      view.getByRole("button", { name: messages.activity.aiRefine }),
+    ).toHaveProperty("disabled", true);
+    fireEvent.submit(form);
+    fireEvent.click(
+      view.getByRole("button", { name: messages.activity.aiRefine }),
+    );
+    expect(boundary.draftRequests).toHaveLength(1);
+    await saveConsent(boundary.consentSaves.at(0));
+    expect(boundary.draftRequests).toHaveLength(1);
+    fireEvent.click(
+      view.getByRole("button", { name: messages.activity.aiUndoAll }),
+    );
+    fireEvent.click(
+      view.getByRole("button", { name: messages.activity.aiDraft }),
+    );
+    fireEvent.click(
+      view.getByRole("button", { name: messages.activity.aiConsentAllow }),
+    );
+    expect(boundary.draftRequests).toHaveLength(1);
+    await saveConsent(boundary.consentSaves.at(1));
+    await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
+    await resolveDraft(
+      boundary.draftRequests.at(1) ?? panic("Expected re-granted draft"),
+      review([draft("entry_1", "After re-grant")]),
+    );
+    expect(
+      view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+    ).toHaveProperty("value", "After re-grant");
+  });
+}
+
+test("withdrawal discards an in-flight result even when permission is subsequently re-granted", async () => {
+  const boundary = installNativeBoundary();
+  const view = mountConsentReview();
+  const stale = await startDrafting(view, boundary.draftRequests);
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiSettingsRevoke }),
+  );
+  await saveConsent(boundary.consentSaves.at(0));
+  expect(boundary.draftRequests).toHaveLength(1);
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiDraft }),
+  );
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiConsentAllow }),
+  );
+  await saveConsent(boundary.consentSaves.at(1));
+  await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
+  await resolveDraft(stale, review([draft("entry_1", "Withdrawn result")]));
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).not.toHaveProperty("value", "Withdrawn result");
+  await resolveDraft(
+    boundary.draftRequests.at(1) ?? panic("Expected fresh draft"),
+    review([draft("entry_1", "Fresh permitted result")]),
+  );
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Fresh permitted result");
 });

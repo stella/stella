@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -64,6 +71,8 @@ import type {
   ResolvedStructureProposal,
   StructureSummary,
 } from "./billing-draft-logic";
+import { BillingDraftConsent } from "./billing-draft-transport";
+import type { DraftConsentStatus } from "./billing-draft-transport";
 import type {
   AcceptedReviewContent,
   BlockedReviewContent,
@@ -83,6 +92,7 @@ type BillingDraftSettings =
 
 export type BillingDraftSettingsControl = {
   settings: BillingDraftSettings;
+  consent: BillingDraftConsent;
   setConsent: (consent: "granted" | "revoked") => Promise<boolean>;
   setPreference: (preference: string | null) => Promise<boolean>;
 };
@@ -118,9 +128,29 @@ export const useBillingDraftSettings = (
   const [loaded, setSettings] = useState<BillingDraftSettings>({
     type: "loading",
   });
-  const settings: BillingDraftSettings = enabled
-    ? loaded
-    : { type: "unavailable" };
+  const [consent] = useState(() => new BillingDraftConsent());
+  const consentStatus = useSyncExternalStore(
+    consent.subscribe,
+    consent.getSnapshot,
+  );
+  const settings = (() => {
+    if (!enabled) {
+      return { type: "unavailable" } as const;
+    }
+    if (loaded.type !== "ready") {
+      return loaded;
+    }
+    return {
+      type: "ready",
+      consent: consentStatus === "granted" ? "granted" : "revoked",
+      preference: loaded.preference,
+    } as const;
+  })();
+  useLayoutEffect(() => {
+    if (!enabled) {
+      consent.refresh("unavailable");
+    }
+  }, [enabled, consent]);
   const request = useRef(0);
   useEffect(() => {
     const current = ++request.current;
@@ -142,6 +172,7 @@ export const useBillingDraftSettings = (
             DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
           );
         }
+        consent.refresh(next?.type === "ready" ? next.consent : "unavailable");
         setSettings(next ?? { type: "unavailable" });
         return undefined;
       })
@@ -151,15 +182,25 @@ export const useBillingDraftSettings = (
             DESKTOP_TELEMETRY_OPERATIONS.activityRead,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
           );
+          consent.refresh("unavailable");
           setSettings({ type: "unavailable" });
         }
       });
     return () => {
       request.current += 1;
+      consent.refresh("unavailable");
     };
-  }, [enabled]);
+  }, [enabled, consent]);
   const update = useCallback(
-    async (command: string, args: Record<string, unknown>) => {
+    async ({
+      command,
+      args,
+      intent,
+    }: {
+      command: string;
+      args: Record<string, unknown>;
+      intent: "grant" | "refresh";
+    }) => {
       const current = ++request.current;
       const response = await Result.tryPromise(
         async () => await invoke<unknown>(command, args),
@@ -185,19 +226,40 @@ export const useBillingDraftSettings = (
         );
         return false;
       }
-      if (current === request.current) {
-        setSettings(next);
+      if (
+        intent === "grant" &&
+        next.type === "ready" &&
+        next.consent === "granted"
+      ) {
+        consent.grant();
+      } else {
+        consent.refresh(next.type === "ready" ? next.consent : "unavailable");
       }
+      setSettings(next);
       return true;
     },
-    [],
+    [consent],
   );
   return {
     settings,
-    setConsent: async (consent) =>
-      await update("billing_draft_set_consent", { consent }),
+    consent,
+    setConsent: async (value) => {
+      if (value === "revoked") {
+        consent.withdraw();
+      }
+      const saved = await update({
+        command: "billing_draft_set_consent",
+        args: { consent: value },
+        intent: value === "granted" ? "grant" : "refresh",
+      });
+      return saved && consent.getSnapshot() === value;
+    },
     setPreference: async (preference) =>
-      await update("billing_draft_set_preference", { preference }),
+      await update({
+        command: "billing_draft_set_preference",
+        args: { preference },
+        intent: "refresh",
+      }),
   };
 };
 
@@ -466,6 +528,7 @@ type EntryReviewProps = {
   editable: boolean;
   busy: boolean;
   refining: boolean;
+  draftingConsent: DraftConsentStatus;
   onUseOriginal: () => void;
   onUseDraft: () => void;
   onAcceptProposal: () => void;
@@ -486,6 +549,7 @@ export const BillingDraftEntryReview = ({
   editable,
   busy,
   refining,
+  draftingConsent,
   onUseOriginal,
   onUseDraft,
   onAcceptProposal,
@@ -593,7 +657,12 @@ export const BillingDraftEntryReview = ({
           size="xs"
           variant="link"
           className="h-auto gap-1 px-0.5"
-          disabled={!editable || busy || content.type !== "single"}
+          disabled={
+            !editable ||
+            busy ||
+            content.type !== "single" ||
+            draftingConsent !== "granted"
+          }
           onClick={onRefine}
         >
           <AiActionIcon aria-hidden="true" className="size-3" />
@@ -652,7 +721,9 @@ export const BillingDraftEntryReview = ({
           onDismiss={onDismissProposal}
         />
       ) : null}
-      {refining && content.type === "single" ? (
+      {draftingConsent === "granted" &&
+      refining &&
+      content.type === "single" ? (
         <BillingDraftSteerInput
           id={`billing-draft-refine-${draft.entryId}`}
           disabled={busy}

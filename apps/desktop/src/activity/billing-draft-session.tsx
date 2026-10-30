@@ -1,7 +1,12 @@
-import { useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { ReactNode } from "react";
 
-import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -9,7 +14,10 @@ import {
   DESKTOP_BILLING_DRAFT_LIMITS,
   desktopBillingDraftReviewSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
-import type { DesktopBillingDraftReview } from "@stll/api-contract/desktop-billing-drafts";
+import type {
+  DesktopBillingDraftRequest,
+  DesktopBillingDraftReview,
+} from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 import { Temporal } from "@stll/time";
 import { useLatest } from "@stll/ui/use-latest";
@@ -32,7 +40,6 @@ import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import {
   absorbedGroupIds,
   captureReviewSources,
-  draftFailureMessage,
   draftRequestEntries,
   draftsByGroup,
   draftStructure,
@@ -40,6 +47,7 @@ import {
   resolveStructure,
 } from "./billing-draft-logic";
 import type { DraftableGroup, DraftResult } from "./billing-draft-logic";
+import type { BillingDraftConsent } from "./billing-draft-transport";
 import { canAcceptStructure, ReviewState } from "./billing-review-state";
 import type {
   EntryEdit,
@@ -198,6 +206,105 @@ const useDraftConsent = ({
   };
 };
 
+type DraftRequestOptions = {
+  request: DesktopBillingDraftRequest;
+  groupIds: readonly string[];
+  onReview: (review: DesktopBillingDraftReview) => void;
+};
+const useDraftRequestLifecycle = (
+  consent: BillingDraftConsent,
+  onError: (message: string | null) => void,
+) => {
+  const t = useTranslations("activity");
+  const [drafting, setDrafting] = useState<DraftingStatus>({ type: "idle" });
+  const [refining, setRefining] = useState<string | null>(null);
+  const draftRequest = useRef(0);
+  const consentStatus = useSyncExternalStore(
+    consent.subscribe,
+    consent.getSnapshot,
+  );
+  const cancelDrafting = useCallback(() => {
+    draftRequest.current += 1;
+    setDrafting({ type: "idle" });
+    setRefining(null);
+  }, []);
+  useEffect(() => {
+    const unsubscribe = consent.subscribe(cancelDrafting);
+    return () => {
+      unsubscribe();
+      draftRequest.current += 1;
+    };
+  }, [consent, cancelDrafting]);
+  const busy = drafting.type === "drafting";
+
+  const send = ({
+    request: payload,
+    groupIds,
+    onReview,
+  }: DraftRequestOptions) => {
+    if (consent.getSnapshot() !== "granted") {
+      return;
+    }
+    const request = ++draftRequest.current;
+    onError(null);
+    setDrafting({ type: "drafting", groupIds });
+    void consent.request(payload).then(async (outcome) => {
+      switch (outcome.type) {
+        case "blocked":
+        case "discarded":
+          if (request === draftRequest.current) {
+            setDrafting({ type: "idle" });
+          }
+          return undefined;
+        case "completed":
+          break;
+        default:
+          return panic("Unknown drafting outcome", outcome satisfies never);
+      }
+      const { response } = outcome;
+      if (request !== draftRequest.current) {
+        return undefined;
+      }
+      if (Result.isError(response)) {
+        setDrafting({ type: "idle" });
+        reportActivityError(
+          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+          DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        );
+        onError(t(response.error));
+        return undefined;
+      }
+      const parsed = await desktopBillingDraftReviewSchema[
+        "~standard"
+      ].validate(response.value);
+      if (request !== draftRequest.current) {
+        return undefined;
+      }
+      setDrafting({ type: "idle" });
+      if (parsed.issues !== undefined) {
+        reportActivityError(
+          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+          DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+        );
+        onError(t("aiDraftFailed"));
+        return undefined;
+      }
+      onReview(parsed.value);
+      setRefining(null);
+      return undefined;
+    });
+  };
+  return {
+    drafting,
+    refining,
+    setRefining,
+    consentStatus,
+    busy,
+    cancelDrafting,
+    send,
+  };
+};
+
 type BillingDraftSessionOptions = {
   snapshot: ActivityDaySnapshot;
   billingDrafts: BillingDraftSettingsControl;
@@ -227,12 +334,17 @@ export const useBillingDraftSession = ({
   onError,
 }: BillingDraftSessionOptions) => {
   const t = useTranslations("activity");
-  const [drafting, setDrafting] = useState<DraftingStatus>({ type: "idle" });
-  const [refining, setRefining] = useState<string | null>(null);
   const { earlierEntries, guidelines, applyReview, clearGuidelines } =
     useDraftReviewResults(dispatch);
-  const draftRequest = useRef(0);
-  const busy = drafting.type === "drafting";
+  const {
+    drafting,
+    refining,
+    setRefining,
+    consentStatus,
+    busy,
+    cancelDrafting,
+    send,
+  } = useDraftRequestLifecycle(billingDrafts.consent, onError);
   const drafts = new Map(
     eligible.flatMap((group) => {
       const draft = editFor(group).draft;
@@ -278,6 +390,9 @@ export const useBillingDraftSession = ({
     groupId: string | null;
     steer: string | null;
   }) => {
+    if (billingDrafts.consent.getSnapshot() !== "granted") {
+      return;
+    }
     const current = currentDraftState.current;
     const selection = steer === null ? current.undrafted : current.steerable;
     const groups = captureReviewSources(
@@ -311,55 +426,19 @@ export const useBillingDraftSession = ({
     const sentEdits = new Map(
       groups.map((group) => [group.id, current.editFor(group)]),
     );
-    const request = ++draftRequest.current;
-    onError(null);
-    setDrafting({ type: "drafting", groupIds: groups.map(({ id }) => id) });
-    void Result.tryPromise({
-      try: async () =>
-        await invoke<unknown>("billing_draft_create_confirmed", {
-          request: {
-            entries: draftRequestEntries({
-              groups,
-              date: current.snapshot.date,
-              timezone: Temporal.Now.timeZoneId(),
-              captureDetails: current.snapshot.captureDetails,
-            }),
-            ...(steer === null ? {} : { steer }),
-            ...(previousResult === null ? {} : { previousResult }),
-          },
+    send({
+      request: {
+        entries: draftRequestEntries({
+          groups,
+          date: current.snapshot.date,
+          timezone: Temporal.Now.timeZoneId(),
+          captureDetails: current.snapshot.captureDetails,
         }),
-      catch: draftFailureMessage,
-    }).then(async (response) => {
-      if (request !== draftRequest.current) {
-        return undefined;
-      }
-      if (Result.isError(response)) {
-        setDrafting({ type: "idle" });
-        reportActivityError(
-          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
-          DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-        );
-        onError(t(response.error));
-        return undefined;
-      }
-      const parsed = await desktopBillingDraftReviewSchema[
-        "~standard"
-      ].validate(response.value);
-      if (request !== draftRequest.current) {
-        return undefined;
-      }
-      setDrafting({ type: "idle" });
-      if (parsed.issues !== undefined) {
-        reportActivityError(
-          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
-          DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-        );
-        onError(t("aiDraftFailed"));
-        return undefined;
-      }
-      applyReview({ review: parsed.value, groups, steer, sentEdits });
-      setRefining(null);
-      return undefined;
+        ...(steer === null ? {} : { steer }),
+        ...(previousResult === null ? {} : { previousResult }),
+      },
+      groupIds: groups.map(({ id }) => id),
+      onReview: (review) => applyReview({ review, groups, steer, sentEdits }),
     });
   };
 
@@ -367,7 +446,6 @@ export const useBillingDraftSession = ({
     if (!saved) {
       onError(t("aiSettingsFailed"));
     }
-    return undefined;
   };
 
   const consent = useDraftConsent({
@@ -380,7 +458,7 @@ export const useBillingDraftSession = ({
     if (billingDrafts.settings.type !== "ready") {
       return;
     }
-    if (billingDrafts.settings.consent !== "granted") {
+    if (billingDrafts.consent.getSnapshot() !== "granted") {
       consent.open();
       return;
     }
@@ -388,6 +466,9 @@ export const useBillingDraftSession = ({
   };
 
   const steerAll = (steer: string, remember: boolean) => {
+    if (billingDrafts.consent.getSnapshot() !== "granted") {
+      return;
+    }
     if (steeringLimitMessage !== null) {
       onError(steeringLimitMessage);
       return;
@@ -402,15 +483,13 @@ export const useBillingDraftSession = ({
   };
 
   const undoAll = () => {
-    draftRequest.current += 1;
-    setDrafting({ type: "idle" });
+    cancelDrafting();
     dispatch({ type: "undo-all" });
-    setRefining(null);
     clearGuidelines();
   };
 
   const draftReview = (group: DraftableGroup): ReactNode => {
-    if (busy && drafting.groupIds.includes(group.id)) {
+    if (drafting.type === "drafting" && drafting.groupIds.includes(group.id)) {
       return <BillingDraftShimmer />;
     }
     const state = drafts.get(group.id);
@@ -463,6 +542,7 @@ export const useBillingDraftSession = ({
         editable={editable}
         busy={busy}
         refining={refining === group.id}
+        draftingConsent={consentStatus}
         onUseOriginal={() => dispatch({ type: "use-original", ...target })}
         onUseDraft={() => dispatch({ type: "use-draft", ...target })}
         onAcceptProposal={() => dispatch({ type: "apply-proposal", ...target })}
@@ -485,6 +565,7 @@ export const useBillingDraftSession = ({
   const offered =
     snapshot.timeBillingEnabled && billingDrafts.settings.type === "ready";
   const steering =
+    consentStatus === "granted" &&
     billingDrafts.settings.type === "ready" &&
     eligible.some(
       (group) => drafts.get(group.id)?.using === "draft" && canDraft(group),

@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
 
+import requestFixture from "../fixtures/billing-draft-request.json";
+
 GlobalRegistrator.register({ url: "http://localhost/" });
 
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
@@ -22,7 +24,8 @@ beforeEach(() => {
 
 const sdkEvent = await import("@tauri-apps/api/event");
 
-const { act, cleanup, render } = await import("@testing-library/react");
+const { act, cleanup, render, fireEvent, waitFor } =
+  await import("@testing-library/react");
 const { flushSync } = await import("react-dom");
 const { useBillingDraftSettings } =
   await import("../src/activity/ActivityBillingDrafts");
@@ -107,4 +110,94 @@ test("settings schema rejects invalid responses and keeps disabled organizations
     }),
   );
   expect(view.getByRole("status").textContent).toBe('{"type":"unavailable"}');
+});
+
+test("withdrawal blocks transport immediately and a failed save or preference refresh cannot re-grant it", async () => {
+  const revoked = Promise.withResolvers<unknown>();
+  let drafts = 0;
+  mockIPC((command, args) => {
+    switch (command) {
+      case "billing_draft_get_settings":
+      case "billing_draft_set_preference":
+        return settingsResponse(null);
+      case "billing_draft_set_consent":
+        return args && "consent" in args && args["consent"] === "revoked"
+          ? revoked.promise
+          : settingsResponse(null);
+      case "billing_draft_create_confirmed":
+        drafts += 1;
+        return {};
+      case "desktop_report_error":
+        return undefined;
+      default:
+        return panic("Unexpected consent command", command);
+    }
+  });
+  const request =
+    requestFixture.requests.at(0) ?? panic("Missing drafting fixture");
+  const Probe = () => {
+    const control = useBillingDraftSettings(true);
+    return (
+      <>
+        <output>{JSON.stringify(control.settings)}</output>
+        <button
+          type="button"
+          onClick={() => {
+            void control.setConsent("revoked");
+          }}
+        >
+          Withdraw
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void control.setPreference("Shorter");
+          }}
+        >
+          Preference
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void control.setConsent("granted");
+          }}
+        >
+          Grant
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void control.consent.request(request);
+          }}
+        >
+          Draft
+        </button>
+      </>
+    );
+  };
+  const view = render(<Probe />);
+  await waitFor(() =>
+    expect(view.getByRole("status").textContent).toContain('"granted"'),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Withdraw" }));
+  fireEvent.click(view.getByRole("button", { name: "Draft" }));
+  expect(drafts).toBe(0);
+  expect(view.getByRole("status").textContent).toContain('"revoked"');
+  await act(async () => {
+    revoked.reject("consent save failed");
+    await Promise.resolve();
+  });
+  await act(async () => {
+    fireEvent.click(view.getByRole("button", { name: "Preference" }));
+    await Promise.resolve();
+  });
+  fireEvent.click(view.getByRole("button", { name: "Draft" }));
+  expect(drafts).toBe(0);
+  expect(view.getByRole("status").textContent).toContain('"revoked"');
+  fireEvent.click(view.getByRole("button", { name: "Grant" }));
+  await waitFor(() =>
+    expect(view.getByRole("status").textContent).toContain('"granted"'),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Draft" }));
+  expect(drafts).toBe(1);
 });

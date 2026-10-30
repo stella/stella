@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
@@ -188,8 +189,16 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
           case "use-draft":
           case "apply-proposal":
             return { ...event, groups: latestGroups };
-          default:
+          case "dismiss-proposal":
+          case "set-billable":
+          case "set-narrative":
+          case "set-selected":
+          case "undo-all":
+          case "undo-structure":
+          case "use-original":
             return event;
+          default:
+            return panic("Unknown review event", event satisfies never);
         }
       })();
       return reviewStateForGroups(reviewReducer(current, action), latestGroups);
