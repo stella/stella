@@ -901,6 +901,7 @@ const ROUTINE_OPTION_KEYWORDS = new Set([
 type SearchPathSetting =
   | { type: "configured"; entries: string[] }
   | { type: "missing" }
+  | { type: "repeated" }
   | { type: "unparseable" };
 
 const parseSearchPathValue = (value: string): SearchPathSetting => {
@@ -983,7 +984,7 @@ const parseSearchPathValue = (value: string): SearchPathSetting => {
       if (!identifier) {
         return { type: "unparseable" };
       }
-      entries.push(identifier);
+      entries.push(identifier.toLowerCase());
       cursor += identifier.length;
     }
 
@@ -1018,17 +1019,26 @@ const readSecurityDefinerSearchPath = (
       isIndexKeyword(token, "security") &&
       isIndexKeyword(tokens[index + 1], "definer"),
   );
-  if (!isSecurityDefinerFunction || functionIndex === -1) {
+  if (functionIndex === -1) {
     return undefined;
   }
 
   const functionName = tokens[functionIndex + 1]?.value ?? "<unknown>";
-  const settingIndex = tokens.findIndex(
-    (token, index) =>
-      isIndexKeyword(token, "set") &&
-      tokens[index + 1]?.value.toLowerCase() === "search_path",
+  const settingIndexes = tokens.flatMap((token, index) =>
+    isIndexKeyword(token, "set") &&
+    tokens[index + 1]?.value.toLowerCase() === "search_path"
+      ? [index]
+      : [],
   );
-  if (settingIndex === -1) {
+  if (settingIndexes.length > 1) {
+    return { functionName, setting: { type: "repeated" } };
+  }
+  if (!isSecurityDefinerFunction) {
+    return undefined;
+  }
+
+  const settingIndex = settingIndexes.at(0);
+  if (settingIndex === undefined) {
     return { functionName, setting: { type: "missing" } };
   }
 
@@ -1057,19 +1067,29 @@ const securityDefinerSearchPathEndsWithPgTemp = (
   if (!result) {
     return true;
   }
-  return (
-    result.setting.type === "configured" &&
-    result.setting.entries.at(-1)?.toLowerCase() === "pg_temp"
-  );
+  switch (result.setting.type) {
+    case "configured":
+      return result.setting.entries.at(-1) === "pg_temp";
+    case "missing":
+    case "repeated":
+    case "unparseable":
+      return false;
+    default: {
+      result.setting satisfies never;
+      return panic("Unhandled search_path setting");
+    }
+  }
 };
 
 const STATEMENT_INVARIANT_RULES = [
   {
     id: "security-definer-search-path",
     description: (statement) => {
-      const functionName =
-        readSecurityDefinerSearchPath(statement)?.functionName;
-      return `defines SECURITY DEFINER function ${functionName ?? "<unknown>"} without a parseable search_path ending in pg_temp`;
+      const result = readSecurityDefinerSearchPath(statement);
+      if (result?.setting.type === "repeated") {
+        return `function ${result.functionName} has a repeated search_path setting`;
+      }
+      return `defines SECURITY DEFINER function ${result?.functionName ?? "<unknown>"} without a parseable search_path ending in pg_temp`;
     },
     matches: (statement) =>
       !statement.deferred &&

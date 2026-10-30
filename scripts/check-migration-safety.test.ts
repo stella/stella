@@ -175,6 +175,9 @@ describe("check-migration-safety", () => {
         runChecker(reviewedDefiner('SET search_path TO pg_catalog, "pg_temp"')),
       );
       expectClean(
+        runChecker(reviewedDefiner("SET search_path = pg_catalog, PG_TEMP")),
+      );
+      expectClean(
         runChecker(
           reviewedDefiner("SET search_path = 'pg_catalog, public, pg_temp'"),
         ),
@@ -188,10 +191,41 @@ describe("check-migration-safety", () => {
 
     it("reads quoted entries without allowing values after pg_temp", () => {
       expectFinding(
+        runChecker(reviewedDefiner('SET search_path = pg_catalog, "PG_TEMP"')),
+        "security-definer-search-path",
+      );
+      expectFinding(
         runChecker(
           reviewedDefiner("SET search_path = pg_catalog, pg_temp, 'public'"),
         ),
         "security-definer-search-path",
+      );
+    });
+
+    it("rejects repeated SECURITY DEFINER search_path settings", () => {
+      for (const options of [
+        "SET search_path = pg_catalog, pg_temp SET search_path = public",
+        "SET search_path = pg_temp SET search_path = pg_catalog, pg_temp",
+      ]) {
+        const result = runChecker(reviewedDefiner(options));
+
+        expectFinding(result, "security-definer-search-path");
+        expect(result.stderr).toContain(
+          "function probe has a repeated search_path setting",
+        );
+      }
+    });
+
+    it("rejects repeated ALTER FUNCTION search_path settings", () => {
+      const result = runChecker(`
+        ALTER FUNCTION probe()
+        SET search_path = pg_catalog, pg_temp
+        SET search_path = public;
+      `);
+
+      expectFinding(result, "security-definer-search-path");
+      expect(result.stderr).toContain(
+        "function probe has a repeated search_path setting",
       );
     });
 
