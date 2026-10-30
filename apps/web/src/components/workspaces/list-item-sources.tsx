@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
@@ -64,9 +65,9 @@ export const ListItemSources = ({
               }
               variant="link"
             >
-              <span className="truncate">
+              <TruncatedText>
                 <SourceLocatorLabel locator={source.locator} />
-              </span>
+              </TruncatedText>
             </Button>
             <SourceVerificationAction
               itemEntityId={itemEntityId}
@@ -77,9 +78,13 @@ export const ListItemSources = ({
             />
           </div>
           {source.quote && (
-            <blockquote className="text-muted-foreground mt-2 line-clamp-3 text-xs">
+            <TruncatedText
+              className="text-muted-foreground mt-2 text-xs"
+              lines={3}
+              render={<blockquote />}
+            >
               {source.quote}
-            </blockquote>
+            </TruncatedText>
           )}
         </article>
       ))}

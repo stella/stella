@@ -35,6 +35,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
@@ -161,12 +162,18 @@ export const MatterMenuHeader = ({
       className="max-w-48 border-s-2 px-2 py-1.5"
       style={{ borderColor: resolveMatterColor(id, color) }}
     >
-      <BidiText as="div" className="truncate text-xs font-medium">
+      <TruncatedText
+        className="text-xs font-medium"
+        render={<BidiText as="div" />}
+      >
         {name}
-      </BidiText>
-      <BidiText as="div" className="text-muted-foreground truncate text-xs">
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground text-xs"
+        render={<BidiText as="div" />}
+      >
         {clientName ?? t("workspaces.parties.personalLabel")}
-      </BidiText>
+      </TruncatedText>
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { RefreshCwIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { AiCellState } from "@/components/workspaces/ai-cell-state.logic";
 
@@ -69,14 +70,14 @@ export const AiCell = ({
             )}
             size="sm"
           />
-          <span className="line-clamp-2 min-w-0" dir="auto">
+          <TruncatedText dir="auto" lines={2}>
             {preview?.trim() ||
               t(
                 state.type === "queued"
                   ? "common.queued"
                   : "caseLaw.research.answers.pending",
               )}
-          </span>
+          </TruncatedText>
         </span>
       );
     case "failed":

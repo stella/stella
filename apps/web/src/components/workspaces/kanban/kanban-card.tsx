@@ -10,6 +10,7 @@ import {
   registerKanbanCardDrag,
   selectKanbanCardFieldIds,
 } from "@stll/ui/kanban";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
@@ -220,9 +221,7 @@ export const KanbanCard = ({
         value={rename.state.draft}
       />
     ) : (
-      <span className="overflow-hidden text-ellipsis whitespace-pre">
-        {name}
-      </span>
+      <TruncatedText className="whitespace-pre">{name}</TruncatedText>
     );
 
   const isTask = entity.kind === "task";
@@ -462,7 +461,7 @@ const KanbanEntityMetadataBadges = ({
               )}
             />
           )}
-          <span className="truncate">{statusLabel}</span>
+          <TruncatedText>{statusLabel}</TruncatedText>
         </span>
       )}
       {priority && priority !== "none" && (
@@ -475,13 +474,13 @@ const KanbanEntityMetadataBadges = ({
               )}
             />
           )}
-          <span className="truncate">{priorityLabel}</span>
+          <TruncatedText>{priorityLabel}</TruncatedText>
         </span>
       )}
       {dueDate && (
         <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
           <CalendarIcon className="size-3 shrink-0" />
-          <span className="truncate">
+          <TruncatedText>
             {format.dateTime(
               Temporal.PlainDate.from(dueDate).toZonedDateTime({
                 plainTime: Temporal.PlainTime.from("00:00"),
@@ -494,7 +493,7 @@ const KanbanEntityMetadataBadges = ({
                 timeZone: "UTC",
               },
             )}
-          </span>
+          </TruncatedText>
         </span>
       )}
     </div>

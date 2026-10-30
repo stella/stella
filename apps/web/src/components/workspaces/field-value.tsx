@@ -5,6 +5,7 @@ import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { SquareMinusIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 import {
   ClipFieldValue,
@@ -188,16 +189,16 @@ const PersonFieldValue = ({
   return (
     <span
       className={cn(
-        "flex max-w-full min-w-0 items-center truncate",
+        "flex max-w-full min-w-0 items-center",
         resolvedVariant === "kanban"
           ? "text-muted-foreground bg-muted/60 gap-1 rounded px-1.5 py-0.5 text-xs leading-none"
           : "gap-1.5 text-sm",
       )}
     >
       <PersonAvatar image={content.image} name={content.name} />
-      <span className="truncate">
+      <TruncatedText>
         <HighlightedText columnId={propertyId} text={content.name} />
-      </span>
+      </TruncatedText>
     </span>
   );
 };
@@ -228,9 +229,9 @@ const PendingFieldValue = ({
           size="sm"
         />
         {hasPreview ? (
-          <BidiText as="div" className="line-clamp-2 min-w-0">
+          <TruncatedText lines={2} render={<BidiText as="div" />}>
             {trimmedPreview}
-          </BidiText>
+          </TruncatedText>
         ) : (
           <PendingSkeleton contentType={contentType} />
         )}
@@ -290,22 +291,24 @@ const TextFieldValue = ({
     }
 
     return (
-      <BidiText
-        as="span"
-        className="text-muted-foreground line-clamp-2 min-w-0 basis-full text-xs leading-4"
+      <TruncatedText
+        className="text-muted-foreground basis-full text-xs leading-4"
+        lines={2}
+        render={<BidiText as="span" />}
       >
         {value}
-      </BidiText>
+      </TruncatedText>
     );
   }
 
-  const className =
-    variant === "table" ? "line-clamp-2" : "line-clamp-2 text-sm";
-
   return (
-    <BidiText as="span" className={cn(className)}>
+    <TruncatedText
+      className={cn(variant !== "table" && "text-sm")}
+      lines={2}
+      render={<BidiText as="span" />}
+    >
       {value}
-    </BidiText>
+    </TruncatedText>
   );
 };
 
@@ -387,16 +390,16 @@ const SelectFieldValue = ({
 
   if (variant === "kanban") {
     return (
-      <BidiText
-        as="span"
-        className="max-w-full truncate rounded px-1.5 py-0.5 text-xs leading-none font-medium"
+      <TruncatedText
+        className="rounded px-1.5 py-0.5 text-xs leading-none font-medium"
         style={{
           backgroundColor: color?.background,
           color: color?.foreground,
         }}
+        render={<BidiText as="span" />}
       >
         {label}
-      </BidiText>
+      </TruncatedText>
     );
   }
 
@@ -413,9 +416,7 @@ const SelectFieldValue = ({
       }}
     >
       {variant === "table" && !value && <SquareMinusIcon className="size-4" />}
-      <BidiText as="span" className="truncate">
-        {label}
-      </BidiText>
+      <TruncatedText render={<BidiText as="span" />}>{label}</TruncatedText>
     </span>
   );
 };

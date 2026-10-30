@@ -23,6 +23,7 @@ import { CopyPlusIcon, DuplicateIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { MatterNumberHint } from "@/components/matter-number-hint";
@@ -341,9 +342,9 @@ export const MatterMetadataPanel = ({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <span className="text-muted-foreground truncate text-sm font-medium">
+          <TruncatedText className="text-muted-foreground text-sm font-medium">
             {t("common.name")}
-          </span>
+          </TruncatedText>
           <Input
             className="rounded-md shadow-none"
             disabled={updateWorkspace.isPending}
@@ -369,9 +370,9 @@ export const MatterMetadataPanel = ({
 
         {/* Reference */}
         <section className="grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-3 border-b px-3">
-          <span className="text-muted-foreground truncate text-sm font-medium">
+          <TruncatedText className="text-muted-foreground text-sm font-medium">
             {t("workspaces.reference")}
-          </span>
+          </TruncatedText>
           <div
             className={cn(
               "flex min-w-0 items-center gap-2",

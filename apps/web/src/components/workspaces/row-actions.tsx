@@ -47,6 +47,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
@@ -1466,9 +1467,12 @@ export const RowOcrMenuActions = ({
                     {...capabilityProps}
                   >
                     <ScanTextIcon />
-                    <BidiText as="span" className="max-w-64 truncate">
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
                       {source.fileName}
-                    </BidiText>
+                    </TruncatedText>
                   </MenuItem>
                 )}
               </CapabilityAction>
@@ -1855,9 +1859,12 @@ const RowFileOperationsMenu = ({
                 <MenuSub key={source.fieldId}>
                   <MenuSubTrigger>
                     <ScanTextIcon />
-                    <BidiText as="span" className="max-w-64 truncate">
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
                       {source.fileName}
-                    </BidiText>
+                    </TruncatedText>
                   </MenuSubTrigger>
                   <MenuSubPopup>{renderOcrExport(source)}</MenuSubPopup>
                 </MenuSub>

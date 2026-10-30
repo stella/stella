@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { ViewFilterButton, ViewFilterChip } from "@stll/ui/view-toolbar";
 
 import type {
@@ -284,9 +285,9 @@ const FilterEditBody = ({
     <div className="flex flex-col">
       <div className="flex items-center gap-1.5 border-b px-2.5 py-2">
         <FieldTypeIcon field={field} />
-        <span className="flex-1 truncate text-sm font-medium">
+        <TruncatedText className="flex-1 text-sm font-medium">
           {field.label}
-        </span>
+        </TruncatedText>
         <Menu>
           <MenuTrigger
             aria-label={t("common.actions")}
