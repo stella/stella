@@ -5,6 +5,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -29,7 +30,6 @@ import {
   type StructuredOutputRoleFixture,
 } from "@/api/tests/helpers/structured-output-role-fixtures";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testFetchState = createTestFetch();
 

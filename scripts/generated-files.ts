@@ -1184,7 +1184,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generate-mobile-folio-fonts.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
-      // folio's version, which pins the fontsource stylesheets it imports.
+      // The @stll/folio-fonts version, which pins its face catalogue.
       "apps/mobile/package.json",
       "package.json",
       "bun.lock",
@@ -1678,6 +1678,23 @@ const GENERATOR_DECLARATIONS = [
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
     checkedBy: "Module ownership",
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "guard-rollout-manifest",
+    outputKind: "committed",
+    outputs: ["scripts/guard-rollouts.gen.ts"],
+    inputs: [
+      "scripts/generate-guard-rollouts.ts",
+      "scripts/guard-rollouts/*.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "packages/portable-path/src/index.ts",
+    ],
+    checkInputs: ["bunfig.toml", ".prettierrc.yml"],
+    write: ["bun", "scripts/generate-guard-rollouts.ts", "--write"],
+    check: ["bun", "scripts/generate-guard-rollouts.ts", "--check"],
     autofix: true,
     after: [],
   },

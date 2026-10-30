@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { featureEnrolments } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -10,7 +12,6 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { executeRowsSafeDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 

@@ -8,6 +8,7 @@ import {
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
+import { createTestState } from "@stll/test-state";
 
 import {
   auditLogs,
@@ -30,7 +31,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import {
   createScopedDbMock,
   createSelectQueryMock,

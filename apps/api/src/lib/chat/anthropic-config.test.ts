@@ -3,9 +3,10 @@ import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { createTanStackTextAdapterFactory } from "../tanstack-ai-models";
 import { anthropicWorkspaceHeaders } from "./anthropic-config";

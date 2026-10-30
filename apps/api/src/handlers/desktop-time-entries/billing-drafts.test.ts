@@ -14,6 +14,7 @@ import type {
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 import { assertProperty } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -31,7 +32,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

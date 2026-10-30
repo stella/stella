@@ -5154,6 +5154,9 @@ const config = defineConfig({
               // to tune fast-check at assert time. Never imported by runtime
               // code, so there is no app env module to route through.
               "packages/property-testing/src/index.ts",
+              // Test-only fixture that records and restores the environment
+              // keys a test writes; it owns those writes by design.
+              "packages/test-state/src/test-state.ts",
             ],
           },
         ],

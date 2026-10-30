@@ -6,6 +6,7 @@ import type {
 import * as v from "valibot";
 
 import { resolveDefaultModel } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -29,7 +30,6 @@ import {
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testFetchState = createTestFetch();
 
