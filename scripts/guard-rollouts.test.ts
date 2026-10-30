@@ -36,7 +36,7 @@ const fixtures = readdirSync(path.join(ROOT, FIXTURES), {
   encoding: "utf-8",
   recursive: true,
 })
-  .filter((name) => name.endsWith(".fixture.ts"))
+  .filter((name) => /\.fixture\.tsx?$/u.test(name))
   .map((name) => {
     const file = `${FIXTURES}/${name}`;
     return { file, source: readFileSync(path.join(ROOT, file), "utf-8") };
