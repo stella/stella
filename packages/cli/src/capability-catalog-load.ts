@@ -13,6 +13,7 @@ import type {
   CatalogTransport,
 } from "./generate-capability-tree.js";
 import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
+import { runtimeAssetUrl } from "./runtime-asset-url.js";
 
 const jsonSchemaSchema = v.record(v.string(), v.unknown());
 
@@ -178,7 +179,13 @@ export const parseCapabilityCatalog = (
 export const loadBakedCapabilityCatalog = ():
   CapabilityCatalogEntry[] | null => {
   const parsed = Result.try({
-    try: () => readCapabilityCatalog(),
+    try: () =>
+      readCapabilityCatalog(
+        runtimeAssetUrl(
+          new URL("../capabilities/", import.meta.url),
+          "capabilities/",
+        ),
+      ),
     catch: (cause) => cause,
   });
   if (Result.isError(parsed)) {

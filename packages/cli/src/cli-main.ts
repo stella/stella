@@ -101,7 +101,7 @@ const resolvePreamble = async (
   if (Result.isError(compatibility)) {
     const channel = await detectInstallChannel({ configDir });
     process.stderr.write(
-      `${compatibility.error.message.replace(/\s+/gu, " ")} Run ${upgradeCommandFor(channel)}.\n`,
+      `${compatibility.error.message.replace(/\s+/gu, " ")} ${Result.isError(channel) ? channel.error.message : `Run ${upgradeCommandFor(channel.value)}.`}\n`,
     );
     process.exitCode = EXIT_CODES.validation;
     return { configDir, serverUrl, token: undefined };
@@ -223,9 +223,13 @@ const main = async (): Promise<void> => {
   if (process.exitCode !== undefined && process.exitCode !== 0) {
     return;
   }
-  const updateCommand = upgradeCommandFor(
-    await detectInstallChannel({ configDir }),
-  );
+  const channel = await detectInstallChannel({ configDir });
+  if (Result.isError(channel)) {
+    process.stderr.write(`${channel.error.message}\n`);
+    process.exitCode = EXIT_CODES.validation;
+    return;
+  }
+  const updateCommand = upgradeCommandFor(channel.value);
   const versionExempt = isVersionAdmissionExempt(argv);
   let unsupportedLine: string | undefined;
 

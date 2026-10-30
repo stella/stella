@@ -1,6 +1,16 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -38,11 +48,16 @@ test.each(["npm-first", "native-first"])(
       await writeFile(nativePath, "native", { mode: 0o755 });
       const directories =
         order === "npm-first" ? [npmBin, nativeBin] : [nativeBin, npmBin];
-      const installations = await inspectPathInstallations({
+      const inspection = await inspectPathInstallations({
         pathValue: directories.join(":"),
         nativePath,
         platform: "linux",
       });
+      expect(Result.isOk(inspection)).toBe(true);
+      if (Result.isError(inspection)) {
+        return;
+      }
+      const installations = inspection.value;
       expect(installations.map((entry) => entry.path)).toEqual(
         directories.map((directory) => path.join(directory, "stella")),
       );
@@ -82,7 +97,7 @@ test("doctor skips non-executable files and directories named stella", async () 
         nativePath: "/unused",
         platform: "linux",
       }),
-    ).toEqual([]);
+    ).toEqual(Result.ok([]));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -111,12 +126,20 @@ test("doctor finds a recorded custom native installation through a PATH alias af
       configDir,
       defaultPath: "/unused/.local/bin/stella",
     });
-    expect(nativePath).toBe(installedPath);
-    const installations = await inspectPathInstallations({
+    expect(nativePath).toEqual(Result.ok(installedPath));
+    if (Result.isError(nativePath)) {
+      return;
+    }
+    const inspection = await inspectPathInstallations({
       pathValue: [npmBin, aliasBin].join(":"),
-      nativePath,
+      nativePath: nativePath.value,
       platform: "linux",
     });
+    expect(Result.isOk(inspection)).toBe(true);
+    if (Result.isError(inspection)) {
+      return;
+    }
+    const installations = inspection.value;
     expect(installations.map((entry) => entry.channel)).toEqual([
       "npm",
       "native",
@@ -141,25 +164,121 @@ test("doctor falls back only for an absent installation path record", async () =
         configDir,
         defaultPath: "/default/stella",
       }),
-    ).toBe("/default/stella");
+    ).toEqual(Result.ok("/default/stella"));
     expect(
       await resolveDoctorNativePath({
         configDir,
         defaultPath: "/default/stella",
         activeNativePath: "/active/stella",
       }),
-    ).toBe("/active/stella");
+    ).toEqual(Result.ok("/active/stella"));
     await mkdir(path.join(configDir, "install-path"));
-    const failed = await Result.tryPromise({
-      try: () =>
-        resolveDoctorNativePath({ configDir, defaultPath: "/default/stella" }),
-      catch: (cause) => cause,
+    const failed = await resolveDoctorNativePath({
+      configDir,
+      defaultPath: "/default/stella",
     });
     expect(Result.isError(failed)).toBe(true);
     if (Result.isError(failed)) {
-      expect(String(failed.error)).toContain("EISDIR");
+      expect(failed.error._tag).toBe("DoctorError");
+      expect(failed.error.cause).toMatchObject({ code: "EISDIR" });
     }
   } finally {
     await rm(configDir, { recursive: true, force: true });
+  }
+});
+
+test("doctor returns tagged failures for invalid records and cyclic PATH entries", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "stella-doctor-errors-"));
+  try {
+    await writeFile(path.join(root, "install-path"), "relative/stella");
+    const invalid = await resolveDoctorNativePath({
+      configDir: root,
+      defaultPath: "/default/stella",
+    });
+    expect(Result.isError(invalid)).toBe(true);
+    if (Result.isError(invalid)) {
+      expect(invalid.error.message).toContain("must be absolute");
+    }
+    await symlink("stella", path.join(root, "stella"));
+    const cycle = await inspectPathInstallations({
+      pathValue: root,
+      nativePath: path.join(root, "absent"),
+      platform: "linux",
+    });
+    expect(Result.isError(cycle)).toBe(true);
+    if (Result.isError(cycle)) {
+      expect(cycle.error._tag).toBe("DoctorError");
+      expect(cycle.error.cause).toMatchObject({ code: "ELOOP" });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("doctor fix refuses backup read failures and remains reversible on success", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "stella-doctor-fix-"));
+  try {
+    const configHome = path.join(root, "config");
+    const configDir = path.join(configHome, "stella");
+    const npmBin = path.join(root, "npm-bin");
+    const nativeBin = path.join(root, "native-bin");
+    const npmTarget = path.join(root, "node_modules", "@stll", "cli", "cli.js");
+    await Promise.all(
+      [configDir, npmBin, nativeBin, path.dirname(npmTarget)].map((directory) =>
+        mkdir(directory, { recursive: true }),
+      ),
+    );
+    const nativePath = path.join(nativeBin, "stella");
+    const shadowPath = path.join(npmBin, "stella");
+    const backup = `${shadowPath}.stella-disabled`;
+    await writeFile(nativePath, "native", { mode: 0o755 });
+    await writeFile(npmTarget, "npm fixture", { mode: 0o755 });
+    await symlink(npmTarget, shadowPath);
+    await writeFile(path.join(configDir, "install-path"), nativePath);
+    const run = async (args: string[]) => {
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dirname, "../cli.ts"),
+          "doctor",
+          ...args,
+        ],
+        {
+          env: {
+            ...process.env,
+            XDG_CONFIG_HOME: configHome,
+            PATH: [npmBin, nativeBin].join(path.delimiter),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { exitCode, stdout, stderr };
+    };
+    const readOnly = await run([]);
+    expect(readOnly.exitCode).toBe(0);
+    expect(await readlink(shadowPath)).toBe(npmTarget);
+    await symlink(path.basename(backup), backup);
+    const refused = await run(["--fix"]);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.stderr).toContain(
+      "Could not inspect the shadowing executable backup",
+    );
+    expect(await readlink(shadowPath)).toBe(npmTarget);
+    await rm(backup);
+    const fixed = await run(["--fix"]);
+    expect(fixed.exitCode).toBe(0);
+    expect(fixed.stdout).toContain("Undo: mv");
+    expect((await lstat(backup)).isSymbolicLink()).toBe(true);
+    expect(await readFile(nativePath, "utf-8")).toBe("native");
+    await rename(backup, shadowPath);
+    expect(await readlink(shadowPath)).toBe(npmTarget);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

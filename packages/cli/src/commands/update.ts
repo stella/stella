@@ -240,8 +240,12 @@ export const updateCommand: Command<Context> = buildCommand<
   docs: { brief: "Update a standalone stella installation" },
   parameters: { flags: buildServerFlag() },
   func: async function func(this: Context) {
+    const channel = await detectInstallChannel({ configDir: this.configDir });
+    if (Result.isError(channel)) {
+      return new CliCommandError(channel.error.message, EXIT_CODES.validation);
+    }
     const result = await updateNative({
-      channel: await detectInstallChannel({ configDir: this.configDir }),
+      channel: channel.value,
       executablePath: this.process.execPath,
       version: this.process.env["STELLA_VERSION"],
     });

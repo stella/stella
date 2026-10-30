@@ -15,7 +15,7 @@ test("standalone executables carry the capability catalog and registry snapshot"
   );
   const packageDirectory = fileURLToPath(new URL("../", import.meta.url));
   const catalogModule = fileURLToPath(
-    new URL("capability-catalog-data.ts", import.meta.url),
+    new URL("capability-catalog-load.ts", import.meta.url),
   );
   const registryModule = fileURLToPath(
     new URL("registry-refresh.ts", import.meta.url),
@@ -38,7 +38,7 @@ test("standalone executables carry the capability catalog and registry snapshot"
     await writeFile(
       entrypoint,
       `import { Result } from ${JSON.stringify(resultModule)};
-import { readCapabilityCatalog } from ${JSON.stringify(catalogModule)};
+import { loadBakedCapabilityCatalog } from ${JSON.stringify(catalogModule)};
 import { refreshRegistryCache } from ${JSON.stringify(registryModule)};
 const refreshed = await refreshRegistryCache({
   serverOrigin: "https://example.invalid",
@@ -49,7 +49,9 @@ const refreshed = await refreshRegistryCache({
   fetchRaw: async () => Result.ok({ rawBody: JSON.stringify({ result: { tools: [] } }) }),
 });
 if (refreshed.status !== "refreshed") throw new TypeError("Expected refreshed registry");
-process.stdout.write(JSON.stringify({ capabilities: readCapabilityCatalog().length, removedTools: refreshed.registry.delta.removed.length }));
+const catalog = loadBakedCapabilityCatalog();
+if (catalog === null) throw new TypeError("Expected bundled capability catalog");
+process.stdout.write(JSON.stringify({ capabilities: catalog.length, removedTools: refreshed.registry.delta.removed.length }));
 `,
     );
     const build = Bun.spawnSync(

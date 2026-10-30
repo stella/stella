@@ -1,6 +1,13 @@
-import { Result } from "better-result";
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+const InstallChannelErrorBase: TaggedErrorClass<"InstallChannelError"> =
+  TaggedError("InstallChannelError");
+export class InstallChannelError extends InstallChannelErrorBase<{
+  message: string;
+  cause?: unknown;
+}> {}
 
 export type InstallChannel = "native" | "npm" | "homebrew";
 
@@ -38,10 +45,12 @@ export const detectInstallChannel = async ({
   configDir,
   executablePath = process.execPath,
   entrypoint = process.argv[1] ?? "",
-}: DetectInstallChannelOptions): Promise<InstallChannel> => {
+}: DetectInstallChannelOptions): Promise<
+  Result<InstallChannel, InstallChannelError>
+> => {
   const inferred = channelForPath(entrypoint) ?? channelForPath(executablePath);
   if (inferred !== undefined) {
-    return inferred;
+    return Result.ok(inferred);
   }
   const marker = await Result.tryPromise({
     try: () => readFile(path.join(configDir, "install-channel"), "utf-8"),
@@ -54,23 +63,34 @@ export const detectInstallChannel = async ({
       "code" in marker.error &&
       marker.error.code === "ENOENT"
     ) {
-      return "npm";
+      return Result.ok("npm");
     }
-    throw marker.error;
+    return Result.err(
+      new InstallChannelError({
+        message: "Could not read the installation channel.",
+        cause: marker.error,
+      }),
+    );
   }
   const channel = marker.value.trim();
   if (channel === "native") {
     // The marker belongs to the native executable, never the Node/Bun runtime
     // used to launch a source checkout or an npm shim.
     const executableName = path.basename(executablePath);
-    return executableName === "stella" || executableName === "stella.exe"
-      ? "native"
-      : "npm";
+    return Result.ok(
+      executableName === "stella" || executableName === "stella.exe"
+        ? "native"
+        : "npm",
+    );
   }
   if (channel === "npm" || channel === "homebrew") {
-    return channel;
+    return Result.ok(channel);
   }
-  return "npm";
+  return Result.err(
+    new InstallChannelError({
+      message: "The installation channel record is invalid.",
+    }),
+  );
 };
 
 export const backgroundUpdateCheckEnabled = (env: NodeJS.ProcessEnv): boolean =>

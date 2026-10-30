@@ -1,6 +1,6 @@
 import { buildCommand } from "@stricli/core";
 import type { Command } from "@stricli/core";
-import { Result } from "better-result";
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 import { constants } from "node:fs";
 import {
   access,
@@ -24,6 +24,20 @@ import {
 import { EXIT_CODES } from "../mcp-constants.js";
 import { buildServerFlag } from "../output-flags.js";
 
+const DoctorErrorBase: TaggedErrorClass<"DoctorError"> =
+  TaggedError("DoctorError");
+export class DoctorError extends DoctorErrorBase<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+const hasFsErrorCode = (cause: unknown, codes: readonly string[]): boolean =>
+  typeof cause === "object" &&
+  cause !== null &&
+  "code" in cause &&
+  typeof cause.code === "string" &&
+  codes.includes(cause.code);
+
 type PathInstallation = {
   path: string;
   target: string;
@@ -45,51 +59,49 @@ export const resolveDoctorNativePath = async ({
   configDir,
   defaultPath,
   activeNativePath,
-}: ResolveDoctorNativePathOptions): Promise<string> => {
+}: ResolveDoctorNativePathOptions): Promise<Result<string, DoctorError>> => {
   const stored = await Result.tryPromise({
     try: () => readFile(path.join(configDir, "install-path"), "utf-8"),
     catch: (cause) => cause,
   });
   if (Result.isError(stored)) {
-    if (
-      typeof stored.error === "object" &&
-      stored.error !== null &&
-      "code" in stored.error &&
-      stored.error.code === "ENOENT"
-    ) {
-      return activeNativePath ?? defaultPath;
+    if (hasFsErrorCode(stored.error, ["ENOENT"])) {
+      return Result.ok(activeNativePath ?? defaultPath);
     }
-    throw stored.error;
+    return Result.err(
+      new DoctorError({
+        message: "Could not read the native installation path.",
+        cause: stored.error,
+      }),
+    );
   }
   const nativePath = stored.value.replace(/\r?\n$/u, "");
   if (!path.isAbsolute(nativePath)) {
-    throw new CliCommandError(
-      "The recorded native installation path must be absolute.",
-      EXIT_CODES.validation,
+    return Result.err(
+      new DoctorError({
+        message: "The recorded native installation path must be absolute.",
+      }),
     );
   }
-  return nativePath;
+  return Result.ok(nativePath);
 };
 
 export const inspectPathInstallations = async ({
   pathValue,
   nativePath,
   platform = process.platform,
-}: InspectPathOptions): Promise<PathInstallation[]> => {
+}: InspectPathOptions): Promise<Result<PathInstallation[], DoctorError>> => {
   const native = await Result.tryPromise({
     try: () => realpath(nativePath),
     catch: (cause) => cause,
   });
-  if (
-    Result.isError(native) &&
-    !(
-      typeof native.error === "object" &&
-      native.error !== null &&
-      "code" in native.error &&
-      native.error.code === "ENOENT"
-    )
-  ) {
-    throw native.error;
+  if (Result.isError(native) && !hasFsErrorCode(native.error, ["ENOENT"])) {
+    return Result.err(
+      new DoctorError({
+        message: "Could not resolve the native executable path.",
+        cause: native.error,
+      }),
+    );
   }
   const nativeTarget = Result.isOk(native) ? native.value : undefined;
   const names =
@@ -120,31 +132,36 @@ export const inspectPathInstallations = async ({
         catch: (cause) => cause,
       });
       if (Result.isError(inspected)) {
-        if (
-          typeof inspected.error === "object" &&
-          inspected.error !== null &&
-          "code" in inspected.error &&
-          (inspected.error.code === "ENOENT" ||
-            inspected.error.code === "ENOTDIR" ||
-            inspected.error.code === "EACCES")
-        ) {
-          return undefined;
+        if (hasFsErrorCode(inspected.error, ["ENOENT", "ENOTDIR", "EACCES"])) {
+          return Result.ok(undefined);
         }
-        throw inspected.error;
+        return Result.err(
+          new DoctorError({
+            message: `Could not inspect executable ${candidate}.`,
+            cause: inspected.error,
+          }),
+        );
       }
       if (inspected.value === undefined) {
-        return undefined;
+        return Result.ok(undefined);
       }
       const channel =
         inspected.value === nativeTarget
           ? "native"
           : (channelForPath(inspected.value) ?? "unknown");
-      return { path: candidate, target: inspected.value, channel };
+      return Result.ok({ path: candidate, target: inspected.value, channel });
     }),
   );
-  return inspections.filter(
-    (entry): entry is PathInstallation => entry !== undefined,
-  );
+  const installations: PathInstallation[] = [];
+  for (const inspected of inspections) {
+    if (Result.isError(inspected)) {
+      return Result.err(inspected.error);
+    }
+    if (inspected.value !== undefined) {
+      installations.push(inspected.value);
+    }
+  }
+  return Result.ok(installations);
 };
 
 export const doctorLines = ({
@@ -191,25 +208,28 @@ export const doctorCommand: Command<Context> = buildCommand<
     },
   },
   func: async function func(this: Context, flags) {
-    const inspected = await Result.tryPromise(async () => {
-      const channel = await detectInstallChannel({ configDir: this.configDir });
-      const nativePath = await resolveDoctorNativePath({
-        configDir: this.configDir,
-        defaultPath: path.join(
-          os.homedir(),
-          ".local",
-          "bin",
-          this.process.platform === "win32" ? "stella.exe" : "stella",
-        ),
-        ...(channel === "native"
-          ? { activeNativePath: this.process.execPath }
-          : {}),
-      });
-      const installations = await inspectPathInstallations({
-        pathValue: this.process.env["PATH"] ?? "",
-        nativePath,
-        platform: this.process.platform,
-      });
+    const { configDir, process: proc } = this;
+    const inspected = await Result.gen(async function* inspectInstallation() {
+      const channel = yield* Result.await(detectInstallChannel({ configDir }));
+      const nativePath = yield* Result.await(
+        resolveDoctorNativePath({
+          configDir,
+          defaultPath: path.join(
+            os.homedir(),
+            ".local",
+            "bin",
+            proc.platform === "win32" ? "stella.exe" : "stella",
+          ),
+          ...(channel === "native" ? { activeNativePath: proc.execPath } : {}),
+        }),
+      );
+      const installations = yield* Result.await(
+        inspectPathInstallations({
+          pathValue: proc.env["PATH"] ?? "",
+          nativePath,
+          platform: proc.platform,
+        }),
+      );
       const lines = doctorLines({
         installations,
         channel,
@@ -220,48 +240,70 @@ export const doctorCommand: Command<Context> = buildCommand<
           (entry) => entry.channel === "native",
         );
         const first = installations.at(0);
-        if (
-          nativeIndex > 0 &&
-          first?.channel === "npm" &&
-          (await lstat(first.path)).isSymbolicLink()
-        ) {
-          const backup = `${first.path}.stella-disabled`;
-          const exists = await Result.tryPromise({
-            try: () => access(backup),
-            catch: (cause) => cause,
-          });
-          if (Result.isOk(exists)) {
-            return new CliCommandError(
-              `Backup already exists: ${backup}; no change made.`,
-              EXIT_CODES.validation,
-            );
-          }
-          if (!(
-            typeof exists.error === "object" &&
-            exists.error !== null &&
-            "code" in exists.error &&
-            exists.error.code === "ENOENT"
-          )) {
-            throw exists.error;
-          }
-          await rename(first.path, backup);
-          lines.push(
-            `Disabled ${first.path}. Undo: mv '${backup.replaceAll("'", "'\\''")}' '${first.path.replaceAll("'", "'\\''")}'`,
+        let fixed = false;
+        if (nativeIndex > 0 && first?.channel === "npm") {
+          const info = yield* Result.await(
+            Result.tryPromise({
+              try: () => lstat(first.path),
+              catch: (cause) =>
+                new DoctorError({
+                  message: "Could not inspect the shadowing executable.",
+                  cause,
+                }),
+            }),
           );
-        } else {
+          if (info.isSymbolicLink()) {
+            const backup = `${first.path}.stella-disabled`;
+            const exists = await Result.tryPromise({
+              try: () => access(backup),
+              catch: (cause) => cause,
+            });
+            if (Result.isOk(exists)) {
+              return Result.err(
+                new DoctorError({
+                  message: `Backup already exists: ${backup}; no change made.`,
+                }),
+              );
+            }
+            if (!hasFsErrorCode(exists.error, ["ENOENT"])) {
+              return Result.err(
+                new DoctorError({
+                  message: "Could not inspect the shadowing executable backup.",
+                  cause: exists.error,
+                }),
+              );
+            }
+            yield* Result.await(
+              Result.tryPromise({
+                try: () => rename(first.path, backup),
+                catch: (cause) =>
+                  new DoctorError({
+                    message: "Could not disable the shadowing executable.",
+                    cause,
+                  }),
+              }),
+            );
+            lines.push(
+              `Disabled ${first.path}. Undo: mv '${backup.replaceAll("'", "'\\''")}' '${first.path.replaceAll("'", "'\\''")}'`,
+            );
+            fixed = true;
+          }
+        }
+        if (!fixed) {
           lines.push(
             "No reversible PATH fix is available; use the migration command above.",
           );
         }
       }
-      this.process.stdout.write(`${lines.join("\n")}\n`);
-      return undefined;
+      return Result.ok(lines);
     });
-    return Result.isError(inspected)
-      ? new CliCommandError(
-          "Could not inspect stella installations on PATH.",
-          EXIT_CODES.validation,
-        )
-      : inspected.value;
+    if (Result.isError(inspected)) {
+      return new CliCommandError(
+        inspected.error.message,
+        EXIT_CODES.validation,
+      );
+    }
+    proc.stdout.write(`${inspected.value.join("\n")}\n`);
+    return undefined;
   },
 });

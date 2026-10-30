@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
+  mkdir,
   mkdtemp,
   open,
   readdir,
@@ -39,7 +40,36 @@ describe("native self update", () => {
           entrypoint: "/tmp/stella",
           executablePath: "/tmp/stella",
         }),
-      ).toBe("npm");
+      ).toEqual(Result.ok("npm"));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("channel read failures and invalid records return tagged errors", async () => {
+    const dir = await mkdtemp(
+      path.join(os.tmpdir(), "stella-channel-failure-"),
+    );
+    const options = {
+      configDir: dir,
+      entrypoint: "/native/stella",
+      executablePath: "/native/stella",
+    };
+    try {
+      await mkdir(path.join(dir, "install-channel"));
+      const unreadable = await detectInstallChannel(options);
+      expect(Result.isError(unreadable)).toBe(true);
+      if (Result.isError(unreadable)) {
+        expect(unreadable.error._tag).toBe("InstallChannelError");
+        expect(unreadable.error.cause).toMatchObject({ code: "EISDIR" });
+      }
+      await rm(path.join(dir, "install-channel"), { recursive: true });
+      await writeFile(path.join(dir, "install-channel"), "unknown-channel");
+      const invalid = await detectInstallChannel(options);
+      expect(Result.isError(invalid)).toBe(true);
+      if (Result.isError(invalid)) {
+        expect(invalid.error.message).toContain("invalid");
+      }
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -154,21 +184,21 @@ describe("native self update", () => {
           entrypoint: "/prefix/lib/node_modules/@stll/cli/dist/cli.js",
           executablePath: "/prefix/bin/node",
         }),
-      ).toBe("npm");
+      ).toEqual(Result.ok("npm"));
       expect(
         await detectInstallChannel({
           configDir: dir,
           entrypoint: "/source/packages/cli/src/cli.ts",
           executablePath: "/usr/local/bin/bun",
         }),
-      ).toBe("npm");
+      ).toEqual(Result.ok("npm"));
       expect(
         await detectInstallChannel({
           configDir: dir,
           entrypoint: "/home/user/.local/bin/stella",
           executablePath: "/home/user/.local/bin/stella",
         }),
-      ).toBe("native");
+      ).toEqual(Result.ok("native"));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
