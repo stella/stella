@@ -1091,7 +1091,8 @@ const readRequiredRecord: RequiredRecordReader = async (runId, artifact) => {
     const token = githubToken();
     const download = Bun.spawn(
       [
-        "gh",
+        "bash",
+        nodePath.join(ROOT_DIR, "scripts/gh-retry.sh"),
         "run",
         "download",
         runId,
