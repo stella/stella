@@ -13,6 +13,8 @@ afterAll(async () => {
 test("accessible-disabled styling preserves activation", () => {
   const onClick = mock(() => undefined);
   const onKeyDown = mock(() => undefined);
+  // Queried through this render's own result: `screen` stays bound to the
+  // DOM of whichever test file loaded Testing Library first.
   const view = render(
     <Button data-accessible-disabled="" onClick={onClick} onKeyDown={onKeyDown}>
       Configure

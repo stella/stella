@@ -638,6 +638,7 @@ const createCitationDigest = (
 });
 
 const createReadDecisionResult = () => ({
+  extractionWarnings: [],
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -4128,6 +4129,7 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
             textWithheldReason: null,
+            extractionWarnings: [],
             sectionIndex: 3,
             doctrine: "unread",
             treatment: "negative",
@@ -4160,6 +4162,7 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0002",
             citationText: "Rozhodnutí, které korpus nedrží",
             textWithheldReason: null,
+            extractionWarnings: [],
             sectionIndex: null,
             doctrine: "unread",
             treatment: "unclassified",
@@ -4205,6 +4208,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0001",
           citationText: "29 Cdo 123/2024",
           textWithheldReason: null,
+          extractionWarnings: [],
           polarity: "negative",
           doctrine: "unread",
           decision: {
@@ -4228,6 +4232,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0002",
           citationText: "Rozhodnutí, které korpus nedrží",
           textWithheldReason: null,
+          extractionWarnings: [],
           polarity: "unclassified",
           doctrine: "unread",
           decision: null,
@@ -6679,6 +6684,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           status: "found",
           decision: {
+            extractionWarnings: [],
             decisionId: DECISION_ID,
             caseNumber: "29 Cdo 123/2024",
             // The shared link contract: the reader's page, and beside it the
@@ -6791,6 +6797,29 @@ describe("OpenAI-compatible MCP tools", () => {
         toolName: "read_case_law_decision",
       });
 
+    test("extraction warnings survive full and passage reads through the CLI", async () => {
+      const extractionWarnings = [
+        { rule: "rtf-control", count: 4, firstOffsets: [0, 12, 24] },
+      ];
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        extractionWarnings,
+      });
+      for (const mode of [{ full: true }, { query: "court" }]) {
+        const result = await handleMcpToolCall({
+          args: { decision_ids: [DECISION_ID], ...mode },
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        });
+        expect(parseToolPayload(result)).toMatchObject({
+          items: [{ decision: { extractionWarnings } }],
+        });
+        expect(renderThroughCli(result, undefined).printed).toMatchObject({
+          items: [{ decision: { extractionWarnings } }],
+        });
+      }
+    });
+
     test.each([null, createCitationDigest()])(
       "unlaunched countries report unavailable citations on MCP and CLI (%#)",
       async (digest) => {
@@ -6822,6 +6851,7 @@ describe("OpenAI-compatible MCP tools", () => {
           createdAt: new Date("2024-02-01T00:00:00.000Z"),
           updatedAt: new Date("2024-02-01T00:00:00.000Z"),
           source: { ...base.source, id: toSafeId<"caseLawSource">("src_1") },
+          sourceLanguages: null,
           judges: [],
           languageAlternates: [],
           citationsFrom: [],
@@ -7480,6 +7510,37 @@ describe("OpenAI-compatible MCP tools", () => {
         text: undefined,
       },
     ]);
+  });
+
+  test("read_case_law_decision answers an entry whose read fails on its own, and reads the rest", async () => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => {
+        if (locator.id === CITING_DECISION_ID) {
+          throw new Error("stored row the read cannot serve");
+        }
+        return {
+          ...base,
+          documentAst: null,
+          fulltext: "Readable text.",
+          id: locator.id,
+        };
+      },
+    );
+
+    const payload = await readDecisions({
+      decision_ids: [CITING_DECISION_ID, DECISION_ID, CITING_DECISION_ID],
+    });
+
+    expect(
+      payload.items.map(({ decisionId, status }) => [decisionId, status]),
+    ).toEqual([
+      [CITING_DECISION_ID, "read_failed"],
+      [DECISION_ID, "found"],
+      [CITING_DECISION_ID, "read_failed"],
+    ]);
+    expect(payload.items.at(0)?.message).toContain("could not be read");
+    expect(payload.items.at(1)?.decision?.text).toBe("Readable text.");
   });
 
   test("read_case_law_decision returns the whole text with full", async () => {

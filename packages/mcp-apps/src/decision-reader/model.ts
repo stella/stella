@@ -143,9 +143,12 @@ export const appendReaderPage = ({
   }
   const metadataEntries = new Map(Object.entries(page.metadata));
   const stripFragment = (url: string | null) => url?.split("#", 1).at(0);
+  // Values are compared as validated JSON, so a warning list compares by value.
   if (
     Object.entries(state.metadata).some(
-      ([key, value]) => key !== "url" && metadataEntries.get(key) !== value,
+      ([key, value]) =>
+        key !== "url" &&
+        JSON.stringify(metadataEntries.get(key)) !== JSON.stringify(value),
     ) ||
     stripFragment(state.metadata.url) !== stripFragment(page.metadata.url)
   ) {

@@ -218,6 +218,7 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       ui_playground_specs: ${{ steps.ui-playground-plan.outputs.specs || '[]' }}
+      ui_playground_matrix: ${{ steps.ui-playground-plan.outputs.matrix || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
@@ -1004,6 +1005,8 @@ jobs:
         env:
           UI_PLAYGROUND_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          EVENT_NAME: ${{ github.event_name }}
+          DESKTOP_REQUIRED: ${{ steps.changed-files.outputs.desktop_browser_required }}
         run: |
           if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
             echo "::warning::Changed files are unknown; running every geometry spec."
@@ -1016,6 +1019,9 @@ jobs:
             specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
           fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          all_specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          matrix=$(UI_PLAYGROUND_SELECTED_SPECS="$specs" UI_PLAYGROUND_ALL_SPECS="$all_specs" bun scripts/ui-playground-shards.ts)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Plan query performance scope
         id: query-perf-scope
@@ -3325,11 +3331,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The UI playground suite runs alone in six Playwright shards: on one
-        # runner its dev-server page loads made it the longest merge-group job.
-        # A pull request runs only its selected geometry specs on one
-        # unsharded `playground` leg.
-        suite: ${{ github.event_name == 'pull_request' && needs.ci-plan.outputs.desktop_browser_required == 'true' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["desktop","playground"]') || github.event_name == 'pull_request' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["playground"]') || github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3","playground-4","playground-5","playground-6"]') }}
+        include: ${{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
@@ -3523,21 +3525,16 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: (matrix.suite == 'playground' || matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true'
+        if: startsWith(matrix.suite, 'playground-') && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
-          SUITE: ${{ matrix.suite }}
-          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
+          SELECTED_SPECS: ${{ toJSON(matrix.specs) }}
         run: |
           cd apps/web
-          if [[ "$SUITE" == playground ]]; then
-            # Selected specs are repository paths; Playwright matches them
-            # against each test file's absolute path.
-            mapfile -t specs < <(bun -e 'for (const spec of JSON.parse(process.env.SELECTED_SPECS ?? "[]")) console.log(spec)')
-            bun run test:e2e:ui-playground "${specs[@]}"
-            exit 0
-          fi
-          bun run test:e2e:ui-playground --shard="${SUITE#playground-}/6"
+          # Selected specs are repository paths; Playwright matches them
+          # against each test file's absolute path.
+          mapfile -t specs < <(bun -e 'for (const spec of JSON.parse(process.env.SELECTED_SPECS ?? "[]")) console.log(spec)')
+          bun run test:e2e:ui-playground "${specs[@]}"
 
       - name: Test extension browser boundary
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
@@ -7390,6 +7387,11 @@ jobs:
           # every exit, so its verdict is this step's exit status.
           RECORDED_NEEDS="$NEEDS"
           required_jobs='[]'
+          # The unmet checks the full-depth verdict found, published beside
+          # (never inside) the required-jobs record as `ci-required-violations`
+          # so a reader can tell a failure it may excuse from one it may not.
+          violations=""
+          violations_evaluated=false
           reused_from_run_id=""
           # Set by each exit that passes without evaluating any job.
           pass_through_reason=""
@@ -7427,6 +7429,13 @@ jobs:
                 not_required: ([keys[] | select(. != "ci-plan")] - $counted),
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
+            violations_record=$(jq -nce --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
+              --arg head "${HEAD_SHA:-}" --arg evaluated "$violations_evaluated" --arg violations "${violations:-}" '
+              def nonempty: if . == "" then null else . end;
+              def count: if test("^[1-9][0-9]*$") then tonumber else null end;
+              {run_id: ($run | count), run_attempt: ($attempt | count), head_sha: ($head | nonempty),
+                evaluated: ($evaluated == "true"), violations: ($violations | nonempty)}') || return 1
+            echo "required_violations=$violations_record" >> "${GITHUB_OUTPUT:-}"
           }
           trap 'record_required_jobs "$?" || echo "::error::The required-jobs record could not be written."' EXIT
           # The required-jobs record a CI run uploaded, checked against its id.
@@ -7888,6 +7897,7 @@ jobs:
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
+              violations_evaluated=true
               if [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
@@ -8078,6 +8088,34 @@ jobs:
           name: ci-required-summary
           overwrite: true
           path: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
+          retention-days: 90
+          if-no-files-found: error
+
+      # The unmet checks behind the verdict, as an artifact of their own: the
+      # required-jobs record above has a fixed key set that other readers
+      # parse strictly. The release health gate reads both.
+      - name: Write required-violations record
+        if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          REQUIRED_VIOLATIONS: ${{ steps.outcome.outputs.required_violations }}
+          RECORD_PATH: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
+        run: |
+          if [[ -z "$REQUIRED_VIOLATIONS" ]]; then
+            echo "::error::Evaluate CI outcome wrote no required-violations record."
+            exit 1
+          fi
+          mkdir -p "$(dirname "$RECORD_PATH")"
+          printf '%s\n' "$REQUIRED_VIOLATIONS" > "$RECORD_PATH"
+
+      - name: Upload required-violations record
+        if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-required-violations
+          overwrite: true
+          path: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
           retention-days: 90
           if-no-files-found: error
 

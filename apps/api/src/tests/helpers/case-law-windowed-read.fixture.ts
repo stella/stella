@@ -142,6 +142,7 @@ export const caseLawWindowFixture = async (
               textAccess: "readable",
               ast,
               decision: {
+                extractionWarnings: [],
                 id: decisionId,
                 caseNumberType: "case-number",
                 caseNumber: "1 Test",

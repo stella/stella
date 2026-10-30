@@ -814,8 +814,10 @@
       "deleteRateTable": "Smazat tabulku sazeb",
       "editRateTable": "Upravit tabulku sazeb",
       "effectiveFrom": "Platnost od",
+      "effectiveRateRequired": "Pro tento spis, osobu a datum není nastavena platná sazba. Přidejte sazbu nebo zaznamenejte čas jako nefakturovatelný.",
       "effectiveTo": "Platnost do",
       "hourlyRate": "Hodinová sazba",
+      "logNonBillable": "Zaznamenat jako nefakturovatelný",
       "noRateEntries": "Zatím žádné sazby",
       "noRateFound": "Není nastavena žádná sazba",
       "noRateTables": "Zatím žádné tabulky sazeb",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
-      "remove": "Odebrat filtr {filter}"
+      "countryMismatch": "Filtry byly odebrány, protože nepatří do země {country}: {filters}.",
+      "remove": "Odebrat filtr {filter}",
+      "showInCountry": "Zobrazit {filter} pro zemi {country}"
     },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
     "activity": {
+      "newerVersion": "Tento obsah se zobrazí v novější verzi.",
       "review": "Informace o revizi"
     },
     "aiPrompt": "Pole pro zprávu AI",
@@ -2357,6 +2362,7 @@
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
     "unsavedChanges": "Neuložené změny",
+    "unsavedChangesClose": "Neuložené změny. Dalším zavřením je zahodíte",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
     "unverified": "Neověřeno",
@@ -2398,6 +2404,8 @@
     "returnToAgent": "Vraťte se ke svému agentovi a pokračujte.",
     "returnsLocally": "Vrátíte se do {clientName} na tomto počítači",
     "returnsTo": "Vrátíte se do {clientName}",
+    "scopeAccountExportRead": "Číst exporty vašich osobních údajů",
+    "scopeAccountExportWrite": "Žádat o exporty vašich osobních údajů",
     "scopeAdminRead": "Číst protokol auditu vaší organizace",
     "scopeAdminWrite": "Spravovat členy a nastavení organizace",
     "scopeBillingWrite": "Vytvoření, úprava a smazání vašich časových záznamů",
@@ -5049,6 +5057,8 @@
       "desktopCardConnectedTitle": "stella desktop je propojen",
       "desktopCardMissingDetail": "Nainstalujte ho, nebo ho připojte, pokud už na tomto počítači nainstalovaný je.",
       "desktopCardMissingTitle": "stella desktop zatím není propojen",
+      "desktopCardOpeningDetail": "Propojujeme tento počítač s účtem <bdi>{identity}</bdi> na {host}. Pokud se prohlížeč zeptá, povolte otevření stella desktop.",
+      "desktopCardOpeningTitle": "Otevírá se stella desktop...",
       "desktopCardOutdatedDetail": "Verze {version} je propojena s účtem <bdi>{identity}</bdi>. Nainstalujte nejnovější verzi, aby dokumenty a aktivita dál fungovaly.",
       "desktopCardOutdatedTitle": "stella desktop potřebuje aktualizaci",
       "desktopClipboardDescription": "Otevírejte, prohledávejte, třiďte a znovu používejte text zkopírovaný v libovolné aplikaci.",
@@ -5068,6 +5078,7 @@
       "desktopInstallOpenStep": "Jednou otevřete stella desktop. Schránka se zobrazí hned a poté zůstane dostupná v řádku nabídek macOS nebo v oznamovací oblasti Windows.",
       "desktopInstallTitle": "Instalace a spuštění",
       "desktopInstallWindowsStep": "Spusťte instalační program a postupujte podle pokynů.",
+      "desktopOpenApp": "Otevřít stella desktop",
       "desktopPrivacyDescription": "Historie schránky je šifrovaná a uložená v tomto zařízení.",
       "desktopPrivacyTitle": "Soukromí ve výchozím nastavení",
       "desktopSelfHostDescription": "Důvěřujte této URL stella v podepsané desktopové aplikaci, aby se dokumenty z této instalace mohly otevírat lokálně.",
@@ -5077,6 +5088,15 @@
       "displayNameSaved": "Zobrazované jméno aktualizováno",
       "enterOtp": "Ověřovací kód",
       "otpSentSuccess": "Ověřovací kód byl odeslán na váš e-mail.",
+      "personalDataExportDescription": "Požádejte o stažitelnou kopii osobních údajů ve svém účtu. Soubor bude dostupný jednu hodinu.",
+      "personalDataExportExpired": "Platnost tohoto exportu vypršela.",
+      "personalDataExportExpiresAt": "Dostupné do {expiresAt}.",
+      "personalDataExportFailed": "Export se nepodařilo připravit.",
+      "personalDataExportReady": "Export je připraven.",
+      "personalDataExportRequest": "Požádat o export",
+      "personalDataExportRequestNew": "Požádat o nový export",
+      "personalDataExportTitle": "Uložit moje data",
+      "personalDataExportWorking": "Připravuje se export…",
       "preferredName": "Preferované jméno",
       "preferredNameDescription": "Použije se jako autor u sledovaných změn a komentářů v DOCX.",
       "preferredNamePlaceholder": "Vaše jméno",
@@ -5414,6 +5434,7 @@
     "showCitedPartOnly": "Zobrazit jen citovanou část",
     "showFullProvision": "Zobrazit celé ustanovení",
     "showInText": "Zobrazit v textu",
+    "sortNeedsYear": "Pro řazení podle tohoto sloupce zvolte ve filtrech rok.",
     "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {
       "current": "Účinné",
@@ -6511,6 +6532,14 @@
           "started": "Spustil(a) kontrolu dokumentu"
         },
         "empty": "V tomto spisu zatím není žádná aktivita.",
+        "fields": {
+          "dueDate": "termín",
+          "parentFolder": "nadřazená složka",
+          "priority": "priorita",
+          "property": "vlastnost",
+          "schedule": "plán",
+          "sortOrder": "pořadí"
+        },
         "filterLabel": "Filtrovat aktivitu",
         "filters": {
           "all": "Veškerá aktivita",
@@ -6560,6 +6589,7 @@
           "translation": "překlad"
         },
         "title": "Aktivita",
+        "updatedFields": "Aktualizováno: {fields}",
         "views": {
           "list": "Seznam",
           "timeline": "Časová osa"
