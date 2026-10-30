@@ -1,11 +1,13 @@
-import { panic } from "better-result";
-
 export const UI_PLAYGROUND_SHARD_COUNT = 6;
 
 export type UiPlaygroundMatrixLeg = {
   suite: string;
   specs: readonly string[];
 };
+
+class InvalidUiPlaygroundSpecsError extends Error {
+  override name = "InvalidUiPlaygroundSpecsError";
+}
 
 type PlanUiPlaygroundMatrixOptions = {
   selectedSpecs: readonly string[];
@@ -75,7 +77,9 @@ if (import.meta.main) {
     !Array.isArray(allSpecs) ||
     !allSpecs.every((spec) => typeof spec === "string")
   ) {
-    panic("UI playground specs must be JSON arrays of strings");
+    throw new InvalidUiPlaygroundSpecsError(
+      "UI playground specs must be JSON arrays of strings",
+    );
   }
   console.log(
     JSON.stringify(
