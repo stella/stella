@@ -21,8 +21,10 @@ import {
 } from "./aggregate-transaction-budget";
 import {
   budgetedSetupRead,
+  getPendingTransactionBudget,
   getTransactionBudget,
   prepareTransactionBudgetSetting,
+  withTransactionBudgetContext,
 } from "./transaction-budget-owner";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -34,6 +36,43 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("aggregate transaction budget (postgres)", () => {
+    test.each([
+      {
+        pending: AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
+        declared: AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+        expected: AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
+        setting: "5s",
+      },
+      {
+        pending:
+          AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
+        declared: AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+        expected: AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+        setting: "30s",
+      },
+    ])(
+      "raw admission retains the tighter pending or declared $setting policy",
+      async ({ pending, declared, expected, setting }) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          await withTransactionBudgetContext(pending, async () => {
+            await withAggregateTransaction(
+              openClient().db,
+              declared,
+              async (tx) => {
+                expect(
+                  await tx.execute(
+                    drizzleSql`SELECT current_setting('transaction_timeout') AS timeout`,
+                  ),
+                ).toEqual([{ timeout: setting }]);
+                expect(getTransactionBudget(tx)).toBe(expected);
+              },
+            );
+            expect(getPendingTransactionBudget()).toBe(pending);
+          });
+        });
+      },
+    );
+
     test.each([
       {
         declared: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,

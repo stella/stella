@@ -756,9 +756,13 @@ export const withAggregateTransaction = async <Tx extends object, T>(
   if (histories.has(database) || "rollback" in database) {
     panic("Use the aggregate savepoint owner for nested transactions");
   }
-  let effectiveBudget = budget;
+  const selected = tighterTransactionBudget({
+    declared: budget,
+    requested: getPendingTransactionBudget(),
+  });
+  let effectiveBudget = selected;
   return await withTransactionBudgetContext(
-    budget,
+    selected,
     async () =>
       await withAggregateTransactionBoundary(
         () =>
@@ -773,11 +777,11 @@ export const withAggregateTransaction = async <Tx extends object, T>(
             }
             const initialized = getTransactionBudget(tx);
             if (initialized === undefined) {
-              await initializeTransactionBudget(tx, budget);
+              await initializeTransactionBudget(tx, selected);
             } else if (
               tighterTransactionBudget({
                 declared: initialized,
-                requested: budget,
+                requested: selected,
               }) !== initialized
             ) {
               panic("Physical transaction already has a looser budget owner");
