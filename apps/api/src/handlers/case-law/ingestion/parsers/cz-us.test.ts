@@ -521,12 +521,14 @@ describe("parseUsDecisionHtml", () => {
       });
     });
 
+    // A concurring judge agrees with the outcome: the opinion is that
+    // judge's argumentation, not a dissent.
     test.each([
-      "Odlišné stanovisko sudcu A. B.",
-      "Odlišné stanovisko sudkyne A. B.",
-      "Paralelní stanovisko soudkyně A. B.",
-      "Konkurujúce stanovisko sudcov A. B. a C. D.",
-    ])("shares CS/SK opinion roles at %s", (opinionLine) => {
+      ["Odlišné stanovisko sudcu A. B.", "dissent"],
+      ["Odlišné stanovisko sudkyne A. B.", "dissent"],
+      ["Paralelní stanovisko soudkyně A. B.", "argumentation"],
+      ["Konkurujúce stanovisko sudcov A. B. a C. D.", "argumentation"],
+    ] as const)("shares CS/SK opinion roles at %s", (opinionLine, role) => {
       const lines = [
         "Odůvodnění:",
         `1. ${MAJORITY_TEXT}`,
@@ -552,7 +554,7 @@ describe("parseUsDecisionHtml", () => {
           type: "paragraph",
           plainText: DISSENT_TEXT,
           number: 2,
-          role: "dissent",
+          role,
         }),
       );
     });

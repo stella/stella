@@ -192,9 +192,11 @@ const ACADEMIC_TITLES: ReadonlySet<string> = new Set(
 );
 
 /**
- * Whether a tail names a person: an author noun or an academic title followed
- * by a capitalized word ("soudce Jana Nováka", "JUDr. Novák"), not an author
- * noun used generically ("soudce prvního stupně").
+ * Whether a tail attributes the opinion: an author noun or an academic title
+ * followed by a capitalized name ("soudce Jana Nováka", "JUDr. Novák") or
+ * ending the heading, whose next line names the author ("soudkyně"). An
+ * author noun a lowercase word qualifies is generic ("soudce prvního
+ * stupně").
  */
 const namesAuthorByName = (tail: string): boolean => {
   const words = stripDiacritics(tail)
@@ -203,9 +205,8 @@ const namesAuthorByName = (tail: string): boolean => {
   return words.some((word, index) => {
     const next = words[index + 1];
     return (
-      next !== undefined &&
       (AUTHOR_WORDS.has(word.toLowerCase()) || ACADEMIC_TITLES.has(word)) &&
-      /^\p{Lu}/u.test(next)
+      (next === undefined || /^\p{Lu}/u.test(next))
     );
   });
 };
