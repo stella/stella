@@ -1,6 +1,6 @@
 //! The activity window's explicit confirmation boundary. Block references stay local.
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::{
   account::{self, AccountRequest, AccountState, LinkedAccount},
@@ -213,7 +213,7 @@ pub async fn time_entry_submit_batch_confirmed(
           .cancel_pending_batch(day, &batch.idempotency_key)
           .map_err(uncertain)?;
         drop(manager);
-        let _ = app.emit(activity::CHANGED_EVENT, ());
+        activity::emit_changed(&app);
         return Err(SubmitError::Rejected);
       }
       Err(_) => return Err(SubmitError::Uncertain),
@@ -239,7 +239,7 @@ pub async fn time_entry_submit_batch_confirmed(
   };
   // The account request lease covers the submission and its marker.
   drop(account);
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(&app);
   Ok(SubmitResult {
     entries: created.entries,
     marker_saved,
@@ -265,7 +265,7 @@ pub async fn time_entry_discard_pending_batch_confirmed(
   manager.require_caller(&caller)?;
   manager.cancel_pending_batch(date, &idempotency_key)?;
   drop(manager);
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(&app);
   Ok(())
 }
 

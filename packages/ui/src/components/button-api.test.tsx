@@ -220,6 +220,16 @@ describe("Button consolidated additions", () => {
   });
 });
 
+describe("Button plain positioning", () => {
+  test("is the containing block for anything it overlays", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<Button variant="plain">Card</Button>),
+    );
+
+    expect(classes).toContain("relative");
+  });
+});
+
 describe("Button loading keeps its width", () => {
   test("without an icon the label stays, transparent, under a centred loader", () => {
     const markup = renderToStaticMarkup(<Button loading>Save draft</Button>);

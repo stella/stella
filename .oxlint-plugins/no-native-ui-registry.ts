@@ -98,6 +98,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "animated-count": noNative("animates a number's digits"),
   "application-rail": noNative("app navigation chrome built from Button"),
   avatar: owned(AVATAR_RULE, "user avatars render through UserIdentity"),
+  badge: noNative(
+    "HTML has no badge element or role; a hand-styled pill is a span no " +
+      "lexical pattern tells apart from other inline text",
+  ),
   "bidi-text": owned(
     "require-dir-on-rendered-name/require-dir-on-rendered-name",
     "raw <bdi>, <bdo> and dir on rendered names are reported there",
@@ -277,6 +281,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",
   ),
+  "scroll-edge-fade": notComponent("scroll edge mask helpers"),
   "scroll-to-top": noNative(
     "a floating Button bound to a scroll container; its markup is the button rule's",
   ),
@@ -341,6 +346,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
+  text: noNative(
+    "text in one of the design system's roles; a <span> or <p> is ordinary " +
+      "markup on the web",
+  ),
   "text-mark": owned(
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
     "raw <mark> and hand-styled marks are reported there",
@@ -369,6 +378,10 @@ export const NO_NATIVE_UI_REGISTRY = {
       },
     ],
   }),
+  "truncated-text": owned(
+    nativeRuleId("tooltip"),
+    "a title on truncated text is reported by the tooltip rule",
+  ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),

@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Conta",
     "server": "Servidor",
-    "signOut": "Sair"
+    "signOut": "Sair",
+    "deleteAccount": "Excluir conta",
+    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu."
   },
   "header": {
     "search": "Pesquisar"
@@ -199,7 +201,8 @@
     "retry": "Tentar novamente",
     "unavailable": "O controle de horas não está ativado na sua organização.",
     "startFailed": "Não foi possível iniciar o cronômetro. Tente novamente.",
-    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente."
+    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente.",
+    "more": "{count, plural, one {mais # cronômetro} other {mais # cronômetros}}"
   },
   "scan": {
     "title": "Digitalizar um documento",

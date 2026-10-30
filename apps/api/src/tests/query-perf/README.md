@@ -1,12 +1,23 @@
 Run `bun run test:perf` from `apps/api` with `DATABASE_URL` pointing to a
 fresh, migrated PostgreSQL 18 database. The suite measures every read budget
 in `apps/api/src/lib/db/read-budgets.ts` with `EXPLAIN (ANALYZE, BUFFERS)` and
-fails when a measurement exceeds its budget. Budgets are absolute: nothing is
+fails when a measurement exceeds its budget or has a plan shape that cannot
+scale. Budgets are absolute: nothing is
 recorded, and nothing is compared with an earlier run, so a statement that has
 been expensive for weeks fails as surely as a new one. The primary metric is
 the root shared hit-plus-read block count; child counters already contribute
-to the root and are not added again. Execution time is only a hang guard
-(10 seconds). It does not use the in-process database.
+to the root and are not added again.
+
+The analyzer walks every measured statement. It rejects sequential scans on
+large (or undeclared) relations, lossy bitmap heap scans, nested loops with
+more than 1,000 unbounded outer rows, sort/hash spills, and execution time
+that would exceed one quarter of the measured owner's runtime statement
+deadline after scaling. Every measurement also has a fixed 10-second execution-
+time guard. An owner without its own deadline is a typed finding.
+The fixture represents 1% of the production-shape population, so its
+documented scale factor is 100. Time is a coarse deadline guard rather than a
+benchmark; pages and plan shape are the deterministic gates. The suite does
+not use the in-process database.
 
 Tenant and corpus profiles run in fresh databases cloned from the migrated
 template; each fixture database is dropped after its clients close. The
@@ -34,6 +45,14 @@ it before closing the connection.
   jurisdictions flipped to their own), each with a queue past the freshness
   report's scan cap, so a cap applied per generation instead of per run goes
   over the budget.
+
+- Global Case Law search (`case-law-search-fixture.ts`): 3,000 and 30,000
+  decisions with 200 fixed full-text matches and an 11-row page. Wide section
+  bodies exercise TOAST reads. The production statement must fit its buffer
+  budget at both sizes and preserve the same rows, fields and ordering as a
+  control that moves the page bound after enrichment. That control must exceed
+  the budget. Logs report both measurements and plans; the read cost must stay
+  stable as unrelated decisions grow.
 
 The corpus profile also checks the gate itself on every run: the freshness
 report's former unbounded reads (`unbounded-freshness-fixture.ts`) must exceed
