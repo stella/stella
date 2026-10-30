@@ -18,7 +18,11 @@ import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
-import { AGENT_CALL_SURFACE, decideAgentCall } from "@/api/mcp/agent-access";
+import {
+  AGENT_ACCESS_TARGET,
+  AGENT_CALL_SURFACE,
+  decideAgentCall,
+} from "@/api/mcp/agent-access";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
 
 type DownloadAuthenticationDependencies = {
@@ -70,7 +74,10 @@ const authenticateAccountExportDownload = async (
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
   }
   const agentDecision = decideAgentCall({
-    target: { type: "capability", id: "account-exports.download.get" },
+    target: {
+      type: AGENT_ACCESS_TARGET.capability,
+      id: "account-exports.download.get",
+    },
     context: {},
     surface: AGENT_CALL_SURFACE.mcp,
     subject: "Account export download",

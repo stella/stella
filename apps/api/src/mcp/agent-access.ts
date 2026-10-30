@@ -651,15 +651,24 @@ const isWriteToolName = (name: string): name is McpWriteToolName =>
 const isCatalogCapabilityId = (id: string): id is CatalogCapabilityId =>
   Object.hasOwn(CAPABILITY_AGENT_ACCESS, id);
 
+export const AGENT_ACCESS_TARGET = {
+  tool: "tool",
+  capability: "capability",
+} as const;
+
 export type AgentAccessTarget =
-  | { type: "tool"; name: string; access: McpToolAccess }
-  | { type: "capability"; id: string };
+  | {
+      type: typeof AGENT_ACCESS_TARGET.tool;
+      name: string;
+      access: McpToolAccess;
+    }
+  | { type: typeof AGENT_ACCESS_TARGET.capability; id: string };
 
 type AgentAccessContext = Pick<McpRequestContext, "toolConfirmation">;
 
 const staticAgentAccess = (target: AgentAccessTarget): ToolAgentAccess => {
   switch (target.type) {
-    case "tool": {
+    case AGENT_ACCESS_TARGET.tool: {
       if (target.access === "read") {
         return OPEN;
       }
@@ -667,7 +676,7 @@ const staticAgentAccess = (target: AgentAccessTarget): ToolAgentAccess => {
         ? WRITE_TOOL_AGENT_ACCESS[target.name]
         : panic(`Write tool ${target.name} has no agent access`);
     }
-    case "capability":
+    case AGENT_ACCESS_TARGET.capability:
       return isCatalogCapabilityId(target.id)
         ? CAPABILITY_AGENT_ACCESS[target.id]
         : panic(`Capability ${target.id} has no agent access`);

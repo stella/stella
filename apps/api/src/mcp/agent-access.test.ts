@@ -104,6 +104,7 @@ describe("agent access is resolved in one place", () => {
     // helpers built on them (`finalAgentRefusal`, `describeForAgents`).
     expect(Object.keys(agentAccess).toSorted()).toEqual([
       "AGENT_ACCESS_KIND",
+      "AGENT_ACCESS_TARGET",
       "AGENT_CALL_SURFACE",
       "decideAgentCall",
       "describeAgentAccess",
