@@ -148,6 +148,18 @@ export const mockFetchWithFixtures = async (
 };
 
 /**
+ * A value as the reconciliation ledger hands it back: stored as JSONB and read
+ * days later. Not a deep clone: the JSON round trip is the point, since it
+ * drops `undefined` fields and turns other non-JSON values into what the
+ * ledger would return, which `structuredClone` would keep.
+ */
+export const throughLedgerJson = (value: unknown): unknown => {
+  const stored = JSON.stringify(value);
+  const parked: unknown = JSON.parse(stored);
+  return parked;
+};
+
+/**
  * The reconciliation capability an adapter's own tests exist to exercise.
  *
  * Every case-law adapter implements the capability; this helper preserves the

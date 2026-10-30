@@ -68,6 +68,11 @@ import {
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import type { CollisionFilterProof } from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
+import {
+  type CollisionRetainedDecisions,
+  retainListedQuarantineDecisions,
+} from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
 import type {
   FailedSliceCandidate,
   LedgerSlice,
@@ -88,6 +93,7 @@ import {
   MAX_SLICE_PAGES,
   SLICE_LISTING_PASSES,
   SLICE_LISTING_PROOF,
+  unstoredRecordCount,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
@@ -113,10 +119,12 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { isQuarantineListingIdentity } from "@/api/lib/legal-search/quarantine-identity";
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
@@ -228,12 +236,19 @@ type ReconciliationUnitSummary = {
   unit: ReconciliationWorkUnit["type"];
   reason: SliceWalkReason | null;
   slice: string | null;
-  /** Items the publisher listed, including repeats and unkeyable ones. */
+  /** Items the publisher listed, including repeats. */
   listed: number;
-  /** Distinct keyable identities; this is what the ledger's `reported` is. */
+  /** Distinct identities; this is what the ledger's `reported` is. */
   keyable: number;
-  unidentifiable: number;
   duplicate: number;
+  /**
+   * Listed records no row can hold: ones stating no stable field, and the
+   * extra records behind a colliding quarantine identity. Outside `keyable`,
+   * so the ledger's settledness is unchanged; see `unstoredRecordCount`.
+   */
+  unstored: number;
+  /** See `ListedSlice.quarantinePeerCollisions`. */
+  quarantinePeerCollisions: number;
   heldBefore: number;
   /**
    * Listed identities that are missing but already tracked, so this walk left
@@ -259,8 +274,9 @@ const emptySummary = (
   slice: null,
   listed: 0,
   keyable: 0,
-  unidentifiable: 0,
   duplicate: 0,
+  unstored: 0,
+  quarantinePeerCollisions: 0,
   heldBefore: 0,
   scheduled: 0,
   written: 0,
@@ -577,7 +593,7 @@ const claimTextlessHeldRechecks = async ({
   const before = textlessHeldRecheckCutoff(now, recheck);
   const claimed = await scopedDb(
     async (tx) =>
-      // audit: skip - durable per-row scheduler backoff bookkeeping
+      // audit: skip — public-corpus held-recheck claims, not user actions; provenance remains in the immutable listing ledger and ingestion run records
       await tx
         .update(caseLawDecisions)
         .set({
@@ -754,10 +770,7 @@ const selectHeldCaseNumbers = async (
  * held row and the item that asks about it cannot be keyed differently.
  */
 const addHeldKey = (held: Set<string>, identity: ListingIdentity): void => {
-  const key = listingIdentityKey(identity);
-  if (key !== null) {
-    held.add(key);
-  }
+  held.add(listingIdentityKey(identity));
 };
 
 type HeldIdentityKeysOptions = {
@@ -775,6 +788,8 @@ type HeldIdentityKeysOptions = {
  * The identity keys, out of the given ones, this source already holds. Where
  * the source requires detail, the identities it declares complete without a
  * document are asked about without that filter, and every other one with it.
+ * A quarantine identity is always complete without one: it names no
+ * publisher id a detail request could use (see `quarantine-identity.ts`).
  */
 const selectHeldIdentityKeys = async (
   scopedDb: ScopedDb,
@@ -786,7 +801,7 @@ const selectHeldIdentityKeys = async (
     rowRules,
   }: HeldIdentityKeysOptions,
 ): Promise<Set<string>> => {
-  if (!requireDetail || heldWithoutDetail === undefined) {
+  if (!requireDetail) {
     return await selectHeldIdentityKeysUniformly(scopedDb, {
       identities,
       requireDetail,
@@ -794,9 +809,12 @@ const selectHeldIdentityKeys = async (
       rowRules,
     });
   }
+  const completeWithoutDetail = (identity: ListingIdentity): boolean =>
+    isQuarantineListingIdentity(identity) ||
+    heldWithoutDetail?.(identity) === true;
   const [exempt, detailed] = [
-    identities.filter((identity) => heldWithoutDetail(identity)),
-    identities.filter((identity) => !heldWithoutDetail(identity)),
+    identities.filter((identity) => completeWithoutDetail(identity)),
+    identities.filter((identity) => !completeWithoutDetail(identity)),
   ];
   const held = await selectHeldIdentityKeysUniformly(scopedDb, {
     identities: detailed,
@@ -827,15 +845,21 @@ const selectHeldIdentityKeysUniformly = async (
   const documentIds = new Set<string>();
   const caseNumbersByLanguage = new Map<string, Set<string>>();
   for (const identity of identities) {
-    if (identity.type === "document") {
-      documentIds.add(identity.sourceDocumentId);
-      continue;
-    }
-    if (identity.type === "case-number") {
-      const forLanguage =
-        caseNumbersByLanguage.get(identity.language) ?? new Set<string>();
-      forLanguage.add(identity.caseNumber);
-      caseNumbersByLanguage.set(identity.language, forLanguage);
+    switch (identity.type) {
+      case "document":
+        documentIds.add(identity.sourceDocumentId);
+        break;
+      case "case-number": {
+        const forLanguage =
+          caseNumbersByLanguage.get(identity.language) ?? new Set<string>();
+        forLanguage.add(identity.caseNumber);
+        caseNumbersByLanguage.set(identity.language, forLanguage);
+        break;
+      }
+      default: {
+        identity satisfies never;
+        panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
+      }
     }
   }
 
@@ -1201,21 +1225,25 @@ type Processed = Awaited<ReturnType<typeof processDecision>>;
  * the writes cannot be batched.
  */
 const writeInOrder = async (
-  rows: readonly IngestionResult[],
+  rows: CollisionRetainedDecisions,
   write: (row: IngestionResult) => Promise<Processed>,
 ): Promise<Processed> => {
-  const [first, ...rest] = rows;
+  const [first, ...rest] = rows.decisions;
   if (first === undefined) {
     return panic("writeInOrder needs a row to write");
   }
-  const processed = await write(first);
-  return processed.status === PROCESS_DECISION_STATUS.RETRYABLE ||
-    rest.length === 0
-    ? processed
-    : await writeInOrder(rest, write);
+  let processed = await write(first);
+  for (const row of rest) {
+    if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+      return processed;
+    }
+    processed = await write(row);
+  }
+  return processed;
 };
 
 type IngestItemOptions = {
+  collisionProof: CollisionFilterProof;
   adapterKey: string;
   item: KeyedListingItem;
   lease: CaseLawSourceIngestionLease;
@@ -1241,6 +1269,7 @@ type IngestItemOptions = {
  * same schedule an unavailable document gets.
  */
 const ingestListedItem = async ({
+  collisionProof,
   adapterKey,
   item,
   lease,
@@ -1347,12 +1376,14 @@ const ingestListedItem = async ({
         // The decision first, then what its page states beside it. A
         // companion that cannot be written parks the item: a rebuild writes
         // both again under the same identities.
-        const processed = await writeInOrder(
-          built.companions === undefined
-            ? [built.decision]
-            : [built.decision, ...built.companions],
-          write,
-        );
+        const retained = await retainListedQuarantineDecisions({
+          sourceLease: lease,
+          scopedDb,
+          listing: item,
+          built,
+          proof: collisionProof,
+        });
+        const processed = await writeInOrder(retained, write);
         if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
           await park(`retryable:${processed.reason}`);
           return;
@@ -1516,6 +1547,15 @@ const walkSlice = async ({
     adapterKey,
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     listSlicePage: reconciliation.listSlicePage,
+    revisionOf: reconciliation.revisionOf,
+    persistEvidence: async (observations) => {
+      await lease.beforeDatabaseMark();
+      await storeListingObservations(scopedDb, {
+        sourceId,
+        adapterKey,
+        observations,
+      });
+    },
     pageDelayMs: LIST_DELAY_MS,
     pageTimeoutMs: LIST_TIMEOUT_MS,
     slice,
@@ -1529,8 +1569,10 @@ const walkSlice = async ({
   }
   const { keyed } = listing.value;
   summary.listed = listing.value.listed;
-  summary.unidentifiable = listing.value.unidentifiable;
   summary.duplicate = listing.value.duplicate;
+  summary.unstored = unstoredRecordCount(listing.value);
+  summary.quarantinePeerCollisions =
+    listing.value.quarantinePeerCollisions.length;
 
   const items = Array.from(keyed, ([identityKey, { identity, payload }]) => ({
     identity,
@@ -1576,6 +1618,7 @@ const walkSlice = async ({
 
   const buildDecision =
     reconciliation.createSliceBuildDecision?.() ?? reconciliation.buildDecision;
+  const collisionProof = listing.value.recoveryProof;
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
@@ -1594,6 +1637,7 @@ const walkSlice = async ({
     }
     // db-await-in-loop: paced publisher fetch per item, under a lease and a wall-clock budget
     await ingestListedItem({
+      collisionProof,
       adapterKey,
       item,
       lease,
@@ -1642,8 +1686,9 @@ const walkSlice = async ({
     sourceId,
     coverage: {
       slice,
-      reported: summary.keyable,
-      collected: summary.heldBefore + summary.written,
+      reported: summary.keyable + listing.value.observations.size,
+      collected:
+        summary.heldBefore + summary.written + listing.value.observations.size,
     },
   });
   return summary;
@@ -1759,14 +1804,11 @@ const recheckTextlessHeldRows = async ({
             language: row.language,
           }
         : { type: "document", sourceDocumentId: row.sourceDocumentId };
-    const identityKey = listingIdentityKey(identity);
-    if (identityKey === null) {
-      summary.failed += 1;
-      continue;
-    }
     const item: KeyedListingItem = {
       identity,
-      identityKey,
+      // Never throws: both halves come from columns the key column is sized
+      // to hold (see `LISTING_IDENTITY_KEY_MAX_LENGTH`).
+      identityKey: listingIdentityKey(identity),
       payload: null,
       slice: reconciliation.sliceOf(row.updatedAt),
     };
@@ -1786,6 +1828,7 @@ const recheckTextlessHeldRows = async ({
     };
     // db-await-in-loop: ingest after each paced publisher fetch; bounded to 200 rows under the source lease
     await ingestListedItem({
+      collisionProof: { type: "no-listing-proof" },
       adapterKey,
       item,
       lease,
@@ -1847,16 +1890,45 @@ const retryParkedItems = async ({
   });
   summary.keyable = due.length;
 
-  const candidates: KeyedListingItem[] = due.map(
-    ({ identityKey, payload, slice }) => ({
-      identity: parseListingIdentityKey(identityKey) ?? {
-        type: "unidentifiable",
-      },
-      identityKey,
-      payload,
-      slice,
-    }),
-  );
+  const candidates: KeyedListingItem[] = [];
+  const unparseable: typeof due = [];
+  for (const row of due) {
+    const { identityKey, payload, slice } = row;
+    const identity = parseListingIdentityKey(identityKey);
+    if (identity === null) {
+      // Every parked key was written by `listingIdentityKey`, which
+      // round-trips through the parser, so this is a ledger row no current
+      // rule wrote: a bug, never an identity to guess. Not thrown, because a
+      // throw would fail the whole unit and hold every other due retry of
+      // this source behind one bad row; not left due either, because due
+      // parked items are planned before every walk and the row would take a
+      // retry slot on every visit forever. Reported once and retired: if the
+      // record is still missing, the next walk of its slice parks it again
+      // under a key the parser reads.
+      summary.failed += 1;
+      logger.error("case_law.reconciliation.parked_identity_key_unparseable", {
+        adapterKey,
+        identityKey,
+        slice,
+        disposition: "retired",
+      });
+      unparseable.push(row);
+      continue;
+    }
+    candidates.push({ identity, identityKey, payload, slice });
+  }
+  if (unparseable.length > 0) {
+    await lease.beforeDatabaseMark();
+    const retired = await resolveReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: lease.leaseToken,
+      items: unparseable,
+    });
+    if (retired.outcome === "superseded") {
+      summary.deferred = due.length;
+      return summary;
+    }
+  }
 
   const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
@@ -1913,6 +1985,7 @@ const retryParkedItems = async ({
     fetched += 1;
     // db-await-in-loop: paced publisher fetch per due item, under a lease and a clock budget
     await ingestListedItem({
+      collisionProof: { type: "no-listing-proof" },
       adapterKey,
       item,
       lease,

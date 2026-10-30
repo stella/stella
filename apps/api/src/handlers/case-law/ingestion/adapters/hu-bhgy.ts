@@ -1,3 +1,4 @@
+// parser-output-unchanged: [hu-bhgy] keyed rows gain only a repair alias; rows without a usable IndexId were never stored, so replay changes no stored row.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -126,6 +127,14 @@ import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  QuarantineIdentity,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -722,23 +731,179 @@ export const huKollegiumsOf = (value: string | undefined): string[] =>
         .filter((part) => part.length > 0);
 
 /**
- * The identity a listed row is stored under.
+ * The content-addressed identity of a row, from the fields the publisher
+ * states identically every time it lists the decision.
+ *
+ * With a docket: the docket, the deciding court and the decision year. The
+ * docket is unique within one court, which is what rule 17 asks of a key in a
+ * collection covering every court of the country, and none of the three is
+ * part of the publisher key, so they read the same before and after `IndexId`
+ * recovers. `IndexelesIdeje` is left out because it is the indexing time, which
+ * moves on a re-index while the decision does not; `EgyediAzonosito` because
+ * it is an identifier that can return together with `IndexId`; `Rezume` and
+ * the colleges because an editorial correction to either would mint a second
+ * identity for a decision the docket already names.
+ *
+ * Without a docket the summary is the only field that tells one decision of a
+ * court, year and legal area from the next, so it joins them. A row stating
+ * neither a docket nor a summary has no stable field set: its court, year and
+ * college name thousands of decisions, and a fingerprint over them would merge
+ * unrelated ones into one row.
+ *
+ * Every form whose fields the row states is returned, most specific first.
+ * The first is the row's own quarantine identity; the rest are the forms an
+ * earlier observation stating fewer fields was quarantined under, which the
+ * row names as repair aliases so it takes that row over instead of inserting
+ * a second one when a docket or an `IndexId` arrives. Two forms with distinct
+ * field sets, so the list is bounded and its digests distinct.
+ */
+const huBhgyQuarantineForms = (row: HuBhgyRow): QuarantineIdentity[] => {
+  const decisionYear =
+    row.HatarozatEve === undefined ? undefined : String(row.HatarozatEve);
+  const withDocket =
+    row.Azonosito === undefined
+      ? []
+      : [
+          quarantineIdentity({
+            namespace: QUARANTINE_NAMESPACE.HU_BHGY,
+            stableFields: {
+              docket: row.Azonosito,
+              court: row.MeghozoBirosag,
+              decisionYear,
+            },
+          }),
+        ];
+  const withSummary =
+    row.Rezume === undefined
+      ? []
+      : [
+          quarantineIdentity({
+            namespace: QUARANTINE_NAMESPACE.HU_BHGY,
+            stableFields: {
+              court: row.MeghozoBirosag,
+              decisionYear,
+              legalArea: row.JogTerulet,
+              summary: row.Rezume,
+            },
+          }),
+        ];
+  return [...withDocket, ...withSummary];
+};
+
+/** The stored ids of quarantine forms, once each. */
+const quarantineIdsOf = (
+  forms: readonly QuarantineIdentity[],
+): readonly RepairAlias[] => [
+  ...new Set(forms.flatMap(({ repairAliases }) => repairAliases)),
+];
+
+/** Why a listed row is stored under its quarantine identity. */
+const HU_BHGY_QUARANTINE_REASON = {
+  MISSING: "missing-publisher-id",
+  UNPERSISTABLE: "unpersistable-publisher-id",
+} as const;
+
+type HuBhgyQuarantineReason =
+  (typeof HU_BHGY_QUARANTINE_REASON)[keyof typeof HU_BHGY_QUARANTINE_REASON];
+
+/** Why a row that states no usable `IndexId` has none. */
+const quarantineReasonOf = (row: HuBhgyRow): HuBhgyQuarantineReason =>
+  row.IndexId === undefined
+    ? HU_BHGY_QUARANTINE_REASON.MISSING
+    : HU_BHGY_QUARANTINE_REASON.UNPERSISTABLE;
+
+/**
+ * How a listed row is keyed, read once so the crawl, the slice walk, the
+ * reconciliation build and a stored-raw replay cannot key one row two ways.
  *
  * `IndexId` is the publisher's own key for the document — the GUID a current
  * decision carries, the migration key a legacy one does — and it is what the
  * download is addressed by. `Azonosito` alone is not an identity: the same
  * docket recurs at two courts, and the collection covers every court of the
- * country (rule 17).
+ * country (rule 17). A row whose `IndexId` is missing or cannot be persisted
+ * is therefore keyed on its quarantine identity, never on its docket, and a
+ * keyed row names that quarantine identity as a repair alias so the row takes
+ * over its quarantined observation once the key recovers (rule 20).
  */
-export const huBhgyListingIdentity = (row: HuBhgyRow): ListingIdentity => {
+export type HuBhgyIdentity =
+  | {
+      type: "keyed";
+      sourceDocumentId: string;
+      repairAliases: readonly RepairAlias[];
+    }
+  | {
+      type: "quarantined";
+      sourceDocumentId: string;
+      fingerprint: string;
+      reason: HuBhgyQuarantineReason;
+      /** Less specific forms an earlier observation may be stored under. */
+      repairAliases: readonly RepairAlias[];
+    }
+  /** No publisher key and no stable field set: nothing can name this row. */
+  | { type: "no-stable-field" };
+
+export const huBhgyIdentityOf = (row: HuBhgyRow): HuBhgyIdentity => {
   const { IndexId } = row;
+  const forms = huBhgyQuarantineForms(row);
   if (IndexId !== undefined && isPersistableSourceDocumentId(IndexId)) {
-    return { type: "document", sourceDocumentId: IndexId };
+    return {
+      type: "keyed",
+      sourceDocumentId: IndexId,
+      repairAliases: quarantineIdsOf(forms),
+    };
   }
-  const caseNumber = row.Azonosito;
-  return caseNumber === undefined
-    ? { type: "unidentifiable" }
-    : { type: "case-number", caseNumber, language: HU_BHGY_LANGUAGE };
+  const [quarantine, ...earlier] = forms;
+  return quarantine === undefined
+    ? { type: "no-stable-field" }
+    : {
+        type: "quarantined",
+        sourceDocumentId: quarantine.sourceDocumentId,
+        fingerprint: quarantine.fingerprint,
+        reason: quarantineReasonOf(row),
+        repairAliases: quarantineIdsOf(earlier).filter(
+          (id) => id !== quarantine.sourceDocumentId,
+        ),
+      };
+};
+
+/** The `sourceDocumentId` a row is stored under, if it has one. */
+const huBhgyStoredIdOf = (identity: HuBhgyIdentity): string | undefined => {
+  switch (identity.type) {
+    case "keyed":
+    case "quarantined":
+      return identity.sourceDocumentId;
+    case "no-stable-field":
+      return undefined;
+    default:
+      identity satisfies never;
+      return panic(`Unhandled hu-bhgy identity: ${JSON.stringify(identity)}`);
+  }
+};
+
+/**
+ * The identity a listed row is reported under, or `undefined` for a row that
+ * has none (see {@link huBhgyIdentityOf}).
+ */
+export const huBhgyListingIdentity = (
+  row: HuBhgyRow,
+): ListingIdentity | undefined => {
+  const sourceDocumentId = huBhgyStoredIdOf(huBhgyIdentityOf(row));
+  return sourceDocumentId === undefined
+    ? undefined
+    : { type: "document", sourceDocumentId };
+};
+
+/**
+ * The structured warning for a row the crawl cannot store. The slice walk
+ * counts such rows in `withoutStableFields` instead, which the shared walker
+ * reports once per slice.
+ */
+const warnNoStableField = (cursor: string, row: HuBhgyRow): void => {
+  logger.warn("case_law.ingestion.listed_row_without_stable_fields", {
+    adapterKey: ADAPTER_KEYS.HU_BHGY,
+    cursor,
+    reason: quarantineReasonOf(row),
+  });
 };
 
 /**
@@ -813,8 +978,16 @@ const readHuBhgyDocument = async (
 
 type HuBhgyBuildResult =
   | { type: "built"; decision: IngestionResult }
-  /** No publisher key and no docket; nothing can store this row. */
+  /**
+   * No row this adapter can store: no publisher key and no stable field set.
+   */
   | { type: "unkeyable" }
+  /**
+   * The row's publisher key is missing or unpersistable, so it is stored as
+   * its listing-only row under its quarantine identity. There is no download
+   * to ask for: the download is addressed by that key.
+   */
+  | { type: "quarantined"; decision: IngestionResult }
   /** The download served nothing this adapter recognises as a document. */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
@@ -825,6 +998,94 @@ type HuBhgyFetchedBuild =
   | { type: "unread"; item: UnreadListedItem; error: AdapterFetchError }
   /** The publisher refused the download for its rate limit. */
   | { type: "halted"; error: AdapterFetchError };
+
+/** The earlier proceedings a row names, each with the court that heard it. */
+const relatedProceedingsOf = (row: HuBhgyRow) =>
+  arrayOrEmpty(row.KapcsolodoHatarozatok).flatMap(
+    ({ KapcsolodoBirosag, KapcsolodoUgyszam }) =>
+      KapcsolodoUgyszam === undefined
+        ? []
+        : [
+            {
+              caseNumber: KapcsolodoUgyszam,
+              ...(KapcsolodoBirosag === undefined
+                ? {}
+                : { court: KapcsolodoBirosag }),
+            },
+          ],
+  );
+
+type QuarantinedHuBhgyOptions = {
+  identity: Extract<HuBhgyIdentity, { type: "quarantined" }>;
+  rawParts: SourceRawParts;
+  row: HuBhgyRow;
+};
+
+/**
+ * The listing-only row of a decision the publisher lists without a usable
+ * key (rule 20): every field the row states, the verbatim row as its raw
+ * payload, stored under the quarantine identity the listing reports it by.
+ */
+const quarantinedHuBhgyDecision = ({
+  identity,
+  rawParts,
+  row,
+}: QuarantinedHuBhgyOptions): IngestionResult => {
+  const court = row.MeghozoBirosag ?? "";
+  const docket = row.Azonosito;
+  const caseNumber = docket ?? `BHGY listing ${identity.fingerprint}`;
+  const related = relatedProceedingsOf(row);
+  const sourceRaw = encodeSourceRawEnvelope(rawParts);
+  return plainTextIngestionResult({
+    caseNumber,
+    ...(docket === undefined
+      ? { caseNumberIsPlaceholder: true }
+      : { identifiers: decisionIdentifiers(docket, undefined) }),
+    isListingOnly: true,
+    sourceDocumentId: identity.sourceDocumentId,
+    ...(aliasesOf(row).length === 0
+      ? {}
+      : { sourceDocumentIdAliases: aliasesOf(row) }),
+    ...(identity.repairAliases.length === 0
+      ? {}
+      : { sourceDocumentIdRepairAliases: identity.repairAliases }),
+    court,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.HU_BHGY].country,
+    language: HU_BHGY_LANGUAGE,
+    // The decision page is addressed by docket and court; with no docket it
+    // would be the bare search, so the fragment names this row instead.
+    sourceUrl:
+      docket === undefined
+        ? `${DECISION_PAGE}#listing-${identity.fingerprint}`
+        : decisionUrl(row),
+    textFields: {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      ...(row.Rezume === undefined
+        ? {}
+        : { headnote: presentTextField(row.Rezume) }),
+    },
+    publisherCitedCases: related.map(({ caseNumber: number }) => number),
+    metadata: checkedDecisionMetadata({
+      caseNumber,
+      court,
+      bhgyIdentifier: row.EgyediAzonosito,
+      kollegiums: huKollegiumsOf(row.Kollegium),
+      legalArea: row.JogTerulet,
+      decisionYear: row.HatarozatEve,
+      publishedAt: row.IndexelesIdeje,
+      statutes: parseHuStatuteReferences(row.Jogszabalyhelyek),
+      relatedProceedings: related,
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: identity.reason,
+    }),
+    rawHash: hashContent(sourceRaw),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
 
 export type AssembleHuBhgyOptions = {
   row: HuBhgyRow;
@@ -844,15 +1105,19 @@ export const assembleHuBhgyDecision = async ({
   rawParts,
   row,
 }: AssembleHuBhgyOptions): Promise<HuBhgyBuildResult> => {
-  const { IndexId } = row;
-  const caseNumber = row.Azonosito;
-  if (
-    IndexId === undefined ||
-    !isPersistableSourceDocumentId(IndexId) ||
-    caseNumber === undefined
-  ) {
+  const identity = huBhgyIdentityOf(row);
+  if (identity.type === "no-stable-field") {
     return { type: "unkeyable" };
   }
+  if (identity.type === "quarantined") {
+    return {
+      type: "quarantined",
+      decision: quarantinedHuBhgyDecision({ identity, rawParts, row }),
+    };
+  }
+  const IndexId = identity.sourceDocumentId;
+  const docket = row.Azonosito;
+  const caseNumber = docket ?? `BHGY listing ${IndexId}`;
   // The deciding court is the row's own field, never a constant: this source
   // publishes for every court of the country.
   const court = row.MeghozoBirosag ?? "";
@@ -901,19 +1166,7 @@ export const assembleHuBhgyDecision = async ({
   }
   const documentAst: DocumentAst | EmptyAst = read?.documentAst ?? EMPTY_AST;
 
-  const related = arrayOrEmpty(row.KapcsolodoHatarozatok).flatMap(
-    ({ KapcsolodoBirosag, KapcsolodoUgyszam }) =>
-      KapcsolodoUgyszam === undefined
-        ? []
-        : [
-            {
-              caseNumber: KapcsolodoUgyszam,
-              ...(KapcsolodoBirosag === undefined
-                ? {}
-                : { court: KapcsolodoBirosag }),
-            },
-          ],
-  );
+  const related = relatedProceedingsOf(row);
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const decision: IngestionResult = plainTextIngestionResult({
@@ -921,11 +1174,16 @@ export const assembleHuBhgyDecision = async ({
     // The listed docket and the one the document prints are two spellings of
     // one number: `Gfv.30091/2025/4` drops the thousands dot and the panel
     // numeral the document keeps. Both are exact, so both are stated.
-    identifiers: decisionIdentifiers(caseNumber, read?.documentDocket),
+    ...(docket === undefined
+      ? { caseNumberIsPlaceholder: true }
+      : { identifiers: decisionIdentifiers(docket, read?.documentDocket) }),
     sourceDocumentId: IndexId,
     ...(aliasesOf(row).length === 0
       ? {}
       : { sourceDocumentIdAliases: aliasesOf(row) }),
+    ...(identity.repairAliases.length === 0
+      ? {}
+      : { sourceDocumentIdRepairAliases: identity.repairAliases }),
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.HU_BHGY].country,
     language: HU_BHGY_LANGUAGE,
@@ -1032,10 +1290,17 @@ const buildHuBhgyDecision = async ({
   signal,
 }: BuildOptions): Promise<HuBhgyFetchedBuild> => {
   const normalized = normalizeHuBhgyRow(row);
-  const { IndexId } = normalized;
-  if (IndexId === undefined || !isPersistableSourceDocumentId(IndexId)) {
-    return { type: "unkeyable" };
+  const identity = huBhgyIdentityOf(normalized);
+  if (identity.type !== "keyed") {
+    // The download is addressed by the publisher key this row lacks, so the
+    // listing row is all there is: assembled without asking for a document.
+    return await assembleHuBhgyDecision({
+      row: normalized,
+      document: undefined,
+      rawParts: huBhgyRawPartsOf(row, undefined),
+    });
   }
+  const IndexId = identity.sourceDocumentId;
   const fetched = await fetchDocument(normalized, cursor, signal);
   switch (fetched.type) {
     case "halted":
@@ -1054,6 +1319,7 @@ const buildHuBhgyDecision = async ({
       });
       switch (listed.type) {
         case "unkeyable":
+        case "quarantined":
           return listed;
         case "built":
         case "detail-unavailable":
@@ -1090,7 +1356,11 @@ const reparseHuBhgyStoredRaw = async (
   const read = readStoredRawListing({
     stored,
     part: RAW_PART.LISTING,
-    identityOf: (listing) => normalizeHuBhgyRow(listing).IndexId,
+    // The identity the crawl stored the row under, quarantine identity
+    // included, so a quarantined row replays rather than reading as a
+    // mismatch.
+    identityOf: (listing) =>
+      huBhgyStoredIdOf(huBhgyIdentityOf(normalizeHuBhgyRow(listing))),
   });
   if (read.type === "rejected") {
     return read;
@@ -1112,7 +1382,8 @@ const reparseHuBhgyStoredRaw = async (
     ? {
         type: "rejected",
         rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-        detail: "the stored listing row states no publisher id or docket",
+        detail:
+          "the stored listing row states no publisher id and no stable field set, or no docket",
       }
     : { type: "parsed", result: built.decision };
 };
@@ -1452,11 +1723,24 @@ const listHuBhgySlicePage = async ({
     );
   }
 
-  const items = rows.map((row) => ({
-    identity: huBhgyListingIdentity(normalizeHuBhgyRow(row)),
-    payload: row,
-  }));
-  return { items, totalPages: Math.ceil(count / MAX_PAGE_SIZE) };
+  const items: ReconciliationSlicePage["items"] = [];
+  let withoutStableFields = 0;
+  for (const row of rows) {
+    const identity = huBhgyListingIdentity(normalizeHuBhgyRow(row));
+    if (identity === undefined) {
+      // Nothing the row states could name it again, so it is not invented an
+      // identity; it is counted, so coverage shows the record it lists.
+      withoutStableFields += 1;
+    } else {
+      items.push({ identity, payload: row });
+    }
+  }
+  return {
+    observations: [],
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
+    totalPages: Math.ceil(count / MAX_PAGE_SIZE),
+  };
 };
 
 const buildHuBhgyFromPayload = async (
@@ -1476,6 +1760,11 @@ const buildHuBhgyFromPayload = async (
     case "halted":
       return await Promise.reject(built.error);
     case "built":
+      return { type: "built", decision: built.decision };
+    // The listing row is the whole record until the key recovers; the walk
+    // counts a quarantine identity held without detail, so waiting for one
+    // here would park it forever.
+    case "quarantined":
       return { type: "built", decision: built.decision };
     case "unkeyable":
       return { type: "unkeyable" };
@@ -1736,6 +2025,7 @@ const collectDecisions = async ({
         switch (outcome.type) {
           case "built":
           case "detail-unavailable":
+          case "quarantined":
             return outcome.decision;
           case "unread":
             return outcome.item.listing;
@@ -1756,8 +2046,13 @@ const collectDecisions = async ({
     }
     const built = captured.value;
     switch (built.type) {
-      case "unkeyable":
+      case "unkeyable": {
+        const normalized = normalizeHuBhgyRow(row);
+        if (huBhgyListingIdentity(normalized) === undefined) {
+          warnNoStableField(cursor, normalized);
+        }
         break;
+      }
       case "halted":
         return Result.err(built.error);
       // The pipeline decides what an unread document costs the page.
@@ -1769,6 +2064,7 @@ const collectDecisions = async ({
       // reconciliation refuses it.
       case "detail-unavailable":
       case "built":
+      case "quarantined":
         decisions.push(built.decision);
         break;
       default: {
@@ -1830,6 +2126,7 @@ const sweepPage = async (
         // the rows it never reached: parking at the page's own start replays it
         // rather than checkpointing past them.
         return Result.ok({
+          observations: [],
           ...collectedPage(collected.value),
           sourceUrl: url,
           nextCursor: cursor,
@@ -1838,6 +2135,7 @@ const sweepPage = async (
       const nextOffset = offset + rows.length;
       if (nextOffset < count) {
         return Result.ok({
+          observations: [],
           ...collectedPage(collected.value),
           sourceUrl: url,
           nextCursor: encodeHuBhgyCursor({
@@ -1850,6 +2148,7 @@ const sweepPage = async (
       }
       const after = nextWindow(year, slug);
       return Result.ok({
+        observations: [],
         ...collectedPage(collected.value),
         sourceUrl: url,
         nextCursor:
@@ -1874,6 +2173,7 @@ const sweepPage = async (
     const after = nextWindow(year, slug);
     if (after === null) {
       return Result.ok({
+        observations: [],
         decisions: [],
         sourceUrl: url,
         nextCursor: encodeHuBhgyCursor({
@@ -1890,6 +2190,7 @@ const sweepPage = async (
 
   // Out of steps rather than out of windows: bank where the walk got to.
   return Result.ok({
+    observations: [],
     decisions: [],
     sourceUrl: url,
     nextCursor: encodeHuBhgyCursor({ ...start, year, slug, offset }),
@@ -1941,6 +2242,7 @@ const tipPage = async (
     // walk has reached rows the frontier covers — and standing still there
     // would leave the tip reading this offset instead of the head.
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: url,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
@@ -1954,6 +2256,7 @@ const tipPage = async (
   const { aborted } = collected.value;
   if (aborted) {
     return Result.ok({
+      observations: [],
       ...collectedPage(collected.value),
       sourceUrl: url,
       nextCursor: cursor,
@@ -1962,6 +2265,7 @@ const tipPage = async (
 
   if (reachedFrontier) {
     return Result.ok({
+      observations: [],
       ...collectedPage(collected.value),
       sourceUrl: url,
       nextCursor: caughtUp(),
@@ -1982,6 +2286,7 @@ const tipPage = async (
   // A descending listing only grows at its head, so resuming at this offset
   // can re-read a row but cannot step over one.
   return Result.ok({
+    observations: [],
     ...collectedPage(collected.value),
     sourceUrl: url,
     nextCursor: encodeHuBhgyCursor({

@@ -3,9 +3,11 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import {
   buildCzNsDecision,
   czNsAdapter,
+  czNsListingIdentity,
   type CzNsListingRow,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -91,6 +93,123 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
       expect(page.value.decisions).toEqual([]);
       expect(page.value.nextCursor).toBe("1");
     }
+  });
+});
+
+describe("view entries with no usable universal id", () => {
+  afterEach(() => mock.restore());
+
+  const UNID = "0123456789abcdef0123456789abcdef";
+  const DOCKET = "1 Cdo 1/2026";
+  const OTHER_DOCKET = "2 Cdo 2/2026";
+  const PAGE = "<html><body><p>Rozhodnutí soudu.</p></body></html>";
+
+  const entry = (unid: string | undefined, docket: string | undefined) => ({
+    "@position": "1",
+    ...(unid === undefined ? {} : { "@unid": unid }),
+    entrydata:
+      docket === undefined
+        ? []
+        : [{ "@name": "znacka", text: { "0": docket } }],
+  });
+
+  const serveView = (viewentry: unknown[]): string[] => {
+    const requested: string[] = [];
+    spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        requested.push(url);
+        if (url.includes("ReadViewEntries")) {
+          return await Promise.resolve(
+            new Response(
+              JSON.stringify({
+                "@toplevelentries": String(viewentry.length),
+                viewentry,
+              }),
+            ),
+          );
+        }
+        return await Promise.resolve(
+          url.includes("/WebPrint/")
+            ? new Response("", { status: 404 })
+            : new Response(PAGE),
+        );
+      }),
+    );
+    return requested;
+  };
+
+  const quarantinedId = (row: CzNsListingRow): string => {
+    const identity = czNsListingIdentity(row);
+    if (identity?.type !== "document") {
+      throw new TypeError("Expected the row to key");
+    }
+    return identity.sourceDocumentId;
+  };
+
+  test("the crawl keeps them listing-only under their quarantine identity", async () => {
+    const requested = serveView([
+      entry(undefined, DOCKET),
+      entry("F".repeat(300), OTHER_DOCKET),
+      entry(UNID, DOCKET),
+      // Nothing but a position: no stable field to keep it under.
+      entry(undefined, undefined),
+    ]);
+
+    const page = (await czNsAdapter.fetchPage("1", {})).unwrap();
+
+    expect(page.nextCursor).toBe("5");
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    const quarantined = quarantinedId({ unid: "", caseNumber: DOCKET });
+    const overLong = quarantinedId({ unid: "", caseNumber: OTHER_DOCKET });
+    expect(quarantined).toMatch(/^cz-ns-quarantine:[0-9a-f]{64}$/u);
+    expect(page.decisions.map((d) => d.sourceDocumentId)).toEqual([
+      quarantined,
+      overLong,
+      UNID,
+    ]);
+    const [idLess, overLongId, keyed] = page.decisions;
+    expect(idLess?.isListingOnly).toBe(true);
+    expect(overLongId?.isListingOnly).toBe(true);
+    expect<string | undefined>(idLess?.caseNumber).toBe(DOCKET);
+    expect(idLess?.metadata["identityQuarantined"]).toBe(true);
+    expect(
+      JSON.parse(
+        decodeSourceRawEnvelope(idLess?.sourceRaw ?? "")?.["listing"] ?? "null",
+      ),
+    ).toEqual({ unid: "", caseNumber: DOCKET });
+    // The keyed entry of the same docket does not claim the quarantine row:
+    // the docket alone cannot prove it is the same document.
+    expect(keyed?.isListingOnly).toBeUndefined();
+    expect(keyed?.sourceDocumentIdRepairAliases).toBeUndefined();
+    // Only the keyed entry is fetched: nothing addresses the others.
+    expect(
+      requested.filter((url) => !url.includes("ReadViewEntries")),
+    ).toHaveLength(2);
+    expect(requested.every((url) => !url.includes("FFFF"))).toBe(true);
+  });
+
+  test("the crawl and the reconciliation store the same quarantine row", async () => {
+    serveView([entry(undefined, DOCKET)]);
+    const page = (await czNsAdapter.fetchPage("1", {})).unwrap();
+    const reconciled = await requireReconciliation(czNsAdapter).buildDecision({
+      unid: "",
+      caseNumber: DOCKET,
+    });
+
+    expect(reconciled.type).toBe("built");
+    if (reconciled.type !== "built") {
+      return;
+    }
+    expect(reconciled.decision.sourceDocumentId).toBe(
+      page.decisions.at(0)?.sourceDocumentId,
+    );
+    expect<string | undefined>(reconciled.decision.rawHash).toBe(
+      page.decisions.at(0)?.rawHash,
+    );
   });
 });
 

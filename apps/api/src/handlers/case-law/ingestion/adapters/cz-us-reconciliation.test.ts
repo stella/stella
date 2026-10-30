@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -248,9 +248,8 @@ const listSlice = async (
 const onlyItem = (
   listed: ReconciliationSlicePage,
 ): ReconciliationListingItem => {
-  const item = listed.items.at(0);
-  expect(item).toBeDefined();
-  return item ?? { identity: { type: "unidentifiable" }, payload: null };
+  expect(listed.items).toHaveLength(1);
+  return listed.items.at(0) ?? panic("The fixture lists one item");
 };
 
 // ── Slice arithmetic ─────────────────────────────────────
@@ -361,20 +360,7 @@ describe("czUsListingIdentity", () => {
     const key = listingIdentityKey(identity);
 
     expect(key).toBe("document:nalus-record:104387");
-    expect(parseListingIdentityKey(key ?? "")).toEqual(identity);
-  });
-
-  test("refuses an id the decision table could never store", () => {
-    // Longer than SOURCE_DOCUMENT_ID_MAX_LENGTH: a row keyed on it would be
-    // counted as missing on every pass, because no held row can ever match it.
-    expect(
-      czUsListingIdentity(
-        listedWith({ sourceDocumentId: `nalus-sz:${"9".repeat(300)}` }),
-      ),
-    ).toEqual({ type: "unidentifiable" });
-    expect(czUsListingIdentity(listedWith({ sourceDocumentId: "" }))).toEqual({
-      type: "unidentifiable",
-    });
+    expect(parseListingIdentityKey(key)).toEqual(identity);
   });
 });
 
@@ -477,7 +463,11 @@ describe("cz-us listSlicePage", () => {
   test("reports a stated-empty year as zero pages", async () => {
     installSearchMock({ statedEmpty: true });
 
-    expect(await listSlice("1993")).toEqual({ items: [], totalPages: 0 });
+    expect(await listSlice("1993")).toEqual({
+      observations: [],
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test.each([
@@ -580,13 +570,6 @@ describe("cz-us buildDecision", () => {
       "a row whose text action was withdrawn",
       { rows: [{ ...servedRow, sz: null }], reported: 1 },
     ],
-    [
-      "a counted row exposing no NALUS identity at all",
-      {
-        rows: [{ caseNumber: "Pl.ÚS 10/24", date: "4. 1. 2024" }],
-        reported: 1,
-      },
-    ],
   ] as const)("reports %s as detail-unavailable", async (_label, options) => {
     const item = await itemFor(options);
 
@@ -641,6 +624,30 @@ describe("cz-us buildDecision", () => {
 
     expect(await reconciliation.buildDecision(payload)).toEqual({
       type: "unkeyable",
+    });
+  });
+
+  test("lists and builds a record with no NALUS identity under its quarantine id", async () => {
+    // Rule 20: the record is counted and stored; with no identity there is no
+    // text to wait for, so its listing-only row is the whole record.
+    installSearchMock({
+      rows: [{ caseNumber: "Pl.ÚS 10/24", date: "4. 1. 2024" }],
+      reported: 1,
+    });
+
+    const item = onlyItem(await listSlice("2024"));
+    const sourceDocumentId =
+      item.identity.type === "document"
+        ? item.identity.sourceDocumentId
+        : panic("A quarantined record keys on its document id");
+    expect(sourceDocumentId).toMatch(/^nalus-quarantine:[a-f0-9]{64}$/u);
+    expect(await reconciliation.buildDecision(item.payload)).toMatchObject({
+      type: "built",
+      decision: {
+        sourceDocumentId,
+        isListingOnly: true,
+        metadata: { identityQuarantined: true },
+      },
     });
   });
 

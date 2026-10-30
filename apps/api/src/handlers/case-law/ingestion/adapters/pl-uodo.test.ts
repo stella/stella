@@ -38,6 +38,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { isQuarantineListingIdentity } from "@/api/lib/legal-search/quarantine-identity";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -155,6 +156,8 @@ const compareBy =
 
 const SEARCH_PREFIX = "/api/documents/search/PublicDocument/";
 const EVENTS_PREFIX = "/api/documents/events/";
+
+const QUARANTINE_ID = /^pl-uodo-quarantine:[0-9a-f]{64}$/u;
 
 /**
  * What Bun's fetch does with a redirect under `redirect: "error"`: it refuses
@@ -701,18 +704,21 @@ describe("identity", () => {
       if (recordClass === "skipped") {
         continue;
       }
-      expect(heldWithoutDetail(plUodoListingIdentity(row)), row.refid).toBe(
+      const identity =
+        plUodoListingIdentity(row) ??
+        panic("a stored record has no listing identity");
+      expect(heldWithoutDetail(identity), row.refid).toBe(
         recordClass === "court-ruling",
       );
     }
   });
 
-  test("a record with no URN in the portal's form is unkeyable", () => {
+  test("a record with no URN in the portal's form and nothing to fingerprint has no identity", () => {
     const row = normalizePlUodoRow({
       refid: "../../etc",
       publicator: { type: "gov", subtype: "uodo" },
     });
-    expect(plUodoListingIdentity(row)).toEqual({ type: "unidentifiable" });
+    expect(plUodoListingIdentity(row)).toBeUndefined();
   });
 
   test("a stored envelope replays into the decision the crawl built", async () => {
@@ -787,6 +793,7 @@ describe("the crawl over modification time", () => {
 
     const again = await plUodoAdapter.fetchPage(parked, {});
     expect(Result.isOk(again) && again.value).toEqual({
+      observations: [],
       decisions: [],
       nextCursor: parked,
     });
@@ -1165,13 +1172,99 @@ describe("a listed record is never dropped silently", () => {
         url.pathname.startsWith(EVENTS_PREFIX),
       ),
     ).toEqual([]);
-    // The reconciliation counts it held on its record, as it can hold no more.
+    // The reconciliation counts it held on its record, as it can hold no
+    // more: the engine reads that off every quarantine identity.
     expect(
-      plUodoAdapter.reconciliation.heldWithoutDetail({
+      isQuarantineListingIdentity({
         type: "document",
         sourceDocumentId: stored?.sourceDocumentId ?? "",
       }),
     ).toBe(true);
+  });
+
+  test("a URN too long to persist is quarantined, never keyed", async () => {
+    const listing = withField(
+      await recordOf(DECISION_URN),
+      "refid",
+      `${DECISION_URN}${"_x".repeat(150)}`,
+    );
+    const row = normalizePlUodoRow(listing);
+    const identity = plUodoListingIdentity(row);
+    expect(identity).toEqual({
+      type: "document",
+      sourceDocumentId:
+        plUodoQuarantineId(row) ?? panic("the record has no fingerprint"),
+    });
+    expect(plUodoQuarantineId(row)).toMatch(QUARANTINE_ID);
+    expect(builtDecision(buildFrom(listing, undefined)).sourceDocumentId).toBe(
+      plUodoQuarantineId(row),
+    );
+  });
+
+  test("the fingerprint does not move when the portal re-issues the record", async () => {
+    const listing = withField(await recordOf(DECISION_URN), "refid", "");
+    const reissued = {
+      ...listing,
+      id: "PublicDocument-20260101-000000-000-00000000000000000000000000000000",
+      mtime: "2026-01-01T00:00:00.000Z",
+    };
+    expect(plUodoQuarantineId(normalizePlUodoRow(reissued))).toBe(
+      plUodoQuarantineId(normalizePlUodoRow(listing)),
+    );
+  });
+
+  test("the census lists a quarantined record and builds it whole, not parked for a body", async () => {
+    const listing = withField(await recordOf(DECISION_URN), "refid", "");
+    const expectedId =
+      plUodoQuarantineId(normalizePlUodoRow(listing)) ??
+      panic("the record has no fingerprint");
+    servePortal({ records: [listing], bodies: new Map(), requests: [] });
+    const page = await plUodoAdapter.reconciliation.listSlicePage({
+      slice: "2023",
+      page: 0,
+    });
+    expect(page.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: expectedId },
+    ]);
+    expect(page.withoutStableFields).toBeUndefined();
+    const built = await plUodoAdapter.reconciliation.buildDecision(
+      page.items[0]?.payload,
+    );
+    expect(built.type).toBe("built");
+    expect(
+      built.type === "built" && built.decision.sourceDocumentId === expectedId,
+    ).toBe(true);
+    expect(built.type === "built" && built.decision.isListingOnly).toBe(true);
+  });
+
+  test("the census leaves out a decision stating no URN, docket, name or title", async () => {
+    const listing = {
+      ...(await recordOf(DECISION_URN)),
+      refid: "",
+      refname: null,
+      name: null,
+      title: null,
+    };
+    expect(classifyPlUodoRow(normalizePlUodoRow(listing)).type).toBe(
+      "authority-decision",
+    );
+    // A record out of scope is tallied by reason, not counted here.
+    const legislation = {
+      ...listing,
+      id: "PublicDocument-20230102-000000-000-00000000000000000000000000000001",
+      publicator: { type: "pro" },
+    };
+    servePortal({
+      records: [listing, legislation],
+      bodies: new Map(),
+      requests: [],
+    });
+    const page = await plUodoAdapter.reconciliation.listSlicePage({
+      slice: "2023",
+      page: 0,
+    });
+    expect(page.items).toEqual([]);
+    expect(page.withoutStableFields).toBe(1);
   });
 
   test("the record, once the portal states its URN, can adopt the quarantined row", async () => {
@@ -1182,7 +1275,7 @@ describe("a listed record is never dropped silently", () => {
     const recovered = builtDecision(buildFrom(listing, undefined));
 
     expect(recovered.sourceDocumentId).toBe(DECISION_URN);
-    expect(recovered.sourceDocumentIdRepairAliases).toEqual([
+    expect(recovered.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       quarantined.sourceDocumentId ?? "",
     ]);
   });
@@ -1191,7 +1284,7 @@ describe("a listed record is never dropped silently", () => {
     const row = normalizePlUodoRow({
       publicator: { type: "court", subtype: "sa", country: "pl" },
     });
-    expect(plUodoListingIdentity(row)).toEqual({ type: "unidentifiable" });
+    expect(plUodoListingIdentity(row)).toBeUndefined();
   });
 
   test("a record with no docket is stored under a placeholder marked as one", async () => {

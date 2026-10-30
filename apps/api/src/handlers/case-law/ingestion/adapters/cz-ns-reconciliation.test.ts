@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
@@ -14,10 +14,12 @@ import { isDecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import {
+  decodeSourceRawEnvelope,
   listingIdentityKey,
   parseListingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildCzNsDecision,
   CZ_NS_FIRST_SLICE,
@@ -25,12 +27,19 @@ import {
   czNsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  requireReconciliation,
+  throughLedgerJson,
+} from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   citationKeyOf,
   decisionIdentifiersFromMetadata,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import {
+  listReconciliationSlice,
+  SLICE_LISTING_PROOF,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -315,9 +324,29 @@ describe("cz-ns reconciliation slices", () => {
 
 // ── Identity ────────────────────────────────────────────────
 
+/** The identity a row keys on, for a row this adapter keys at all. */
+const identityOf = (row: CzNsListingRow) => {
+  const identity = czNsListingIdentity(row);
+  if (identity === null) {
+    throw new TypeError(`Expected ${JSON.stringify(row)} to key`);
+  }
+  return identity;
+};
+
+/** The id a row the publisher lists with no usable id is stored under. */
+const quarantinedIdOf = (row: CzNsListingRow): string => {
+  const identity = identityOf(row);
+  if (identity.type !== "document") {
+    throw new TypeError("Expected a document identity");
+  }
+  return identity.sourceDocumentId;
+};
+
+const QUARANTINE_ID_PATTERN = /^cz-ns-quarantine:[0-9a-f]{64}$/u;
+
 describe("czNsListingIdentity", () => {
   test("keys on the universal id, never the docket", () => {
-    const identity = czNsListingIdentity({
+    const identity = identityOf({
       unid: UNID.FIRST,
       caseNumber: DOCKET.FIRST,
     });
@@ -328,46 +357,86 @@ describe("czNsListingIdentity", () => {
     expect(listingIdentityKey(identity)).toBe(`document:${UNID.FIRST}`);
   });
 
-  test("a row missing either half is unidentifiable, matching what the crawl drops", () => {
-    expect(czNsListingIdentity({ unid: "", caseNumber: DOCKET.FIRST })).toEqual(
-      {
-        type: "unidentifiable",
-      },
-    );
+  test("a row with an id and no docket still keys on its id", () => {
     expect(czNsListingIdentity({ unid: UNID.FIRST, caseNumber: "" })).toEqual({
-      type: "unidentifiable",
+      type: "document",
+      sourceDocumentId: UNID.FIRST,
     });
-    expect(
-      listingIdentityKey(czNsListingIdentity({ unid: "", caseNumber: "" })),
-    ).toBeNull();
   });
 
-  test("an id the decision column cannot hold keys nothing", () => {
-    // Storing it is impossible, so hunting a row under it would keep the slice
-    // short for a document nothing can ever write.
+  test("a row with a docket and no id keys on the quarantine identity of its dockets", () => {
+    const id = quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST });
+    expect(id).toMatch(QUARANTINE_ID_PATTERN);
+    expect(listingIdentityKey({ type: "document", sourceDocumentId: id })).toBe(
+      `document:${id}`,
+    );
+    // Another docket is another record.
+    expect(quarantinedIdOf({ unid: "", caseNumber: DOCKET.SECOND })).not.toBe(
+      id,
+    );
+  });
+
+  test("an id the decision column cannot hold is quarantined, not keyed on", () => {
+    // Storing under it is impossible, and the malformed id is not part of the
+    // fingerprint: the row is the same record as the id-less one.
+    for (const unid of [
+      "F".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      "not-a-universal-id",
+    ]) {
+      expect(quarantinedIdOf({ unid, caseNumber: DOCKET.FIRST })).toBe(
+        quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST }),
+      );
+    }
+  });
+
+  test("the quarantine identity survives a re-rendered docket list", () => {
+    const id = quarantinedIdOf({
+      unid: "",
+      caseNumber: "22 Cdo 807/2025",
+      additionalCaseNumbers: ["22 ND 148/2025"],
+    });
+    // The Domino view joins co-settled dockets into one `znacka`, and the
+    // publisher reflows whitespace between renderings.
     expect(
-      czNsListingIdentity({
-        unid: "F".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-        caseNumber: DOCKET.FIRST,
+      quarantinedIdOf({
+        unid: "",
+        caseNumber: "22 Cdo 807/2025, 22 ND 148/2025",
       }),
-    ).toEqual({ type: "unidentifiable" });
+    ).toBe(id);
+    expect(
+      quarantinedIdOf({
+        unid: "",
+        caseNumber: " 22  Cdo 807/2025",
+        additionalCaseNumbers: ["22 ND\n148/2025 "],
+      }),
+    ).toBe(id);
+  });
+
+  test("a row stating neither an id nor a docket keys on nothing", () => {
+    expect(czNsListingIdentity({ unid: "", caseNumber: "" })).toBeNull();
+    expect(czNsListingIdentity({ unid: "", caseNumber: "  " })).toBeNull();
   });
 
   test("every keyable identity round-trips through its key", () => {
-    for (const unid of [UNID.FIRST, UNID.SECOND, UNID.THIRD]) {
-      const identity = czNsListingIdentity({ unid, caseNumber: DOCKET.FIRST });
-      const key = listingIdentityKey(identity);
-      expect(key).not.toBeNull();
-      expect(parseListingIdentityKey(key ?? "")).toEqual(identity);
+    for (const row of [
+      { unid: UNID.FIRST, caseNumber: DOCKET.FIRST },
+      { unid: UNID.SECOND, caseNumber: DOCKET.FIRST },
+      { unid: UNID.THIRD, caseNumber: "" },
+      { unid: "", caseNumber: DOCKET.FIRST },
+    ]) {
+      const identity = identityOf(row);
+      expect(parseListingIdentityKey(listingIdentityKey(identity))).toEqual(
+        identity,
+      );
     }
   });
 
   test("two documents under one docket are two keys, as the store now is", () => {
-    const first = czNsListingIdentity({
+    const first = identityOf({
       unid: UNID.FIRST,
       caseNumber: DOCKET.FIRST,
     });
-    const second = czNsListingIdentity({
+    const second = identityOf({
       unid: UNID.SECOND,
       caseNumber: DOCKET.FIRST,
     });
@@ -402,6 +471,8 @@ describe("cz-ns listSlicePage", () => {
       { type: "document", sourceDocumentId: UNID.FIRST },
       { type: "document", sourceDocumentId: UNID.SECOND },
     ]);
+    // Every row states a universal id.
+    expect(listed.withoutStableFields).toBeUndefined();
 
     const url = requestedUrls.at(0) ?? "";
     const query = new URL(url).searchParams.get("Query") ?? "";
@@ -411,6 +482,56 @@ describe("cz-ns listSlicePage", () => {
     expect(new URL(url).searchParams.get("Start")).toBe("1");
     expect(new URL(url).searchParams.get("Count")).toBe("900");
     expect(requestedUrls).toHaveLength(1);
+  });
+
+  test("a row whose link names no document is quarantined, not left out of the day", async () => {
+    const NO_HREF = "NO-HREF";
+    const body = listingPageHtml({
+      rows: [
+        [UNID.FIRST, DOCKET.FIRST],
+        ["not-a-universal-id", DOCKET.SECOND],
+        [NO_HREF, DOCKET.SUFFIXED],
+        // Neither an id nor a docket: counted, nothing to key.
+        ["", ""],
+      ],
+      shown: 4,
+    }).replace(
+      `href="/Judikatura/judikatura_ns.nsf/WebSearch/${NO_HREF}?openDocument" `,
+      "",
+    );
+    expect(body).not.toContain(`WebSearch/${NO_HREF}`);
+    mockFetch({ listing: { body } });
+
+    // Before, the day's own count refused the whole listing for these rows.
+    const listed = await listSlice("2026-07-01");
+
+    expect(listed.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: UNID.FIRST },
+      {
+        type: "document",
+        sourceDocumentId: quarantinedIdOf({
+          unid: "",
+          caseNumber: DOCKET.SECOND,
+        }),
+      },
+      {
+        type: "document",
+        sourceDocumentId: quarantinedIdOf({
+          unid: "",
+          caseNumber: DOCKET.SUFFIXED,
+        }),
+      },
+    ]);
+    expect(listed.items.at(1)?.payload).toEqual({
+      unid: "",
+      caseNumber: DOCKET.SECOND,
+    });
+    // The keyed row names the quarantine id an id-less listing of it gets.
+    expect(listed.items.at(0)?.quarantinePeers).toEqual([
+      quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST }),
+    ]);
+    expect(listed.items.at(1)?.quarantinePeers).toBeUndefined();
+    expect(listed.withoutStableFields).toBe(1);
   });
 
   test("asking the same slice twice asks the publisher the same question", async () => {
@@ -593,7 +714,11 @@ describe("cz-ns listSlicePage", () => {
   test("the publisher's own words for an empty day are an empty slice", async () => {
     mockFetch({ listing: { body: EMPTY_LISTING_HTML } });
 
-    expect(await listSlice("2026-07-05")).toEqual({ items: [], totalPages: 0 });
+    expect(await listSlice("2026-07-05")).toEqual({
+      observations: [],
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test("a failed request is thrown, never read as an empty day", async () => {
@@ -732,7 +857,81 @@ describe("cz-ns buildDecision", () => {
         type: "document",
         sourceDocumentId: built.decision.sourceDocumentId ?? "",
       }),
-    ).toBe(listingIdentityKey(czNsListingIdentity(row)));
+    ).toBe(listingIdentityKey(identityOf(row)));
+  });
+
+  test("a keyed row and an id-less row on one docket are reported, never merged", async () => {
+    // Two documents of one docket, one listed without its id: the docket
+    // fingerprint cannot tell them apart, so the keyed one must not adopt the
+    // other's quarantine row.
+    mockFetch({
+      listing: {
+        body: listingPageHtml({
+          rows: [
+            [UNID.FIRST, DOCKET.FIRST],
+            ["", DOCKET.FIRST],
+          ],
+          shown: 2,
+        }),
+      },
+      printStatus: 404,
+    });
+    const quarantined = quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST });
+
+    const listing = await listReconciliationSlice({
+      adapterKey: "cz-ns",
+      proof: SLICE_LISTING_PROOF.COUNT,
+      listSlicePage: reconciliation.listSlicePage,
+      revisionOf: reconciliation.revisionOf,
+      persistEvidence: async () => undefined,
+      slice: "2026-07-01",
+      pageDelayMs: 0,
+      pageTimeoutMs: 5000,
+      sleep: async () => {
+        await Promise.resolve();
+      },
+    });
+    if (Result.isError(listing)) {
+      throw listing.error;
+    }
+    expect(
+      [...listing.value.keyed.values()].map((item) => item.identity),
+    ).toEqual([
+      { type: "document", sourceDocumentId: UNID.FIRST },
+      { type: "document", sourceDocumentId: quarantined },
+    ]);
+    expect(listing.value.quarantinePeerCollisions).toEqual([quarantined]);
+
+    const built = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: DOCKET.FIRST,
+    });
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.sourceDocumentIdRepairAliases).toBeUndefined();
+  });
+
+  test("a row listed with an id and no docket is read and stored under its id", async () => {
+    mockFetch({ printStatus: 404 });
+
+    const built = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: "",
+    });
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.sourceDocumentId).toBe(UNID.FIRST);
+    expect(built.decision.isListingOnly).toBeUndefined();
+    expect<string>(built.decision.caseNumber).toBe(UNID.FIRST);
+    expect(built.decision.caseNumberIsPlaceholder).toBe(true);
+    expect(built.decision.metadata["listingDocketMissing"]).toBe(true);
+    // With no docket there is no quarantine row it could have been kept as.
+    expect(built.decision.sourceDocumentIdRepairAliases).toBeUndefined();
+    expect(requestedUrls.some((url) => url.includes(UNID.FIRST))).toBe(true);
   });
 
   test("the built decision carries the URL its docket-keyed row was stored under", async () => {
@@ -925,14 +1124,61 @@ describe("cz-ns buildDecision", () => {
     expect(requestedUrls).toHaveLength(0);
   });
 
-  test("a row naming no document is unkeyable without contacting the publisher", async () => {
+  test("a row with no usable id is built listing-only under its quarantine identity, unasked", async () => {
+    mockFetch({});
+
+    const row: CzNsListingRow = {
+      unid: "",
+      caseNumber: DOCKET.FIRST,
+      additionalCaseNumbers: [DOCKET.SECOND],
+    };
+    const built = await reconciliation.buildDecision(row);
+
+    // Built, not parked: there is no detail page to wait for.
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    const { decision } = built;
+    expect(decision.sourceDocumentId).toBe(quarantinedIdOf(row));
+    expect(decision.sourceDocumentId).toMatch(QUARANTINE_ID_PATTERN);
+    expect(decision.isListingOnly).toBe(true);
+    expect<string>(decision.caseNumber).toBe(DOCKET.FIRST);
+    expect(decision.caseNumberIsPlaceholder).toBeUndefined();
+    expect(throughLedgerJson(decision.identifiers)).toEqual([
+      { type: "case-number", value: DOCKET.SECOND },
+    ]);
+    expect(decision.metadata).toMatchObject({
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: "missing-record-identity",
+      additionalCaseNumbers: [DOCKET.SECOND],
+    });
+    expect(decision.sourceDocumentIdRepairAliases).toBeUndefined();
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(row);
+    expect(parts?.["detail"]).toBeUndefined();
+    expect(requestedUrls).toHaveLength(0);
+  });
+
+  test("an over-long id is quarantined the same way, never requested", async () => {
+    mockFetch({});
+
+    const built = await reconciliation.buildDecision({
+      unid: "F".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      caseNumber: DOCKET.FIRST,
+    });
+    expect(built.type === "built" && built.decision.sourceDocumentId).toBe(
+      quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST }),
+    );
+    expect(requestedUrls).toHaveLength(0);
+  });
+
+  test("a row stating neither an id nor a docket is unkeyable without contacting the publisher", async () => {
     mockFetch({});
 
     expect(
-      await reconciliation.buildDecision({
-        unid: "",
-        caseNumber: DOCKET.FIRST,
-      }),
+      await reconciliation.buildDecision({ unid: "", caseNumber: "" }),
     ).toEqual({ type: "unkeyable" });
     expect(requestedUrls).toHaveLength(0);
   });
@@ -944,36 +1190,63 @@ describe("cz-ns stored-raw replay", () => {
     throw new TypeError("Expected cz-ns to implement reparseStoredRaw");
   }
 
-  test("current envelopes rebuild to a fixed point without the network", async () => {
-    mockFetch({ printStatus: 404 });
-    const built = await reconciliation.buildDecision({
+  /** What the decision table hands the replay for a stored row. */
+  const storedRowOf = (decision: IngestionResult) => ({
+    raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+    contentType: decision.sourceRawContentType ?? null,
+    caseNumber: decision.caseNumber,
+    sourceDocumentId: decision.sourceDocumentId ?? null,
+    language: decision.language,
+    court: decision.court,
+    ecli: decision.ecli ?? null,
+    decisionDate: decision.decisionDate ?? null,
+    decisionType: decision.decisionType ?? null,
+    sourceUrl: decision.sourceUrl ?? null,
+    documentUrl: decision.documentUrl ?? null,
+    metadata: decision.metadata,
+  });
+
+  // The second row is listed without a docket: its stored docket is the id
+  // standing in for one, which the replay must not read back as a docket.
+  for (const row of [
+    {
       unid: UNID.CO_SETTLED,
       caseNumber: DOCKET.FIRST,
       additionalCaseNumbers: [DOCKET.SECOND],
+    },
+    { unid: UNID.FIRST, caseNumber: "" },
+  ] satisfies CzNsListingRow[]) {
+    test(`current envelopes rebuild to a fixed point without the network (${row.caseNumber || "no docket"})`, async () => {
+      mockFetch({ printStatus: 404 });
+      const built = await reconciliation.buildDecision(row);
+      if (built.type !== "built") {
+        throw new TypeError("Expected the fixture decision to build");
+      }
+      globalThis.fetch = asFetchMock(async () => {
+        throw new Error("a replay must not contact the publisher");
+      });
+
+      const outcome = await replay(storedRowOf(built.decision));
+
+      expect(outcome).toEqual({ type: "parsed", result: built.decision });
+    });
+  }
+
+  test("a quarantined listing row has no pages to replay", async () => {
+    mockFetch({});
+    const built = await reconciliation.buildDecision({
+      unid: "",
+      caseNumber: DOCKET.FIRST,
     });
     if (built.type !== "built") {
-      throw new TypeError("Expected the fixture decision to build");
+      throw new TypeError("Expected the quarantined row to build");
     }
-    globalThis.fetch = asFetchMock(async () => {
-      throw new Error("a replay must not contact the publisher");
-    });
 
-    const outcome = await replay({
-      raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
-      contentType: built.decision.sourceRawContentType ?? null,
-      caseNumber: built.decision.caseNumber,
-      sourceDocumentId: built.decision.sourceDocumentId ?? null,
-      language: built.decision.language,
-      court: built.decision.court,
-      ecli: built.decision.ecli ?? null,
-      decisionDate: built.decision.decisionDate ?? null,
-      decisionType: built.decision.decisionType ?? null,
-      sourceUrl: built.decision.sourceUrl ?? null,
-      documentUrl: built.decision.documentUrl ?? null,
-      metadata: built.decision.metadata,
+    expect(await replay(storedRowOf(built.decision))).toEqual({
+      type: "rejected",
+      rejection: "no-document",
+      detail: "a quarantined listing row holds no decision pages",
     });
-
-    expect(outcome).toEqual({ type: "parsed", result: built.decision });
   });
 
   test("legacy joined dockets recover every identity from the saved pages", async () => {

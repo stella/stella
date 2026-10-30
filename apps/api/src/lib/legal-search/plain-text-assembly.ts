@@ -12,6 +12,7 @@ import {
   type RawIngestionResult,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { PLAIN_TEXT_QUARANTINE_PREFIX } from "@/api/lib/legal-search/quarantine-prefixes";
 
 const persistableIdentity = (value: string) =>
   isPersistableSourceDocumentId(value) && stripDangerousChars(value) === value;
@@ -26,7 +27,7 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     return result.value;
   }
   const error = result.error;
-  const quarantineId = `plaintext-quarantine:${hashSha256Hex(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))}`;
+  const quarantineId = `${PLAIN_TEXT_QUARANTINE_PREFIX}${hashSha256Hex(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))}`;
   const sourceDocumentId =
     raw.sourceDocumentId !== undefined &&
     persistableIdentity(raw.sourceDocumentId)

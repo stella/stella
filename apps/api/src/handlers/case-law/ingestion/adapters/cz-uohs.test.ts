@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
@@ -11,20 +11,24 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
   buildCzUohsDecision,
+  CZ_UOHS_PAGE_SIZE,
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
   czUohsLetterheadDate,
   encodeCzUohsCursor,
+  parseCzUohsCursor,
   parseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
+import { throughLedgerJson } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   extractPlPdfSeparatedContent,
   PL_PDF_PARAGRAPH_START,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -508,7 +512,12 @@ describe("ÚOHS JSON-LD", () => {
     );
     const parked = encodeCzUohsCursor({
       version: 1,
-      afterId: make("02").iri,
+      frontier: {
+        type: "after-record",
+        iri: make("02").iri,
+        fingerprint: fingerprintReconciliationPayload(make("02")),
+        occurrence: 0,
+      },
       parkedOn: "2000-01-01",
     });
     const page = (
@@ -527,6 +536,28 @@ describe("ÚOHS JSON-LD", () => {
     });
     const page = await czUohsAdapter.fetchPage("40", {}, undefined);
     expect(Result.isError(page)).toBe(true);
+    expect(requests).toBe(0);
+  });
+
+  test("rejects two valid cursor frontiers before reading the listing", async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests += 1;
+      return Response.json({ rozhodnutí: [] });
+    });
+    const result = await czUohsAdapter.fetchPage(
+      JSON.stringify({
+        version: 1,
+        afterId: "",
+        afterRecord: { iri: "", fingerprint: "a".repeat(64), occurrence: 0 },
+      }),
+      {},
+      undefined,
+    );
+    expect(result.isErr()).toBe(true);
+    expect(result.isErr() ? result.error.message : "").toContain(
+      "both frontiers",
+    );
     expect(requests).toBe(0);
   });
 
@@ -620,3 +651,315 @@ const CZ_COLLECTION_URLS = [
     "https://uohs.gov.cz/cs/pristup-k-dopravni-infrastrukture.html",
   ],
 ] as const;
+
+describe("ÚOHS decisions listed without a storable IRI", () => {
+  const QUARANTINE_ID = /^cz-uohs-quarantine:[0-9a-f]{64}$/u;
+  const PDF_URL =
+    "https://uohs.gov.cz/download/sbirky_rozhodnuti/dokumenty/quarantined.pdf";
+  const RECOVERED_IRI =
+    "https://uohs.gov.cz/cs/verejne-zakazky/sbirky-rozhodnuti/detail-90011.html";
+
+  const listed = async () => {
+    const [template] = await records();
+    const make = (iri: string, overrides: object = {}) => ({
+      ...template!,
+      iri,
+      dokument: [{ typ: "Digitální objekt", url: PDF_URL }],
+      ...overrides,
+    });
+    return {
+      keyed: make("https://uohs.gov.cz/cs/verejne-zakazky/detail-1.html", {
+        dokument: [],
+      }),
+      empty: make("", {
+        číslo_jednací: "90011/2026/163",
+        spisová_značka: "R0911/2026/VZ",
+      }),
+      overLong: make(`https://uohs.gov.cz/cs/${"x".repeat(300)}.html`, {
+        číslo_jednací: "90012/2026/163",
+        spisová_značka: "R0912/2026/VZ",
+      }),
+      // No IRI and neither number: nothing could name it again.
+      unnamed: make("", { číslo_jednací: " ", spisová_značka: "" }),
+    };
+  };
+
+  const serve = (rozhodnutí: readonly object[]): string[] => {
+    const requested: string[] = [];
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      requested.push(input instanceof Request ? input.url : String(input));
+      return Response.json({ rozhodnutí });
+    });
+    return requested;
+  };
+
+  const listSlice = async (rozhodnutí: readonly object[]) => {
+    serve(rozhodnutí);
+    return await czUohsAdapter.reconciliation.listSlicePage({
+      slice: "all",
+      page: 0,
+      signal: undefined,
+    });
+  };
+
+  const listedIdOf = async (record: object): Promise<string | null> => {
+    const [item] = (await listSlice([record])).items;
+    return item?.identity.type === "document"
+      ? item.identity.sourceDocumentId
+      : null;
+  };
+
+  test("keys an empty or over-long IRI on a quarantine id and counts a decision with no stable field", async () => {
+    const { keyed, empty, overLong, unnamed } = await listed();
+    const page = await listSlice([keyed, empty, overLong, unnamed]);
+    expect(page.withoutStableFields).toBe(1);
+    expect(page.totalPages).toBe(1);
+    const emptyId = await listedIdOf(empty);
+    const overLongId = await listedIdOf(overLong);
+    expect(emptyId).toMatch(QUARANTINE_ID);
+    expect(overLongId).toMatch(QUARANTINE_ID);
+    expect(emptyId).not.toBe(overLongId);
+    expect(
+      page.items.map(({ identity }) =>
+        identity.type === "document" ? identity.sourceDocumentId : null,
+      ),
+    ).toEqual([emptyId, keyed.iri, overLongId]);
+  });
+
+  test.each([
+    [CZ_UOHS_PAGE_SIZE + 1, false],
+    [CZ_UOHS_PAGE_SIZE * 2 + 1, true],
+    [CZ_UOHS_PAGE_SIZE * 3 + 1, false],
+  ])(
+    "walks every empty-IRI quarantine row exactly once across %i rows",
+    async (count, reverse) => {
+      const { empty } = await listed();
+      const rows = Array.from({ length: count }, (_, index) => ({
+        ...empty,
+        iri: "",
+        číslo_jednací: `EMPTY-${String(index).padStart(3, "0")}/2026/163`,
+        spisová_značka: `R${String(index).padStart(3, "0")}/2026/VZ`,
+        dokument: [],
+      }));
+      if (reverse) {
+        rows.reverse();
+      }
+      const listing = { rozhodnutí: rows };
+      serve(rows);
+      const expectedPage = await listSlice(rows);
+      const expectedIds = expectedPage.items.flatMap(({ identity }) =>
+        identity.type === "document" ? [identity.sourceDocumentId] : [],
+      );
+
+      globalThis.fetch = asFetchMock(async () => Response.json(listing));
+      let cursor: string | null = null;
+      const received: string[] = [];
+      for (
+        let boundary = 0;
+        boundary <= Math.ceil(count / CZ_UOHS_PAGE_SIZE);
+        boundary += 1
+      ) {
+        const page = (
+          await czUohsAdapter.fetchPage(cursor, {}, undefined)
+        ).unwrap();
+        received.push(
+          ...page.decisions.map(
+            ({ sourceDocumentId }) =>
+              sourceDocumentId ??
+              panic("A listed decision requires its source id"),
+          ),
+        );
+        if (
+          page.decisions.length < CZ_UOHS_PAGE_SIZE ||
+          page.nextCursor === null
+        ) {
+          break;
+        }
+        cursor = encodeCzUohsCursor({
+          ...parseCzUohsCursor(page.nextCursor).unwrap(
+            "A page writes a valid cursor",
+          ),
+          snapshotId: "forced-cache-miss",
+        });
+      }
+
+      expect(received).toHaveLength(count);
+      expect(new Set(received).size).toBe(count);
+      expect(received.toSorted()).toEqual(expectedIds.toSorted());
+    },
+  );
+
+  test("identical listing occurrences have distinct resumable positions", async () => {
+    const { empty } = await listed();
+    const row = { ...empty, iri: "", dokument: [] };
+    const count = CZ_UOHS_PAGE_SIZE * 2 + 1;
+    globalThis.fetch = asFetchMock(async () =>
+      Response.json({ rozhodnutí: Array.from({ length: count }, () => row) }),
+    );
+    let cursor: string | null = null;
+    let received = 0;
+    for (
+      let boundary = 0;
+      boundary <= Math.ceil(count / CZ_UOHS_PAGE_SIZE);
+      boundary += 1
+    ) {
+      const page = (
+        await czUohsAdapter.fetchPage(cursor, {}, undefined)
+      ).unwrap();
+      received += page.decisions.length;
+      const position = parseCzUohsCursor(page.nextCursor).unwrap(
+        "A page writes a valid cursor",
+      );
+      expect(position.frontier.type).toBe("after-record");
+      expect(
+        position.frontier.type === "after-record"
+          ? position.frontier.occurrence
+          : null,
+      ).toBe(received - 1);
+      if (page.decisions.length < CZ_UOHS_PAGE_SIZE) {
+        break;
+      }
+      cursor = encodeCzUohsCursor({
+        ...position,
+        snapshotId: "forced-cache-miss",
+      });
+    }
+    expect(received).toBe(count);
+  });
+
+  test("a legacy v1 IRI cursor replays its boundary group before using compound cursors", async () => {
+    const { empty } = await listed();
+    const rows = Array.from({ length: CZ_UOHS_PAGE_SIZE + 1 }, (_, index) => ({
+      ...empty,
+      iri: "",
+      číslo_jednací: `LEGACY-${String(index).padStart(3, "0")}/2026/163`,
+      spisová_značka: `R${String(index).padStart(3, "0")}/2026/VZ`,
+      dokument: [],
+    }));
+    const listing = { rozhodnutí: rows };
+    globalThis.fetch = asFetchMock(async () => Response.json(listing));
+    const legacyCursor = JSON.stringify({
+      version: 1,
+      afterId: "",
+      parkedOn: "2000-01-01",
+    });
+    const first = (
+      await czUohsAdapter.fetchPage(legacyCursor, {}, undefined)
+    ).unwrap();
+    expect(first.decisions).toHaveLength(CZ_UOHS_PAGE_SIZE);
+    const next =
+      first.nextCursor ??
+      panic("Expected a compound cursor after the first page");
+    const second = (
+      await czUohsAdapter.fetchPage(
+        encodeCzUohsCursor({
+          ...parseCzUohsCursor(next).unwrap("A page writes a valid cursor"),
+          snapshotId: "forced-cache-miss",
+        }),
+        {},
+        undefined,
+      )
+    ).unwrap();
+    const received = [
+      ...first.decisions.map(
+        ({ sourceDocumentId }) =>
+          sourceDocumentId ?? panic("A listed decision requires its source id"),
+      ),
+      ...second.decisions.map(
+        ({ sourceDocumentId }) =>
+          sourceDocumentId ?? panic("A listed decision requires its source id"),
+      ),
+    ];
+    expect(second.decisions).toHaveLength(1);
+    expect(new Set(received).size).toBe(CZ_UOHS_PAGE_SIZE + 1);
+  });
+
+  test("the crawl stores a quarantined decision listing-only under its listed id, reading no document", async () => {
+    const { keyed, empty, overLong, unnamed } = await listed();
+    const emptyId = await listedIdOf(empty);
+    const overLongId = await listedIdOf(overLong);
+    const requested = serve([keyed, empty, overLong, unnamed]);
+    const page = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
+    expect(requested).not.toContain(PDF_URL);
+    expect(
+      throughLedgerJson(
+        page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+      ),
+    ).toEqual([emptyId, keyed.iri, overLongId]);
+    for (const [record, reason] of [
+      [empty, "missing-record-iri"],
+      [overLong, "unpersistable-record-iri"],
+    ] as const) {
+      const id = await listedIdOf(record);
+      const stored = page.decisions.find(
+        ({ sourceDocumentId }) => sourceDocumentId === id,
+      );
+      expect(stored?.isListingOnly).toBe(true);
+      expect(stored?.fulltext).toBeUndefined();
+      expect(stored?.sourceDocumentIdRepairAliases).toBeUndefined();
+      expect(stored?.metadata).toMatchObject({
+        identityQuarantined: true,
+        listedOnly: true,
+        listedOnlyReason: reason,
+        fileNumber: record.spisová_značka,
+        referenceNumber: record.číslo_jednací,
+      });
+      const raw = decodeSourceRawEnvelope(stored?.sourceRaw ?? "");
+      expect(JSON.parse(raw?.["listing"] ?? "null")).toEqual(record);
+    }
+  });
+
+  test("the reconciliation builds a quarantined payload as the same listing-only row", async () => {
+    const { empty } = await listed();
+    const [item] = (await listSlice([empty])).items;
+    expect(item).toBeDefined();
+    if (item?.identity.type !== "document") {
+      return;
+    }
+    const outcome = await czUohsAdapter.reconciliation.buildDecision(
+      item.payload,
+      undefined,
+    );
+    expect(outcome.type).toBe("built");
+    if (outcome.type !== "built") {
+      return;
+    }
+    expect(outcome.decision.sourceDocumentId).toBe(
+      item.identity.sourceDocumentId,
+    );
+    expect(outcome.decision.isListingOnly).toBe(true);
+  });
+
+  test("a keyed observation names the quarantine id its IRI-less listing was stored under", async () => {
+    const { empty } = await listed();
+    const quarantineId = await listedIdOf(empty);
+    const recovered = { ...empty, iri: RECOVERED_IRI, dokument: [] };
+    const decision = await buildCzUohsDecision(
+      parseCzUohsListing({ rozhodnutí: [recovered] })[0]!,
+    );
+    expect(decision.sourceDocumentId).toBe(RECOVERED_IRI);
+    expect(throughLedgerJson(decision.sourceDocumentIdRepairAliases)).toEqual([
+      quarantineId,
+    ]);
+    const quarantined = await buildCzUohsDecision(
+      parseCzUohsListing({ rozhodnutí: [empty] })[0]!,
+    );
+    expect(quarantined.caseNumber).toBe(decision.caseNumber);
+  });
+
+  test("the quarantine id survives a re-rendered listing", async () => {
+    const { keyed, empty } = await listed();
+    const quarantineId = await listedIdOf(empty);
+    const reflowed = {
+      ...empty,
+      věc: { cs: `  ${empty.věc.cs.replaceAll(" ", "\n  ")} ` },
+      spisová_značka: ` ${empty.spisová_značka}`,
+    };
+    const page = await listSlice([keyed, reflowed]);
+    expect(
+      page.items.map(({ identity }) =>
+        identity.type === "document" ? identity.sourceDocumentId : null,
+      ),
+    ).toEqual([quarantineId, keyed.iri]);
+  });
+});

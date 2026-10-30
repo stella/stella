@@ -1,3 +1,5 @@
+// parser-output-unchanged: [sk-courts] Extracts quarantined replay identity matching into its own helper without changing accepted rows, aliases, labels or stored output.
+// parser-output-unchanged: [sk-courts] only adds sourceDocumentIdRepairAliases to guid-keyed rows; no stored row had a quarantine row to adopt.
 // parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
 // parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -112,8 +114,22 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
-import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  DOCUMENT_DELIVERY,
+  isKeyableListingIdentity,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  QuarantineIdentity,
+  QuarantineStableFields,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser";
@@ -537,9 +553,6 @@ const skCourtsSourceDocumentId = (
     : undefined;
 };
 
-/** The two fields this adapter refuses to store a decision without. */
-type SkCourtsIdentityFields = { caseNumber: string; court: string };
-
 /**
  * Publisher display text in the form a plain-text field stores. A value the
  * canonical form refuses is kept as stated, so assembly reports it instead of
@@ -576,64 +589,411 @@ const decodeSkCourtRegistryRecord = (
 });
 
 /**
- * The docket and the court an item must state for this adapter to keep it.
+ * The labels a keyed decision is stored with.
  *
- * Stated once, because the crawl, the identity rule and the listing walk must
- * agree exactly on which items exist: an item one of them keeps and another
- * drops is either a decision nothing ever stores or a slice that stays short
- * forever.
+ * A record keyed by its guid is that record whatever else its listing omits
+ * (case-law AGENTS.md rule 17), so a guid-keyed item stating no docket is
+ * stored under the guid with the guid as its placeholder docket, and one
+ * stating no court with an empty court label, rather than not at all.
  */
-const skCourtsIdentityFields = (
-  item: SkApiItem,
-): SkCourtsIdentityFields | null => {
-  const statedCaseNumber = toOptionalValue(item.spisovaZnacka);
-  const statedCourt = toOptionalValue(item.sud?.nazov);
-  if (!statedCaseNumber || !statedCourt) {
+type SkCourtsLabels = {
+  caseNumber: string;
+  caseNumberIsPlaceholder: boolean;
+  court: string;
+  /** The docket and the court as stated; undefined where the listing states none. */
+  statedCaseNumber: string | undefined;
+  statedCourt: string | undefined;
+};
+
+/** Why a listed record is stored under its quarantine identity. */
+const SK_COURTS_QUARANTINE_REASON = {
+  /**
+   * The payload fails the listing shape. None of its values is trusted as a
+   * publisher identity, a stated guid included: the shape that would vouch
+   * for it is the one that failed.
+   */
+  INVALID_LISTING_SHAPE: "invalid_listing_shape",
+  /** No persistable guid, and no docket and court that key the record. */
+  NO_PUBLISHER_ID: "no_publisher_id",
+} as const;
+
+type SkCourtsQuarantineReason =
+  (typeof SK_COURTS_QUARANTINE_REASON)[keyof typeof SK_COURTS_QUARANTINE_REASON];
+
+/**
+ * How a listed record is keyed and stored.
+ *
+ * Decided once, here, because the crawl, the listing walk, the reconciliation
+ * build and the stored-raw replay must agree exactly on which records exist
+ * and under which identity: a record one of them keys differently is either a
+ * decision nothing ever stores or a slice that stays short forever.
+ */
+type SkCourtsRecordIdentity =
+  | {
+      type: "keyed";
+      item: SkApiItem;
+      identity: ListingIdentity;
+      labels: SkCourtsLabels;
+      /**
+       * The fingerprint this record would be quarantined under, emitted as a
+       * repair alias so a keyed observation takes over the row a degraded one
+       * stored; null where the record has no stable field set.
+       */
+      quarantine: QuarantineIdentity | null;
+    }
+  | SkCourtsQuarantinedRecord
+  /**
+   * Nothing the listing states names the record, so no identity is invented
+   * for it: every other field is shared by unrelated decisions.
+   */
+  | { type: "no-stable-fields" };
+
+type SkCourtsQuarantinedRecord = {
+  type: "quarantined";
+  record: Readonly<Record<string, unknown>>;
+  quarantine: QuarantineIdentity;
+  reason: SkCourtsQuarantineReason;
+};
+
+/** A stated string; empty, absent, null and every other type state nothing. */
+const statedSkCourtsString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+/**
+ * Stated display text in its canonical form. A markup-only label reaches the
+ * required-label boundary with its evidence intact: an empty canonical form
+ * is not source absence. Only an empty string states nothing here, so a
+ * label stored before this rule existed is rebuilt byte for byte.
+ */
+const statedSkCourtsLabel = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0
+    ? canonicalSkCourtText(value) || value
+    : undefined;
+
+/**
+ * The fingerprint a record is quarantined under, read off any record the
+ * listing holds, valid shape or not, so a recovered observation computes
+ * exactly what its degraded one did.
+ *
+ * Why these fields: the docket, the case-file number, the court with its
+ * registry guid, the decision date and the decision form are what this
+ * service states for a record each time it lists it, verbatim, and none of
+ * them is derived from or served only with the guid. Excluded: the guid
+ * itself, the `zvyraznenie` search highlights and everything only the detail
+ * record states (ECLI, update date, document). A record stating neither a
+ * docket nor a case-file number has no field that names it, since the
+ * remaining ones are shared by every decision a court issued that day, so it
+ * has no fingerprint.
+ *
+ * The field order is part of the digest stored rows carry.
+ */
+const skCourtsQuarantineIdentity = (
+  record: Readonly<Record<string, unknown>>,
+): QuarantineIdentity | null => {
+  const docket = statedSkCourtsString(record["spisovaZnacka"]);
+  const caseFile = statedSkCourtsString(record["identifikacneCislo"]);
+  if (docket === undefined && caseFile === undefined) {
     return null;
   }
-  // Stated markup-only labels must reach the required-label boundary with
-  // their evidence intact; an empty canonical form is not source absence.
+  const court = record["sud"];
+  const stableFields: QuarantineStableFields = {
+    spisovaZnacka: docket,
+    identifikacneCislo: caseFile,
+    sud: isRecord(court) ? statedSkCourtsString(court["nazov"]) : undefined,
+    sudRegistreGuid: isRecord(court)
+      ? statedSkCourtsString(court["registreGuid"])
+      : undefined,
+    datumVydania: statedSkCourtsString(record["datumVydania"]),
+    formaRozhodnutia: statedSkCourtsString(record["formaRozhodnutia"]),
+  };
+  return quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.SK_COURTS,
+    stableFields,
+  });
+};
+
+/**
+ * The docket fallback for an item without a persistable guid, or null where
+ * its docket and court do not make a key: one the plain-text form refuses,
+ * an empty court, or a key past the key column.
+ */
+const skCourtsDocketIdentity = (
+  caseNumber: string,
+  court: string,
+): ListingIdentity | null => {
+  const plainCaseNumber = toPlainText(caseNumber);
+  const plainCourt = toPlainText(court);
+  if (
+    plainCaseNumber.isErr() ||
+    plainCourt.isErr() ||
+    plainCourt.value.length === 0
+  ) {
+    return null;
+  }
+  const identity: ListingIdentity = {
+    type: "case-number",
+    caseNumber: plainCaseNumber.value,
+    language: SK_COURTS_LANGUAGE,
+  };
+  return isKeyableListingIdentity(identity) ? identity : null;
+};
+
+/**
+ * How the ingest keys and stores this listing item.
+ *
+ * Takes the raw item rather than a validated one, because the shape check is
+ * itself part of the rule: a payload that fails it is still a record the
+ * publisher counts, so it is quarantined rather than dropped.
+ */
+export const skCourtsRecordIdentity = (
+  raw: unknown,
+): SkCourtsRecordIdentity => {
+  if (!isRecord(raw)) {
+    return { type: "no-stable-fields" };
+  }
+  const quarantine = skCourtsQuarantineIdentity(raw);
+  if (isSkApiItem(raw)) {
+    const statedCaseNumber = statedSkCourtsLabel(raw.spisovaZnacka);
+    const statedCourt = statedSkCourtsLabel(raw.sud?.nazov);
+    const sourceDocumentId = skCourtsSourceDocumentId(raw.guid);
+    if (sourceDocumentId !== undefined) {
+      return {
+        type: "keyed",
+        item: raw,
+        identity: { type: "document", sourceDocumentId },
+        labels: {
+          caseNumber: statedCaseNumber ?? sourceDocumentId,
+          caseNumberIsPlaceholder: statedCaseNumber === undefined,
+          court: statedCourt ?? "",
+          statedCaseNumber,
+          statedCourt,
+        },
+        quarantine,
+      };
+    }
+    if (statedCaseNumber !== undefined && statedCourt !== undefined) {
+      const docketIdentity = skCourtsDocketIdentity(
+        statedCaseNumber,
+        statedCourt,
+      );
+      if (docketIdentity !== null) {
+        return {
+          type: "keyed",
+          item: raw,
+          identity: docketIdentity,
+          labels: {
+            caseNumber: statedCaseNumber,
+            caseNumberIsPlaceholder: false,
+            court: statedCourt,
+            statedCaseNumber,
+            statedCourt,
+          },
+          quarantine,
+        };
+      }
+    }
+  }
+  if (quarantine === null) {
+    return { type: "no-stable-fields" };
+  }
   return {
-    caseNumber: canonicalSkCourtText(statedCaseNumber) || statedCaseNumber,
-    court: canonicalSkCourtText(statedCourt) || statedCourt,
+    type: "quarantined",
+    record: raw,
+    quarantine,
+    reason: isSkApiItem(raw)
+      ? SK_COURTS_QUARANTINE_REASON.NO_PUBLISHER_ID
+      : SK_COURTS_QUARANTINE_REASON.INVALID_LISTING_SHAPE,
   };
 };
 
 /**
- * The identity the ingest would store for this listing item.
- *
- * Takes the raw item rather than a validated one, because the shape check is
- * itself part of the rule: the crawl drops a payload it cannot validate, so a
- * walk must count it as unidentifiable rather than as a decision it is missing.
+ * The identity the ingest would store for this listing item, or null for one
+ * with no stable field set, which nothing can key or store.
  */
-export const skCourtsListingIdentity = (item: unknown): ListingIdentity => {
-  if (!isSkApiItem(item)) {
-    return { type: "unidentifiable" };
+export const skCourtsListingIdentity = (
+  item: unknown,
+): ListingIdentity | null => {
+  const record = skCourtsRecordIdentity(item);
+  switch (record.type) {
+    case "keyed":
+      return record.identity;
+    case "quarantined":
+      return {
+        type: "document",
+        sourceDocumentId: record.quarantine.sourceDocumentId,
+      };
+    case "no-stable-fields":
+      return null;
+    default:
+      record satisfies never;
+      return panic(`Unhandled sk-courts identity: ${String(record)}`);
   }
-  const fields = skCourtsIdentityFields(item);
-  if (fields === null) {
-    return { type: "unidentifiable" };
-  }
-  const sourceDocumentId = skCourtsSourceDocumentId(item.guid);
-  if (sourceDocumentId !== undefined) {
-    return { type: "document", sourceDocumentId };
-  }
-  const caseNumber = toPlainText(fields.caseNumber);
-  const court = toPlainText(fields.court);
-  if (
-    caseNumber.isErr() ||
-    court.isErr() ||
-    caseNumber.value.length === 0 ||
-    court.value.length === 0
-  ) {
-    return { type: "unidentifiable" };
-  }
-  return {
-    type: "case-number",
-    caseNumber: caseNumber.value,
-    language: SK_COURTS_LANGUAGE,
-  };
 };
+
+/** The item a keyed record is fetched and built from; null for any other. */
+const skCourtsKeyedItem = (raw: unknown): SkApiItem | null => {
+  const record = skCourtsRecordIdentity(raw);
+  return record.type === "keyed" ? record.item : null;
+};
+
+/**
+ * The id an earlier version stored this record under, where it can be rebuilt
+ * byte for byte from the listing alone.
+ *
+ * Before records with no usable id were quarantined here, a guid-less item
+ * whose docket or court the plain-text form refuses went through the keyed
+ * assembly and fell back to the shared plain-text quarantine, whose id digests
+ * the row's raw. That raw was the listing, plus the court registry record
+ * when the listing named a registry guid, plus the detail record when it
+ * stated a guid of any length. Only an item stating neither had a raw that is
+ * its listing alone, so only for it is the earlier id known; the earlier row
+ * is adopted through it as a repair alias. The id is produced by the shared
+ * function itself, over the raw the earlier assembly built, so it cannot drift
+ * from what that function stored.
+ */
+const legacyPlainTextQuarantineId = ({
+  record,
+  reason,
+}: SkCourtsQuarantinedRecord): string | undefined => {
+  if (
+    reason !== SK_COURTS_QUARANTINE_REASON.NO_PUBLISHER_ID ||
+    !isSkApiItem(record) ||
+    (record.guid !== null && record.guid !== undefined && record.guid !== "") ||
+    (record.sud?.registreGuid !== null &&
+      record.sud?.registreGuid !== undefined)
+  ) {
+    return undefined;
+  }
+  // The earlier assembly kept only items stating both, under these labels.
+  const statedCaseNumber = toOptionalValue(record.spisovaZnacka);
+  const statedCourt = toOptionalValue(record.sud?.nazov);
+  if (!statedCaseNumber || !statedCourt) {
+    return undefined;
+  }
+  const { sourceRaw, sourceRawContentType } = skCourtsSourceRaw({
+    item: record,
+    detail: null,
+    courtRegistry: null,
+  });
+  const earlier = plainTextIngestionResult({
+    caseNumber: canonicalSkCourtText(statedCaseNumber) || statedCaseNumber,
+    court: canonicalSkCourtText(statedCourt) || statedCourt,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
+    language: SK_COURTS_LANGUAGE,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: {},
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType,
+  });
+  // Labels the plain-text form accepts were stored by docket, not under the
+  // shared quarantine, so there is no earlier id to adopt.
+  return earlier.plainTextOutcome.type === "item_build_failed"
+    ? earlier.sourceDocumentId
+    : undefined;
+};
+
+/**
+ * The listing-only row of a record stored under its quarantine identity
+ * (case-law AGENTS.md rule 20): the verbatim listing as its raw, every label
+ * the listing states in a form this adapter can read, and no detail request,
+ * since there is no guid to ask the service about. Not deferred to the
+ * document walk either: with no record read there is no document URL for it
+ * to fetch, and a deferred row would be published with nothing on it.
+ */
+const quarantinedSkCourtsDecision = (
+  quarantined: SkCourtsQuarantinedRecord,
+): IngestionResult => {
+  const { record, quarantine, reason } = quarantined;
+  const legacyId = legacyPlainTextQuarantineId(quarantined);
+  const statedCourtRecord = record["sud"];
+  const statedJudgeRecord = record["sudca"];
+  const court: Readonly<Record<string, unknown>> = isRecord(statedCourtRecord)
+    ? statedCourtRecord
+    : {};
+  const judge: Readonly<Record<string, unknown>> = isRecord(statedJudgeRecord)
+    ? statedJudgeRecord
+    : {};
+  const statedCaseNumber = statedSkCourtsLabel(record["spisovaZnacka"]);
+  const statedCourt = statedSkCourtsLabel(court["nazov"]);
+  const decisionDate = parseSkDate(
+    statedSkCourtsString(record["datumVydania"]),
+  );
+  const decisionType = statedSkCourtsLabel(record["formaRozhodnutia"]);
+  const decisionNature = record["povaha"];
+  const sourceRaw = encodeSourceRawEnvelope({
+    listing: JSON.stringify(record),
+  });
+  return plainTextIngestionResult({
+    // No docket stated: the row's label is its own identity, marked a
+    // placeholder so no citation is ever matched against it.
+    caseNumber: statedCaseNumber ?? quarantine.sourceDocumentId,
+    ...(statedCaseNumber === undefined
+      ? { caseNumberIsPlaceholder: true }
+      : {}),
+    isListingOnly: true,
+    sourceDocumentId: quarantine.sourceDocumentId,
+    ...(legacyId === undefined
+      ? {}
+      : {
+          sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+            namespace: LEGACY_REPAIR_NAMESPACE.SK_COURTS_PLAINTEXT,
+            sourceDocumentIds: [legacyId],
+            stableFields: { caseNumber: statedCaseNumber, sud: statedCourt },
+          }),
+        }),
+    court: statedCourt ?? "",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
+    language: SK_COURTS_LANGUAGE,
+    decisionDate,
+    decisionType,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      caseNumber: statedCaseNumber,
+      court: statedCourt,
+      decisionDate,
+      decisionType,
+      decisionTypeKey: decisionTypeKey(decisionType),
+      identifikacneCislo: statedSkCourtsString(record["identifikacneCislo"]),
+      judge: statedSkCourtsLabel(judge["meno"]),
+      judgeRegistreGuid: statedSkCourtsString(judge["registreGuid"]),
+      courtRegistreGuid: statedSkCourtsString(court["registreGuid"]),
+      decisionNature: isStringArray(decisionNature)
+        ? decodeSkCourtTextList(decisionNature)
+        : undefined,
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: reason,
+    }),
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
+
+/** Report a listed record stored under its quarantine identity. */
+const warnQuarantinedListingRecord = ({
+  quarantine,
+  reason,
+}: SkCourtsQuarantinedRecord): void => {
+  logger.warn("case_law.ingestion.listing_identity_quarantined", {
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    sourceDocumentId: quarantine.sourceDocumentId,
+    reason,
+  });
+};
+
+/**
+ * Why a listed record has no identity, for the warning that reports it, so a
+ * listing whose records lose every naming field is not read as one with fewer
+ * records.
+ */
+const UNKEYABLE_LISTING_RECORD_REASON =
+  "listing record states neither a docket nor a case-file number";
 
 /**
  * What asking the publisher's per-decision record about a listed item produced.
@@ -738,10 +1098,11 @@ const readPageDetails = async ({
   readDetail,
 }: ReadPageDetailsOptions): Promise<void> => {
   await mapWithConcurrency({
-    items: items.filter(
-      (item): item is SkApiItem =>
-        isSkApiItem(item) && skCourtsIdentityFields(item) !== null,
-    ),
+    // A quarantined record names no record to read.
+    items: items.flatMap((item) => {
+      const keyed = skCourtsKeyedItem(item);
+      return keyed === null ? [] : [keyed];
+    }),
     limit: ITEM_CONCURRENCY,
     operation: async (item) => await readDetail(item),
   });
@@ -826,23 +1187,88 @@ const skCourtsSourceRaw = ({
 
 /**
  * Build one decision from the two responses already in hand, without
- * contacting the publisher, or `null` for an item nothing can key.
+ * contacting the publisher, or `null` for an item with no stable field set.
+ * A quarantined item is its listing-only row, whatever else is handed in.
  *
  * The seam the crawl, the stored-payload re-parse and the conformance
  * fixtures all go through: a decision keyed or projected one way here is
  * keyed and projected that way everywhere.
  */
-export const assembleSkCourtsDecision = ({
-  courtRegistry,
-  detail,
-  detailOutcome,
-  item,
-}: SkCourtsDecisionParts): IngestionResult | null => {
-  const fields = skCourtsIdentityFields(item);
-  if (fields === null) {
-    return null;
+export const assembleSkCourtsDecision = (
+  parts: SkCourtsDecisionParts,
+): IngestionResult | null => {
+  const record = skCourtsRecordIdentity(parts.item);
+  switch (record.type) {
+    case "keyed":
+      return assembleKeyedSkCourtsDecision(parts, record);
+    case "quarantined":
+      return quarantinedSkCourtsDecision(record);
+    case "no-stable-fields":
+      return null;
+    default:
+      record satisfies never;
+      return panic(`Unhandled sk-courts identity: ${String(record)}`);
   }
-  const { caseNumber, court } = fields;
+};
+
+/**
+ * A row a degraded listing quarantined is taken over by this keyed
+ * observation of the same record (case-law AGENTS.md rule 20). Only a
+ * guid-keyed row can: the pipeline adopts by publisher id.
+ */
+const skCourtsRepairAliases = (
+  record: Extract<SkCourtsRecordIdentity, { type: "keyed" }>,
+): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> => {
+  if (record.identity.type !== "document") {
+    return {};
+  }
+  // At most sixteen forms; each must still name a docket or case file.
+  const item = record.item;
+  const forms = [item.spisovaZnacka, undefined].flatMap((spisovaZnacka) =>
+    [item.identifikacneCislo, undefined].flatMap((identifikacneCislo) =>
+      [item.sud?.nazov, undefined].flatMap((nazov) =>
+        [item.sud?.registreGuid, undefined].map((registreGuid) => ({
+          ...item,
+          spisovaZnacka,
+          identifikacneCislo,
+          sud: { nazov, registreGuid },
+        })),
+      ),
+    ),
+  );
+  const aliases = new Set<RepairAlias>();
+  for (const form of forms) {
+    if (
+      form.identifikacneCislo === undefined &&
+      form.sud.nazov === undefined &&
+      form.sud.registreGuid === undefined
+    ) {
+      continue;
+    }
+    const quarantine = skCourtsQuarantineIdentity(form);
+    if (quarantine !== null) {
+      for (const alias of quarantine.repairAliases) {
+        aliases.add(alias);
+      }
+    }
+  }
+  return aliases.size === 0
+    ? {}
+    : { sourceDocumentIdRepairAliases: [...aliases] };
+};
+
+/** {@link assembleSkCourtsDecision} for an item keyed on a publisher identity. */
+const assembleKeyedSkCourtsDecision = (
+  { courtRegistry, detail, detailOutcome, item }: SkCourtsDecisionParts,
+  record: Extract<SkCourtsRecordIdentity, { type: "keyed" }>,
+): IngestionResult => {
+  const {
+    caseNumber,
+    caseNumberIsPlaceholder,
+    court,
+    statedCaseNumber,
+    statedCourt,
+  } = record.labels;
 
   // Registry changes must reach already stored decisions; detail failures
   // still do not change the listing observation.
@@ -908,6 +1334,7 @@ export const assembleSkCourtsDecision = ({
   return plainTextIngestionResult(
     {
       caseNumber,
+      ...(caseNumberIsPlaceholder ? { caseNumberIsPlaceholder: true } : {}),
       ecli,
       court,
       country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
@@ -915,6 +1342,7 @@ export const assembleSkCourtsDecision = ({
       decisionDate,
       decisionType,
       sourceDocumentId: skCourtsSourceDocumentId(item.guid),
+      ...skCourtsRepairAliases(record),
       sourceUrl,
       documentUrl:
         restrictSkCourtDocumentUrl(
@@ -931,9 +1359,10 @@ export const assembleSkCourtsDecision = ({
           ...(detailOutcome === undefined
             ? {}
             : { [READ_OUTCOME_METADATA_KEY]: detailOutcome }),
-          caseNumber,
+          // What the listing states, never the placeholder label.
+          caseNumber: statedCaseNumber,
           ecli,
-          court,
+          court: statedCourt,
           decisionDate,
           decisionType,
           decisionTypeKey: decisionTypeKey(decisionType),
@@ -999,7 +1428,7 @@ export const assembleSkCourtsDecision = ({
  */
 export type SkCourtsBuildResult =
   | { type: "built"; decision: IngestionResult }
-  /** No docket or no court to key on; nothing can store this item. */
+  /** No stable field set to key on; nothing can store this item. */
   | { type: "unkeyable" }
   /**
    * The publisher stated the decision's record absent, or refused it: the
@@ -1072,11 +1501,22 @@ export const buildSkCourtsDecision = async (
     readDetail = createSkCourtsDetailReader(signal),
   }: SkCourtsBuildOptions = {},
 ): Promise<SkCourtsBuildResult> => {
-  // Asked before the record is fetched, so an item nothing can store never
-  // costs a request; the assembler answers the same question again over what
-  // it was handed.
-  if (skCourtsIdentityFields(item) === null) {
-    return { type: "unkeyable" };
+  // Asked before the record is fetched, so an item with no record to ask
+  // about never costs a request; the assembler answers the same question
+  // again over what it was handed.
+  const record = skCourtsRecordIdentity(item);
+  switch (record.type) {
+    case "keyed":
+      break;
+    // Complete as its listing row: there is no guid to wait for a record
+    // under, and the walk counts a quarantine identity held without one.
+    case "quarantined":
+      return { type: "built", decision: quarantinedSkCourtsDecision(record) };
+    case "no-stable-fields":
+      return { type: "unkeyable" };
+    default:
+      record satisfies never;
+      return panic(`Unhandled sk-courts identity: ${String(record)}`);
   }
   const fetched = await readDetail(item, signal);
   const registreGuid = toOptionalValue(item.sud?.registreGuid);
@@ -1128,14 +1568,27 @@ const parseItemWithDetail = async (
   raw: unknown,
   options: SkCourtsBuildOptions = {},
 ): Promise<SkCourtsParsedItem> => {
-  if (!isSkApiItem(raw)) {
-    logger.warn("case_law.ingestion.item_build_failed", {
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      identity: JSON.stringify(skCourtsListingIdentity(raw)),
-      reason: "Invalid listing member",
-    });
-    return { type: "item_build_failed", decision: null };
+  const record = skCourtsRecordIdentity(raw);
+  switch (record.type) {
+    case "keyed":
+      break;
+    case "quarantined":
+      warnQuarantinedListingRecord(record);
+      return {
+        type: "decision",
+        decision: quarantinedSkCourtsDecision(record),
+      };
+    case "no-stable-fields":
+      logger.warn("case_law.ingestion.item_build_failed", {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        reason: UNKEYABLE_LISTING_RECORD_REASON,
+      });
+      return { type: "item_build_failed", decision: null };
+    default:
+      record satisfies never;
+      return panic(`Unhandled sk-courts identity: ${String(record)}`);
   }
+  const item = record.item;
   const attempted = await buildPlainTextItem({
     decisionOf: (value) => {
       switch (value.type) {
@@ -1155,7 +1608,7 @@ const parseItemWithDetail = async (
     adapterKey: ADAPTER_KEYS.SK_COURTS,
 
     rawListing: JSON.stringify(raw),
-    build: async () => await buildSkCourtsDecision(raw, options),
+    build: async () => await buildSkCourtsDecision(item, options),
   });
   if (attempted.type === "item_build_failed") {
     return attempted;
@@ -1505,11 +1958,28 @@ const listSkCourtsSlicePage = async ({
     pageSize: LISTING_PAGE_SIZE,
     signal,
   });
+  const items = listed.flatMap((item, index) => {
+    const identity = skCourtsListingIdentity(item);
+    if (identity === null) {
+      // Not a record anything can key or store, so not an item; the page
+      // counts it below. The walk reports the count per slice, and this
+      // names where in the listing the record sits, which the count cannot.
+      logger.warn("case_law.ingestion.unkeyable_listing_record", {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        slice,
+        resultIndex: page * LISTING_PAGE_SIZE + index,
+        reason: UNKEYABLE_LISTING_RECORD_REASON,
+      });
+      return [];
+    }
+    return [{ identity, payload: item }];
+  });
+  // Every listed record left out above states no stable field.
+  const withoutStableFields = listed.length - items.length;
   return {
-    items: listed.map((item) => ({
-      identity: skCourtsListingIdentity(item),
-      payload: item,
-    })),
+    observations: [],
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: Math.ceil(total / LISTING_PAGE_SIZE),
   };
 };
@@ -1524,10 +1994,21 @@ const buildSkCourtsFromPayload = async (
   payload: unknown,
   options: SkCourtsBuildOptions = {},
 ): Promise<ReconciliationBuildOutcome> => {
-  if (!isSkApiItem(payload)) {
-    return { type: "unkeyable" };
+  const record = skCourtsRecordIdentity(payload);
+  switch (record.type) {
+    case "keyed":
+      break;
+    // Its listing-only row is the whole record: there is no detail to wait
+    // for, so `detail-unavailable` would park it forever.
+    case "quarantined":
+      return { type: "built", decision: quarantinedSkCourtsDecision(record) };
+    case "no-stable-fields":
+      return { type: "unkeyable" };
+    default:
+      record satisfies never;
+      return panic(`Unhandled sk-courts identity: ${String(record)}`);
   }
-  const built = await buildSkCourtsDecision(payload, options);
+  const built = await buildSkCourtsDecision(record.item, options);
   switch (built.type) {
     case "built":
       return { type: "built", decision: built.decision };
@@ -1654,6 +2135,7 @@ const collectFrontierPage = async (
   const day = nextClosedDay(frontier.verifiedThrough);
   if (day === null) {
     return Result.ok({
+      observations: [],
       decisions: [],
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
@@ -1674,10 +2156,8 @@ const collectFrontierPage = async (
     items: [
       ...new Set(
         listed.flatMap((item) => {
-          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
-            return [];
-          }
-          const id = item.sud?.registreGuid;
+          // A quarantined record is built without its court's registry entry.
+          const id = skCourtsKeyedItem(item)?.sud?.registreGuid;
           return id === null || id === undefined ? [] : [id];
         }),
       ),
@@ -1722,6 +2202,7 @@ const collectFrontierPage = async (
 
   const nextPage = frontier.page + 1;
   return Result.ok({
+    observations: [],
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
     ...(unreadItems.length === 0 ? {} : { unreadItems }),
@@ -1993,6 +2474,29 @@ const skCourtsStoredDocketMatch = ({
     : "different";
 };
 
+const reparseQuarantinedSkCourtsRaw = (
+  stored: StoredRawReparseInput,
+  listed: Extract<SkCourtsRecordIdentity, { type: "quarantined" }>,
+): StoredRawReparseOutcome => {
+  // Only a row stored under that quarantine identity, or under the earlier
+  // id its rebuilt row names as a repair alias (which the pipeline adopts),
+  // is rebuilt from it. A row an earlier version stored under any other key
+  // keeps it: replay never moves a stored row onto an identity it cannot
+  // prove is the same record's.
+  const rebuilt = quarantinedSkCourtsDecision(listed);
+  return stored.sourceDocumentId === listed.quarantine.sourceDocumentId ||
+    (stored.sourceDocumentId !== null &&
+      rebuilt.sourceDocumentIdRepairAliases?.some(
+        (alias) => alias === stored.sourceDocumentId,
+      ) === true)
+    ? reparsedSkCourtsDecision(stored, rebuilt)
+    : {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+        detail: `the stored listing row for ${stored.caseNumber} is quarantined under ${listed.quarantine.sourceDocumentId}`,
+      };
+};
+
 /**
  * Rebuild a decision from the responses already stored for it.
  *
@@ -2020,6 +2524,14 @@ export const reparseSkCourtsStoredMetadata = (
     new TextDecoder().decode(stored.raw),
     stored.contentType,
   );
+  const listed = skCourtsRecordIdentity(
+    storedPart(parts?.["listing"], isRecord),
+  );
+  // A quarantined row is rebuilt from its listing alone, whatever the
+  // listing's shape: that is all it was ever built from.
+  if (listed.type === "quarantined") {
+    return reparseQuarantinedSkCourtsRaw(stored, listed);
+  }
   const item = storedPart(parts?.["listing"], isSkApiItem);
   if (item === null) {
     return {
@@ -2070,9 +2582,17 @@ export const reparseSkCourtsStoredMetadata = (
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      detail: `the stored listing row for ${stored.caseNumber} states no docket and court to key on`,
+      detail: `the stored listing row for ${stored.caseNumber} states no field to key on`,
     };
   }
+  return reparsedSkCourtsDecision(stored, decision);
+};
+
+/** A replayed decision checked against the row it would rewrite. */
+const reparsedSkCourtsDecision = (
+  stored: StoredRawReparseInput,
+  decision: IngestionResult,
+): StoredRawReparseOutcome => {
   const docket = skCourtsStoredDocketMatch({
     stored: stored.caseNumber,
     replayed: decision.caseNumber,
@@ -2423,10 +2943,8 @@ const createBackfillPage = (
       }
       const courtIds = new Set(
         arrayOrEmpty(json.rozhodnutieList).flatMap((item) => {
-          if (!isSkApiItem(item) || skCourtsIdentityFields(item) === null) {
-            return [];
-          }
-          const id = item.sud?.registreGuid;
+          // A quarantined record is built without its court's registry entry.
+          const id = skCourtsKeyedItem(item)?.sud?.registreGuid;
           return id === null || id === undefined ? [] : [id];
         }),
       );

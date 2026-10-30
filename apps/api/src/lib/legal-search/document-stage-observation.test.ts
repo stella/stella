@@ -45,6 +45,7 @@ describe("document-stage observation windows", () => {
     for (const transientFailures of [1, 2, 3]) {
       const observations: DocumentStageObservation[] = [];
       const page = Result.ok({
+        observations: [],
         decisions: [decision("recovered text")],
         nextCursor: null,
       });
@@ -108,7 +109,7 @@ describe("document-stage observation windows", () => {
           source: ADAPTER_KEYS.CZ_NSS,
           fetch: async () => new Response(null, { status: 503 }),
         });
-        return Result.ok({ decisions: [], nextCursor: null });
+        return Result.ok({ observations: [], decisions: [], nextCursor: null });
       },
     });
     expect(observations.at(-1)).toMatchObject({
@@ -218,6 +219,7 @@ describe("document-stage observation windows", () => {
     const observations: DocumentStageObservation[] = [];
     let clock = 0;
     const page = Result.ok({
+      observations: [],
       decisions: [
         decision("text"),
         decision("   "),
@@ -294,7 +296,8 @@ describe("document-stage observation windows", () => {
     const observations: DocumentStageObservation[] = [];
     await withDocumentStageWindow({
       source: ADAPTER_KEYS.CZ_NSS,
-      fetchPage: async () => Result.ok({ decisions: [], nextCursor: null }),
+      fetchPage: async () =>
+        Result.ok({ observations: [], decisions: [], nextCursor: null }),
       now: () => 42,
       observe: (event) => {
         observations.push(event);
@@ -324,6 +327,7 @@ describe("document-stage observation windows", () => {
       },
       fetchPage: async () =>
         Result.ok({
+          observations: [],
           decisions: [{ ...decision(""), isListingOnly: true }],
           nextCursor: null,
         }),
@@ -428,6 +432,7 @@ describe("document-stage observation windows", () => {
     const logs = installRecordingLogger();
     let callbacks = 0;
     const page = Result.ok({
+      observations: [],
       decisions: [],
       nextCursor: null,
     } satisfies SyncPage);
@@ -480,6 +485,7 @@ describe("document-stage observation windows", () => {
                 }),
             });
             return Result.ok({
+              observations: [],
               decisions:
                 source === ADAPTER_KEYS.CZ_NSS
                   ? [decision("text")]
@@ -545,7 +551,11 @@ describe("document-stage observation windows", () => {
             }),
           ).toBe(response);
           expect(response.bodyUsed).toBe(false);
-          return Result.ok({ decisions: [], nextCursor: null });
+          return Result.ok({
+            observations: [],
+            decisions: [],
+            nextCursor: null,
+          });
         },
       });
       expect(observations.at(0)).toEqual({

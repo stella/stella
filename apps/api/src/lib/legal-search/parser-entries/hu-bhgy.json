@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "HU_BHGY",
   "key": "hu-bhgy",
-  "parserVersion": 22,
+  "parserVersion": 23,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage."
+    "reason": "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl."
   }
 }

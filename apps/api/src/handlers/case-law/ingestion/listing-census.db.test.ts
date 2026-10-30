@@ -65,18 +65,18 @@ const INTERVAL_MS = 250;
 
 /**
  * Per slice, the identities the fake publisher lists, in listing order. It
- * repeats one, lists an unkeyable item, and has an empty day, so the count is
- * the distinct keyable identities and not the rows.
+ * repeats one, lists a quarantined record, and has an empty day, so the count
+ * is the distinct identities, the quarantined one included, and not the rows.
  */
-const LISTED: Record<string, readonly (string | null)[]> = {
+const LISTED: Record<string, readonly string[]> = {
   "2026-01-01": ["a", "b", "c"],
-  "2026-01-02": ["d", "d", null],
+  "2026-01-02": ["d", "d", "fake-quarantine:0f"],
   "2026-01-03": [],
   "2026-01-04": ["e", "f", "g", "h", "i"],
   "2026-01-05": ["j"],
   "2026-01-06": ["k", "l"],
 };
-const EXPECTED_TOTAL = 12;
+const EXPECTED_TOTAL = 13;
 const SLICE_COUNT = Object.keys(LISTED).length;
 
 const stepDay = (slice: string, days: number): string =>
@@ -84,10 +84,10 @@ const stepDay = (slice: string, days: number): string =>
     new Date(new Date(`${slice}T00:00:00.000Z`).getTime() + days * DAY_MS),
   );
 
-const itemFor = (id: string | null): ReconciliationListingItem =>
-  id === null
-    ? { identity: { type: "unidentifiable" }, payload: null }
-    : { identity: { type: "document", sourceDocumentId: id }, payload: { id } };
+const itemFor = (id: string): ReconciliationListingItem => ({
+  identity: { type: "document", sourceDocumentId: id },
+  payload: { id },
+});
 
 type FakePublisher = {
   adapter: ListingCensusAdapter;
@@ -103,7 +103,7 @@ type FakePublisherOptions = {
   failOnce?: string | undefined;
   /** Runs before a slice's first page is answered. */
   beforeSlice?: ((slice: string) => Promise<void>) | undefined;
-  listed?: Record<string, readonly (string | null)[]> | undefined;
+  listed?: Record<string, readonly string[]> | undefined;
 };
 
 const fakePublisher = ({
@@ -151,6 +151,7 @@ const fakePublisher = ({
           }
           const ids = listed[slice] ?? [];
           return {
+            observations: [],
             items: ids
               .slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
               .map(itemFor),
@@ -275,7 +276,7 @@ describe("runListingCensus", () => {
       asOf: TO.toISOString(),
       slicesCounted: 2,
       nextSlice: "2026-01-03",
-      counted: 4,
+      counted: 5,
     };
     expect(outcome).toEqual({ type: "counting", slicesThisRun: 2, checkpoint });
     const row = await readSource(adapterKey);
@@ -535,10 +536,10 @@ describe("runListingCensus", () => {
     );
     expect(outcome).toMatchObject({
       type: "completed",
-      checkpoint: { total: 4 },
+      checkpoint: { total: 5 },
     });
     const row = await readSource(adapterKey);
-    expect(row.reportedTotal).toBe(4);
+    expect(row.reportedTotal).toBe(5);
     expect(row.reportedTotalAsOf).toEqual(shorter);
   });
 

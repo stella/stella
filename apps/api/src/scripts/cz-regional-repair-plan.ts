@@ -7,8 +7,8 @@ import {
   CZ_REGIONAL_LANGUAGE,
   czRegionalListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import type { CzRegionalListedIdentity } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { toUtcDateString } from "@/api/lib/dates";
-import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
 /**
@@ -31,7 +31,7 @@ export {
 };
 
 /** Retained under the local name this script's callers already use. */
-export type CzRegionalListingIdentity = ListingIdentity;
+export type CzRegionalListingIdentity = CzRegionalListedIdentity;
 
 /**
  * Whether a string names a real UTC calendar day.
@@ -90,7 +90,8 @@ export const czRegionalListingKeys = (
       case "case-number":
         caseNumbers.add(identity.caseNumber);
         break;
-      case "unidentifiable":
+      case "not-a-court-decision":
+      case "no-stable-field":
         break;
       default: {
         identity satisfies never;
@@ -115,7 +116,13 @@ export type CzRegionalHeldIdentities = {
 export type CzRegionalListingDiff = {
   missing: unknown[];
   held: unknown[];
-  unidentifiable: unknown[];
+  /**
+   * Listed, but not a record this source stores a row for: the ministry's own
+   * decisions, which share the feed, and a row stating nothing to key or
+   * fingerprint it by. A court's row with no usable identity is not here: it
+   * is keyed on its quarantine identity like any other row.
+   */
+  notStored: unknown[];
   /** A repeat of an identity already classified on this page. */
   duplicate: unknown[];
 };
@@ -140,17 +147,20 @@ export const diffCzRegionalListing = ({
   const diff: CzRegionalListingDiff = {
     missing: [],
     held: [],
-    unidentifiable: [],
+    notStored: [],
     duplicate: [],
   };
   const seen = new Set<string>();
   for (const item of items) {
     const identity = czRegionalListingIdentity(item);
-    const key = listingIdentityKey(identity);
-    if (identity.type === "unidentifiable" || key === null) {
-      diff.unidentifiable.push(item);
+    if (
+      identity.type === "not-a-court-decision" ||
+      identity.type === "no-stable-field"
+    ) {
+      diff.notStored.push(item);
       continue;
     }
+    const key = listingIdentityKey(identity);
     if (seen.has(key)) {
       diff.duplicate.push(item);
       continue;

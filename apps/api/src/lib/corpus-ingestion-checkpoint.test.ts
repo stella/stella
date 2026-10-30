@@ -379,6 +379,7 @@ describe("case-law source ingestion lease", () => {
     czNsAdapter.fetchPage = async (cursor) => {
       expect(cursor).toBeNull();
       return Result.ok({
+        observations: [],
         decisions: [
           plainTextIngestionResult({
             caseNumber: "lifecycle/1/2026",

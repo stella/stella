@@ -3,7 +3,26 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
+import {
+  fingerprintReconciliationPayload,
+  snapshotReconciliationPayload,
+} from "@/api/lib/legal-search/reconciliation-payload";
+
+test("listing snapshots retain captured JSON after the publisher object changes", () => {
+  assertProperty(
+    "listing snapshots retain captured JSON after the publisher object changes",
+    fc.property(fc.jsonValue(), fc.jsonValue(), (captured, replacement) => {
+      const publisher = { nested: { record: captured }, records: [captured] };
+      const serialized = JSON.stringify(publisher);
+      const fingerprint = fingerprintReconciliationPayload(publisher);
+      const snapshot = snapshotReconciliationPayload(publisher);
+      publisher.nested.record = replacement;
+      publisher.records.splice(0, 1, replacement);
+      expect(JSON.stringify(snapshot)).toBe(serialized);
+      expect(fingerprintReconciliationPayload(snapshot)).toBe(fingerprint);
+    }),
+  );
+});
 
 const reverseObjectKeys = (value: unknown): unknown => {
   if (Array.isArray(value)) {

@@ -309,6 +309,8 @@ const buildFrom = async (
     files,
   });
 
+const QUARANTINE_ID = /^pl-uokik-quarantine:[0-9a-f]{64}$/u;
+
 const decisionOf = (
   built: Awaited<ReturnType<typeof assemblePlUokikDecision>>,
 ): IngestionResult =>
@@ -868,8 +870,10 @@ describe("the year census", () => {
     );
     expect(listed.totalPages).toBe(1);
     expect(listed.items.map(({ identity }) => identity)).toEqual(
-      expected.map((entry) =>
-        plUokikListingIdentity(normalizePlUokikRow(entry)),
+      expected.map(
+        (entry) =>
+          plUokikListingIdentity(normalizePlUokikRow(entry)) ??
+          panic("a register row has no listing identity"),
       ),
     );
     expect(expected.length).toBe(1135);
@@ -883,7 +887,11 @@ describe("the year census", () => {
 
   test("a year the register holds nothing for lists nothing", async () => {
     serveRegister(await registerOverFixtures());
-    expect(await listSlice("2015")).toEqual({ items: [], totalPages: 0 });
+    expect(await listSlice("2015")).toEqual({
+      observations: [],
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test("a view that changes size while it is bisected refuses the slice", async () => {
@@ -1280,12 +1288,15 @@ describe("a listed row is never dropped silently", () => {
   test("a row with no UNID anywhere is kept verbatim under a quarantine identity", async () => {
     const entry = withoutAnyUnid(entryOf(await capturedEntries(), FILELESS));
     const identity = plUokikListingIdentity(normalizePlUokikRow(entry));
-    expect(identity.type).toBe("document");
+    expect(identity?.type).toBe("document");
     const built = await buildFrom(entry, undefined);
     const decision = decisionOf(built);
-    expect(decision.sourceDocumentId?.startsWith("pl-uokik-quarantine:")).toBe(
-      true,
-    );
+    expect(decision.sourceDocumentId).toMatch(QUARANTINE_ID);
+    expect(identity).toEqual({
+      type: "document",
+      sourceDocumentId:
+        decision.sourceDocumentId ?? panic("the decision has no id"),
+    });
     expect(decision.isListingOnly).toBe(true);
     expect(
       decision.metadata["detailStatus"] ===
@@ -1301,7 +1312,7 @@ describe("a listed row is never dropped silently", () => {
     const recovered = decisionOf(
       await buildFrom(entry, await pageOf(FILELESS)),
     );
-    expect(recovered.sourceDocumentIdRepairAliases).toEqual([
+    expect(recovered.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       quarantined.sourceDocumentId ?? "",
     ]);
   });
@@ -1325,6 +1336,82 @@ describe("a listed row is never dropped silently", () => {
 
   test("a row with nothing to key or fingerprint is reported, not stored as a guess", async () => {
     expect((await buildFrom({}, undefined)).type).toBe("unkeyable");
+  });
+
+  test("a UNID too long to persist is quarantined, never keyed", async () => {
+    const entry = {
+      ...withoutAnyUnid(entryOf(await capturedEntries(), FILELESS)),
+      "@unid": "A".repeat(300),
+    };
+    const row = normalizePlUokikRow(entry);
+    expect(row.unid).toBeUndefined();
+    expect(plUokikListingIdentity(row)).toEqual({
+      type: "document",
+      sourceDocumentId:
+        plUokikQuarantineId(row) ?? panic("the row has no fingerprint"),
+    });
+    expect(plUokikQuarantineId(row)).toMatch(QUARANTINE_ID);
+  });
+
+  test("the fingerprint ignores where the view lists the row", async () => {
+    const entry = withoutAnyUnid(entryOf(await capturedEntries(), FILELESS));
+    expect(plUokikQuarantineId(normalizePlUokikRow(atPosition(entry, 7)))).toBe(
+      plUokikQuarantineId(normalizePlUokikRow(atPosition(entry, 4021))),
+    );
+  });
+
+  test("the crawl stores a quarantined row listing-only with its view row, asking for no page", async () => {
+    const entry = withoutAnyUnid(entryOf(await capturedEntries(), FILELESS));
+    const model = await registerOverFixtures([entry]);
+    serveRegister(model);
+    const { decisions } = await walkCrawl(null);
+    const [decision] = decisions;
+    const expectedId = plUokikQuarantineId(normalizePlUokikRow(entry));
+    expect(decisions.length).toBe(1);
+    expect(decision?.sourceDocumentId).toBe(expectedId);
+    expect(decision?.isListingOnly).toBe(true);
+    expect(decodeSourceRawEnvelope(decision?.sourceRaw ?? "")).toEqual(
+      plUokikRawPartsOf(atPosition(entry, 1), undefined),
+    );
+    expect(
+      model.requests.filter(({ pathname }) => DETAIL_PATH.test(pathname)),
+    ).toEqual([]);
+  });
+
+  test("the census lists a quarantined row and builds it whole, not parked for a page", async () => {
+    const entry = withoutAnyUnid(entryOf(await capturedEntries(), FILELESS));
+    const expectedId =
+      plUokikQuarantineId(normalizePlUokikRow(entry)) ??
+      panic("the row has no fingerprint");
+    serveRegister(await registerOverFixtures([entry]));
+    const listed = await plUokikAdapter.reconciliation.listSlicePage({
+      slice: "2009",
+      page: 0,
+    });
+    expect(listed.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: expectedId },
+    ]);
+    expect(listed.withoutStableFields).toBeUndefined();
+    const built = await plUokikAdapter.reconciliation.buildDecision(
+      listed.items[0]?.payload,
+    );
+    expect(built.type).toBe("built");
+    expect(
+      built.type === "built" && built.decision.sourceDocumentId === expectedId,
+    ).toBe(true);
+    expect(built.type === "built" && built.decision.isListingOnly).toBe(true);
+  });
+
+  test("the census leaves out a row stating nothing but its position", async () => {
+    serveRegister(
+      await registerOverFixtures([{ "@position": "1", "@noteid": "9" }]),
+    );
+    const listed = await plUokikAdapter.reconciliation.listSlicePage({
+      slice: PL_UOKIK_UNDATED_SLICE,
+      page: 0,
+    });
+    expect(listed.items).toEqual([]);
+    expect(listed.withoutStableFields).toBe(1);
   });
 });
 

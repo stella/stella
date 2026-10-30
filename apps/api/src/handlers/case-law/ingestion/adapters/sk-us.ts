@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-us] only adds sourceDocumentIdRepairAliases to keyed rows; no stored row had a quarantine row to adopt.
 // parser-output-unchanged: Stored-object replay reuses the ingestion XHTML parser; PDF bytes are retained and verified without adding a PDF parser.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
@@ -80,7 +81,6 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
-  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
@@ -94,6 +94,7 @@ import type {
   UnreadOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { emptySyncPage } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisherBytes,
@@ -134,6 +135,16 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LISTING_OBSERVATION_REASON,
+  QUARANTINE_NAMESPACE,
+  quarantinedListingObservation,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  ListingObservation,
+  QuarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -894,39 +905,162 @@ const publisherList = (
 
 const isString = (value: unknown): value is string => typeof value === "string";
 
-/**
- * The two fields an item must state for this adapter to keep it: the docket it
- * is stored under and the id its document is downloaded by. Stated once,
- * because the crawl, the identity rule and the listing walk must agree exactly
- * on which items exist — an item one of them keeps and another drops is either
- * a decision nothing ever stores or a slice that can never be filled.
- */
-const skUsIdentityFields = (
-  doc: SearchDocument,
-): { caseNumber: string; documentId: string } | null => {
-  const { documentId, mkRSAPNumberOfFile: caseNumber } = doc;
-  if (
-    typeof caseNumber !== "string" ||
-    caseNumber.length === 0 ||
-    typeof documentId !== "string" ||
-    // The id is now the stored identity, so one the column cannot hold is not
-    // a document this adapter can key: keeping it would hunt a row nothing can
-    // ever write.
-    !isPersistableSourceDocumentId(documentId)
-  ) {
-    return null;
-  }
-  return { caseNumber, documentId };
+/** The court every decision this adapter stores is a decision of. */
+const SK_US_COURT = "Ústavný súd SR";
+
+/** Why a listed record is stored under its quarantine identity. */
+const SK_US_QUARANTINE_REASON = "no_usable_document_id";
+
+/** How a DMS record is keyed and stored once its document id is persistable. */
+type SkUsDocumentIdentity = {
+  type: "document";
+  documentId: string;
+  /**
+   * The docket the row is stored under. The DMS id is the record (case-law
+   * AGENTS.md rule 17), so a row whose listing states no docket is stored
+   * under the id with the id as its placeholder label rather than not at all.
+   */
+  caseNumber: string;
+  caseNumberIsPlaceholder: boolean;
+  /**
+   * The fingerprint this record would be quarantined under, emitted as a
+   * repair alias so a keyed observation takes over the row a degraded one
+   * stored; null where the record has no stable field set.
+   */
+  quarantine: QuarantineIdentity | null;
 };
 
 /**
- * The identity the ingest would store for this listing item.
+ * How a listed record is keyed and stored.
+ *
+ * Decided once, here, because the crawl, the identity rule, the listing walk
+ * and the stored-raw replay must agree exactly on which records exist and
+ * under which identity: an item one of them keys differently is either a
+ * decision nothing ever stores or a slice that can never be filled.
+ */
+type SkUsRecordIdentity =
+  | SkUsDocumentIdentity
+  | { type: "quarantined"; quarantine: QuarantineIdentity }
+  /**
+   * Nothing the record states names it, so no identity is invented for it:
+   * every other field is shared by unrelated decisions.
+   */
+  | { type: "no-stable-fields" };
+
+/** A stated string; empty, absent, null and every other type state nothing. */
+const statedSkUsString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+/**
+ * The fingerprint a record whose document id is unusable is quarantined
+ * under, read type-checked, since nothing upstream validates a field of a
+ * search row.
+ *
+ * Why these fields: the corpus, the docket, the registry number,
+ * the decision date, the decision form, the document type and the dissenting
+ * judge are DMS metadata the court states for the record each time it is
+ * listed, independently of its DMS id. Together they
+ * tell apart the several documents one docket publishes on one day: the
+ * decision, its corrections and each separate opinion. Excluded: the DMS id
+ * itself, ECLI (which may recover with the id), the result `index`
+ * (listing position), the title (the document
+ * type again, as rendered) and the publication and legal-force dates, which
+ * describe what happens to the decision after it is listed and so may be
+ * filled in between two listings of it. A record without a docket or
+ * registry number has no field that names it, so it has no fingerprint.
+ *
+ * The field order is part of the digest stored rows carry.
+ */
+const skUsQuarantineIdentity = (
+  doc: Readonly<Record<string, unknown>>,
+): QuarantineIdentity | null => {
+  const docket = statedSkUsString(doc["mkRSAPNumberOfFile"]);
+  const registryNumber = statedSkUsString(doc["mkRVPNumberOfFile"]);
+  if (docket === undefined && registryNumber === undefined) {
+    return null;
+  }
+  return quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.SK_US,
+    stableFields: {
+      docType: statedSkUsString(doc["docType"]),
+      mkRSAPNumberOfFile: docket,
+      mkRVPNumberOfFile: registryNumber,
+      mkDateOfDecision: statedSkUsString(doc["mkDateOfDecision"]),
+      mkFormOfDecision: statedSkUsString(doc["mkFormOfDecision"]),
+      mkDocumentType: statedSkUsString(doc["mkDocumentType"]),
+      mkDifferentView: statedSkUsString(doc["mkDifferentView"]),
+    },
+  });
+};
+
+/**
+ * How the ingest keys and stores this search row.
+ *
+ * Takes the row as a plain record and reads every field type-checked: the
+ * DMS changes field types without notice, and a document id that is not a
+ * persistable string is a record with no usable id, not one to drop.
+ */
+const skUsRecordIdentity = (
+  doc: Readonly<Record<string, unknown>>,
+): SkUsRecordIdentity => {
+  const quarantine = skUsQuarantineIdentity(doc);
+  const documentId = doc["documentId"];
+  // The id is the stored identity, so one the column cannot hold is not one
+  // this adapter can key on: keying it would hunt a row nothing can ever
+  // write. It is quarantined instead.
+  if (
+    typeof documentId === "string" &&
+    isPersistableSourceDocumentId(documentId)
+  ) {
+    const statedCaseNumber = doc["mkRSAPNumberOfFile"];
+    const caseNumber =
+      typeof statedCaseNumber === "string" && statedCaseNumber.length > 0
+        ? statedCaseNumber
+        : undefined;
+    return {
+      type: "document",
+      documentId,
+      caseNumber: caseNumber ?? documentId,
+      caseNumberIsPlaceholder: caseNumber === undefined,
+      quarantine,
+    };
+  }
+  return quarantine === null
+    ? { type: "no-stable-fields" }
+    : { type: "quarantined", quarantine };
+};
+
+/** Capture unnameable source evidence without constructing a decision identity. */
+export const skUsListingObservation = (
+  payload: unknown,
+): ListingObservation | null => {
+  if (isRecord(payload)) {
+    const documentId = payload["documentId"];
+    if (
+      (typeof documentId === "string" &&
+        isPersistableSourceDocumentId(documentId)) ||
+      skUsQuarantineIdentity(payload) !== null
+    ) {
+      return null;
+    }
+  }
+  return quarantinedListingObservation({
+    source: QUARANTINE_NAMESPACE.SK_US,
+    payload,
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
+};
+
+/**
+ * The identity the ingest would store for this listing item, or null for one
+ * with no stable field set, which nothing can key or store.
  *
  * The DMS `documentId`, which is what the publisher itself keys a document on:
  * the court publishes each opinion of a plenary decision as its own document
  * under one docket (19 documents under `PL. ÚS 4/2020` in March 2020 alone),
  * so a `(caseNumber, language)` key names a docket rather than a document and
- * collapses all of them onto one row.
+ * collapses all of them onto one row. A record without a usable id is keyed
+ * on its quarantine identity, which is what the crawl stores it under.
  *
  * {@link buildSkUsDecision} stores that same id as `sourceDocumentId`, and
  * rows written before it did are re-keyed by the deterministic
@@ -934,12 +1068,82 @@ const skUsIdentityFields = (
  * must state one rule: a walk that keyed items differently from the ingest
  * would read stored decisions as missing and re-fetch them forever.
  */
-export const skUsListingIdentity = (doc: SearchDocument): ListingIdentity => {
-  const fields = skUsIdentityFields(doc);
-  return fields === null
-    ? { type: "unidentifiable" }
-    : { type: "document", sourceDocumentId: fields.documentId };
+export const skUsListingIdentity = (
+  doc: SearchDocument,
+): ListingIdentity | null => {
+  const identity = skUsRecordIdentity(doc);
+  switch (identity.type) {
+    case "document":
+      return { type: "document", sourceDocumentId: identity.documentId };
+    case "quarantined":
+      return {
+        type: "document",
+        sourceDocumentId: identity.quarantine.sourceDocumentId,
+      };
+    case "no-stable-fields":
+      return null;
+    default:
+      identity satisfies never;
+      return panic(`Unhandled SK ÚS identity: ${String(identity)}`);
+  }
 };
+
+/**
+ * The listing-only row of a record stored under its quarantine identity
+ * (case-law AGENTS.md rule 20): the verbatim search row as its raw, the
+ * labels the row states, and no further request, since the text, the file
+ * and the docket file are all addressed by the document id it lacks.
+ */
+const quarantinedSkUsDecision = (
+  doc: Readonly<Record<string, unknown>>,
+  quarantine: QuarantineIdentity,
+): IngestionResult => {
+  const statedCaseNumber = statedSkUsString(doc["mkRSAPNumberOfFile"]);
+  const ecli = statedSkUsString(doc["mkECLI"]);
+  const decisionDate = parseApiDate(statedSkUsString(doc["mkDateOfDecision"]));
+  const decisionType = statedSkUsString(doc["mkFormOfDecision"]);
+  const sourceRaw = encodeSourceRawEnvelope({ listing: JSON.stringify(doc) });
+  return plainTextIngestionResult({
+    // No docket stated: the row's label is its own identity, marked a
+    // placeholder so no citation is ever matched against it.
+    caseNumber: statedCaseNumber ?? quarantine.sourceDocumentId,
+    ...(statedCaseNumber === undefined
+      ? { caseNumberIsPlaceholder: true }
+      : {}),
+    isListingOnly: true,
+    sourceDocumentId: quarantine.sourceDocumentId,
+    ecli,
+    court: SK_US_COURT,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].country,
+    language: SK_US_LANGUAGE,
+    decisionDate,
+    decisionType,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      caseNumber: statedCaseNumber,
+      ecli,
+      decisionType,
+      decisionTypeKey: decisionTypeKey(decisionType),
+      docType: statedSkUsString(doc["docType"]),
+      title: statedSkUsString(doc["title"]),
+      documentType: statedSkUsString(doc["mkDocumentType"]),
+      rvpNumber: statedSkUsString(doc["mkRVPNumberOfFile"]),
+      dissentingOpinion: statedSkUsString(doc["mkDifferentView"]),
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: SK_US_QUARANTINE_REASON,
+    }),
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
+
+/** Why a listed record has no identity, for the warning that reports it. */
+const UNKEYABLE_LISTING_RECORD_REASON =
+  "search row states neither a docket, a registry number nor an ECLI";
 
 export type SkUsListingFetchOutcome =
   | { type: "listing"; listing: string }
@@ -1083,11 +1287,12 @@ export const fetchSkUsListing = async ({
           return { type: "listing_unavailable" };
         }
         const doc = data.documents.at(0);
-        const identity = doc === undefined ? null : skUsIdentityFields(doc);
+        const identity = doc === undefined ? null : skUsRecordIdentity(doc);
         if (
           data.numFound !== 1 ||
           data.documents.length !== 1 ||
-          identity?.documentId !== documentId ||
+          identity?.type !== "document" ||
+          identity.documentId !== documentId ||
           identity.caseNumber !== caseNumber
         ) {
           return { type: "listing_identity_mismatch" };
@@ -1134,7 +1339,7 @@ export const fetchSkUsListing = async ({
  */
 export type SkUsBuildResult =
   | { type: "built"; decision: IngestionResult }
-  /** No docket or no document id to key on; nothing can store this item. */
+  /** No stable field set to key on; nothing can store this item. */
   | { type: "unkeyable" }
   /** The court served no document for the id the listing states. */
   | { type: "detail-unavailable"; decision: IngestionResult }
@@ -1588,8 +1793,7 @@ type SkUsResponses = {
 
 type AssembleSkUsDecisionOptions = {
   doc: SearchDocument;
-  caseNumber: string;
-  documentId: string;
+  identity: SkUsDocumentIdentity;
   responses: Readonly<SkUsResponses>;
 };
 
@@ -1599,8 +1803,7 @@ type AssembleSkUsDecisionOptions = {
  */
 const assembleSkUsDecision = ({
   doc,
-  caseNumber,
-  documentId,
+  identity: { caseNumber, caseNumberIsPlaceholder, documentId, quarantine },
   responses: {
     codelist,
     documentXhtml,
@@ -1614,7 +1817,7 @@ const assembleSkUsDecision = ({
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
   const decisionType = doc.mkFormOfDecision ?? undefined;
   const ecli = doc.mkECLI ?? undefined;
-  const court = "Ústavný súd SR";
+  const court = SK_US_COURT;
   const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
   const collection = skUsCollectionMatch({ doc, collectionJson, facetsJson });
   const rapporteurs = skUsRapporteurs(doc);
@@ -1688,7 +1891,13 @@ const assembleSkUsDecision = ({
 
   const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
+    ...(caseNumberIsPlaceholder ? { caseNumberIsPlaceholder: true } : {}),
     sourceDocumentId: documentId,
+    // A row a degraded listing quarantined is taken over by this keyed
+    // observation of the same record (case-law AGENTS.md rule 20).
+    ...(quarantine === null
+      ? {}
+      : { sourceDocumentIdRepairAliases: quarantine.repairAliases }),
     // What every row this adapter wrote before it stated an id was stored
     // under: one row per docket, carrying the download URL of whichever of the
     // docket's documents was written last. The URL names one document exactly,
@@ -1748,11 +1957,31 @@ export const buildSkUsDecision = async (
   doc: SearchDocument,
   { context, signal }: BuildSkUsDecisionOptions = {},
 ): Promise<SkUsBuildResult> => {
-  const fields = skUsIdentityFields(doc);
-  if (fields === null) {
-    return { type: "unkeyable" };
+  const identity = skUsRecordIdentity(doc);
+  switch (identity.type) {
+    case "document":
+      break;
+    // Complete as its listing row: every other response is addressed by the
+    // document id it lacks, and the walk counts a quarantine identity held
+    // without one.
+    case "quarantined":
+      logger.warn("case_law.ingestion.listing_identity_quarantined", {
+        adapterKey: ADAPTER_KEYS.SK_US,
+        sourceDocumentId: identity.quarantine.sourceDocumentId,
+        reason: SK_US_QUARANTINE_REASON,
+      });
+      return {
+        type: "built",
+        decision: quarantinedSkUsDecision(doc, identity.quarantine),
+      };
+    case "no-stable-fields":
+      return { type: "unkeyable" };
+    default:
+      identity satisfies never;
+      return panic(`Unhandled SK ÚS identity: ${String(identity)}`);
   }
-  const { caseNumber, documentId } = fields;
+  const keyed: SkUsDocumentIdentity = identity;
+  const { caseNumber, caseNumberIsPlaceholder, documentId } = keyed;
   const page = context ?? createSkUsPageContext();
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
@@ -1793,7 +2022,7 @@ export const buildSkUsDecision = async (
     part,
     item: {
       listing: {
-        ...assembleSkUsDecision({ doc, caseNumber, documentId, responses }),
+        ...assembleSkUsDecision({ doc, identity: keyed, responses }),
         sourceDocumentId: documentId,
         isListingOnly: true,
       },
@@ -1818,7 +2047,8 @@ export const buildSkUsDecision = async (
   if (documentStop !== undefined) {
     return unread("document", documentStop);
   }
-  if (decisionDate !== undefined) {
+  // Both are queried by docket, so a placeholder label asks about nothing.
+  if (decisionDate !== undefined && !caseNumberIsPlaceholder) {
     const facetsStop = take(
       partRead(await page.facets({ caseNumber, decisionDate }, signal)),
       (value) => {
@@ -1873,12 +2103,7 @@ export const buildSkUsDecision = async (
       return panic(`Unhandled SK ÚS PDF read: ${String(pdf)}`);
   }
 
-  const decision = assembleSkUsDecision({
-    doc,
-    caseNumber,
-    documentId,
-    responses,
-  });
+  const decision = assembleSkUsDecision({ doc, identity: keyed, responses });
   return responses.pdfBytes === undefined
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -2100,20 +2325,26 @@ const sliceDateRange = (slice: string): SearchDateRange => {
 };
 
 /**
- * One listed item for a result the DMS will not serve.
+ * Report a result the DMS counts but will not serve.
  *
- * With no body there is no document id and no docket, so there is nothing to
- * key the decision on and nothing that could be invented: an identity guessed
- * from the offset would name a row the ingest can never write. The engine
- * counts an item like this as unidentifiable and leaves it out of both
- * `reported` and `collected`, which is what lets the month settle on the
- * records that do exist instead of standing one short of a number no walk can
- * reach.
+ * With no body there is no document id, no docket and no other field, only
+ * the offset, so there is no record to key or store and nothing that could
+ * be invented: an identity guessed from the offset would name a row the
+ * ingest can never write, and would move whenever an earlier record is
+ * added. Such a result is therefore no item of the page but one of its
+ * `withoutStableFields`, which the walk counts into the slice's coverage. Kept
+ * beside that count because it names the offset: one request for it alone is
+ * how an operator confirms the refusal is still the record's.
  */
-const unservedListingItem = (offset: number): ReconciliationListingItem => ({
-  identity: { type: "unidentifiable" },
-  payload: { unservedResultIndex: offset },
-});
+const warnUnservedListingRecord = (slice: string, offset: number): void => {
+  logger.warn("case_law.ingestion.unserved_listing_record", {
+    adapterKey: ADAPTER_KEYS.SK_US,
+    slice,
+    resultIndex: offset,
+    outcome: "deterministic_refusal",
+    reason: "the publisher counts a record it will not serve",
+  });
+};
 
 /** What one window of a date range's results answered. */
 type ListedWindow = {
@@ -2205,9 +2436,10 @@ const listedWindow = (data: SearchResponse): ListedWindow => ({
  * slice for an hour, every hour, with no pass ever able to get past it.
  *
  * So a refused window is halved until the refusal is one record wide. What
- * surrounds it lists normally, the record itself is reported with nothing to
- * key on, and the month settles honestly: 277 reported, 277 collected, one
- * unidentifiable. The halving terminates at a window of one record, costs up to
+ * surrounds it lists normally, the record itself is reported unserved, and
+ * the month settles honestly: 277 reported, 277 collected, one counted
+ * without stable fields. The halving terminates at a window of one record,
+ * costs up to
  * {@link SPLIT_REQUESTS_PER_UNSERVED_RECORD} plus the one confirming request
  * below per such record, and each of those requests waits the same pause as
  * every other request here.
@@ -2220,7 +2452,7 @@ const listedWindow = (data: SearchResponse): ListedWindow => ({
  * that work.
  *
  * A one-record refusal is confirmed by a second request before it is reported
- * unserved. An unidentifiable item is excluded from the slice rather than
+ * unserved. An unserved record is excluded from the slice rather than
  * parked, so nothing retries it later: a single 204 taken at face value would
  * drop a real decision out of `reported` permanently, and this endpoint is
  * known to answer badly under load. One request is a reading; two agreeing
@@ -2318,21 +2550,42 @@ const listSkUsSlicePage = async ({
     throw unservedWindowError(slice, `offset ${page * LISTING_PAGE_SIZE}`);
   }
 
-  return {
-    items: items.map((item) => {
-      switch (item.type) {
-        case "served":
-          return {
-            identity: skUsListingIdentity(item.document),
-            payload: item.document,
-          };
-        case "unserved":
-          return unservedListingItem(item.offset);
-        default:
-          item satisfies never;
-          return panic("Unhandled SK ÚS listing result");
+  // The window lists every result in offset order, an unserved one in its
+  // own slot, so a position is the publisher's offset.
+  const observations: ListingObservation[] = [];
+  const listed = items.flatMap((item) => {
+    switch (item.type) {
+      case "served": {
+        const identity = skUsListingIdentity(item.document);
+        if (identity === null) {
+          observations.push(
+            skUsListingObservation(item.document) ??
+              panic("An unnameable SK-US listing must have an observation"),
+          );
+          return [];
+        }
+        return [{ identity, payload: item.document }];
       }
-    }),
+      case "unserved":
+        warnUnservedListingRecord(slice, item.offset);
+        observations.push(
+          quarantinedListingObservation({
+            source: QUARANTINE_NAMESPACE.SK_US,
+            payload: { type: "unserved", slice, offset: item.offset },
+            reason: LISTING_OBSERVATION_REASON.UNSERVED_RECORD,
+          }),
+        );
+        return [];
+      default:
+        item satisfies never;
+        return panic("Unhandled SK ÚS listing result");
+    }
+  });
+  return {
+    items: listed,
+    observations,
+    // Still the publisher's count, unserved records included: it sizes the
+    // walk, and the walk's offsets are the publisher's.
     totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
   };
 };
@@ -2340,18 +2593,15 @@ const listSkUsSlicePage = async ({
 /**
  * Validate a payload the loop stored verbatim well enough to key it.
  *
- * Deliberately as lenient as {@link isSearchResponse}, and for the same
- * reason: the DMS adds fields and changes their types without notice, and all
- * of it lands in JSONB. Only the two fields the identity is made of are
- * checked, so a parked payload that no longer states them is reported rather
- * than parsed on faith.
+ * Deliberately exactly as lenient as {@link isSearchResponse}, and for the
+ * same reason: the DMS adds fields and changes their types without notice,
+ * and all of it lands in JSONB. The identity is read type-checked by
+ * {@link skUsRecordIdentity}, so a parked payload whose document id changed
+ * type is keyed exactly as the crawl keys the same row, quarantined, rather
+ * than refused here.
  */
 const isSearchDocument = (value: unknown): value is SearchDocument =>
-  isRecord(value) &&
-  (value["documentId"] === undefined ||
-    typeof value["documentId"] === "string") &&
-  (value["mkRSAPNumberOfFile"] === undefined ||
-    typeof value["mkRSAPNumberOfFile"] === "string");
+  isRecord(value);
 
 const buildSkUsFromPayload = async (
   payload: unknown,
@@ -2364,6 +2614,8 @@ const buildSkUsFromPayload = async (
     ...(signal === undefined ? {} : { signal }),
   });
   switch (built.type) {
+    // A quarantined record is built listing-only: there is no document to
+    // wait for, so `detail-unavailable` would park it forever.
     case "built":
       return { type: "built", decision: built.decision };
     case "unkeyable":
@@ -2795,14 +3047,37 @@ const reparseStoredRaw = async (
     };
   }
 
-  const fields = skUsIdentityFields(listing);
-  if (fields === null) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      detail: `the stored search row for ${stored.caseNumber} states no identity`,
-    };
+  const identity = skUsRecordIdentity(listing);
+  switch (identity.type) {
+    case "document":
+      break;
+    // Rebuilt from its search row alone: that is all it was ever built from.
+    // Only a row already stored under that quarantine identity: a row an
+    // earlier version stored under another key (a docket-keyed row from
+    // before the DMS id was the identity) keeps it, since replay never moves
+    // a stored row's identity.
+    case "quarantined": {
+      const quarantined = quarantinedSkUsDecision(listing, identity.quarantine);
+      return stored.sourceDocumentId === identity.quarantine.sourceDocumentId &&
+        quarantined.caseNumber === stored.caseNumber
+        ? { type: "parsed", result: quarantined }
+        : {
+            type: "rejected",
+            rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+            detail: `stored payload states ${quarantined.caseNumber}`,
+          };
+    }
+    case "no-stable-fields":
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: `the stored search row for ${stored.caseNumber} states no identity`,
+      };
+    default:
+      identity satisfies never;
+      return panic(`Unhandled SK ÚS identity: ${String(identity)}`);
   }
+  const fields: SkUsDocumentIdentity = identity;
   if (fields.caseNumber !== stored.caseNumber) {
     return {
       type: "rejected",
@@ -2821,8 +3096,7 @@ const reparseStoredRaw = async (
   }).unwrapOr(null);
   const result = assembleSkUsDecision({
     doc: listing,
-    caseNumber: fields.caseNumber,
-    documentId: fields.documentId,
+    identity: fields,
     responses: {
       codelist: undefined,
       documentXhtml,
@@ -3095,6 +3369,7 @@ export const skUsAdapter = defineSourceAdapter({
           });
           return {
             decisions: [],
+            observations: [],
             itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
             nextCursor:
               year < currentYear
@@ -3106,20 +3381,18 @@ export const skUsAdapter = defineSourceAdapter({
         if (items.length === 0) {
           if (year < currentYear) {
             // Move to next year
-            return {
-              decisions: [],
-              nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
-            };
+            return emptySyncPage(
+              encodeCursor({ year: year + 1, offset: 0 }),
+              [],
+            );
           }
           // Current year exhausted; park at current offset
-          return {
-            decisions: [],
-            nextCursor: encodeCursor({ year, offset }),
-          };
+          return emptySyncPage(encodeCursor({ year, offset }), []);
         }
 
         const decisions: IngestionResult[] = [];
         const unreadItems: UnreadListedItem[] = [];
+        const observations: ListingObservation[] = [];
         let failed = 0;
         // One context for the page: the vocabularies are fetched once for
         // it, and a docket listed twice on it costs one facet query and one
@@ -3129,6 +3402,13 @@ export const skUsAdapter = defineSourceAdapter({
         for (const item of items) {
           switch (item.type) {
             case "unserved":
+              observations.push(
+                quarantinedListingObservation({
+                  source: QUARANTINE_NAMESPACE.SK_US,
+                  payload: { type: "unserved", year, offset: item.offset },
+                  reason: LISTING_OBSERVATION_REASON.UNSERVED_RECORD,
+                }),
+              );
               failed++;
               logger.warn("case_law.ingestion.unserved_listing_record", {
                 adapterKey: ADAPTER_KEYS.SK_US,
@@ -3145,6 +3425,11 @@ export const skUsAdapter = defineSourceAdapter({
               panic("Unhandled SK ÚS listing result");
           }
           const doc = item.document;
+          const observation = skUsListingObservation(doc);
+          if (observation !== null) {
+            observations.push(observation);
+            continue;
+          }
           try {
             const attempted = await buildPlainTextItem({
               decisionOf: (value) => {
@@ -3178,6 +3463,12 @@ export const skUsAdapter = defineSourceAdapter({
             const built = attempted.value;
             switch (built.type) {
               case "unkeyable":
+                failed++;
+                logger.warn("case_law.ingestion.unkeyable_listing_record", {
+                  adapterKey: ADAPTER_KEYS.SK_US,
+                  cursor: encodeCursor({ year, offset }),
+                  reason: UNKEYABLE_LISTING_RECORD_REASON,
+                });
                 break;
               // The cursor moves past this document either way, so the crawl
               // keeps the listing-only row a failed PDF still describes; only
@@ -3224,6 +3515,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (hasMore) {
           return {
             decisions,
+            observations,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
             nextCursor: encodeCursor({ year, offset: nextOffset }),
@@ -3234,6 +3526,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (year < currentYear) {
           return {
             decisions,
+            observations,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
@@ -3251,6 +3544,7 @@ export const skUsAdapter = defineSourceAdapter({
         // to find, not this cursor's.
         return {
           decisions,
+          observations,
           itemBuildFailures: { type: "item_build_failed", count: failed },
           ...unreadPage(unreadItems),
           nextCursor: encodeCursor({

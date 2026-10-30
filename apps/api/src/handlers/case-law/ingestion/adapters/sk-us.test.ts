@@ -53,6 +53,29 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(skUsAdapter);
 
+const QUARANTINE_ID = /^sk-us-quarantine:[0-9a-f]{64}$/u;
+
+/** The stored key of a row the walk can key; a test fails on one it cannot. */
+const keyOf = (doc: Parameters<typeof skUsListingIdentity>[0]): string => {
+  const identity = skUsListingIdentity(doc);
+  if (identity === null) {
+    throw new TypeError("Expected a keyable SK ÚS record");
+  }
+  return listingIdentityKey(identity);
+};
+
+/** The quarantine id a record without a usable document id is keyed on. */
+const quarantineIdOf = (
+  doc: Parameters<typeof skUsListingIdentity>[0],
+): string => {
+  const identity = skUsListingIdentity(doc);
+  const id = identity?.type === "document" ? identity.sourceDocumentId : "";
+  if (!QUARANTINE_ID.test(id)) {
+    throw new TypeError("Expected a quarantined SK ÚS record");
+  }
+  return id;
+};
+
 const storedReplayInput = (decision: IngestionResult) => {
   const objects = decision.sourceRawObjects ?? {};
   const refs = Object.fromEntries(
@@ -571,7 +594,7 @@ describe("sk-us listing identity", () => {
       type: "document",
       sourceDocumentId: PLENARY_OPINION.documentId,
     });
-    expect(listingIdentityKey(skUsListingIdentity(PLENARY_OPINION))).toBe(
+    expect(keyOf(PLENARY_OPINION)).toBe(
       `document:${PLENARY_OPINION.documentId}`,
     );
   });
@@ -583,29 +606,60 @@ describe("sk-us listing identity", () => {
       ...PLENARY_OPINION,
       documentId: "9c2f0f01-6a2f-4a53-9a4e-2b6cf9a5f4d2",
     };
-    expect(listingIdentityKey(skUsListingIdentity(sibling))).not.toBe(
-      listingIdentityKey(skUsListingIdentity(PLENARY_OPINION)),
+    expect(keyOf(sibling)).not.toBe(keyOf(PLENARY_OPINION));
+  });
+
+  test("an id the decision column cannot hold is quarantined, as an absent one is", () => {
+    const { documentId: _documentId, ...withoutId } = PLENARY_OPINION;
+    const overLong = quarantineIdOf({
+      ...PLENARY_OPINION,
+      documentId: "d".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+    });
+    // The malformed id is no stable field, so it is the same record.
+    expect(overLong).toBe(quarantineIdOf(withoutId));
+    expect(quarantineIdOf({ ...PLENARY_OPINION, documentId: null })).toBe(
+      overLong,
     );
   });
 
-  test("an id the decision column cannot hold keys nothing", () => {
-    expect(
-      skUsListingIdentity({
-        ...PLENARY_OPINION,
-        documentId: "d".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-      }),
-    ).toEqual({ type: "unidentifiable" });
-  });
-
-  test("an item the crawl would drop is unidentifiable, not keyed on nothing", () => {
+  test("a document id keys the record even where the row states no docket", () => {
     expect(
       skUsListingIdentity({ ...CHAMBER_RESOLUTION, mkRSAPNumberOfFile: "" }),
-    ).toEqual({ type: "unidentifiable" });
-    expect(skUsListingIdentity(WITHOUT_DOCUMENT_ID)).toEqual({
-      type: "unidentifiable",
+    ).toEqual({
+      type: "document",
+      sourceDocumentId: CHAMBER_RESOLUTION.documentId,
     });
+  });
+
+  test("a record without a document id is keyed on its quarantine identity", () => {
+    expect(quarantineIdOf(WITHOUT_DOCUMENT_ID)).toMatch(QUARANTINE_ID);
+    // Two of one docket's documents on one day stay two records.
+    const { documentId: _documentId, ...opinion } = PLENARY_OPINION;
     expect(
-      listingIdentityKey(skUsListingIdentity(WITHOUT_DOCUMENT_ID)),
+      quarantineIdOf({ ...opinion, mkDifferentView: "Ivan Fiačan" }),
+    ).not.toBe(quarantineIdOf(opinion));
+  });
+
+  test("a quarantine fingerprint survives a re-rendered row", () => {
+    const { documentId: _documentId, ...opinion } = PLENARY_OPINION;
+    // Whitespace reflowed, a listing position and the fields reordered.
+    const { mkRSAPNumberOfFile, ...rest } = opinion;
+    expect(
+      quarantineIdOf({
+        index: 7,
+        ...rest,
+        mkRSAPNumberOfFile: `  ${mkRSAPNumberOfFile.replace(" ", "   ")}\n`,
+      }),
+    ).toBe(quarantineIdOf({ ...opinion, index: 0 }));
+  });
+
+  test("a record stating nothing that names it gets no invented identity", () => {
+    expect(skUsListingIdentity({})).toBeNull();
+    expect(
+      skUsListingIdentity({
+        mkDocumentType: "Rozhodnutie - Nález",
+        mkDateOfDecision: "03/12/2020 00:00:00",
+      }),
     ).toBeNull();
   });
 });
@@ -696,7 +750,7 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({ observations: [], items: [], totalPages: 0 });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {
@@ -784,32 +838,87 @@ describe("sk-us listSlicePage", () => {
 
     const stub = mockFetch({ search: [], searchFor: poisonedDms });
 
-    const page = await reconciliation.listSlicePage({
-      slice: "2025-04",
-      page: 1,
-    });
+    const logs = installRecordingLogger();
+    try {
+      const page = await reconciliation.listSlicePage({
+        slice: "2025-04",
+        page: 1,
+      });
 
-    // The page is whole: 99 keyed records plus the one that cannot be keyed,
-    // which the engine counts as unidentifiable and leaves out of both
-    // `reported` and `collected`.
-    expect(page.items).toHaveLength(100);
-    expect(page.totalPages).toBe(3);
-    const unkeyableAt = page.items.findIndex(
-      ({ identity }) => listingIdentityKey(identity) === null,
-    );
-    // In place, not appended: the walk must not reorder what the publisher
-    // lists, or a replay would key the wrong payloads.
-    expect(unkeyableAt).toBe(UNSERVED_INDEX - 100);
-    expect(page.items.at(unkeyableAt)?.identity).toEqual({
-      type: "unidentifiable",
-    });
-    expect(
-      page.items.filter(
-        ({ identity }) => listingIdentityKey(identity) === null,
-      ),
-    ).toHaveLength(1);
+      // Served records retain canonical identities; the refused slot is
+      // separate, durable evidence rather than a fabricated decision.
+      expect(page.totalPages).toBe(3);
+      expect(page.items.map(({ identity }) => identity)).toEqual(
+        Array.from({ length: 100 }, (_, offset) => 100 + offset)
+          .filter((index) => index !== UNSERVED_INDEX)
+          .map((index) => ({
+            type: "document",
+            sourceDocumentId: documentAt(index).documentId,
+          })),
+      );
+      expect(page.withoutStableFields).toBeUndefined();
+      expect(page.observations).toMatchObject([
+        {
+          reason: "unserved-listing-record",
+          payload: {
+            type: "unserved",
+            slice: "2025-04",
+            offset: UNSERVED_INDEX,
+          },
+        },
+      ]);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.unserved_listing_record",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "sk-us",
+          slice: "2025-04",
+          resultIndex: UNSERVED_INDEX,
+        }),
+      ]);
+    } finally {
+      logs.restore();
+    }
     expect(stub.calls()).toBe(SPLIT_REQUEST_BOUND);
   }, 30_000);
+
+  test("a served row stating nothing that names it is counted, not keyed", async () => {
+    mockFetch({
+      search: [
+        {
+          type: "page",
+          documents: [
+            PLENARY_OPINION,
+            { mkDocumentType: "Rozhodnutie - Nález", index: 1 },
+          ],
+          numFound: 2,
+        },
+      ],
+    });
+
+    const page = await reconciliation.listSlicePage({
+      slice: "2020-03",
+      page: 0,
+    });
+
+    expect(page.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: PLENARY_OPINION.documentId },
+    ]);
+    expect(page.withoutStableFields).toBeUndefined();
+    expect(page.observations).toMatchObject([
+      {
+        reason: "no-usable-id",
+        payload: { mkDocumentType: "Rozhodnutie - Nález", index: 1 },
+      },
+    ]);
+    expect(page.totalPages).toBe(1);
+  });
 
   test("a page of a poisoned month that carries no refused record costs one request", async () => {
     const stub = mockFetch({ search: [], searchFor: poisonedDms });
@@ -824,7 +933,7 @@ describe("sk-us listSlicePage", () => {
   });
 
   test("a one-record 204 that does not repeat lists the record it named", async () => {
-    // An unidentifiable item is excluded from the slice rather than parked, so
+    // An unserved record is excluded from the slice rather than parked, so
     // nothing retries it: a 204 the endpoint answered once under load and not
     // again would drop a real decision out of `reported` for good.
     let singletonCalls = 0;
@@ -853,14 +962,10 @@ describe("sk-us listSlicePage", () => {
     });
 
     // The record is asked for twice and served the second time, so it is a
-    // listed decision like any other and nothing is unidentifiable.
+    // listed decision like any other and nothing is left out.
     expect(singletonCalls).toBe(2);
     expect(page.items).toHaveLength(100);
-    expect(
-      page.items.filter(
-        ({ identity }) => listingIdentityKey(identity) === null,
-      ),
-    ).toHaveLength(0);
+    expect(page.withoutStableFields).toBeUndefined();
     expect(page.items.at(UNSERVED_INDEX - 100)?.identity).toEqual({
       type: "document",
       sourceDocumentId: documentAt(UNSERVED_INDEX).documentId,
@@ -1447,7 +1552,7 @@ describe("sk-us buildDecision", () => {
         type: "document",
         sourceDocumentId: outcome.decision.sourceDocumentId ?? "",
       }),
-    ).toBe(listingIdentityKey(skUsListingIdentity(PLENARY_OPINION)));
+    ).toBe(keyOf(PLENARY_OPINION));
   });
 
   test("the built decision carries the URL its docket-keyed row was stored under", async () => {
@@ -1503,22 +1608,106 @@ describe("sk-us buildDecision", () => {
     });
   });
 
-  test("a payload that no longer states an identity is unkeyable", async () => {
+  test("a payload that states nothing naming a record is unkeyable", async () => {
     mockFetch({ search: [] });
 
     expect(await reconciliation.buildDecision({})).toEqual({
       type: "unkeyable",
     });
-    expect(
-      await reconciliation.buildDecision({
-        ...PLENARY_OPINION,
-        mkRSAPNumberOfFile: "",
-      }),
-    ).toEqual({ type: "unkeyable" });
-    // A field whose type the DMS changed under us keys nothing either.
-    expect(
-      await reconciliation.buildDecision({ ...PLENARY_OPINION, documentId: 7 }),
-    ).toEqual({ type: "unkeyable" });
+    expect(await reconciliation.buildDecision("PL. ÚS 4/2020")).toEqual({
+      type: "unkeyable",
+    });
+  });
+
+  test("a payload without a usable document id is built listing-only under its quarantine id", async () => {
+    const stub = mockFetch({ search: [] });
+    const { documentId: _documentId, ...withoutId } = PLENARY_OPINION;
+    // A field whose type the DMS changed under us is no usable id either.
+    for (const payload of [withoutId, { ...PLENARY_OPINION, documentId: 7 }]) {
+      const built = await reconciliation.buildDecision(payload);
+      expect(built.type).toBe("built");
+      if (built.type !== "built") {
+        return;
+      }
+      expect(built.decision.sourceDocumentId).toBe(quarantineIdOf(withoutId));
+      expect(built.decision).toMatchObject({
+        caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
+        ecli: PLENARY_OPINION.mkECLI,
+        decisionDate: "2020-03-12",
+        isListingOnly: true,
+      });
+      expect(built.decision.metadata).toMatchObject({
+        identityQuarantined: true,
+        rvpNumber: PLENARY_OPINION.mkRVPNumberOfFile,
+      });
+      expect(built.decision.sourceDocumentIdRepairAliases).toBeUndefined();
+      expect(
+        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.["listing"],
+      ).toBe(JSON.stringify(payload));
+    }
+    // Every other response is addressed by the id the record lacks.
+    expect(stub.calls()).toBe(0);
+    expect(stub.downloads()).toBe(0);
+    expect(stub.facetCalls()).toBe(0);
+  });
+
+  test("a keyed observation can take over the row its degraded listing quarantined", async () => {
+    mockFetch({ search: [] });
+    const { documentId: _documentId, ...withoutId } = PLENARY_OPINION;
+
+    const built = await reconciliation.buildDecision(PLENARY_OPINION);
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+      quarantineIdOf(withoutId),
+    ]);
+  });
+
+  test("a document id recovered with its ECLI keeps the quarantine repair identity", async () => {
+    mockFetch({ search: [] });
+    const { documentId: _documentId, ...withoutId } = PLENARY_OPINION;
+    const built = await reconciliation.buildDecision(PLENARY_OPINION);
+    if (built.type !== "built") {
+      panic("Expected the recovered document to build");
+    }
+    const { mkECLI: _mkECLI, ...withoutEcli } = withoutId;
+    for (const observation of [
+      withoutEcli,
+      { ...withoutId, mkECLI: null },
+      { ...withoutId, mkECLI: "" },
+      withoutId,
+    ]) {
+      expect(
+        (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+          (alias) => alias === quarantineIdOf(observation),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("a payload with a document id and no docket is built under the id", async () => {
+    const stub = mockFetch({ search: [] });
+
+    const built = await reconciliation.buildDecision({
+      ...PLENARY_OPINION,
+      mkRSAPNumberOfFile: "",
+    });
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision).toMatchObject({
+      sourceDocumentId: PLENARY_OPINION.documentId,
+      caseNumber: PLENARY_OPINION.documentId,
+      caseNumberIsPlaceholder: true,
+    });
+    // The facet query is by docket, so a placeholder asks about nothing.
+    expect(stub.facetCalls()).toBe(0);
+    expect(stub.downloads()).toBe(1);
   });
 
   test("replays a payload that round-tripped through storage", async () => {
@@ -1838,6 +2027,41 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
         },
       },
     });
+  });
+
+  test("stored-raw replay rebuilds a quarantined row but never re-keys a row stored under another identity", async () => {
+    const { documentId: _documentId, ...withoutId } = PLENARY_OPINION;
+    const input = {
+      raw: new TextEncoder().encode(
+        encodeSourceRawEnvelope({ listing: JSON.stringify(withoutId) }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
+      sourceDocumentId: quarantineIdOf(withoutId),
+      language: "sk",
+      court: "Ústavný súd SR",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    };
+
+    expect(await skUsAdapter.reparseStoredRaw?.(input)).toMatchObject({
+      type: "parsed",
+      result: {
+        sourceDocumentId: quarantineIdOf(withoutId),
+        isListingOnly: true,
+      },
+    });
+    // A docket-keyed row from before the DMS id was the identity.
+    expect(
+      await skUsAdapter.reparseStoredRaw?.({
+        ...input,
+        sourceDocumentId: null,
+      }),
+    ).toMatchObject({ type: "rejected", rejection: "identity-mismatch" });
   });
 
   test("builds nothing for a document whose download fails and reports the download", async () => {
@@ -2378,4 +2602,29 @@ describe("the responses this court served, as recorded", () => {
     expect(xhtml).toContain("PL. ÚS 11/2021");
     expect(new TextDecoder().decode(file.subarray(0, 5))).toBe("%PDF-");
   });
+});
+
+test("a terminal page retains malformed records and unserved slots as evidence", async () => {
+  mockFetch({
+    search: [],
+    searchFor: ({ start, pageSize }) => {
+      if (start <= 1 && start + pageSize > 1) {
+        return { type: "status", status: 204 };
+      }
+      return { type: "page", documents: start === 0 ? [{}] : [], numFound: 2 };
+    },
+  });
+  const page = (await skUsAdapter.fetchPage("1993:0", {})).unwrap(
+    "The bounded terminal listing remains readable",
+  );
+  expect(page.decisions).toEqual([]);
+  expect(page.observations.map(({ reason }) => reason)).toEqual([
+    "no-usable-id",
+    "unserved-listing-record",
+  ]);
+  expect(page.observations.map(({ payload }) => payload)).toEqual([
+    {},
+    { type: "unserved", year: 1993, offset: 1 },
+  ]);
+  expect(page.nextCursor).toBe("1994:0");
 });

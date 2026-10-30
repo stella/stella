@@ -470,7 +470,11 @@ describe("notice publication outcomes", () => {
           observations.push(event);
         },
         fetchPage: async () =>
-          Result.ok({ decisions: [refused], nextCursor: null }),
+          Result.ok({
+            observations: [],
+            decisions: [refused],
+            nextCursor: null,
+          }),
       });
       expect(observations.at(-1)).toMatchObject({
         filled: 1,

@@ -946,9 +946,6 @@ export const eraseDecisionReconciliationPayloadsTx = async (
       type: "document",
       sourceDocumentId,
     });
-    if (identityKey === null) {
-      return panic("Erasure requires a keyable publisher identity");
-    }
     return { source_id: sourceId, identity_key: identityKey };
   });
   // One parameter bounds query growth across provenance identities and aliases.

@@ -339,7 +339,12 @@ const INGEST_OUTCOMES = {
   WRITTEN: "written",
   RETRYABLE: "retryable",
   FAILED: "failed",
-  /** The adapter would drop this item; a retry can never write it. */
+  /**
+   * Not a record this source stores, which its document showed (a court
+   * code stating no court decided it); a retry can never write it. A row
+   * the listing already shows as such never reaches the ingest: the diff
+   * counts it as not stored.
+   */
   UNINGESTABLE: "uningestable",
 } as const;
 
@@ -356,7 +361,7 @@ const ingestItem = async (
       AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS),
     );
     if (built.type === "unkeyable") {
-      console.error(`${docket}: no docket and court to key on; skipped`);
+      console.error(`${docket}: not a record a court decided; skipped`);
       return INGEST_OUTCOMES.UNINGESTABLE;
     }
     if (built.type === "detail-unavailable") {
@@ -549,7 +554,7 @@ try {
         counts.listed += listed.items.length;
         counts.held += diff.held.length;
         counts.missing += diff.missing.length;
-        counts.uningestable += diff.unidentifiable.length;
+        counts.uningestable += diff.notStored.length;
         counts.duplicate += diff.duplicate.length;
         missingItems.push(...diff.missing);
 
@@ -598,7 +603,7 @@ try {
     counts.listed += suppliedItems.length;
     counts.held += fileDiff.held.length;
     counts.missing += fileDiff.missing.length;
-    counts.uningestable += fileDiff.unidentifiable.length;
+    counts.uningestable += fileDiff.notStored.length;
     counts.duplicate += fileDiff.duplicate.length;
     for (const item of fileDiff.missing) {
       halt = stopReason();

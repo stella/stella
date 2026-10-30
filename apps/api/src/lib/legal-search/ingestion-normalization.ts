@@ -453,7 +453,7 @@ export const sanitizeResult = (
       ),
       sourceDocumentIdRepairAliases:
         result.sourceDocumentIdRepairAliases?.filter(
-          (identity): identity is string =>
+          (identity) =>
             strip(identity) === identity &&
             isPersistableSourceDocumentId(identity),
         ),

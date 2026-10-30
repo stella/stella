@@ -767,27 +767,39 @@ describe("case-law adapter nullish optionals", () => {
     expect(decision?.ecli === "ECLI:SK:TEST").toBe(true);
   });
 
-  test("SK Courts skips items missing required court data", async () => {
+  test("SK Courts keeps an item with no publisher id or court as a listing-only quarantine row", async () => {
+    const listed = {
+      spisovaZnacka: "1Cdo/2/2024",
+      sud: null,
+      datumVydania: "01.02.2024",
+    };
     mockFetchWithBodies([
       {
         pattern: "/pilot/api/ress-isu-service/v1/rozhodnutie?",
-        body: JSON.stringify({
-          rozhodnutieList: [
-            {
-              spisovaZnacka: "1Cdo/2/2024",
-              sud: null,
-              datumVydania: "01.02.2024",
-            },
-          ],
-          numFound: 1,
-        }),
+        body: JSON.stringify({ rozhodnutieList: [listed], numFound: 1 }),
       },
     ]);
 
     const result = await skCourtsAdapter.fetchPage(null, {});
 
     expect(result.isOk()).toBe(true);
-    expect(result.unwrap().decisions).toEqual([]);
+    const { decisions } = result.unwrap();
+    expect(decisions).toHaveLength(1);
+    const decision = decisions[0];
+    expect(decision?.sourceDocumentId).toMatch(
+      /^sk-courts-quarantine:[0-9a-f]{64}$/u,
+    );
+    expect(decision?.isListingOnly).toBe(true);
+    expect(decision?.caseNumber === "1Cdo/2/2024").toBe(true);
+    expect(decision?.metadata["identityQuarantined"]).toBe(true);
+    expect(decision?.metadata["listedOnly"]).toBe(true);
+    expect(decision?.metadata["listedOnlyReason"] === "no_publisher_id").toBe(
+      true,
+    );
+    // The listing is kept verbatim, so a later pass can still identify it.
+    expect(decodeSourceRawEnvelope(decision?.sourceRaw ?? "")).toEqual({
+      listing: JSON.stringify(listed),
+    });
   });
 
   test("PL Courts uses the extended page timeout budget for sequential detail fetches", () => {

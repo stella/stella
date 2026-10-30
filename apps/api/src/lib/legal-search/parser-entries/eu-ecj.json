@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "EU_ECJ",
   "key": "eu-ecj",
-  "parserVersion": 19,
+  "parserVersion": 20,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Revalidate publisher head-matter ordering across the complete document AST; retain listed language variants with unusable CELEX values under their captured ECLI-qualified quarantine identity. Reconciliation alone establishes repair candidates from complete listings; these values have no separate feature storage."
   }
 }

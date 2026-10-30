@@ -102,6 +102,11 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+  type RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -504,6 +509,8 @@ export type ParsedRow = {
   publishedCaseNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
+  /** The court the results table states; absent on rows parked by older parsers. */
+  court?: string | undefined;
   outcome: string | undefined;
   documentUrl: string | undefined;
   /** Numeric document ID for fetching fulltext via /DokumentOriginal/Text/{id}. */
@@ -511,20 +518,96 @@ export type ParsedRow = {
 };
 
 /**
- * The publisher's own document id for a row, or undefined where the row states
- * none this store can hold.
+ * What a listed row is stored under.
+ *
+ * `document` is a row stating the portal's own document id. `quarantined` is
+ * a row the portal lists with a reference but no usable id: it is kept as its
+ * listing (case-law AGENTS.md rule 20) under the quarantine identity of its
+ * stable columns, since nothing about it can be read.
+ */
+type CzNssRowIdentity =
+  | {
+      type: "document";
+      sourceDocumentId: string;
+      /** The quarantine id this row would have had without its id. */
+      repairAliases: readonly RepairAlias[] | undefined;
+    }
+  | { type: "quarantined"; sourceDocumentId: string };
+
+/** Why a quarantined row is stored as its listing alone. */
+const CZ_NSS_QUARANTINE_REASON = "missing-record-identity";
+
+/**
+ * The quarantine identity of a row's stable columns, or undefined for a row
+ * stating no reference.
+ *
+ * The reference as published (docket with its sheet number, which tells two
+ * rulings of one file apart), the decision date, decision type and court: the
+ * columns the portal states for the document itself. The row index and hidden
+ * form binding are position, and the detail and document links are the id that
+ * is missing. Without a reference the date, type and court name a day's worth
+ * of decisions, not one, so they are never a fingerprint on their own.
+ */
+const czNssRowQuarantine = ({
+  publishedCaseNumber,
+  decisionDate,
+  decisionType,
+  court,
+}: ParsedRow) =>
+  publishedCaseNumber === undefined || publishedCaseNumber.length === 0
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.CZ_NSS,
+        stableFields: {
+          reference: publishedCaseNumber,
+          decisionDate,
+          decisionType,
+          court,
+        },
+      });
+
+/**
+ * How this adapter keys a row, or `null` for a row with neither a usable id
+ * nor a reference, which has nothing stable to key on.
  *
  * Stated once, because the crawl, the identity rule and the listing walk must
- * agree exactly on which documents exist. The bound is not decoration: an id
- * past the column's limit is refused by the pipeline's own normalization, so
- * keying a row on it would hunt a row nothing can ever write.
+ * agree exactly on which documents exist and what each is stored under. The
+ * id is bounded here rather than left to the pipeline: an id past the
+ * column's limit is refused by the pipeline's own normalization, so a row
+ * stating one is quarantined rather than keyed on a row nothing can write.
  */
-const czNssSourceDocumentId = ({
-  documentId,
-}: ParsedRow): string | undefined =>
-  documentId !== undefined && isPersistableSourceDocumentId(documentId)
-    ? documentId
-    : undefined;
+const czNssRowIdentity = (row: ParsedRow): CzNssRowIdentity | null => {
+  const quarantine = czNssRowQuarantine(row);
+  const { documentId } = row;
+  if (documentId !== undefined && isPersistableSourceDocumentId(documentId)) {
+    return {
+      type: "document",
+      sourceDocumentId: documentId,
+      repairAliases: quarantine?.repairAliases,
+    };
+  }
+  return quarantine === undefined
+    ? null
+    : { type: "quarantined", sourceDocumentId: quarantine.sourceDocumentId };
+};
+
+/**
+ * The identity of a row this adapter parsed or validated. `parseResultRows`
+ * drops a row with nothing to key on and the payload guard refuses one, so
+ * meeting one here is a caller that built a row by hand.
+ */
+const requireRowIdentity = (row: ParsedRow): CzNssRowIdentity =>
+  czNssRowIdentity(row) ??
+  panic("cz-nss row states neither a document id nor a reference");
+
+/**
+ * The docket a row is stored and parsed under. A row listed with an id and
+ * no usable reference is still the portal's document, so its id stands in
+ * for the label (marked `caseNumberIsPlaceholder` on the result), and the
+ * document parser reads the same label the replay later hands it.
+ */
+const czNssRowLabel = (row: ParsedRow, sourceDocumentId: string): string =>
+  row.caseNumber.length === 0 ? sourceDocumentId : row.caseNumber;
 
 /** The detail page of one document, which is also the row's stored URL. */
 const detailUrl = (documentId: string): string =>
@@ -535,6 +618,7 @@ const CZ_NSS_RESULT_CELL = {
   CASE_REFERENCE: 3,
   DECISION_DATE: 2,
   DECISION_TYPE: 5,
+  COURT: 4,
 } as const;
 
 const CZ_NSS_CASE_REFERENCE_MAX_LENGTH = 100;
@@ -559,9 +643,17 @@ const statedDecisionType = (value: string | undefined): string | undefined =>
  * Exported so the crawl, the listing walk and their tests read one parser:
  * a second copy of these patterns would certify itself rather than the
  * adapter.
+ *
+ * `withoutStableFields` counts the rows the page lists with neither an id nor
+ * a reference. Nothing about them can be keyed or stored, but the portal
+ * counted them, so each caller reports them: the crawl as a listing gap, the
+ * reconciliation walk as `ReconciliationSlicePage.withoutStableFields`.
  */
-export const parseResultRows = (html: string): ParsedRow[] => {
+export const parseResultPage = (
+  html: string,
+): { rows: ParsedRow[]; withoutStableFields: number } => {
   const rows: ParsedRow[] = [];
+  let withoutStableFields = 0;
 
   const tbodyPattern = /<tbody>(?<block>[\s\S]*?)<\/tbody>/giu;
   let tbodyMatch: RegExpExecArray | null;
@@ -572,15 +664,28 @@ export const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
 
-    const detailMatch =
-      /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block);
-    const documentId = detailMatch?.groups?.["documentId"];
+    // A result row carries the detail link, and the portal binds its id to
+    // the `ZobrazeneVysledky[n].ID` form field; a block with neither is page
+    // furniture, not a row. A row whose link states no usable id is still a
+    // listed document (rule 20), kept under its quarantine identity.
+    // The numeric link is looked for first, anywhere in the block, so a row
+    // that also carries some malformed detail link keys on the same id it
+    // always did rather than being quarantined.
+    const numericDocumentId =
+      /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block)
+        ?.groups?.["documentId"];
     if (
-      documentId === undefined ||
-      !isPersistableSourceDocumentId(documentId)
+      numericDocumentId === undefined &&
+      !/href="\/DokumentDetail\/Index\//u.test(block) &&
+      !block.includes("ZobrazeneVysledky[")
     ) {
       continue;
     }
+    const documentId =
+      numericDocumentId !== undefined &&
+      isPersistableSourceDocumentId(numericDocumentId)
+        ? numericDocumentId
+        : undefined;
 
     const cells: string[] = [];
     const cellPattern = /<td[^>]*>(?<cell>[\s\S]*?)<\/td>/giu;
@@ -593,23 +698,36 @@ export const parseResultRows = (html: string): ParsedRow[] => {
       );
     }
 
-    const publishedCaseNumber = cells.at(CZ_NSS_RESULT_CELL.CASE_REFERENCE);
-    if (
-      !publishedCaseNumber ||
-      publishedCaseNumber.length > CZ_NSS_CASE_REFERENCE_MAX_LENGTH
-    ) {
-      // Skip malformed or overly long case numbers
-      if (publishedCaseNumber) {
-        logger.warn("case_law.ingestion.malformed_case_number_skipped", {
-          adapterKey: ADAPTER_KEYS.CZ_NSS,
-          caseNumberLength: publishedCaseNumber.length,
-          caseNumberSample: publishedCaseNumber.slice(0, 50),
-        });
-      }
-      continue;
+    const statedReference = cells.at(CZ_NSS_RESULT_CELL.CASE_REFERENCE);
+    const publishedCaseNumber =
+      statedReference &&
+      statedReference.length <= CZ_NSS_CASE_REFERENCE_MAX_LENGTH
+        ? statedReference
+        : undefined;
+    if (statedReference && publishedCaseNumber === undefined) {
+      // Not a reference any court writes; the row keeps its id and gets a
+      // stand-in label instead.
+      logger.warn("case_law.ingestion.malformed_case_number_replaced", {
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        caseNumberLength: statedReference.length,
+        caseNumberSample: statedReference.slice(0, 50),
+      });
     }
-    const { caseNumber } = splitCaseReference(publishedCaseNumber);
-    const documentUrl = detailUrl(documentId);
+    if (documentId === undefined && publishedCaseNumber === undefined) {
+      // Neither an id nor a reference: what is left is the row's position and
+      // a date and type a whole day's decisions share, so there is nothing
+      // stable to keep it under.
+      withoutStableFields += 1;
+      continue; // unsignalled-skip-allow: counted in withoutStableFields, which the reconciliation walk reports per slice and the crawl warns on per page
+    }
+    // An empty docket is the row the portal lists with an id and no usable
+    // reference; `rowToResult` labels it with the id, marked as a stand-in.
+    const caseNumber =
+      publishedCaseNumber === undefined
+        ? ""
+        : splitCaseReference(publishedCaseNumber).caseNumber;
+    const documentUrl =
+      documentId === undefined ? undefined : detailUrl(documentId);
 
     const dateCell = cells.at(CZ_NSS_RESULT_CELL.DECISION_DATE);
     const decisionDate =
@@ -623,20 +741,28 @@ export const parseResultRows = (html: string): ParsedRow[] => {
       decisionTypeCell.length < CZ_NSS_DECISION_TYPE_MAX_LENGTH
         ? statedDecisionType(decisionTypeCell)
         : undefined;
+    const courtCell = cells.at(CZ_NSS_RESULT_CELL.COURT);
+    const court =
+      courtCell === undefined || courtCell.length === 0 ? undefined : courtCell;
 
     rows.push({
       caseNumber,
       publishedCaseNumber,
       decisionDate,
       decisionType,
+      court,
       outcome: undefined,
       documentUrl,
       documentId,
     });
   }
 
-  return rows;
+  return { rows, withoutStableFields };
 };
+
+/** The rows of a results page that can be keyed; see {@link parseResultPage}. */
+export const parseResultRows = (html: string): ParsedRow[] =>
+  parseResultPage(html).rows;
 
 type DecisionContent = {
   fulltext: string | undefined;
@@ -874,7 +1000,7 @@ const fetchDecisionContent = async (
   const parsed = Result.try({
     try: () =>
       parseNssDecisionHtml({
-        caseNumber: row.caseNumber,
+        caseNumber: czNssRowLabel(row, documentId),
         ecli: detail.ecli,
         court: czNssCourt(detail.ecli, documentId),
         decisionDate: (() => {
@@ -991,10 +1117,11 @@ const fetchRegistryDocument = async ({
   signal,
 }: FetchRegistryDocumentOptions): Promise<DecisionContentRead> => {
   const reference = row.publishedCaseNumber ?? row.caseNumber;
-  const documentId = czNssSourceDocumentId(row);
-  if (documentId === undefined) {
+  const identity = czNssRowIdentity(row);
+  if (identity?.type !== "document") {
     return { type: "read", content: EMPTY_CONTENT };
   }
+  const documentId = identity.sourceDocumentId;
   const listingTarget = publisherTarget(
     ADAPTER_KEYS.CZ_NSS,
     nssRegistryUrl(reference),
@@ -1883,6 +2010,7 @@ const storedListingRow = ({
   publishedCaseNumber,
   decisionDate,
   decisionType,
+  court,
   outcome,
   documentUrl,
   documentId,
@@ -1892,6 +2020,7 @@ const storedListingRow = ({
     publishedCaseNumber,
     decisionDate,
     decisionType,
+    court,
     outcome,
     documentUrl,
     documentId,
@@ -1962,7 +2091,10 @@ const rowToResult = ({
   detailHtml,
   row,
 }: RowToResultOptions): IngestionResult => {
-  const sourceDocumentId = czNssSourceDocumentId(row);
+  const identity = requireRowIdentity(row);
+  const { sourceDocumentId } = identity;
+  const listingDocketMissing = row.caseNumber.length === 0;
+  const caseNumber = czNssRowLabel(row, sourceDocumentId);
   const legalSentenceField = czNssTextField(detail.legalSentence);
   const court = czNssCourt(detail.ecli, sourceDocumentId);
   const decisionDate = (() => {
@@ -1977,8 +2109,13 @@ const rowToResult = ({
   const decisionType = (detail.decisionType ?? row.decisionType)?.toLowerCase();
   const reporterIdentifiers = nssReporterIdentifiers(detail.citation);
   // This source publishes the docket with the sheet number appended.
-  const publishedCaseNumber = row.publishedCaseNumber ?? row.caseNumber;
-  const { sheetNumber } = splitCaseReference(publishedCaseNumber);
+  const publishedCaseNumber = listingDocketMissing
+    ? undefined
+    : (row.publishedCaseNumber ?? row.caseNumber);
+  const sheetNumber =
+    publishedCaseNumber === undefined
+      ? undefined
+      : splitCaseReference(publishedCaseNumber).sheetNumber;
   const rawParts = {
     ...(content.sourceRaw === undefined
       ? {}
@@ -1997,12 +2134,20 @@ const rowToResult = ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
 
   return plainTextIngestionResult({
-    caseNumber: row.caseNumber,
+    caseNumber,
+    ...(listingDocketMissing ? { caseNumberIsPlaceholder: true } : {}),
     sheetNumber,
     ...(reporterIdentifiers === undefined
       ? {}
       : { identifiers: reporterIdentifiers }),
     sourceDocumentId,
+    // So the listing row a crawl kept for this document while its id was
+    // unusable is taken over by it rather than left beside it.
+    ...(identity.type === "document" &&
+    identity.repairAliases !== undefined &&
+    identity.repairAliases.length > 0
+      ? { sourceDocumentIdRepairAliases: identity.repairAliases }
+      : {}),
     // What every row this adapter wrote before it stated an id was stored
     // under: one row per docket, carrying the detail URL of whichever document
     // was written last. The URL names one document exactly, so it re-keys that
@@ -2011,9 +2156,9 @@ const rowToResult = ({
     // regional court's decision numbered the same, or a further ruling in the
     // same file — find no null-id row and are inserted, which is the collapse
     // being undone.
-    ...(sourceDocumentId === undefined
-      ? {}
-      : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
+    ...(identity.type === "document"
+      ? { legacySourceUrls: [detailUrl(sourceDocumentId)] }
+      : {}),
     ecli: detail.ecli,
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NSS].country,
@@ -2030,7 +2175,7 @@ const rowToResult = ({
       legalSentence: legalSentenceField,
     },
     metadata: checkedDecisionMetadata({
-      caseNumber: row.caseNumber,
+      caseNumber,
       sheetNumber,
       // The reference exactly as the court publishes it, docket and sheet
       // together, so the split stays reversible from what we stored.
@@ -2039,6 +2184,15 @@ const rowToResult = ({
       ...detailMetadataFields(detail),
       // The listing states an outcome for rows whose detail page does not.
       outcome: detail.outcome ?? row.outcome,
+      // Read back by the stored-raw replay, which sees only the stand-in.
+      ...(listingDocketMissing ? { listingDocketMissing: true } : {}),
+      ...(identity.type === "quarantined"
+        ? {
+            identityQuarantined: true,
+            listedOnly: true,
+            listedOnlyReason: CZ_NSS_QUARANTINE_REASON,
+          }
+        : {}),
     }),
     rawHash: sourceFingerprint({ sourceRaw }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
@@ -2208,6 +2362,31 @@ const rebuildStoredDocument = async ({
 };
 
 /**
+ * The repair alias the crawl emitted for a stored row, read off the listing
+ * part it stored, so a replay names the same quarantine row the crawl did.
+ * Only for the document the row is stored under: a listing part naming some
+ * other document is not this row's to repair.
+ */
+const storedRepairAlias = (
+  parts: SourceRawParts | null,
+  sourceDocumentId: string | undefined,
+): readonly RepairAlias[] | undefined => {
+  const listing = parts?.[CZ_NSS_RAW_PART.LISTING];
+  if (listing === undefined) {
+    return [];
+  }
+  const row = Result.try((): unknown => JSON.parse(listing)).unwrapOr(null);
+  if (!isCzNssListingRow(row)) {
+    return [];
+  }
+  const identity = czNssRowIdentity(row);
+  return identity?.type === "document" &&
+    identity.sourceDocumentId === sourceDocumentId
+    ? identity.repairAliases
+    : [];
+};
+
+/**
  * Rebuild one NSS decision from what the crawl stored for it.
  *
  * Two payload shapes reach this, and the difference is what a replay can
@@ -2278,8 +2457,17 @@ const reparseStoredRaw = async (
     nonEmptyString(stored.metadata["citation"]);
   const reporterIdentifiers = nssReporterIdentifiers(citation);
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
-  const publishedCaseNumber = storedPublishedCaseNumber(stored);
-  const { sheetNumber } = splitCaseReference(publishedCaseNumber);
+  const repairAliases = storedRepairAlias(parts, sourceDocumentId);
+  // The stored docket of a row listed without a reference is the id standing
+  // in for one, which must not be read back as a reference the court wrote.
+  const listingDocketMissing = stored.metadata["listingDocketMissing"] === true;
+  const publishedCaseNumber = listingDocketMissing
+    ? undefined
+    : storedPublishedCaseNumber(stored);
+  const sheetNumber =
+    publishedCaseNumber === undefined
+      ? undefined
+      : splitCaseReference(publishedCaseNumber).sheetNumber;
   const storedDecisionText = splitStoredDecisionTextMetadata(stored.metadata);
   const textFields = { ...storedDecisionText.textFields };
   // Only legacy text without a sidecar, or text already read as present, can
@@ -2305,11 +2493,15 @@ const reparseStoredRaw = async (
     type: "parsed",
     result: plainTextIngestionResult({
       caseNumber: stored.caseNumber,
+      ...(listingDocketMissing ? { caseNumberIsPlaceholder: true } : {}),
       sheetNumber,
       ...(reporterIdentifiers === undefined
         ? {}
         : { identifiers: reporterIdentifiers }),
       sourceDocumentId,
+      ...(repairAliases === undefined || repairAliases.length === 0
+        ? {}
+        : { sourceDocumentIdRepairAliases: repairAliases }),
       ...(sourceDocumentId === undefined
         ? {}
         : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
@@ -2717,6 +2909,11 @@ const EMPTY_CONTENT: DecisionContent = {
  * row, which the reconciliation does not count as held (`heldRequiresDetail`)
  * and reads again; the reconciliation itself parks the document for a later
  * attempt and writes nothing for it.
+ *
+ * A quarantined row is `built` although it is listing-only: with no id there
+ * is nothing to read, so its listing row is the whole record until the id
+ * recovers, and the reconciliation counts it held
+ * (`isQuarantineListingIdentity`) instead of parking it forever.
  */
 export type CzNssBuildResult =
   | { type: "built"; decision: IngestionResult }
@@ -2780,16 +2977,18 @@ export const buildCzNssDecision = async ({
   session,
   signal,
 }: BuildCzNssDecisionOptions): Promise<CzNssBuildResult> => {
-  const documentId = czNssSourceDocumentId(row);
-  if (documentId === undefined) {
-    // Only a payload parked by an older parser can reach this branch: current
-    // listing rows require a persistable detail id. Nothing can be read for
-    // the legacy row, now or later, so it remains a listing-only observation.
-    return {
-      type: "detail-unavailable",
-      decision: unreadRowDecision(row, null),
-    };
+  const identity = requireRowIdentity(row);
+  switch (identity.type) {
+    case "document":
+      break;
+    case "quarantined":
+      // Every detail and document address is the id the row lacks.
+      return { type: "built", decision: unreadRowDecision(row, null) };
+    default:
+      identity satisfies never;
+      return panic(`Unhandled NSS row identity: ${JSON.stringify(identity)}`);
   }
+  const documentId = identity.sourceDocumentId;
 
   const detailFetch = await fetchDetailMetadata(documentId, session, signal);
   if (detailFetch.type === "unavailable") {
@@ -2944,16 +3143,19 @@ const CZ_NSS_PAGE_READ_BUDGET_MS = 90_000;
  * walk that keyed rows differently from the ingest would read stored decisions
  * as missing and re-fetch them forever.
  *
- * A payload parked by an older parser without that link remains unidentifiable
- * rather than keyed on the docket alone. The current listing parser rejects it
- * before this boundary; keeping the branch lets persisted JSONB replay without
- * inventing an identity.
+ * A row the portal lists without a usable id keys on the quarantine identity
+ * of its stable columns, which is what the build stores its listing row
+ * under. `null` is a row with neither an id nor a reference, such as a
+ * payload an older parser parked without either: it is keyed on nothing
+ * rather than on an invented identity.
  */
-export const czNssListingIdentity = (row: ParsedRow): ListingIdentity => {
-  const sourceDocumentId = czNssSourceDocumentId(row);
-  return sourceDocumentId === undefined
-    ? { type: "unidentifiable" }
-    : { type: "document", sourceDocumentId };
+export const czNssListingIdentity = (
+  row: ParsedRow,
+): ListingIdentity | null => {
+  const identity = czNssRowIdentity(row);
+  return identity === null
+    ? null
+    : { type: "document", sourceDocumentId: identity.sourceDocumentId };
 };
 
 /**
@@ -2998,18 +3200,19 @@ const listCzNssSlicePage = async ({
     await executeSearch(session, slice, effectiveSignal),
   );
 
-  const firstPageRows = parseResultRows(search.html);
+  const firstPage = parseResultPage(search.html);
+  const firstPageListed = firstPage.rows.length + firstPage.withoutStableFields;
   if (search.type === "absent") {
-    if (firstPageRows.length > 0) {
+    if (firstPageListed > 0) {
       // The page contradicts itself, so neither number can be trusted for a
       // ledger row. Refused rather than resolved in either direction.
       throw new AdapterFetchError({
-        message: `NSS stated no records for ${slice} while rendering ${firstPageRows.length}`,
+        message: `NSS stated no records for ${slice} while rendering ${firstPageListed}`,
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         cursor: slice,
       });
     }
-    return { items: [], totalPages: 0 };
+    return { observations: [], items: [], totalPages: 0 };
   }
 
   const { continuation } = search;
@@ -3031,8 +3234,11 @@ const listCzNssSlicePage = async ({
     const { error } = continued;
     throw error;
   }
-  const rows =
-    continued === null ? firstPageRows : parseResultRows(continued.value);
+  const parsed =
+    continued === null ? firstPage : parseResultPage(continued.value);
+  // A row with nothing to key on is still a row the portal listed, so it
+  // counts towards what the page carries and is reported, not refused.
+  const listed = parsed.rows.length + parsed.withoutStableFields;
 
   // How many rows this page must carry, from the count the portal stated for
   // the whole day. A short page is refused rather than returned, because the
@@ -3047,19 +3253,26 @@ const listCzNssSlicePage = async ({
     page,
     statedCount: search.statedCount,
   });
-  if (rows.length < expectedRows) {
+  if (listed < expectedRows) {
     throw new AdapterFetchError({
-      message: `NSS page ${page} of ${slice} carried ${rows.length} of the ${expectedRows} rows its stated count of ${search.statedCount} requires`,
+      message: `NSS page ${page} of ${slice} carried ${listed} of the ${expectedRows} rows its stated count of ${search.statedCount} requires`,
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       cursor: slice,
     });
   }
 
+  // `parseResultPage` already leaves out a row with nothing to key on, so
+  // every row here keys; one that does not is counted with them.
+  const items = parsed.rows.flatMap((row) => {
+    const identity = czNssListingIdentity(row);
+    return identity === null ? [] : [{ identity, payload: row }];
+  });
+  const withoutStableFields =
+    parsed.withoutStableFields + (parsed.rows.length - items.length);
   return {
-    items: rows.map((row) => ({
-      identity: czNssListingIdentity(row),
-      payload: row,
-    })),
+    observations: [],
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: czNssTotalPages(search.statedCount),
   };
 };
@@ -3082,6 +3295,7 @@ const isCzNssListingRow = (value: unknown): value is ParsedRow =>
   isOptionalString(value["publishedCaseNumber"]) &&
   isOptionalString(value["decisionDate"]) &&
   isOptionalString(value["decisionType"]) &&
+  isOptionalString(value["court"]) &&
   isOptionalString(value["outcome"]) &&
   isOptionalString(value["documentUrl"]) &&
   isOptionalString(value["documentId"]);
@@ -3092,6 +3306,15 @@ const buildCzNssFromPayload = async (
 ): Promise<ReconciliationBuildOutcome> => {
   if (!isCzNssListingRow(payload)) {
     return { type: "unkeyable" };
+  }
+  const identity = czNssRowIdentity(payload);
+  if (identity === null) {
+    return { type: "unkeyable" };
+  }
+  if (identity.type === "quarantined") {
+    // The same listing-only row `buildCzNssDecision` builds for it, without
+    // the session it would never use: nothing is read for a row with no id.
+    return { type: "built", decision: unreadRowDecision(payload, null) };
   }
   const effectiveSignal =
     signal ?? AbortSignal.timeout(CZ_NSS_LISTING_TIMEOUT_MS);
@@ -3333,6 +3556,7 @@ export const czNssAdapter = defineSourceAdapter({
             publishedCaseNumber: payload["publishedCaseNumber"],
             decisionDate: payload["decisionDate"],
             decisionType: payload["decisionType"],
+            court: payload["court"],
             outcome: payload["outcome"],
             documentUrl: payload["documentUrl"],
             documentId: payload["documentId"],
@@ -3371,7 +3595,11 @@ export const czNssAdapter = defineSourceAdapter({
         // only re-check today on the next cycle (never null —
         // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: cursorFor(today, 0) };
+          return {
+            observations: [],
+            decisions: [],
+            nextCursor: cursorFor(today, 0),
+          };
         }
 
         // 1. Get or reuse session
@@ -3390,6 +3618,7 @@ export const czNssAdapter = defineSourceAdapter({
               attempts,
             });
             return {
+              observations: [],
               decisions: [],
               nextCursor: encodeCursor({
                 date,
@@ -3407,6 +3636,7 @@ export const czNssAdapter = defineSourceAdapter({
           });
           const next = nextDay(date);
           return {
+            observations: [],
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: 1 },
             nextCursor: encodeCursor({
@@ -3428,6 +3658,7 @@ export const czNssAdapter = defineSourceAdapter({
           }
           const next = nextDay(date);
           return {
+            observations: [],
             decisions: [],
             nextCursor: cursorFor(next <= today ? next : today, 0),
           };
@@ -3456,9 +3687,19 @@ export const czNssAdapter = defineSourceAdapter({
           throw error;
         }
 
-        const rows = parseResultRows(
+        const { rows, withoutStableFields } = parseResultPage(
           continued === null ? searchResult.html : continued.value,
         );
+        if (withoutStableFields > 0) {
+          // Counted in the listing gap below as well; this names why.
+          logger.warn("case_law.ingestion.listing_row_without_stable_field", {
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            date,
+            page,
+            count: withoutStableFields,
+            reason: "no-document-id-and-no-reference",
+          });
+        }
         const expectedRows = czNssExpectedRows({
           page,
           statedCount: searchResult.statedCount,
@@ -3526,6 +3767,7 @@ export const czNssAdapter = defineSourceAdapter({
         if (page + 1 < czNssTotalPages(searchResult.statedCount)) {
           // More pages for this date
           return {
+            observations: [],
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: cursorFor(date, page + 1),
@@ -3535,6 +3777,7 @@ export const czNssAdapter = defineSourceAdapter({
         // No more pages; advance to next day
         const next = nextDay(date);
         return {
+          observations: [],
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
           nextCursor: cursorFor(next <= today ? next : today, 0),

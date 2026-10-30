@@ -1146,7 +1146,7 @@ describe("the crawl", () => {
       ),
     });
     const { ID_INFORMACJI: _id, ...withoutId } = row;
-    expect(built.decision.sourceDocumentIdRepairAliases).toEqual([
+    expect(built.decision.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       plKisQuarantineId(withoutId),
     ]);
   });

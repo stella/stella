@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-ncourt] only adds sourceDocumentIdRepairAliases to rows an earlier version stored; the pl-ncourt-quarantine rows were never stored before.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -136,6 +137,17 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
+import {
+  LEGACY_QUARANTINE_PREFIXES,
+  PL_NCOURT_POSITION_QUARANTINE_PREFIX,
+} from "@/api/lib/legal-search/quarantine-prefixes";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1046,7 +1058,6 @@ export const assemblePlNcourtDecision = ({
   detailXml,
   documentStatus,
   listingXml,
-  positionAlias,
 }: AssemblePlNcourtDecisionOptions): PlNcourtBuild => {
   const listing = readPlNcourtListingRow(listingXml);
   if (listing === null) {
@@ -1118,9 +1129,8 @@ export const assemblePlNcourtDecision = ({
   });
   // Where the listing once could not serve this row, or served it without a
   // usable id, its audit row is found through these, and enriched.
-  const repairAliases = [positionAlias, plNcourtRowFingerprintId(row)].filter(
-    (alias) => alias !== undefined,
-  );
+  // Positional evidence remains in listing payloads; it cannot identify this judgment.
+  const repairAliases = plNcourtRowRepairAliases(row, id);
 
   const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
@@ -1223,7 +1233,7 @@ export type PlNcourtPosition = {
   next: PositionNeighbour | undefined;
 };
 
-const QUARANTINE_ID_PREFIX = "ncourt-quarantine:";
+const QUARANTINE_ID_PREFIX = PL_NCOURT_POSITION_QUARANTINE_PREFIX;
 
 /** Rows probed either side of an unservable one for a servable neighbour. */
 const QUARANTINE_REACH = 5;
@@ -1257,7 +1267,7 @@ export const plNcourtPositionId = ({
     }),
   )}`;
 
-const LISTED_ID_PREFIX = "ncourt-listed:";
+const LISTED_ID_PREFIX = LEGACY_QUARANTINE_PREFIXES["ncourt-listed"];
 
 /**
  * What a listed row states about the judgment, without its id: the fields
@@ -1273,14 +1283,11 @@ const ROW_FINGERPRINT_FIELDS = [
 ] as const satisfies readonly (keyof PlNcourtListingRow)[];
 
 /**
- * The content-addressed identity of a listed row that states no usable id,
- * or `undefined` for a row stating none of the fields. Every listed row
- * emits its own as a repair alias, so a row whose id is later corrected
- * enriches its audit row instead of doubling it.
+ * The `ncourt-listed:` form: a digest of the {@link ROW_FINGERPRINT_FIELDS}
+ * the row states, or `undefined` where it states none. It predates the shared
+ * quarantine identity and stored rows carry it, so it is kept byte for byte.
  */
-export const plNcourtRowFingerprintId = (
-  row: PlNcourtListingRow,
-): string | undefined => {
+const listedFingerprintOf = (row: PlNcourtListingRow): string | undefined => {
   const stated = ROW_FINGERPRINT_FIELDS.flatMap((field) => {
     const value = row[field];
     return value === undefined ? [] : [[field, value] as const];
@@ -1289,6 +1296,98 @@ export const plNcourtRowFingerprintId = (
     ? undefined
     : `${LISTED_ID_PREFIX}${hashContent(JSON.stringify(stated))}`;
 };
+
+/**
+ * The `pl-ncourt-quarantine:` form, for a row stating none of the
+ * fingerprint fields: what it can still state about the judgment, the day
+ * the portal published it and its thesis, both read off the record and
+ * unchanged when its id comes back. `lastUpdate` moves with every edit of the
+ * record and the id is the malformed part, so neither is a stable field.
+ * `undefined` where the row states neither.
+ */
+const publishedFingerprintOf = (row: PlNcourtListingRow): string | undefined =>
+  row.publicationDate === undefined && row.thesis === undefined
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.PL_NCOURT,
+        stableFields: {
+          publicationDate: row.publicationDate,
+          thesis: row.thesis,
+        },
+      }).sourceDocumentId;
+
+/**
+ * The content-addressed identity of a listed row that states no usable id,
+ * or `undefined` for a row stating no stable field at all: the
+ * `ncourt-listed:` form where the row states any of its fields, the
+ * `pl-ncourt-quarantine:` form only where it states none, which used to
+ * leave the row with no identity at all.
+ */
+export const plNcourtRowFingerprintId = (
+  row: PlNcourtListingRow,
+): string | undefined =>
+  listedFingerprintOf(row) ?? publishedFingerprintOf(row);
+
+/**
+ * Every fingerprint form an earlier, poorer observation of this row could
+ * have been stored under, other than the identity it is stored under now.
+ *
+ * Recovery can add fields as well as the id: a row first quarantined on its
+ * publication day and thesis can come back stating a signature, which moves
+ * it to the `ncourt-listed:` form, or an id, which keys it. Each form is
+ * computed from the fields it was built from wherever this observation still
+ * states them, so the row stored under either is found and enriched rather
+ * than doubled. Two forms at most, deduplicated.
+ *
+ * A form is emitted only where it states a field that tells one document
+ * from another: the signature or the excerpt for `ncourt-listed:`, the
+ * thesis for the published form. Without one, the form is a day, a court
+ * or a type, which many judgments share, and an alias built from it would
+ * let this row adopt another judgment's quarantine row. An id-less row
+ * still stores under such a form; only adoption by alias is withheld.
+ */
+const plNcourtRowRepairAliases = (
+  row: PlNcourtListingRow,
+  storedUnder: string,
+): RepairAlias[] => {
+  const states = (value: string | undefined): boolean =>
+    value !== undefined && value.trim().length > 0;
+  const listedId = listedFingerprintOf(row);
+  const listedAliases =
+    listedId === undefined || (!states(row.signature) && !states(row.excerpt))
+      ? []
+      : repairAliasesForStableFields({
+          namespace: LEGACY_REPAIR_NAMESPACE.PL_NCOURT_LISTED,
+          sourceDocumentIds: [listedId],
+          stableFields: {
+            signature: row.signature,
+            excerpt: row.excerpt,
+            courtId: row.courtId,
+          },
+        });
+  const publishedId = publishedFingerprintOf(row);
+  const publishedAliases =
+    publishedId === undefined
+      ? []
+      : repairAliasesForStableFields({
+          namespace: QUARANTINE_NAMESPACE.PL_NCOURT,
+          sourceDocumentIds: [publishedId],
+          stableFields: { thesis: row.thesis },
+        });
+  const forms = [...listedAliases, ...publishedAliases];
+  return [...new Set(forms.filter((alias) => alias !== storedUnder))];
+};
+
+/**
+ * The identity a listed row is stored and listed under: its id where the
+ * identity column can hold it, its content fingerprint otherwise. One
+ * function, so the crawl, the reconciliation listing and its build cannot
+ * key a row differently. `undefined` only for a row stating no stable field.
+ */
+const plNcourtRowIdentity = (row: PlNcourtListingRow): string | undefined =>
+  row.id !== undefined && isPersistableSourceDocumentId(row.id)
+    ? row.id
+    : plNcourtRowFingerprintId(row);
 
 /**
  * An unpublished row naming no decision. The court it records is this
@@ -1376,7 +1475,7 @@ const buildUnkeyedRow = ({
 }): IngestionResult | null => {
   const idUsable =
     row.id !== undefined && isPersistableSourceDocumentId(row.id);
-  const sourceDocumentId = idUsable ? row.id : plNcourtRowFingerprintId(row);
+  const sourceDocumentId = plNcourtRowIdentity(row);
   if (sourceDocumentId === undefined) {
     return null;
   }
@@ -1391,8 +1490,15 @@ const buildUnkeyedRow = ({
     [RAW_PART.LISTING]: listingXml,
     ...(detailXml === undefined ? {} : { [RAW_PART.DETAIL]: detailXml }),
   });
+  // Kept under its id or one fingerprint form, the row still names the audit
+  // rows a poorer observation of it was stored as, as a judgment built from
+  // it would.
+  const repairAliases = plNcourtRowRepairAliases(row, sourceDocumentId);
   return plainTextIngestionResult({
     sourceDocumentId,
+    ...(repairAliases.length === 0
+      ? {}
+      : { sourceDocumentIdRepairAliases: repairAliases }),
     ...(documentRole === undefined ? {} : { documentRole }),
     caseNumber: signature ?? sourceDocumentId,
     ...(signature === undefined ? { caseNumberIsPlaceholder: true } : {}),
@@ -2011,6 +2117,22 @@ const buildRows = async (
         aborted: true,
       });
     }
+    const reading = readPlNcourtListingRow(row.fragment);
+    if (
+      reading !== null &&
+      plNcourtRowIdentity(normalizePlNcourtListingRow(reading)) === undefined
+    ) {
+      // A row stating no stable field has no identity to store it under,
+      // and inventing one would mint a new row each time it is listed
+      // (case-law AGENTS.md rule 20). Logged and passed, not a page failure:
+      // failing would hold every later row of the lane behind it.
+      logger.warn("case_law.ingestion.listing_row_without_stable_fields", {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+        index,
+      });
+      continue;
+    }
     const captured = await buildPlainTextItem({
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
 
@@ -2139,6 +2261,7 @@ const fetchUnreadableWindow = async (
 ): Promise<Result<SyncPage, AdapterFetchError>> => {
   if (cursor.window > 1) {
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: url,
       nextCursor: encodePlNcourtCursor({
@@ -2157,6 +2280,7 @@ const fetchUnreadableWindow = async (
     return quarantine;
   }
   return Result.ok({
+    observations: [],
     decisions: [buildPlNcourtQuarantine(quarantine.value)],
     sourceUrl: url,
     nextCursor: encodePlNcourtCursor({
@@ -2261,6 +2385,7 @@ const plNcourtFetchPage = async (
     parsed.lane === "tip" && parsed.offset === 0 && parsed.anchor === "";
   if (lapStart && parsed.from >= today()) {
     return Result.ok({
+      observations: [],
       decisions: [],
       nextCursor: encodePlNcourtCursor(parsed),
     });
@@ -2281,6 +2406,7 @@ const plNcourtFetchPage = async (
       found: listed.value.found ?? "",
     });
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: listed.value.url,
       nextCursor: encodePlNcourtCursor({
@@ -2308,6 +2434,7 @@ const plNcourtFetchPage = async (
   }
   const { decisions, itemBuildFailures, supplements, read } = built.value;
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}
@@ -2341,14 +2468,16 @@ const sliceQuery = (slice: string): Record<string, string> => ({
   sort: SORT_BY_SIGNATURE,
 });
 
-/** How the ingest keys a listed row: its id, or its content fingerprint. */
-const plNcourtListingIdentity = (row: PlNcourtListingRow): ListingIdentity => {
-  const sourceDocumentId =
-    row.id !== undefined && isPersistableSourceDocumentId(row.id)
-      ? row.id
-      : plNcourtRowFingerprintId(row);
+/**
+ * How the ingest keys a listed row: its id, or its content fingerprint;
+ * `undefined` for a row stating no stable field, which no identity can name.
+ */
+const plNcourtListingIdentity = (
+  row: PlNcourtListingRow,
+): ListingIdentity | undefined => {
+  const sourceDocumentId = plNcourtRowIdentity(row);
   return sourceDocumentId === undefined
-    ? { type: "unidentifiable" }
+    ? undefined
     : { type: "document", sourceDocumentId };
 };
 
@@ -2396,17 +2525,27 @@ const listSliceWindow = async ({
     }
     return Result.ok({
       total: listing.total,
-      items: listing.fragments.map((listingXml, index) => {
+      items: listing.fragments.flatMap((listingXml, index) => {
+        const identity = plNcourtListingIdentity(
+          listing.rows[index] ?? panic("a listed row lost its reading"),
+        );
+        // Unreachable while the stray check above holds: a row dated the
+        // slice states its date, a fingerprint field. Logged, not keyed, if
+        // that ever changes: a row with no stable field has no identity to
+        // invent (case-law AGENTS.md rule 20).
+        if (identity === undefined) {
+          logger.warn("case_law.ingestion.listing_row_without_stable_fields", {
+            adapterKey: ADAPTER_KEYS.PL_NCOURT,
+            slice,
+            offset: offset + index,
+          });
+          return [];
+        }
         const payload: SlicePayload = {
           listingXml,
           positionAlias: positionAliasOf(query, listing.rows, index),
         };
-        return {
-          identity: plNcourtListingIdentity(
-            listing.rows[index] ?? panic("a listed row lost its reading"),
-          ),
-          payload,
-        };
+        return [{ identity, payload }];
       }),
     });
   }
@@ -2421,15 +2560,15 @@ const listSliceWindow = async ({
       return quarantine;
     }
     const payload: SlicePayload = { quarantine: quarantine.value };
-    const { sourceDocumentId } = buildPlNcourtQuarantine(quarantine.value);
     return Result.ok({
       total: undefined,
       items: [
         {
-          identity:
-            sourceDocumentId === undefined
-              ? { type: "unidentifiable" }
-              : { type: "document", sourceDocumentId },
+          // The id its audit row is stored under, by the same function.
+          identity: {
+            type: "document",
+            sourceDocumentId: plNcourtPositionId(positionOf(quarantine.value)),
+          },
           payload,
         },
       ],
@@ -2475,6 +2614,7 @@ const listPlNcourtSlicePage = async ({
   }
   const { items, total } = listed.value;
   return {
+    observations: [],
     items,
     // A page every row of which was unservable states no total; it is still
     // a page, and the ones after it are listed.

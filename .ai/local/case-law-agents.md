@@ -576,9 +576,19 @@ net. Publisher identities are opaque and byte-exact: if general text
 sanitization would change an identity, reject the canonical value or discard
 the alias. Never reserve the rewritten value, which may be another document's
 legitimate exact key.
-If a counted row exposes no publisher identity at all, durably quarantine its
-verbatim listing payload under a content-addressed audit identity; do not let
-one poison row pin every later record in the slice. Continue emitting that
+If a counted row exposes no usable publisher identity, retain its verbatim
+listing payload. Existing stable-field quarantine identities continue to use
+`quarantineIdentity` in `lib/legal-search/quarantine-identity.ts`; recovered
+publisher identities emit the same bounded repair-only aliases.
+For SK-US and PL-courts records with no usable stable fields, use
+`quarantinedListingObservation`: its branded object identity is separate from
+canonical decision identities and cannot enter their matching paths. Store
+these records in `case_law_listing_observations`, keyed by source and stable
+listing fingerprint, before advancing crawl or reconciliation progress.
+Unserved listing slots are stored there with the typed `unserved-listing-record`
+reason and the source's slice and offset. Replays preserve the immutable raw
+record. Views may filter observations, but ingestion never drops them.
+For existing stable-field quarantine rows, continue emitting that
 quarantine fingerprint as a repair-only alias after a publisher identity
 recovers, so the repair enriches the audited row instead of inserting a
 duplicate. Repair-only aliases may adopt an existing row only while it is still
@@ -590,9 +600,11 @@ together with the new exact identity, or the recovered observation will hash
 differently from its quarantine row. Do not discard stable discriminators such
 as the docket and sibling counter merely because an older malformed row may
 lack one: use their most specific fingerprint for the quarantine identity and
-emit the bounded combinations of present and absent optional discriminators as
-repair-only aliases after recovery. A low-information form must never be
-reserved as an exact identity.
+emit only bounded combinations that retain a document-specific discriminator
+as repair-only aliases after recovery. The shared quarantine owner qualifies
+these candidates as branded `RepairAlias` values; metadata-only forms remain
+stored observations and never become adoption candidates. A low-information
+form must never be reserved as an exact identity.
 Likewise, preserve the digit string of any numeric publisher component used to
 synthesize an exact alias, or reject it unless it is a safe bounded integer;
 rounding two counters to one JavaScript number silently merges documents. An

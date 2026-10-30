@@ -59,6 +59,12 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -813,13 +819,13 @@ const quarantineSourceDocumentIds = (
       sourceMetadata: data.sourceMetadata,
       sibling: stableSibling,
     });
-    return `ris-quarantine:${hashContent(fingerprint)}`;
+    return `${LEGACY_QUARANTINE_PREFIXES[LEGACY_REPAIR_NAMESPACE.AT_COURTS]}${hashContent(fingerprint)}`;
   });
 };
 
 type RisIdentity = {
   sourceDocumentId: string;
-  sourceDocumentIdRepairAliases: readonly string[] | undefined;
+  sourceDocumentIdRepairAliases: readonly RepairAlias[] | undefined;
   type: "publisher" | "quarantine";
 };
 
@@ -833,6 +839,7 @@ const identityOf = (
     panic("RIS quarantine identity construction failed");
   }
   const sourceDocumentId = sourceDocumentIdOf(item);
+  const data = readDecisionMetadata(source, item);
   return sourceDocumentId === undefined
     ? {
         sourceDocumentId: quarantineId,
@@ -841,7 +848,16 @@ const identityOf = (
       }
     : {
         sourceDocumentId,
-        sourceDocumentIdRepairAliases: quarantineIds,
+        sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+          namespace: LEGACY_REPAIR_NAMESPACE.AT_COURTS,
+          sourceDocumentIds: quarantineIds,
+          stableFields: {
+            court:
+              optionalString(data.sourceMetadata?.["Gericht"]) ??
+              optionalString(data.sourceMetadata?.["EntscheidendeBehoerde"]),
+            caseNumbers: data.caseNumbers.join(" | "),
+          },
+        }),
         type: "publisher",
       };
 };
@@ -1392,6 +1408,7 @@ const listReconciliationSlicePage = async (
     });
   }
   return {
+    observations: [],
     items: listing.items
       .filter((item) => !isExcludedItem(source, item))
       .map((item) => ({
@@ -1558,6 +1575,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           const expectedTotal = state.total ?? page.total;
           if (page.total !== expectedTotal) {
             return {
+              observations: [],
               decisions: [],
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
@@ -1569,6 +1587,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
               dependencies.now(),
             );
             return {
+              observations: [],
               decisions: [],
               nextCursor: encodeCursor(next),
             };
@@ -1598,6 +1617,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           if (state.phase === CURSOR_PHASE.VERIFY) {
             if (state.page < totalPages) {
               return {
+                observations: [],
                 decisions: [],
                 nextCursor: encodeCursor({
                   ...state,
@@ -1613,6 +1633,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
               foreign !== state.expectedForeign
             ) {
               return {
+                observations: [],
                 decisions: [],
                 nextCursor: encodeCursor(restartSliceCursor(state.slice)),
               };
@@ -1623,6 +1644,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
               dependencies.now(),
             );
             return {
+              observations: [],
               decisions: [],
               nextCursor: encodeCursor(next),
             };
@@ -1668,6 +1690,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           const collected = state.collected + decisions.length;
           if (state.page < totalPages) {
             return {
+              observations: [],
               decisions,
               itemBuildFailures,
               nextCursor: encodeCursor({
@@ -1683,11 +1706,13 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           }
           if (collected !== expectedTotal - foreign) {
             return {
+              observations: [],
               decisions: [],
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
           }
           return {
+            observations: [],
             decisions,
             itemBuildFailures,
             nextCursor: encodeCursor({

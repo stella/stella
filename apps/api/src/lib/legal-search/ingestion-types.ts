@@ -11,6 +11,7 @@
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 // parser-output-unchanged: a page may also report listed items whose read did not produce them; built decisions are unchanged.
 // parser-output-unchanged: adapter definitions keep their declared reconciliation types; parsed output is unchanged.
+// parser-output-unchanged: listing identities lose the unkeyed variant; they key ledger rows and never reach a parsed decision.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -63,6 +64,10 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
+import type {
+  ListingObservation,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-observation-types";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import {
   decodeSourceRawEnvelope,
@@ -192,7 +197,7 @@ export type RawIngestionResult = {
    * when unclaimed. Use this for content-addressed repair fingerprints, never
    * for an alternate publisher key.
    */
-  sourceDocumentIdRepairAliases?: readonly string[] | undefined;
+  sourceDocumentIdRepairAliases?: readonly RepairAlias[] | undefined;
   /**
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
@@ -625,7 +630,12 @@ export type SliceCoverage = {
 };
 
 /** A page of ingestion results with an optional cursor. */
-export type SyncPage = {
+type ListingPageBase = {
+  /** Captured evidence is required on every page, including terminal and empty pages. */
+  observations: readonly ListingObservation[];
+};
+
+export type SyncPage = ListingPageBase & {
   decisions: IngestionResult[];
   /** Failed item builds retained as listing-only rows for reconciliation. */
   itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
@@ -1029,18 +1039,20 @@ export const readStoredRawListing = ({
  * the decision identity index: the publisher's own document id where the item
  * carries one, the docket plus its language otherwise.
  *
- * `unidentifiable` is the item an ingest also drops: with nothing to key the
- * decision on it can never be held, so it must not be counted as missing
- * either — a slice that counted it would stay short forever.
+ * There is no variant for an item with nothing to key on (case-law AGENTS.md
+ * rule 20): a record the publisher lists without a usable id is stored under
+ * its quarantine identity (`quarantine-identity.ts`), a `document` identity
+ * like any other, so every listed record is both counted and collected.
  */
 export type ListingIdentity =
   | { type: "document"; sourceDocumentId: string }
-  | { type: "case-number"; caseNumber: string; language: string }
-  | { type: "unidentifiable" };
+  | { type: "case-number"; caseNumber: string; language: string };
 
 /**
  * Mirrors `case_law_reconciliation_items.identity_key`. A key longer than the
  * column cannot be parked, so it cannot be tracked to a fixed point either.
+ * Every persistable identity fits: `source_document_id` and `case_number`
+ * are both bounded at 256 characters.
  */
 const LISTING_IDENTITY_KEY_MAX_LENGTH = 320;
 
@@ -1049,30 +1061,12 @@ const IDENTITY_KEY_PREFIX = {
   CASE_NUMBER: "case-number:",
 } as const;
 
-/**
- * The stable string form of a keyable identity, or `null` when there is none
- * to key on. Both `unidentifiable` and an over-long key answer `null`: they
- * mean the same thing to every caller — this item can be neither looked up
- * nor parked, so it is excluded from what a slice is measured against.
- */
-const unboundedListingIdentityKey = (
-  identity: ListingIdentity,
-): string | null => {
+const unboundedListingIdentityKey = (identity: ListingIdentity): string => {
   switch (identity.type) {
     case "document":
-      return identity.sourceDocumentId.length === 0
-        ? null
-        : `${IDENTITY_KEY_PREFIX.DOCUMENT}${identity.sourceDocumentId}`;
+      return `${IDENTITY_KEY_PREFIX.DOCUMENT}${identity.sourceDocumentId}`;
     case "case-number":
-      // Both halves, because either one empty produces a key the parser
-      // below rejects, and the round-trip is the property this pair exists
-      // to guarantee. An adapter that trims a docket to nothing gets an
-      // unkeyable identity rather than a key nothing can read back.
-      return identity.caseNumber.length === 0 || identity.language.length === 0
-        ? null
-        : `${IDENTITY_KEY_PREFIX.CASE_NUMBER}${identity.language}:${identity.caseNumber}`;
-    case "unidentifiable":
-      return null;
+      return `${IDENTITY_KEY_PREFIX.CASE_NUMBER}${identity.language}:${identity.caseNumber}`;
     default: {
       identity satisfies never;
       return panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
@@ -1080,14 +1074,48 @@ const unboundedListingIdentityKey = (
   }
 };
 
-export const listingIdentityKey = (
+/**
+ * Whether an identity has a key: no empty half, since an empty one produces
+ * a key the parser below rejects, and a key within the column. Adapters
+ * check an identity the publisher states with this at their boundary and
+ * quarantine the record when it fails, so {@link listingIdentityKey} never
+ * meets one that does.
+ */
+export const isKeyableListingIdentity = (
   identity: ListingIdentity,
-): string | null => {
-  const key = unboundedListingIdentityKey(identity);
-  return key !== null && key.length <= LISTING_IDENTITY_KEY_MAX_LENGTH
-    ? key
-    : null;
+): boolean => {
+  switch (identity.type) {
+    case "document":
+      return isPersistableSourceDocumentId(identity.sourceDocumentId);
+    case "case-number":
+      return (
+        identity.caseNumber.length > 0 &&
+        identity.language.length > 0 &&
+        unboundedListingIdentityKey(identity).length <=
+          LISTING_IDENTITY_KEY_MAX_LENGTH
+      );
+    default: {
+      identity satisfies never;
+      return panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
+    }
+  }
 };
+
+/**
+ * The stable string form of an identity.
+ *
+ * Panics on one {@link isKeyableListingIdentity} rejects: adapters quarantine
+ * such a record at their boundary, so meeting one here is an adapter bug, and
+ * skipping it would drop a listed record from both what its slice reports and
+ * what it collects. In a reconciliation walk the panic fails the slice, which
+ * keeps the slice's previous ledger row and records the error.
+ */
+export const listingIdentityKey = (identity: ListingIdentity): string =>
+  isKeyableListingIdentity(identity)
+    ? unboundedListingIdentityKey(identity)
+    : panic(
+        `Listing identity has no key; quarantine it at the adapter boundary: ${identity.type}`,
+      );
 
 /**
  * The identity a key names, or `null` when no current rule produces that key.
@@ -1127,10 +1155,26 @@ export type ReconciliationListingItem = {
   identity: ListingIdentity;
   /** Verbatim listing payload, JSON-serializable; replayed into buildDecision. */
   payload: unknown;
+  /**
+   * For a record keyed on a publisher id: the quarantine ids an id-less
+   * listing of the same record would get, whether or not the adapter emits
+   * them as repair aliases. The walker reports a slice that also lists one
+   * of them as a quarantined record (`quarantinePeerCollisions`).
+   */
+  quarantinePeers?: readonly string[] | undefined;
 };
 
-export type ReconciliationSlicePage = {
+export type ReconciliationSlicePage = ListingPageBase & {
   items: ReconciliationListingItem[];
+  /**
+   * Records the page lists that state no stable field at all (no publisher
+   * id and nothing a quarantine identity could hash, such as a result the
+   * publisher counts but will not serve). There is nothing to key or store
+   * for them, so they are not items, but the publisher listed them: the walk
+   * counts them so coverage shows the gap instead of losing them. Absent
+   * means none.
+   */
+  withoutStableFields?: number | undefined;
   /** 0 where the publisher lists nothing for the slice at all. */
   totalPages: number;
 };
@@ -1343,7 +1387,10 @@ export type SourceTotalProbeFailure =
 /** A failure the adapter detected without a throw. */
 export const sourceTotalProbeFailed = (
   failure: SourceTotalProbeFailure,
-): SourceTotalCount => ({ type: "probe-failed", errorTag: failure });
+): SourceTotalCount => ({
+  type: "probe-failed",
+  errorTag: failure,
+});
 
 /**
  * The count answer for a number an adapter read out of a publisher's payload.

@@ -1,6 +1,7 @@
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: quarantine ids keep their digest under the shared prefix owner; listing identities lose the unkeyed variant, built decisions are unchanged.
 import { panic, Result } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
@@ -105,6 +106,12 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  isQuarantineSourceDocumentId,
+  QUARANTINE_NAMESPACE,
+  quarantineSourceDocumentId,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -673,13 +680,19 @@ const isDocumentUrn = (value: string | undefined): value is string =>
   DOCUMENT_URN.test(value) &&
   isPersistableSourceDocumentId(value);
 
-const QUARANTINE_PREFIX = "pl-uodo-quarantine:";
-
 /**
  * The audit identity of a record that states no usable URN: a digest of the
  * fields that stay the same once the portal fixes the URN, so the recovered
  * record can adopt the quarantined row instead of duplicating it. Undefined
- * for a record stating none of them, which nothing could tell apart.
+ * for a record stating none of them, which nothing could tell apart: what
+ * is left is its day, kind and the one authority's signing line, shared by
+ * every decision it issues that day, and dates the portal adds as the
+ * decision becomes final, so no fingerprint over them names one record.
+ *
+ * The digest is over this null-filled record rather than
+ * `quarantineIdentity`'s, which omits absent fields and collapses spacing:
+ * stored rows carry it, and that helper cannot reproduce it. Only the prefix
+ * is the shared owner's.
  */
 export const plUodoQuarantineId = (row: PlUodoRow): string | undefined => {
   if (
@@ -689,50 +702,56 @@ export const plUodoQuarantineId = (row: PlUodoRow): string | undefined => {
   ) {
     return undefined;
   }
-  return `${QUARANTINE_PREFIX}${hashContent(
-    JSON.stringify({
-      refname: row.refname ?? null,
-      time: row.time ?? null,
-      kind: row.kind ?? null,
-      name: row.name ?? null,
-      title: row.title ?? null,
-      type: row.publicator.type ?? null,
-      subtype: row.publicator.subtype ?? null,
-      country: row.publicator.country ?? null,
-    }),
-  )}`;
+  return quarantineSourceDocumentId(
+    QUARANTINE_NAMESPACE.PL_UODO,
+    hashContent(
+      JSON.stringify({
+        refname: row.refname ?? null,
+        time: row.time ?? null,
+        kind: row.kind ?? null,
+        name: row.name ?? null,
+        title: row.title ?? null,
+        type: row.publicator.type ?? null,
+        subtype: row.publicator.subtype ?? null,
+        country: row.publicator.country ?? null,
+      }),
+    ),
+  );
 };
 
 const isQuarantineId = (sourceDocumentId: string): boolean =>
-  sourceDocumentId.startsWith(QUARANTINE_PREFIX);
+  isQuarantineSourceDocumentId(QUARANTINE_NAMESPACE.PL_UODO, sourceDocumentId);
 
 /**
  * The identity a record is stored under: the portal's document URN, which is
  * what it addresses every content request by and what other records' links
  * name; the quarantine digest where the record states no usable URN, so the
  * row is kept verbatim instead of dropped. Stated once so the crawl and the
- * reconciliation cannot differ.
+ * reconciliation cannot differ. Undefined where neither exists (see
+ * `plUodoQuarantineId`).
  */
-export const plUodoListingIdentity = (row: PlUodoRow): ListingIdentity => {
+export const plUodoListingIdentity = (
+  row: PlUodoRow,
+): ListingIdentity | undefined => {
   if (isDocumentUrn(row.refid)) {
     return { type: "document", sourceDocumentId: row.refid };
   }
   const quarantineId = plUodoQuarantineId(row);
   return quarantineId === undefined
-    ? { type: "unidentifiable" }
+    ? undefined
     : { type: "document", sourceDocumentId: quarantineId };
 };
 
 /**
  * Whether an identity is complete as its record: a court ruling, which the
- * portal files with no text, and a quarantined record, which can hold nothing
- * more until the portal states its URN. The URN names the publisher kind, and
- * the listing carries no other court records, so the identity alone answers.
+ * portal files with no text. The URN names the publisher kind, and the
+ * listing carries no other court records, so the identity alone answers. A
+ * quarantined record is complete too, which the engine reads off every
+ * quarantine identity itself.
  */
 export const plUodoHeldWithoutDetail = (identity: ListingIdentity): boolean =>
   identity.type === "document" &&
-  (identity.sourceDocumentId.startsWith("urn:ndoc:court:pl:") ||
-    isQuarantineId(identity.sourceDocumentId));
+  identity.sourceDocumentId.startsWith("urn:ndoc:court:pl:");
 
 const collapse = (value: string): string => value.replace(/\s+/gu, " ").trim();
 
@@ -1263,11 +1282,24 @@ const caseNumberOf = (
 /** The quarantine digest a keyed record would have had, for a later repair. */
 const repairAliasesOf = (
   row: PlUodoRow,
-): { sourceDocumentIdRepairAliases?: string[] } => {
+): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> => {
   const quarantineId = plUodoQuarantineId(row);
   return quarantineId === undefined
     ? {}
-    : { sourceDocumentIdRepairAliases: [quarantineId] };
+    : {
+        sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+          namespace: QUARANTINE_NAMESPACE.PL_UODO,
+          sourceDocumentIds: [quarantineId],
+          stableFields: {
+            refname: row.refname,
+            name: rulingCourtOf(row) === null ? undefined : row.name,
+            subtype:
+              classifyPlUodoRow(row).type === "authority-decision"
+                ? row.publicator.subtype
+                : undefined,
+          },
+        }),
+      };
 };
 
 /** What every record states, whichever kind it is. */
@@ -1633,7 +1665,7 @@ export const assemblePlUodoDecision = (
     return { type: "skipped", reason: recordClass.reason };
   }
   const identity = plUodoListingIdentity(row);
-  if (identity.type !== "document") {
+  if (identity?.type !== "document") {
     return { type: "unkeyable" };
   }
   const urn = identity.sourceDocumentId;
@@ -1736,7 +1768,7 @@ const reparsePlUodoStoredRaw = (
     part: RAW_PART.LISTING,
     identityOf: (listing) => {
       const identity = plUodoListingIdentity(normalizePlUodoRow(listing));
-      return identity.type === "document"
+      return identity?.type === "document"
         ? identity.sourceDocumentId
         : undefined;
     },
@@ -2261,16 +2293,26 @@ const listPlUodoSlicePage = async ({
     `slice ${slice} page ${page}`,
     tallyPlUodoSkips(rows.map(({ row }) => row)),
   );
-  const items = rows.flatMap(({ payload, row }) =>
-    classifyPlUodoRow(row).type === "skipped"
-      ? []
-      : [{ identity: plUodoListingIdentity(row), payload }],
+  const inScope = rows.filter(
+    ({ row }) => classifyPlUodoRow(row).type !== "skipped",
   );
+  // An in-scope record with no URN and nothing to fingerprint (see
+  // `plUodoQuarantineId`) is left out rather than keyed on a guess, and
+  // counted so the walk reports what the portal listed and nothing could
+  // store. Out-of-scope records are tallied above, by reason.
+  const items = inScope.flatMap(({ payload, row }) => {
+    const identity = plUodoListingIdentity(row);
+    return identity === undefined ? [] : [{ identity, payload }];
+  });
+  const withoutStableFields = inScope.length - items.length;
+  const unstored = withoutStableFields === 0 ? {} : { withoutStableFields };
   if (served === 0) {
-    return { items, totalPages: page };
+    return { observations: [], items, totalPages: page };
   }
   return {
+    observations: [],
     items,
+    ...unstored,
     totalPages: served < LISTING_PAGE_SIZE ? page + 1 : page + 2,
   };
 };
@@ -2357,7 +2399,7 @@ const countPlUodoRecords = async (
     .filter(
       (row) =>
         classifyPlUodoRow(row).type !== "skipped" &&
-        plUodoListingIdentity(row).type === "document",
+        plUodoListingIdentity(row) !== undefined,
     );
   return sourceTotalRead(ingested.length);
 };
@@ -2372,7 +2414,7 @@ const plUodoFetchPage = async (
   const encoded = encodePlUodoCursor(position);
   // Parked on a day that has not closed: this cycle has nothing to ask.
   if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({ observations: [], decisions: [], nextCursor: encoded });
   }
   const listing: Record<string, unknown>[] = [];
   let url = "";
@@ -2412,6 +2454,7 @@ const plUodoFetchPage = async (
       // the records it never reached; the page is read again next cycle, and
       // what was stored is stored again under the same hash.
       return Result.ok({
+        observations: [],
         decisions,
         ...(itemBuildFailures === 0
           ? {}
@@ -2492,6 +2535,7 @@ const plUodoFetchPage = async (
   // A short page is the tip: the crawl parks there until today has closed.
   const reachedTip = listing.length < CRAWL_PAGE_SIZE;
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}

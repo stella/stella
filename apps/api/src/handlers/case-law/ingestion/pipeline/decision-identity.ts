@@ -709,8 +709,9 @@ export const resolveDecisionIdentityTx = async (
       (existingIdentity !== undefined &&
         (observed.sourceDocumentIdAliases?.includes(existingIdentity) ===
           true ||
-          observed.sourceDocumentIdRepairAliases?.includes(existingIdentity) ===
-            true)));
+          observed.sourceDocumentIdRepairAliases?.some(
+            (alias) => alias === existingIdentity,
+          ) === true)));
   const persistedSourceDocumentId = incomingSupersedesExisting
     ? observed.sourceDocumentId
     : (existingIdentity ?? observed.sourceDocumentId);

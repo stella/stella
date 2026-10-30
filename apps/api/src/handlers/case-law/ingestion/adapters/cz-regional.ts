@@ -41,6 +41,7 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
+  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
@@ -101,7 +102,17 @@ import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
+import { isKeyableListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  QuarantineIdentity,
+  QuarantineStableFields,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -530,54 +541,103 @@ const readCzRegionalPage = async (
   return { type: "present", page };
 };
 
-/** Identity fields are read independently of optional metadata validation. */
-const czRegionalIdentityItem = (raw: unknown): CzRegionalApiItem | null => {
-  if (!isRecord(raw)) {
-    return null;
+/**
+ * What one listed row is to this source, read once for the crawl, the
+ * reconciliation build and a re-parse of a stored envelope alike.
+ *
+ * `present` and `unavailable` are keyed rows, the second with optional
+ * metadata in a shape the validator refuses (its identity fields still drive
+ * the document fetch). `quarantined` is a court's record with no usable
+ * identity, stored listing-only under its quarantine id. The last two are
+ * not stored at all: a record no court decided, and a row stating nothing
+ * to key or fingerprint it by.
+ */
+type CzRegionalListingRead =
+  | { type: "present"; item: CzRegionalApiItem; docket: string }
+  | {
+      type: "unavailable";
+      item: CzRegionalApiItem;
+      docket: string;
+      raw: unknown;
+    }
+  | { type: "quarantined"; row: CzRegionalQuarantinedRow }
+  | { type: "not-a-court-decision" }
+  | { type: "no-stable-field" };
+
+const readCzRegionalListingItem = (raw: unknown): CzRegionalListingRead => {
+  const row = czRegionalRowIdentity(raw);
+  switch (row.type) {
+    case "keyed":
+      break;
+    case "quarantined":
+      return { type: "quarantined", row };
+    case "not-a-court-decision":
+    case "no-stable-field":
+      return { type: row.type };
+    default:
+      row satisfies never;
+      return panic("Unhandled regional row identity");
   }
-  const jednaciCislo = raw["jednaciCislo"];
-  const soud = raw["soud"];
-  if (typeof jednaciCislo !== "string" || typeof soud !== "string") {
-    return null;
+  if (isCzRegionalApiItem(raw)) {
+    return { type: "present", item: raw, docket: row.listedDocket };
   }
+  const link = row.record["odkaz"];
   return {
-    jednaciCislo,
-    soud,
-    ...(typeof raw["odkaz"] === "string" ? { odkaz: raw["odkaz"] } : {}),
+    type: "unavailable",
+    item: {
+      jednaciCislo: row.listedDocket,
+      soud: row.court,
+      ...(typeof link === "string" ? { odkaz: link } : {}),
+    },
+    docket: row.listedDocket,
+    raw,
   };
 };
 
-type CzRegionalListingRead =
-  | { type: "present"; item: CzRegionalApiItem }
-  | { type: "unidentifiable" }
-  | { type: "unavailable"; item: CzRegionalApiItem; raw: unknown };
-
-const readCzRegionalListingItem = (raw: unknown): CzRegionalListingRead => {
-  if (isCzRegionalApiItem(raw)) {
-    return { type: "present", item: raw };
-  }
-  const item = czRegionalIdentityItem(raw);
-  return item === null ||
-    czRegionalListingIdentity(item).type === "unidentifiable"
-    ? { type: "unidentifiable" }
-    : { type: "unavailable", item, raw };
+/** A listed row the crawl stores, with how it was read. */
+type CzRegionalListingItem = {
+  raw: unknown;
+  read: Extract<
+    CzRegionalListingRead,
+    { type: "present" | "unavailable" | "quarantined" }
+  >;
 };
 
-type CzRegionalListingItem = { item: CzRegionalApiItem; raw: unknown };
+/** The docket a stored row is reported under, where it states one. */
+const listingDocketOf = ({
+  read,
+}: CzRegionalListingItem): string | undefined =>
+  read.type === "quarantined" ? undefined : read.docket;
 
 const readCzRegionalListingItems = (rows: unknown[]) => {
   const items: CzRegionalListingItem[] = [];
   let failures = 0;
+  let notCourtDecisions = 0;
   for (const row of rows) {
     const read = readCzRegionalListingItem(row);
     switch (read.type) {
       case "present":
-        items.push({ item: read.item, raw: row });
+        items.push({ raw: row, read });
+        continue;
+      case "quarantined":
+        // Rare by construction, and each one is a row the publisher's own
+        // identity failed for, so it is named rather than only counted.
+        logger.warn("case_law.ingestion.listing_identity_quarantined", {
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          sourceDocumentId: read.row.quarantine.sourceDocumentId,
+          reason: read.row.reason,
+        });
+        items.push({ raw: row, read });
+        continue;
+      case "not-a-court-decision":
+        // The ministry's own records share the feed; skipping one is the
+        // source's scope, not a failure to read it.
+        notCourtDecisions += 1;
         continue;
       case "unavailable":
-        items.push({ item: read.item, raw: read.raw });
+        items.push({ raw: row, read });
         break;
-      case "unidentifiable":
+      case "no-stable-field":
         break;
       default:
         read satisfies never;
@@ -588,11 +648,14 @@ const readCzRegionalListingItems = (rows: unknown[]) => {
       new AdapterFetchError({
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
         cursor: null,
-        message: "Invalid listing member",
+        message:
+          read.type === "no-stable-field"
+            ? "Listing member states nothing to key or fingerprint it by"
+            : "Invalid listing member",
       }),
     );
   }
-  return { items, failures };
+  return { items, failures, notCourtDecisions };
 };
 
 /**
@@ -926,19 +989,6 @@ const listingJudges = (
     : [{ role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: printed }];
 };
 
-/**
- * Whether the publisher states a court decided this record.
- *
- * The feed carries the ministry's own administrative decisions beside the
- * courts', marked by a court field reading "not entered" and, in the document
- * payload, a court code of `NONE`. Their identifier is a ministry reference
- * rather than an ECLI, so storing one makes a case-law row whose court is a
- * placeholder and whose ECLI is not one. Refusing them here keeps them out of
- * the corpus and out of what reconciliation counts as missing.
- */
-const isCourtListing = (item: CzRegionalApiItem): boolean =>
-  Boolean(item.soud) && item.soud?.trim() !== COURT_NOT_STATED;
-
 const isCourtDocument = (doc: CzRegionalFinaldoc | null): boolean => {
   const courtCode = doc?.metadata?.courtCode;
   if (courtCode === undefined || courtCode === null) {
@@ -1014,27 +1064,294 @@ export const documentIdFromLink = (
 };
 
 /**
- * The identity the ingest would store for this listing item.
- *
- * Stated once, here, rather than restated by every caller that has to decide
- * whether a listed item is already held: the crawl, the reconciliation loop
- * and the operator repair all key rows the same way, and a second copy of the
- * rule would let them disagree about which rows exist.
+ * A listing value the publisher states: a string with something in it. A
+ * blank value states nothing, so it cannot tell two rows apart.
  */
-export const czRegionalListingIdentity = (raw: unknown): ListingIdentity => {
-  const item = czRegionalIdentityItem(raw);
-  if (!item?.jednaciCislo || !isCourtListing(item)) {
-    return { type: "unidentifiable" };
+const statedText = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+/** An identity half as earlier parsers read it: any non-empty string. */
+const nonEmptyText = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0 ? value : undefined;
+
+/**
+ * A listed string array as one stable value. Sorted, because the publisher
+ * states keywords and statutes as a set and nothing promises their order
+ * survives a re-render; a member that is not text states nothing.
+ */
+const statedTextSet = (value: unknown): string | undefined => {
+  if (!isUnknownArray(value)) {
+    return undefined;
   }
-  const sourceDocumentId = documentIdFromLink(item.odkaz ?? undefined);
-  if (sourceDocumentId !== undefined) {
-    return { type: "document", sourceDocumentId };
+  const members = value.flatMap((member) => {
+    const text = statedText(member);
+    return text === undefined ? [] : [text.replace(/\s+/gu, " ").trim()];
+  });
+  return members.length === 0 ? undefined : JSON.stringify(members.toSorted());
+};
+
+/** A listed string array kept as stated, where it is one. */
+const statedList = (value: unknown): readonly string[] | undefined =>
+  isArrayOf(value, (member): member is string => typeof member === "string")
+    ? value
+    : undefined;
+
+/**
+ * The two halves of a row's identity that can be missing from it: the court,
+ * which says the record is a court's, and the docket, which keys a row the
+ * publisher links no document for. Undefined where the row states none that
+ * can serve.
+ */
+type CzRegionalIdentityHalves = {
+  court: string | undefined;
+  docket: string | undefined;
+};
+
+/**
+ * The quarantine identity of a listed row, from the fields the publisher
+ * states the same way every time it lists the record.
+ *
+ * The court and the docket go in where the row states them usably: they are
+ * the strongest discriminators it has, and a quarantined row lacks one or
+ * both. The decision date, the rapporteur, the subject and the keyword and
+ * statute sets are what tell one court's decisions of a day apart. Left out:
+ * the ECLI, which encodes the docket and returns together with it; the
+ * document link, which is the publisher id itself; and the publication date,
+ * which is the day page the row is listed under and moves when the publisher
+ * republishes the record.
+ *
+ * Undefined where the row states none of the record's own fields: a court
+ * name alone is shared by every row of that court, so it is no identity, and
+ * none is invented.
+ */
+const czRegionalQuarantineIdentity = (
+  record: Readonly<Record<string, unknown>>,
+  { court, docket }: CzRegionalIdentityHalves,
+): QuarantineIdentity | undefined => {
+  const recordFields = {
+    docket,
+    decisionDate: statedText(record["datumVydani"]),
+    author: statedText(record["autor"]),
+    subject: statedText(record["predmetRizeni"]),
+    keywords: statedTextSet(record["klicovaSlova"]),
+    statutes: statedTextSet(record["zminenaUstanoveni"]),
+  };
+  if (Object.values(recordFields).every((value) => value === undefined)) {
+    return undefined;
+  }
+  // The field order is part of the digest stored rows carry.
+  const stableFields = {
+    court,
+    ...recordFields,
+  } satisfies QuarantineStableFields;
+  return quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields,
+  });
+};
+
+/** Why a court's listed record is held under its quarantine identity. */
+const CZ_REGIONAL_QUARANTINE_REASON = {
+  COURT_NOT_STATED: "court-not-stated",
+  DOCKET_NOT_USABLE: "docket-not-usable",
+  COURT_AND_DOCKET_NOT_USABLE: "court-and-docket-not-usable",
+} as const;
+
+type CzRegionalQuarantineReason =
+  (typeof CZ_REGIONAL_QUARANTINE_REASON)[keyof typeof CZ_REGIONAL_QUARANTINE_REASON];
+
+type CzRegionalQuarantinedRow = {
+  type: "quarantined";
+  record: Readonly<Record<string, unknown>>;
+  halves: CzRegionalIdentityHalves;
+  quarantine: QuarantineIdentity;
+  reason: CzRegionalQuarantineReason;
+};
+
+type CzRegionalKeyedRow = {
+  type: "keyed";
+  record: Readonly<Record<string, unknown>>;
+  /**
+   * Undefined for one legacy shape only: a court's linkless row whose docket
+   * is empty once trimmed. Earlier parsers stored it under that empty case
+   * number with no publisher id, so the build still does, or the next crawl
+   * would insert a second row beside the stored one. No listing identity can
+   * name an empty case number, so the ledger cannot track it.
+   */
+  identity: ListingIdentity | undefined;
+  court: string;
+  /** The docket exactly as listed, sheet number and all. */
+  listedDocket: string;
+  /** The same docket where it can key a row, for the repair aliases. */
+  usableDocket: string | undefined;
+};
+
+type CzRegionalRowIdentity =
+  | CzRegionalKeyedRow
+  | CzRegionalQuarantinedRow
+  | { type: "not-a-court-decision" }
+  | { type: "no-stable-field" };
+
+/**
+ * How this source keys one listed row: the one rule the listing walk, the
+ * crawl, the reconciliation build, the stored-raw re-parse and the operator
+ * repair all read, so none of them can disagree about which rows exist.
+ *
+ * A court's row with a docket keys on the publisher's document id, or on the
+ * docket where the row links no usable document. A court's row lacking a
+ * usable docket or a court is still the publisher's statement that the record
+ * exists, so it keys on its quarantine identity and is stored listing-only.
+ *
+ * A row whose court reads the publisher's "not entered" placeholder is no
+ * court's record: the feed carries the ministry's own administrative decisions
+ * beside the courts', marked that way and, in the document payload, by a
+ * court code of `NONE`. Their identifier is a ministry reference rather than
+ * an ECLI. They are outside what this source stores, so they are neither
+ * quarantined nor reported as listed: a slice that counted them would report
+ * records the corpus is never meant to hold.
+ */
+const czRegionalRowIdentity = (raw: unknown): CzRegionalRowIdentity => {
+  if (!isRecord(raw)) {
+    return { type: "no-stable-field" };
+  }
+  // Any non-empty string states the half, blank or not: earlier parsers keyed
+  // a row on exactly that, so a row they stored with a whitespace court or
+  // docket keeps its key rather than moving to a quarantine id on replay.
+  const court = nonEmptyText(raw["soud"]);
+  if (court?.trim() === COURT_NOT_STATED) {
+    return { type: "not-a-court-decision" };
+  }
+  const listedDocket = nonEmptyText(raw["jednaciCislo"]);
+  const docketIdentity =
+    listedDocket === undefined
+      ? undefined
+      : ({
+          type: "case-number",
+          caseNumber: splitCaseReference(listedDocket).caseNumber,
+          language: CZ_REGIONAL_LANGUAGE,
+        } satisfies ListingIdentity);
+  // A docket that cannot key a reconciliation item (an over-long one) is no
+  // more usable as the identity than a missing one.
+  const usableDocket =
+    docketIdentity !== undefined && isKeyableListingIdentity(docketIdentity)
+      ? listedDocket
+      : undefined;
+  if (court !== undefined && listedDocket !== undefined) {
+    const link = raw["odkaz"];
+    const sourceDocumentId = documentIdFromLink(
+      typeof link === "string" ? link : undefined,
+    );
+    const documentIdentity: ListingIdentity | undefined =
+      sourceDocumentId === undefined
+        ? undefined
+        : { type: "document", sourceDocumentId };
+    const identity =
+      documentIdentity ??
+      (usableDocket === undefined ? undefined : docketIdentity);
+    // An over-long docket is no such legacy: the write refused it, so no
+    // earlier row exists and it is quarantined like a missing one.
+    const legacyEmptyDocket =
+      documentIdentity === undefined && docketIdentity?.caseNumber === "";
+    if (identity !== undefined || legacyEmptyDocket) {
+      return {
+        type: "keyed",
+        record: raw,
+        identity,
+        court,
+        listedDocket,
+        usableDocket,
+      };
+    }
+  }
+  const halves = { court, docket: usableDocket };
+  const quarantine = czRegionalQuarantineIdentity(raw, halves);
+  if (quarantine === undefined) {
+    return { type: "no-stable-field" };
   }
   return {
-    type: "case-number",
-    caseNumber: splitCaseReference(item.jednaciCislo).caseNumber,
-    language: CZ_REGIONAL_LANGUAGE,
+    type: "quarantined",
+    record: raw,
+    halves,
+    quarantine,
+    reason: quarantineReasonOf(halves),
   };
+};
+
+const quarantineReasonOf = ({
+  court,
+  docket,
+}: CzRegionalIdentityHalves): CzRegionalQuarantineReason => {
+  if (court !== undefined) {
+    return CZ_REGIONAL_QUARANTINE_REASON.DOCKET_NOT_USABLE;
+  }
+  return docket === undefined
+    ? CZ_REGIONAL_QUARANTINE_REASON.COURT_AND_DOCKET_NOT_USABLE
+    : CZ_REGIONAL_QUARANTINE_REASON.COURT_NOT_STATED;
+};
+
+/**
+ * The quarantine identities a keyed observation of this row takes over.
+ *
+ * A court's row is quarantined lacking a usable docket, a court, or both, so
+ * the keyed observation emits the fingerprint of each of those three forms of
+ * itself; one whose identity recovers then adopts its quarantined row instead
+ * of inserting beside it. Repair-only: the pipeline lets them adopt a row
+ * still stored under that identity and never reserves them.
+ */
+const czRegionalRepairAliases = (
+  row: CzRegionalKeyedRow,
+): readonly RepairAlias[] => {
+  const forms: readonly CzRegionalIdentityHalves[] = [
+    { court: row.court, docket: undefined },
+    { court: undefined, docket: row.usableDocket },
+    { court: undefined, docket: undefined },
+  ];
+  return [
+    ...new Set(
+      forms
+        .map((halves) => czRegionalQuarantineIdentity(row.record, halves))
+        .filter((quarantine) => quarantine !== undefined)
+        .flatMap((quarantine) => quarantine.repairAliases),
+    ),
+  ];
+};
+
+/**
+ * How the listing walk and the operator repair see one listed row: the
+ * identity the ingest stores it under, or why the ledger can hold no row for
+ * it. Discriminated on `type` together with {@link ListingIdentity}.
+ *
+ * `no-stable-field` is a row stating nothing a listing identity can name:
+ * one with no field to fingerprint, and the legacy empty-docket row the
+ * crawl still stores under its empty case number (see
+ * {@link CzRegionalKeyedRow}). The walk counts both as records it cannot
+ * key, so coverage shows them instead of a ledger key that would never
+ * match the stored row.
+ */
+export type CzRegionalListedIdentity =
+  | ListingIdentity
+  | { type: "not-a-court-decision" }
+  | { type: "no-stable-field" };
+
+export const czRegionalListingIdentity = (
+  raw: unknown,
+): CzRegionalListedIdentity => {
+  const row = czRegionalRowIdentity(raw);
+  switch (row.type) {
+    case "keyed":
+      return row.identity ?? { type: "no-stable-field" };
+    case "quarantined":
+      return {
+        type: "document",
+        sourceDocumentId: row.quarantine.sourceDocumentId,
+      };
+    case "not-a-court-decision":
+    case "no-stable-field":
+      return { type: row.type };
+    default:
+      row satisfies never;
+      return panic("Unhandled regional row identity");
+  }
 };
 
 /** The plain-text fallbacks the document states, and the row's text. */
@@ -1125,7 +1442,12 @@ const parseDocumentPayload = ({
 
 export type CzRegionalBuildResult =
   | { type: "built"; decision: IngestionResult }
-  /** No docket and court to key on, or a record no court decided. */
+  /**
+   * Not a row this source stores: a record no court decided (by its listing
+   * or by its document), or a row stating nothing to key it by. A court's
+   * row with no usable identity is not this: it is built, listing-only,
+   * under its quarantine identity.
+   */
   | { type: "unkeyable" }
   /**
    * The item links a document and nothing came back for it. The row is built
@@ -1165,7 +1487,10 @@ export const assembleCzRegionalDecision = ({
   document,
   chain,
 }: AssembleCzRegionalOptions): CzRegionalBuildResult => {
-  if (!item.jednaciCislo || !isCourtListing(item)) {
+  // Keyed from the verbatim row, as the listing walk keys it, so the row
+  // built and the identity listed cannot disagree.
+  const row = czRegionalRowIdentity(rawListing);
+  if (row.type !== "keyed") {
     return { type: "unkeyable" };
   }
   const parsedDocument = document?.parsed ?? null;
@@ -1174,7 +1499,7 @@ export const assembleCzRegionalDecision = ({
   }
 
   // This source publishes the docket with the sheet number appended.
-  const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
+  const { caseNumber, sheetNumber } = splitCaseReference(row.listedDocket);
   const publishedDocumentUrl = toOptionalValue(item.odkaz);
   const documentUrl = publishedDocumentUrl
     ? restrictCzRegionalFinaldocUrl(publishedDocumentUrl)
@@ -1221,7 +1546,7 @@ export const assembleCzRegionalDecision = ({
           doc: parsedDocument,
           caseNumber,
           ecli,
-          court: item.soud ?? "",
+          court: row.court,
           decisionDate,
           decisionType,
           sourceUrl: documentUrl?.toString(),
@@ -1234,13 +1559,21 @@ export const assembleCzRegionalDecision = ({
     ...(chain === null ? {} : { [RAW_PART.CHAIN]: chain.raw }),
   });
 
+  const sourceDocumentId =
+    toOptionalValue(parsedDocument?.uuid) ??
+    documentIdFromLink(publishedDocumentUrl);
+  // The pipeline lets a repair alias adopt a row only for an observation
+  // that states a publisher id, so a row keyed on its docket emits none.
+  const repairAliases =
+    sourceDocumentId === undefined ? [] : czRegionalRepairAliases(row);
+
   return {
     type: "built",
     decision: plainTextIngestionResult({
       caseNumber,
       sheetNumber,
       ecli,
-      court: item.soud ?? "",
+      court: row.court,
       country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_REGIONAL].country,
       language: CZ_REGIONAL_LANGUAGE,
       decisionDate,
@@ -1257,9 +1590,10 @@ export const assembleCzRegionalDecision = ({
         : {}),
       ...(judges.length === 0 ? {} : { judges }),
       ...(publisherCitedCases.length === 0 ? {} : { publisherCitedCases }),
-      sourceDocumentId:
-        toOptionalValue(parsedDocument?.uuid) ??
-        documentIdFromLink(publishedDocumentUrl),
+      sourceDocumentId,
+      ...(repairAliases.length === 0
+        ? {}
+        : { sourceDocumentIdRepairAliases: repairAliases }),
       sourceUrl: documentUrl?.toString(),
       documentUrl: documentUrl?.toString(),
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
@@ -1268,9 +1602,9 @@ export const assembleCzRegionalDecision = ({
         sheetNumber,
         // The reference exactly as the court publishes it, docket and sheet
         // together, so the split stays reversible from what we stored.
-        publishedCaseNumber: item.jednaciCislo,
+        publishedCaseNumber: row.listedDocket,
         ecli,
-        court: item.soud,
+        court: row.court,
         decisionDate,
         decisionType,
         author: toOptionalValue(item.autor),
@@ -1312,27 +1646,100 @@ const buildCzRegionalListingFallback = (
   item: CzRegionalApiItem,
   raw: unknown,
 ): CzRegionalBuildResult => {
+  // The verbatim row is the listing part, and what the identity and its
+  // repair aliases are read from, exactly as the listing walk reads it.
   const built = assembleCzRegionalDecision({
     item,
+    rawListing: raw,
     document: null,
     chain: null,
   });
   if (built.type === "unkeyable") {
     return built;
   }
-  const sourceRaw = encodeSourceRawEnvelope({
-    [RAW_PART.LISTING]: JSON.stringify(raw),
-  });
   return {
     type: "built",
     decision: {
       ...built.decision,
       // An unreadable link cannot establish that the publisher has no document.
       isListingOnly: true,
-      sourceRaw,
-      rawHash: sourceFingerprint({ sourceRaw }),
     },
   };
+};
+
+/**
+ * The listing-only row of a court's listed record that states no usable
+ * identity, stored under its quarantine id.
+ *
+ * Built from the listing alone and never asks for a document: with no usable
+ * identity there is nothing to fetch the decision by, and the reconciliation
+ * counts the row held for the same reason. The verbatim row is the envelope's
+ * listing part, so a later parser can repair it, and every field the row
+ * states is kept on it. It is completed when the publisher states the
+ * identity again: that observation emits this id as a repair alias and takes
+ * the row over.
+ */
+const quarantinedCzRegionalDecision = ({
+  record,
+  halves,
+  quarantine,
+  reason,
+}: CzRegionalQuarantinedRow): IngestionResult => {
+  const reference =
+    halves.docket === undefined ? undefined : splitCaseReference(halves.docket);
+  // No docket to cite the row by: the label names the listing it came from,
+  // and is marked as a placeholder so nothing reads it as a case number.
+  const caseNumber =
+    reference?.caseNumber ?? `CZ regional listing ${quarantine.fingerprint}`;
+  const author = statedText(record["autor"]);
+  const decisionDate = statedText(record["datumVydani"]);
+  const link = statedText(record["odkaz"]);
+  const sourceUrl =
+    link === undefined ? undefined : restrictCzRegionalFinaldocUrl(link);
+  const judges = listingJudges(author);
+  const sourceRaw = encodeSourceRawEnvelope({
+    [RAW_PART.LISTING]: JSON.stringify(record),
+  });
+  return plainTextIngestionResult({
+    caseNumber,
+    ...(reference === undefined
+      ? { caseNumberIsPlaceholder: true }
+      : { sheetNumber: reference.sheetNumber }),
+    court: halves.court ?? "",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_REGIONAL].country,
+    language: CZ_REGIONAL_LANGUAGE,
+    decisionDate,
+    isListingOnly: true,
+    ...(judges.length === 0 ? {} : { judges }),
+    sourceDocumentId: quarantine.sourceDocumentId,
+    sourceUrl: sourceUrl?.toString(),
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      caseNumber,
+      ...(reference === undefined
+        ? {}
+        : { sheetNumber: reference.sheetNumber }),
+      publishedCaseNumber: statedText(record["jednaciCislo"]),
+      // The listed identifier stays on the metadata only: an ECLI the row
+      // states beside no usable docket or court is not one to adopt by.
+      ecli: statedText(record["ecli"]),
+      court: halves.court,
+      decisionDate,
+      author,
+      subjectOfProceeding: statedText(record["predmetRizeni"]),
+      publishedDate: statedText(record["datumZverejneni"]),
+      keywords: statedList(record["klicovaSlova"]),
+      mentionedStatutes: statedList(record["zminenaUstanoveni"]),
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: reason,
+    }),
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
 };
 
 /**
@@ -1432,8 +1839,17 @@ export const buildCzRegionalDecision = async (
 ): Promise<CzRegionalBuildResult> => {
   const read = readCzRegionalListingItem(raw);
   switch (read.type) {
-    case "unidentifiable":
+    case "not-a-court-decision":
+    case "no-stable-field":
       return { type: "unkeyable" };
+    // Complete as listed: there is no identity to fetch a document by, so
+    // the listing-only row is the whole observation, and the reconciliation
+    // counts it held rather than waiting on a detail no request can name.
+    case "quarantined":
+      return {
+        type: "built",
+        decision: quarantinedCzRegionalDecision(read.row),
+      };
     case "unavailable": {
       if (read.item.odkaz && restrictCzRegionalFinaldocUrl(read.item.odkaz)) {
         break;
@@ -1451,16 +1867,18 @@ export const buildCzRegionalDecision = async (
       return panic("Unhandled regional listing read");
   }
   const item = read.item;
-  if (!item.jednaciCislo || !isCourtListing(item)) {
-    return { type: "unkeyable" };
-  }
   const publishedDocumentUrl = toOptionalValue(item.odkaz);
   // The publisher linked no document; the listing metadata is all there is,
   // and there is nothing left to ask for, so the row is complete as built.
   if (publishedDocumentUrl === undefined) {
-    return assembleCzRegionalDecision({ item, document: null, chain: null });
+    return assembleCzRegionalDecision({
+      item,
+      rawListing: raw,
+      document: null,
+      chain: null,
+    });
   }
-  const caseNumber = splitCaseReference(item.jednaciCislo).caseNumber;
+  const caseNumber = splitCaseReference(read.docket).caseNumber;
   const finaldoc = finaldocOf({
     read: await fetchFinaldoc(publishedDocumentUrl, caseNumber, signal),
     caseNumber,
@@ -1764,11 +2182,34 @@ const listCzRegionalSlicePage = async ({
     page,
     ...(signal === undefined ? {} : { signal }),
   });
+  const listed: ReconciliationListingItem[] = [];
+  let withoutStableFields = 0;
+  for (const item of items) {
+    const identity = czRegionalListingIdentity(item);
+    switch (identity.type) {
+      case "document":
+      case "case-number":
+        listed.push({ identity, payload: item });
+        break;
+      // Outside what this source stores, so neither a record the slice
+      // reports nor a gap in it: counting it would hold the slice short of a
+      // row the corpus is never meant to have.
+      case "not-a-court-decision":
+        break;
+      // Nothing to key or fingerprint the row by, so no identity is invented
+      // for it; counted, so the walk shows the record as a coverage gap.
+      case "no-stable-field":
+        withoutStableFields += 1;
+        break;
+      default:
+        identity satisfies never;
+        panic("Unhandled regional listing identity");
+    }
+  }
   return {
-    items: items.map((item) => ({
-      identity: czRegionalListingIdentity(item),
-      payload: item,
-    })),
+    observations: [],
+    items: listed,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages,
   };
 };
@@ -2148,12 +2589,28 @@ const reparseCzRegionalStoredRaw = (
   }
   const rawListing = parsedPart(parts, RAW_PART.LISTING);
   const read = readCzRegionalListingItem(rawListing);
-  if (read.type === "unidentifiable") {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      detail: "the stored envelope holds no listing row",
-    };
+  switch (read.type) {
+    case "no-stable-field":
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: "the stored envelope holds no listing row to key it by",
+      };
+    case "not-a-court-decision":
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        detail: "the stored listing row is a record no court decided",
+      };
+    // A quarantined row never held a document: it is its listing.
+    case "quarantined":
+      return reparsedUnder(stored, quarantinedCzRegionalDecision(read.row));
+    case "present":
+    case "unavailable":
+      break;
+    default:
+      read satisfies never;
+      return panic("Unhandled regional listing read");
   }
 
   const documentRaw = parts[RAW_PART.DOCUMENT];
@@ -2175,21 +2632,25 @@ const reparseCzRegionalStoredRaw = (
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-      detail: "the stored listing row states no court and docket",
+      detail: "the stored document states no court decided the record",
     };
   }
-  if (
-    stored.sourceDocumentId !== null &&
-    built.decision.sourceDocumentId !== stored.sourceDocumentId
-  ) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
-      detail: `the envelope names ${built.decision.sourceDocumentId ?? "no id"}, the row ${stored.sourceDocumentId}`,
-    };
-  }
-  return { type: "parsed", result: built.decision };
+  return reparsedUnder(stored, built.decision);
 };
+
+/** The rebuilt decision, provided it names the row it was read from. */
+const reparsedUnder = (
+  stored: StoredRawReparseInput,
+  decision: IngestionResult,
+): StoredRawReparseOutcome =>
+  stored.sourceDocumentId !== null &&
+  decision.sourceDocumentId !== stored.sourceDocumentId
+    ? {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+        detail: `the envelope names ${decision.sourceDocumentId ?? "no id"}, the row ${stored.sourceDocumentId}`,
+      }
+    : { type: "parsed", result: decision };
 
 /**
  * Every payload this service serves for one decision, and whether the row
@@ -2307,21 +2768,48 @@ const buildCzRegionalPageItems = async ({
   // their documents, and the cursor moves on.
   const decisions: IngestionResult[] = [];
   let deferred = 0;
-  const recordUnkeyableRow = (item: CzRegionalApiItem): void => {
+  // The listing already passed every row this source keys or quarantines,
+  // so what the build still refuses is a document stating no court decided
+  // the record.
+  const recordUnkeyableRow = (listing: CzRegionalListingItem): void => {
     refused += 1;
     observeItemBuildFailure(
       new AdapterFetchError({
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
         cursor,
-        message: "Listing row has no decision identity",
+        message: "Listed document states no court decided the record",
       }),
-      item.jednaciCislo ?? undefined,
+      listingDocketOf(listing),
     );
   };
-  const pushListingRow = async ({
-    item,
+  /** The row as listed alone, with no document request. */
+  const listingOnlyBuild = ({
     raw,
-  }: CzRegionalListingItem): Promise<void> => {
+    read,
+  }: CzRegionalListingItem): CzRegionalBuildResult => {
+    switch (read.type) {
+      case "present":
+        return assembleCzRegionalDecision({
+          item: read.item,
+          document: null,
+          chain: null,
+        });
+      case "unavailable":
+        return buildCzRegionalListingFallback(read.item, raw);
+      case "quarantined":
+        return {
+          type: "built",
+          decision: quarantinedCzRegionalDecision(read.row),
+        };
+      default:
+        read satisfies never;
+        return panic("Unhandled regional listing read");
+    }
+  };
+  const pushListingRow = async (
+    listing: CzRegionalListingItem,
+  ): Promise<void> => {
+    const { raw } = listing;
     const attempted = await buildPlainTextItem({
       decisionOf: (value) => {
         switch (value.type) {
@@ -2338,12 +2826,7 @@ const buildCzRegionalPageItems = async ({
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
 
       rawListing: JSON.stringify(raw),
-      build: async () =>
-        await Promise.resolve(
-          isCzRegionalApiItem(raw)
-            ? assembleCzRegionalDecision({ item, document: null, chain: null })
-            : buildCzRegionalListingFallback(item, raw),
-        ),
+      build: async () => await Promise.resolve(listingOnlyBuild(listing)),
     });
     if (attempted.type === "item_build_failed") {
       refused++;
@@ -2352,23 +2835,25 @@ const buildCzRegionalPageItems = async ({
     }
     const listed = attempted.value;
     if (listed.type === "unkeyable") {
-      recordUnkeyableRow(item);
+      recordUnkeyableRow(listing);
       return;
     }
     decisions.push(listed.decision);
   };
   for (const batch of chunkItems(items, FINALDOC_CONCURRENCY)) {
     if (readBudgetSpent()) {
-      deferred += batch.length;
+      // A quarantined row has no document to defer.
+      deferred += batch.filter(
+        ({ read }) => read.type !== "quarantined",
+      ).length;
       for (const item of batch) {
         await pushListingRow(item);
       }
       continue;
     }
     const built = await Promise.all(
-      batch.map(async ({ item, raw }) => ({
-        item,
-        raw,
+      batch.map(async (listing) => ({
+        listing,
         attempt: await Result.tryPromise({
           try: async () => {
             const attempted = await buildPlainTextItem({
@@ -2386,9 +2871,9 @@ const buildCzRegionalPageItems = async ({
               },
               adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
 
-              rawListing: JSON.stringify(raw),
+              rawListing: JSON.stringify(listing.raw),
               build: async () =>
-                await buildCzRegionalDecision(raw, effectiveSignal),
+                await buildCzRegionalDecision(listing.raw, effectiveSignal),
             });
             return attempted.type === "item_build_failed"
               ? attempted
@@ -2414,10 +2899,10 @@ const buildCzRegionalPageItems = async ({
       })),
     );
     signal?.throwIfAborted();
-    for (const { item, raw, attempt } of built) {
+    for (const { listing, attempt } of built) {
       if (Result.isError(attempt) && attempt.error instanceof DOMException) {
         deferred += 1;
-        await pushListingRow({ item, raw });
+        await pushListingRow(listing);
         continue;
       }
       if (Result.isError(attempt)) {
@@ -2432,8 +2917,8 @@ const buildCzRegionalPageItems = async ({
         // the identity is held and the reconciliation asks for the
         // document again (and parks the refusal) instead of losing it.
         const failureCountBeforeFallback = refused;
-        observeItemBuildFailure(attempt.error, item.jednaciCislo ?? undefined);
-        await pushListingRow({ item, raw });
+        observeItemBuildFailure(attempt.error, listingDocketOf(listing));
+        await pushListingRow(listing);
         if (refused === failureCountBeforeFallback) {
           refused++;
         }
@@ -2449,7 +2934,7 @@ const buildCzRegionalPageItems = async ({
       // observation is durable and `isListingOnly` keeps the document
       // in what a later reconciliation asks for again.
       if (outcome.type === "unkeyable") {
-        recordUnkeyableRow(item);
+        recordUnkeyableRow(listing);
         continue;
       }
       decisions.push(outcome.decision);
@@ -2651,6 +3136,7 @@ export const czRegionalAdapter = defineSourceAdapter({
             const skip = gapSkipDays(empty);
             const next = advanceDate(state.date, skip);
             return {
+              observations: [],
               decisions: [],
               nextCursor:
                 next <= today
@@ -2667,7 +3153,8 @@ export const czRegionalAdapter = defineSourceAdapter({
             return panic("Unhandled regional page read");
         }
         const json = read.page;
-        const { items, failures } = readCzRegionalListingItems(json.items);
+        const { items, failures, notCourtDecisions } =
+          readCzRegionalListingItems(json.items);
 
         const { decisions, refused, deferred } = await buildCzRegionalPageItems(
           {
@@ -2696,10 +3183,12 @@ export const czRegionalAdapter = defineSourceAdapter({
           date: state.date,
           decisions: decisions.length,
           items: items.length,
+          notCourtDecisions,
           totalMs: fetchMs,
         });
 
         return {
+          observations: [],
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: refused },
           nextCursor: nextCzRegionalListingCursor({

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
@@ -25,7 +25,9 @@ import {
   CYCLE_HALT_REASON,
   INGESTION_STOP_KIND,
 } from "@stll/legal-atlas/ingestion-cycle";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { createSha256 } from "@stll/sha256/node";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -33,6 +35,7 @@ import type { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawListingObservations,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -43,6 +46,7 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
@@ -52,6 +56,7 @@ import {
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { filterQuarantinePeerCollisions } from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
@@ -90,11 +95,19 @@ import type {
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LISTING_OBSERVATION_REASON,
+  QUARANTINE_NAMESPACE,
+  quarantinedListingObservation,
+  quarantineIdentity,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // An insert whose values can be awaited directly or chained into an upsert,
 // as the refresh path does for identifier rows.
@@ -102,6 +115,7 @@ import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 const insertedValues = () =>
   Object.assign(Promise.resolve(undefined), {
     onConflictDoUpdate: async () => await Promise.resolve(undefined),
+    onConflictDoNothing: async () => await Promise.resolve(undefined),
   });
 
 const baseResult = (
@@ -141,26 +155,50 @@ const testSourceLease = (
   source,
 });
 
+type CursorOnlyDbOptions = {
+  onInsert?: (input: { table: unknown; values: unknown }) => void;
+  onRead?: (table: unknown) => void;
+};
+
 const cursorOnlyDb =
-  (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
+  (
+    onCursor: (cursor: string | null | undefined) => void,
+    options: CursorOnlyDbOptions = {},
+  ): ScopedDb =>
   async (callback) => {
     const tx = {
-      insert: () => ({ values: insertedValues }),
+      insert: (table: unknown) => ({
+        values: (values: unknown) => {
+          options.onInsert?.({ table, values });
+          return {
+            onConflictDoUpdate: async () => undefined,
+            onConflictDoNothing: async () => undefined,
+          };
+        },
+      }),
       query: {
-        caseLawDecisions: { findFirst: async () => undefined },
+        caseLawDecisions: {
+          findFirst: async () => {
+            options.onRead?.(caseLawDecisions);
+            return undefined;
+          },
+        },
       },
       select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            for: () => ({ limit: async () => await Promise.resolve([]) }),
-            limit: async () =>
-              await Promise.resolve(
-                table === caseLawSources
-                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                  : [],
-              ),
-          }),
-        }),
+        from: (table: unknown) => {
+          options.onRead?.(table);
+          return {
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                    : [],
+                ),
+            }),
+          };
+        },
       }),
       execute: async () => await Promise.resolve([]),
       update: (table: unknown) => ({
@@ -180,8 +218,8 @@ const cursorOnlyDb =
       }),
     };
 
-    // SAFETY: these cases exercise only the case_law_sources cursor update;
-    // the fake implements that chain.
+    // SAFETY: the fake implements the cursor and observation insert chains
+    // exercised by these cases.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return await callback(tx as unknown as Transaction);
   };
@@ -536,14 +574,18 @@ describe("sanitizeResult — shared publisher identity limits", () => {
         "publisher:fallback",
         "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
       ],
-      sourceDocumentIdRepairAliases: [
-        "publisher:repair",
-        "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-      ],
+      sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+        namespace: QUARANTINE_NAMESPACE.PL_SN,
+        stableFields: { docket: "Fixture reference" },
+        sourceDocumentIds: [
+          "publisher:repair",
+          "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+        ],
+      }),
     });
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:fallback"]);
-    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+    expect(sanitized.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       "publisher:repair",
     ]);
   });
@@ -562,14 +604,18 @@ describe("sanitizeResult — shared publisher identity limits", () => {
       ...baseResult(EMPTY_AST),
       sourceDocumentId: "publisher:canonical",
       sourceDocumentIdAliases: ["publisher:a\u200Bb", "publisher:ab"],
-      sourceDocumentIdRepairAliases: [
-        "publisher:repair\u200Bchanged",
-        "publisher:repair-clean",
-      ],
+      sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+        namespace: QUARANTINE_NAMESPACE.PL_SN,
+        stableFields: { docket: "Fixture reference" },
+        sourceDocumentIds: [
+          "publisher:repair\u200Bchanged",
+          "publisher:repair-clean",
+        ],
+      }),
     });
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:ab"]);
-    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+    expect(sanitized.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       "publisher:repair-clean",
     ]);
   });
@@ -836,7 +882,11 @@ describe("runIngestionPipeline — database timeouts", () => {
 
     const decision = baseResult({});
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [decision], nextCursor: "cursor-2" });
+      Result.ok({
+        observations: [],
+        decisions: [decision],
+        nextCursor: "cursor-2",
+      });
 
     let calls = 0;
     let persistedCursor: string | null | undefined;
@@ -956,19 +1006,26 @@ describe("runIngestionPipeline — failure records", () => {
               }),
           }),
         }),
-        insert: (table: unknown) => ({
-          values: async (rows: FailureRow[]) => {
-            if (table === caseLawDecisions) {
-              state.decisionWrites++;
-              throw new Error("unexpected decision write");
-            }
-            if (insertError !== null) {
-              throw insertError;
-            }
-            state.insertedRows.push(...rows);
-            return await Promise.resolve([]);
-          },
-        }),
+        insert: (table: unknown) => {
+          if (table === caseLawListingObservations) {
+            return {
+              values: () => ({ onConflictDoNothing: async () => undefined }),
+            };
+          }
+          return {
+            values: async (rows: FailureRow[]) => {
+              if (table === caseLawDecisions) {
+                state.decisionWrites++;
+                throw new Error("unexpected decision write");
+              }
+              if (insertError !== null) {
+                throw insertError;
+              }
+              state.insertedRows.push(...rows);
+              return await Promise.resolve([]);
+            },
+          };
+        },
         execute: async () => await Promise.resolve([]),
         update: (table: unknown) => ({
           set: (values: { syncCursor?: string | null }) => {
@@ -1023,7 +1080,11 @@ describe("runIngestionPipeline — failure records", () => {
         [field]: value,
       });
       czNsAdapter.fetchPage = async () =>
-        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+        Result.ok({
+          observations: [],
+          decisions: [input],
+          nextCursor: "cursor-2",
+        });
       // Normalization refuses before the decision write; the ledger insert is
       // the next transaction and must not receive a synthetic write failure.
       const { scopedDb, state } = failingDecisionDb(null, false);
@@ -1065,7 +1126,11 @@ describe("runIngestionPipeline — failure records", () => {
     });
     expect(fitsDecisionSearchCandidateRow(input)).toBe(false);
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+      Result.ok({
+        observations: [],
+        decisions: [input],
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(null, false);
     const result = await runIngestionPipeline({
       acquireStoredTotalAdmission: async () => "held",
@@ -1120,7 +1185,11 @@ describe("runIngestionPipeline — failure records", () => {
         fulltext: citationText,
       });
       czNsAdapter.fetchPage = async () =>
-        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+        Result.ok({
+          observations: [],
+          decisions: [input],
+          nextCursor: "cursor-2",
+        });
       const { scopedDb, state } = failingDecisionDb(null, false);
 
       const result = await runIngestionPipeline({
@@ -1149,6 +1218,7 @@ describe("runIngestionPipeline — failure records", () => {
     const caseNumber = "X".repeat(CITATION_STORAGE_WIDTHS.caseNumber);
     czNsAdapter.fetchPage = async () =>
       Result.ok({
+        observations: [],
         decisions: [
           plainTextIngestionResult({
             ...baseResult({}),
@@ -1186,10 +1256,110 @@ describe("runIngestionPipeline — failure records", () => {
     ).toBe(2);
   });
 
+  test("reports two records a page lists under one quarantine id", async () => {
+    // A quarantine id is only as distinct as the fields it hashes; a second
+    // record under it would replace the first. Each one is reported, a repeat
+    // of the same record and records under publisher ids are not.
+    const source = caseLawSourceRow({ name: "Quarantine collision source" });
+    const { sourceDocumentId } = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_NS,
+      stableFields: { docket: "21 Cdo 288/2026" },
+    });
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        observations: [],
+        decisions: [
+          { ...baseResult({}), sourceDocumentId, rawHash: "first" },
+          { ...baseResult({}), sourceDocumentId, rawHash: "first" },
+          { ...baseResult({}), sourceDocumentId, rawHash: "second" },
+          { ...baseResult({}), sourceDocumentId: "unid-a", rawHash: "a" },
+          { ...baseResult({}), sourceDocumentId: "unid-a", rawHash: "b" },
+        ],
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb } = failingDecisionDb(null);
+    logs = installRecordingLogger();
+
+    await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+
+    expect(
+      logs.records
+        .filter(
+          ({ message }) =>
+            message === "case_law.ingestion.quarantine_collision",
+        )
+        .map(({ attributes }) => ({
+          sourceDocumentId: attributes?.["sourceDocumentId"],
+          collidingRecords: attributes?.["collidingRecords"],
+        })),
+    ).toEqual([{ sourceDocumentId, collidingRecords: 1 }]);
+  });
+
+  test("withholds unproven repair aliases without reporting a peer collision", async () => {
+    const source = caseLawSourceRow({ name: "Quarantine peer source" });
+    const { sourceDocumentId, repairAliases } = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.PL_SN,
+      stableFields: { docket: "Fixture reference" },
+    });
+    const [repairAlias] = repairAliases;
+    if (repairAlias === undefined) {
+      panic("the PL-SN docket supplies an eligible repair alias");
+    }
+    const decisions = [
+      {
+        ...baseResult({}),
+        sourceDocumentId: "unid-a",
+        sourceDocumentIdRepairAliases: repairAliases,
+      },
+      { ...baseResult({}), sourceDocumentId },
+    ];
+    const filtered = filterQuarantinePeerCollisions({
+      decisions,
+      proof: { type: "no-listing-proof" },
+    });
+    expect(decisions[0]?.sourceDocumentIdRepairAliases).toEqual([repairAlias]);
+    expect(filtered.collidingIds).toEqual([]);
+    expect(filtered.decisions[0]?.sourceDocumentIdRepairAliases).toEqual([]);
+
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        observations: [],
+        decisions,
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb } = failingDecisionDb(null);
+    logs = installRecordingLogger();
+
+    await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+
+    expect(
+      logs.records.filter(
+        ({ message }) =>
+          message === "case_law.ingestion.quarantine_peer_collision",
+      ),
+    ).toEqual([]);
+  });
+
   test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        observations: [],
+        decisions: [baseResult({})],
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("22021"));
     logs = installRecordingLogger();
 
@@ -1216,7 +1386,11 @@ describe("runIngestionPipeline — failure records", () => {
   test("holds the source cursor when the failure record write meets a serialization failure", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        observations: [],
+        decisions: [baseResult({})],
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("40001"));
 
     const result = await runIngestionPipeline({
@@ -1247,7 +1421,11 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     const controller = new AbortController();
     czNsAdapter.fetchPage = async () => {
       controller.abort();
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        observations: [],
+        decisions: [],
+        nextCursor: "cursor-2",
+      });
     };
 
     let acquires = 0;
@@ -1342,7 +1520,11 @@ describe("runIngestionPipeline — document observer failures", () => {
               fetch: async () => new Response("document"),
             });
           }
-          return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+          return Result.ok({
+            observations: [],
+            decisions: [],
+            nextCursor: "cursor-2",
+          });
         },
       });
       czNsAdapter.fetchPage = wrappedAdapter.fetchPage;
@@ -1517,6 +1699,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     czNsAdapter.fetchPage = async () =>
       Result.ok({
+        observations: [],
         decisions: [
           { ...baseResult(EMPTY_AST), sourceRaw: "<html>source</html>" },
         ],
@@ -1607,7 +1790,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        observations: [],
+        decisions: [],
+        nextCursor: "cursor-2",
+      });
     };
 
     let persistedCursor: string | null | undefined;
@@ -1638,7 +1825,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        observations: [],
+        decisions: [],
+        nextCursor: "cursor-2",
+      });
     };
 
     // The production lease renews itself before the request. This one ends
@@ -1680,7 +1871,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: null });
+      return Result.ok({ observations: [], decisions: [], nextCursor: null });
     };
 
     let persistedCursor: string | null | undefined;
@@ -2294,3 +2485,175 @@ describe("processDecision — source raw upload failure", () => {
     expect(failure?.attributes?.["error.code"]).toBe("AccessDenied");
   });
 });
+
+test("a no-id observation is durable before the cursor and never enters canonical identity reads", async () => {
+  const source = caseLawSourceRow({
+    adapterKey: ADAPTER_KEYS.SK_US,
+    name: "Observation source",
+  });
+  const observation = quarantinedListingObservation({
+    source: "sk-us",
+    payload: { documentId: null, preserved: "Publisher statement" },
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
+  const original = skUsAdapter.fetchPage;
+  const events: string[] = [];
+  try {
+    skUsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [],
+        observations: [observation],
+        nextCursor: "cursor-2",
+      });
+    const scopedDb = cursorOnlyDb(
+      (cursor) => {
+        events.push(`cursor:${String(cursor)}`);
+      },
+      {
+        onInsert: ({ table, values }) => {
+          expect(table).toBe(caseLawListingObservations);
+          expect(values).toMatchObject([
+            { sourceId: source.id, payload: { listing: observation.payload } },
+          ]);
+          events.push("observation");
+        },
+        onRead: (table) => {
+          if (
+            table === caseLawDecisions ||
+            table === caseLawDecisionIdentifiers
+          ) {
+            return expect.unreachable(
+              "A no-id observation entered the canonical identity path",
+            );
+          }
+        },
+      },
+    );
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+      acquireStoredTotalAdmission: async () => "held",
+    });
+    expect(result.inserted).toBe(0);
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(events).toEqual(["observation", "cursor:cursor-2"]);
+  } finally {
+    skUsAdapter.fetchPage = original;
+  }
+});
+
+test("an observation write failure prevents cursor progress", async () => {
+  const source = caseLawSourceRow({
+    adapterKey: ADAPTER_KEYS.SK_US,
+    name: "Observation source",
+  });
+  const observation = quarantinedListingObservation({
+    source: "sk-us",
+    payload: null,
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
+  const original = skUsAdapter.fetchPage;
+  const cursors: (string | null | undefined)[] = [];
+  const failure = new SQL.PostgresError("Observation write refused", {
+    code: "42501",
+  });
+  try {
+    skUsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [],
+        observations: [observation],
+        nextCursor: "cursor-2",
+      });
+    const scopedDb = cursorOnlyDb(
+      (cursor) => {
+        cursors.push(cursor);
+      },
+      {
+        onInsert: () => {
+          throw failure;
+        },
+      },
+    );
+    expect(
+      await rejectionOf(
+        runIngestionPipeline({
+          source,
+          sourceLease: testSourceLease(source),
+          scopedDb,
+          maxPages: 1,
+          acquireStoredTotalAdmission: async () => "held",
+        }),
+      ),
+    ).toBe(failure);
+    expect(cursors).toEqual([]);
+  } finally {
+    skUsAdapter.fetchPage = original;
+  }
+});
+
+test.each(["historical-year", "current-year"] as const)(
+  "a terminal SK-US %s page stores its only observation before advancing",
+  async (mode) => {
+    const currentYear = Temporal.Now.plainDateISO().year;
+    const year = mode === "historical-year" ? 1993 : currentYear;
+    const nextCursor = year < currentYear ? `${year + 1}:0` : `${year}:1`;
+    const source = caseLawSourceRow({
+      adapterKey: ADAPTER_KEYS.SK_US,
+      syncCursor: `${year}:0`,
+      name: "Terminal observation source",
+    });
+    const originalFetch = globalThis.fetch;
+    const events: string[] = [];
+    try {
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        expect(url.pathname).toBe("/o/v1/dms/search");
+        return Response.json({ documents: [{}], numFound: 1 });
+      });
+      const scopedDb = cursorOnlyDb(
+        (cursor) => {
+          events.push(`cursor:${cursor}`);
+        },
+        {
+          onInsert: ({ table, values }) => {
+            expect(table).toBe(caseLawListingObservations);
+            expect(values).toMatchObject([
+              {
+                sourceId: source.id,
+                reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+                payload: { listing: {} },
+              },
+            ]);
+            events.push("observation");
+          },
+          onRead: (table) => {
+            if (
+              table === caseLawDecisions ||
+              table === caseLawDecisionIdentifiers
+            ) {
+              return expect.unreachable(
+                "An observation entered canonical identity matching",
+              );
+            }
+          },
+        },
+      );
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.inserted).toBe(0);
+      expect(result.nextCursor).toBe(nextCursor);
+      expect(events).toEqual(["observation", `cursor:${nextCursor}`]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+);

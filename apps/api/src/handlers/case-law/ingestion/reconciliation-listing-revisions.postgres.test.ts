@@ -144,8 +144,7 @@ const withFixture = async (
         checkedAt: new Date(now.getTime() - 2 * DAY_IN_MS),
       });
       const key = (id: string) =>
-        listingIdentityKey({ type: "document", sourceDocumentId: id }) ??
-        panic("Fixture identity must be keyable");
+        listingIdentityKey({ type: "document", sourceDocumentId: id });
       await work({
         db,
         scopedDb,
@@ -219,6 +218,7 @@ const publisher = (
   nextSlice: () => null,
   previousSlice: () => null,
   listSlicePage: async () => ({
+    observations: [],
     items: payloads.map((payload) => ({
       identity: { type: "document", sourceDocumentId: payload.documentId },
       payload,
@@ -330,6 +330,7 @@ describe.skipIf(!enabled)(
               sliceOf: () => fixture.slice,
               revisionOf: listing.revisionOf,
               listSlicePage: async () => ({
+                observations: [],
                 items: [
                   {
                     identity: {
@@ -346,6 +347,7 @@ describe.skipIf(!enabled)(
             await fixture.walk({
               ...reconciliation,
               listSlicePage: async () => ({
+                observations: [],
                 items: [
                   {
                     identity: {
@@ -647,11 +649,10 @@ describe.skipIf(!enabled)(
             const resolved = await resolveReconciliationItem(fixture.scopedDb, {
               sourceId: fixture.sourceId,
               leaseToken: crawlLease.leaseToken,
-              identityKey:
-                listingIdentityKey({
-                  type: "document",
-                  sourceDocumentId: id,
-                }) ?? panic("Missing identity key"),
+              identityKey: listingIdentityKey({
+                type: "document",
+                sourceDocumentId: id,
+              }),
               payload: correctedPayload(id),
             });
             expect(resolved.outcome).toBe("recorded");

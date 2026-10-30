@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "AT_COURTS",
   "key": "at-courts",
-  "parserVersion": 9,
+  "parserVersion": 10,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."
+    "reason": "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl."
   }
 }

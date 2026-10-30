@@ -12,12 +12,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   encodePlSnCursor,
   normalizePlSnListingItem,
   parsePlSnCursor,
+  PL_SN_LISTED_ONLY_REASON,
   plSnAdapter,
   plSnDecidingCourt,
   plSnDecisionType,
@@ -61,6 +65,22 @@ const recordedDecision = async (): Promise<IngestionResult> => {
     throw new TypeError("the recorded page holds no decision");
   }
   return plainTextIngestionResult(decision);
+};
+
+const QUARANTINE_ID = /^pl-sn-quarantine:[0-9a-f]{64}$/u;
+
+/** A listed row whose id the listing does not state. */
+const IDLESS_ROW = {
+  sygnatura_sprawy: "I CSK 1/94",
+  data_wydania: "1994-03-02",
+  forma_orzeczenia: "wyrok SN",
+} as const;
+
+const quarantineIdOf = (row: Record<string, unknown>): string => {
+  const identity = plSnListingIdentity(normalizePlSnListingItem(row));
+  return identity?.type === "document"
+    ? identity.sourceDocumentId
+    : panic("the row has no document identity");
 };
 
 const envelope = (payload: unknown): string =>
@@ -142,16 +162,43 @@ describe("Supreme Court dockets", () => {
       plSnListingIdentity(normalizePlSnListingItem(row)),
     );
 
-    expect(identities.every(({ type }) => type === "document")).toBe(true);
+    expect(identities.every((identity) => identity?.type === "document")).toBe(
+      true,
+    );
   });
 
-  test("a row with no id falls back to its docket, and one with neither is unidentifiable", () => {
-    expect(plSnListingIdentity({ sygnatura_sprawy: "I CSK 1/26" })).toEqual({
-      type: "case-number",
-      caseNumber: "I CSK 1/26",
-      language: "pl",
-    });
-    expect(plSnListingIdentity({})).toEqual({ type: "unidentifiable" });
+  test("a row with no usable id is quarantined on its docket, date and form", () => {
+    const listed = {
+      sygnatura_sprawy: "I CSK 1/26",
+      data_wydania: "2026-01-14",
+      forma_orzeczenia: "wyrok SN",
+    };
+    const idless = plSnListingIdentity(listed);
+    expect(idless?.type === "document" ? idless.sourceDocumentId : "").toMatch(
+      QUARANTINE_ID,
+    );
+    // An id too long to store is no id: the same record, the same identity.
+    expect(plSnListingIdentity({ ...listed, id: "x".repeat(300) })).toEqual(
+      idless,
+    );
+    // Re-rendered spacing is the same record; another date is another one.
+    expect(
+      plSnListingIdentity({ ...listed, sygnatura_sprawy: " I  CSK 1/26 " }),
+    ).toEqual(idless);
+    expect(
+      plSnListingIdentity({ ...listed, data_wydania: "2026-01-15" }),
+    ).not.toEqual(idless);
+  });
+
+  test("a row with neither an id nor a docket has no identity", () => {
+    expect(plSnListingIdentity({})).toBeUndefined();
+    expect(
+      plSnListingIdentity({
+        sygnatura_sprawy: "  ",
+        data_wydania: "2026-01-14",
+        forma_orzeczenia: "wyrok SN",
+      }),
+    ).toBeUndefined();
   });
 });
 
@@ -281,6 +328,54 @@ describe("listing one decision date", () => {
     expect(page.totalPages).toBeGreaterThan(4);
   });
 
+  test("a row with no id is listed under its quarantine identity and built whole", async () => {
+    answerWith((url) => {
+      const listing = url.searchParams.get("task") === "searchOrzeczenia";
+      return jsonResponse(envelope(listing ? [IDLESS_ROW] : []));
+    });
+
+    const page = await plSnAdapter.reconciliation.listSlicePage({
+      slice: "1994-03-02",
+      page: 0,
+    });
+    expect(page.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: quarantineIdOf(IDLESS_ROW) },
+    ]);
+    expect(page.withoutStableFields).toBeUndefined();
+
+    const built = await plSnAdapter.reconciliation.buildDecision(
+      page.items[0]?.payload,
+    );
+    expect(built.type).toBe("built");
+    expect(
+      built.type === "built" &&
+        built.decision.sourceDocumentId === quarantineIdOf(IDLESS_ROW) &&
+        built.decision.isListingOnly === true,
+    ).toBe(true);
+  });
+
+  test("a row with neither an id nor a docket is left out, and the page still counts", async () => {
+    const rows = [
+      { data_wydania: "2025-06-11", forma_orzeczenia: "wyrok SN" },
+      ...Array.from({ length: 99 }, (_unused, index) => ({
+        id: `id-${index}`,
+        sygnatura_sprawy: `I CSK ${index}/25`,
+        forma_orzeczenia: "wyrok SN",
+      })),
+    ];
+    answerWith(() => jsonResponse(envelope(rows)));
+
+    const page = await plSnAdapter.reconciliation.listSlicePage({
+      slice: "2025-06-11",
+      page: 0,
+    });
+
+    expect(page.items).toHaveLength(99);
+    expect(page.withoutStableFields).toBe(1);
+    // The publisher served a full page, so there is more to ask for.
+    expect(page.totalPages).toBe(2);
+  });
+
   test("a date the publisher lists nothing for has no pages", async () => {
     answerWith(() => jsonResponse(envelope([])));
 
@@ -289,7 +384,7 @@ describe("listing one decision date", () => {
       page: 0,
     });
 
-    expect(page).toEqual({ items: [], totalPages: 0 });
+    expect(page).toEqual({ observations: [], items: [], totalPages: 0 });
   });
 
   test("the window error the proxy wraps in a 200 fails the slice", async () => {
@@ -552,6 +647,63 @@ describe("walking decision-date months oldest first", () => {
 
     expect(decision?.isListingOnly).toBe(true);
     expect(decision?.sourceDocumentId).toBe("x");
+  });
+
+  test("a listed row with no id is stored listing-only under its quarantine identity, asking for nothing more", async () => {
+    sourceHolding("1994-03", [IDLESS_ROW]);
+    const tasks: string[] = [];
+    const served = globalThis.fetch;
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      tasks.push(url.searchParams.get("task") ?? "");
+      return await served(input);
+    });
+
+    const { decisions } = await walk("1994-03:0");
+    const [decision] = decisions;
+
+    expect(decisions).toHaveLength(1);
+    expect(decision?.sourceDocumentId).toBe(quarantineIdOf(IDLESS_ROW));
+    expect(decision).toMatchObject({
+      isListingOnly: true,
+      caseNumber: "I CSK 1/94",
+      decisionDate: "1994-03-02",
+      metadata: {
+        identityQuarantined: true,
+        listedOnlyReason: PL_SN_LISTED_ONLY_REASON.IDENTITY_UNAVAILABLE,
+      },
+    });
+    expect(decision?.caseNumberIsPlaceholder).toBeUndefined();
+    expect(
+      JSON.parse(
+        decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["listing"] ?? "",
+      ),
+    ).toEqual(IDLESS_ROW);
+    expect(tasks.filter((task) => task !== "searchOrzeczenia")).toEqual([]);
+  });
+
+  test("the row, once the listing states its id, can adopt the quarantined one", async () => {
+    sourceHolding("1994-03", [{ ...IDLESS_ROW, id: "x" }]);
+
+    const [decision] = (await walk("1994-03:0")).decisions;
+
+    expect(decision?.sourceDocumentId).toBe("x");
+    expect(decision?.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+      quarantineIdOf(IDLESS_ROW),
+    ]);
+  });
+
+  test("a listed id with no docket is stored under a placeholder, not dropped", async () => {
+    sourceHolding("1994-03", [{ id: "x", forma_orzeczenia: "wyrok SN" }]);
+
+    const [decision] = (await walk("1994-03:0")).decisions;
+
+    expect(decision).toMatchObject({
+      sourceDocumentId: "x",
+      caseNumber: "x",
+      caseNumberIsPlaceholder: true,
+    });
+    expect(decision?.sourceDocumentIdRepairAliases).toBeUndefined();
   });
 });
 

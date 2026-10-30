@@ -23,6 +23,7 @@ import {
   caseLawCoverageSlices,
   caseLawDecisions,
   caseLawDecisionSupplements,
+  caseLawListingObservations,
   caseLawReconciliationItems,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
@@ -71,6 +72,11 @@ import type {
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -153,14 +159,12 @@ const LISTING_ITEMS = [
       "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000002",
   },
 ] satisfies [unknown, unknown];
-const DOCUMENT_KEYS = LISTING_ITEMS.map(
-  ({ odkaz }) =>
-    listingIdentityKey({
-      type: "document",
-      sourceDocumentId:
-        odkaz.split("/").at(-1) ??
-        panic("Fixture URL needs a document identity"),
-    }) ?? panic("Fixture document identity must be keyable"),
+const DOCUMENT_KEYS = LISTING_ITEMS.map(({ odkaz }) =>
+  listingIdentityKey({
+    type: "document",
+    sourceDocumentId:
+      odkaz.split("/").at(-1) ?? panic("Fixture URL needs a document identity"),
+  }),
 );
 const FIXTURE_CASE_NUMBERS = ["999 C 1/2099", "999 Cm 2/2099"] as const;
 const FIXTURE_COURT = "Fixture court A";
@@ -209,6 +213,7 @@ const stubReconciliation: SourceReconciliation = {
   listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
     listed.push(options);
     return await Promise.resolve({
+      observations: [],
       items: LISTING_ITEMS.map((item) => ({
         identity: {
           type: "document",
@@ -237,7 +242,11 @@ const unwalkableSliceStub: SourceReconciliation = {
         cursor: options.slice,
       });
     }
-    return await Promise.resolve({ items: [], totalPages: 1 });
+    return await Promise.resolve({
+      observations: [],
+      items: [],
+      totalPages: 1,
+    });
   },
 };
 
@@ -288,6 +297,7 @@ const caseNumberStub: SourceReconciliation = {
   listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
     listed.push(options);
     return await Promise.resolve({
+      observations: [],
       items: FIXTURE_CASE_NUMBERS.map((caseNumber) => ({
         identity: {
           type: "case-number",
@@ -349,9 +359,10 @@ const seedTerminalItem = async (
     id: createSafeId<"caseLawReconciliationItem">(),
     sourceId,
     slice,
-    identityKey:
-      listingIdentityKey({ type: "document", sourceDocumentId: slice }) ??
-      slice,
+    identityKey: listingIdentityKey({
+      type: "document",
+      sourceDocumentId: slice,
+    }),
     payload: {},
     status: RECONCILIATION_ITEM_STATUS.TERMINAL,
     attempts: 6,
@@ -464,7 +475,7 @@ test("an aborted reconciliation backoff sleep returns immediately", async () => 
     ...stubReconciliation,
     listSlicePage: async () => {
       fetches += 1;
-      return { items: [], totalPages: 2 };
+      return { observations: [], items: [], totalPages: 2 };
     },
   };
   const pending = runUnitWith({
@@ -991,11 +1002,10 @@ test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
       checkedAt: addUtcDays(NOW, -2),
     });
 
-    const staleTerminalKey =
-      listingIdentityKey({
-        type: "document",
-        sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
-      }) ?? "";
+    const staleTerminalKey = listingIdentityKey({
+      type: "document",
+      sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
+    });
     // The retained payload could still build, but the publisher withdrew it.
     const withdrawnPayload = { withdrawn: true };
     const originalDueAt = addUtcDays(NOW, 1);
@@ -1083,6 +1093,54 @@ test("a completed walk drops every withdrawn parked row past one prune batch", a
   expect(builds).toEqual(LISTING_ITEMS);
 });
 
+test("a parked key no rule wrote is reported and counted failed, never guessed", async () => {
+  // Every parked key comes from `listingIdentityKey`, so one the parser cannot
+  // read is a bug. Guessing an identity for it would ask about the wrong row,
+  // and throwing would hold every other due retry of the source behind it.
+  const sourceId = await seedSource();
+  const dueAt = new Date(NOW.getTime() - 60 * 60 * 1000);
+  const unparseableKey = "legacy:7201";
+  await seedItem(sourceId, unparseableKey, {
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+    attempts: 2,
+    payload: { legacy: true },
+    nextAttemptAt: dueAt,
+  });
+  await seedItem(sourceId, DOCUMENT_KEYS[0] ?? panic("Fixture key"), {
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+    attempts: 2,
+    payload: LISTING_ITEMS[0],
+    nextAttemptAt: dueAt,
+  });
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries", keyable: 2, failed: 1 },
+  });
+  expect(builds).toEqual([LISTING_ITEMS[0]]);
+  const reported = logs
+    .at("ERROR")
+    .find(
+      ({ message }) =>
+        message === "case_law.reconciliation.parked_identity_key_unparseable",
+    );
+  expect(reported?.attributes?.["identityKey"]).toBe(unparseableKey);
+  // Retired, not left due: due parked items are planned before every walk,
+  // so a row that stayed due would take a retry slot on every visit forever.
+  expect(
+    await db
+      .select({ identityKey: caseLawReconciliationItems.identityKey })
+      .from(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          eq(caseLawReconciliationItems.identityKey, unparseableKey),
+        ),
+      )
+      .limit(1),
+  ).toEqual([]);
+});
+
 test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
   "a failed partial listing preserves tracked %s rows",
   async (status) => {
@@ -1121,7 +1179,7 @@ test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
             cursor: OWED_SLICE,
           });
         }
-        return { items: [], totalPages: 2 };
+        return { observations: [], items: [], totalPages: 2 };
       },
     };
     const rejected = await rejectionOf(runUnit(sourceId, reconciliation));
@@ -1228,7 +1286,11 @@ const refusingSlice = (refused: string): SourceReconciliation => ({
         cursor: options.slice,
       });
     }
-    return await Promise.resolve({ items: [], totalPages: 1 });
+    return await Promise.resolve({
+      observations: [],
+      items: [],
+      totalPages: 1,
+    });
   },
 });
 
@@ -2252,6 +2314,49 @@ test("a merged supplement whose standalone row still stands is listed again", as
   expect(builds).toHaveLength(1);
 });
 
+test("a quarantined record's listing-only row is held where the source requires detail", async () => {
+  // A quarantine identity names no publisher id, so no request could fetch a
+  // detail for it: its listing-only row is the whole record until the id
+  // recovers. A listing-only row under a publisher id is still hunted.
+  const { sourceDocumentId: quarantined } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.PL_SN,
+    stableFields: { docket: "II CSK 12/24", date: "2024-01-04" },
+  });
+  const failed = "0000000000000000000000000000000D";
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  for (const sourceDocumentId of [quarantined, failed]) {
+    await seedDecision({
+      sourceId,
+      caseNumber: sourceDocumentId,
+      sourceDocumentId,
+      isListingOnly: true,
+    });
+  }
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+      listed.push(options);
+      return await Promise.resolve({
+        observations: [],
+        items: [quarantined, failed].map((sourceDocumentId) => ({
+          identity: { type: "document", sourceDocumentId },
+          payload: { refid: sourceDocumentId },
+        })),
+        totalPages: 1,
+      });
+    },
+    heldRequiresDetail: true,
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  expect(builds).toEqual([{ refid: failed }]);
+});
+
 test("a record kind declared complete without a document is held on its record alone", async () => {
   // The data-protection authority's portal lists decisions, whose bodies it
   // serves, beside court rulings it files as records only. Both are stored
@@ -2275,6 +2380,7 @@ test("a record kind declared complete without a document is held on its record a
     listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
       listed.push(options);
       return await Promise.resolve({
+        observations: [],
         items: [decisionUrn, rulingUrn].map((sourceDocumentId) => ({
           identity: { type: "document", sourceDocumentId },
           payload: { refid: sourceDocumentId },
@@ -2330,6 +2436,7 @@ test("a row stating a declared reason for holding no document is held on that re
     listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
       listed.push(options);
       return await Promise.resolve({
+        observations: [],
         items: [scanned, failed, otherReason].map((sourceDocumentId) => ({
           identity: { type: "document", sourceDocumentId },
           payload: { unid: sourceDocumentId },
@@ -2354,9 +2461,12 @@ test("a row stating a declared reason for holding no document is held on that re
 });
 
 /** A decision with no document, as an adapter hands one over. */
-const plainDecision = (sourceDocumentId: string): IngestionResult =>
+const plainDecision = (
+  sourceDocumentId: string,
+  caseNumber: string = sourceDocumentId,
+): IngestionResult =>
   plainTextIngestionResult({
-    caseNumber: sourceDocumentId,
+    caseNumber,
     sourceDocumentId,
     court: FIXTURE_COURT,
     country: "CZE",
@@ -2396,6 +2506,7 @@ test("a held row stating a recheck value is asked for again, and what its page a
     listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
       listed.push(options);
       return await Promise.resolve({
+        observations: [],
         items: [watched, settled].map((sourceDocumentId) => ({
           identity: { type: "document", sourceDocumentId },
           payload: { unid: sourceDocumentId },
@@ -2570,6 +2681,7 @@ test("reconciliation persists registered root and nested URLs without caller sch
       ...stubReconciliation,
       listSlicePage: async () =>
         await Promise.resolve({
+          observations: [],
           items: [
             {
               identity: {
@@ -2621,4 +2733,289 @@ test("reconciliation persists registered root and nested URLs without caller sch
     fake.stop();
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
   }
+});
+
+const quarantineRecoveryFixture = () => {
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.PL_SN,
+    stableFields: { docket: "II CSK 12/24", date: "2024-01-04" },
+  });
+  const peer = "publisher-document-42";
+  return {
+    quarantine,
+    peer,
+    decision: {
+      ...plainDecision(peer, "II CSK 12/24"),
+      sourceDocumentIdRepairAliases: quarantine.repairAliases,
+    },
+  };
+};
+
+const seedQuarantineListingOnlyDecision = async (
+  sourceId: SafeId<"caseLawSource">,
+  sourceDocumentId: string,
+) => {
+  await seedDecision({
+    sourceId,
+    caseNumber: "II CSK 12/24",
+    sourceDocumentId,
+    isListingOnly: true,
+  });
+  const row = (
+    await db
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return row?.id ?? panic("Expected the seeded quarantine row");
+};
+
+const decisionsForSource = async (sourceId: SafeId<"caseLawSource">) =>
+  await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+
+test("a completed reconciliation retains all colliding revisions without rewriting its canonical row", async () => {
+  const { quarantine } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const canonicalId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+  const records = [
+    { record: "first" },
+    { record: "second" },
+    { record: "third" },
+  ];
+  let currentRecords = records.slice(0, 2);
+  const reconciliation: SourceReconciliation = {
+    ...stubReconciliation,
+    listSlicePage: async () => ({
+      observations: [],
+      items: currentRecords.map((payload) => ({
+        identity: {
+          type: "document" as const,
+          sourceDocumentId: quarantine.sourceDocumentId,
+        },
+        payload,
+      })),
+      totalPages: 1,
+    }),
+    heldRequiresDetail: true,
+  };
+  const readEvidence = async () =>
+    await db
+      .select()
+      .from(caseLawListingObservations)
+      .where(eq(caseLawListingObservations.sourceId, sourceId))
+      .orderBy(caseLawListingObservations.fingerprint)
+      .limit(10);
+  const first = await runUnit(sourceId, reconciliation);
+  expect(first).toMatchObject({
+    type: "worked",
+    summary: { keyable: 1, heldBefore: 1, written: 0, unstored: 1 },
+  });
+  const retained = await readEvidence();
+  expect(retained).toHaveLength(2);
+  expect(retained.map(({ payload }) => payload)).toEqual(
+    expect.arrayContaining(
+      records.slice(0, 2).map((record) => ({
+        listing: {
+          quarantineId: quarantine.sourceDocumentId,
+          revision: fingerprintReconciliationPayload(record),
+          record,
+        },
+      })),
+    ),
+  );
+  await db
+    .update(caseLawCoverageSlices)
+    .set({
+      reported: 2,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    })
+    .where(
+      and(
+        eq(caseLawCoverageSlices.sourceId, sourceId),
+        eq(caseLawCoverageSlices.slice, OWED_SLICE),
+      ),
+    );
+  expect(await runUnit(sourceId, reconciliation)).toMatchObject({
+    type: "worked",
+  });
+  expect(await readEvidence()).toEqual(retained);
+  currentRecords = records;
+  await db
+    .update(caseLawCoverageSlices)
+    .set({
+      reported: 3,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    })
+    .where(
+      and(
+        eq(caseLawCoverageSlices.sourceId, sourceId),
+        eq(caseLawCoverageSlices.slice, OWED_SLICE),
+      ),
+    );
+  expect(await runUnit(sourceId, reconciliation)).toMatchObject({
+    type: "worked",
+    summary: { keyable: 1, unstored: 2 },
+  });
+  expect(await readEvidence()).toHaveLength(3);
+  expect(await decisionsForSource(sourceId)).toEqual([
+    { id: canonicalId, sourceDocumentId: quarantine.sourceDocumentId },
+  ]);
+});
+
+test("a fresh listing that proves a quarantine peer collision preserves both rows", async () => {
+  const { quarantine, peer, decision } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const quarantinedRowId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async () =>
+      await Promise.resolve({
+        observations: [],
+        items: [
+          {
+            identity: {
+              type: "document",
+              sourceDocumentId: quarantine.sourceDocumentId,
+            },
+            payload: { refid: quarantine.sourceDocumentId },
+          },
+          {
+            identity: { type: "document", sourceDocumentId: peer },
+            payload: { refid: peer },
+            quarantinePeers: quarantine.repairAliases,
+          },
+        ],
+        totalPages: 1,
+      }),
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({ type: "built", decision, companions: [] });
+    },
+    heldRequiresDetail: true,
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, written: 1 },
+  });
+  expect(builds).toEqual([{ refid: peer }]);
+  const rows = await decisionsForSource(sourceId);
+  expect(rows).toHaveLength(2);
+  expect(rows).toEqual(
+    expect.arrayContaining([
+      {
+        id: quarantinedRowId,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: peer }),
+    ]),
+  );
+});
+
+test("a due retry without a fresh listing cannot adopt its quarantine repair alias", async () => {
+  const { quarantine, peer, decision } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  const quarantinedRowId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+  await seedFreshTip(sourceId);
+  await seedItem(
+    sourceId,
+    listingIdentityKey({ type: "document", sourceDocumentId: peer }),
+    {
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 1,
+      nextAttemptAt: new Date(NOW.getTime() - 1),
+      payload: { refid: peer },
+    },
+  );
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({ type: "built", decision, companions: [] });
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries", keyable: 1, written: 1 },
+  });
+  expect(listed).toEqual([]);
+  expect(builds).toEqual([{ refid: peer }]);
+  const rows = await decisionsForSource(sourceId);
+  expect(rows).toHaveLength(2);
+  expect(rows).toEqual(
+    expect.arrayContaining([
+      {
+        id: quarantinedRowId,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: peer }),
+    ]),
+  );
+});
+
+test("a fresh listing with only the recovered keyed peer adopts its repair alias", async () => {
+  const { quarantine, peer, decision } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const quarantinedRowId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async () =>
+      await Promise.resolve({
+        observations: [],
+        items: [
+          {
+            identity: { type: "document", sourceDocumentId: peer },
+            payload: { refid: peer },
+            quarantinePeers: quarantine.repairAliases,
+          },
+        ],
+        totalPages: 1,
+      }),
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({ type: "built", decision, companions: [] });
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 1, written: 1 },
+  });
+  expect(builds).toEqual([{ refid: peer }]);
+  expect(await decisionsForSource(sourceId)).toEqual([
+    { id: quarantinedRowId, sourceDocumentId: peer },
+  ]);
 });

@@ -2,8 +2,12 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  type DecisionIdentifiers,
+} from "@stll/legal-ast/decision-identifier";
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -59,16 +63,28 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  isPersistableSourceDocumentId,
+  type ListingIdentity,
+} from "@/api/lib/legal-search/ingestion-types";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  type QuarantineIdentity,
+  quarantineIdentity,
+  type RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
+import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
 const ORIGIN = "https://uohs.gov.cz";
 const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
-const PAGE_SIZE = 20;
+export const CZ_UOHS_PAGE_SIZE = 20;
 const CURSOR_VERSION = 1;
 
 export const CZ_UOHS_COLLECTIONS = [
@@ -173,6 +189,146 @@ export const czUohsDecisionIdentifiers = (
     identifier(record.spisová_značka),
     identifier(record.číslo_jednací),
   ] as const;
+};
+
+/** Why a listed decision is stored under its quarantine identity. */
+const CZ_UOHS_QUARANTINE_REASON = {
+  MISSING_IRI: "missing-record-iri",
+  UNPERSISTABLE_IRI: "unpersistable-record-iri",
+} as const;
+
+type CzUohsQuarantineReason =
+  (typeof CZ_UOHS_QUARANTINE_REASON)[keyof typeof CZ_UOHS_QUARANTINE_REASON];
+
+/**
+ * How a listed decision is keyed. `keyed` is a decision whose IRI the
+ * decision table can hold byte for byte. `quarantined` is one listed without
+ * such an IRI but with a file or reference number: it is kept as its listing
+ * row (case-law AGENTS.md rule 20) under the quarantine identity of its
+ * stable fields. `no-stable-field` is one stating neither, which nothing can
+ * name again.
+ */
+type CzUohsRecordIdentity =
+  CzUohsKeyedIdentity | CzUohsQuarantinedIdentity | { type: "no-stable-field" };
+
+type CzUohsKeyedIdentity = {
+  type: "keyed";
+  sourceDocumentId: string;
+  /** The quarantine id this decision would have had without its IRI. */
+  repairAliases: readonly RepairAlias[] | undefined;
+};
+
+type CzUohsQuarantinedIdentity = {
+  type: "quarantined";
+  quarantine: QuarantineIdentity;
+  reason: CzUohsQuarantineReason;
+  /** The file and reference numbers the decision states, file number first. */
+  identifiers: DecisionIdentifiers;
+};
+
+/** A stated value, or undefined for one that is empty once trimmed. */
+const statedText = (value: string): string | undefined =>
+  value.trim().length === 0 ? undefined : value;
+
+/**
+ * The quarantine identity of a decision's stable fields, or undefined for one
+ * stating neither a file nor a reference number.
+ *
+ * The file number, the reference number and the subject: what the office
+ * states for the decision itself, whatever its IRI. The IRI is the identity
+ * that is missing; the document URLs and the participant and code-list IRIs
+ * are links the export can reissue together with it; the date of legal force
+ * is added once the decision becomes final, so a later keyed observation would
+ * hash differently; and the record types are the same for every decision.
+ * The subject alone names a matter, which the office decides in several
+ * instances, so it only refines a fingerprint and is never one on its own.
+ */
+const czUohsQuarantine = (
+  record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací" | "věc">,
+): QuarantineIdentity | undefined => {
+  const fileNumber = statedText(record.spisová_značka);
+  const referenceNumber = statedText(record.číslo_jednací);
+  return fileNumber === undefined && referenceNumber === undefined
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.CZ_UOHS,
+        stableFields: {
+          fileNumber,
+          referenceNumber,
+          subject: statedText(record.věc.cs),
+        },
+      });
+};
+
+/**
+ * Whether an IRI is one the decision table can hold exactly as published.
+ * The pipeline refuses an empty or over-long identity and one that text
+ * sanitization would rewrite, so a decision listed with such an IRI is
+ * quarantined here rather than keyed on an identity no row can carry.
+ */
+const isStorableIri = (iri: string): boolean =>
+  isPersistableSourceDocumentId(iri) && stripDangerousChars(iri) === iri;
+
+/**
+ * How this adapter keys a listed decision. Stated once, because the crawl,
+ * the reconciliation listing and its build must agree exactly on which
+ * decisions exist and what each is stored under.
+ */
+const czUohsRecordIdentity = (record: CzUohsRecord): CzUohsRecordIdentity => {
+  const quarantine = czUohsQuarantine(record);
+  if (isStorableIri(record.iri)) {
+    return {
+      type: "keyed",
+      sourceDocumentId: record.iri,
+      repairAliases: quarantine?.repairAliases,
+    };
+  }
+  // Only the numbers the decision states: the docket of its listing-only row
+  // is the first, never the bare prefix an empty number would leave.
+  const [fileNumber, referenceNumber] = czUohsDecisionIdentifiers(record);
+  const [first, ...rest] = [
+    ...(statedText(record.spisová_značka) === undefined ? [] : [fileNumber]),
+    ...(statedText(record.číslo_jednací) === undefined
+      ? []
+      : [referenceNumber]),
+  ];
+  if (quarantine === undefined || first === undefined) {
+    return { type: "no-stable-field" };
+  }
+  return {
+    type: "quarantined",
+    quarantine,
+    reason:
+      record.iri.length === 0
+        ? CZ_UOHS_QUARANTINE_REASON.MISSING_IRI
+        : CZ_UOHS_QUARANTINE_REASON.UNPERSISTABLE_IRI,
+    identifiers: [first, ...rest],
+  };
+};
+
+/**
+ * The identity the reconciliation lists a decision under, or undefined for
+ * one with no stable field, which the walk counts instead of listing.
+ */
+export const czUohsListingIdentity = (
+  record: CzUohsRecord,
+): ListingIdentity | undefined => {
+  const identity = czUohsRecordIdentity(record);
+  switch (identity.type) {
+    case "keyed":
+      return { type: "document", sourceDocumentId: identity.sourceDocumentId };
+    case "quarantined":
+      return {
+        type: "document",
+        sourceDocumentId: identity.quarantine.sourceDocumentId,
+      };
+    case "no-stable-field":
+      return undefined;
+    default: {
+      identity satisfies never;
+      return panic(`Unhandled ÚOHS identity: ${JSON.stringify(identity)}`);
+    }
+  }
 };
 
 type CzUohsPdf = {
@@ -397,6 +553,34 @@ const decisionDateMetadata = (
   return { decisionDateAvailability: { status: "not-published-by-source" } };
 };
 
+/**
+ * The export is one JSON-LD document for every decision; each decision keeps
+ * its own record, every key included. Provenance names where each stored
+ * part came from and its digest, never when it was read, so an unchanged
+ * decision keeps its fingerprint across reads.
+ */
+const czUohsSourceRaw = (
+  record: CzUohsRecord,
+  documents: Readonly<Record<string, { url: string; sha256: string }>>,
+): string => {
+  const rawRecord = JSON.stringify(record);
+  return encodeSourceRawEnvelope({
+    listing: rawRecord,
+    provenance: JSON.stringify({
+      listing: { url: LISTING_URL, sha256: sha256Hex(rawRecord) },
+      documents,
+    }),
+  });
+};
+
+/** The quarantine id a keyed record takes over when its IRI recovers. */
+const czUohsRepairAliases = (
+  repairAliases: readonly RepairAlias[] | undefined,
+): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> =>
+  repairAliases === undefined || repairAliases.length === 0
+    ? {}
+    : { sourceDocumentIdRepairAliases: repairAliases };
+
 type CzUohsDocumentRead =
   | { type: "publisher"; signal: AbortSignal | undefined }
   | { type: "stored"; documents: ReadonlyMap<string, Uint8Array> };
@@ -437,11 +621,13 @@ const readCzUohsDocument = async ({
 
 type AssembleCzUohsDecisionOptions = {
   record: CzUohsRecord;
+  identity: CzUohsKeyedIdentity;
   read: CzUohsDocumentRead;
 };
 
 const assembleCzUohsDecision = async ({
   record,
+  identity: { sourceDocumentId, repairAliases },
   read,
 }: AssembleCzUohsDecisionOptions): Promise<IngestionResult> => {
   const collection = czUohsCollectionOf(record);
@@ -529,19 +715,10 @@ const assembleCzUohsDecision = async ({
     }
   }
   const sourceRawObjects = Object.fromEntries(rawObjectEntries);
-  const documentProvenance = Object.fromEntries(provenanceEntries);
-  // The export is one JSON-LD document for every decision; each decision
-  // keeps its own record, every key included. Provenance names where each
-  // stored part came from and its digest, never when it was read, so an
-  // unchanged decision keeps its fingerprint across reads.
-  const rawRecord = JSON.stringify(record);
-  const sourceRaw = encodeSourceRawEnvelope({
-    listing: rawRecord,
-    provenance: JSON.stringify({
-      listing: { url: LISTING_URL, sha256: sha256Hex(rawRecord) },
-      documents: documentProvenance,
-    }),
-  });
+  const sourceRaw = czUohsSourceRaw(
+    record,
+    Object.fromEntries(provenanceEntries),
+  );
   const fulltext = canonical?.text;
   // A link to the document points at the file the text was read from; the
   // first listed file only when none of them yielded text.
@@ -555,7 +732,8 @@ const assembleCzUohsDecision = async ({
     caseNumber: identifiers[0].value,
     caseNumberType: "case-number",
     identifiers,
-    sourceDocumentId: record.iri,
+    sourceDocumentId,
+    ...czUohsRepairAliases(repairAliases),
     court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
     country: "CZE",
     language: "cs",
@@ -624,14 +802,93 @@ const assembleCzUohsDecision = async ({
   });
 };
 
+/**
+ * The listing-only row of a decision listed without a storable IRI (rule
+ * 20). Its documents are not read: the row is held as its listing until the
+ * IRI recovers, and the keyed observation then takes it over through its
+ * repair alias and reads them.
+ */
+const quarantinedCzUohsDecision = (
+  record: CzUohsRecord,
+  { quarantine, reason, identifiers }: CzUohsQuarantinedIdentity,
+): IngestionResult => {
+  const collection = czUohsCollectionOf(record);
+  const sourceUrl = new URL(LISTING_URL);
+  sourceUrl.hash = `quarantine-${quarantine.fingerprint}`;
+  const sourceRaw = czUohsSourceRaw(record, {});
+  return plainTextIngestionResult({
+    caseNumber: identifiers[0].value,
+    caseNumberType: "case-number",
+    identifiers,
+    isListingOnly: true,
+    sourceDocumentId: quarantine.sourceDocumentId,
+    court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
+    country: "CZE",
+    language: "cs",
+    ...(record.typ_rozhodnutí.at(0) === undefined
+      ? {}
+      : { decisionType: record.typ_rozhodnutí[0] }),
+    sourceUrl: sourceUrl.href,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      subject: record.věc,
+      referenceNumber: record.číslo_jednací,
+      fileNumber: record.spisová_značka,
+      instance: record.instance,
+      department: record.odbor,
+      collection: collection ?? null,
+      // An authority decision carries no ECLI, and the export states none.
+      ecliAvailability: { status: "not_published" },
+      legalForceDate: record.datum_právní_moci ?? null,
+      proceedingTypes: record.typ_řízení,
+      decisionTypes: record.typ_rozhodnutí,
+      participants: record.účastník,
+      recordTypes: record.typ,
+      documents: record.dokument,
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: reason,
+    }),
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
+
+/**
+ * The row a listed decision is stored as: read in full under its IRI, or its
+ * listing-only row under its quarantine identity.
+ *
+ * Panics on a decision with no stable field: the crawl and the
+ * reconciliation listing count such a decision instead of building it, so
+ * meeting one here is a caller that skipped {@link czUohsListingIdentity}.
+ */
 export const buildCzUohsDecision = async (
   record: CzUohsRecord,
   signal?: AbortSignal,
-): Promise<IngestionResult> =>
-  await assembleCzUohsDecision({
-    record,
-    read: { type: "publisher", signal },
-  });
+): Promise<IngestionResult> => {
+  const identity = czUohsRecordIdentity(record);
+  switch (identity.type) {
+    case "keyed":
+      return await assembleCzUohsDecision({
+        record,
+        identity,
+        read: { type: "publisher", signal },
+      });
+    case "quarantined":
+      return quarantinedCzUohsDecision(record, identity);
+    case "no-stable-field":
+      return panic(
+        "ÚOHS record states neither a storable IRI nor a file or reference number",
+      );
+    default: {
+      identity satisfies never;
+      return panic(`Unhandled ÚOHS identity: ${JSON.stringify(identity)}`);
+    }
+  }
+};
 
 const reparseCzUohsStoredRaw = async (
   stored: StoredRawReparseInput,
@@ -651,6 +908,15 @@ const reparseCzUohsStoredRaw = async (
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       detail: "the stored listing does not contain a complete ÚOHS record",
+    };
+  }
+  const identity = czUohsRecordIdentity(parsed.output);
+  if (identity.type !== "keyed") {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail: "the stored listing has no usable publisher IRI",
     };
   }
   const documents = new Map<string, Uint8Array>();
@@ -689,36 +955,100 @@ const reparseCzUohsStoredRaw = async (
     type: "parsed",
     result: await assembleCzUohsDecision({
       record: parsed.output,
+      identity,
       read: { type: "stored", documents },
     }),
   };
 };
 
+type CzUohsRecordKey = {
+  readonly iri: string;
+  readonly fingerprint: string;
+  readonly occurrence: number;
+};
+
 type CzUohsListing = {
-  records: CzUohsRecord[];
+  records: { record: CzUohsRecord; key: CzUohsRecordKey }[];
   snapshotId: string;
 };
 
 type CzUohsCursor = {
   version: typeof CURSOR_VERSION;
-  afterId?: string;
   parkedOn?: string;
   snapshotId?: string;
+  frontier:
+    | { type: "start" }
+    | { type: "before-group"; iri: string }
+    | ({ type: "after-record" } & CzUohsRecordKey);
+};
+
+/** The same tuple order determines sorting, resumption and checkpoint fields. */
+const compareCzUohsRecordKeys = (
+  left: CzUohsRecordKey,
+  right: CzUohsRecordKey,
+): number => {
+  for (const field of ["iri", "fingerprint"] as const) {
+    if (left[field] !== right[field]) {
+      return left[field] < right[field] ? -1 : 1;
+    }
+  }
+  return left.occurrence - right.occurrence;
 };
 
 const listingSnapshots = new Map<string, CzUohsListing>();
 
 const todayUtc = (): string => Temporal.Now.plainDateISO("UTC").toString();
 
-export const encodeCzUohsCursor = (cursor: CzUohsCursor): string =>
-  JSON.stringify(cursor);
+export const encodeCzUohsCursor = (cursor: CzUohsCursor): string => {
+  const { frontier, ...common } = cursor;
+  switch (frontier.type) {
+    case "start":
+      return JSON.stringify(common);
+    case "before-group":
+      return JSON.stringify({ ...common, afterId: frontier.iri });
+    case "after-record":
+      return JSON.stringify({
+        ...common,
+        afterRecord: {
+          iri: frontier.iri,
+          fingerprint: frontier.fingerprint,
+          occurrence: frontier.occurrence,
+        } satisfies CzUohsRecordKey,
+      });
+    default: {
+      frontier satisfies never;
+      return panic(
+        `Unhandled ÚOHS cursor frontier: ${JSON.stringify(frontier)}`,
+      );
+    }
+  }
+};
 
-const cursorSchema = v.strictObject({
-  version: v.literal(CURSOR_VERSION),
-  afterId: v.optional(v.string()),
-  parkedOn: v.optional(v.string()),
-  snapshotId: v.optional(v.string()),
-});
+const cursorSchema = v.pipe(
+  v.strictObject({
+    version: v.literal(CURSOR_VERSION),
+    afterId: v.optional(v.string()),
+    afterRecord: v.optional(
+      v.strictObject({
+        iri: v.string(),
+        fingerprint: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
+        occurrence: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(0),
+          v.maxValue(Number.MAX_SAFE_INTEGER),
+        ),
+      }),
+    ),
+    parkedOn: v.optional(v.string()),
+    snapshotId: v.optional(v.string()),
+  }),
+  v.check(
+    ({ afterId, afterRecord }) =>
+      afterId === undefined || afterRecord === undefined,
+    "ÚOHS cursor cannot contain both frontiers",
+  ),
+);
 
 // A cursor this adapter did not write is refused: restarting the walk would
 // silently re-fetch every decision.
@@ -726,16 +1056,22 @@ export const parseCzUohsCursor = (
   cursor: string | null,
 ): Result<CzUohsCursor, AdapterFetchError> =>
   cursor === null
-    ? Result.ok({ version: CURSOR_VERSION })
+    ? Result.ok({ version: CURSOR_VERSION, frontier: { type: "start" } })
     : Result.try({
         try: (): CzUohsCursor => {
-          const { afterId, parkedOn, snapshotId } = v.parse(
+          const { afterId, afterRecord, parkedOn, snapshotId } = v.parse(
             cursorSchema,
             JSON.parse(cursor),
           );
+          let frontier: CzUohsCursor["frontier"] = { type: "start" };
+          if (afterRecord !== undefined) {
+            frontier = { type: "after-record", ...afterRecord };
+          } else if (afterId !== undefined) {
+            frontier = { type: "before-group", iri: afterId };
+          }
           return {
             version: CURSOR_VERSION,
-            ...(afterId === undefined ? {} : { afterId }),
+            frontier,
             ...(parkedOn === undefined ? {} : { parkedOn }),
             ...(snapshotId === undefined ? {} : { snapshotId }),
           };
@@ -753,15 +1089,31 @@ const readListing = async (
   }
   const raw = rawResult.value;
   return Result.try({
-    try: () => ({
-      records: parseCzUohsListing(JSON.parse(raw)).toSorted((left, right) => {
-        if (left.iri === right.iri) {
-          return 0;
-        }
-        return left.iri < right.iri ? -1 : 1;
-      }),
-      snapshotId: sha256Hex(raw),
-    }),
+    try: () => {
+      const sorted = parseCzUohsListing(JSON.parse(raw))
+        .map((record) => ({
+          record,
+          key: {
+            iri: record.iri,
+            fingerprint: fingerprintReconciliationPayload(record),
+            occurrence: 0,
+          },
+        }))
+        .toSorted((left, right) =>
+          compareCzUohsRecordKeys(left.key, right.key),
+        );
+      let previous: CzUohsRecordKey | undefined;
+      let occurrence = 0;
+      const records = sorted.map(({ record, key }) => {
+        occurrence =
+          previous !== undefined && compareCzUohsRecordKeys(previous, key) === 0
+            ? occurrence + 1
+            : 0;
+        previous = key;
+        return { record, key: { ...key, occurrence } };
+      });
+      return { records, snapshotId: sha256Hex(raw) };
+    },
     catch: adapterCatch(ADAPTER_KEYS.CZ_UOHS, cursor),
   });
 };
@@ -861,7 +1213,11 @@ export const czUohsAdapter = defineSourceAdapter({
     const position = parsedPosition.value;
     const encoded = encodeCzUohsCursor(position);
     if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-      return Result.ok({ decisions: [], nextCursor: encoded });
+      return Result.ok({
+        observations: [],
+        decisions: [],
+        nextCursor: encoded,
+      });
     }
     const listing = await listingForCursor(cursor, position, signal);
     if (Result.isError(listing)) {
@@ -869,22 +1225,58 @@ export const czUohsAdapter = defineSourceAdapter({
     }
     // A parked walk resumes after its frontier: one listing read per cycle,
     // new documents only (rule 19); reconciliation covers the rest.
-    const afterId = position.afterId;
-    const remaining = listing.value.records.filter(
-      (record) => afterId === undefined || record.iri > afterId,
-    );
-    const selected = remaining.slice(0, PAGE_SIZE);
+    const frontier = position.frontier;
+    const remaining = listing.value.records.filter(({ key }) => {
+      switch (frontier.type) {
+        case "start":
+          return true;
+        case "before-group":
+          return (
+            compareCzUohsRecordKeys(key, {
+              iri: frontier.iri,
+              fingerprint: "",
+              occurrence: 0,
+            }) >= 0
+          );
+        case "after-record":
+          return compareCzUohsRecordKeys(key, frontier) > 0;
+        default: {
+          frontier satisfies never;
+          return panic("Unhandled ÚOHS cursor frontier");
+        }
+      }
+    });
+    const selected = remaining.slice(0, CZ_UOHS_PAGE_SIZE);
     const decisions: IngestionResult[] = [];
-    for (const record of selected) {
+    for (const { record } of selected) {
+      if (czUohsListingIdentity(record) === undefined) {
+        // The reconciliation counts it in `withoutStableFields`; this names
+        // why the crawl stores nothing for it.
+        logger.warn("case_law.ingestion.listing_row_without_stable_field", {
+          adapterKey: ADAPTER_KEYS.CZ_UOHS,
+          cursor: encoded,
+          reason: "no-storable-iri-and-no-file-or-reference-number",
+        });
+        continue;
+      }
       decisions.push(await buildCzUohsDecision(record, signal));
     }
-    const lastId = selected.at(-1)?.iri ?? afterId;
-    const reachedTip = selected.length < PAGE_SIZE;
+    const last = selected.at(-1);
+    const reachedTip = selected.length < CZ_UOHS_PAGE_SIZE;
     return Result.ok({
+      observations: [],
       decisions,
       nextCursor: encodeCzUohsCursor({
         version: CURSOR_VERSION,
-        ...(lastId === undefined ? {} : { afterId: lastId }),
+        frontier:
+          last === undefined
+            ? frontier
+            : {
+                type: "after-record",
+                iri: last.key.iri,
+                fingerprint: last.key.fingerprint,
+                occurrence: last.key.occurrence,
+              },
         snapshotId: listing.value.snapshotId,
         ...(reachedTip ? { parkedOn: todayUtc() } : {}),
       }),
@@ -910,32 +1302,40 @@ export const czUohsAdapter = defineSourceAdapter({
     revisionOf: (payload) => payload,
     listSlicePage: async ({ slice, page, signal }) => {
       if (slice !== "all" || page !== 0) {
-        return { items: [], totalPages: 0 };
+        return { observations: [], items: [], totalPages: 0 };
       }
       const listing = await readListing(null, signal);
       if (Result.isError(listing)) {
         return await Promise.reject(listing.error);
       }
+      const { records } = listing.value;
+      const items = records.flatMap(({ record }) => {
+        const identity = czUohsListingIdentity(record);
+        return identity === undefined ? [] : [{ identity, payload: record }];
+      });
+      // A decision with no stable field is listed but cannot be keyed: it is
+      // counted so coverage shows it, and the crawl warns on it.
+      const withoutStableFields = records.length - items.length;
       return {
-        items: listing.value.records.map((payload) => ({
-          identity: {
-            type: "document",
-            sourceDocumentId: payload.iri,
-          },
-          payload,
-        })),
-        totalPages: listing.value.records.length === 0 ? 0 : 1,
+        observations: [],
+        items,
+        ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
+        totalPages: records.length === 0 ? 0 : 1,
       };
     },
-    buildDecision: async (payload, signal) =>
-      isRecord(payload)
-        ? {
+    buildDecision: async (payload, signal) => {
+      if (!isRecord(payload)) {
+        return { type: "unkeyable" };
+      }
+      const record = v.parse(recordSchema, payload);
+      // A quarantined decision builds its listing-only row, which the walk
+      // counts held: there is no detail to wait for until its IRI recovers.
+      return czUohsListingIdentity(record) === undefined
+        ? { type: "unkeyable" }
+        : {
             type: "built",
-            decision: await buildCzUohsDecision(
-              v.parse(recordSchema, payload),
-              signal,
-            ),
-          }
-        : { type: "unkeyable" },
+            decision: await buildCzUohsDecision(record, signal),
+          };
+    },
   },
 });

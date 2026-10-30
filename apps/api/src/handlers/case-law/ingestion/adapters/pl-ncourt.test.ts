@@ -1911,7 +1911,7 @@ describe("the walk", () => {
     expect(await walk()).toEqual(first);
   });
 
-  test("once the row is served, it names its audit row as a repair alias", async () => {
+  test("a served row keeps its positional audit identity out of repair aliases", async () => {
     const rows = await rowsAroundPoison();
     installWalkStub({
       rows: await servableRows(),
@@ -1923,13 +1923,16 @@ describe("the walk", () => {
     const served = decisions.find(
       (decision) => decision.sourceDocumentId === RECOVERED_ID,
     );
-    expect(served?.sourceDocumentIdRepairAliases).toContain(
-      plNcourtPositionId({
-        query: WALK_QUERY,
-        previous: { id: idOf(rows.get(POISONED_OFFSET - 1)), gap: 1 },
-        next: { id: idOf(rows.get(POISONED_OFFSET + 1)), gap: 1 },
-      }),
-    );
+    const positionId = plNcourtPositionId({
+      query: WALK_QUERY,
+      previous: { id: idOf(rows.get(POISONED_OFFSET - 1)), gap: 1 },
+      next: { id: idOf(rows.get(POISONED_OFFSET + 1)), gap: 1 },
+    });
+    expect(
+      (served?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === positionId,
+      ),
+    ).toBe(false);
   });
 
   test("a listed row with no usable id is kept under its content, and found again once it has one", async () => {
@@ -1981,11 +1984,194 @@ describe("the walk", () => {
       detailXml: undefined,
       contentXml: undefined,
     });
-    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
-      quarantined.type === "built"
-        ? quarantined.decision.sourceDocumentId
-        : panic("not kept"),
+    if (quarantined.type !== "built") {
+      panic("not kept");
+    }
+    expect(
+      (recovered?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === quarantined.decision.sourceDocumentId,
+      ),
+    ).toBe(true);
+  });
+
+  test("a listed row stating no fingerprint field is quarantined on what it still states", async () => {
+    const rows = await servableRows();
+    const stated = {
+      publicationDate: "2019-02-28 18:26:16.0 CET",
+      thesis: "Teza o czymś.",
+    };
+    const bare = rowXml({ ...stated, lastUpdate: "2019-02-28 14:38:12.0 CET" });
+    const oversized = rowXml({
+      id: "x".repeat(400),
+      ...stated,
+      lastUpdate: "2020-01-01 10:00:00.0 CET",
+    });
+    const ids: string[] = [];
+    for (const broken of [bare, oversized]) {
+      const stub: WalkStub = {
+        rows: new Map([...rows, [165_992, broken]]),
+        poisoned: new Set(),
+        total: 166_002,
+        requests: [],
+      };
+      installWalkStub(stub);
+      const { decisions } = await walkToTip(WALK_START);
+      expect(decisions).toHaveLength(rows.size);
+      const kept =
+        decisions[165_992 - 165_990] ?? panic("no row at the broken offset");
+      expect(kept.sourceDocumentId ?? "").toMatch(
+        /^pl-ncourt-quarantine:[0-9a-f]{64}$/u,
+      );
+      expect(kept.isListingOnly).toBe(true);
+      expect(kept.caseNumberIsPlaceholder).toBe(true);
+      expect(kept.metadata["detailStatus"] === "publisher-id-unavailable").toBe(
+        true,
+      );
+      expect(decodeSourceRawEnvelope(kept.sourceRaw ?? "")?.["listing"]).toBe(
+        broken,
+      );
+      // Nothing to ask the record for: no request names the unusable id.
+      expect(
+        stub.requests.some((request) => request.includes("x".repeat(400))),
+      ).toBe(false);
+      ids.push(kept.sourceDocumentId ?? "");
+
+      // The reconciliation builds the same row from the parked payload.
+      const outcome = await plNcourtAdapter.reconciliation.buildDecision({
+        listingXml: broken,
+      });
+      const reconciled =
+        outcome.type === "built" ? outcome.decision : panic(outcome.type);
+      expect(reconciled.sourceDocumentId).toBe(kept.sourceDocumentId);
+      expect(reconciled.isListingOnly).toBe(true);
+    }
+    // Neither the unusable id nor the update stamp is part of the identity.
+    expect(ids[1]).toBe(ids[0]);
+
+    // A re-rendered row, its thesis reflowed, keys alike.
+    const reflowed = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ ...stated, thesis: "  Teza  o\n czymś. " }),
+        detailXml: undefined,
+        contentXml: undefined,
+      }),
     );
+    expect(reflowed.sourceDocumentId).toBe(ids[0]);
+
+    // Once the row states its id, the judgment names the audit row.
+    const recovered = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ id: PAIR, ...stated }),
+        detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+        contentXml: undefined,
+      }),
+    );
+    expect(recovered.sourceDocumentId).toBe(PAIR);
+    expect(
+      (recovered.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === ids[0],
+      ),
+    ).toBe(false);
+  });
+
+  test("a recovered row names only earlier forms carrying its court", async () => {
+    const stated = {
+      publicationDate: "2019-02-28 18:26:16.0 CET",
+      thesis: "Teza o czymś.",
+    };
+    const listedFields = {
+      signature: "II Ca 236/18",
+      date: "2018-03-22 01:00:00.0 CET",
+      courtId: "15502000",
+      type: "SENTENCE",
+    };
+    const unkeyed = (fields: Record<string, string>): IngestionResult =>
+      built(
+        assemblePlNcourtDecision({
+          listingXml: rowXml(fields),
+          detailXml: undefined,
+          contentXml: undefined,
+        }),
+      );
+    // First observed with no id and none of the fingerprint fields.
+    const published = unkeyed(stated).sourceDocumentId ?? "";
+    expect(published).toMatch(/^pl-ncourt-quarantine:[0-9a-f]{64}$/u);
+
+    // A signature and court qualify the listed form; the earlier courtless form stays separate.
+    const listedRow = unkeyed({ ...listedFields, ...stated });
+    const listed = listedRow.sourceDocumentId ?? "";
+    expect(listed).toStartWith("ncourt-listed:");
+    expect(listedRow.sourceDocumentIdRepairAliases).toBeUndefined();
+
+    // Then keyed: only the court-qualified listed form can be adopted.
+    const recovered = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ id: PAIR, ...listedFields, ...stated }),
+        detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+        contentXml: undefined,
+      }),
+    );
+    expect(recovered.sourceDocumentId).toBe(PAIR);
+    expect(
+      recovered.sourceDocumentIdRepairAliases?.map(String).toSorted(),
+    ).toEqual([listed].toSorted());
+  });
+
+  test("a form that tells no judgment apart is stored under, never emitted as an alias", async () => {
+    const publicationDate = "2019-02-28 18:26:16.0 CET";
+    // Id-less with only its publication day: still kept, under that form.
+    const dayOnly = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ publicationDate }),
+        detailXml: undefined,
+        contentXml: undefined,
+      }),
+    );
+    expect(dayOnly.sourceDocumentId ?? "").toMatch(
+      /^pl-ncourt-quarantine:[0-9a-f]{64}$/u,
+    );
+
+    // Keyed, with no thesis, signature or excerpt in its listing row: every
+    // judgment published that day would compute the same day-only form.
+    const keyed = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({
+          id: PAIR,
+          publicationDate,
+          date: "2018-03-22 01:00:00.0 CET",
+          courtId: "15502000",
+        }),
+        detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+        contentXml: undefined,
+      }),
+    );
+    expect(keyed.sourceDocumentId).toBe(PAIR);
+    expect(keyed.sourceDocumentIdRepairAliases).toBeUndefined();
+  });
+
+  test("a listed row stating no stable field is logged and passed, not keyed", async () => {
+    const rows = await servableRows();
+    const empty = rowXml({ lastUpdate: "2019-02-28 14:38:12.0 CET" });
+    installWalkStub({
+      rows: new Map([...rows, [165_992, empty]]),
+      poisoned: new Set(),
+      total: 166_002,
+      requests: [],
+    });
+    const warned: unknown[] = [];
+    setLogSinkForTesting(({ message, attributes }) => {
+      if (message === "case_law.ingestion.listing_row_without_stable_fields") {
+        warned.push(attributes?.["adapterKey"]);
+      }
+    });
+    try {
+      const { decisions } = await walkToTip(WALK_START);
+      // Every other row is stored; the lane is not held behind this one.
+      expect(decisions).toHaveLength(rows.size - 1);
+      expect(warned).toEqual(["pl-ncourt"]);
+    } finally {
+      resetLogSinkForTesting();
+    }
   });
 
   test("a listed row with an id but no court is kept under its id, unpublished", async () => {
@@ -2320,4 +2506,31 @@ describe("a judgment date", () => {
     );
     expect(failure).toContain("dateFrom=2018-03-22");
   });
+});
+
+test("a position-only listing candidate cannot adopt an existing record", async () => {
+  const positionAlias = plNcourtPositionId({
+    query: WALK_QUERY,
+    previous: { id: "previous-published-record", gap: 1 },
+    next: { id: "next-published-record", gap: 1 },
+  });
+  const decision = built(
+    assemblePlNcourtDecision({
+      listingXml: rowXml({
+        id: PAIR,
+        publicationDate: "2019-02-28 18:26:16.0 CET",
+      }),
+      detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+      contentXml: undefined,
+      positionAlias,
+    }),
+  );
+  expect(positionAlias).toStartWith("ncourt-quarantine:");
+  expect(decision.sourceDocumentId).toBe(PAIR);
+  expect(decision.sourceDocumentIdRepairAliases ?? []).toEqual([]);
+  expect(
+    (decision.sourceDocumentIdRepairAliases ?? []).some(
+      (alias) => alias === positionAlias,
+    ),
+  ).toBe(false);
 });

@@ -10,9 +10,16 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawListingObservations,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
@@ -38,6 +45,10 @@ import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -202,6 +213,7 @@ describe("a listed item whose read stays unavailable", () => {
   test("holds its page for the bound, then the page advances with the item kept listing-only", async () => {
     const sourceId = await crawlSource();
     const page = {
+      observations: [],
       decisions: [fullDecision("ok-1")],
       unreadItems: [noContent("gone-quiet")],
     };
@@ -239,7 +251,10 @@ describe("a listed item whose read stays unavailable", () => {
 
   test("a stored row keeps its detail byte for byte and records the outcome", async () => {
     const sourceId = await crawlSource();
-    await cycle(sourceId, { decisions: [fullDecision("held-1")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("held-1")],
+    });
     const before = (await decisionRow(sourceId, "held-1")) ?? panic("stored");
     expect(before.contentHash).not.toBeNull();
     await db
@@ -249,6 +264,7 @@ describe("a listed item whose read stays unavailable", () => {
 
     for (let n = 0; n < UNAVAILABLE_CYCLES_BEFORE_MARKING; n += 1) {
       await cycle(sourceId, {
+        observations: [],
         decisions: [],
         unreadItems: [emptyServerError("held-1")],
       });
@@ -284,13 +300,17 @@ describe("a listed item whose read stays unavailable", () => {
 
   test("a later read of unchanged content removes the recorded outcome", async () => {
     const sourceId = await crawlSource();
-    await cycle(sourceId, { decisions: [fullDecision("back-1")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("back-1")],
+    });
     for (let n = 0; n < UNAVAILABLE_CYCLES_BEFORE_MARKING; n += 1) {
       await db
         .update(caseLawSources)
         .set({ syncCursor: "page-1" })
         .where(eq(caseLawSources.id, sourceId));
       await cycle(sourceId, {
+        observations: [],
         decisions: [],
         unreadItems: [emptyServerError("back-1")],
       });
@@ -302,7 +322,10 @@ describe("a listed item whose read stays unavailable", () => {
       .set({ syncCursor: "page-1" })
       .where(eq(caseLawSources.id, sourceId));
 
-    await cycle(sourceId, { decisions: [fullDecision("back-1")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("back-1")],
+    });
 
     const after = (await decisionRow(sourceId, "back-1")) ?? panic("stored");
     expect(after.sourceHash).toBe(marked.sourceHash);
@@ -328,11 +351,18 @@ describe("a listed item whose read stays unavailable", () => {
 
   test("a successful read in between starts the count again", async () => {
     const sourceId = await crawlSource();
-    const unread = { decisions: [], unreadItems: [noContent("flaky")] };
+    const unread = {
+      observations: [],
+      decisions: [],
+      unreadItems: [noContent("flaky")],
+    };
 
     await cycle(sourceId, unread);
     await cycle(sourceId, unread);
-    await cycle(sourceId, { decisions: [fullDecision("flaky")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("flaky")],
+    });
     expect((await sourceState(sourceId)).cursor).toBe("page-2");
     await db
       .update(caseLawSources)
@@ -360,6 +390,7 @@ describe("a listed item whose read stays unavailable", () => {
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
         Result.ok({
+          observations: [],
           decisions: [],
           unreadItems: [forbidden("slotted")],
           nextCursor: "page-2",
@@ -394,6 +425,7 @@ describe("a listed item whose read stays unavailable", () => {
     const sourceId = await crawlSource();
 
     const run = await cycle(sourceId, {
+      observations: [],
       decisions: [],
       unreadItems: [forbidden("withheld")],
     });
@@ -411,4 +443,231 @@ describe("a listed item whose read stays unavailable", () => {
       scope: "document",
     });
   });
+});
+
+test("a quarantined record followed by its keyed peer survives as two database rows", async () => {
+  const sourceId = await crawlSource();
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 130/2024", court: BASE.court },
+  });
+  const quarantined = {
+    ...fullDecision("130"),
+    sourceDocumentId: quarantine.sourceDocumentId,
+  };
+  const keyed = {
+    ...fullDecision("131"),
+    sourceDocumentIdRepairAliases: quarantine.repairAliases,
+  };
+  const run = await cycle(sourceId, {
+    observations: [],
+    decisions: [quarantined, keyed],
+  });
+  const rows = await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+      caseNumber: caseLawDecisions.caseNumber,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(
+    rows
+      .map((row) => row.sourceDocumentId)
+      .toSorted((a, b) => compareCodeUnit(String(a), String(b))),
+  ).toEqual(
+    [quarantine.sourceDocumentId, keyed.sourceDocumentId]
+      .map(String)
+      .toSorted(compareCodeUnit),
+  );
+  expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+  expect(rows.map((row) => row.caseNumber).toSorted(compareCodeUnit)).toEqual(
+    [quarantined.caseNumber, keyed.caseNumber].toSorted(compareCodeUnit),
+  );
+  expect(run.haltReason).toBeNull();
+  expect((await sourceState(sourceId)).cursor).toBe("page-2");
+  expect(keyed.sourceDocumentIdRepairAliases.map(String)).toEqual([
+    quarantine.sourceDocumentId,
+  ]);
+});
+
+test("a keyed peer on page one stays separate when its quarantined peer appears on page two", async () => {
+  const sourceId = await crawlSource();
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 130/2024", court: BASE.court },
+  });
+  const quarantined = {
+    ...fullDecision("130"),
+    sourceDocumentId: quarantine.sourceDocumentId,
+  };
+  const keyed = {
+    ...fullDecision("130"),
+    sourceDocumentId: "publisher-document-130",
+    sourceDocumentIdRepairAliases: quarantine.repairAliases,
+  };
+
+  const originalRow = { id: createSafeId<"caseLawDecision">() };
+  await db.insert(caseLawDecisions).values({
+    id: originalRow.id,
+    sourceId,
+    sourceDocumentId: quarantine.sourceDocumentId,
+    caseNumber: quarantined.caseNumber,
+    court: quarantined.court,
+    country: quarantined.country,
+    language: quarantined.language,
+    fulltext: quarantined.fulltext,
+    sourceHash: quarantined.rawHash,
+    metadata: quarantined.metadata,
+  });
+
+  const firstPage = await cycle(sourceId, {
+    observations: [],
+    decisions: [keyed],
+  });
+  expect(firstPage.haltReason).toBeNull();
+  expect((await sourceState(sourceId)).cursor).toBe("page-2");
+  const afterFirstPage = await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(afterFirstPage).toHaveLength(2);
+  expect(afterFirstPage).toEqual(
+    expect.arrayContaining([
+      {
+        id: originalRow.id,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: keyed.sourceDocumentId }),
+    ]),
+  );
+
+  const secondPage = await cycle(sourceId, {
+    observations: [],
+    decisions: [quarantined],
+  });
+  expect(secondPage.haltReason).toBeNull();
+  const afterSecondPage = await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(afterSecondPage).toHaveLength(2);
+  expect(afterSecondPage).toEqual(
+    expect.arrayContaining([
+      {
+        id: originalRow.id,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: keyed.sourceDocumentId }),
+    ]),
+  );
+  expect(keyed.sourceDocumentIdRepairAliases.map(String)).toEqual([
+    quarantine.sourceDocumentId,
+  ]);
+});
+
+test("a crawl retains colliding publisher revisions before applying decisions or advancing and replay is a fixed point", async () => {
+  const sourceId = await crawlSource();
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_NS,
+    stableFields: { docket: "21 Cdo 501/2024" },
+  });
+  const records = ["first", "second"].map((record) =>
+    plainTextIngestionResult({
+      ...fullDecision("501"),
+      fulltext: undefined,
+      isListingOnly: true,
+      sourceDocumentId: quarantine.sourceDocumentId,
+      sourceRaw: JSON.stringify({ record, caseNumber: "21 Cdo 501/2024" }),
+      rawHash: `source-${record}`,
+      metadata: { publisherRecord: record },
+    }),
+  );
+  const evidenceBeforeWrites: number[] = [];
+  const guardedDb: ScopedDb = async (operation) =>
+    await scopedDb(async (tx) => {
+      const result = await operation(tx);
+      const decisions = await tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      const source = (
+        await tx
+          .select({ cursor: caseLawSources.syncCursor })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+      ).at(0);
+      if (decisions.length > 0 || source?.cursor === "page-2") {
+        const evidence = await tx
+          .select({ fingerprint: caseLawListingObservations.fingerprint })
+          .from(caseLawListingObservations)
+          .where(eq(caseLawListingObservations.sourceId, sourceId));
+        expect(evidence).toHaveLength(2);
+        evidenceBeforeWrites.push(evidence.length);
+      }
+      return result;
+    });
+  const runPage = async () => {
+    const sourceLease =
+      (await acquireCaseLawSourceIngestionLease({
+        scopedDb: guardedDb,
+        sourceId,
+      })) ?? panic("The collision fixture needs its source lease");
+    try {
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          observations: [],
+          decisions: records,
+          nextCursor: "page-2",
+        });
+      return await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb: guardedDb,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+        corpus,
+      });
+    } finally {
+      await sourceLease.release();
+    }
+  };
+  const first = await runPage();
+  expect(first.haltReason).toBeNull();
+  expect((await sourceState(sourceId)).cursor).toBe("page-2");
+  const readEvidence = async () =>
+    await db
+      .select()
+      .from(caseLawListingObservations)
+      .where(eq(caseLawListingObservations.sourceId, sourceId))
+      .orderBy(caseLawListingObservations.fingerprint);
+  const evidence = await readEvidence();
+  expect(evidence).toHaveLength(2);
+  expect(evidence.map(({ payload }) => payload)).toEqual(
+    expect.arrayContaining(
+      records.map(({ sourceRaw, metadata }) =>
+        expect.objectContaining({
+          listing: expect.objectContaining({
+            quarantineId: quarantine.sourceDocumentId,
+            record: expect.objectContaining({ sourceRaw, metadata }),
+          }),
+        }),
+      ),
+    ),
+  );
+  expect(evidenceBeforeWrites.length).toBeGreaterThan(0);
+  const replay = await runPage();
+  expect(replay.haltReason).toBeNull();
+  expect(await readEvidence()).toEqual(evidence);
+  const canonical = await db
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(canonical).toHaveLength(1);
 });

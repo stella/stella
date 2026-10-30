@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   decodeSourceRawEnvelope,
@@ -427,6 +430,29 @@ describe("pl-courts replays a stored row", () => {
   });
 });
 
+test("bench whitespace cannot change an id-less listing's quarantine identity", () => {
+  const listing = {
+    id: null,
+    courtCases: [{ caseNumber: `II Co ${"1".repeat(300)}/15` }],
+    judges: [{ name: "Anna Nowak" }, { name: "Jan Kowalski" }],
+  };
+  const withLeadingWhitespace = decisionFrom({
+    listingRow: {
+      ...listing,
+      judges: [{ name: "Anna Nowak" }, { name: " Jan Kowalski" }],
+    },
+    detail: null,
+  });
+  const normalized = decisionFrom({ listingRow: listing, detail: null });
+
+  expect(withLeadingWhitespace.sourceDocumentId).toMatch(
+    /^pl-courts-quarantine:[0-9a-f]{64}$/u,
+  );
+  expect(withLeadingWhitespace.sourceDocumentId).toBe(
+    normalized.sourceDocumentId,
+  );
+});
+
 describe("declared metadata URLs remain scalar across projection and reload", () => {
   for (const entry of [
     { input: null, expected: null },
@@ -597,5 +623,132 @@ describe("SAOS detail refusals preserve the dump crawl's storage policy", () => 
         });
       }
     },
+  );
+});
+
+test("no-id dump listings are observations and never request a canonical detail", async () => {
+  const original = globalThis.fetch;
+  const payloads = [
+    null,
+    {},
+    { id: "not-a-publisher-id", rawField: "Publisher statement" },
+  ];
+  let listingRequests = 0;
+  try {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (!url.pathname.includes("/dump/")) {
+        return panic("A no-id listing reached the canonical detail path");
+      }
+      listingRequests += 1;
+      return Response.json({ items: payloads });
+    });
+    const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap(
+      "A listing page is readable",
+    );
+    expect(page.decisions).toEqual([]);
+    expect(page.observations.map(({ payload }) => payload)).toEqual(payloads);
+    expect(page.observations.map(({ reason }) => reason)).toEqual(
+      payloads.map(() => "no-usable-id"),
+    );
+    expect(listingRequests).toBe(1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("reconciliation retains every malformed listing value without canonical detail", async () => {
+  const original = globalThis.fetch;
+  const payloads = [
+    null,
+    {},
+    { id: "not-a-publisher-id", rawField: "Publisher statement" },
+  ];
+  try {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (!url.pathname.includes("/search/")) {
+        return panic("A no-id observation reached the canonical detail path");
+      }
+      return Response.json({
+        items: payloads,
+        info: { totalResults: payloads.length },
+      });
+    });
+    const reconciliation = plCourtsAdapter.reconciliation;
+    if (reconciliation === undefined) {
+      return panic("PL-courts has listing reconciliation");
+    }
+    const page = await reconciliation.listSlicePage({
+      slice: "2026-01-01",
+      page: 0,
+    });
+    expect(page.items).toEqual([]);
+    expect(page.observations.map(({ payload }) => payload)).toEqual(payloads);
+    expect(page.withoutStableFields).toBeUndefined();
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("internal judge whitespace is normalized before quarantine bench ordering", () => {
+  const rawNames = ["Jan  Z", "Jan A"];
+  const normalizedNames = ["Jan Z", "Jan A"];
+  expect(rawNames.toSorted()).toEqual(["Jan  Z", "Jan A"]);
+  expect(normalizedNames.toSorted()).toEqual(["Jan A", "Jan Z"]);
+  const listing = {
+    id: null,
+    courtCases: [{ caseNumber: `II Co ${"1".repeat(300)}/15` }],
+  };
+  const raw = decisionFrom({
+    listingRow: { ...listing, judges: rawNames.map((name) => ({ name })) },
+    detail: null,
+  });
+  const normalized = decisionFrom({
+    listingRow: {
+      ...listing,
+      judges: normalizedNames.map((name) => ({ name })),
+    },
+    detail: null,
+  });
+  expect(normalized.sourceDocumentId).toBe(
+    "pl-courts-quarantine:2b466177ca910dbf1fcbaf4de795eee5146ca2fef45c5cb8ecfb32e8734b0f5d",
+  );
+  expect(raw.sourceDocumentId).toBe(normalized.sourceDocumentId);
+});
+
+test("pl-courts judge whitespace variants preserve quarantine identity", () => {
+  const whitespace = fc
+    .array(
+      fc.constantFrom(" ", "\t", "\r", "\n", "\u00a0", "\u2003", "\u202f"),
+      { minLength: 1, maxLength: 6 },
+    )
+    .map((parts) => parts.join(""));
+  const listing = {
+    id: null,
+    courtCases: [{ caseNumber: `II Co ${"1".repeat(300)}/15` }],
+  };
+  const normalized = decisionFrom({
+    listingRow: { ...listing, judges: [{ name: "Jan A" }, { name: "Jan Z" }] },
+    detail: null,
+  });
+  assertProperty(
+    "pl-courts judge whitespace variants preserve quarantine identity",
+    fc.property(
+      fc.record({
+        whitespaceA: whitespace,
+        whitespaceZ: whitespace,
+        order: fc.constantFrom("az", "za"),
+      }),
+      ({ whitespaceA, whitespaceZ, order }) => {
+        const a = { name: `${whitespaceA}Jan${whitespaceA}A${whitespaceA}` };
+        const z = { name: `${whitespaceZ}Jan${whitespaceZ}Z${whitespaceZ}` };
+        const decision = decisionFrom({
+          listingRow: { ...listing, judges: order === "az" ? [a, z] : [z, a] },
+          detail: null,
+        });
+        expect(decision.sourceDocumentId).toBe(normalized.sourceDocumentId);
+      },
+    ),
   );
 });

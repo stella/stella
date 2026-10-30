@@ -65,6 +65,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
   "case_law_judges.external_refs",
+  "case_law_listing_observations.payload",
   "case_law_polarity_rules.surface_forms",
   "case_law_provision_extractions.unresolved_counts",
   "case_law_reconciliation_items.payload",

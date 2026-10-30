@@ -1052,7 +1052,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          observations: [],
+          decisions: [decision],
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({
@@ -1099,7 +1103,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          observations: [],
+          decisions: [decision],
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({

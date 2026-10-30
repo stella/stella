@@ -9,12 +9,26 @@
 import { Result } from "better-result";
 
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
+import {
+  createQuarantineCollisionRetention,
+  type FlushedListingPage,
+  requestNextRetainedPage,
+} from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
+  ListingIdentity,
   ReconciliationListingItem,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import {
+  isQuarantineListingIdentity,
+  type ListingObservation,
+  quarantineCollisionEvidence,
+  quarantinePeerCollisions,
+} from "@/api/lib/legal-search/quarantine-identity";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Pages requested for one slice before the listing gives up on it.
@@ -27,16 +41,81 @@ import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
  */
 export const MAX_SLICE_PAGES = 200;
 
-export type ListedSlice = {
+type SliceListing = {
+  /** Durable source evidence kept outside canonical identity matching. */
+  observations: Map<string, ListingObservation>;
   /** Distinct keyable identities, first listing of each. */
   keyed: Map<string, ReconciliationListingItem>;
-  /** Items the publisher listed, including repeats and unkeyable ones. */
+  /** Items the publisher listed, including repeats. */
   listed: number;
-  unidentifiable: number;
+  /** Repeats of an identity with the same revision: one record listed twice. */
   duplicate: number;
   /** Page requests the listing made, the first included. */
   pages: number;
+  /**
+   * Per quarantine identity, the records beyond the first that it was listed
+   * for: repeats whose payload revision differs from every earlier one. A
+   * publisher id names one document however often it is listed, but a
+   * content-addressed id is only as distinct as the fields it hashes, so two
+   * records whose stable fields agree share it and only one canonical row can be
+   * stored (case-law AGENTS.md rule 17's failure mode). Counted, never
+   * folded into `duplicate`.
+   */
+  quarantineCollisions: Map<string, number>;
+  /** Distinct content revisions per quarantined identity across every page. */
+  quarantineRevisions: Map<string, Set<string>>;
+  /**
+   * Quarantine ids listed both for a quarantined record and as the peer of a
+   * keyed one (`ReconciliationListingItem.quarantinePeers`): two records the
+   * fingerprint cannot tell apart, which a repair alias would merge.
+   */
+  quarantinePeerCollisions: string[];
+  /**
+   * Records the publisher listed that state no stable field to key on, so
+   * nothing can be stored for them (`ReconciliationSlicePage.withoutStableFields`).
+   */
+  withoutStableFields: number;
 };
+
+/** Constructed only after this owner has listed the whole reconciliation scope. */
+class VerifiedReconciliationScope {
+  readonly type = "complete-scope";
+  readonly #listedIdentities: readonly Readonly<ListingIdentity>[];
+
+  constructor(listedIdentities: readonly ListingIdentity[]) {
+    this.#listedIdentities = Object.freeze(
+      listedIdentities.map((identity) => Object.freeze({ ...identity })),
+    );
+  }
+
+  get listedIdentities(): readonly Readonly<ListingIdentity>[] {
+    return this.#listedIdentities;
+  }
+}
+
+export type CompleteReconciliationScope = VerifiedReconciliationScope;
+
+type RetainedSliceListing = SliceListing & { pageReceipt: FlushedListingPage };
+
+export type ListedSlice = RetainedSliceListing & {
+  recoveryProof: CompleteReconciliationScope;
+};
+
+const completeListedSlice = (listing: RetainedSliceListing): ListedSlice => ({
+  ...listing,
+  recoveryProof: new VerifiedReconciliationScope(
+    [...listing.keyed.values()].map(({ identity }) => identity),
+  ),
+});
+
+const unstoredCollisionCount = ({
+  quarantineCollisions,
+}: SliceListing): number =>
+  [...quarantineCollisions.values()].reduce((sum, extra) => sum + extra, 0);
+
+/** Listed records that cannot each have a canonical row of their own; collision evidence is retained separately. */
+export const unstoredRecordCount = (listing: SliceListing): number =>
+  listing.withoutStableFields + unstoredCollisionCount(listing);
 
 /**
  * How many passes over a slice each proof makes, for a caller that has to
@@ -66,6 +145,11 @@ type ListReconciliationSliceOptions = {
   adapterKey: string;
   proof: SliceListingProof;
   listSlicePage: SourceReconciliation["listSlicePage"];
+  revisionOf: SourceReconciliation["revisionOf"];
+  /** Durable evidence must finish before another page or a verification verdict. */
+  persistEvidence: (
+    observations: readonly ListingObservation[],
+  ) => Promise<void>;
   slice: string;
   /** Pause before every page after the first. */
   pageDelayMs: number;
@@ -76,32 +160,60 @@ type ListReconciliationSliceOptions = {
 };
 
 /** One pass over every page of a slice, keyed as the ingest keys it. */
-const listSlicePass = async ({
-  adapterKey,
-  listSlicePage,
-  pageDelayMs,
-  pageTimeoutMs,
-  slice,
-  sleep,
-  signal,
-}: ListReconciliationSliceOptions): Promise<
-  Result<ListedSlice, AdapterFetchError>
-> => {
-  const listing: ListedSlice = {
+const listSlicePass = async (
+  {
+    adapterKey,
+    listSlicePage,
+    pageDelayMs,
+    pageTimeoutMs,
+    revisionOf,
+    slice,
+    sleep,
+    signal,
+  }: ListReconciliationSliceOptions,
+  collisionEvidence: ReturnType<typeof createQuarantineCollisionRetention>,
+): Promise<Result<RetainedSliceListing, AdapterFetchError>> => {
+  const listing: SliceListing = {
     keyed: new Map(),
+    observations: new Map(),
     listed: 0,
-    unidentifiable: 0,
     duplicate: 0,
     pages: 0,
+    quarantineCollisions: new Map(),
+    quarantineRevisions: new Map(),
+    quarantinePeerCollisions: [],
+    withoutStableFields: 0,
   };
-  for (let page = 0; ; page += 1) {
+  // Only quarantine items are fingerprinted: a publisher id is one record
+  // however often it is listed, and hashing every payload would cost every
+  // walk for nothing.
+  const quarantineObservations: {
+    sourceDocumentId: string;
+    revision: string;
+  }[] = [];
+  let repeats = 0;
+  const finish = (pageReceipt: FlushedListingPage): RetainedSliceListing => {
+    const evidence = quarantineCollisionEvidence(quarantineObservations);
+    listing.quarantineCollisions = evidence.collisions;
+    listing.quarantineRevisions = evidence.revisions;
+    listing.duplicate = repeats - unstoredCollisionCount(listing);
+    listing.quarantinePeerCollisions = quarantinePeerCollisions(
+      [...listing.keyed.values()].map(({ identity, quarantinePeers }) => ({
+        sourceDocumentId:
+          identity.type === "document" ? identity.sourceDocumentId : "",
+        quarantinePeers,
+      })),
+    );
+    return { ...listing, pageReceipt };
+  };
+  const requestPage = async (page: number) => {
     signal?.throwIfAborted();
     if (page > 0) {
       await abortableSleep(sleep, pageDelayMs, signal);
       signal?.throwIfAborted();
     }
     const timeoutSignal = AbortSignal.timeout(pageTimeoutMs);
-    const listed = await listSlicePage({
+    return await listSlicePage({
       slice,
       page,
       signal:
@@ -109,26 +221,51 @@ const listSlicePass = async ({
           ? timeoutSignal
           : AbortSignal.any([signal, timeoutSignal]),
     });
+  };
+  let listed = await requestPage(0);
+  for (;;) {
+    const receipt = await collisionEvidence.retainPage(listed, listing.pages);
     listing.pages += 1;
-    listing.listed += listed.items.length;
+    listing.listed +=
+      listed.items.length +
+      listed.observations.length +
+      (listed.withoutStableFields ?? 0);
+    for (const observation of listed.observations) {
+      const key = observation.identity.fingerprint;
+      if (listing.observations.has(key)) {
+        repeats += 1;
+      } else {
+        listing.observations.set(key, observation);
+      }
+    }
+    listing.withoutStableFields += listed.withoutStableFields ?? 0;
     for (const item of listed.items) {
       const identityKey = listingIdentityKey(item.identity);
-      if (identityKey === null) {
-        listing.unidentifiable += 1;
-        continue;
+      if (
+        item.identity.type === "document" &&
+        isQuarantineListingIdentity(item.identity)
+      ) {
+        const revision = fingerprintReconciliationPayload(
+          revisionOf(item.payload),
+        );
+        quarantineObservations.push({
+          sourceDocumentId: item.identity.sourceDocumentId,
+          revision,
+        });
       }
       if (listing.keyed.has(identityKey)) {
         // A publisher lists a document once per docket it settles; the same
-        // identity twice is one document.
-        listing.duplicate += 1;
+        // publisher identity twice is one document. A quarantine identity
+        // repeated with another revision is not, and `finish` separates it.
+        repeats += 1;
         continue;
       }
       listing.keyed.set(identityKey, item);
     }
-    if (page + 1 >= listed.totalPages) {
-      return Result.ok(listing);
+    if (receipt.nextPage >= receipt.page.totalPages) {
+      return Result.ok(finish(receipt));
     }
-    if (page + 1 >= MAX_SLICE_PAGES) {
+    if (receipt.nextPage >= MAX_SLICE_PAGES) {
       return Result.err(
         new AdapterFetchError({
           message: `Slice listing exceeded ${MAX_SLICE_PAGES} pages`,
@@ -140,12 +277,68 @@ const listSlicePass = async ({
     // No clock here on purpose: a listing has nowhere to resume from, so
     // cutting one off on time would make a slowly-listing slice unlistable
     // rather than merely slow.
+    listed = await requestNextRetainedPage(receipt, requestPage);
   }
 };
 
-const sameIdentities = (first: ListedSlice, second: ListedSlice): boolean =>
+/**
+ * One record per listed record the slice cannot store, from the first pass
+ * only, so a verified slice reports each once. Every caller of the walker
+ * gets it, so no adapter has to remember to.
+ */
+const reportUnstoredRecords = (
+  { adapterKey, slice }: ListReconciliationSliceOptions,
+  listing: SliceListing,
+): void => {
+  for (const [sourceDocumentId, extra] of listing.quarantineCollisions) {
+    logger.warn("case_law.reconciliation.quarantine_collision", {
+      adapterKey,
+      slice,
+      sourceDocumentId,
+      collidingRecords: extra,
+    });
+  }
+  for (const sourceDocumentId of listing.quarantinePeerCollisions) {
+    logger.warn("case_law.reconciliation.quarantine_peer_collision", {
+      adapterKey,
+      slice,
+      sourceDocumentId,
+    });
+  }
+  if (listing.withoutStableFields > 0) {
+    logger.warn("case_law.reconciliation.records_without_stable_fields", {
+      adapterKey,
+      slice,
+      records: listing.withoutStableFields,
+    });
+  }
+};
+
+const sameQuarantineRevisions = (
+  first: SliceListing,
+  second: SliceListing,
+): boolean =>
+  first.quarantineRevisions.size === second.quarantineRevisions.size &&
+  [...first.quarantineRevisions].every(([key, revisions]) => {
+    const other = second.quarantineRevisions.get(key);
+    return (
+      other !== undefined &&
+      revisions.size === other.size &&
+      [...revisions].every((revision) => other.has(revision))
+    );
+  });
+
+const sameIdentities = (
+  first: RetainedSliceListing,
+  second: RetainedSliceListing,
+): boolean =>
   first.keyed.size === second.keyed.size &&
-  [...first.keyed.keys()].every((identityKey) => second.keyed.has(identityKey));
+  [...first.keyed.keys()].every((identityKey) =>
+    second.keyed.has(identityKey),
+  ) &&
+  first.observations.size === second.observations.size &&
+  [...first.observations.keys()].every((key) => second.observations.has(key)) &&
+  sameQuarantineRevisions(first, second);
 
 /**
  * Every page of one slice, or an error. Never a partial listing: an
@@ -169,22 +362,26 @@ const sameIdentities = (first: ListedSlice, second: ListedSlice): boolean =>
 export const listReconciliationSlice = async (
   options: ListReconciliationSliceOptions,
 ): Promise<Result<ListedSlice, AdapterFetchError>> => {
-  const first = await listSlicePass(options);
+  const collisionEvidence = createQuarantineCollisionRetention(options);
+  const first = await listSlicePass(options, collisionEvidence);
+  if (Result.isError(first)) {
+    return first;
+  }
+  reportUnstoredRecords(options, first.value);
   if (
-    Result.isError(first) ||
     (first.value.listed === 0 && first.value.pages === 1) ||
     options.proof === SLICE_LISTING_PROOF.COUNT
   ) {
-    return first;
+    return Result.ok(completeListedSlice(first.value));
   }
   const { adapterKey, pageDelayMs, slice, sleep, signal } = options;
   await abortableSleep(sleep, pageDelayMs, signal);
-  const verification = await listSlicePass(options);
+  const verification = await listSlicePass(options, collisionEvidence);
   if (Result.isError(verification)) {
     return verification;
   }
   return sameIdentities(first.value, verification.value)
-    ? first
+    ? Result.ok(completeListedSlice(first.value))
     : Result.err(
         new AdapterFetchError({
           message: `Slice ${slice} changed while it was listed: ${String(first.value.keyed.size)} identities, then ${String(verification.value.keyed.size)}`,

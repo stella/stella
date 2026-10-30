@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_UODO",
   "key": "pl-uodo",
-  "parserVersion": 16,
+  "parserVersion": 17,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl."
   }
 }

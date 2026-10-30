@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-sn] stored rows (persistable id and docket) gain only sourceDocumentIdRepairAliases; quarantine and placeholder rows are new records the old parser dropped.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -93,6 +94,7 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -102,6 +104,11 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type { QuarantineIdentity } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -687,23 +694,111 @@ const isoDate = (value: string | undefined): string | undefined =>
   value !== undefined && ISO_DATE.test(value) ? value : undefined;
 
 /**
- * The identity the ingest stores this listing item under.
- *
- * The publisher's own document id. A Supreme Court docket is unique within
- * this court, but the id is what the portal keys a document on and what its
- * detail and document tasks are addressed by, so it is what identifies a row
- * (rule 17). Stated once so the crawl and the reconciliation cannot key the
- * same item differently.
+ * How a listed item is keyed: by the publisher's id, or, where the listing
+ * states none that can be stored, by its quarantine identity (case-law
+ * AGENTS.md rule 20). A keyed item carries the quarantine identity it would
+ * have had, so the observation that states the id again can take over the
+ * quarantined row.
  */
-export const plSnListingIdentity = (item: PlSnListingItem): ListingIdentity => {
+type PlSnItemIdentity =
+  | {
+      type: "keyed";
+      id: string;
+      quarantine: QuarantineIdentity | undefined;
+    }
+  | { type: "quarantined"; docket: string; quarantine: QuarantineIdentity };
+
+/** Why a listing-only row is stored, under `listedOnlyReason`. */
+export const PL_SN_LISTED_ONLY_REASON = {
+  /** The listing states no id that can be stored or asked for. */
+  IDENTITY_UNAVAILABLE: "identity-unavailable",
+} as const;
+
+/**
+ * The docket an item states, or undefined for none: the proxy sends an empty
+ * or blank docket for a record it holds no number for.
+ */
+const docketOf = (item: PlSnListingItem): string | undefined =>
+  item.sygnatura_sprawy === undefined ||
+  item.sygnatura_sprawy.trim().length === 0
+    ? undefined
+    : item.sygnatura_sprawy;
+
+/**
+ * The quarantine identity of a listed item, from what the listing states of
+ * the decision besides its id.
+ *
+ * The docket, the decision date and the decision form are what the court
+ * prints for the decision itself: the same on every listing of it, and on the
+ * listing that states its id again. The id is the identity that went missing,
+ * and the page and offset move as the court publishes, so neither is part of
+ * it. Undefined without a docket: a date and a form alone are shared by every
+ * decision of that kind handed down that day, so they name no one decision.
+ */
+const plSnQuarantineIdentity = (
+  item: PlSnListingItem,
+): QuarantineIdentity | undefined => {
+  const docket = docketOf(item);
+  return docket === undefined
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.PL_SN,
+        stableFields: {
+          docket,
+          decisionDate: item.data_wydania,
+          decisionForm: item.forma_orzeczenia,
+        },
+      });
+};
+
+/**
+ * The publisher's own document id where it can be stored, else the
+ * quarantine identity. A Supreme Court docket is unique within this court,
+ * but the id is what the portal keys a document on and what its detail and
+ * document tasks are addressed by, so it is what identifies a row (rule 17).
+ * Undefined for an item stating neither an id nor a docket. Stated once so
+ * the crawl, the reconciliation and a replay cannot key one item differently.
+ */
+const plSnItemIdentity = (
+  item: PlSnListingItem,
+): PlSnItemIdentity | undefined => {
   const { id } = item;
+  const quarantine = plSnQuarantineIdentity(item);
   if (id !== undefined && isPersistableSourceDocumentId(id)) {
-    return { type: "document", sourceDocumentId: id };
+    return { type: "keyed", id, quarantine };
   }
-  const caseNumber = item.sygnatura_sprawy;
-  return caseNumber === undefined
-    ? { type: "unidentifiable" }
-    : { type: "case-number", caseNumber, language: PL_SN_LANGUAGE };
+  const docket = docketOf(item);
+  return docket === undefined || quarantine === undefined
+    ? undefined
+    : { type: "quarantined", docket, quarantine };
+};
+
+/** The `sourceDocumentId` an item is stored under, if it can be stored. */
+const plSnSourceDocumentId = (item: PlSnListingItem): string | undefined => {
+  const identity = plSnItemIdentity(item);
+  if (identity === undefined) {
+    return undefined;
+  }
+  switch (identity.type) {
+    case "keyed":
+      return identity.id;
+    case "quarantined":
+      return identity.quarantine.sourceDocumentId;
+    default: {
+      identity satisfies never;
+      return panic(`Unhandled pl-sn identity: ${JSON.stringify(identity)}`);
+    }
+  }
+};
+
+/** The identity the ingest stores this listing item under. */
+export const plSnListingIdentity = (
+  item: PlSnListingItem,
+): ListingIdentity | undefined => {
+  const sourceDocumentId = plSnSourceDocumentId(item);
+  return sourceDocumentId === undefined
+    ? undefined
+    : { type: "document", sourceDocumentId };
 };
 
 const decisionUrl = (id: string): string =>
@@ -713,6 +808,7 @@ const documentUrlOf = (id: string): string =>
   proxyUrl(PROXY_TASK.DOCUMENT, { id });
 
 type PlSnBuildResult =
+  /** Read whole, or quarantined: an item with no id has nothing to fetch. */
   | { type: "built"; decision: IngestionResult }
   /** No id and no docket to key on; nothing can store this item. */
   | { type: "unkeyable" }
@@ -728,6 +824,76 @@ const RAW_PART = {
   DETAIL: "detail",
   DOCUMENT: "document",
 } as const;
+
+type QuarantinedOptions = {
+  item: PlSnListingItem;
+  docket: string;
+  quarantine: QuarantineIdentity;
+  rawParts: SourceRawParts;
+};
+
+/**
+ * A listed item stating no id that can be stored, kept as its listing row
+ * under its quarantine identity rather than dropped. Complete as it is: with
+ * no id there is no detail or document to ask the court for.
+ */
+const assembleQuarantinedPlSnDecision = ({
+  docket,
+  item,
+  quarantine,
+  rawParts,
+}: QuarantinedOptions): IngestionResult => {
+  const decisionForm = item.forma_orzeczenia;
+  const court = plSnDecidingCourt(decisionForm);
+  const decisionType = plSnDecisionType(decisionForm);
+  const decisionDate = isoDate(item.data_wydania);
+  // A docket too long to store labels nothing; the row is named by its
+  // quarantine identity instead, marked as a placeholder.
+  const docketFits = fitsCitationStorageField("caseNumber", docket);
+  const caseNumber = docketFits ? docket : quarantine.sourceDocumentId;
+  const sourceDocumentId = quarantine.sourceDocumentId;
+  logger.warn("case_law.ingestion.record_quarantined", {
+    adapterKey: ADAPTER_KEYS.PL_SN,
+    sourceDocumentId,
+  });
+  const sourceRaw = encodeSourceRawEnvelope(rawParts);
+  return plainTextIngestionResult({
+    caseNumber,
+    ...(docketFits ? {} : { caseNumberIsPlaceholder: true }),
+    sourceDocumentId,
+    court,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_SN].country,
+    language: PL_SN_LANGUAGE,
+    decisionDate,
+    decisionType,
+    isListingOnly: true,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      caseNumber,
+      court,
+      decisionDate,
+      decisionType,
+      decisionForm,
+      identityQuarantined: true,
+      listedOnlyReason: PL_SN_LISTED_ONLY_REASON.IDENTITY_UNAVAILABLE,
+      ...(docketFits
+        ? {
+            rulingKeys: plSupremeCourtRulingKeys({
+              caseNumber,
+              court,
+              decisionDate,
+              decisionType,
+            }),
+          }
+        : { caseNumberFallbackReason: "overlong-number" }),
+    }),
+    rawHash: hashContent(sourceRaw),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
 
 export type AssemblePlSnDecisionOptions = {
   /** The row as the listing stated it. */
@@ -755,17 +921,31 @@ export const assemblePlSnDecision = async ({
   item,
   rawParts,
 }: AssemblePlSnDecisionOptions): Promise<PlSnBuildResult> => {
-  const { id } = item;
-  if (id === undefined || !isPersistableSourceDocumentId(id)) {
+  const identity = plSnItemIdentity(item);
+  if (identity === undefined) {
     return { type: "unkeyable" };
   }
+  if (identity.type === "quarantined") {
+    return {
+      type: "built",
+      decision: assembleQuarantinedPlSnDecision({
+        item,
+        docket: identity.docket,
+        quarantine: identity.quarantine,
+        rawParts,
+      }),
+    };
+  }
+  const { id } = identity;
   // Annotated because the union of the two payloads hides the detail-only
   // fields below; a listing row simply states none of them.
   const record: PlSnDetail = detail ?? item;
-  const caseNumber = record.sygnatura_sprawy ?? item.sygnatura_sprawy;
-  if (caseNumber === undefined) {
-    return { type: "unkeyable" };
-  }
+  // The docket as stated, blank or not: rows already stored under an id were
+  // labelled this way, and a replay must label them the same.
+  const docket = record.sygnatura_sprawy ?? item.sygnatura_sprawy;
+  // A listed id with no docket is still the court's document: it is stored
+  // under its id, labelled by it and marked as a placeholder.
+  const caseNumber = docket ?? id;
 
   const decisionForm = record.forma_orzeczenia ?? item.forma_orzeczenia;
   const court = plSnDecidingCourt(decisionForm);
@@ -809,7 +989,14 @@ export const assemblePlSnDecision = async ({
 
   const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
+    ...(docket === undefined ? { caseNumberIsPlaceholder: true } : {}),
     sourceDocumentId: id,
+    // The row this item was stored under while the listing stated no id.
+    ...(identity.quarantine === undefined
+      ? {}
+      : {
+          sourceDocumentIdRepairAliases: identity.quarantine.repairAliases,
+        }),
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_SN].country,
     language: PL_SN_LANGUAGE,
@@ -842,12 +1029,15 @@ export const assemblePlSnDecision = async ({
       dissentingOnDecision: record.zglaszajacy_zdanie_odrebne_orzeczenie,
       dissentingOnReasons: record.zglaszajacy_zdanie_odrebne_uzasadnienie,
       modifiedDate: record.data_modyfikacji,
-      rulingKeys: plSupremeCourtRulingKeys({
-        caseNumber,
-        court,
-        decisionDate,
-        decisionType,
-      }),
+      rulingKeys:
+        docket === undefined
+          ? undefined
+          : plSupremeCourtRulingKeys({
+              caseNumber,
+              court,
+              decisionDate,
+              decisionType,
+            }),
     }),
     rawHash: hashContent(sourceRaw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN],
@@ -884,10 +1074,20 @@ const buildPlSnDecision = async ({
 }: FetchPlSnDecisionOptions): Promise<
   Result<PlSnBuildResult, AdapterFetchError>
 > => {
-  const { id } = item;
-  if (id === undefined || !isPersistableSourceDocumentId(id)) {
-    return Result.ok({ type: "unkeyable" });
+  const identity = plSnItemIdentity(item);
+  if (identity?.type !== "keyed") {
+    // No id to address a detail or document request by: the listing row is
+    // all there is, stored under its quarantine identity where it has one.
+    return Result.ok(
+      await assemblePlSnDecision({
+        item,
+        detail: null,
+        documentBytes: undefined,
+        rawParts: { [RAW_PART.LISTING]: listingRaw },
+      }),
+    );
   }
+  const { id } = identity;
 
   const fetched = await fetchDetail({ cursor, id, signal });
   if (Result.isError(fetched)) {
@@ -930,7 +1130,8 @@ const reparsePlSnStoredRaw = async (
   const read = readStoredRawListing({
     stored,
     part: RAW_PART.LISTING,
-    identityOf: (listing) => normalizePlSnListingItem(listing).id,
+    identityOf: (listing) =>
+      plSnSourceDocumentId(normalizePlSnListingItem(listing)),
   });
   if (read.type === "rejected") {
     return read;
@@ -1207,20 +1408,24 @@ const listPlSnSlicePage = async ({
   }
   const { rows } = listed.value;
 
-  const items = rows.map((row) => {
-    const item = normalizePlSnListingItem(row);
-    return {
-      identity: plSnListingIdentity(item),
-      payload: row,
-    };
+  // A row with no id and no docket is left out rather than keyed on a guess:
+  // a date and a form name no one decision. It is counted, not dropped, so
+  // the walk reports what the court listed and nothing could store.
+  const items = rows.flatMap((row) => {
+    const identity = plSnListingIdentity(normalizePlSnListingItem(row));
+    return identity === undefined ? [] : [{ identity, payload: row }];
   });
+  const withoutStableFields = rows.length - items.length;
+  const unstored = withoutStableFields === 0 ? {} : { withoutStableFields };
 
-  if (items.length === 0) {
-    return { items, totalPages: page };
+  if (rows.length === 0) {
+    return { observations: [], items, totalPages: page };
   }
   return {
+    observations: [],
     items,
-    totalPages: items.length < LISTING_PAGE_SIZE ? page + 1 : page + 2,
+    ...unstored,
+    totalPages: rows.length < LISTING_PAGE_SIZE ? page + 1 : page + 2,
   };
 };
 
@@ -1373,6 +1578,7 @@ const plSnFetchPage = async (
   const window = advanced.value;
   if (!window.listed) {
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: window.url,
       nextCursor: encodePlSnCursor(window),
@@ -1427,6 +1633,11 @@ const plSnFetchPage = async (
     const built = attempted.value;
     switch (built.type) {
       case "unkeyable":
+        logger.warn("case_law.ingestion.record_unidentifiable", {
+          adapterKey: ADAPTER_KEYS.PL_SN,
+          cursor: encodePlSnCursor(window),
+          reason: "no-stable-field",
+        });
         break;
       // The cursor moves past this document either way, so the crawl keeps
       // the listing-only row a document the proxy served nothing for still
@@ -1448,6 +1659,7 @@ const plSnFetchPage = async (
     // next cycle rather than checkpointing past them; what was stored is
     // re-stored under the same hash, and skipping them would be permanent.
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -1467,6 +1679,7 @@ const plSnFetchPage = async (
   // reading it as the month's last one would leave the rest unvisited.
   if (window.full) {
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -1486,6 +1699,7 @@ const plSnFetchPage = async (
 
   const next = monthAfter(window.month);
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}

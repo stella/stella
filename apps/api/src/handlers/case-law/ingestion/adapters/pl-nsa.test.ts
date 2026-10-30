@@ -647,7 +647,11 @@ describe("the cursor", () => {
     const crawler = createPlNsaCrawler({ snapshot, source: counted });
     const parked = `${snapshot.revision}:2:0`;
     const page = (await crawler.fetchPage(parked)).unwrap();
-    expect(page).toEqual({ decisions: [], nextCursor: parked });
+    expect(page).toEqual({
+      observations: [],
+      decisions: [],
+      nextCursor: parked,
+    });
     expect(local).not.toHaveBeenCalled();
   });
 
@@ -933,7 +937,7 @@ describe("a row without a publisher id", () => {
         (row) => row.case === "nsa-wyrok-fsk-reasons",
       ) ?? panic("no recorded row");
     const identified = build(recorded);
-    expect(identified.sourceDocumentIdRepairAliases).toEqual([
+    expect(identified.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       plNsaQuarantineId(await withoutId()),
     ]);
   });

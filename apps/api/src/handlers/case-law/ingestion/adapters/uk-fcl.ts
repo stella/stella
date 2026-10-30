@@ -295,6 +295,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
       switch (state.type) {
         case "tip":
           return Result.ok({
+            observations: [],
             decisions,
             sourceUrl,
             nextCursor: JSON.stringify(
@@ -311,6 +312,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
         case "sweep": {
           if (listed.next !== null) {
             return Result.ok({
+              observations: [],
               decisions,
               sourceUrl,
               nextCursor: JSON.stringify({
@@ -340,6 +342,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
             empty === MAX_EMPTY_SLICES - 1
           ) {
             return Result.ok({
+              observations: [],
               decisions,
               sourceUrl,
               nextCursor: JSON.stringify(state),
@@ -606,6 +609,7 @@ export const ukFclAdapter = defineSourceAdapter({
         return await Promise.reject(listed.error);
       }
       return {
+        observations: [],
         items: listed.value.entries.map((entry) => ({
           identity: {
             type: "document" as const,

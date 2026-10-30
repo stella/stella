@@ -27,8 +27,15 @@ import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
+
+/** An empty decision page still carries the observations that precede its cursor. */
+export const emptySyncPage = (
+  nextCursor: SyncPage["nextCursor"],
+  observations: SyncPage["observations"],
+) => ({ decisions: [], observations, nextCursor }) satisfies SyncPage;
 
 /**
  * Options for page-number pagination (1-indexed or
@@ -209,6 +216,7 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
     signal?: AbortSignal,
   ) => Promise<
     | IngestionItem
+    | { type: "observation"; observation: ListingObservation }
     | { type: "item_build_failed"; decision: IngestionResult | null }
     | { type: "unread"; item: UnreadListedItem }
     | null
@@ -612,6 +620,7 @@ const materialiseConfiguredWalks = ({
 };
 
 type ParsedPageItems = {
+  observations: ListingObservation[];
   decisions: IngestionResult[];
   supplements: DecisionSupplement[];
   unreadItems: UnreadListedItem[];
@@ -636,6 +645,7 @@ const parsePageItems = async ({
   parseItem,
   signal,
 }: ParsePageItemsOptions): Promise<ParsedPageItems> => {
+  const observations: ListingObservation[] = [];
   const decisions: IngestionResult[] = [];
   const supplements: DecisionSupplement[] = [];
   const unreadItems: UnreadListedItem[] = [];
@@ -662,6 +672,9 @@ const parsePageItems = async ({
         const item = result.value;
         switch (item?.type) {
           case undefined:
+            break;
+          case "observation":
+            observations.push(item.observation);
             break;
           case "decision":
             decisions.push(item.decision);
@@ -699,6 +712,7 @@ const parsePageItems = async ({
     });
   }
   return {
+    observations,
     decisions,
     supplements,
     unreadItems,
@@ -851,6 +865,7 @@ export const createPagePaginatedFetch = <TResponse>(
               page: String(page),
             });
             return Result.ok({
+              observations: [],
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),
             });
@@ -956,6 +971,7 @@ export const createPagePaginatedFetch = <TResponse>(
           signal,
         });
         const {
+          observations,
           decisions,
           supplements,
           unreadItems,
@@ -1040,6 +1056,7 @@ export const createPagePaginatedFetch = <TResponse>(
 
         return Result.ok({
           decisions,
+          observations,
           ...(itemsSkipped === 0
             ? {}
             : {

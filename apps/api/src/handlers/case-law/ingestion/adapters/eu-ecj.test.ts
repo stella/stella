@@ -11,12 +11,16 @@ import {
   ECJ_DECISION_PATTERN,
   ECJ_TOTAL_COUNT_QUERY,
   ecjCaseNumber,
-  ecjListingIdentity,
+  type EcjListedVariant,
+  ecjVariantIdentity,
   euEcjAdapter as ecjAdapter,
   fetchDecisionsByCelex,
   SPARQL_LIMIT,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  requireReconciliation,
+  throughLedgerJson,
+} from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -657,7 +661,7 @@ const LANGUAGE_PREFIX =
  * is keyed on. */
 const storedIdentityKey = (decision: {
   sourceDocumentId?: string | undefined;
-}): string | null =>
+}): string =>
   listingIdentityKey({
     type: "document",
     sourceDocumentId: decision.sourceDocumentId ?? "",
@@ -986,52 +990,68 @@ describe("euEcjAdapter.getTotalCount", () => {
   });
 });
 
-describe("ecjListingIdentity", () => {
+/** The listing identity a variant is reported under, as a ledger key. */
+const variantKey = (variant: EcjListedVariant): string | null => {
+  const identity = ecjVariantIdentity(variant);
+  return identity.type === "no-stable-field"
+    ? null
+    : listingIdentityKey({
+        type: "document",
+        sourceDocumentId: identity.sourceDocumentId,
+      });
+};
+
+const ECLI = "ECLI:EU:C:2024:49";
+
+describe("ecjVariantIdentity", () => {
   test("keys a variant on its CELEX and the stored language tag", () => {
     expect(
-      ecjListingIdentity({ celex: "62021CJ0128", language: "EN" }),
-    ).toEqual({ type: "document", sourceDocumentId: "62021CJ0128:en" });
+      throughLedgerJson(
+        ecjVariantIdentity({
+          celex: "62021CJ0128",
+          ecli: ECLI,
+          language: "EN",
+        }),
+      ),
+    ).toMatchObject({ type: "keyed", sourceDocumentId: "62021CJ0128:en" });
     expect(
-      ecjListingIdentity({ celex: "62023TJ0201", language: "MT" }),
-    ).toEqual({ type: "document", sourceDocumentId: "62023TJ0201:mt" });
+      ecjVariantIdentity({ celex: "62023TJ0201", ecli: ECLI, language: "MT" }),
+    ).toMatchObject({ type: "keyed", sourceDocumentId: "62023TJ0201:mt" });
   });
 
   test("the key it produces fits the ledger and reads back", () => {
-    const identity = ecjListingIdentity({
+    const key = variantKey({
       celex: "62009FJ0100",
+      ecli: ECLI,
       language: "SV",
     });
-    expect(listingIdentityKey(identity)).toBe("document:62009FJ0100:sv");
-    expect(parseListingIdentityKey(listingIdentityKey(identity) ?? "")).toEqual(
-      identity,
-    );
+    expect(key).toBe("document:62009FJ0100:sv");
+    expect(parseListingIdentityKey(key ?? "")).toEqual({
+      type: "document",
+      sourceDocumentId: "62009FJ0100:sv",
+    });
   });
 
   test("the documents that settle one docket are separate identities", () => {
     // A judgment and an order both numbered C-128/21, in one language: keyed
     // on the docket they were one row and the second replaced the first.
-    const judgment = ecjListingIdentity({
-      celex: "62021CJ0128",
-      language: "EN",
-    });
-    const order = ecjListingIdentity({ celex: "62021CO0128", language: "EN" });
     expect(celexToCaseNumber("62021CO0128")).toBe(
       celexToCaseNumber("62021CJ0128"),
     );
-    expect(listingIdentityKey(order)).not.toBe(listingIdentityKey(judgment));
+    expect(
+      variantKey({ celex: "62021CO0128", ecli: ECLI, language: "EN" }),
+    ).not.toBe(
+      variantKey({ celex: "62021CJ0128", ecli: ECLI, language: "EN" }),
+    );
   });
 
   test("one document's language variants are separate identities", () => {
     // This source stores a row per language, so a single identity for the
     // work would have each translation overwrite the last.
     expect(
-      listingIdentityKey(
-        ecjListingIdentity({ celex: "62021CJ0128", language: "FR" }),
-      ),
+      variantKey({ celex: "62021CJ0128", ecli: ECLI, language: "FR" }),
     ).not.toBe(
-      listingIdentityKey(
-        ecjListingIdentity({ celex: "62021CJ0128", language: "EN" }),
-      ),
+      variantKey({ celex: "62021CJ0128", ecli: ECLI, language: "EN" }),
     );
   });
 
@@ -1040,18 +1060,64 @@ describe("ecjListingIdentity", () => {
     // publisher stated, so a sector or type this adapter has no rule for is
     // still one document.
     expect(
-      ecjListingIdentity({ celex: "62021XX0128", language: "EN" }),
-    ).toEqual({ type: "document", sourceDocumentId: "62021XX0128:en" });
+      variantKey({ celex: "62021XX0128", ecli: ECLI, language: "EN" }),
+    ).toBe("document:62021XX0128:en");
   });
 
-  test("a CELEX no store can hold keys nothing", () => {
-    // Reserving it is impossible, so hunting a row under it would keep the
-    // slice short for a document nothing can ever write.
+  test("a CELEX no store can hold quarantines the variant under its ECLI", () => {
+    // The CELEX itself is the malformed value, so it is no part of the
+    // fingerprint: a missing and an over-long one name the same record. The
+    // digest is pinned so a change to the stable fields, which would orphan
+    // every stored quarantine row, cannot pass unnoticed.
     for (const celex of ["", "not a celex", "6".repeat(300)]) {
-      expect(ecjListingIdentity({ celex, language: "EN" })).toEqual({
-        type: "unidentifiable",
-      });
+      expect(ecjVariantIdentity({ celex, ecli: ECLI, language: "EN" })).toEqual(
+        {
+          type: "quarantined",
+          sourceDocumentId:
+            "eu-ecj-quarantine:3be9980e918d55ce91340ad5f75f1b8121db200295f89a0a5407d192eda41099",
+          fingerprint:
+            "3be9980e918d55ce91340ad5f75f1b8121db200295f89a0a5407d192eda41099",
+        },
+      );
     }
+    // A reflowed ECLI is the same record; another language is another row.
+    expect(variantKey({ celex: "", ecli: ` ${ECLI}\n`, language: "EN" })).toBe(
+      variantKey({ celex: "", ecli: ECLI, language: "EN" }),
+    );
+    expect(variantKey({ celex: "", ecli: ECLI, language: "FR" })).not.toBe(
+      variantKey({ celex: "", ecli: ECLI, language: "EN" }),
+    );
+  });
+
+  test("a keyed variant names its quarantine identity as a repair alias", () => {
+    const quarantined = ecjVariantIdentity({
+      celex: "not a celex",
+      ecli: ECLI,
+      language: "EN",
+    });
+    expect(
+      throughLedgerJson(
+        ecjVariantIdentity({
+          celex: "62021CJ0128",
+          ecli: ECLI,
+          language: "EN",
+        }),
+      ),
+    ).toEqual({
+      type: "keyed",
+      sourceDocumentId: "62021CJ0128:en",
+      repairAliases: [
+        quarantined.type === "quarantined" ? quarantined.sourceDocumentId : "",
+      ],
+    });
+  });
+
+  test("an unusable CELEX with a blank ECLI is given no identity", () => {
+    // Nothing else the binding states names one decision: its date and class
+    // are shared by every judgment of the day.
+    expect(
+      ecjVariantIdentity({ celex: "not a celex", ecli: " ", language: "EN" }),
+    ).toEqual({ type: "no-stable-field" });
   });
 });
 
@@ -1286,6 +1352,230 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
     expect(
       listed.items.map(({ identity }) => listingIdentityKey(identity)),
     ).toEqual(crawled.value.decisions.map(storedIdentityKey));
+  });
+});
+
+describe("a variant listed under a CELEX no store can hold", () => {
+  const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
+
+  beforeEach(() => {
+    Bun.sleep = () => Promise.resolve();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
+  });
+
+  const malformedEn = {
+    ...enBinding,
+    celex: { type: "literal", value: "not a celex" },
+  };
+  const quarantined = ecjVariantIdentity({
+    celex: malformedEn.celex.value,
+    ecli: malformedEn.ecli.value,
+    language: "EN",
+  });
+  const quarantineId =
+    quarantined.type === "quarantined" ? quarantined.sourceDocumentId : "";
+
+  const crawl = async () =>
+    (await ecjAdapter.fetchPage("2024-01-18", {})).unwrap().decisions;
+
+  test("the crawl keeps it listing-only under its quarantine identity, without a fetch", async () => {
+    const { documentFetches, noticeRequests } = installSparqlMock({
+      bindings: [malformedEn],
+      served: [EN_MANIFESTATION_ID],
+    });
+
+    const [decision, ...rest] = await crawl();
+
+    expect(rest).toEqual([]);
+    expect(quarantineId).toMatch(/^eu-ecj-quarantine:[0-9a-f]{64}$/u);
+    expect(decision?.sourceDocumentId).toBe(quarantineId);
+    expect(decision?.isListingOnly).toBe(true);
+    expect(decision?.caseNumberIsPlaceholder).toBe(true);
+    expect(decision?.ecli === malformedEn.ecli.value).toBe(true);
+    expect(decision?.metadata).toMatchObject({
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: "unpersistable-celex",
+    });
+    expect(
+      decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["listing"],
+    ).toBe(JSON.stringify(malformedEn));
+    // The notice and the EUR-Lex page are addressed by the CELEX it lacks.
+    expect(documentFetches).toEqual([]);
+    expect(noticeRequests).toEqual([]);
+  });
+
+  test.each(["toString", "constructor", "__proto__", "UNKNOWN_PUBLISHER_TYPE"])(
+    "a listed unknown type %s cannot inherit a decision type",
+    async (typeCode) => {
+      const binding = {
+        ...malformedEn,
+        type: { ...malformedEn.type, value: typeCode },
+      };
+      installSparqlMock({ bindings: [binding] });
+      const [decision] = await crawl();
+      expect(decision?.decisionType === "unknown").toBe(true);
+      expect(decision?.sourceDocumentId).toBe(quarantineId);
+      expect(decision?.metadata["identityQuarantined"]).toBe(true);
+    },
+  );
+
+  test("the slice walk lists it under the same identity and builds the crawl's row", async () => {
+    installSparqlMock({ bindings: [malformedEn] });
+
+    const [crawled] = await crawl();
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+    expect(
+      page.items.map(({ identity }) => listingIdentityKey(identity)),
+    ).toEqual([storedIdentityKey({ sourceDocumentId: quarantineId })]);
+
+    // Through JSON, as the loop parks a payload and replays it.
+    const payload = throughLedgerJson(page.items[0]?.payload);
+    const outcome = await reconciliation.buildDecision(payload);
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(outcome.decision.sourceDocumentId).toBe(quarantineId);
+    expect(outcome.decision.isListingOnly).toBe(true);
+    expect(outcome.decision.rawHash).toBe(crawled?.rawHash ?? "");
+  });
+
+  test("the keyed observation of the same decision names it as a repair alias", async () => {
+    installSparqlMock({
+      bindings: [enBinding],
+      served: [EN_MANIFESTATION_ID],
+    });
+
+    const [keyed] = await crawl();
+
+    expect(keyed?.sourceDocumentId).toBe("62021CJ0128:en");
+    expect(keyed?.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+      quarantineId,
+    ]);
+  });
+
+  test("two decisions listed under one unusable CELEX stay two rows", async () => {
+    const otherDecision = {
+      ...malformedEn,
+      ecli: { type: "literal", value: "ECLI:EU:C:2024:61" },
+    };
+    installSparqlMock({ bindings: [malformedEn, otherDecision] });
+
+    const crawled = await crawl();
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+
+    expect(crawled).toHaveLength(2);
+    expect(new Set(crawled.map(storedIdentityKey)).size).toBe(2);
+    expect(
+      page.items.map(({ identity }) => listingIdentityKey(identity)),
+    ).toEqual(crawled.map(storedIdentityKey));
+  });
+
+  test("a stored quarantined row replays under the id it was stored by", async () => {
+    installSparqlMock({ bindings: [malformedEn] });
+    const [stored] = await crawl();
+    if (stored === undefined) {
+      throw new TypeError("Expected the quarantined row");
+    }
+
+    const replayed = await ecjAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(stored.sourceRaw ?? ""),
+      contentType: stored.sourceRawContentType ?? null,
+      caseNumber: stored.caseNumber,
+      sourceDocumentId: stored.sourceDocumentId ?? null,
+      language: stored.language,
+      court: stored.court,
+      ecli: stored.ecli ?? null,
+      decisionDate: stored.decisionDate ?? null,
+      decisionType: stored.decisionType ?? null,
+      sourceUrl: stored.sourceUrl ?? null,
+      documentUrl: stored.documentUrl ?? null,
+      metadata: stored.metadata,
+    });
+
+    if (replayed?.type !== "parsed") {
+      throw new TypeError(
+        `Expected parsed, got ${replayed?.type ?? "missing"}`,
+      );
+    }
+    expect(replayed.result.sourceDocumentId).toBe(quarantineId);
+    expect(replayed.result.rawHash).toBe(stored.rawHash);
+  });
+
+  test("an unusable CELEX with a blank ECLI is stored by neither walk, but counted by the slice", async () => {
+    const unnamed = {
+      ...enBinding,
+      celex: { ...enBinding.celex, value: malformedEn.celex.value },
+      ecli: { ...enBinding.ecli, value: "" },
+    };
+    const republished = withManifestation(unnamed, {
+      cellarLanguage: "ENG",
+      manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05",
+    });
+    installSparqlMock({
+      bindings: [unnamed, republished, enBinding],
+      served: [EN_MANIFESTATION_ID],
+    });
+
+    expect(
+      (await crawl()).map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["62021CJ0128:en"]);
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+    expect(
+      page.items.map(({ identity }) => listingIdentityKey(identity)),
+    ).toEqual(["document:62021CJ0128:en"]);
+    // One variant, however many manifestations name it, as the crawl groups
+    // it: the walker adds it to the slice's unstored records.
+    expect(page.withoutStableFields).toBe(1);
+  });
+
+  test("a slice listing only nameable variants reports no unstored records", async () => {
+    installSparqlMock({ bindings: [malformedEn, enBinding] });
+
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+
+    expect(page.items).toHaveLength(2);
+    expect(page.withoutStableFields).toBeUndefined();
+  });
+
+  test("it keeps the label the crawl filed it under before it was quarantined", async () => {
+    // The previous crawl fetched such a variant and stored it under no id,
+    // keyed on `celexToCaseNumber` of the CELEX as listed. The same label,
+    // language and ECLI let the pipeline's legacy null-id adoption re-key
+    // that row to the quarantine identity instead of inserting a second one.
+    const docketPrefixed = {
+      ...malformedEn,
+      celex: { type: "literal", value: "62021CJ0128 R" },
+      language: {
+        type: "uri",
+        value: `${LANGUAGE_PREFIX}FRA`,
+      },
+    };
+    const overLong = {
+      ...malformedEn,
+      ecli: { type: "literal", value: "ECLI:EU:C:2024:61" },
+      celex: { type: "literal", value: "6".repeat(300) },
+    };
+    installSparqlMock({ bindings: [malformedEn, docketPrefixed, overLong] });
+
+    const labels = (await crawl()).map((decision) => ({
+      caseNumber: String(decision.caseNumber),
+      placeholder: decision.caseNumberIsPlaceholder,
+    }));
+
+    expect(labels).toEqual([
+      { caseNumber: celexToCaseNumber("not a celex"), placeholder: true },
+      { caseNumber: "C-128/21", placeholder: false },
+      {
+        caseNumber: expect.stringMatching(/^CJEU listing [0-9a-f]{64}$/u),
+        placeholder: true,
+      },
+    ]);
   });
 });
 

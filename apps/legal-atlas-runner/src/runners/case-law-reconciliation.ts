@@ -50,10 +50,12 @@ type ReconciliationTurn =
 export type ReconciliationCounts = {
   /** Items the publisher listed across the unit. */
   listed: number;
-  /** Distinct keyable identities; what a slice is measured against. */
+  /** Distinct identities; what a slice is measured against. */
   keyable: number;
-  /** Listed items with nothing to key on; never held, never missing. */
-  unidentifiable: number;
+  /** Listed records no row can hold; see the engine's unit summary. */
+  unstored: number;
+  /** Keyed and quarantined records a quarantine fingerprint cannot tell apart. */
+  quarantinePeerCollisions: number;
   /** Identities already held when the unit started. */
   heldBefore: number;
   /** Misses the store already tracks, left to the due-retry path. */
@@ -122,7 +124,8 @@ const emptySummary = (): ReconciliationSweepSummary => ({
   erroredSources: [],
   listed: 0,
   keyable: 0,
-  unidentifiable: 0,
+  unstored: 0,
+  quarantinePeerCollisions: 0,
   heldBefore: 0,
   scheduled: 0,
   written: 0,
@@ -152,7 +155,8 @@ const addCounts = (
 ): void => {
   summary.listed += counts.listed;
   summary.keyable += counts.keyable;
-  summary.unidentifiable += counts.unidentifiable;
+  summary.unstored += counts.unstored;
+  summary.quarantinePeerCollisions += counts.quarantinePeerCollisions;
   summary.heldBefore += counts.heldBefore;
   summary.scheduled += counts.scheduled;
   summary.written += counts.written;

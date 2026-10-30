@@ -98,6 +98,11 @@ import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -859,7 +864,8 @@ const verbatimRow = (source: PlNsaDatasetRow): Record<string, unknown> =>
 
 // ── Identity ─────────────────────────────────────────────
 
-const QUARANTINE_PREFIX = "pl-nsa-quarantine:";
+const QUARANTINE_PREFIX =
+  LEGACY_QUARANTINE_PREFIXES[LEGACY_REPAIR_NAMESPACE.PL_NSA];
 
 type PlNsaIdentity = {
   id: string;
@@ -974,7 +980,17 @@ const quarantined = ({
       sourceDocumentId: identity.id,
       ...(identity.kind === "quarantine"
         ? {}
-        : { sourceDocumentIdRepairAliases: [plNsaQuarantineId(source)] }),
+        : {
+            sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+              namespace: LEGACY_REPAIR_NAMESPACE.PL_NSA,
+              sourceDocumentIds: [plNsaQuarantineId(source)],
+              stableFields: {
+                docket_number:
+                  normalizePlNsaRow(source).docket_number ?? undefined,
+                court_name: normalizePlNsaRow(source).court_name ?? undefined,
+              },
+            }),
+          }),
       court: PL_NSA_UNSTATED_COURT,
       country: PL_NSA_COUNTRY,
       language: PL_NSA_LANGUAGE,
@@ -1146,7 +1162,17 @@ export const assemblePlNsaDecision = ({
       sourceDocumentId: identity.id,
       ...(identity.kind === "quarantine"
         ? {}
-        : { sourceDocumentIdRepairAliases: [plNsaQuarantineId(source)] }),
+        : {
+            sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+              namespace: LEGACY_REPAIR_NAMESPACE.PL_NSA,
+              sourceDocumentIds: [plNsaQuarantineId(source)],
+              stableFields: {
+                docket_number:
+                  normalizePlNsaRow(source).docket_number ?? undefined,
+                court_name: normalizePlNsaRow(source).court_name ?? undefined,
+              },
+            }),
+          }),
       court: court.name,
       country: PL_NSA_COUNTRY,
       language: PL_NSA_LANGUAGE,
@@ -1569,6 +1595,7 @@ export const createPlNsaCrawler = ({
       // Past the last shard: the pinned revision has nothing left, and the
       // cursor parks here without asking for anything (rule 13).
       return Result.ok({
+        observations: [],
         decisions: [],
         nextCursor: encodePlNsaCursor(at, snapshot),
       });
@@ -1617,6 +1644,7 @@ export const createPlNsaCrawler = ({
       snapshot,
     );
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -1639,12 +1667,12 @@ export const createPlNsaCrawler = ({
     const index = sliceIndex(slice);
     const target = index === null ? undefined : snapshot.shards[index];
     if (target === undefined) {
-      return { items: [], totalPages: 0 };
+      return { observations: [], items: [], totalPages: 0 };
     }
     const totalPages = Math.ceil(target.rows / LISTING_PAGE_ROWS);
     const rowStart = page * LISTING_PAGE_ROWS;
     if (rowStart >= target.rows) {
-      return { items: [], totalPages };
+      return { observations: [], items: [], totalPages };
     }
     const file = await source.remote(target, signal);
     const listed = Result.isError(file)
@@ -1661,6 +1689,7 @@ export const createPlNsaCrawler = ({
       return await Promise.reject(listed.error);
     }
     return {
+      observations: [],
       items: listed.value.map(({ fingerprint, judgmentId }, offset) => {
         const identity = plNsaIdentityOf(
           fingerprint ?? { judgment_id: judgmentId },

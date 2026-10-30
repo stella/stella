@@ -3,6 +3,8 @@ import * as v from "valibot";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
 
+import { CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE } from "@/api/lib/case-law/coverage-index";
+
 import { decodeCheckpoint } from "./backfill-runtime";
 import { reindexIndexConcurrently } from "./online-ddl";
 import type {
@@ -189,4 +191,9 @@ export const createFunctionDependentIndexReindex = ({
 /** Each replacement revision registers once; the repair discovers its index workset. */
 export const FUNCTION_DEPENDENT_INDEX_REINDEXES: readonly ReturnType<
   typeof createFunctionDependentIndexReindex
->[] = [];
+>[] = [
+  createFunctionDependentIndexReindex({
+    functionSignature: CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
+    replacementRevision: "20261030123341_decision_docket_filing_year_workplace",
+  }),
+];

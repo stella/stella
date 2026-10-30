@@ -37,11 +37,16 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // Spies created in a test stay attached if it fails before restoring them.
@@ -1117,6 +1122,146 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
     });
 
+    test("a NALUS listing without a document discriminator keeps its raw beside the recovered row", async () => {
+      let phase: "quarantined" | "keyed" = "quarantined";
+      const sleepSpy = spyOn(Bun, "sleep").mockResolvedValue(undefined);
+      const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+        asFetchMock(async (input, init) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          if (url.pathname.endsWith("/Search/Search.aspx")) {
+            if (init?.method === "POST") {
+              return new Response(null, {
+                status: 302,
+                headers: { Location: "/Search/Results.aspx" },
+              });
+            }
+            return new Response(`<html><body>
+              <input id="__VIEWSTATE" value="view-state" />
+              <input id="__VIEWSTATEGENERATOR" value="generator" />
+              <input id="__EVENTVALIDATION" value="validation" />
+              <select name="ctl00$MainContent$resultsPageSize" id="ctl00_MainContent_resultsPageSize">
+                <option selected="selected" value="20">20</option>
+              </select></body></html>`);
+          }
+          if (url.pathname.endsWith("/Search/Results.aspx")) {
+            const detail = phase === "keyed" ? "id=7402" : "malformed=true";
+            const label = phase === "keyed" ? "Pl.ÚS 11/24" : "";
+            const ecli =
+              phase === "keyed" ? "ECLI:CZ:US:2024:Pl.US.11.24.1" : "";
+            return new Response(`<html><body>Výsledky 1 - 1 z celkem 1<table>
+              <tr class="resultData0"><td></td><td>
+                <a href="ResultDetail.aspx?${detail}&pos=1&cnt=1">${label} #1</a><br />${ecli}<br />Jan Novák
+              </td></tr><tr class="resultData0" valign="top"><td></td></tr>
+              </table>Výsledky 1 - 1 z celkem 1</body></html>`);
+          }
+          return new Response("missing", { status: 404 });
+        }),
+      );
+      const cursor = "search:historical:2026-08-07:2024:collect:0:0:-";
+      const first = (await czUsAdapter.fetchPage(cursor, {}))
+        .unwrap()
+        .decisions.at(0);
+      phase = "keyed";
+      const recovered = (await czUsAdapter.fetchPage(cursor, {}))
+        .unwrap()
+        .decisions.at(0);
+      fetchSpy.mockRestore();
+      sleepSpy.mockRestore();
+      if (
+        first === undefined ||
+        recovered === undefined ||
+        first.sourceDocumentId === undefined ||
+        first.sourceRaw === undefined
+      ) {
+        return panic("Both NALUS listing observations must build");
+      }
+      expect(first.sourceDocumentId).toMatch(/^nalus-quarantine:/u);
+      expect(recovered.sourceDocumentId).toBe("nalus-record:7402");
+      expect(
+        recovered.sourceDocumentIdRepairAliases?.some(
+          (alias) => alias === first.sourceDocumentId,
+        ) ?? false,
+      ).toBe(false);
+      const fake = startFakeS3();
+      try {
+        await processDecision({
+          input: first,
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+        const [before] = await db
+          .select()
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, first.sourceDocumentId),
+            ),
+          )
+          .limit(1);
+        if (
+          before?.sourceRawS3Key === undefined ||
+          before.sourceRawS3Key === null
+        ) {
+          panic("The initial listing must retain its raw source pointer");
+        }
+        const sourceRawS3Key = before.sourceRawS3Key;
+        const rawBefore = [...fake.objects].find(([key]) =>
+          key.endsWith(`/${sourceRawS3Key}`),
+        )?.[1];
+        expect(rawBefore).toBeDefined();
+        expect(new TextDecoder().decode(rawBefore?.bytes)).toBe(
+          first.sourceRaw,
+        );
+        await processDecision({
+          input: recovered,
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        });
+        const rows = await db
+          .select()
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              inArray(
+                caseLawDecisions.sourceDocumentId,
+                [first.sourceDocumentId, "nalus-record:7402"].map(String),
+              ),
+            ),
+          )
+          .limit(3);
+        expect(rows).toHaveLength(2);
+        const retained = rows.find(({ id }) => id === before.id);
+        expect(retained?.sourceDocumentId).toBe(first.sourceDocumentId);
+        expect(retained?.sourceRawS3Key).toBe(before.sourceRawS3Key);
+        expect(retained?.metadata).toEqual(before.metadata);
+        expect(before.metadata).toMatchObject({
+          identityQuarantined: true,
+          listedOnly: true,
+        });
+        expect(
+          [...fake.objects].find(([key]) =>
+            key.endsWith(`/${sourceRawS3Key}`),
+          )?.[1],
+        ).toEqual(rawBefore);
+        const keyed = rows.find(
+          ({ sourceDocumentId }) => sourceDocumentId === "nalus-record:7402",
+        );
+        expect(keyed?.id).not.toBe(before.id);
+        expect(keyed?.caseNumber).toBe("Pl.ÚS 11/24");
+        expect(keyed?.ecli).toBe("ECLI:CZ:US:2024:Pl.US.11.24.1");
+      } finally {
+        fake.stop();
+      }
+    });
+
     test.each(["reserved", "legacy"] as const)(
       "adopts a stored raw-text NALUS quarantine identity after publisher recovery (%s)",
       async (identityState) => {
@@ -1197,7 +1342,11 @@ if (!databaseUrl || !runPostgresTests) {
           sourceRaw: undefined,
           sourceRawBytes: undefined,
         };
-        expect(recovered.sourceDocumentIdRepairAliases).toContain(legacyId);
+        expect(
+          (recovered.sourceDocumentIdRepairAliases ?? []).some(
+            (alias) => alias === legacyId,
+          ),
+        ).toBe(true);
         expect(recovered.sourceDocumentIdAliases ?? []).not.toContain(legacyId);
         await processDecision({
           input: {
@@ -1291,7 +1440,11 @@ if (!databaseUrl || !runPostgresTests) {
         input: plainTextIngestionResult({
           ...quarantined,
           sourceDocumentId: recoveredId,
-          sourceDocumentIdRepairAliases: [quarantineId],
+          sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+            namespace: QUARANTINE_NAMESPACE.PL_SN,
+            stableFields: { docket: "Fixture reference" },
+            sourceDocumentIds: [quarantineId],
+          }),
           rawHash: "hash-known-repair-recovered",
         }),
         observationOrder: 2n,
@@ -1305,7 +1458,11 @@ if (!databaseUrl || !runPostgresTests) {
             "Distinct row after repair",
             "nalus-record:known-repair-collision",
           ),
-          sourceDocumentIdRepairAliases: [quarantineId],
+          sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+            namespace: QUARANTINE_NAMESPACE.PL_SN,
+            stableFields: { docket: "Fixture reference" },
+            sourceDocumentIds: [quarantineId],
+          }),
         }),
         observationOrder: 3n,
         sourceId,
@@ -1320,7 +1477,11 @@ if (!databaseUrl || !runPostgresTests) {
             await processDecision({
               input: plainTextIngestionResult({
                 ...decisionAt(`Distinct repair row ${index}`, publisherId),
-                sourceDocumentIdRepairAliases: [unclaimedRepairId],
+                sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+                  namespace: QUARANTINE_NAMESPACE.PL_SN,
+                  stableFields: { docket: "Fixture reference" },
+                  sourceDocumentIds: [unclaimedRepairId],
+                }),
               }),
               observationOrder: BigInt(index + 4),
               sourceId,
@@ -1406,7 +1567,11 @@ if (!databaseUrl || !runPostgresTests) {
           await processDecision({
             input: {
               ...decisionAt("Ambiguous repair", canonicalId),
-              sourceDocumentIdRepairAliases: quarantineIds,
+              sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+                namespace: QUARANTINE_NAMESPACE.PL_SN,
+                stableFields: { docket: "Fixture reference" },
+                sourceDocumentIds: quarantineIds,
+              }),
             },
             observationOrder,
             sourceId,

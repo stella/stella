@@ -112,7 +112,11 @@ describe("the NALUS publisher budget", () => {
             { fetchStage },
           );
           expect(Result.isError(result)).toBe(true);
-          return Result.ok({ decisions: [], nextCursor: null });
+          return Result.ok({
+            observations: [],
+            decisions: [],
+            nextCursor: null,
+          });
         },
       });
       if (fetchStage === "document") {

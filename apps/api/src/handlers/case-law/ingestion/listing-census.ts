@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A reported total for a source whose publisher states none, summed from the
  * publisher's own listing.
@@ -34,8 +35,6 @@
  * take back out) and continues from there; the earlier slices are not listed
  * again.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -48,6 +47,7 @@ import { floorSliceWalk } from "@/api/handlers/case-law/ingestion/reconciliation
 import {
   listReconciliationSlice,
   SLICE_LISTING_PROOF,
+  unstoredRecordCount,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -57,6 +57,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
 import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The key under the source's `config` that holds the census checkpoint. */
@@ -424,12 +425,16 @@ const recordSlice = async ({
 };
 
 type CountSliceOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
   adapter: ListingCensusAdapter;
   slice: string;
   sleep: (ms: number) => Promise<void>;
 };
 
 const countSlice = async ({
+  scopedDb,
+  sourceId,
   adapter,
   slice: target,
   sleep,
@@ -440,6 +445,14 @@ const countSlice = async ({
         adapterKey: adapter.key,
         proof: SLICE_LISTING_PROOF.COUNT,
         listSlicePage: adapter.reconciliation.listSlicePage,
+        revisionOf: adapter.reconciliation.revisionOf,
+        persistEvidence: async (observations) => {
+          await storeListingObservations(scopedDb, {
+            sourceId,
+            adapterKey: adapter.key,
+            observations,
+          });
+        },
         pageDelayMs: adapter.minRequestIntervalMs,
         pageTimeoutMs: adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE,
         slice: target,
@@ -455,7 +468,93 @@ const countSlice = async ({
             cause,
           }),
   });
-  return listing.andThen((listed) => listed).map(({ keyed }) => keyed.size);
+  // What the publisher lists, the records no row can hold included: the
+  // census is the source's own count, and those records are exactly the gap
+  // between it and what is stored.
+  const counted = listing.andThen((listed) => listed);
+  if (Result.isError(counted)) {
+    return counted;
+  }
+  return Result.ok(
+    counted.value.keyed.size +
+      counted.value.observations.size +
+      unstoredRecordCount(counted.value),
+  );
+};
+
+type CountAndRecordSliceOptions = {
+  scopedDb: ScopedDb;
+  adapter: ListingCensusAdapter;
+  sleep: (ms: number) => Promise<void>;
+  plan: ListingCensusPlan;
+  checkpoint: CountingCheckpoint;
+  observed: ListingCensusCheckpoint | null;
+};
+
+type CountAndRecordSliceResult = Result<
+  {
+    next: ListingCensusCheckpoint;
+    recorded: Awaited<ReturnType<typeof recordSlice>>;
+  },
+  AdapterFetchError
+>;
+
+/** One cursor unit retains its listing evidence before recording its count and next slice. */
+const countAndRecordSlice = async ({
+  scopedDb,
+  adapter,
+  sleep,
+  plan,
+  checkpoint,
+  observed,
+}: CountAndRecordSliceOptions): Promise<CountAndRecordSliceResult> => {
+  const target = checkpoint.nextSlice;
+  const counted = await countSlice({
+    scopedDb,
+    sourceId: plan.sourceId,
+    adapter,
+    slice: target,
+    sleep,
+  });
+  if (Result.isError(counted)) {
+    return counted;
+  }
+  const range = {
+    fromSlice: checkpoint.fromSlice,
+    toSlice: checkpoint.toSlice,
+    asOf: checkpoint.asOf,
+    slicesCounted: checkpoint.slicesCounted + 1,
+  };
+  const next: ListingCensusCheckpoint =
+    target === plan.toSlice
+      ? {
+          status: LISTING_CENSUS_STATUS.COMPLETE,
+          ...range,
+          total: checkpoint.counted + counted.value,
+          lastSliceCount: counted.value,
+        }
+      : {
+          status: LISTING_CENSUS_STATUS.COUNTING,
+          ...range,
+          nextSlice:
+            adapter.reconciliation.nextSlice(target) ??
+            panic(
+              `${adapter.key}: no slice after ${target}, before ${plan.toSlice}`,
+            ),
+          counted: checkpoint.counted + counted.value,
+        };
+  const recorded = await scopedDb(
+    async (tx) =>
+      await recordSlice({
+        tx,
+        adapterKey: adapter.key,
+        sourceId: plan.sourceId,
+        asOf: plan.asOf,
+        observed,
+        next,
+      }),
+  );
+  return Result.ok({ next, recorded });
 };
 
 /** The checkpoint a call starts counting from, and the value it replaces. */
@@ -559,48 +658,19 @@ export const runListingCensus = async (
     if (slicesThisRun > 0) {
       await sleep(adapter.minRequestIntervalMs);
     }
-    const target = checkpoint.nextSlice;
-    const counted = await countSlice({ adapter, slice: target, sleep });
+    // db-await-in-loop: each cursor slice retains its evidence and records its count before the next is requested, so interrupted censuses resume instead of relisting
+    const counted = await countAndRecordSlice({
+      scopedDb,
+      adapter,
+      sleep,
+      plan,
+      checkpoint,
+      observed,
+    });
     if (Result.isError(counted)) {
       return counted;
     }
-    const range = {
-      fromSlice: checkpoint.fromSlice,
-      toSlice: checkpoint.toSlice,
-      asOf: checkpoint.asOf,
-      slicesCounted: checkpoint.slicesCounted + 1,
-    };
-    const next: ListingCensusCheckpoint =
-      target === plan.toSlice
-        ? {
-            status: LISTING_CENSUS_STATUS.COMPLETE,
-            ...range,
-            total: checkpoint.counted + counted.value,
-            lastSliceCount: counted.value,
-          }
-        : {
-            status: LISTING_CENSUS_STATUS.COUNTING,
-            ...range,
-            nextSlice:
-              adapter.reconciliation.nextSlice(target) ??
-              panic(
-                `${adapter.key}: no slice after ${target}, before ${plan.toSlice}`,
-              ),
-            counted: checkpoint.counted + counted.value,
-          };
-    const previous = observed;
-    // db-await-in-loop: durable progress: each listed slice is checkpointed before the next is requested, so an interrupted census resumes instead of relisting
-    const recorded = await scopedDb(
-      async (tx) =>
-        await recordSlice({
-          tx,
-          adapterKey: adapter.key,
-          sourceId: plan.sourceId,
-          asOf: plan.asOf,
-          observed: previous,
-          next,
-        }),
-    );
+    const { next, recorded } = counted.value;
     switch (recorded) {
       case "superseded":
         return Result.ok({ type: "superseded", slicesThisRun });

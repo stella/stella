@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The source foreign key belongs to a new empty table and scans no existing rows; referenced-table lock acquisition is bounded by 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "RLS is enabled and forced on the new empty table before traffic can use it, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The SELECT and ingestion-only INSERT policies are metadata on the new empty table, under 1s lock_timeout and 5s statement_timeout."
+}
