@@ -21,6 +21,7 @@ const SettingsScreen = () => {
   return (
     // The sheet's own bar carries the title and the close button.
     <ScrollView
+      alwaysBounceVertical={false}
       className="bg-background flex-1"
       contentContainerStyle={screenStyles.content}
       contentInsetAdjustmentBehavior="automatic"
