@@ -1040,7 +1040,10 @@ export const getPublicCorpusLimits = (
       },
       sitemap: {
         // Shared crawler origins keep an address quota independent of fleet capacity.
-        address: { duration: 60_000, max: 600 },
+        address: {
+          duration: 60_000,
+          max: Math.min(600, sitemapGlobal.max - 1),
+        },
         global: sitemapGlobal,
       },
       browse: { address: API_RATE_LIMITS.api },

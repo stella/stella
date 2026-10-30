@@ -79,6 +79,48 @@ describe("search crawler identity", () => {
     expect(await verify("2001:4860:4801:1::2")).toBe(false);
   });
 
+  test("checks every provider PTR until one forward-confirms the peer", async () => {
+    const resolved: string[] = [];
+    const verify = createSearchCrawlerVerifier({
+      createDns: () => ({
+        reverse: async () => ["stale.googlebot.com", "current.search.msn.com"],
+        resolve4: async (host) => {
+          resolved.push(host);
+          return host === "current.search.msn.com"
+            ? ["66.249.66.1"]
+            : ["192.0.2.1"];
+        },
+        resolve6: async () => [],
+        cancel: () => {},
+      }),
+    });
+    expect(await verify("66.249.66.1")).toBe(true);
+    expect(resolved).toEqual(["stale.googlebot.com", "current.search.msn.com"]);
+  });
+
+  test("normalizes mapped IPv4 peers for DNS, confirmation and caching", async () => {
+    const reversed: string[] = [];
+    let forwardCalls = 0;
+    const verify = createSearchCrawlerVerifier({
+      createDns: () => ({
+        reverse: async (address) => {
+          reversed.push(address);
+          return ["crawl.googlebot.com"];
+        },
+        resolve4: async () => {
+          forwardCalls += 1;
+          return ["66.249.66.1"];
+        },
+        resolve6: async () => [],
+        cancel: () => {},
+      }),
+    });
+    expect(await verify("::ffff:66.249.66.1")).toBe(true);
+    expect(await verify("66.249.66.1")).toBe(true);
+    expect(reversed).toEqual(["66.249.66.1"]);
+    expect(forwardCalls).toBe(1);
+  });
+
   test("coalesces concurrent DNS work and expires successful identity checks", async () => {
     let now = 0;
     let queries = 0;

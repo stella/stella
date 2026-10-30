@@ -314,6 +314,47 @@ test("public reads wait for crawler verification before deciding quota exemption
   }
 });
 
+test("crawler verification bounds waiters on one coalesced DNS flight", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<boolean>();
+  const bindings = createBindings();
+  let waiters = 0;
+  try {
+    await using server = serveVersioned(
+      { "/law/statutes": { GET: answering("browse") } },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: bindings.binding,
+        verifyCrawlerAddress: async () => {
+          waiters += 1;
+          if (waiters === 32) {
+            entered.resolve(undefined);
+          }
+          return await release.promise;
+        },
+      }),
+    );
+    const crawlerRequest = async () =>
+      await server.fetch(
+        new Request(request("/law/statutes"), {
+          headers: { "user-agent": "Googlebot" },
+        }),
+      );
+    const waiting = Array.from({ length: 32 }, crawlerRequest);
+    await entered.promise;
+    const refused = await crawlerRequest();
+    expect(refused.status).toBe(503);
+    expect(refused.headers.get("Retry-After")).toBe("1");
+    expect(waiters).toBe(32);
+    release.resolve(false);
+    expect(
+      (await Promise.all(waiting)).every(({ status }) => status === 200),
+    ).toBe(true);
+  } finally {
+    release.resolve(false);
+    bindings.kill();
+  }
+});
+
 type AdmissionCountOptions = {
   lines: string[];
   routeClass: string;
@@ -407,7 +448,7 @@ describe("public corpus fleet request budgets", () => {
       for (const { path, limit } of [
         { path: "/law/statutes/search", limit: 30 },
         { path: "/law/statutes/facets", limit: 60 },
-        { path: "/law/sitemap/shards", limit: 100 },
+        { path: "/law/sitemap/shards", limit: 99 },
       ]) {
         const response = await bindings.send({
           server,

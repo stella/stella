@@ -68,7 +68,7 @@ describe("public corpus capacity configuration", () => {
           global: { duration: 60_000, max: 120, localMax: 60 },
         },
         sitemap: {
-          address: { duration: 60_000, max: 600 },
+          address: { duration: 60_000, max: 23 },
           global: { duration: 60_000, max: 24, localMax: 12 },
         },
         browse: { address: API_RATE_LIMITS.api },
@@ -206,6 +206,16 @@ describe("public corpus capacity configuration", () => {
           );
         }
       }
+    }
+  });
+
+  test("the sitemap address budget remains strictly below its fleet budget", () => {
+    for (const override of [undefined, 2, 3, 24, 600, 1200]) {
+      const sitemap = getPublicCorpusLimits({
+        ...defaults(),
+        PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: override,
+      }).classes.sitemap;
+      expect(sitemap.address.max).toBeLessThan(sitemap.global.max);
     }
   });
 

@@ -46,8 +46,14 @@ import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
+/** Growth between refreshes must not consume the protocol ceiling. */
+export const SITEMAP_SHARD_URL_HEADROOM = 1000;
 /** Language alternates reserve extra URL weight within the protocol ceiling. */
-export const SITEMAP_SHARD_SPLIT_THRESHOLD = LIMITS.caseLawSitemapShardUrlLimit;
+export const SITEMAP_SHARD_SPLIT_THRESHOLD =
+  LIMITS.caseLawSitemapShardUrlLimit - SITEMAP_SHARD_URL_HEADROOM;
+
+export const shouldSplitSitemapMonth = (weightedUrlCount: number): boolean =>
+  weightedUrlCount > SITEMAP_SHARD_SPLIT_THRESHOLD;
 
 /**
  * A change-log row whose year and month are this asks for a whole country,
@@ -306,7 +312,7 @@ const shardRows = (
     return [];
   }
   const { country, year, month } = target;
-  if (monthWeightedTotal > SITEMAP_SHARD_SPLIT_THRESHOLD) {
+  if (shouldSplitSitemapMonth(monthWeightedTotal)) {
     return buckets.map(({ bucket, total, last_modified_ms }) => ({
       bucket,
       country,

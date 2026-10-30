@@ -65,4 +65,27 @@ describe("root sitemap read failures", () => {
       expect(await response.text()).toBe("Service Unavailable");
     },
   );
+
+  test.each([
+    { caseLawStatus: 502, statuteStatus: 429 },
+    { caseLawStatus: 503, statuteStatus: 502 },
+  ])(
+    "prefers the retryable failure when both upstreams fail: %j",
+    async ({ caseLawStatus, statuteStatus }) => {
+      const handlers = createSitemapHandlers({
+        isEnabled: () => true,
+        fetchImpl: async (input) => {
+          const path = requestPath(input);
+          return upstreamResponse(
+            path === "/v1/case/sitemap/shards" ? caseLawStatus : statuteStatus,
+          );
+        },
+      });
+
+      const response = await handlers.GET();
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Retry-After")).toBe("17");
+    },
+  );
 });

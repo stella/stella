@@ -31,7 +31,9 @@ import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisi
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   refreshCaseLawSitemapShards,
+  shouldSplitSitemapMonth,
   SITEMAP_SHARD_SPLIT_THRESHOLD,
+  SITEMAP_SHARD_URL_HEADROOM,
   SITEMAP_WHOLE_COUNTRY,
   sitemapMonthCountSql,
   sitemapPendingMonthsSql,
@@ -42,6 +44,7 @@ import {
   decisionMonthSqlFor,
   decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
+  SITEMAP_MULTILINGUAL_URL_WEIGHT,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -58,6 +61,12 @@ import {
   explainRoot,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
+
+test("single-month shards retain URL headroom at the packing boundary", () => {
+  expect(SITEMAP_SHARD_URL_HEADROOM).toBeGreaterThan(0);
+  expect(shouldSplitSitemapMonth(SITEMAP_SHARD_SPLIT_THRESHOLD)).toBe(false);
+  expect(shouldSplitSitemapMonth(SITEMAP_SHARD_SPLIT_THRESHOLD + 1)).toBe(true);
+});
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -1338,9 +1347,11 @@ test(
 
 // timeout: seeds language alternates and reads their weighted protocol boundary in embedded PostgreSQL.
 test(
-  "language alternates retain the 5000 document budget while monolingual group keys stay cheap",
+  "language alternates retain shard headroom while monolingual group keys stay cheap",
   async () => {
-    const multilingualLimit = 5000;
+    const multilingualLimit = Math.floor(
+      SITEMAP_SHARD_SPLIT_THRESHOLD / SITEMAP_MULTILINGUAL_URL_WEIGHT,
+    );
     const seedGroups = async (start: number, end: number) => {
       await db.execute(sql`
         INSERT INTO case_law_decisions
@@ -1374,7 +1385,7 @@ test(
         ({ languageAlternates }) => languageAlternates.length === 2,
       ),
     ).toBe(true);
-    await seedGroups(multilingualLimit + 1, multilingualLimit + 1);
+    await seedGroups(multilingualLimit + 1, 5001);
     const oversized = await listSitemapShardDecisionsHandler(query, caseLawDb);
     expect("items" in oversized).toBe(false);
     expect(oversized).toMatchObject({ code: 500 });
@@ -1403,7 +1414,7 @@ test(
     if (!("items" in monolingual)) {
       panic("Expected language-only changes to release the hreflang budget");
     }
-    expect(monolingual.items).toHaveLength(multilingualLimit + 1);
+    expect(monolingual.items).toHaveLength(5001);
     expect(
       monolingual.items.every(
         ({ languageAlternates }) => languageAlternates.length === 0,

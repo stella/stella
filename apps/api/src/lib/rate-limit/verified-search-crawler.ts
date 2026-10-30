@@ -17,9 +17,15 @@ const CRAWLER_DOMAINS = ["googlebot.com", "search.msn.com"] as const;
 const MAX_CACHE_ENTRIES = 512;
 const MAX_DNS_CHECKS = 8;
 const DNS_CAPACITY_REFUSED = "capacity_refused";
+export const CRAWLER_VERIFICATION_CAPACITY_REFUSED = "capacity_refused";
 const CACHE_TTL_MS = 60_000;
 const VERIFICATION_TIMEOUT_MS = 2000;
 const MAX_DNS_RECORDS = 64;
+
+const normalizePeerAddress = (address: string): string => {
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/iu.exec(address);
+  return mapped?.[1] ?? address;
+};
 
 type CrawlerDns = {
   reverse: (address: string) => Promise<string[]>;
@@ -49,11 +55,12 @@ export const createSearchCrawlerVerifier = ({
   let activeChecks = 0;
 
   return async (address: string): Promise<boolean> => {
-    const family = isIP(address);
+    const peerAddress = normalizePeerAddress(address);
+    const family = isIP(peerAddress);
     if (family === 0) {
       return false;
     }
-    const answer = await cache.read(address, async () => {
+    const answer = await cache.read(peerAddress, async () => {
       if (activeChecks >= MAX_DNS_CHECKS) {
         return DNS_CAPACITY_REFUSED;
       }
@@ -68,9 +75,9 @@ export const createSearchCrawlerVerifier = ({
               const cancel = () => dns.cancel();
               signal.addEventListener("abort", cancel, { once: true });
               try {
-                const host = (await dns.reverse(address))
+                const hosts = (await dns.reverse(peerAddress))
                   .slice(0, MAX_DNS_RECORDS)
-                  .find((name) =>
+                  .filter((name) =>
                     CRAWLER_DOMAINS.some((domain) =>
                       name
                         .toLowerCase()
@@ -79,21 +86,25 @@ export const createSearchCrawlerVerifier = ({
                     ),
                   );
                 signal.throwIfAborted();
-                if (host === undefined) {
-                  return false;
+                for (const host of hosts) {
+                  const addresses = await (family === 4
+                    ? dns.resolve4(host)
+                    : dns.resolve6(host));
+                  signal.throwIfAborted();
+                  const confirmed = new BlockList();
+                  for (const resolved of addresses.slice(0, MAX_DNS_RECORDS)) {
+                    confirmed.addAddress(
+                      normalizePeerAddress(resolved),
+                      family === 4 ? "ipv4" : "ipv6",
+                    );
+                  }
+                  if (
+                    confirmed.check(peerAddress, family === 4 ? "ipv4" : "ipv6")
+                  ) {
+                    return true;
+                  }
                 }
-                const addresses = await (family === 4
-                  ? dns.resolve4(host)
-                  : dns.resolve6(host));
-                signal.throwIfAborted();
-                const confirmed = new BlockList();
-                for (const resolved of addresses.slice(0, MAX_DNS_RECORDS)) {
-                  confirmed.addAddress(
-                    resolved,
-                    family === 4 ? "ipv4" : "ipv6",
-                  );
-                }
-                return confirmed.check(address, family === 4 ? "ipv4" : "ipv6");
+                return false;
               } finally {
                 signal.removeEventListener("abort", cancel);
               }
@@ -120,14 +131,18 @@ export const createSearchCrawlerVerifier = ({
 type SearchCrawlerRequestOptions = {
   request: Request;
   server: RequestIpServer | null;
-  verifyAddress: ReturnType<typeof createSearchCrawlerVerifier>;
+  verifyAddress: (
+    address: string,
+  ) => Promise<boolean | typeof CRAWLER_VERIFICATION_CAPACITY_REFUSED>;
 };
 
 export const isVerifiedSearchCrawler = async ({
   request,
   server,
   verifyAddress,
-}: SearchCrawlerRequestOptions): Promise<boolean> => {
+}: SearchCrawlerRequestOptions): Promise<
+  boolean | typeof CRAWLER_VERIFICATION_CAPACITY_REFUSED
+> => {
   // The UA avoids DNS work for ordinary requests; it cannot grant an exemption.
   if (!/googlebot|bingbot/iu.test(request.headers.get("user-agent") ?? "")) {
     return false;
