@@ -1749,9 +1749,11 @@ const computeCliCommandPaths = async (
 // Callers must start a new process when changing an existing handler's source.
 export const exportCapabilityCatalog = async (
   mode: "write" | "check",
+  catalogOnly = false,
 ): Promise<number> => {
   const checkMode = mode === "check";
   if (
+    !catalogOnly &&
     !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
   ) {
     await generateCapabilityCatalogRuntime();
@@ -1825,16 +1827,20 @@ export const exportCapabilityCatalog = async (
     mode,
   });
   if (!checkMode) {
-    await generateCapabilityRuntime();
-    await Bun.write(COVERAGE_DOC_PATH, doc);
+    if (!catalogOnly) {
+      await generateCapabilityRuntime();
+      await Bun.write(COVERAGE_DOC_PATH, doc);
+    }
     process.stderr.write(
       `export-capability-catalog: wrote ${entries.length} capability shards\n`,
     );
     return 0;
   }
-  const committedDoc = await Bun.file(COVERAGE_DOC_PATH)
-    .text()
-    .catch(() => null);
+  const committedDoc = catalogOnly
+    ? doc
+    : await Bun.file(COVERAGE_DOC_PATH)
+        .text()
+        .catch(() => null);
   if (catalogDrift.length === 0 && committedDoc === doc) {
     console.log(
       `export-capability-catalog: OK. ${entries.length} capability shards are up to date.`,
@@ -1857,6 +1863,7 @@ if (import.meta.main) {
   process.exit(
     await exportCapabilityCatalog(
       process.argv.includes("--check") ? "check" : "write",
+      process.argv.includes("--catalog-only"),
     ),
   );
 }

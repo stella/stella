@@ -1,4 +1,4 @@
-// Raw committed contract data: preserve every field for API consumers.
+// Raw build-generated contract data: preserve every field for API consumers.
 import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 
@@ -32,7 +32,7 @@ export const readCapabilityCatalog = (
   return entries;
 };
 
-/** Curated-tool references must resolve in the same committed registry. */
+/** Curated-tool references must resolve in the same generated registry. */
 export const checkCapabilityRegistry = (
   entries: readonly unknown[],
   toolNames: ReadonlySet<string>,

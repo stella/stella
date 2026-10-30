@@ -625,9 +625,12 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
       ({ id }) => id,
     ),
   ).toEqual([
+    "capability-catalog",
     "capability-runtime",
     "cli-runtime",
+    "mcp-app-contracts",
     "api-typecheck-projects",
+    "mcp-app-bundles",
     "module-ownership",
   ]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
@@ -768,7 +771,12 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
   for (const entry of GENERATORS) {
     for (const glob of entry.inputs) {
       expect(
-        tracked.some((file) => matchesGeneratedGlob(glob, file)),
+        tracked.some((file) => matchesGeneratedGlob(glob, file)) ||
+          GENERATORS.some(
+            ({ outputKind, outputs }) =>
+              outputKind === "derived" &&
+              outputs.some((output) => output === glob),
+          ),
         `${entry.id}: ${glob}`,
       ).toBe(true);
     }

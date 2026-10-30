@@ -264,7 +264,7 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
 // segment is an internal handler identifier (e.g. `deleteWorkspaceFooEntry`).
 const CAPABILITY_ID_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
-describe("committed capability-catalog snapshot", () => {
+describe("generated capability-catalog snapshot", () => {
   test("every id is dotted lowercase kebab-case", async () => {
     const catalog = parseCapabilityCatalog(readCapabilityCatalog());
     if (catalog === null) {

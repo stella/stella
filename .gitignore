@@ -89,6 +89,7 @@ apps/api/src/mcp/generated/capability-catalog.ts
 apps/api/src/mcp/generated/capability-feature-bindings.ts
 
 # CLI runtime projections are restored by codegen:runtime.
+packages/cli/capabilities/
 packages/cli/src/generated/route-map.ts
 packages/cli/src/generated/tool-annotations.ts
 

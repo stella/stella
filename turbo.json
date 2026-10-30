@@ -767,6 +767,7 @@
       "inputs": ["$TURBO_DEFAULT$"]
     },
     "@stll/cli#codegen:runtime": {
+      "dependsOn": ["generate:capabilities"],
       "inputs": [
         "package.json",
         "capabilities/**",
@@ -797,6 +798,18 @@
         "src/generated/route-map.ts",
         "src/generated/tool-annotations.ts"
       ]
+    },
+    "generate:capabilities": {},
+    "@stll/cli#generate:capabilities": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/export-capability-catalog.ts",
+        "$TURBO_ROOT$/apps/api/scripts/lib/**",
+        "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!capabilities/**"
+      ],
+      "outputs": ["capabilities/**"]
     },
     "@stll/cli#build": {
       "dependsOn": ["^build", "codegen:runtime"]

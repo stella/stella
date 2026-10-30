@@ -54,6 +54,7 @@
     "lint": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/cli",
     "lint:fix": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/cli",
     "codegen:runtime": "bun ../scripts/src/prepare-cli-runtime.ts",
+    "generate:capabilities": "cd ../.. && bun scripts/prepare-mcp-apps.ts && bun apps/api/scripts/export-capability-catalog.ts --catalog-only",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {

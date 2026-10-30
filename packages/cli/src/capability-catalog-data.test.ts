@@ -24,7 +24,7 @@ const withShards = (
   }
 };
 
-describe("committed capability shards", () => {
+describe("generated capability shards", () => {
   test("sorts by capability id and preserves the complete raw contract", () => {
     const later = {
       id: "widgets.zebra",
