@@ -10,10 +10,6 @@ import {
 } from "@/api/lib/case-law/corpus-slice";
 import type { CorpusSliceTransferStorage } from "@/api/lib/case-law/corpus-slice-transfer";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
-
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 const TABLES = {
   sources: "case_law_sources",
@@ -275,7 +271,7 @@ const executeCorpusSliceExport = async ({
 export const exportCorpusSliceFromDatabase = async (
   options: ExportExecutionOptions,
 ): Promise<CorpusSliceExportResult> =>
-  await withAggregateTransaction(options.database, BUDGET, async (tx) => {
+  await options.database.transaction(async (tx) => {
     await tx.execute(CORPUS_SLICE_SNAPSHOT_ISOLATION);
     return await executeCorpusSliceExport({
       ...options,

@@ -5,10 +5,6 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawSourceArrivals } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SOURCE_ARRIVALS_WINDOW_MS } from "@/api/lib/case-law/source-arrivals-window";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
-
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 /** The connection the scheduler task opens; the refresh owns its transaction. */
 type RefreshDb = {
@@ -69,7 +65,7 @@ export const refreshCaseLawSourceArrivals = async (
   db: RefreshDb,
   { now, signal }: { now: Date; signal?: AbortSignal },
 ) =>
-  await withAggregateTransaction(db, BUDGET, async (tx) => {
+  await db.transaction(async (tx) => {
     await tx.delete(caseLawSourceArrivals).where(sql`true`);
     await tx.execute(sql`
       INSERT INTO ${caseLawSourceArrivals}

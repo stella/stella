@@ -45,7 +45,7 @@ import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.sitemapRefresh;
 
 /**
  * A month is split into buckets once it holds more than this many decisions.

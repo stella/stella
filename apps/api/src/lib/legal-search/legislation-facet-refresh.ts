@@ -9,15 +9,11 @@ import {
   legislationFacetCounts,
   legislationFacetRefreshes,
 } from "@/api/db/schema";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import { publishedLegislationCountryFor } from "@/api/lib/legal-search/legislation-redistribution";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 /** The connection the scheduler task opens; the refresh owns its transaction. */
 type RefreshDb = {
@@ -75,7 +71,7 @@ export const refreshLegislationFacetCounts = async (
     bucketCap = LIMITS.legislationDocumentTypeBucketLimit,
   }: RefreshOptions = {},
 ) =>
-  await withAggregateTransaction(db, BUDGET, async (tx) => {
+  await db.transaction(async (tx) => {
     await tx.delete(legislationFacetCounts).where(sql`true`);
     await tx.execute(sql`
       INSERT INTO ${legislationFacetCounts}

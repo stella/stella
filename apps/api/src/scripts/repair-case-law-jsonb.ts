@@ -45,7 +45,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRepair;
 
 await runScriptWithErrorOutput(async () => {
   // Hold the maintenance lane before the first statement: operator passes over

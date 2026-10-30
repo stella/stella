@@ -41,6 +41,7 @@ import {
   AGGREGATE_TRANSACTION_BUDGETS,
   AggregateTransactionTimeoutError,
 } from "./aggregate-transaction-budget";
+import { READ_BUDGETS } from "./read-budgets";
 
 test.each(["present", "missing"] as const)(
   "invoice matter batches retain only visible sorted row locks (%s)",
@@ -109,53 +110,113 @@ test("an empty invoice matter plan refuses before any lock query", async () => {
   expect(executions).toBe(0);
 });
 
-test.each(Object.values(AGGREGATE_TRANSACTION_BUDGETS))(
-  "budget setup preserves snapshot admission ($reason)",
-  async (budget) => {
-    const statements: string[] = [];
-    const dialect = new PgDialect();
-    const tx = {
-      execute: async (statement: SQL) => {
-        statements.push(dialect.sqlToQuery(statement).sql);
-      },
-    };
-    await withAggregateTransaction(
-      {
-        transaction: async (run: (transaction: typeof tx) => Promise<void>) =>
-          await run(tx),
-      },
-      budget,
-      async () => {
-        expect(statements).toEqual([
-          `SET LOCAL transaction_timeout = ${budget.milliseconds}`,
-        ]);
-      },
-    );
-  },
-);
+test.each(
+  Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+    (budget) => budget.kind !== "dedicated-deadline",
+  ),
+)("budget setup preserves snapshot admission ($reason)", async (budget) => {
+  const statements: string[] = [];
+  const dialect = new PgDialect();
+  const tx = {
+    execute: async (statement: SQL) => {
+      statements.push(dialect.sqlToQuery(statement).sql);
+    },
+  };
+  await withAggregateTransaction(
+    {
+      transaction: async (run: (transaction: typeof tx) => Promise<void>) =>
+        await run(tx),
+    },
+    budget,
+    async () => {
+      expect(statements).toEqual([
+        `SET LOCAL transaction_timeout = ${budget.milliseconds}`,
+      ]);
+    },
+  );
+});
 
-test("every aggregate transaction call supplies a named budget", async () => {
+test("sitemap transaction budget covers atomic publication and its supporting statements", () => {
+  const statementDeadlineMs =
+    READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].statementDeadlineMs;
+  const publicationStatements = 4;
+  const retirementStatements = 2;
+  const setupFenceAndReadStatements = 6;
+  const budgetSetupStatements = 1;
+  expect(
+    AGGREGATE_TRANSACTION_BUDGETS.sitemapRefresh.milliseconds,
+  ).toBeGreaterThanOrEqual(
+    (publicationStatements +
+      retirementStatements +
+      setupFenceAndReadStatements +
+      budgetSetupStatements) *
+      statementDeadlineMs,
+  );
+});
+
+test("every transaction owner uses its registered budget classification", async () => {
   const root = new URL("../../..", import.meta.url).pathname;
   const glob = new Bun.Glob("{src,scripts}/**/*.ts");
+  const aggregateBudgets = new Set(
+    Object.entries(AGGREGATE_TRANSACTION_BUDGETS)
+      .filter(([, budget]) => budget.kind !== "dedicated-deadline")
+      .map(([name]) => name),
+  );
+  const dedicatedOwners = Object.values(AGGREGATE_TRANSACTION_BUDGETS)
+    .filter((budget) => budget.kind === "dedicated-deadline")
+    .map((budget) => budget.owner);
+  expect(new Set(dedicatedOwners).size).toBe(dedicatedOwners.length);
+  const observedDedicatedOwners: string[] = [];
   const missing: string[] = [];
-  for await (const path of glob.scan({ cwd: root, absolute: true })) {
-    const text = await Bun.file(path).text();
-    if (
-      path.endsWith(".test.ts") ||
-      !text.includes("withAggregateTransaction")
-    ) {
+  for await (const path of glob.scan({ cwd: root })) {
+    if (path.endsWith(".test.ts") || path.endsWith(".type-test.ts")) {
       continue;
     }
-    const budgetName =
-      /AGGREGATE_TRANSACTION_BUDGETS\s+as\s+(\w+)/u.exec(text)?.at(1) ??
-      "AGGREGATE_TRANSACTION_BUDGETS";
+    const owner = `apps/api/${path}`;
+    const dedicated = dedicatedOwners.some((entry) => entry === owner);
+    const text = await Bun.file(`${root}${path}`).text();
+    if (!dedicated && !text.includes("withAggregateTransaction")) {
+      continue;
+    }
     const source = ts.createSourceFile(
       path,
       text,
       ts.ScriptTarget.Latest,
       true,
     );
+    const budgetImports = new Set<string>();
+    const transactionImports = new Set(["withAggregateTransaction"]);
+    const lockImports = new Set(["withAggregateLock"]);
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement)) {
+        continue;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) {
+        continue;
+      }
+      for (const binding of bindings.elements) {
+        const imported = binding.propertyName?.text ?? binding.name.text;
+        switch (imported) {
+          case "AGGREGATE_TRANSACTION_BUDGETS":
+            budgetImports.add(binding.name.text);
+            break;
+          case "withAggregateTransaction":
+            transactionImports.add(binding.name.text);
+            break;
+          case "withAggregateLock":
+            lockImports.add(binding.name.text);
+            break;
+        }
+      }
+    }
     const namedBudgets = new Set<string>();
+    const isAggregateBudget = (node: ts.Node): boolean =>
+      (ts.isIdentifier(node) && namedBudgets.has(node.text)) ||
+      (ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        budgetImports.has(node.expression.text) &&
+        aggregateBudgets.has(node.name.text));
     for (const statement of source.statements) {
       if (!ts.isVariableStatement(statement)) {
         continue;
@@ -164,30 +225,63 @@ test("every aggregate transaction call supplies a named budget", async () => {
         if (
           ts.isIdentifier(declaration.name) &&
           declaration.initializer &&
-          ts.isPropertyAccessExpression(declaration.initializer) &&
-          declaration.initializer.expression.getText(source) === budgetName
+          isAggregateBudget(declaration.initializer)
         ) {
           namedBudgets.add(declaration.name.text);
         }
       }
     }
+    let directTransactions = 0;
+    let aggregateTransactions = 0;
+    let aggregateLocks = 0;
     const visit = (node: ts.Node): void => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "withAggregateTransaction" &&
-        (node.arguments.length < 3 ||
-          (!node.arguments[1]?.getText(source).startsWith(`${budgetName}.`) &&
-            !namedBudgets.has(node.arguments[1]?.getText(source) ?? "")))
-      ) {
-        missing.push(
-          `${path}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`,
-        );
+      if (ts.isCallExpression(node)) {
+        if (
+          ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === "transaction"
+        ) {
+          directTransactions += 1;
+        }
+        if (ts.isIdentifier(node.expression)) {
+          if (lockImports.has(node.expression.text)) {
+            aggregateLocks += 1;
+          }
+          if (transactionImports.has(node.expression.text)) {
+            aggregateTransactions += 1;
+            const budget = node.arguments.at(1);
+            if (
+              node.arguments.length !== 3 ||
+              !budget ||
+              !isAggregateBudget(budget)
+            ) {
+              missing.push(
+                `${owner}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`,
+              );
+            }
+          }
+        }
       }
       ts.forEachChild(node, visit);
     };
     visit(source);
+    if (dedicated) {
+      observedDedicatedOwners.push(owner);
+      expect({
+        owner,
+        directTransactions,
+        aggregateTransactions,
+        aggregateLocks,
+      }).toEqual({
+        owner,
+        directTransactions: 1,
+        aggregateTransactions: 0,
+        aggregateLocks: 0,
+      });
+    }
   }
+  expect(observedDedicatedOwners.toSorted()).toEqual(
+    dedicatedOwners.toSorted(),
+  );
   expect(missing).toEqual([]);
 });
 

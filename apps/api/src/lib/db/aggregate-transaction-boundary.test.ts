@@ -8,7 +8,11 @@ import {
   AggregateTransactionTimeoutError,
 } from "./aggregate-transaction-budget";
 
-test.each(Object.values(AGGREGATE_TRANSACTION_BUDGETS))(
+test.each(
+  Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+    (budget) => budget.kind !== "dedicated-deadline",
+  ),
+)(
   "transaction rejection names the exhausted budget ($reason)",
   async (budget) => {
     const cause = { cause: { code: "25P04" } };

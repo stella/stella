@@ -1,3 +1,4 @@
+import { AGGREGATE_TRANSACTION_BUDGETS } from "../apps/api/src/lib/db/aggregate-transaction-budget.ts";
 import {
   type Node,
   parseSource,
@@ -7,6 +8,11 @@ import {
 import { sha256Hex } from "../packages/sha256/src/node.ts";
 
 export const AGGREGATE_LOCK_OWNER = "apps/api/src/lib/db/aggregate-lock.ts";
+// These non-locking transactions are counted by the budget owner's census;
+// their SQL lock primitives remain subject to this shrinking inventory.
+const dedicatedDeadlineOwners = Object.values(AGGREGATE_TRANSACTION_BUDGETS)
+  .filter((budget) => budget.kind === "dedicated-deadline")
+  .map((budget) => budget.owner);
 export const aggregateLockSourceIncluded = (file: string) =>
   /\.(?:[cm]?ts|tsx|[cm]?js|jsx|sql)$/u.test(file) &&
   file !== AGGREGATE_LOCK_OWNER &&
@@ -235,7 +241,11 @@ export const aggregateLockSites = (
           offset: node.start,
         });
       }
-      if (method === "transaction" && file.startsWith("apps/api/")) {
+      if (
+        method === "transaction" &&
+        file.startsWith("apps/api/") &&
+        !dedicatedDeadlineOwners.some((owner) => owner === file)
+      ) {
         add({
           primitive: "transaction-boundary",
           text: textOf(node),

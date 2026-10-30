@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { AGGREGATE_TRANSACTION_BUDGETS } from "../../apps/api/src/lib/db/aggregate-transaction-budget.ts";
 import {
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
@@ -8,6 +9,36 @@ import {
 
 const file = "apps/api/src/handlers/example.ts";
 describe("aggregate lock confinement", () => {
+  test.each(
+    Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+      (budget) => budget.kind === "dedicated-deadline",
+    ),
+  )(
+    "dedicated deadline owner retains SQL lock confinement ($owner)",
+    ({ owner }) => {
+      for (const method of [
+        ".transaction",
+        '["transaction"]',
+        '["trans" + "action"]',
+      ]) {
+        const source = `db${method}(async (tx) => {
+        await tx.execute(sql\`SELECT id FROM items FOR UPDATE\`);
+        await tx.execute(sql\`SELECT pg_advisory_xact_lock(1)\`);
+      });`;
+        const sites = aggregateLockSites(owner, source);
+        expect(sites.map((site) => site.primitive).toSorted()).toEqual([
+          "for update",
+          "pg_advisory_xact_lock(",
+        ]);
+        expect(
+          aggregateLockBaselineProblems({
+            actual: aggregateLockBaseline(sites),
+            baseline: [],
+          }),
+        ).toHaveLength(2);
+      }
+    },
+  );
   test("rejects raw API transaction boundaries including computed spellings", () => {
     for (const method of [
       ".transaction",

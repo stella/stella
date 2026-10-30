@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { withLongRunningConnection } from "@/api/db/long-running-connection";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { refreshLegislationFacetCounts } from "@/api/lib/legal-search/legislation-facet-refresh";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
@@ -8,7 +9,9 @@ import { recordSystemAudit } from "@/api/lib/system-audit/record";
 export const REFRESH_LEGISLATION_FACETS_TASK =
   "legislation.refreshFacetCounts" as const;
 
-const REFRESH_STATEMENT_TIMEOUT_MS = 5 * 60_000;
+const REFRESH_STATEMENT_TIMEOUT_MS =
+  AGGREGATE_TRANSACTION_BUDGETS.legislationFacetRefresh.statementDeadline
+    .milliseconds;
 const REFRESH_LOCK_TIMEOUT_MS = 10_000;
 
 export const refreshLegislationFacetsTask: SchedulerTask = async ({
