@@ -224,8 +224,14 @@ const requestTokens = async (
 const base64Url = (bytes: Uint8Array) =>
   Buffer.from(bytes).toString("base64url");
 
-/** Sign the mobile app in as it does on a phone, with `browser` approving. */
-const mobileSignIn = async (browser: Browser) => {
+/**
+ * Sign the mobile app in as it does on a phone, with `browser` approving.
+ * `scopes` narrows the grant, as a person declining part of it would.
+ */
+const mobileSignIn = async (
+  browser: Browser,
+  scopes: readonly string[] = MOBILE_SCOPES,
+) => {
   const discovered = await serveInProcess(
     new URL("/api/auth/.well-known/oauth-authorization-server", SERVER_URL),
   );
@@ -243,7 +249,7 @@ const mobileSignIn = async (browser: Browser) => {
     code_challenge_method: "S256",
     state,
     resource,
-    scope: MOBILE_SCOPES.join(" "),
+    scope: scopes.join(" "),
     prompt: "consent",
   })) {
     authorize.searchParams.set(name, value);
@@ -444,6 +450,74 @@ describe("stella mobile client document", () => {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
     });
     expect(mcp.status).toBe(401);
+  });
+
+  test("the app's token sends a file with a message only with the chat scope", async () => {
+    const browser = await signInWithOrganization(
+      "mobile-chat-file@example.test",
+    );
+    const threadId = createSafeId<"chatThread">();
+    const messageId = createSafeId<"chatMessage">();
+    const runId = Bun.randomUUIDv7();
+    // The envelope the app sends; the file is of a kind chat never takes, so
+    // the handler refuses it before any model runs.
+    const forwarded = {
+      threadId,
+      runId,
+      sendMode: "rawOverride",
+      message: {
+        id: messageId,
+        role: "user",
+        parts: [
+          { type: "text", content: "What does this say?" },
+          {
+            type: "document",
+            source: {
+              type: "url",
+              value: `data:application/x-msdownload;base64,${btoa("MZ")}`,
+              mimeType: "application/x-msdownload",
+            },
+            metadata: { filename: "setup.exe" },
+          },
+        ],
+      },
+    };
+    const send = async (token: string) =>
+      await serveInProcess(new URL("/v1/chat", SERVER_URL), {
+        method: "POST",
+        headers: {
+          ...bearer(token),
+          accept: "text/event-stream",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          threadId,
+          runId,
+          state: {},
+          messages: [{ id: messageId, role: "user", content: "" }],
+          tools: [],
+          context: [],
+          forwardedProps: forwarded,
+          data: forwarded,
+        }),
+      });
+
+    const withoutChat = await mobileSignIn(
+      browser,
+      MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+    );
+    const refused = await send(withoutChat.access.token);
+    expect(refused.status).toBe(403);
+    expect(refused.headers.get("www-authenticate")).toBe(
+      'Bearer error="insufficient_scope"',
+    );
+
+    // With the scope the request reaches the chat handler, whose own checks
+    // answer it as they answer a browser session.
+    const { access } = await mobileSignIn(browser);
+    const reached = await send(access.token);
+    expect([401, 403]).not.toContain(reached.status);
+    expect(reached.headers.get("www-authenticate")).toBeNull();
   });
 
   test("no client but the app is granted the REST API", async () => {
