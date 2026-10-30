@@ -674,6 +674,17 @@ export const processLauncher =
 const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
+/**
+ * A check's log. A check that never launched, or whose launch failed before
+ * its log was opened, has none; its result's detail is then its only record.
+ */
+type CheckLog = { type: "missing" } | { type: "present"; text: string };
+
+const readCheckLog = (file: string): CheckLog =>
+  existsSync(file)
+    ? { type: "present", text: readFileSync(file, "utf-8") }
+    : { type: "missing" };
+
 const CANCELLATION_LOG_TAIL_BYTES = 8 * 1024;
 const CANCELLATION_LOG_TAIL_LINES = 40;
 const CANCELLATION_LOG_TOTAL_BYTES = 64 * 1024;
@@ -792,6 +803,24 @@ export const checkLogText = (
     .replace(NESTED_GROUP_END, "")
     .replace(NESTED_GROUP_START, "");
   return outcome === "failure" ? flat : flat.replace(ERROR_COMMAND, "| $1");
+};
+
+/** A check's group body: its log, or the error that ended it before it wrote one. */
+const checkGroupText = (
+  log: CheckLog,
+  result: Pick<CheckResult, "outcome" | "detail">,
+): string => {
+  switch (log.type) {
+    case "present": {
+      const text = checkLogText(log.text, result.outcome);
+      return text === "" || text.endsWith("\n") ? text : `${text}\n`;
+    }
+    case "missing":
+      return result.outcome === "failure" ? `error: ${result.detail}\n` : "";
+    default:
+      log satisfies never;
+      throw new CheckPoolError(`Unhandled check log: ${JSON.stringify(log)}`);
+  }
 };
 const escapeProperty = (value: string) =>
   value
@@ -1363,15 +1392,13 @@ const main = async () => {
           : "FAILED";
       }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
-      const output =
+      const log: CheckLog =
         planned[index]?.status === "selected"
-          ? readFileSync(logPath(directory, index), "utf-8")
-          : "";
-      if (planned[index]?.status === "selected") {
-        const text = checkLogText(output, result.outcome);
-        writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
-      }
+          ? readCheckLog(logPath(directory, index))
+          : { type: "missing" };
+      writeOut(checkGroupText(log, result));
       print("::endgroup::");
+      const output = log.type === "present" ? log.text : "";
       if (result.outcome === "failure") {
         print(failedCheckAnnotation(result, output));
         print(failedCheckRecord(result.name, failedCheckCause(result, output)));
