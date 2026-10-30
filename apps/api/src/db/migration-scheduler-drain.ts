@@ -216,15 +216,50 @@ const eligibleSql = (floor: string, audit: string) =>
          AND (paused_until IS NULL
               OR paused_until < now() + ${floor}::integer * interval '1 millisecond')`;
 
+/** Runs one statement on whichever session the caller owns. */
+type DrainQuery = (
+  query: string,
+  params: readonly (string | number)[],
+) => Promise<readonly unknown[]>;
+
+const mainQuery =
+  (connection: ReservedSQL): DrainQuery =>
+  async (query, params) =>
+    await connection.unsafe(query, [...params]);
+
+const field = (row: unknown, key: string): unknown =>
+  typeof row === "object" && row !== null ? Reflect.get(row, key) : undefined;
+
+const requiredString = (row: unknown, key: string): string => {
+  const value = field(row, key);
+  return typeof value === "string"
+    ? value
+    : panic(`Scheduler drain row has no text column ${key}`);
+};
+
+const nullableString = (row: unknown, key: string): string | null => {
+  const value = field(row, key);
+  return value === null || typeof value === "string"
+    ? value
+    : panic(`Scheduler drain row column ${key} is not text`);
+};
+
 const readEligible = async (
-  connection: ReservedSQL,
+  query: DrainQuery,
   floorMs: number,
 ): Promise<string[]> => {
-  const rows = await connection.unsafe<{ id: string }[]>(
+  const rows = await query(
     `SELECT id FROM scheduler_jobs WHERE ${eligibleSql("$1", "$2")} ORDER BY id`,
     [floorMs, UNPAUSABLE_SCHEDULER_JOB_ID],
   );
-  return rows.map(({ id }) => id);
+  return rows.map((row) => requiredString(row, "id"));
+};
+
+type PausedRow = {
+  id: string;
+  /** The row already carried this step's own pause (adopted, not taken over). */
+  ownBefore: boolean;
+  restoration: Restoration;
 };
 
 /**
@@ -237,18 +272,10 @@ const readEligible = async (
  * write's compare-and-set and is left for the next pass.
  */
 const pauseOnce = async (
-  connection: ReservedSQL,
+  query: DrainQuery,
   floorMs: number,
-): Promise<PauseOutcome> => {
-  const rows = await connection.unsafe<
-    {
-      id: string;
-      taken_over: boolean;
-      paused_by: string | null;
-      pause_reason: string | null;
-      paused_until_text: string | null;
-    }[]
-  >(
+): Promise<PausedRow[]> => {
+  const rows = await query(
     `WITH targets AS (
        SELECT id, paused_by, pause_reason, paused_until AS raw_paused_until,
               coalesce(paused_until > now() AND paused_by <> $2, false) AS taken_over,
@@ -279,44 +306,51 @@ const pauseOnce = async (
       UNPAUSABLE_SCHEDULER_JOB_ID,
     ],
   );
-  const outcome: PauseOutcome = new Map();
-  for (const row of rows) {
+  return rows.map((row) => {
+    const id = requiredString(row, "id");
+    const pausedBy = nullableString(row, "paused_by");
+    const pauseReason = nullableString(row, "pause_reason");
+    const pausedUntil = nullableString(row, "paused_until_text");
+    const ownBefore = pausedBy === SCHEDULER_DRAIN_ACTOR;
     if (
-      row.taken_over &&
-      row.paused_by !== null &&
-      row.pause_reason !== null &&
-      row.paused_until_text !== null
+      field(row, "taken_over") === true &&
+      pausedBy !== null &&
+      pauseReason !== null &&
+      pausedUntil !== null
     ) {
-      outcome.set(row.id, {
-        kind: "restore",
-        pausedBy: row.paused_by,
-        pauseReason: row.pause_reason,
-        pausedUntil: row.paused_until_text,
-      });
-      continue;
+      return {
+        id,
+        ownBefore,
+        restoration: {
+          kind: "restore",
+          pausedBy,
+          pauseReason,
+          pausedUntil,
+        },
+      };
     }
-    outcome.set(row.id, { kind: "clear" });
-  }
-  return outcome;
+    return { id, ownBefore, restoration: { kind: "clear" } };
+  });
 };
 
 /** Passes after which a job still changing under the step is a bug, not a race. */
 const MAX_PAUSE_PASSES = 5;
 
 /**
- * Repeats the pause until a fresh scan finds no job paused for less than
+ * The one eligibility rule, at the start and at every renewal tick. Repeats
+ * the pause until a fresh scan finds no job paused for less than
  * `floorMs`: a pass that wrote nothing proves nothing, since compare-and-set
  * losers are retried. Progress accumulates in `total`, so a failure part-way
  * still leaves the caller the list of what to undo.
  */
 const pauseJobs = async (
-  connection: ReservedSQL,
+  query: DrainQuery,
   floorMs: number,
   total: PauseOutcome,
 ): Promise<number> => {
   let written = 0;
   for (let pass = 0; ; pass += 1) {
-    const eligible = await readEligible(connection, floorMs);
+    const eligible = await readEligible(query, floorMs);
     if (eligible.length === 0) {
       return written;
     }
@@ -325,11 +359,14 @@ const pauseJobs = async (
         `Scheduler jobs kept changing; the drain could not pause: ${eligible.join(", ")}`,
       );
     }
-    const outcome = await pauseOnce(connection, floorMs);
-    for (const [id, restoration] of outcome) {
-      total.set(id, restoration);
+    const rows = await pauseOnce(query, floorMs);
+    for (const { id, ownBefore, restoration } of rows) {
+      // Renewing this step's own pause keeps what a resume must restore.
+      if (!ownBefore || !total.has(id)) {
+        total.set(id, restoration);
+      }
     }
-    written += outcome.size;
+    written += rows.length;
   }
 };
 
@@ -469,24 +506,13 @@ const resumeAndReport = async (
   );
 };
 
-/**
- * Extends the step's pauses to the work floor, only for jobs this run wrote
- * and only while `paused_by` is still the step's, so a row someone else
- * rewrote is never touched; a pause already longer is never shortened.
- */
-const RENEW_SQL = `UPDATE scheduler_jobs
-   SET paused_until = now() + $3::integer * interval '1 millisecond',
-       updated_at = now()
-   WHERE id IN (SELECT jsonb_array_elements_text($1::text::jsonb))
-     AND paused_by = $2
-     AND paused_until IS NOT NULL
-     AND paused_until < now() + $3::integer * interval '1 millisecond'
-   RETURNING id`;
-
 type Renewal = { stats: RenewalStats; stop: () => Promise<void> };
 
 /**
- * Keeps the pauses alive while `work` runs. A failure is reported and never
+ * Keeps every pausable job paused past the work floor while `work` runs, by
+ * running the drain's own eligibility pass at each tick: the step's pauses are
+ * extended, a long pause of another actor nearing its end is taken over, and
+ * a pause someone shortened is paused again. A failure is reported and never
  * aborts the work, which may be mid-DDL; the next tick tries again.
  */
 const startRenewal = async (
@@ -510,7 +536,8 @@ const startRenewal = async (
     return { stats, stop: async () => undefined };
   }
   const renewalConnection = opened.value;
-  const ids = JSON.stringify([...paused.keys()]);
+  const renewalQuery: DrainQuery = async (query, params) =>
+    await renewalConnection.query(query, params);
   let stopped = false;
   let inflight: Promise<void> = Promise.resolve();
   const tick = async () => {
@@ -519,18 +546,14 @@ const startRenewal = async (
     }
     const renewed = await Result.tryPromise({
       try: async () =>
-        await renewalConnection.query(RENEW_SQL, [
-          ids,
-          SCHEDULER_DRAIN_ACTOR,
-          SCHEDULER_DRAIN_WORK_FLOOR_MS,
-        ]),
+        await pauseJobs(renewalQuery, SCHEDULER_DRAIN_WORK_FLOOR_MS, paused),
       catch: (cause) => cause,
     });
     if (renewed.isErr()) {
       reportFailure(renewed.error);
       return;
     }
-    if (renewed.value.length > 0) {
+    if (renewed.value > 0) {
       stats.renewalCount += 1;
     }
   };
@@ -570,6 +593,7 @@ export const withDrainedScheduler = async <T>(
   if (!options.pending || !(await hasPauseColumns(connection))) {
     return await work();
   }
+  const query = mainQuery(connection);
   const startedAt = runtime.now();
   const waitedMs = () => Math.max(0, Math.round(runtime.now() - startedAt));
   const paused: PauseOutcome = new Map();
@@ -581,7 +605,7 @@ export const withDrainedScheduler = async <T>(
     let floorMs = SCHEDULER_DRAIN_START_FLOOR_MS;
     let lastProgressAt = Number.NEGATIVE_INFINITY;
     for (;;) {
-      const written = await pauseJobs(connection, floorMs, paused);
+      const written = await pauseJobs(query, floorMs, paused);
       floorMs = SCHEDULER_DRAIN_WORK_FLOOR_MS;
       const leased = await readLeased(connection);
       if (leased.length === 0 && written === 0) {

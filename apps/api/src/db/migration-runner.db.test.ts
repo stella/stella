@@ -2467,6 +2467,88 @@ if (!runPostgresTests || databaseUrl === undefined) {
         );
       });
 
+      test("a long operator pause that lapses during the schema work is taken over by a renewal tick and restored", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            // Longer than the start floor, so the drain leaves it untouched.
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Long operator hold",
+              interval: "3 hours",
+            });
+            let shortened: ReturnType<typeof rowOf>;
+            let tick: (() => Promise<void>) | undefined;
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+                repeat: (callback) => {
+                  tick = callback;
+                  return () => {
+                    tick = undefined;
+                  };
+                },
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              expect(
+                rowOf(await schedulerRows(observer), "job.other")?.paused_by,
+              ).toBe("operator");
+              // The operator's pause now ends within a second.
+              await observer.unsafe(
+                "UPDATE scheduler_jobs SET paused_until = now() + interval '1 second' WHERE id = 'job.other'",
+              );
+              await waitForExternalState({
+                description: "the operator pause has lapsed",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ lapsed: boolean }[]>(
+                    "SELECT paused_until < now() AS lapsed FROM scheduler_jobs WHERE id = 'job.other'",
+                  );
+                  return row?.lapsed === true;
+                },
+              });
+              shortened = rowOf(await schedulerRows(observer), "job.other");
+              await tick?.();
+              const during = rowOf(await schedulerRows(observer), "job.other");
+              expect(during?.paused_by).toBe("migrate");
+              expect(
+                (during?.paused_until?.getTime() ?? 0) >
+                  Date.now() + 10 * 60_000,
+              ).toBe(true);
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { outcome: "drained", takenOverCount: 0 },
+                { outcome: "resumed", renewalCount: 1, restoredCount: 1 },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            // What the operator last wrote is what comes back, exactly.
+            expect(
+              rowOf(await schedulerRows(observer), "job.other"),
+            ).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Long operator hold",
+              paused_until: shortened?.paused_until,
+            });
+          },
+        );
+      });
+
       test("no pending schema migration pauses nothing", async () => {
         await withSchedulerBundle(
           ALTER_AFTER_DRAIN,
