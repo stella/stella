@@ -673,6 +673,7 @@ test("billing-review.applied-results-cannot-survive-source-edit-sequences", () =
     fc.property(
       fc.array(
         fc.record({
+          manual: fc.constantFrom("none", "narrative", "billable", "both"),
           narrative: fc.string({ maxLength: 30 }),
           billable: fc.boolean(),
           selected: fc.boolean(),
@@ -703,32 +704,45 @@ test("billing-review.applied-results-cannot-survive-source-edit-sequences", () =
               groups: sources,
             });
           }
+          let fallback = initial.content;
           for (const [index, edit] of edits.entries()) {
-            const before = entry(state);
-            const key =
-              before.content.type === "accepted"
-                ? (before.content.items.at(0)?.key ??
-                  panic("Missing accepted item"))
-                : target.groupId;
-            state = reviewReducer(state, {
-              type: "set-narrative",
-              ...target,
-              itemKey: key,
-              narrative: edit.narrative,
-            });
-            state = reviewReducer(state, {
-              type: "set-billable",
-              ...target,
-              itemKey: key,
-              billable: edit.billable,
-            });
+            const source =
+              live.get(target.groupId) ?? panic("Missing live source");
+            const before = reviewItems(
+              [{ group: source, content: entry(state).content }],
+              live,
+            );
+            const item = before.at(0) ?? panic("Missing review item");
+            if (edit.manual === "narrative" || edit.manual === "both") {
+              state = reviewReducer(state, {
+                type: "set-narrative",
+                ...target,
+                itemKey: item.key,
+                narrative: edit.narrative,
+              });
+            }
+            if (edit.manual === "billable" || edit.manual === "both") {
+              state = reviewReducer(state, {
+                type: "set-billable",
+                ...target,
+                itemKey: item.key,
+                billable: edit.billable,
+              });
+            }
+            const edited = reviewItems(
+              [{ group: source, content: entry(state).content }],
+              live,
+            );
+            const userChanged = edited.some(
+              (row, at) =>
+                row.narrative !== before.at(at)?.narrative ||
+                row.billable !== before.at(at)?.billable,
+            );
             state = reviewReducer(state, {
               type: "set-selected",
               ...target,
               selected: edit.selected,
             });
-            const source =
-              live.get(target.groupId) ?? panic("Missing live source");
             const changed = {
               ...source,
               durationMs: source.durationMs + 360_000,
@@ -737,25 +751,63 @@ test("billing-review.applied-results-cannot-survive-source-edit-sequences", () =
             };
             expect(changed).not.toEqual(source);
             live.set(source.id, changed);
-            // Both projection and persisted reducer state reject every applied result.
+            const projected = reviewItems(
+              [{ group: changed, content: entry(state).content }],
+              live,
+            );
+            if (userChanged) {
+              // Every user-entered scalar survives, including edits within a split, move or merge.
+              expect(
+                projected.map(
+                  ({ narrative, billable, classification: codes }) => ({
+                    narrative,
+                    billable,
+                    classification: codes,
+                  }),
+                ),
+              ).toEqual(
+                edited.map(
+                  ({ narrative, billable, classification: codes }) => ({
+                    narrative,
+                    billable,
+                    classification: codes,
+                  }),
+                ),
+              );
+            } else {
+              expect(projected.at(0)).toMatchObject({
+                narrative:
+                  fallback.type === "single"
+                    ? fallback.narrative
+                    : panic("Expected scalar fallback"),
+                billable: fallback.type === "single" ? fallback.billable : true,
+                classification:
+                  fallback.type === "single" ? fallback.classification : null,
+              });
+            }
+            state = reviewStateForGroups(state, live);
+            expect(entry(state).content.notice).toBe("sourceChanged");
             expect(
               reviewItems(
                 [{ group: changed, content: entry(state).content }],
                 live,
-              ).at(0)?.classification,
-            ).toBeNull();
-            state = reviewStateForGroups(state, live);
-            expect(entry(state).content).toMatchObject({
-              type: "single",
-              notice: "sourceChanged",
-              classification: null,
-            });
+              ),
+            ).toEqual(projected);
             expect(entry(state).draft?.using).toBe("proposal");
             const invalidated = state;
             expect(reviewStateForGroups(state, currentGroups)).toBe(
               invalidated,
             );
-            // Explicit review accepts the proposal for the latest source, then the next edit invalidates it again.
+            if (entry(state).content.type === "accepted") {
+              expect(entry(state).content).toMatchObject({ ownership: "user" });
+              // Discarding the edited structure is an explicit user action, never an invalidation.
+              state = reviewReducer(state, {
+                type: "undo-structure",
+                ...target,
+              });
+              state = reviewStateForGroups(state, live);
+            }
+            fallback = entry(state).content;
             state = reviewReducer(state, {
               type: "apply-proposal",
               ...target,

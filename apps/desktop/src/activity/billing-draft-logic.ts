@@ -382,12 +382,46 @@ export const currentReviewContent = (
   content: ReviewContent,
   groups: ReadonlyMap<string, DraftableGroup>,
 ): ReviewContent => {
-  const acceptance = content.type === "accepted" ? content : content.acceptance;
+  const acceptance =
+    content.type === "accepted"
+      ? {
+          type: content.ownership,
+          sources: content.sources,
+          undoContent: content.undoContent,
+        }
+      : content.sourceBinding;
   if (
     acceptance === undefined ||
     reviewSourcesCurrent(acceptance.sources, groups)
   ) {
     return content;
+  }
+  if (acceptance.type === "user") {
+    if (content.notice === "sourceChanged") {
+      return content;
+    }
+    switch (content.type) {
+      case "single":
+        return {
+          type: "single",
+          narrative: content.narrative,
+          classification: content.classification,
+          billable: content.billable,
+          notice: "sourceChanged",
+        };
+      case "accepted":
+        return {
+          type: "accepted",
+          ownership: "user",
+          sources: content.sources,
+          undoContent: content.undoContent,
+          summary: content.summary,
+          items: content.items,
+          notice: "sourceChanged",
+        };
+      default:
+        return panic("Unknown review content", content satisfies never);
+    }
   }
   const original = currentReviewContent(acceptance.undoContent, groups);
   if (original.type !== "single") {

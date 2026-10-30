@@ -199,9 +199,15 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
   return {
     editFor: (group: DayReviewGroup) => edits.get(group.id) ?? initial(group),
     dispatch,
+    sourceReviewRequired: [...edits].some(
+      ([id, { selected, content }]) =>
+        groups.has(id) &&
+        selected &&
+        content.type === "accepted" &&
+        content.notice === "sourceChanged",
+    ),
     notice: [...edits.values()].some(
-      ({ content }) =>
-        content.type === "single" && content.notice === "sourceChanged",
+      ({ content }) => content.notice === "sourceChanged",
     )
       ? "sourceChanged"
       : null,
@@ -337,7 +343,8 @@ export const ActivityDayReview = ({
       group.matter !== null,
   );
   const currentGroups = new Map(eligible.map((group) => [group.id, group]));
-  const { editFor, dispatch, notice } = useReviewEdits(currentGroups);
+  const review = useReviewEdits(currentGroups);
+  const { editFor, dispatch, notice } = review;
   const selected = eligible.filter((group) => editFor(group).selected);
   const rows = selected.map((group) => ({
     group,
@@ -348,6 +355,7 @@ export const ActivityDayReview = ({
     eligible.map((group) => ({ group, content: editFor(group).content })),
   );
   const selectionExceedsLimit = items.length > DESKTOP_ACTIVITY_REVIEW_LIMIT;
+  const creatable = !selectionExceedsLimit && !review.sourceReviewRequired;
   const selectedTenths = selected.reduce(
     (sum, group) => sum + group.roundedTenths,
     0,
@@ -393,10 +401,7 @@ export const ActivityDayReview = ({
     }).catch(() => setError(t("errorUpdate")));
   };
   const submit = () => {
-    if (sending.current) {
-      return;
-    }
-    if (submission.type !== "retry" && selectionExceedsLimit) {
+    if (sending.current || (submission.type !== "retry" && !creatable)) {
       return;
     }
     const pending =
@@ -586,7 +591,7 @@ export const ActivityDayReview = ({
         }
         onSubmit={submit}
         valid={
-          !selectionExceedsLimit &&
+          creatable &&
           !session.busy &&
           items.every((item) => item.narrative.trim().length > 0)
         }
@@ -1081,7 +1086,9 @@ const ReviewEntries = ({
                         calendarDate(
                           matter.signals.upcomingDeadline.slice(0, 10),
                         ),
-                        { dateStyle: "short" },
+                        {
+                          dateStyle: "short",
+                        },
                       )}
                     </ReviewStatusBadge>
                   ) : null}

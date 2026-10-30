@@ -21,16 +21,21 @@ type ReviewAcceptance = {
   sources: readonly DraftableGroup[];
   undoContent: SingleReviewContent;
 };
+type ScalarSourceBinding =
+  | ({ type: "ai" } & ReviewAcceptance)
+  | { type: "user"; sources: readonly DraftableGroup[] };
 export type SingleReviewContent = {
   type: "single";
   narrative: string;
   billable: boolean;
   classification: DesktopTimeEntryClassification | null;
   notice?: "sourceChanged";
-  acceptance?: ReviewAcceptance;
+  sourceBinding?: ScalarSourceBinding;
 };
 export type AcceptedReviewContent = ReviewAcceptance & {
   type: "accepted";
+  ownership: "ai" | "user";
+  notice?: "sourceChanged";
   summary: StructureSummary;
   items: readonly ReviewItem[];
 };
@@ -198,9 +203,13 @@ const appliedContent = (
     narrative: scalars.narrative,
     classification: scalars.classification,
     billable: scalars.billable ?? billable,
-    acceptance: {
+    sourceBinding: {
+      type: "ai",
       sources: result.sources,
-      undoContent: current.acceptance?.undoContent ?? current,
+      undoContent:
+        current.sourceBinding?.type === "ai"
+          ? current.sourceBinding.undoContent
+          : current,
     },
   };
 };
@@ -297,8 +306,8 @@ const offerResults = (
               billable: current.content.billable,
               classification: current.content.classification,
               notice: "sourceChanged",
-              ...(current.content.acceptance
-                ? { acceptance: current.content.acceptance }
+              ...(current.content.sourceBinding
+                ? { sourceBinding: current.content.sourceBinding }
                 : {}),
             }
           : current.content,
@@ -346,7 +355,14 @@ const editItem = (
             action.type === "set-billable" ? action.billable : content.billable,
           classification: content.classification,
           ...(content.notice ? { notice: content.notice } : {}),
-          ...(content.acceptance ? { acceptance: content.acceptance } : {}),
+          ...(content.sourceBinding
+            ? {
+                sourceBinding: {
+                  type: "user" as const,
+                  sources: content.sourceBinding.sources,
+                },
+              }
+            : {}),
         },
       },
     });
@@ -367,6 +383,8 @@ const editItem = (
     change: {
       content: {
         type: "accepted",
+        ownership: "user",
+        ...(current.content.notice ? { notice: current.content.notice } : {}),
         summary: current.content.summary,
         sources: current.content.sources,
         undoContent: current.content.undoContent,
@@ -461,6 +479,7 @@ const acceptStructure = (
     change: {
       content: {
         type: "accepted",
+        ownership: "ai",
         summary: action.proposal.summary,
         sources: captureReviewSources(
           action.groups

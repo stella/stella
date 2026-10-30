@@ -603,7 +603,9 @@ test("deferred draft becomes a proposal and undo restores the text edited while 
   ).toHaveProperty("value", "Typed while waiting");
   fireEvent.change(
     view.getByRole("textbox", { name: messages.activity.entryNarrative }),
-    { target: { value: "Edited before applying" } },
+    {
+      target: { value: "Edited before applying" },
+    },
   );
   fireEvent.click(
     view.getByRole("button", { name: messages.activity.aiAccept }),
@@ -892,7 +894,9 @@ for (const mode of ["initial", "redraft", "steer"] as const) {
         } else {
           fireEvent.change(
             view.getByPlaceholderText(messages.activity.aiSteerAllPlaceholder),
-            { target: { value: "Make the draft shorter" } },
+            {
+              target: { value: "Make the draft shorter" },
+            },
           );
           fireEvent.click(
             view.getByRole("button", { name: messages.activity.aiSteerApply }),
@@ -1026,4 +1030,149 @@ test("recording after an applied scalar draft requires review and enables redraf
     view.getByRole("textbox", { name: messages.activity.entryNarrative }),
   ).toHaveProperty("value", "Current AI narrative");
   expect(view.queryByText(messages.activity.aiStructureChanged)).toBeNull();
+});
+
+for (const field of ["narrative", "billable"] as const) {
+  test(`recording preserves a user's ${field} edit to an AI draft and flags review`, async () => {
+    const boundary = installNativeBoundary();
+    const view = mountReview();
+    const request = await startDrafting(view, boundary.draftRequests);
+    await resolveDraft(
+      request,
+      review([draft("entry_1", "AI work", [], BASE_LEDGER_CLASSIFICATION)]),
+    );
+    if (field === "narrative") {
+      fireEvent.change(
+        view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+        {
+          target: { value: "My reviewed narrative" },
+        },
+      );
+    } else {
+      const control = view.getByRole("switch", {
+        name: messages.activity.entryBillable,
+      });
+      const input =
+        control.parentElement?.querySelector("input[type=checkbox]") ??
+        panic("Expected the switch input");
+      fireEvent.click(input);
+    }
+    expect(
+      view
+        .getByRole("switch", { name: messages.activity.entryBillable })
+        .getAttribute("aria-checked"),
+    ).toBe(field === "billable" ? "false" : "true");
+    const updated = snapshot([
+      ...segments,
+      {
+        appIdentifier: "com.example.editor",
+        appName: "Example Editor",
+        matterId: FIRST_MATTER_ID,
+        start: "2026-10-07T10:00:00Z",
+        end: "2026-10-07T10:06:00Z",
+      },
+    ]);
+    view.rerender(
+      <DesktopIntlProvider language="en" messages={messages}>
+        <ActivityDayReview
+          snapshot={updated}
+          header={<span>Review</span>}
+          billingDrafts={billingDrafts}
+          onCopy={(_text, onSettled) => onSettled(true)}
+          onReviewStatusChange={() => undefined}
+        />
+      </DesktopIntlProvider>,
+    );
+    expect(
+      view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+    ).toHaveProperty(
+      "value",
+      field === "narrative" ? "My reviewed narrative" : "AI work",
+    );
+    expect(
+      view
+        .getByRole("switch", { name: messages.activity.entryBillable })
+        .getAttribute("aria-checked"),
+    ).toBe(field === "billable" ? "false" : "true");
+    expect(visibleReviewCodes(view.container)).toEqual([
+      ["BASE-TASK", "BASE-ACTIVITY"],
+    ]);
+    expect(view.getByText(messages.activity.aiStructureChanged)).toBeTruthy();
+    expect(
+      view.getByRole("button", { name: messages.activity.aiAccept }),
+    ).toBeTruthy();
+    expect(
+      view.getByRole("button", { name: messages.activity.aiDraft }),
+    ).toHaveProperty("disabled", false);
+  });
+}
+
+test("an edited split survives recording changes while stale creation is blocked", async () => {
+  const boundary = installNativeBoundary();
+  const view = mountReview();
+  const request = await startDrafting(view, boundary.draftRequests);
+  await resolveDraft(
+    request,
+    review([
+      draft("entry_1", "AI work", [
+        {
+          type: "split",
+          parts: [
+            {
+              durationMinutes: 30,
+              narrative: "First half",
+              classification: CLIENT_CLASSIFICATION,
+              billable: true,
+            },
+            {
+              durationMinutes: 30,
+              narrative: "Second half",
+              classification: CLIENT_CLASSIFICATION,
+              billable: true,
+            },
+          ],
+        },
+      ]),
+    ]),
+  );
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiApply }),
+  );
+  const first =
+    view
+      .getAllByRole("textbox", { name: messages.activity.entryNarrative })
+      .at(0) ?? panic("Expected split row");
+  fireEvent.change(first, { target: { value: "My split narrative" } });
+  const updated = snapshot([
+    ...segments,
+    {
+      appIdentifier: "com.example.editor",
+      appName: "Example Editor",
+      matterId: FIRST_MATTER_ID,
+      start: "2026-10-07T10:00:00Z",
+      end: "2026-10-07T10:06:00Z",
+    },
+  ]);
+  view.rerender(
+    <DesktopIntlProvider language="en" messages={messages}>
+      <ActivityDayReview
+        snapshot={updated}
+        header={<span>Review</span>}
+        billingDrafts={billingDrafts}
+        onCopy={(_text, onSettled) => onSettled(true)}
+        onReviewStatusChange={() => undefined}
+      />
+    </DesktopIntlProvider>,
+  );
+  const narratives = view.getAllByRole("textbox", {
+    name: messages.activity.entryNarrative,
+  });
+  expect(narratives).toHaveLength(2);
+  expect(narratives.at(0)).toHaveProperty("value", "My split narrative");
+  expect(narratives.at(1)).toHaveProperty("value", "Second half");
+  expect(view.getByText(messages.activity.aiStructureChanged)).toBeTruthy();
+  const create = view.getByRole("button", { name: "Create 2 drafts" });
+  expect(create).toHaveProperty("disabled", true);
+  fireEvent.click(create);
+  expect(boundary.submissions).toHaveLength(0);
 });

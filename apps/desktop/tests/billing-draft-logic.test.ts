@@ -412,6 +412,7 @@ describe("accepted proposals become batch items", () => {
           ? content
           : {
               type: "accepted",
+              ownership: "ai",
               summary: structure.summary,
               sources: [riverside, meridian].filter((source) =>
                 structure.type === "merge"
