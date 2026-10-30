@@ -5,12 +5,13 @@ import { Stack } from "expo-router";
 import { FlatList, Linking, Share, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
-import { RetryButton } from "@/components/retry-button";
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
+import type { TextVariant } from "@stll/ui/text";
+
+import { screenStyles } from "@/components/empty-state-screen";
+import { LoadFailedCard } from "@/components/load-failure";
 import { barGlyph } from "@/components/ui/bar-glyph";
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
-import type { TextVariant } from "@/components/ui/text";
 import type { Load } from "@/state/api-request";
 import type { Decision } from "@/state/case-law";
 import { plainTextBlocks, readerBlocks } from "@/state/decision-document";
@@ -40,9 +41,12 @@ export const DecisionReader = ({
   if (Result.isError(result)) {
     return (
       <View className="flex-1 p-4">
-        <EmptyCard description={t("loadFailed")} title={t("unavailable")}>
-          <RetryButton label={t("retry")} onPress={onReload} />
-        </EmptyCard>
+        <LoadFailedCard
+          error={result.error}
+          onRetry={onReload}
+          retryLabel={t("retry")}
+          title={t("loadFailed")}
+        />
       </View>
     );
   }
@@ -201,13 +205,14 @@ const OpenSourceButton = ({ url }: { url: string }) => {
   return (
     <Button
       className="self-start"
-      label={t("openSource")}
       onPress={() => {
         void Linking.openURL(url);
       }}
       size="sm"
       variant="outline"
-    />
+    >
+      {t("openSource")}
+    </Button>
   );
 };
 

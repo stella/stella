@@ -40,6 +40,8 @@ import {
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import { isNssDocumentPlaceholder } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
+import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
@@ -440,8 +442,9 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(pageDeadlines).toEqual([90_000]);
+    // The page's own budget first, then one deadline per listing request.
     expect(failedStub.timeouts).toEqual([60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...failedStub.timeouts]);
     pageDeadlines.length = 0;
 
     const pageStub = installStub({
@@ -458,8 +461,8 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(pageDeadlines).toEqual([90_000]);
     expect(pageStub.timeouts.slice(0, 3)).toEqual([60_000, 60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...pageStub.timeouts]);
   } finally {
     timeoutSpy.mockRestore();
   }
@@ -2170,6 +2173,44 @@ describe("cz-nss buildDecision", () => {
       "listing",
       "text",
     ]);
+  });
+
+  test("a rich document with no parsed blocks remains stored beside the fallback text", async () => {
+    const payload = await listedRow();
+    const html = "<html><body><p>pokračování</p></body></html>";
+    expect(isNssDocumentPlaceholder(html)).toBe(false);
+    expect(
+      parseNssDecisionHtml({
+        caseNumber: "1 Az 4/2026",
+        ecli: undefined,
+        court: "Městský soud v Praze",
+        decisionDate: undefined,
+        decisionType: undefined,
+        sourceUrl: undefined,
+        html,
+        detailMetadata: {},
+      }).documentAst.blocks,
+    ).toHaveLength(0);
+    installStub({ search: [] });
+    const served = globalThis.fetch;
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        return url.pathname.startsWith("/DokumentOriginal/Html/")
+          ? htmlResponse(html)
+          : await served(input, init);
+      }),
+    );
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the text fallback to build a decision");
+    }
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+    expect(parts?.["document"]).toBe(html);
+    expect(parts?.["text"]).toBe(DOCUMENT_TEXT);
   });
 
   test("a replay rebuilds the text-served row the crawl built", async () => {

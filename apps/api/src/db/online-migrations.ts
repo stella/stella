@@ -46,6 +46,10 @@ import {
   BILLING_DRAFTS_CONSTRAINTS,
 } from "./billing-drafts-constraint-validation";
 import {
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
+} from "./case-law-identifier-retry-constraint-validation";
+import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
@@ -81,6 +85,7 @@ import {
   EMAIL_UNDELIVERABLE_CONSTRAINTS,
 } from "./email-undeliverable-constraint-validation";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
@@ -405,7 +410,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   // Billing guideline file search over knowledge-file paths.
   {
-    introducedBy: "20261029190000_activity_billing_drafts",
+    introducedBy: "20261030100000_activity_billing_drafts",
     createSql:
       'CREATE INDEX CONCURRENTLY "agent_skill_resources_path_billing_trgm_idx" ON public."agent_skill_resources" USING gin ("path" gin_trgm_ops)',
     definitionBody:
@@ -953,6 +958,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  ...FUNCTION_DEPENDENT_INDEX_REINDEXES,
   CHAT_RUN_TEXT_BOUNDARIES,
   ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
@@ -960,6 +966,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
   ...MATTER_TIME_EXPENSE_RETENTION_VALIDATIONS,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
@@ -994,6 +1001,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...CLIENT_INVOICE_CONSTRAINTS,
     ...MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,
+    ...CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
     ...AGENT_SKILL_BINDING_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,
     ...DECISION_DATE_CEILING_CONSTRAINTS,
