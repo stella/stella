@@ -1238,26 +1238,28 @@ describe(`chat requests: ${String(combinations.included.length)} combinations th
       propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
     );
 
-    test(
-      `${provider}: a turn with any user text holds to the provider's rules`,
-      async () => {
-        await assertProperty(
-          `${provider}: a turn with any user text holds to the provider's rules`,
-          fc.asyncProperty(
-            fc
-              .string({ minLength: 1, maxLength: 400, unit: "grapheme" })
-              .filter((text) => text.trim() !== ""),
-            async (text) => {
-              expect(
-                await turnViolations({ provider, slot: "recorded" }, text),
-              ).toEqual([]);
-            },
-          ),
-          { numRuns: 2 },
-        );
-      },
-      propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
-    );
+    describe(provider, () => {
+      test(
+        "a turn with any user text holds to the provider's rules",
+        async () => {
+          await assertProperty(
+            "a turn with any user text holds to the provider's rules",
+            fc.asyncProperty(
+              fc
+                .string({ minLength: 1, maxLength: 400, unit: "grapheme" })
+                .filter((text) => text.trim() !== ""),
+              async (text) => {
+                expect(
+                  await turnViolations({ provider, slot: "recorded" }, text),
+                ).toEqual([]);
+              },
+            ),
+            { numRuns: 2 },
+          );
+        },
+        propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+      );
+    });
   }
 
   // The inventory is the paths the all-pairs run sends, by target provider.

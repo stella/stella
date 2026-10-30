@@ -475,7 +475,8 @@ const LF = 0x0a;
 const hasCrlf = (bytes: Uint8Array): boolean =>
   bytes.some((byte, index) => byte === CR && bytes[index + 1] === LF);
 
-const checkSplit = async (cassette: ProviderWireCassette) => {
+/** The cut-anywhere property, after the one-byte read already matched. */
+const splitReadProperty = async (cassette: ProviderWireCassette) => {
   const multibyte = withMultibyteText(cassette);
   const { run: whole } = await replayWireScenario({
     cassette: multibyte,
@@ -495,18 +496,14 @@ const checkSplit = async (cassette: ProviderWireCassette) => {
   };
   await expectSame({ every: 1 });
   const length = firstBodyOf(multibyte).length;
-  await assertProperty(
-    cassetteKey(cassette).replace("/", " "),
-    fc.asyncProperty(
-      fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
-        minLength: 1,
-        maxLength: 48,
-      }),
-      async (at) => {
-        await expectSame({ at });
-      },
-    ),
-    { numRuns: SPLIT_RUNS, seed: SPLIT_SEED },
+  return fc.asyncProperty(
+    fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
+      minLength: 1,
+      maxLength: 48,
+    }),
+    async (at) => {
+      await expectSame({ at });
+    },
   );
 };
 
@@ -529,13 +526,19 @@ describe("every adapter reads a stream cut anywhere as it reads it whole", () =>
   });
 
   for (const cassette of streamed) {
-    test(
-      cassetteKey(cassette).replace("/", " "),
-      async () => {
-        await checkSplit(cassette);
-      },
-      propertyTestTimeout(RETRY_TIMEOUT_MS),
-    );
+    describe(cassetteKey(cassette).replace("/", " "), () => {
+      test(
+        "matches the whole read at any cut",
+        async () => {
+          await assertProperty(
+            "matches the whole read at any cut",
+            await splitReadProperty(cassette),
+            { numRuns: SPLIT_RUNS, seed: SPLIT_SEED },
+          );
+        },
+        propertyTestTimeout(RETRY_TIMEOUT_MS),
+      );
+    });
   }
 });
 

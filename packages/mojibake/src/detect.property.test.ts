@@ -306,40 +306,43 @@ describe("typographic punctuation in otherwise ASCII text", () => {
     ["signs and units without lowercase", signs],
   ] as const;
 
-  test.each(TEXTS)("%s, read correctly, is clean", (label, texts) => {
-    assertProperty(
-      `${label}, read correctly, is clean`,
-      fc.property(texts, (written) => {
-        expect(checkTextEncoding(written, "en")).toEqual({ status: "clean" });
-      }),
-      { numRuns: 300, seed: propertySeed() },
-    );
-  });
+  for (const [label, texts] of TEXTS) {
+    describe(label, () => {
+      test("read correctly, is clean", () => {
+        assertProperty(
+          "read correctly, is clean",
+          fc.property(texts, (written) => {
+            expect(checkTextEncoding(written, "en")).toEqual({
+              status: "clean",
+            });
+          }),
+          { numRuns: 300, seed: propertySeed() },
+        );
+      });
 
-  test.each(TEXTS)(
-    "%s, written in UTF-8 and read as windows-1252 or Latin-1, is reported",
-    (label, texts) => {
-      assertProperty(
-        `${label}, written in UTF-8 and read as windows-1252 or Latin-1, is reported`,
-        fc.property(
-          texts,
-          fc.constantFrom<DecodingPair>(
-            { actual: "utf-8", assumed: "windows-1252" },
-            { actual: "utf-8", assumed: "iso-8859-1" },
+      test("written in UTF-8 and read as windows-1252 or Latin-1, is reported", () => {
+        assertProperty(
+          "written in UTF-8 and read as windows-1252 or Latin-1, is reported",
+          fc.property(
+            texts,
+            fc.constantFrom<DecodingPair>(
+              { actual: "utf-8", assumed: "windows-1252" },
+              { actual: "utf-8", assumed: "iso-8859-1" },
+            ),
+            (written, pair) => {
+              const misread = misdecode(written, pair);
+              expect(misread).not.toBeNull();
+              expect(misread).not.toBe(written);
+              expect(checkTextEncoding(misread ?? "", "en").status).toBe(
+                "suspect",
+              );
+            },
           ),
-          (written, pair) => {
-            const misread = misdecode(written, pair);
-            expect(misread).not.toBeNull();
-            expect(misread).not.toBe(written);
-            expect(checkTextEncoding(misread ?? "", "en").status).toBe(
-              "suspect",
-            );
-          },
-        ),
-        { numRuns: 300, seed: propertySeed() },
-      );
-    },
-  );
+          { numRuns: 300, seed: propertySeed() },
+        );
+      });
+    });
+  }
 });
 
 describe("a native capital before a mark", () => {

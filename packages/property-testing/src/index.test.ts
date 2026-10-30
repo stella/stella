@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  assertProperty,
   drawPropertySamples,
   PROPERTY_TEST_SEED_ENV,
   PROPERTY_TEST_TIMEOUT_BASE_MS_ENV,
@@ -310,5 +311,21 @@ describe("drawPropertySamples", () => {
     }).toThrow(
       `PROPERTY_TEST_SEED=77 sample 1: ${fc.stringify(failing?.value)}`,
     );
+  });
+});
+
+describe("assertProperty", () => {
+  test("raw runner parameters apply one run factor with an unset seed", () => {
+    withEnv({ [FACTOR_ENV]: "3", [PROPERTY_TEST_SEED_ENV]: undefined }, () => {
+      const values: number[] = [];
+      assertProperty(
+        "raw runner parameters apply one run factor with an unset seed",
+        fc.property(fc.constant(1), (value) => {
+          values.push(value);
+        }),
+        { numRuns: 2, seed: undefined },
+      );
+      expect(values).toEqual([1, 1, 1, 1, 1, 1]);
+    });
   });
 });

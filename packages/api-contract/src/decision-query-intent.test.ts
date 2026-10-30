@@ -495,22 +495,24 @@ describe("an entry finds its decision within its own jurisdiction", () => {
         ),
       );
 
-    test(`${jurisdiction}: every accepted spelling matches itself and every stored spelling of it`, () => {
-      assertProperty(
-        `${jurisdiction}: every accepted spelling matches itself and every stored spelling of it`,
-        fc.property(
-          fc.oneof(constitutionalPair, ordinaryPair),
-          ([typed, stored, other]) => {
-            fc.pre(accepted(typed) && accepted(stored));
-            const hits = [hit(typed), hit(stored), hit(other)];
-            expect(
-              exactDecisionMatches(identityOf(typed, grammar), hits),
-              `${typed} ~ ${stored}`,
-            ).toEqual([hit(typed), hit(stored)]);
-          },
-        ),
-        {},
-      );
+    describe(jurisdiction, () => {
+      test("every accepted spelling matches itself and every stored spelling of it", () => {
+        assertProperty(
+          "every accepted spelling matches itself and every stored spelling of it",
+          fc.property(
+            fc.oneof(constitutionalPair, ordinaryPair),
+            ([typed, stored, other]) => {
+              fc.pre(accepted(typed) && accepted(stored));
+              const hits = [hit(typed), hit(stored), hit(other)];
+              expect(
+                exactDecisionMatches(identityOf(typed, grammar), hits),
+                `${typed} ~ ${stored}`,
+              ).toEqual([hit(typed), hit(stored)]);
+            },
+          ),
+          {},
+        );
+      });
     });
   }
 

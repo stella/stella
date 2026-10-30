@@ -86,19 +86,21 @@ describe("fold family (properties)", () => {
    * comparison can disagree purely over how many times each was folded.
    */
   for (const [name, fold] of Object.entries(FOLDS)) {
-    test(`${name} is idempotent`, () => {
-      assertProperty(
-        `${name} is idempotent`,
-        fc.property(
-          fold === arabicNormalize ? sqlMirrorText : text,
-          (value) => {
-            const once = fold(value);
+    describe(name, () => {
+      test("is idempotent", () => {
+        assertProperty(
+          "is idempotent",
+          fc.property(
+            fold === arabicNormalize ? sqlMirrorText : text,
+            (value) => {
+              const once = fold(value);
 
-            expect(fold(once)).toBe(once);
-          },
-        ),
-        { numRuns: 400, seed: propertySeed() },
-      );
+              expect(fold(once)).toBe(once);
+            },
+          ),
+          { numRuns: 400, seed: propertySeed() },
+        );
+      });
     });
   }
 

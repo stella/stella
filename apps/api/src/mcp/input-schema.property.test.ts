@@ -37,81 +37,101 @@ describe("MCP input contracts", () => {
     );
   });
 
-  for (const [index, definition] of ALL_MCP_TOOL_DEFINITIONS.entries()) {
-    test(
-      `${index}: ${definition.name} wire and runtime acceptance agree`,
-      () => {
-        expect("inputSchemaSource" in definition).toBe(true);
-        if (!("inputSchemaSource" in definition)) {
+  const wireRuntimeAgreement = (
+    definition: (typeof ALL_MCP_TOOL_DEFINITIONS)[number],
+  ) => {
+    if (!("inputSchemaSource" in definition)) {
+      return undefined;
+    }
+    const acceptsWire = compileWireSchema(validator, definition.inputSchema);
+    return fc.property(
+      schemaComparisonArbitrary([definition.inputSchema]),
+      (input) => {
+        const parsed = v.safeParse(
+          definition.inputSchemaSource.advertisedSchema,
+          input,
+        );
+        // Explicit projection waivers and declared runtime-only checks
+        // stay at runtime. Every other rejection must agree with the
+        // published schema.
+        const onlyWaivedIssues =
+          !parsed.success &&
+          parsed.issues.every(
+            (issue) =>
+              isRuntimeOnlyCheckIssue(issue) ||
+              definition.inputSchemaProjectionWaiver?.ignoreActions.some(
+                (action) => action === issue.type,
+              ),
+          );
+        expect(acceptsWire(input)).toBe(parsed.success || onlyWaivedIssues);
+
+        if (!isRecord(input)) {
           return;
         }
-        const acceptsWire = compileWireSchema(
-          validator,
-          definition.inputSchema,
+        const unknownKey = "__schema_property_unknown__";
+        expect(definition.inputSchema.properties).not.toHaveProperty(
+          unknownKey,
         );
-        const property = fc.property(
-          schemaComparisonArbitrary([definition.inputSchema]),
-          (input) => {
-            const parsed = v.safeParse(
-              definition.inputSchemaSource.advertisedSchema,
-              input,
-            );
-            // Explicit projection waivers and declared runtime-only checks
-            // stay at runtime. Every other rejection must agree with the
-            // published schema.
-            const onlyWaivedIssues =
-              !parsed.success &&
-              parsed.issues.every(
-                (issue) =>
-                  isRuntimeOnlyCheckIssue(issue) ||
-                  definition.inputSchemaProjectionWaiver?.ignoreActions.some(
-                    (action) => action === issue.type,
-                  ),
-              );
-            expect(acceptsWire(input)).toBe(parsed.success || onlyWaivedIssues);
-
-            if (!isRecord(input)) {
-              return;
-            }
-            const unknownKey = "__schema_property_unknown__";
-            expect(definition.inputSchema.properties).not.toHaveProperty(
-              unknownKey,
-            );
-            const normalized = normalizeObjectInputAtBoundary({
-              access: definition.access,
-              schema: definition.inputSchema,
-              value: { ...input, [unknownKey]: true },
-            });
-            if (!normalized.ok) {
-              return;
-            }
-            expect(normalized.value[unknownKey]).toBe(true);
-            expect(acceptsWire(normalized.value)).toBe(false);
-            expect(
-              v.safeParse(definition.inputSchemaSource, normalized.value)
-                .success,
-            ).toBe(false);
-          },
-        );
-        if (definition.name === "preview_template_conditions") {
-          assertProperty(
-            `${definition.name} wire and runtime acceptance agree`,
-            property,
-            {
-              seed: -232_809_522,
-              path: "19:0:0:0:0:0:0:0:2",
-              numRuns: 1,
-              endOnFailure: true,
-            },
-          );
+        const normalized = normalizeObjectInputAtBoundary({
+          access: definition.access,
+          schema: definition.inputSchema,
+          value: { ...input, [unknownKey]: true },
+        });
+        if (!normalized.ok) {
+          return;
         }
-        assertProperty(
-          `${definition.name} wire and runtime acceptance agree`,
-          property,
-          { numRuns: 20, seed: propertySeed() },
-        );
+        expect(normalized.value[unknownKey]).toBe(true);
+        expect(acceptsWire(normalized.value)).toBe(false);
+        expect(
+          v.safeParse(definition.inputSchemaSource, normalized.value).success,
+        ).toBe(false);
       },
-      propertyTestTimeout(10_000),
     );
+  };
+
+  for (const [index, definition] of ALL_MCP_TOOL_DEFINITIONS.entries()) {
+    describe(`${index}: ${definition.name}`, () => {
+      test(
+        "wire and runtime acceptance agree",
+        () => {
+          const property = wireRuntimeAgreement(definition);
+          expect(property).toBeDefined();
+          if (property === undefined) {
+            return;
+          }
+          assertProperty("wire and runtime acceptance agree", property, {
+            numRuns: 20,
+            seed: propertySeed(),
+          });
+        },
+        propertyTestTimeout(10_000),
+      );
+    });
   }
+
+  test(
+    "preview_template_conditions replays its recorded counterexample",
+    () => {
+      const definition = ALL_MCP_TOOL_DEFINITIONS.find(
+        ({ name }) => name === "preview_template_conditions",
+      );
+      const property =
+        definition === undefined ? undefined : wireRuntimeAgreement(definition);
+      expect(property).toBeDefined();
+      if (property === undefined) {
+        return;
+      }
+      assertProperty(
+        "preview_template_conditions replays its recorded counterexample",
+        property,
+        {
+          seed: -232_809_522,
+          path: "19:0:0:0:0:0:0:0:2",
+          numRuns: 1,
+          endOnFailure: true,
+        },
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
 });

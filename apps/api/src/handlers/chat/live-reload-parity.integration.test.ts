@@ -7,11 +7,7 @@ import fc from "fast-check";
 
 import { getOutputTokenLimit } from "@stll/ai-catalog";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
-import {
-  assertProperty,
-  propertySeed,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatToolGrants, mcpConnectors } from "@/api/db/schema";
@@ -1484,23 +1480,19 @@ const closeConversation = async ({ real }: { real: Real }) => {
   await real.harness.close();
 };
 
-const runConversations = async (
-  id: string,
+const CONVERSATION_RUNS = { numRuns: 25 } as const;
+
+const conversationsProperty = (
   commands: fc.Arbitrary<Iterable<fc.AsyncCommand<Model, Real>>>,
-) => {
-  await assertProperty(
-    id,
-    fc.asyncProperty(commands, async (sequence) => {
-      const conversation = await openConversation();
-      try {
-        await fc.asyncModelRun(() => conversation, sequence);
-      } finally {
-        await closeConversation(conversation);
-      }
-    }),
-    { numRuns: 25, seed: propertySeed() },
-  );
-};
+) =>
+  fc.asyncProperty(commands, async (sequence) => {
+    const conversation = await openConversation();
+    try {
+      await fc.asyncModelRun(() => conversation, sequence);
+    } finally {
+      await closeConversation(conversation);
+    }
+  });
 
 // --- Example cases----------------------------------------------------------
 
@@ -2480,9 +2472,12 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every step of any conversation",
     async () => {
-      await runConversations(
+      await assertProperty(
         "matches a reload and the ledger after every step of any conversation",
-        fc.commands(conversationCommands, { maxCommands: 6 }),
+        conversationsProperty(
+          fc.commands(conversationCommands, { maxCommands: 6 }),
+        ),
+        CONVERSATION_RUNS,
       );
     },
     propertyTestTimeout(240_000),
@@ -2739,11 +2734,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every action the page offers",
     async () => {
-      await runConversations(
+      await assertProperty(
         "matches a reload and the ledger after every action the page offers",
-        fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
-          maxCommands: 6,
-        }),
+        conversationsProperty(
+          fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
+            maxCommands: 6,
+          }),
+        ),
+        CONVERSATION_RUNS,
       );
     },
     propertyTestTimeout(240_000),
@@ -2752,11 +2750,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger when a new message replaces waiting cards",
     async () => {
-      await runConversations(
+      await assertProperty(
         "matches a reload and the ledger when a new message replaces waiting cards",
-        fc.commands([...conversationCommands, supersedeCommand], {
-          maxCommands: 6,
-        }),
+        conversationsProperty(
+          fc.commands([...conversationCommands, supersedeCommand], {
+            maxCommands: 6,
+          }),
+        ),
+        CONVERSATION_RUNS,
       );
     },
     propertyTestTimeout(240_000),

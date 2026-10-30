@@ -97,16 +97,18 @@ describe("collapseSpacedLetters (properties)", () => {
    * `Žaloba se zamítá` into `Žalob as ez amítá`.
    */
   for (const [gapName, gap] of Object.entries(WORD_GAPS)) {
-    test(`round-trips a letter-spaced sentence with ${gapName} gaps`, () => {
-      assertProperty(
-        `round-trips a letter-spaced sentence with ${gapName} gaps`,
-        fc.property(sentence, (original) => {
-          const collapsed = collapseSpacedLetters(letterSpace(original, gap));
+    describe(`with ${gapName} gaps`, () => {
+      test("round-trips a letter-spaced sentence", () => {
+        assertProperty(
+          "round-trips a letter-spaced sentence",
+          fc.property(sentence, (original) => {
+            const collapsed = collapseSpacedLetters(letterSpace(original, gap));
 
-          expect(words(collapsed)).toEqual(words(original));
-        }),
-        { numRuns: 300, seed: propertySeed() },
-      );
+            expect(words(collapsed)).toEqual(words(original));
+          }),
+          { numRuns: 300, seed: propertySeed() },
+        );
+      });
     });
   }
 

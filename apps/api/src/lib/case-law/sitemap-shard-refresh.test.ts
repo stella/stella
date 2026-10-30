@@ -8,7 +8,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { compareCodeUnit } from "@stll/collation";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   caseLawDecisions,
@@ -1308,7 +1308,8 @@ test(
           step satisfies never;
       }
     };
-    await fc.assert(
+    await assertProperty(
+      "any sequence of writes interleaved with refreshes ends equal to a full recount",
       fc.asyncProperty(
         fc.array(operation, { minLength: 1, maxLength: 12 }),
         async (steps) => {
@@ -1321,7 +1322,7 @@ test(
           expect(await loggedMonths()).toEqual([]);
         },
       ),
-      propertyConfig({ numRuns: 25 }),
+      { numRuns: 25 },
     );
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS * 3), // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres
