@@ -5,8 +5,8 @@ use tauri::{AppHandle, State};
 use crate::{
   account::{self, AccountRequest, AccountState, LinkedAccount},
   activity::{
-    self, ActivityAppState, ActivityDraftedEntry, ActivityPendingBatch, ActivityRange,
-    BatchReservationError,
+    self, ActivityAppState, ActivityDraftedEntry, ActivityNarrativeAssist,
+    ActivityPendingBatch, ActivityRange, BatchReservationError,
   },
   feature_gate::{DesktopFeature, FeatureGates},
   local_window::ActivityCaller,
@@ -144,6 +144,61 @@ pub async fn time_entry_candidates(
   require_account(&caller, &gates, &account)?;
   drop(account);
   Ok(candidates)
+}
+
+/// How the user approved sending one suggestion's titles. `Always` also
+/// stops the activity window from asking again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NarrativeApproval {
+  Once,
+  Always,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NarrativeCommandRequest {
+  titles: Vec<String>,
+  locale: String,
+  matter_name: Option<String>,
+  approval: NarrativeApproval,
+}
+
+/// Sends one suggestion's window titles, which the user just approved, for a
+/// stella AI description. Neither side keeps them; titles are never logged.
+#[tauri::command]
+pub async fn activity_generate_narrative(
+  caller: ActivityCaller,
+  app: AppHandle,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  state: State<'_, ActivityAppState>,
+  request: NarrativeCommandRequest,
+) -> Result<String, String> {
+  let NarrativeCommandRequest {
+    titles,
+    locale,
+    matter_name,
+    approval,
+  } = request;
+  let request = time_entry_submit::NarrativeRequest::bounded(titles, locale, matter_name)?;
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  if approval == NarrativeApproval::Always {
+    {
+      let mut manager = state
+        .lock()
+        .map_err(crate::logging::with_cause_logged(REFUSAL))?;
+      caller.require_current(&app)?;
+      manager.require_caller(&caller)?;
+      manager.set_narrative_assist(ActivityNarrativeAssist::Always)?;
+    }
+    activity::emit_changed(&app);
+  }
+  let narrative = time_entry_submit::narrative(&account, &request).await?;
+  require_account(&caller, &gates, &account)?;
+  caller.require_current(&app)?;
+  drop(account);
+  Ok(narrative)
 }
 
 #[tauri::command]

@@ -176,6 +176,110 @@ pub async fn candidates(
   Ok(result.matters)
 }
 
+// The API contract's narrative limits (`desktop-time-entries.ts`). Its
+// lengths count UTF-16 code units, as JavaScript strings do.
+const NARRATIVE_MAX_TITLES: usize = 40;
+const NARRATIVE_MAX_TITLE_UNITS: usize = 300;
+const NARRATIVE_MAX_LOCALE_BYTES: usize = 35;
+const NARRATIVE_MAX_MATTER_NAME_UNITS: usize = 200;
+const NARRATIVE_MAX_UNITS: usize = 10_000;
+
+/// The longest prefix of `text` that fits `limit` UTF-16 code units, cut on a
+/// character boundary.
+fn utf16_prefix(text: &str, limit: usize) -> String {
+  let mut units = 0;
+  text
+    .chars()
+    .take_while(|character| {
+      units += character.len_utf16();
+      units <= limit
+    })
+    .collect()
+}
+
+/// A BCP 47 shape: a letter-only language subtag, then 1 to 8 character
+/// alphanumeric subtags, all ASCII.
+fn well_formed_locale(locale: &str) -> bool {
+  !locale.is_empty()
+    && locale.len() <= NARRATIVE_MAX_LOCALE_BYTES
+    && locale.split('-').all(|subtag| {
+      (1..=8).contains(&subtag.len())
+        && subtag.chars().all(|character| character.is_ascii_alphanumeric())
+    })
+    && locale.split('-').next().is_some_and(|language| {
+      language.chars().all(|character| character.is_ascii_alphabetic())
+    })
+}
+
+/// The titles of one suggestion the user approved for a stella AI
+/// description; the server writes the narrative and stores nothing.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrativeRequest {
+  titles: Vec<String>,
+  locale: String,
+  matter_name: Option<String>,
+}
+
+impl NarrativeRequest {
+  /// At most 40 non-blank titles cut to the contract's length, a BCP 47
+  /// locale (`cs_CZ` becomes `cs-CZ`) and the matter name cut to its
+  /// length; no titles or a malformed locale is refused.
+  pub fn bounded(
+    titles: Vec<String>,
+    locale: String,
+    matter_name: Option<String>,
+  ) -> Result<Self, String> {
+    let titles: Vec<String> = titles
+      .iter()
+      .map(|title| utf16_prefix(title.trim(), NARRATIVE_MAX_TITLE_UNITS))
+      .filter(|title| !title.trim().is_empty())
+      .take(NARRATIVE_MAX_TITLES)
+      .collect();
+    let locale = locale.trim().replace('_', "-");
+    if titles.is_empty() || !well_formed_locale(&locale) {
+      return Err(FAILURE.to_string());
+    }
+    Ok(Self {
+      titles,
+      locale,
+      matter_name: matter_name
+        .map(|name| utf16_prefix(name.trim(), NARRATIVE_MAX_MATTER_NAME_UNITS))
+        .filter(|name| !name.is_empty()),
+    })
+  }
+}
+
+#[derive(Deserialize)]
+struct NarrativeResponse {
+  narrative: String,
+}
+
+pub async fn narrative(
+  account: &AccountRequest,
+  request: &NarrativeRequest,
+) -> Result<String, String> {
+  let body = response_body(crate::http_client::device_proof_request(
+    client()?
+      .post(format!(
+        "{}/v1/desktop/time-entries/narrative",
+        account.api_base_url
+      ))
+      .json(request),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?)
+  .await?;
+  let NarrativeResponse { narrative } =
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
+  let narrative = narrative.trim();
+  if narrative.is_empty() || narrative.encode_utf16().count() > NARRATIVE_MAX_UNITS {
+    return Err(FAILURE.to_string());
+  }
+  Ok(narrative.to_string())
+}
+
 impl ConfirmedBatch {
   pub fn validate(&self) -> Result<(), String> {
     if self.idempotency_key.is_empty()
@@ -396,6 +500,114 @@ mod tests {
     drop(account);
     assert_eq!(requests.load(Ordering::SeqCst), 2);
     server.abort();
+  }
+
+  #[test]
+  fn narrative_requests_bound_titles_and_refuse_malformed_fields() {
+    let long = "\u{1F600}".repeat(NARRATIVE_MAX_TITLE_UNITS);
+    let titles = std::iter::once("  ".to_string())
+      .chain(std::iter::once(long))
+      .chain((0..60).map(|index| format!("Draft {index}")))
+      .collect();
+    let request = NarrativeRequest::bounded(
+      titles,
+      "cs_CZ".into(),
+      Some("m".repeat(NARRATIVE_MAX_MATTER_NAME_UNITS + 50)),
+    )
+    .unwrap();
+    assert_eq!(request.titles.len(), NARRATIVE_MAX_TITLES);
+    assert!(request.titles.iter().all(|title| {
+      !title.trim().is_empty() && title.encode_utf16().count() <= NARRATIVE_MAX_TITLE_UNITS
+    }));
+    // A surrogate pair is never split: 150 emoji fill 300 code units.
+    assert_eq!(
+      request.titles.first().map(|title| title.chars().count()),
+      Some(NARRATIVE_MAX_TITLE_UNITS / 2)
+    );
+    assert_eq!(request.locale, "cs-CZ");
+    assert_eq!(
+      request.matter_name.as_ref().map(String::len),
+      Some(NARRATIVE_MAX_MATTER_NAME_UNITS)
+    );
+    for (titles, locale) in [
+      (vec![], "en"),
+      (vec![" ".to_string()], "en"),
+      (vec!["Draft".to_string()], ""),
+      (vec!["Draft".to_string()], "en US"),
+      (vec!["Draft".to_string()], "en--US"),
+      (vec!["Draft".to_string()], "12-US"),
+      (vec!["Draft".to_string()], "toolongsubtag-x"),
+      (vec!["Draft".to_string()], "en-a-b-c-d-e-f-g-h-i-j-k-l-m-n-o-p-q"),
+    ] {
+      assert!(NarrativeRequest::bounded(titles, locale.to_string(), None).is_err());
+    }
+  }
+
+  #[tokio::test]
+  async fn narrative_request_sends_only_titles_locale_and_matter_name() {
+    use axum::routing::post;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let account = fixture(format!("http://{}", listener.local_addr().unwrap())).await;
+    let router = Router::new().route(
+      "/v1/desktop/time-entries/narrative",
+      post(
+        |headers: HeaderMap, Json(body): Json<serde_json::Value>| async move {
+          assert_eq!(headers.get("authorization").unwrap(), "Bearer fixture_key");
+          assert_eq!(
+            body,
+            serde_json::json!({
+              "titles": ["Lease draft.docx"], "locale": "en", "matterName": null
+            })
+          );
+          Json(serde_json::json!({"narrative": "  Revised the lease draft.  "}))
+        },
+      ),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let request =
+      NarrativeRequest::bounded(vec!["Lease draft.docx".into()], "en".into(), None)
+        .unwrap();
+    assert_eq!(
+      narrative(&account, &request).await.unwrap(),
+      "Revised the lease draft."
+    );
+    server.abort();
+  }
+
+  #[tokio::test]
+  async fn narrative_refusals_and_empty_answers_keep_the_template() {
+    use axum::{http::StatusCode, routing::post};
+
+    for (status, body) in [
+      (
+        StatusCode::BAD_GATEWAY,
+        serde_json::json!({"error": "Narrative generation failed", "code": "ai_unavailable"}),
+      ),
+      (StatusCode::TOO_MANY_REQUESTS, serde_json::json!({})),
+      (StatusCode::FORBIDDEN, serde_json::json!({})),
+      (StatusCode::OK, serde_json::json!({"narrative": "  "})),
+    ] {
+      let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+      let account = fixture(format!("http://{}", listener.local_addr().unwrap())).await;
+      let router = Router::new().route(
+        "/v1/desktop/time-entries/narrative",
+        post(move || {
+          let body = body.clone();
+          async move { (status, Json(body)) }
+        }),
+      );
+      let server = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+      });
+      let request =
+        NarrativeRequest::bounded(vec!["Lease draft.docx".into()], "en".into(), None)
+          .unwrap();
+      assert!(narrative(&account, &request).await.is_err(), "{status}");
+      server.abort();
+    }
   }
 
   #[tokio::test]
