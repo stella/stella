@@ -1651,6 +1651,95 @@ if (!runPostgresTests || databaseUrl === undefined) {
         );
       });
 
+      test("an operator-paused job still holding a lease delays the migration until it releases", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.operator");
+            const ledgerBefore = await ledgerRows(observer);
+            const operatorBefore = rowOf(
+              await schedulerRows(observer),
+              "job.operator",
+            );
+            const holder = holdLockProbe(openClient());
+            await holder.held;
+            // The migrate pause is in place while the operator-paused job is
+            // still running: nothing may have run yet.
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              expect([...(await ledgerRows(observer))]).toEqual([
+                ...ledgerBefore,
+              ]);
+              expect(await lockProbeColumns(observer)).toEqual(["id"]);
+              await holder.release();
+              await releaseLease(observer, "job.operator");
+            })();
+            try {
+              const { error } = await attemptRun({
+                openClient,
+                scratchUrl,
+                folder,
+                schedulerDrain: {
+                  ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                  pollMs: 10,
+                },
+              });
+              await runner;
+              expect(error).toBeNull();
+            } finally {
+              await holder.release();
+            }
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+            ]);
+            const operatorAfter = rowOf(
+              await schedulerRows(observer),
+              "job.operator",
+            );
+            expect(operatorAfter).toMatchObject({
+              paused_by: operatorBefore?.paused_by,
+              pause_reason: operatorBefore?.pause_reason,
+              paused_until: operatorBefore?.paused_until,
+            });
+          },
+        );
+      });
+
+      test("an operator-paused job whose lease never clears fails the drain before any statement and stays as it was", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.operator");
+            const ledgerBefore = await ledgerRows(observer);
+            const before = await schedulerRows(observer);
+            const { error } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(true);
+            expect(error).toMatchObject({
+              leased: [
+                { id: "job.operator", lockedBy: "previous-release-runner" },
+              ],
+            });
+            expect([...(await ledgerRows(observer))]).toEqual([
+              ...ledgerBefore,
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual(["id"]);
+            const after = await schedulerRows(observer);
+            expect(rowOf(after, "job.operator")).toEqual(
+              rowOf(before, "job.operator"),
+            );
+            expect(after.filter((row) => row.paused_by === "migrate")).toEqual(
+              [],
+            );
+          },
+        );
+      });
+
       test("no pending schema migration pauses nothing", async () => {
         await withSchedulerBundle(
           ALTER_AFTER_DRAIN,

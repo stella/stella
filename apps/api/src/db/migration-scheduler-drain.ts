@@ -124,19 +124,22 @@ const pauseJobs = async (connection: ReservedSQL): Promise<string[]> => {
   return rows.map(({ id }) => id);
 };
 
+/**
+ * Live leases on every pausable job, whoever paused it: a job an operator
+ * paused may still be mid-run until its runner meets the pause at a heartbeat.
+ */
 const readLeased = async (
   connection: ReservedSQL,
-  ids: readonly string[],
 ): Promise<LeasedSchedulerJob[]> => {
   const rows = await connection.unsafe<
     { id: string; locked_by: string | null; locked_until: Date | null }[]
   >(
     `SELECT id, locked_by, locked_until
      FROM scheduler_jobs
-     WHERE id IN (SELECT jsonb_array_elements_text($1::text::jsonb))
+     WHERE id <> $1
        AND locked_until IS NOT NULL AND locked_until >= now()
      ORDER BY id`,
-    [JSON.stringify(ids)],
+    [UNPAUSABLE_SCHEDULER_JOB_ID],
   );
   return rows.map(({ id, locked_by, locked_until }) => ({
     id,
@@ -204,9 +207,10 @@ const resumeAndReport = async (
 };
 
 /**
- * Pauses the scheduled jobs, waits until none holds a live lease, runs `work`,
- * and resumes the jobs it paused whether `work` returned or threw. A job still
- * leased at the deadline fails the run before `work` starts.
+ * Pauses the scheduled jobs not already paused, waits until no pausable job
+ * holds a live lease (operator-paused ones included, never touched), runs
+ * `work`, and resumes only the jobs it paused whether `work` returned or
+ * threw. A job still leased at the deadline fails the run before `work` starts.
  */
 export const withDrainedScheduler = async <T>(
   options: SchedulerDrainOptions,
@@ -218,12 +222,9 @@ export const withDrainedScheduler = async <T>(
   }
   const startedAt = runtime.now();
   const pausedIds = await pauseJobs(connection);
-  if (pausedIds.length === 0) {
-    return await work();
-  }
 
   try {
-    let leased = await readLeased(connection, pausedIds);
+    let leased = await readLeased(connection);
     while (leased.length > 0) {
       const waitedMs = Math.max(0, Math.round(runtime.now() - startedAt));
       if (waitedMs >= runtime.deadlineMs) {
@@ -248,7 +249,7 @@ export const withDrainedScheduler = async <T>(
       await runtime.sleep(
         Math.min(runtime.pollMs, runtime.deadlineMs - waitedMs),
       );
-      leased = await readLeased(connection, pausedIds);
+      leased = await readLeased(connection);
     }
     timing.emit({
       event: "migrate.scheduler_drain",
@@ -259,6 +260,8 @@ export const withDrainedScheduler = async <T>(
     });
     return await work();
   } finally {
-    await resumeAndReport(options, pausedIds);
+    if (pausedIds.length > 0) {
+      await resumeAndReport(options, pausedIds);
+    }
   }
 };
