@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { pickVersionAt } from "@stll/api-contract/statute-version";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -37,7 +38,6 @@ import { ProvisionHistory } from "@/features/statutes/components/provision-histo
 import { ProvisionLeadingDecisions } from "@/features/statutes/components/provision-leading-decisions";
 import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
-import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
@@ -187,15 +187,10 @@ export const ProvisionInspectorView = ({
       ref={panelRef}
     >
       <InspectorTabHeader
-        label={tab.label}
-        labelOverflow="wrap"
-        labelContent={
-          statute === undefined ? undefined : (
-            <>
-              <span className="block">{payload.provisionLabel}</span>
-              <StatuteDisplayLabel statute={statute} />
-            </>
-          )
+        label={
+          statute === undefined
+            ? tab.label
+            : `${payload.provisionLabel} ${statuteDisplayLabel(statute).text}`
         }
         onClose={onClose}
       />

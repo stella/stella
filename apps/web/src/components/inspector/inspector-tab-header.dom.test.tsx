@@ -224,38 +224,27 @@ describe("renaming a file from the inspector header", () => {
   });
 });
 
-test("legal tab headers preserve an identity while clamping only the subject", async () => {
-  const { StatuteDisplayLabel } =
-    await import("@/features/statutes/components/statute-display-label");
+test("a long statute title stays on one row with its full accessible tooltip", async () => {
+  const title =
+    "Zákon č. 165/2012 Sb., o podporovaných zdrojích energie a o změně některých zákonů";
   render(
     <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-      <InspectorTabHeader
-        label="Zákon č. 274/2026 Z. z."
-        labelOverflow="wrap"
-        labelContent={
-          <StatuteDisplayLabel
-            statute={{
-              country: "SVK",
-              documentType: "zákon",
-              eli: "/eli/sk/zz/2026/274",
-              title: `ktorým sa mení ${"zákon o stavebnom sporení ".repeat(40)}`,
-            }}
-          />
-        }
-        onClose={() => undefined}
-      />
+      <InspectorTabHeader label={title} onClose={() => undefined} />
     </IntlProvider>,
   );
-  const identity = screen.getByText("Zákon č. 274/2026 Z. z.");
-  for (
-    let element: HTMLElement | null = identity;
-    element !== null;
-    element = element.parentElement
-  ) {
-    expect(element.className).not.toMatch(
-      /overflow-hidden|text-ellipsis|line-clamp/u,
-    );
-  }
+  const titleElement = screen.getByLabelText(title);
+  expect(titleElement.className).toContain("truncate");
+  expect(titleElement.className).toContain("whitespace-pre");
+  Object.defineProperties(titleElement, {
+    clientWidth: { configurable: true, value: 240 },
+    scrollWidth: { configurable: true, value: 720 },
+  });
+  fireEvent.focus(titleElement);
+  await waitFor(() =>
+    expect(
+      document.querySelector('[data-slot="tooltip-popup"]')?.textContent,
+    ).toBe(title),
+  );
   expect(
     screen.getByRole("button", { name: englishMessages.common.close }),
   ).toBeDefined();
