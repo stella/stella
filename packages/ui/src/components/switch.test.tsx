@@ -42,7 +42,7 @@ describe("SwitchField", () => {
     const describedBy = /aria-describedby="(?<id>[^"]+)"/u.exec(markup)
       ?.groups?.["id"];
     expect(describedBy).toBeDefined();
-    expect(markup).toContain(`id="${describedBy}"`);
+    expect(markup).toContain(`id="${String(describedBy)}"`);
   });
 
   test("adds no description link without a description", () => {
