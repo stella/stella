@@ -544,6 +544,8 @@ const styledBlockChunk = (
     return null;
   }
 
+  // `plainText` is trimmed and non-empty, so it holds a non-space character
+  // and a bold block holds at least one bold character.
   const bold =
     boldCharacterCount($el.get(0)) >=
     (plainText.match(NON_SPACE)?.length ?? 0) * BOLD_SHARE;

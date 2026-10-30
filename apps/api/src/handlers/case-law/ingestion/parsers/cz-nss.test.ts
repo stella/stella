@@ -1364,6 +1364,36 @@ describe("layout read from inline style", () => {
       type,
     ]);
   });
+
+  // A block with no visible character is no block, so it is never a bold
+  // heading; a bold run of spaces beside normal text is not bold text.
+  test.each([
+    `<p style="text-align:center;font-weight:bold"> </p>`,
+    `<p style="text-align:center;font-weight:bold">&nbsp;&nbsp;</p>`,
+    `<p style="text-align:center"><span style="font-weight:bold">&nbsp;</span></p>`,
+  ])("a centred bold block of spaces adds no block: %s", (html) => {
+    const withBlank = parseNssDecisionHtml(
+      baseInput(
+        nssUnitDecisionHtml.replace(
+          "<p>[2] Krajský soud",
+          () => `${html}<p>[2] Krajský soud`,
+        ),
+      ),
+    ).documentAst.blocks;
+    const without = parseNssDecisionHtml(baseInput(nssUnitDecisionHtml))
+      .documentAst.blocks;
+    expect(withBlank.map((block) => [block.type, block.plainText])).toEqual(
+      without.map((block) => [block.type, block.plainText]),
+    );
+  });
+
+  test("bold spaces beside normal text do not make it bold", () => {
+    expect(
+      ownWeightSection(
+        `<p style="text-align:center"><span style="font-weight:bold">&nbsp;&nbsp;&nbsp;</span>2. Posouzení věci</p>`,
+      ).map(([type]) => type),
+    ).toEqual(["paragraph"]);
+  });
 });
 
 describe("table caption retention", () => {
