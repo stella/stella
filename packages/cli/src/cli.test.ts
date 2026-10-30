@@ -129,7 +129,7 @@ describe("stella CLI version admission", () => {
       });
 
     const refused = run(["matter", "list", "--schema"]);
-    expect(refused.exitCode).toBe(4);
+    expect(refused.exitCode).toBe(2);
     expect(refused.stderr.toString().trim()).toEndWith(
       "run npm i -g @stll/cli@latest",
     );

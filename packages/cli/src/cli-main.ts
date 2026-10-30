@@ -274,7 +274,7 @@ const main = async (): Promise<void> => {
   }
   if (!versionExempt && unsupportedLine !== undefined) {
     process.stderr.write(`${unsupportedLine}\n`);
-    process.exitCode = EXIT_CODES.server;
+    process.exitCode = EXIT_CODES.validation;
     return;
   }
 
