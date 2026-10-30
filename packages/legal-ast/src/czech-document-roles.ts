@@ -49,7 +49,9 @@ export const CZ_TAKTO = "takto:";
 export const isCzechTaktoLine = (text: string): boolean =>
   TAKTO_LINE_RE.test(text.trim());
 
-const JUDGE_SIGNATURE_SUFFIX_RE = /\s*,?\s*v\.\s*r\.\s*$/iu;
+// Matched after whitespace collapses to single spaces, so each separator is at
+// most one space: unbounded `\s*` runs here would backtrack super-linearly.
+const JUDGE_SIGNATURE_SUFFIX_RE = / ?,? ?v\. ?r\.$/iu;
 
 /**
  * A judge's name as the signature block prints it: layout whitespace
