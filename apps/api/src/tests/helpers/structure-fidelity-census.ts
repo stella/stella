@@ -8,36 +8,15 @@
  * `apps/api/scripts/update-structure-fidelity-baseline.ts` writes it.
  */
 
+import { fileURLToPath } from "node:url";
+
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
-import {
-  STRUCTURE_FIDELITY_RULES,
-  structureFidelityIn,
-} from "@/api/lib/legal-search/parsers/structure-fidelity";
-import type { StructureFidelityRule } from "@/api/lib/legal-search/parsers/structure-fidelity";
+import { structureFidelityIn } from "@/api/lib/legal-search/parsers/structure-fidelity";
 import { isRecord } from "@/api/lib/type-guards";
+import type { StructureFidelityCensus } from "@/api/tests/helpers/structure-fidelity-baseline";
 
 import { collectParserOutputs } from "../../../../../scripts/parser-output-fixtures.ts";
-
-/**
- * Text stored without a readable AST: the parser emitted none, or the reader
- * schema rejected the one it emitted and only the text was kept.
- */
-const AST_MISSING_FINDING = "ast-missing";
-
-export type StructureFidelityFindingKind =
-  StructureFidelityRule | typeof AST_MISSING_FINDING;
-
-export const STRUCTURE_FIDELITY_FINDING_KINDS = [
-  ...Object.values(STRUCTURE_FIDELITY_RULES),
-  AST_MISSING_FINDING,
-] as const satisfies readonly StructureFidelityFindingKind[];
-
-/** Non-zero finding counts, per adapter, per fixture. */
-export type StructureFidelityCensus = Record<
-  string,
-  Record<string, Partial<Record<StructureFidelityFindingKind, number>>>
->;
 
 export type StructureFidelityCensusResult = {
   census: StructureFidelityCensus;
@@ -45,7 +24,10 @@ export type StructureFidelityCensusResult = {
   documentedAdapters: ReadonlySet<string>;
 };
 
-const REPOSITORY_ROOT = new URL("../../../../../", import.meta.url).pathname;
+export const structureFidelityRepositoryRoot = (moduleUrl: string) =>
+  fileURLToPath(new URL("../../../../../", moduleUrl));
+
+const REPOSITORY_ROOT = structureFidelityRepositoryRoot(import.meta.url);
 
 /** The persisted decision of an output: a decision, or a supplement's document. */
 const decisionOf = (output: unknown): Record<string, unknown> | null => {
@@ -58,18 +40,20 @@ const decisionOf = (output: unknown): Record<string, unknown> | null => {
 
 const findingsOf = (
   decision: Record<string, unknown>,
-): Partial<Record<StructureFidelityFindingKind, number>> | null => {
+): StructureFidelityCensus[string][string] | null => {
   const { documentAst, fulltext } = decision;
   if (!isDocumentAst(documentAst)) {
     return typeof fulltext === "string" && fulltext.trim().length > 0
-      ? { [AST_MISSING_FINDING]: 1 }
+      ? [
+          {
+            rule: "ast-missing",
+            anchorId: "document",
+            excerpt: fulltext.slice(0, 120),
+          },
+        ]
       : null;
   }
-  const counts: Partial<Record<StructureFidelityFindingKind, number>> = {};
-  for (const { rule } of structureFidelityIn(documentAst.blocks)) {
-    counts[rule] = (counts[rule] ?? 0) + 1;
-  }
-  return counts;
+  return structureFidelityIn(documentAst.blocks);
 };
 
 export const collectStructureFidelityCensus =
@@ -85,7 +69,7 @@ export const collectStructureFidelityCensus =
           continue;
         }
         documentedAdapters.add(adapter);
-        if (Object.keys(findings).length === 0) {
+        if (findings.length === 0) {
           continue;
         }
         const rows = census[adapter] ?? {};

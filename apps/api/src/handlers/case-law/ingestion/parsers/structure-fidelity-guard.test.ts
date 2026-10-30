@@ -1,15 +1,20 @@
 import { afterAll, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+import * as v from "valibot";
 
 import {
   listSourceRegistrations,
   type SourceRegistrationKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json";
+import baselineJson from "@/api/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json";
 import {
-  collectStructureFidelityCensus,
-  STRUCTURE_FIDELITY_FINDING_KINDS,
-  type StructureFidelityCensus,
-} from "@/api/tests/helpers/structure-fidelity-census";
+  assertStructureFidelityBaselineHistory,
+  structureFidelityBaselineSchema,
+  structureFidelityDrift,
+} from "@/api/tests/helpers/structure-fidelity-baseline";
+import { collectStructureFidelityCensus } from "@/api/tests/helpers/structure-fidelity-census";
+
+const baseline = v.parse(structureFidelityBaselineSchema, baselineJson);
 
 /**
  * Every registered source's parser output is read from recorded fixtures, or
@@ -106,42 +111,21 @@ test(
   COLLECTION_TIMEOUT_MS,
 );
 
-type CensusDrift = { added: string[]; stale: string[] };
-
-const driftOf = (
-  actual: StructureFidelityCensus,
-  expected: StructureFidelityCensus,
-): CensusDrift => {
-  const added: string[] = [];
-  const stale: string[] = [];
-  const adapters = new Set([...Object.keys(actual), ...Object.keys(expected)]);
-  for (const adapter of adapters) {
-    const fixtures = new Set([
-      ...Object.keys(actual[adapter] ?? {}),
-      ...Object.keys(expected[adapter] ?? {}),
-    ]);
-    for (const fixture of fixtures) {
-      for (const kind of STRUCTURE_FIDELITY_FINDING_KINDS) {
-        const now = actual[adapter]?.[fixture]?.[kind] ?? 0;
-        const before = expected[adapter]?.[fixture]?.[kind] ?? 0;
-        const where = `${adapter} / ${fixture} / ${kind}: ${before} -> ${now}`;
-        if (now > before) {
-          added.push(where);
-        } else if (now < before) {
-          stale.push(where);
-        }
-      }
-    }
-  }
-  return { added, stale };
-};
-
 // timeout: awaits the census, which replays every registered source's recorded fixtures through its parser.
 test(
   "structure-fidelity findings only shrink",
   async () => {
     const { census } = await censusResult;
-    const { added, stale } = driftOf(census, baseline.findings);
+    assertStructureFidelityBaselineHistory({
+      repositoryRoot: fileURLToPath(
+        new URL("../../../../../../../", import.meta.url),
+      ),
+      findings: baseline.findings,
+    });
+    const { added, stale } = structureFidelityDrift({
+      actual: census,
+      expected: baseline.findings,
+    });
     // A new finding is a parser storing printed-page layout as structure:
     // fix the parser through the shared owners (hard-wrapped-lines.ts,
     // page-furniture.ts, letter-spacing.ts), never by raising the baseline.
