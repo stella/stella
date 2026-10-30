@@ -5,27 +5,31 @@
 ## `fetchWithTimeout`
 
 ```ts
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
 
 // Abort when no response headers arrive within 5 seconds.
 const response = await fetchWithTimeout(url, {
   timeout: { type: "headers", ms: 5_000 },
 });
 
-// Abort when the headers, or any later body chunk, take longer than
-// 10 seconds: a slow but progressing download keeps going.
-const stream = await fetchWithTimeout(url, {
-  timeout: { type: "idle", ms: 10_000 },
+// Bound headers separately, then observe chunks in the caller's own read.
+const download = await fetchWithTimeout(url, {
+  timeout: { type: "headers", ms: 10_000 },
   signal: controller.signal, // optional; either signal aborts the request
+});
+const bytes = await readBodyWithIdleDeadline(download, {
+  idleMs: 10_000,
+  signal: controller.signal,
 });
 ```
 
-The timeout is required by the type. `headers` bounds the wait for the
-response; `idle` also restarts on every body chunk and errors the body stream
-when it stalls; `total` bounds the request and its body consumption through
-the transport's own signal and returns the transport's response unchanged. A
-timeout rejects (or errors the body) with a `TimeoutError` `DOMException`, and
-the caller's `signal` and a `Request`'s own signal still abort the request.
+The timeout is required by the type. `headers` bounds only the wait for the
+response; `total` bounds the request and its body consumption through the
+transport's own signal. Both policies return the transport's response
+unchanged. `readBodyWithIdleDeadline` consumes the caller's own body reader,
+restarts its deadline after every chunk, and cancels a stalled body with a
+`TimeoutError` `DOMException`. The caller's `signal` and a `Request`'s own
+signal still abort the request.
 `timeoutMs: number` remains the legacy numeric form of the total policy.
 
 `createFetchWithTimeout(fetcher)` returns the same function over another

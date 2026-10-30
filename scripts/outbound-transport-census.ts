@@ -1056,7 +1056,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "packages/fetch/src/index.ts",
     class: "package-owned-client",
     reason:
-      "Shared fetch owner resolves the runtime transport and applies caller-selected header or idle deadlines.",
+      "Shared fetch owner resolves the runtime transport and applies caller-selected header or total deadlines.",
     transports: ["global:fetch"],
   },
   {

@@ -2457,7 +2457,7 @@ describe("deployment fetch boundary", () => {
     const response = await deploymentFetch("https://api.example/path", {
       headers: { authorization: "Bearer canary" },
       redirect: "follow",
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     expect(response.status).toBe(302);
     expect(captured?.redirect).toBe("manual");
@@ -2479,15 +2479,15 @@ describe("deployment fetch boundary", () => {
       fetcher,
     );
     await deploymentFetch("https://app.example/oauth/authorize", {
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     await deploymentFetch("https://api.example/mcp", {
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     expect(origins).toEqual(["https://app.example", "https://api.example"]);
     const rejection = await rejectionOf(
       deploymentFetch("https://foreign.example/path", {
-        timeout: { type: "idle", ms: 1000 },
+        timeout: { type: "headers", ms: 1000 },
       }),
     );
     expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });
@@ -2505,7 +2505,7 @@ describe("deployment fetch boundary", () => {
     );
     const rejection = await rejectionOf(
       deploymentFetch("https://foreign.example/path", {
-        timeout: { type: "idle", ms: 1000 },
+        timeout: { type: "headers", ms: 1000 },
       }),
     );
     expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });

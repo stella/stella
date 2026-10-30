@@ -86,7 +86,7 @@ export const classifyFailedChunkLoad =
 
     return fetchWithTimeout(VERSION_MANIFEST_PATH, {
       cache: "no-store",
-      timeout: { type: "idle", ms: VERSION_MANIFEST_IDLE_TIMEOUT_MS },
+      timeout: { type: "headers", ms: VERSION_MANIFEST_IDLE_TIMEOUT_MS },
     })
       .then(async (response): Promise<FailedChunkLoadClassification> => {
         if (!response.ok || !response.body) {
