@@ -1043,9 +1043,9 @@ describe("walking a month", () => {
       }),
     );
     expect(recovered.sourceDocumentIdRepairAliases).toHaveLength(1);
-    expect(recovered.sourceDocumentIdRepairAliases?.[0]).toBe(
+    expect(recovered.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       quarantined?.sourceDocumentId,
-    );
+    ]);
   });
 
   test("a row whose issuing body nobody states is quarantined unpublished and never blocks later rows", async () => {
@@ -1292,10 +1292,16 @@ test.each(["script", "style"])(
       }),
     );
     expect(recovered.sourceDocumentId).toBe("30306");
-    expect(recovered.sourceDocumentIdRepairAliases).toContain(storedLegacyId);
-    expect(recovered.sourceDocumentIdRepairAliases).toContain(
-      canonical.sourceDocumentId,
-    );
+    expect(
+      (recovered.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === storedLegacyId,
+      ),
+    ).toBe(true);
+    expect(
+      (recovered.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === canonical.sourceDocumentId,
+      ),
+    ).toBe(true);
     const held = built(
       assemblePlKioDecision({
         item: { ...item, id: undefined },

@@ -581,7 +581,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
     });
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:fallback"]);
-    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+    expect(sanitized.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       "publisher:repair",
     ]);
   });
@@ -611,7 +611,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
     });
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:ab"]);
-    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+    expect(sanitized.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       "publisher:repair-clean",
     ]);
   });
@@ -2591,7 +2591,7 @@ test.each(["historical-year", "current-year"] as const)(
     const originalFetch = globalThis.fetch;
     const events: string[] = [];
     try {
-      globalThis.fetch = asFetchMock(async (input) => {
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );

@@ -688,7 +688,7 @@ describe("walking decision-date months oldest first", () => {
     const [decision] = (await walk("1994-03:0")).decisions;
 
     expect(decision?.sourceDocumentId).toBe("x");
-    expect(decision?.sourceDocumentIdRepairAliases).toEqual([
+    expect(decision?.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       quarantineIdOf(IDLESS_ROW),
     ]);
   });

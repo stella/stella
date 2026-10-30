@@ -475,9 +475,11 @@ describe("Austrian RIS adapter", () => {
         "publisher-id-unavailable",
     ).toBe(true);
     expect(page.decisions[1]?.sourceDocumentId).toBe(SOURCE_ID);
-    expect(page.decisions[1]?.sourceDocumentIdRepairAliases).toContain(
-      page.decisions[0]?.sourceDocumentId,
-    );
+    expect(
+      (page.decisions[1]?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === page.decisions[0]?.sourceDocumentId,
+      ),
+    ).toBe(true);
   });
 
   it("stores a listing-only row for a permanently missing detail", async () => {

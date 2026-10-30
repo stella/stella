@@ -1866,9 +1866,11 @@ describe("czUsAdapter.fetchPage", () => {
       sourceDocumentId: "nalus-record:7401",
       isListingOnly: true,
     });
-    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
-      page.decisions[0]?.sourceDocumentId,
-    );
+    expect(
+      (recovered?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === page.decisions[0]?.sourceDocumentId,
+      ),
+    ).toBe(true);
   });
 
   test("keeps identity-less dockets distinct in quarantine", async () => {
@@ -1941,7 +1943,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(new Set(quarantineIds).size).toBe(2);
   });
 
-  test("keeps the repair identity when ECLI and the detail docket recover", async () => {
+  test("court listing without a document discriminator stays separate", async () => {
     installSearchMock({
       rows: [
         {
@@ -1981,9 +1983,11 @@ describe("czUsAdapter.fetchPage", () => {
       ecli: "ECLI:CZ:US:2024:Pl.US.11.24.1",
       sourceDocumentId: "nalus-record:7402",
     });
-    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
-      quarantined?.sourceDocumentId,
-    );
+    expect(
+      (recovered?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === quarantined?.sourceDocumentId,
+      ),
+    ).toBe(false);
   });
 
   test("keeps the repair identity when a visible text action recovers", async () => {
@@ -2019,9 +2023,11 @@ describe("czUsAdapter.fetchPage", () => {
       caseNumber: "Pl.ÚS 12/24",
       sourceDocumentId: "nalus-sz:Pl-12-24_1",
     });
-    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
-      quarantined?.sourceDocumentId,
-    );
+    expect(
+      (recovered?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === quarantined?.sourceDocumentId,
+      ),
+    ).toBe(true);
   });
 
   test.each(["script", "style"])(
@@ -2058,10 +2064,16 @@ describe("czUsAdapter.fetchPage", () => {
       const recovered = unwrap(
         await czUsAdapter.fetchPage(historicalCursor(2024), {}),
       ).decisions.at(0);
-      expect(recovered?.sourceDocumentIdRepairAliases).toContain(legacyId);
-      expect(recovered?.sourceDocumentIdRepairAliases).toContain(
-        quarantined?.sourceDocumentId,
-      );
+      expect(
+        (recovered?.sourceDocumentIdRepairAliases ?? []).some(
+          (alias) => alias === legacyId,
+        ),
+      ).toBe(true);
+      expect(
+        (recovered?.sourceDocumentIdRepairAliases ?? []).some(
+          (alias) => alias === quarantined?.sourceDocumentId,
+        ),
+      ).toBe(true);
       expect(recovered?.sourceDocumentIdAliases).not.toContain(legacyId);
     },
   );

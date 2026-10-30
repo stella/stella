@@ -1923,13 +1923,16 @@ describe("the walk", () => {
     const served = decisions.find(
       (decision) => decision.sourceDocumentId === RECOVERED_ID,
     );
-    expect(served?.sourceDocumentIdRepairAliases ?? []).not.toContain(
-      plNcourtPositionId({
-        query: WALK_QUERY,
-        previous: { id: idOf(rows.get(POISONED_OFFSET - 1)), gap: 1 },
-        next: { id: idOf(rows.get(POISONED_OFFSET + 1)), gap: 1 },
-      }),
-    );
+    const positionId = plNcourtPositionId({
+      query: WALK_QUERY,
+      previous: { id: idOf(rows.get(POISONED_OFFSET - 1)), gap: 1 },
+      next: { id: idOf(rows.get(POISONED_OFFSET + 1)), gap: 1 },
+    });
+    expect(
+      (served?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === positionId,
+      ),
+    ).toBe(false);
   });
 
   test("a listed row with no usable id is kept under its content, and found again once it has one", async () => {
@@ -1981,11 +1984,14 @@ describe("the walk", () => {
       detailXml: undefined,
       contentXml: undefined,
     });
-    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
-      quarantined.type === "built"
-        ? quarantined.decision.sourceDocumentId
-        : panic("not kept"),
-    );
+    if (quarantined.type !== "built") {
+      panic("not kept");
+    }
+    expect(
+      (recovered?.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === quarantined.decision.sourceDocumentId,
+      ),
+    ).toBe(true);
   });
 
   test("a listed row stating no fingerprint field is quarantined on what it still states", async () => {
@@ -2061,7 +2067,11 @@ describe("the walk", () => {
       }),
     );
     expect(recovered.sourceDocumentId).toBe(PAIR);
-    expect(recovered.sourceDocumentIdRepairAliases ?? []).not.toContain(ids[0]);
+    expect(
+      (recovered.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === ids[0],
+      ),
+    ).toBe(false);
   });
 
   test("a recovered row names only earlier forms carrying its court", async () => {
@@ -2102,9 +2112,9 @@ describe("the walk", () => {
       }),
     );
     expect(recovered.sourceDocumentId).toBe(PAIR);
-    expect(recovered.sourceDocumentIdRepairAliases?.toSorted()).toEqual(
-      [listed].toSorted(),
-    );
+    expect(
+      recovered.sourceDocumentIdRepairAliases?.map(String).toSorted(),
+    ).toEqual([listed].toSorted());
   });
 
   test("a form that tells no judgment apart is stored under, never emitted as an alias", async () => {
@@ -2518,7 +2528,9 @@ test("a position-only listing candidate cannot adopt an existing record", async 
   expect(positionAlias).toStartWith("ncourt-quarantine:");
   expect(decision.sourceDocumentId).toBe(PAIR);
   expect(decision.sourceDocumentIdRepairAliases ?? []).toEqual([]);
-  expect(decision.sourceDocumentIdRepairAliases ?? []).not.toContain(
-    positionAlias,
-  );
+  expect(
+    (decision.sourceDocumentIdRepairAliases ?? []).some(
+      (alias) => alias === positionAlias,
+    ),
+  ).toBe(false);
 });

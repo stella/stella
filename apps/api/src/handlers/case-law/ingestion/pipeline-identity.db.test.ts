@@ -1201,7 +1201,11 @@ if (!databaseUrl || !runPostgresTests) {
           sourceRaw: undefined,
           sourceRawBytes: undefined,
         };
-        expect(recovered.sourceDocumentIdRepairAliases).toContain(legacyId);
+        expect(
+          (recovered.sourceDocumentIdRepairAliases ?? []).some(
+            (alias) => alias === legacyId,
+          ),
+        ).toBe(true);
         expect(recovered.sourceDocumentIdAliases ?? []).not.toContain(legacyId);
         await processDecision({
           input: {

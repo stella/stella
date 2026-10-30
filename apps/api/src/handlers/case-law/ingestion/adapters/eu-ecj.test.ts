@@ -1442,7 +1442,9 @@ describe("a variant listed under a CELEX no store can hold", () => {
     const [keyed] = await crawl();
 
     expect(keyed?.sourceDocumentId).toBe("62021CJ0128:en");
-    expect(keyed?.sourceDocumentIdRepairAliases).toEqual([quarantineId]);
+    expect(keyed?.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+      quarantineId,
+    ]);
   });
 
   test("two decisions listed under one unusable CELEX stay two rows", async () => {

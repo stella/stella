@@ -264,7 +264,9 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       expect(decision.sourceDocumentId).toMatch(
         /^sk-courts-quarantine:[0-9a-f]{64}$/u,
       );
-      expect(decision.sourceDocumentIdRepairAliases).toEqual([earlierId]);
+      expect(decision.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+        earlierId,
+      ]);
     });
 
     test("replay rebuilds a row stored under the earlier id under the new one", () => {
@@ -296,10 +298,15 @@ describe("Slovak court display text decodes publisher entities to stable text", 
           sourceDocumentId: expect.stringMatching(
             /^sk-courts-quarantine:[0-9a-f]{64}$/u,
           ),
-          sourceDocumentIdRepairAliases: [earlier.sourceDocumentId],
           isListingOnly: true,
         },
       });
+      if (outcome.type !== "parsed") {
+        panic("Expected the stored listing row to parse");
+      }
+      expect(outcome.result.sourceDocumentIdRepairAliases?.map(String)).toEqual(
+        [earlier.sourceDocumentId],
+      );
     });
 
     test("a listing naming a registry guid has no earlier id this can rebuild", () => {

@@ -937,7 +937,7 @@ describe("a row without a publisher id", () => {
         (row) => row.case === "nsa-wyrok-fsk-reasons",
       ) ?? panic("no recorded row");
     const identified = build(recorded);
-    expect(identified.sourceDocumentIdRepairAliases).toEqual([
+    expect(identified.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       plNsaQuarantineId(await withoutId()),
     ]);
   });

@@ -43,6 +43,10 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(skCourtsAdapter);
@@ -565,9 +569,11 @@ describe("sk-courts buildDecision", () => {
     if (built.type !== "built" || degraded?.type !== "document") {
       throw new TypeError("Expected a built decision and a quarantine id");
     }
-    expect(built.decision.sourceDocumentIdRepairAliases).toContain(
-      degraded.sourceDocumentId,
-    );
+    expect(
+      (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === degraded.sourceDocumentId,
+      ),
+    ).toBe(true);
   });
 
   test("recovered fields repair every bounded degraded listing combination", async () => {
@@ -599,20 +605,20 @@ describe("sk-courts buildDecision", () => {
             if (degraded?.type !== "document") {
               panic("Expected a quarantined degraded listing");
             }
-            if (
-              identifikacneCislo === null &&
-              nazov === null &&
-              registreGuid === null
-            ) {
+            if (nazov === null && registreGuid === null) {
               expect(
-                built.decision.sourceDocumentIdRepairAliases,
-              ).not.toContain(degraded.sourceDocumentId);
+                (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+                  (alias) => alias === degraded.sourceDocumentId,
+                ),
+              ).toBe(false);
               continue;
             }
             degradedIds.add(degraded.sourceDocumentId);
-            expect(built.decision.sourceDocumentIdRepairAliases).toContain(
-              degraded.sourceDocumentId,
-            );
+            expect(
+              (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+                (alias) => alias === degraded.sourceDocumentId,
+              ),
+            ).toBe(true);
           }
         }
       }
@@ -634,15 +640,22 @@ describe("sk-courts buildDecision", () => {
       observeDecision({
         input: {
           ...built.decision,
-          sourceDocumentIdRepairAliases: [
-            ...degradedIds,
-            ...Array.from(
-              {
-                length: MAX_SOURCE_IDENTITY_CANDIDATES - degradedIds.size,
-              },
-              (_, index) => `overflow-publisher-identity-${index}`,
-            ),
-          ],
+          sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+            namespace: LEGACY_REPAIR_NAMESPACE.SK_COURTS_PLAINTEXT,
+            sourceDocumentIds: [
+              ...degradedIds,
+              ...Array.from(
+                {
+                  length: MAX_SOURCE_IDENTITY_CANDIDATES - degradedIds.size,
+                },
+                (_, index) => `overflow-publisher-identity-${index}`,
+              ),
+            ],
+            stableFields: {
+              caseNumber: GALANTA_ITEM.spisovaZnacka,
+              sud: GALANTA_ITEM.sud.nazov,
+            },
+          }),
         },
         sourceId: createSafeId<"caseLawSource">(),
       }),

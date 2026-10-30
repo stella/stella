@@ -821,7 +821,7 @@ describe("cz-nss listing rows", () => {
     const regionalId = czNssListingIdentity(rowOf(idLessRegional));
     expect(municipalId).not.toBeNull();
     expect(regionalId).not.toBeNull();
-    if (municipalId === null || regionalId === null) {
+    if (municipalId?.type !== "document" || regionalId?.type !== "document") {
       return;
     }
     expect(municipalId.sourceDocumentId).not.toBe(regionalId.sourceDocumentId);
@@ -842,12 +842,14 @@ describe("cz-nss listing rows", () => {
         ({ sourceDocumentId }) =>
           sourceDocumentId === keyedMunicipal.documentId,
       ) ?? panic("recovered municipal decision");
-    expect(recovered.sourceDocumentIdRepairAliases).toEqual([
+    expect(recovered.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       municipalId.sourceDocumentId,
     ]);
-    expect(recovered.sourceDocumentIdRepairAliases).not.toContain(
-      regionalId.sourceDocumentId,
-    );
+    expect(
+      (recovered.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === regionalId.sourceDocumentId,
+      ),
+    ).toBe(false);
   });
 
   test("a legacy payload with neither a document link nor a reference keys on nothing", () => {
@@ -1424,9 +1426,9 @@ describe("cz-nss fetchPage", () => {
     expect(recovered.decisions.at(0)?.sourceDocumentId).toBe(
       REGIONAL_ROW.documentId,
     );
-    expect(recovered.decisions.at(0)?.sourceDocumentIdRepairAliases).toEqual([
-      quarantinedId,
-    ]);
+    expect(
+      recovered.decisions.at(0)?.sourceDocumentIdRepairAliases?.map(String),
+    ).toEqual([quarantinedId]);
   });
 
   test("a listed row with an id and no reference is read and labelled by its id", async () => {

@@ -316,9 +316,16 @@ describe("identity", () => {
       HatarozatEve: 2025,
     };
     const quarantined = huBhgyListingIdentity(normalizeHuBhgyRow(listed));
-    expect(
-      huBhgyIdentityOf(normalizeHuBhgyRow({ ...listed, IndexId: "id-0" })),
-    ).toEqual({
+    const keyed = huBhgyIdentityOf(
+      normalizeHuBhgyRow({ ...listed, IndexId: "id-0" }),
+    );
+    if (keyed.type !== "keyed") {
+      panic("Expected the recovered document to be keyed");
+    }
+    expect({
+      ...keyed,
+      repairAliases: keyed.repairAliases.map(String),
+    }).toEqual({
       type: "keyed",
       sourceDocumentId: "id-0",
       repairAliases: [storedIdOf(quarantined)],
@@ -1254,7 +1261,7 @@ describe("a listed decision with no usable publisher key", () => {
     const decision =
       built.type === "detail-unavailable" ? built.decision : undefined;
     expect(decision?.sourceDocumentId).toBe("id-30000");
-    expect(decision?.sourceDocumentIdRepairAliases).toEqual([
+    expect(decision?.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       storedIdOf(quarantineId),
     ]);
   });
@@ -1350,7 +1357,9 @@ describe("a listed decision with no usable publisher key", () => {
       const decision =
         built.type === "quarantined" ? built.decision : undefined;
       expect(decision?.sourceDocumentId).toBe(docketId);
-      expect(decision?.sourceDocumentIdRepairAliases ?? []).toEqual([]);
+      expect(
+        decision?.sourceDocumentIdRepairAliases?.map(String) ?? [],
+      ).toEqual([]);
     });
 
     test("the key arriving names the docket-qualified earlier form only", async () => {
@@ -1363,7 +1372,9 @@ describe("a listed decision with no usable publisher key", () => {
       const decision =
         built.type === "detail-unavailable" ? built.decision : undefined;
       expect(decision?.sourceDocumentId).toBe("id-30000");
-      expect(decision?.sourceDocumentIdRepairAliases).toEqual([docketId]);
+      expect(decision?.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+        docketId,
+      ]);
     });
 
     test("a key arriving without a docket cannot adopt the summary-only row", async () => {

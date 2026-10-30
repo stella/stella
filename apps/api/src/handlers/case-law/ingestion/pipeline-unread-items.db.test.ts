@@ -473,7 +473,7 @@ test("a quarantined record followed by its keyed peer survives as two database r
   );
   expect(run.haltReason).toBeNull();
   expect((await sourceState(sourceId)).cursor).toBe("page-2");
-  expect(keyed.sourceDocumentIdRepairAliases).toEqual([
+  expect(keyed.sourceDocumentIdRepairAliases?.map(String)).toEqual([
     quarantine.sourceDocumentId,
   ]);
 });
@@ -554,7 +554,7 @@ test("a keyed peer on page one stays separate when its quarantined peer appears 
       expect.objectContaining({ sourceDocumentId: keyed.sourceDocumentId }),
     ]),
   );
-  expect(keyed.sourceDocumentIdRepairAliases).toEqual([
+  expect(keyed.sourceDocumentIdRepairAliases?.map(String)).toEqual([
     quarantine.sourceDocumentId,
   ]);
 });

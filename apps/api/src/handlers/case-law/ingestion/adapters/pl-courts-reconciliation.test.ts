@@ -891,13 +891,15 @@ describe("pl-courts quarantined items", () => {
     }
     expect(built.decision.sourceDocumentId).toBe(String(COMMON_COURT_ITEM.id));
     // A day, court and bench also describe other judgments.
-    expect(built.decision.sourceDocumentIdRepairAliases).not.toContain(
-      quarantineIdOf(UNKEYED_SEARCH_ITEM),
-    );
+    expect(
+      (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+        (alias) => alias === quarantineIdOf(UNKEYED_SEARCH_ITEM),
+      ),
+    ).toBe(false);
   });
 });
 
-test("a recovered id retains its docket-specific quarantine repair alias", async () => {
+test("a courtless docket quarantine is withheld as a repair alias", async () => {
   mockFetchWithBodies([
     { pattern: DETAIL_PATTERN, body: "Not found", status: 404 },
   ]);
@@ -912,12 +914,16 @@ test("a recovered id retains its docket-specific quarantine repair alias", async
   if (built.type !== "built") {
     panic("Expected the recovered docket to build");
   }
-  expect(built.decision.sourceDocumentIdRepairAliases).toContain(
-    quarantineIdOf(degraded),
-  );
-  expect(built.decision.sourceDocumentIdRepairAliases).not.toContain(
-    quarantineIdOf(UNKEYED_SEARCH_ITEM),
-  );
+  expect(
+    (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+      (alias) => alias === quarantineIdOf(degraded),
+    ),
+  ).toBe(false);
+  expect(
+    (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+      (alias) => alias === quarantineIdOf(UNKEYED_SEARCH_ITEM),
+    ),
+  ).toBe(false);
 });
 
 describe("pl-courts crawl detail reads", () => {

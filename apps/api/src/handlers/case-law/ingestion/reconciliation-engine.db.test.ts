@@ -2459,9 +2459,12 @@ test("a row stating a declared reason for holding no document is held on that re
 });
 
 /** A decision with no document, as an adapter hands one over. */
-const plainDecision = (sourceDocumentId: string): IngestionResult =>
+const plainDecision = (
+  sourceDocumentId: string,
+  caseNumber: string = sourceDocumentId,
+): IngestionResult =>
   plainTextIngestionResult({
-    caseNumber: sourceDocumentId,
+    caseNumber,
     sourceDocumentId,
     court: FIXTURE_COURT,
     country: "CZE",
@@ -2740,8 +2743,7 @@ const quarantineRecoveryFixture = () => {
     quarantine,
     peer,
     decision: {
-      ...plainDecision(peer),
-      caseNumber: "II CSK 12/24",
+      ...plainDecision(peer, "II CSK 12/24"),
       sourceDocumentIdRepairAliases: quarantine.repairAliases,
     },
   };

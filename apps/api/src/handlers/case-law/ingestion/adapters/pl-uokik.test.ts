@@ -1302,7 +1302,7 @@ describe("a listed row is never dropped silently", () => {
     const recovered = decisionOf(
       await buildFrom(entry, await pageOf(FILELESS)),
     );
-    expect(recovered.sourceDocumentIdRepairAliases).toEqual([
+    expect(recovered.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       quarantined.sourceDocumentId ?? "",
     ]);
   });

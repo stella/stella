@@ -1630,7 +1630,7 @@ describe("sk-us buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision.sourceDocumentIdRepairAliases).toEqual([
+    expect(built.decision.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       quarantineIdOf(withoutId),
     ]);
   });
@@ -1649,9 +1649,11 @@ describe("sk-us buildDecision", () => {
       { ...withoutId, mkECLI: "" },
       withoutId,
     ]) {
-      expect(built.decision.sourceDocumentIdRepairAliases).toContain(
-        quarantineIdOf(observation),
-      );
+      expect(
+        (built.decision.sourceDocumentIdRepairAliases ?? []).some(
+          (alias) => alias === quarantineIdOf(observation),
+        ),
+      ).toBe(true);
     }
   });
 

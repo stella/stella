@@ -82,6 +82,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // coverage ledger it sits beside: read by the ingestion status rollup,
   // written only by the reconciliation loop.
   "case_law_reconciliation_items",
+  "case_law_listing_observations",
   // Removal retries are corpus coordination state; ingestion owns mutations.
   "case_law_removal_reconciliation_items",
   // Where the citation-resolution walk had got to. Operational progress the

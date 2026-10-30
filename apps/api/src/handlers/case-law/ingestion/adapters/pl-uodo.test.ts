@@ -1275,7 +1275,7 @@ describe("a listed record is never dropped silently", () => {
     const recovered = builtDecision(buildFrom(listing, undefined));
 
     expect(recovered.sourceDocumentId).toBe(DECISION_URN);
-    expect(recovered.sourceDocumentIdRepairAliases).toEqual([
+    expect(recovered.sourceDocumentIdRepairAliases?.map(String)).toEqual([
       quarantined.sourceDocumentId ?? "",
     ]);
   });

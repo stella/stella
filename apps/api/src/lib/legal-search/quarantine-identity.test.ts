@@ -70,8 +70,8 @@ describe("repair alias qualification", () => {
       namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
       stableFields: { docket: undefined, ...shared },
     });
-    expect(first.repairAliases).toEqual([first.sourceDocumentId]);
-    expect(second.repairAliases).toEqual([second.sourceDocumentId]);
+    expect(first.repairAliases.map(String)).toEqual([first.sourceDocumentId]);
+    expect(second.repairAliases.map(String)).toEqual([second.sourceDocumentId]);
     expect(
       first.repairAliases.filter((alias) =>
         second.repairAliases.includes(alias),
@@ -87,17 +87,19 @@ describe("quarantineIdentity", () => {
     // Stored NALUS rows carry ids the adapter minted before this module
     // existed; a different digest would orphan each of them and insert its
     // record again under a second id.
-    expect(
-      quarantineIdentity({
-        namespace: QUARANTINE_NAMESPACE.CZ_US,
-        stableFields: {
-          stablePrimaryText: "  1.   III.ÚS 2045/24 \n Nález ",
-          stableActionsText: "Text",
-          stableDetailText: "III.ÚS 2045/24",
-          stableCounterText: "",
-        },
-      }),
-    ).toEqual({
+    const identity = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_US,
+      stableFields: {
+        stablePrimaryText: "  1.   III.ÚS 2045/24 \n Nález ",
+        stableActionsText: "Text",
+        stableDetailText: "III.ÚS 2045/24",
+        stableCounterText: "",
+      },
+    });
+    expect({
+      ...identity,
+      repairAliases: identity.repairAliases.map(String),
+    }).toEqual({
       repairAliases: [
         "nalus-quarantine:43ae4610609797ebfc941ed3d3ebc641fa2d31fd1a73cdfd19c5754a069860f8",
       ],
@@ -296,7 +298,7 @@ describe("court provenance of repair forms", () => {
           namespace,
           sourceDocumentIds,
           stableFields: { ...fields, [courtField]: "Published court" },
-        }),
+        }).map(String),
       ).toEqual(sourceDocumentIds);
     },
   );
@@ -389,6 +391,8 @@ describe("legacy quarantine classification", () => {
     });
     expect(filtered.collidingIds).toEqual([sourceDocumentId]);
     expect(filtered.decisions.at(0)?.sourceDocumentIdRepairAliases).toEqual([]);
-    expect(decision.sourceDocumentIdRepairAliases).toEqual([sourceDocumentId]);
+    expect(decision.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+      sourceDocumentId,
+    ]);
   });
 });
