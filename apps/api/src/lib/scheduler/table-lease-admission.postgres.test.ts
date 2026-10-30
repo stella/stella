@@ -215,4 +215,139 @@ describe.skipIf(!enabled)("scheduler table lease admission (postgres)", () => {
       }
     });
   });
+
+  test.each([getTableName(schedulerJobs), getTableName(schedulerJobRuns)])(
+    "a migration on %s waits for an execution whose task uses another table",
+    async (infrastructureTable) => {
+      if (!databaseUrl) {
+        throw new TypeError("DATABASE_URL is required");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db, sql: client } = openClient({ max: 4 });
+        const migration = await openClient().sql.reserve();
+        const prefix = `infrastructure-lease.${Bun.randomUUIDv7()}`;
+        const firstId = `${prefix}.first`;
+        const laterId = `${prefix}.later`;
+        const firstTaskName = `${prefix}.running`;
+        const laterTaskName = `${prefix}.due`;
+        const started = deferred();
+        const finish = deferred();
+        const requested = deferred();
+        const tablesForTask = () => [unrelatedTable];
+        const firstTask: SchedulerTask = async () => {
+          started.resolve();
+          await finish.promise;
+        };
+        const laterRegistry = new Map<string, SchedulerTask>([
+          [laterTaskName, () => {}],
+        ]);
+        const adapter: OnlineMigrationConnection = {
+          query: async (query, params = []) =>
+            await migration.unsafe<unknown[]>(query, [...params]),
+          execute: async (query, params = []) => {
+            await migration.unsafe(query, [...params]);
+          },
+          release: () => migration.release(),
+        };
+        let running: ReturnType<typeof runSchedulerOnce> | undefined;
+        let waiting: ReturnType<typeof acquireMigrationTableLeases> | undefined;
+        let leases:
+          Awaited<ReturnType<typeof acquireMigrationTableLeases>> | undefined;
+        try {
+          expect(tablesForTask()).not.toContain(infrastructureTable);
+          await db.insert(schedulerJobs).values({
+            id: firstId,
+            description: "execution infrastructure reservation",
+            task: firstTaskName,
+            schedule: { type: "interval", everyMs: DEFAULT_LEASE_MS },
+            nextRunAt: new Date("2020-01-01T00:00:00Z"),
+          });
+          running = runSchedulerOnce({
+            db,
+            registry: new Map([[firstTaskName, firstTask]]),
+            tablesForTask,
+            rerunLimit: 0,
+          });
+          await started.promise;
+          const executionTables = await client.unsafe<{ table_name: string }[]>(
+            "SELECT table_name FROM scheduler_table_leases WHERE holder_kind = 'job' AND holder_id LIKE $1",
+            [`${firstId}:%`],
+          );
+          expect(executionTables.map(({ table_name }) => table_name)).toContain(
+            infrastructureTable,
+          );
+          waiting = acquireMigrationTableLeases({
+            connection: adapter,
+            tables: [infrastructureTable],
+            holderId: prefix,
+            checkEveryMs: 10,
+            waitMs: 2000,
+            onLeaseLost: async (cause) => {
+              throw cause;
+            },
+            emit: ({ event }) => {
+              if (event === "migrate.table_lease_requested") {
+                requested.resolve();
+              }
+            },
+          });
+          await requested.promise;
+          const pending = await client.unsafe<{ granted_at: Date | null }[]>(
+            "SELECT granted_at FROM scheduler_table_leases WHERE holder_kind = 'migration' AND holder_id = $1 AND table_name = $2",
+            [prefix, infrastructureTable],
+          );
+          expect(pending).toEqual([{ granted_at: null }]);
+          await db.insert(schedulerJobs).values({
+            id: laterId,
+            description: "execution waiting for infrastructure migration",
+            task: laterTaskName,
+            schedule: { type: "interval", everyMs: DEFAULT_LEASE_MS },
+            nextRunAt: new Date("2020-01-01T00:00:00Z"),
+          });
+          const claimLater = async () =>
+            await acquireNextDueJob({
+              db,
+              registry: laterRegistry,
+              tablesForTask,
+              leaseMs: DEFAULT_LEASE_MS,
+              runnerId: prefix,
+            });
+          expect(await claimLater()).toBeNull();
+          finish.resolve();
+          expect((await running).succeeded).toBe(1);
+          leases = await waiting;
+          await leases.assertHeld();
+          expect(await claimLater()).toBeNull();
+          await leases.release();
+          leases = undefined;
+          expect(
+            (
+              await runSchedulerOnce({
+                db,
+                registry: laterRegistry,
+                tablesForTask,
+                rerunLimit: 0,
+              })
+            ).succeeded,
+          ).toBe(1);
+        } finally {
+          finish.resolve();
+          await running;
+          if (waiting) {
+            leases ??= await waiting;
+          }
+          await leases?.release();
+          await migration.release();
+          await db
+            .delete(schedulerJobRuns)
+            .where(eq(schedulerJobRuns.jobId, firstId));
+          await db
+            .delete(schedulerJobRuns)
+            .where(eq(schedulerJobRuns.jobId, laterId));
+          await db.delete(schedulerJobs).where(eq(schedulerJobs.id, firstId));
+          await db.delete(schedulerJobs).where(eq(schedulerJobs.id, laterId));
+        }
+      });
+    },
+  );
 });

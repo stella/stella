@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { SQL } from "bun";
 import {
   afterAll,
@@ -7,7 +8,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { desc, DrizzleQueryError, eq } from "drizzle-orm";
+import { desc, DrizzleQueryError, eq, getTableName } from "drizzle-orm";
 
 import {
   BackfillFailedError,
@@ -24,6 +25,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { schedulerTableLeases } from "../../db/schema/table-leases";
 import {
   acquireNextDueJob,
   finishRunFailure,
@@ -358,6 +360,38 @@ const abortSignalWhenRunInserted = (
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
+
+test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
+  "execution reservations include lifecycle tables once for $taskTables",
+  async ({ taskTables }) => {
+    const id = await seedJob();
+    const job =
+      (await acquireNextDueJob({
+        db,
+        leaseMs: LEASE_MS,
+        registry: noopRegistry,
+        runnerId: "infrastructure-reservation",
+        tablesForTask: () => taskTables,
+      })) ?? panic("Expected a scheduler claim");
+    const holderId = `${id}:${job.lockedBy}`;
+    try {
+      const leases = await testDb
+        .select({ tableName: schedulerTableLeases.tableName })
+        .from(schedulerTableLeases)
+        .where(eq(schedulerTableLeases.holderId, holderId));
+      expect(leases.map(({ tableName }) => tableName).toSorted()).toEqual(
+        [
+          getTableName(schedulerJobs),
+          getTableName(schedulerJobRuns),
+        ].toSorted(),
+      );
+    } finally {
+      await testDb
+        .delete(schedulerTableLeases)
+        .where(eq(schedulerTableLeases.holderId, holderId));
+    }
+  },
+);
 
 describe("acquireNextDueJob claim exclusivity", () => {
   test("two interleaved passes never claim the same job", async () => {

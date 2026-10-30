@@ -52,6 +52,17 @@ import {
   DEFAULT_POLL_INTERVAL_MS,
   defaultHeartbeatIntervalMs,
 } from "./lease-timing";
+import type { SchedulerTableName } from "./table-declarations";
+
+// Lifecycle writes accompany every execution, including tasks with no domain tables.
+const SCHEDULER_INFRASTRUCTURE_TABLES = [
+  "scheduler_jobs",
+  "scheduler_job_runs",
+] as const satisfies readonly SchedulerTableName[];
+
+const executionTableNames = (taskTables: readonly string[]) => [
+  ...new Set([...SCHEDULER_INFRASTRUCTURE_TABLES, ...taskTables]),
+];
 
 // A sweep runs every job that is due, once; this caps only the extra runs of
 // jobs that asked for an immediate continuation within the same sweep. Nine
@@ -213,7 +224,7 @@ export const runSchedulerOnce = async ({
       job,
       leaseMs,
       maxRuntimeMs,
-      tableCount: new Set(tablesForTask(job.task)).size,
+      tableCount: executionTableNames(tablesForTask(job.task)).length,
       ...(eligibilityNow && { now: eligibilityNow }),
       registry,
       runnerId,
@@ -366,7 +377,7 @@ export const acquireNextDueJob = async ({
     : sql`now()`;
   const taskTables = runnableTasks.map((task) => ({
     task,
-    tables: tablesForTask(task),
+    tables: executionTableNames(tablesForTask(task)),
   }));
   return await withAggregateTransaction(db, async (tx) => {
     await tableLeaseClaimLock(tx);
@@ -400,7 +411,7 @@ export const acquireNextDueJob = async ({
     const leaseToken = acquireLeaseToken(runnerId);
     const admitted = await acquireJobTableLeases({
       tx,
-      tables: tablesForTask(candidate.task),
+      tables: executionTableNames(tablesForTask(candidate.task)),
       holderId: tableLeaseHolderId(candidate.id, leaseToken),
       leaseMs,
     });
