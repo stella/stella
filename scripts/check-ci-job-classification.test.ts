@@ -600,23 +600,11 @@ test("conflicting modes are rejected", () => {
   expect(result.stderr).toContain("usage:");
 });
 
-const mergeGroupRun = (
-  root: string,
-  base: string,
-  head: string,
-  previous: string,
-  number: number,
-) => {
+const mergeGroupRun = (root: string, base: string, head: string) => {
   const eventPath = path.join(root, "merge-group-event.json");
   writeFileSync(
     eventPath,
-    JSON.stringify({
-      merge_group: {
-        base_sha: base,
-        head_sha: head,
-        head_ref: `refs/heads/gh-readonly-queue/main/pr-${number}-${previous}`,
-      },
-    }),
+    JSON.stringify({ merge_group: { base_sha: base, head_sha: head } }),
   );
   return runWithEnv(
     root,
@@ -627,207 +615,109 @@ const mergeGroupRun = (
   );
 };
 
-const twoEntryMergeGroup = (secondJobField = "") => {
-  const baseWorkflow =
-    "jobs: {check: {steps: [{uses: acme/one@0000000000000000000000000000000000000000}, {uses: acme/two@0000000000000000000000000000000000000000}]}}";
+const revision = (root: string) =>
+  decoder
+    .decode(Bun.spawnSync(["git", "-C", root, "rev-parse", "HEAD"]).stdout)
+    .trim();
+
+const mergeGroupFixture = (baseWorkflow: string, groupWorkflow: string) => {
   const decisions = reviewed(baseWorkflow, "check");
   const { root, commitAll } = repository(
     { workflow: baseWorkflow, decisions },
     { workflow: baseWorkflow, decisions },
   );
-  const revision = () => {
-    const result = Bun.spawnSync(["git", "-C", root, "rev-parse", "HEAD"], {
-      stdout: "pipe",
-    });
-    return decoder.decode(result.stdout).trim();
-  };
-  const base = revision();
-  const firstWorkflow = baseWorkflow.replace(
-    "acme/one@0000000000000000000000000000000000000000",
-    "acme/one@1111111111111111111111111111111111111111",
-  );
-  writeFileSync(path.join(root, ".github/workflows/ci.yml"), firstWorkflow);
-  writeDecision(root, keyOf("check"), {
-    kind: "ordinary",
-    qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(firstWorkflow, "check"),
-  });
-  commitAll("change first step (#11)");
-  const first = revision();
-  const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", "-C", root, ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
-  };
-  git("update-ref", "refs/pull/11/head", first);
-  git("switch", "--detach", base);
-  const ownSecondWorkflow = baseWorkflow
-    .replace(
-      "acme/two@0000000000000000000000000000000000000000",
-      "acme/two@2222222222222222222222222222222222222222",
-    )
-    .replace("check: {", () => `check: {${secondJobField}`);
-  writeFileSync(path.join(root, ".github/workflows/ci.yml"), ownSecondWorkflow);
-  writeDecision(root, keyOf("check"), {
-    kind: "ordinary",
-    qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(ownSecondWorkflow, "check"),
-  });
-  commitAll("second pull request head");
-  git("update-ref", "refs/pull/12/head", revision());
-  git("switch", "--detach", first);
-  const composedWorkflow = firstWorkflow
-    .replace(
-      "acme/two@0000000000000000000000000000000000000000",
-      "acme/two@2222222222222222222222222222222222222222",
-    )
-    .replace("check: {", () => `check: {${secondJobField}`);
-  writeFileSync(path.join(root, ".github/workflows/ci.yml"), composedWorkflow);
-  writeDecision(root, keyOf("check"), {
-    kind: "ordinary",
-    qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(firstWorkflow, "check"),
-  });
-  writeDecision(root, keyOf("check"), {
-    kind: "ordinary",
-    qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(ownSecondWorkflow, "check"),
-  });
-  commitAll("change second step (#12)");
-  return { root, base, first, head: revision() };
+  const base = revision(root);
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), groupWorkflow);
+  return { root, base, head: () => revision(root), commitAll };
 };
 
-test("a merge group composes ordinary approvals from each pull request head", () => {
-  const group = twoEntryMergeGroup();
-  expect(
-    mergeGroupRun(group.root, group.base, group.head, group.first, 12),
-  ).toEqual({
+const approveGroupJob = (root: string, workflow: string, kind = "ordinary") =>
+  writeDecision(root, keyOf("check"), {
+    kind,
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(workflow, "check"),
+  });
+
+test("a merge group accepts the exact-digest approval from its own tree", () => {
+  const groupWorkflow = AFTER;
+  const group = mergeGroupFixture(BEFORE, groupWorkflow);
+  approveGroupJob(group.root, groupWorkflow);
+  group.commitAll("group tree");
+
+  expect(mergeGroupRun(group.root, group.base, group.head())).toEqual({
     exitCode: 0,
     stdout: "Classified 1 workflows\n",
     stderr: "",
   });
 });
 
-test("a merge group accepts an own-head approval after main changes the job", () => {
-  const original =
-    "jobs: {check: {steps: [{run: echo first-old}, {run: echo second-old}]}}";
-  const decisions = reviewed(original, "check");
-  const { root, commitAll } = repository(
-    { workflow: original, decisions },
-    { workflow: original, decisions },
-  );
-  const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", "-C", root, ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
-    return decoder.decode(result.stdout).trim();
-  };
-  const oldMain = git("rev-parse", "HEAD");
-  const pullRequestWorkflow = original.replace("first-old", "first-new");
-  writeFileSync(
-    path.join(root, ".github/workflows/ci.yml"),
-    pullRequestWorkflow,
-  );
-  writeDecision(root, keyOf("check"), {
-    kind: "ordinary",
-    qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(pullRequestWorkflow, "check"),
-  });
-  commitAll("pull request head");
-  git("update-ref", "refs/pull/21/head", "HEAD");
+test("a merge group refuses an approval for a different digest", () => {
+  const group = mergeGroupFixture(BEFORE, AFTER);
+  // The base digest remains approved, but the group digest is not.
+  group.commitAll("group tree");
+  const result = mergeGroupRun(group.root, group.base, group.head());
+  const digest = digestOf(AFTER, "check");
 
-  git("switch", "--detach", oldMain);
-  const newMainWorkflow = original.replace("second-old", "second-new");
-  writeFileSync(path.join(root, ".github/workflows/ci.yml"), newMainWorkflow);
-  writeDecision(root, keyOf("check"), {
-    kind: "ordinary",
-    qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(newMainWorkflow, "check"),
-  });
-  commitAll("main changes another step");
-  const base = git("rev-parse", "HEAD");
-  git("update-ref", "refs/remotes/origin/main", base);
-
-  const composedWorkflow = pullRequestWorkflow.replace(
-    "second-old",
-    "second-new",
-  );
-  writeFileSync(path.join(root, ".github/workflows/ci.yml"), composedWorkflow);
-  writeDecision(root, keyOf("check"), {
-    kind: "ordinary",
-    qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(pullRequestWorkflow, "check"),
-  });
-  commitAll("compose pull request (#21)");
-  const head = git("rev-parse", "HEAD");
-
-  expect(mergeGroupRun(root, base, head, base, 21)).toEqual({
-    exitCode: 0,
-    stdout: "Classified 1 workflows\n",
-    stderr: "",
-  });
-});
-
-test("a merge group refuses a multi-pull-request privileged-surface composition", () => {
-  const group = twoEntryMergeGroup("permissions: {contents: write}, ");
-  const result = mergeGroupRun(
-    group.root,
-    group.base,
-    group.head,
-    group.first,
-    12,
-  );
   expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain(
+    "Merge-group approval is missing or mismatched",
+  );
   expect(result.stderr).toContain(keyOf("check"));
-  expect(result.stderr).toContain("#11, #12");
-  expect(result.stderr).toContain("merge them separately");
+  expect(result.stderr).toContain(digest);
+  expect(result.stderr).toContain(
+    `${CLASSIFICATION_DECISIONS_PATH}/${encodeURIComponent(keyOf("check"))}/${digest}.json`,
+  );
 });
 
-test("a merge group refuses a job change without its pull request approval", () => {
-  const group = twoEntryMergeGroup();
-  const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", "-C", group.root, ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
-  };
-  git("switch", "--detach", group.first);
-  rmSync(
-    path.join(
-      group.root,
-      decisionPathForKey(keyOf("check")).replace(
-        "decision.json",
-        () =>
-          `${digestOf("jobs: {check: {steps: [{uses: acme/one@1111111111111111111111111111111111111111}, {uses: acme/two@0000000000000000000000000000000000000000}]}}", "check")}.json`,
-      ),
-    ),
+test("two changes to one permission-kind job need a composed-digest approval", () => {
+  const baseWorkflow =
+    "jobs: {check: {permissions: {contents: write}, steps: [{run: echo one}, {run: echo two}]}}";
+  const firstWorkflow = baseWorkflow.replace("echo one", "echo first");
+  const composedWorkflow = firstWorkflow.replace("echo two", "echo second");
+  const decisions = reviewed(baseWorkflow, "check", "priority");
+  const { root, commitAll } = repository(
+    { workflow: baseWorkflow, decisions },
+    { workflow: baseWorkflow, decisions },
   );
-  git("add", ".");
-  git(
-    "-c",
-    "user.name=Fixture",
-    "-c",
-    "user.email=fixture@example.invalid",
-    "commit",
-    "--quiet",
-    "-m",
-    "remove first approval",
-  );
-  git("update-ref", "refs/pull/11/head", "HEAD");
-  git("switch", "--detach", group.head);
-  const result = mergeGroupRun(
-    group.root,
-    group.base,
-    group.head,
-    group.first,
-    12,
-  );
+  const base = revision(root);
+  // These model the approvals carried by the two queued changes. Neither is
+  // approval for the permissions-bearing job's composed group-tree content.
+  approveGroupJob(root, firstWorkflow, "priority");
+  const secondOnlyWorkflow = baseWorkflow.replace("echo two", "echo second");
+  approveGroupJob(root, secondOnlyWorkflow, "priority");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), composedWorkflow);
+  commitAll("composed group tree");
+
+  const result = mergeGroupRun(root, base, revision(root));
   expect(result.exitCode).toBe(1);
-  expect(result.stderr).toContain("approval is missing");
-  expect(result.stderr).toContain("#11");
+  expect(result.stderr).toContain(digestOf(composedWorkflow, "check"));
+  expect(result.stderr).toContain("expected");
+});
+
+test("a job removed by a merge group needs no approval", () => {
+  const baseWorkflow =
+    "jobs: {check: {steps: [{run: echo check}]}, keep: {steps: [{run: echo keep}]}}";
+  const removedWorkflow = "jobs: {keep: {steps: [{run: echo keep}]}}";
+  const decisions = {
+    ...reviewed(baseWorkflow, "check"),
+    ...reviewed(baseWorkflow, "keep"),
+  };
+  const remainingDecision = reviewed(removedWorkflow, "keep");
+  const { root, commitAll } = repository(
+    { workflow: baseWorkflow, decisions },
+    { workflow: removedWorkflow, decisions: remainingDecision },
+  );
+  const base = revision(root);
+  commitAll("remove job");
+
+  expect(mergeGroupRun(root, base, revision(root))).toEqual({
+    exitCode: 0,
+    stdout: "Classified 1 workflows\n",
+    stderr: "",
+  });
+});
+
+test("the merge-group check never reads pull request refs", () => {
+  const source = readFileSync(SCRIPT, "utf-8");
+  expect(source).not.toContain(["refs", "pull"].join("/"));
 });
