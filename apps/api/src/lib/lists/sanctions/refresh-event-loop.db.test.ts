@@ -15,6 +15,7 @@ import { largeOfacSdnXml } from "@stll/sanctions/test-fixtures/large-ofac-list";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { safeOutboundFetchStream } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
@@ -27,7 +28,6 @@ import {
   type FetchedMarker,
   fetchSanctionsEdition,
 } from "@/api/lib/lists/sanctions/source-fetch";
-import type { safeOutboundFetchStream } from "@/api/lib/safe-outbound-fetch";
 import {
   expectEventLoopResponsive,
   pgliteAsOutOfProcess,

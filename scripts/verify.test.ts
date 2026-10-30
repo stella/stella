@@ -916,6 +916,7 @@ exit 0
                 HOME: home,
                 PATH: bin,
                 CI: ci,
+                GITHUB_WORKSPACE: undefined,
                 TEST_ENTRY: entry,
                 TEST_ENTRY_RECEIPT: path.join(fixture, `${entry}-receipt`),
                 TEST_INSTALL_RECEIPT: path.join(fixture, "install-receipt"),

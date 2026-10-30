@@ -38,6 +38,7 @@ import {
   taskAssigneeCondition,
 } from "@/api/lib/tasks/assigned";
 import type { TaskAssigneeFilter } from "@/api/lib/tasks/assigned";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 /** Keyset position: the last row's due date (null sorts last) and id. */
 type TaskListCursor = {
@@ -219,7 +220,7 @@ export const listTasksPage = async ({
       .where(
         and(
           inArray(entities.workspaceId, [...workspaceIds]),
-          eq(entities.kind, "task"),
+          workTask(entities),
           query.status === undefined
             ? undefined
             : eq(entities.status, query.status),

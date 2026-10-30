@@ -10,10 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Script } from "node:vm";
 import * as v from "valibot";
-
-import { contextFromNested, evaluate } from "./github-expression";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
@@ -47,42 +44,6 @@ const namedStep = (name: string) => {
 };
 const validateFormat = namedStep("Validate SHA format");
 const verifyAncestry = namedStep("Verify main ancestry");
-const actionStep = (name: string) => {
-  const step = validationSteps.find((candidate) => candidate.name === name);
-  const script = step?.with?.["script"];
-  if (step?.if === undefined || typeof script !== "string") {
-    panic(`main-heavy.yml is missing action step ${name}`);
-  }
-  return { condition: step.if, script };
-};
-const versionStaging = actionStep("Dispatch version commit staging");
-const prDepthDispatch = actionStep("Dispatch release PR-depth checks");
-
-const runActionScript = async (
-  script: string,
-  context: object,
-  github: object,
-  env: Record<string, string> = {},
-) => {
-  const calls: unknown[] = [];
-  const api = {
-    ...github,
-    rest: {
-      ...(github as { rest?: object }).rest,
-      actions: {
-        createWorkflowDispatch: async (input: unknown) => calls.push(input),
-      },
-    },
-  };
-  await new Script(`(async () => { ${script} })()`).runInNewContext({
-    context,
-    core: { info: () => undefined },
-    github: api,
-    process: { env },
-  });
-  return calls;
-};
-
 const runGit = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, {
     maxBuffer: 2 ** 30,
@@ -96,17 +57,20 @@ const runStep = (
   cwd: string,
   outputPath: string,
 ) =>
-  Bun.spawnSync(["bash", "-euc", script], {
-    cwd,
-    env: {
-      ...process.env,
-      SHA: sha,
-      GITHUB_OUTPUT: outputPath,
-      GITHUB_REPOSITORY: "stella/stella",
-      RUNNER_TEMP: cwd,
-      GH_RETRY_SCRIPT: path.join(cwd, "gh-retry.sh"),
+  Bun.spawnSync(
+    ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        SHA: sha,
+        GITHUB_OUTPUT: outputPath,
+        GITHUB_REPOSITORY: "stella/stella",
+        RUNNER_TEMP: cwd,
+        GH_RETRY_SCRIPT: path.join(cwd, "gh-retry.sh"),
+      },
     },
-  });
+  );
 
 test("dispatch SHA validation delegates main and authorized release heads to the shared verifier", () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "main-heavy-sha-"));
@@ -145,6 +109,17 @@ test("dispatch SHA validation delegates main and authorized release heads to the
         readFileSync(new URL(script, import.meta.url), "utf-8"),
       );
     }
+    const pullRequestFile = path.join(fixture, "pull-request.json");
+    const releasePullRequest = {
+      number: 1,
+      title: "chore: release v1.2.3",
+      state: "open",
+      draft: false,
+      merged_at: null,
+      head: { sha: releaseSha, repo: { full_name: "stella/stella" } },
+      base: { sha: mainSha, ref: "main", repo: { full_name: "stella/stella" } },
+    };
+    writeFileSync(pullRequestFile, JSON.stringify([[releasePullRequest]]));
     writeFileSync(
       path.join(fixture, "gh-retry.sh"),
       `#!/usr/bin/env bash
@@ -155,7 +130,7 @@ case "$endpoint" in
     sha="\${endpoint#repos/stella/stella/commits/}"
     sha="\${sha%%/*}"
     if [[ "$sha" == "${releaseSha}" ]]; then
-      printf '%s\\n' '[[{"number":1,"title":"chore: release v1.2.3","state":"open","draft":false,"merged_at":null,"head":{"sha":"${releaseSha}","repo":{"full_name":"stella/stella"}},"base":{"sha":"${mainSha}","ref":"main","repo":{"full_name":"stella/stella"}}}]]'
+      cat "$RUNNER_TEMP/pull-request.json"
     else printf '%s\\n' '[[]]'; fi
     ;;
   repos/stella/stella/commits/*)
@@ -190,6 +165,37 @@ esac
       runStep(verifyAncestry, releaseSha, fixture, outputPath).exitCode,
     ).toBe(0);
     expect(readFileSync(outputPath, "utf-8")).toContain(`sha=${releaseSha}`);
+    expect(readFileSync(outputPath, "utf-8")).toContain("relation=pr-head");
+
+    for (const invalidPullRequest of [
+      {
+        ...releasePullRequest,
+        state: "closed",
+        merged_at: "2026-10-24T00:00:00Z",
+      },
+      {
+        ...releasePullRequest,
+        head: { ...releasePullRequest.head, sha: mainSha },
+      },
+    ]) {
+      writeFileSync(pullRequestFile, JSON.stringify([[invalidPullRequest]]));
+      writeFileSync(outputPath, "");
+      const rejected = runStep(verifyAncestry, releaseSha, fixture, outputPath);
+      expect(rejected.exitCode).not.toBe(0);
+      expect(rejected.stderr.toString()).toContain(
+        "release PR head relation is unverified",
+      );
+      expect(readFileSync(outputPath, "utf-8")).toBe("");
+    }
+    writeFileSync(pullRequestFile, JSON.stringify([[releasePullRequest]]));
+    const depthAncestry =
+      readWorkflow("main-pr-depth").jobs.validate.steps?.find(
+        ({ name }) => name === "Verify main ancestry",
+      )?.run ?? panic("main-pr-depth.yml is missing its trusted ancestry step");
+    for (const sha of [mainSha, releaseSha]) {
+      const result = runStep(depthAncestry, sha, fixture, outputPath);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+    }
 
     const rejectedFormat = [
       mainSha.slice(0, 39),
@@ -251,9 +257,6 @@ test("only trusted main tooling is checked out before target verification", () =
     // Uncached runtime for the release queue history check; no target code.
     "Setup Bun",
     "Reuse completed release proof",
-    "Check the version commit's merge-group receipt",
-    "Dispatch release PR-depth checks",
-    "Dispatch version commit staging",
     "Select untested heavy SHA",
     "Validate SHA format",
     "Fetch main history",
@@ -266,147 +269,14 @@ test("only trusted main tooling is checked out before target verification", () =
   expect(checkouts.at(0)?.with?.["persist-credentials"]).toBe(false);
 });
 
-test("a version commit whose receipt does not cover its history also dispatches PR-depth", () => {
-  const dispatches = ({
-    event,
-    message = "",
-    covered,
-    releaseCandidate = false,
-  }: {
-    event: string;
-    message?: string;
-    covered?: string;
-    releaseCandidate?: boolean;
-  }) =>
-    evaluate(
-      prDepthDispatch.condition,
-      contextFromNested({
-        github: { event_name: event, event: { head_commit: { message } } },
-        inputs: releaseCandidate
-          ? { sha: "a".repeat(40), release_candidate: true }
-          : { sha: "", release_candidate: false },
-        steps: {
-          reuse: { outputs: { run: "true" } },
-          // GitHub reads a skipped step's outputs as empty strings.
-          receipt: { outputs: { covered: covered ?? "" } },
-        },
-      }),
-    );
-  // The receipt step runs only on a version commit push.
-  expect(
-    dispatches({
-      event: "push",
-      message: "chore: release v1.2.3",
-      covered: "false",
-    }),
-  ).toBe(true);
-  expect(
-    dispatches({
-      event: "push",
-      message: "chore: release v1.2.3",
-      covered: "true",
-    }),
-  ).toBe(false);
-  expect(dispatches({ event: "push", message: "ordinary change" })).toBe(false);
-  expect(
-    dispatches({ event: "workflow_dispatch", releaseCandidate: true }),
-  ).toBe(true);
-});
-
-test("version commit staging reuses only an identical head's newest bot proof", async () => {
-  expect(
-    evaluate(
-      versionStaging.condition,
-      contextFromNested({
-        github: {
-          event_name: "push",
-          event: { head_commit: { message: "ordinary change" } },
-        },
-      }),
-    ),
-  ).toBe(false);
-  expect(
-    evaluate(
-      versionStaging.condition,
-      contextFromNested({
-        github: {
-          event_name: "push",
-          event: { head_commit: { message: "chore: release v1.2.3" } },
-        },
-      }),
-    ),
-  ).toBe(true);
-
-  const versionSha = "b".repeat(40);
-  const headSha = "a".repeat(40);
-  const passed = {
-    context: "staging/verified",
-    creator: { login: "github-actions[bot]" },
-    state: "success",
-  };
-  const dispatchFor = async (headTree: string, statuses: unknown[]) =>
-    runActionScript(
-      versionStaging.script,
-      {
-        repo: { owner: "stella", repo: "stella" },
-        sha: versionSha,
-      },
-      {
-        rest: {
-          repos: {
-            listPullRequestsAssociatedWithCommit: async () => ({
-              data: [
-                {
-                  head: {
-                    repo: { full_name: "stella/stella" },
-                    sha: headSha,
-                  },
-                  merge_commit_sha: versionSha,
-                  merged_at: "2026-10-24T00:00:00Z",
-                  title: "chore: release v1.2.3",
-                },
-              ],
-            }),
-            listCommitStatusesForRef: async () => ({ data: statuses }),
-          },
-          git: {
-            getCommit: async ({ commit_sha }: { commit_sha: string }) => ({
-              data: {
-                tree: { sha: commit_sha === headSha ? headTree : "tree" },
-              },
-            }),
-          },
-        },
-      },
-    );
-  const reuse = await dispatchFor("tree", [passed]);
-  expect(reuse).toEqual([
-    {
-      owner: "stella",
-      repo: "stella",
-      workflow_id: "deploy-staging.yml",
-      ref: "main",
-      inputs: { proof_sha: headSha, sha: versionSha },
-    },
-  ]);
-  for (const full of [
-    await dispatchFor("different", [passed]),
-    await dispatchFor("tree", []),
-    await dispatchFor("tree", [
-      { ...passed, creator: { login: "human" } },
-      passed,
-    ]),
-  ]) {
-    expect(full).toEqual([
-      {
-        owner: "stella",
-        repo: "stella",
-        workflow_id: "deploy-staging.yml",
-        ref: "main",
-        inputs: { release_candidate: "true", sha: versionSha },
-      },
-    ]);
-  }
+test("main validation does not dispatch release proofs owned by the RC artifact run", () => {
+  const source = readFileSync(
+    new URL("../.github/workflows/main-heavy.yml", import.meta.url),
+    "utf-8",
+  );
+  expect(source).not.toContain("createWorkflowDispatch");
+  expect(source).not.toContain("Dispatch version commit staging");
+  expect(source).not.toContain("Dispatch release PR-depth checks");
 });
 
 test("scheduled main validation delegates ancestry to trusted main tooling before suite checkout", () => {
@@ -435,7 +305,8 @@ test("scheduled main validation delegates ancestry to trusted main tooling befor
       ({ name: stepName }) => stepName === "Verify main ancestry",
     );
     expect(ancestry?.run, name).toContain(
-      'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
+      '"$RUNNER_TEMP/verify-release-tree-proof.sh"',
     );
+    expect(ancestry?.run, name).toContain('"$GITHUB_REPOSITORY" "$SHA" "$SHA"');
   }
 });

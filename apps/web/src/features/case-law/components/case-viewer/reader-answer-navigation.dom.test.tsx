@@ -87,7 +87,9 @@ const ReopenHarness = () => {
           });
         }}
       >
-        {anchors.at(0)?.render(answer.anchor.spans[0].quote)}
+        {anchors.at(0)?.render(answer.anchor.spans[0].quote, {
+          isRangeStart: true,
+        })}
       </div>
       <ReaderAnswerCard
         answer={answer}

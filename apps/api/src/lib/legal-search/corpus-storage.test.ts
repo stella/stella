@@ -17,6 +17,7 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
+  StoredCorpusValidationError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -302,12 +303,12 @@ describe("persisted corpus JSON validation", () => {
     ).toThrow('Invalid type: Expected number but received "0"');
     expect(() =>
       parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
-    ).toThrow("Invalid type: Expected (Object | unknown) but received Object");
+    ).toThrow(StoredCorpusValidationError);
     expect(() => parsePersistedCorpusAst([])).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Array",
+      StoredCorpusValidationError,
     );
     expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Object",
+      StoredCorpusValidationError,
     );
   });
 
@@ -908,7 +909,7 @@ describe("deleteCorpusDocument", () => {
   });
 });
 
-test("standalone writes validate structure before comparing the stored payload", async () => {
+test("standalone writes repair repeated identities before comparing the stored payload", async () => {
   const invalidAst = {
     version: 1,
     source: {
@@ -943,13 +944,18 @@ test("standalone writes validate structure before comparing the stored payload",
       },
     ],
   } satisfies DocumentAst;
-  expect(v.safeParse(persistedDocumentAstSchema, invalidAst).success).toBe(
-    false,
-  );
+  const repaired = v.parse(persistedDocumentAstSchema, invalidAst);
+  expect(repaired).not.toEqual(invalidAst);
+  expect(
+    repaired.blocks.map(({ anchorId, plainText }) => [anchorId, plainText]),
+  ).toEqual([
+    ["p1", "Body."],
+    ["p1-2", "Body."],
+  ]);
   const payload = {
     text: "Synthetic decision.",
     sections: null,
-    ast: EMPTY_AST,
+    ast: repaired,
   };
   expect(corpusContentHash({ ...payload, ast: invalidAst })).not.toBe(
     corpusContentHash(payload),
@@ -963,17 +969,19 @@ test("standalone writes validate structure before comparing the stored payload",
   if (plan.type !== "put") {
     expect.unreachable("Fixture must carry text");
   }
-  // A rejected AST must converge to the already stored text-only payload. The
+  // The repaired AST must converge to the already stored document. The
   // aborted signal makes any unintended transfer fail before reaching S3.
-  const outcome = await writeCorpusDocument(
-    {
-      ...payload,
-      ast: invalidAst,
-      documentId: "synthetic",
-      jurisdiction: "SVK",
-      stored: plan.written,
-    },
-    { signal: AbortSignal.abort() },
-  );
+  const outcome = (
+    await writeCorpusDocument(
+      {
+        ...payload,
+        ast: invalidAst,
+        documentId: "synthetic",
+        jurisdiction: "SVK",
+        stored: plan.written,
+      },
+      { signal: AbortSignal.abort() },
+    )
+  ).unwrap();
   expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

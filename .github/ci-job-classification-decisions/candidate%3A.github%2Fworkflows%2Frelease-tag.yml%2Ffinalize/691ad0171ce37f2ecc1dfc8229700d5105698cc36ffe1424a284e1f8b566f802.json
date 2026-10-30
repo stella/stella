@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Tags the final release on the exact release-candidate commit once its proof is green; creates the stable tag.",
+  "reviewedDigest": "691ad0171ce37f2ecc1dfc8229700d5105698cc36ffe1424a284e1f8b566f802"
+}

@@ -3,6 +3,7 @@ import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { readFailureBrand } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
@@ -549,6 +550,52 @@ describe("chat history compaction", () => {
         summarizeTranscript: failures.fails,
       });
       expect(observedSummaryError).toBe(true);
+    });
+
+    test("carries the summarizer's failure class onto the reported error", async () => {
+      const reported: unknown[] = [];
+      const deadline = async (): Promise<string> => {
+        throw new ModelDeadlineExceededError({ deadlineMs: 30_000 });
+      };
+      await compactChatMessages({
+        messages: longThread,
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: deadline,
+      });
+      await compactModelMessages({
+        messages: longThread.map((message): ModelMessage => ({
+          role: message.role === "user" ? "user" : "assistant",
+          content: message.parts
+            .map((part) => (part.type === "text" ? part.content : ""))
+            .join(""),
+        })),
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: deadline,
+      });
+      expect(reported.map((error) => readFailureBrand(error)?.reason)).toEqual([
+        "model_deadline_exceeded",
+        "model_deadline_exceeded",
+      ]);
+    });
+
+    test("leaves an unclassified summarizer failure unclassified", async () => {
+      const reported: unknown[] = [];
+      await compactChatMessages({
+        messages: longThread,
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: failures.fails,
+      });
+      expect(reported).toHaveLength(1);
+      expect(readFailureBrand(reported[0])).toBeUndefined();
     });
 
     test("keeps step history the same way", async () => {
