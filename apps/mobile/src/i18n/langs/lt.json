@@ -163,7 +163,6 @@
     "newest": "Naujausi sprendimai",
     "noResults": "Niekas neatitiko žodžių, kurių reikalavo ši paieška.",
     "noResultsHint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
-    "unavailable": "Paieška laikinai nepasiekiama",
     "retry": "Bandyti dar kartą",
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
@@ -179,6 +178,14 @@
   "writes": {
     "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
     "signInAgain": "Prisijungti iš naujo"
+  },
+  "loads": {
+    "offline": "stella nepavyko susisiekti su jūsų serveriu. Patikrinkite ryšį ir bandykite dar kartą.",
+    "outdated": "Serveris atsakė formatu, kurio ši programėlės versija nesupranta. Atnaujinkite programėlę arba serverį, jei jį administruojate.",
+    "consent": "Šis prisijungimas neleidžia programėlei to skaityti. Prisijunkite iš naujo, kad suteiktumėte prieigą.",
+    "session": "Jūsų prisijungimas baigėsi. Prisijunkite iš naujo.",
+    "server": "Serveryje įvyko klaida (klaidos kodas {status}). Netrukus bandykite dar kartą.",
+    "refused": "Serveris atmetė užklausą (klaidos kodas {status})."
   },
   "timers": {
     "title": "Laikmačiai",

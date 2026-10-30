@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_NSA",
+  "key": "pl-nsa",
+  "parserVersion": 11,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl."
+  }
+}

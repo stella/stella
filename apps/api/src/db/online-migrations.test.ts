@@ -1,10 +1,11 @@
 import { SQL } from "bun";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
-import { defaultConfig } from "@stll/db-load-gate/health";
+import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { REWRITTEN_MIGRATION_INDEXES } from "../lib/db/migration-history";
@@ -19,6 +20,7 @@ import {
   createDecisionDateCeilingRepair,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import type { MigrationTimingRecord } from "./migration-timing";
 import type { OnlineIndexDeclaration } from "./online-ddl";
 import { declaresOnlineBuild } from "./online-ddl";
@@ -165,6 +167,22 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
+  test("completes registered function reindex checkpoints with no dependent indexes", async () => {
+    const harness = createHarness({ functionReindexCheckpoints: "missing" });
+    await runOnlineMigrations(harness.pool);
+    expect((await reportOnlineMigrations(harness.pool)).pending).toEqual([]);
+    expect(
+      harness.statements.some((statement) =>
+        statement.includes("FROM pg_catalog.pg_depend dependency"),
+      ),
+    ).toBe(true);
+    expect(
+      harness.statements.some((statement) =>
+        statement.includes(REINDEX_FRAGMENT),
+      ),
+    ).toBe(false);
+  });
+
   test("registers the identifier retry shape for bounded online validation", () => {
     expect(ONLINE_MIGRATION_REPAIRS).toContain(
       CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
@@ -1985,6 +2003,7 @@ type Artifacts = Readonly<Record<string, Artifact[]>>;
 
 type HarnessOptions = {
   newestAppliedMigration?: string;
+  functionReindexCheckpoints?: "complete" | "missing";
   artifacts?: Artifacts;
   /**
    * Constraints `pg_constraint` reports as not validated until a repair's
@@ -2009,6 +2028,7 @@ const artifactPrefix = (name: string, suffix: "_ccnew" | "_ccold") =>
 
 const createHarness = ({
   newestAppliedMigration = "99999999999999_later_release",
+  functionReindexCheckpoints = "complete",
   artifacts = {},
   unvalidatedConstraints = [],
   indexStates = {},
@@ -2031,6 +2051,22 @@ const createHarness = ({
     unknown,
     { cursor: unknown; batch: unknown }
   >();
+  const functionReindexCheckpointNames = new Set(
+    FUNCTION_DEPENDENT_INDEX_REINDEXES.map(
+      (repair) => `${repair.name}:${repair.introducedBy}`,
+    ),
+  );
+  if (functionReindexCheckpoints === "complete") {
+    for (const name of functionReindexCheckpointNames) {
+      backfillStates.set(name, {
+        cursor: null,
+        batch: {
+          ...initialBatchState(),
+          reindex: { indexes: [], status: "complete" },
+        },
+      });
+    }
+  }
   const pendingConstraints = new Set(unvalidatedConstraints);
   const indexOffsets = new Map<string, number>();
   const pendingIndexes = new Set(missingIndexes);
@@ -2063,6 +2099,48 @@ const createHarness = ({
     query: string,
     params: readonly unknown[],
   ) => {
+    const name = params.at(0);
+    if (typeof name === "string" && functionReindexCheckpointNames.has(name)) {
+      if (query.startsWith("INSERT")) {
+        const serialized = params.at(1);
+        if (typeof serialized !== "string") {
+          throw new TypeError("Expected function reindex checkpoint JSON");
+        }
+        const batch: unknown = JSON.parse(serialized);
+        if (!backfillStates.has(name)) {
+          backfillStates.set(name, { cursor: null, batch });
+        }
+        return [];
+      }
+      if (query.startsWith("UPDATE")) {
+        const state = backfillStates.get(name);
+        if (!state) {
+          throw new TypeError("Expected existing function reindex checkpoint");
+        }
+        if (query.includes("SET cursor = $2")) {
+          backfillStates.set(name, {
+            cursor: params.at(1),
+            batch: state.batch,
+          });
+          return [];
+        }
+        if (query.includes("jsonb_set(batch, '{reindex,status}'")) {
+          if (!isRecord(state.batch) || !isRecord(state.batch["reindex"])) {
+            throw new TypeError("Expected function reindex batch state");
+          }
+          backfillStates.set(name, {
+            cursor: state.cursor,
+            batch: {
+              ...state.batch,
+              reindex: { ...state.batch["reindex"], status: "complete" },
+            },
+          });
+          return [];
+        }
+        throw new TypeError("Unexpected function reindex checkpoint update");
+      }
+      return [backfillStates.get(name)];
+    }
     if (query.startsWith("INSERT")) {
       const serialized = params.at(2);
       if (typeof serialized !== "string") {
@@ -2153,8 +2231,12 @@ const createHarness = ({
   return {
     pool: {
       reserve: async () => ({
-        execute: async (query: string) => {
+        execute: async (query: string, params: readonly unknown[] = []) => {
           statements.push(query);
+          if (query.includes("database_backfill_states")) {
+            queryBackfillCheckpoint(query, params);
+            return;
+          }
           for (const { name, createSql } of onlineIndexes) {
             if (query === createSql) {
               pendingIndexes.delete(name);
@@ -2246,6 +2328,13 @@ const createHarness = ({
             "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
+          }
+          if (
+            query.includes("FROM pg_catalog.pg_depend dependency") &&
+            query.includes("JOIN pg_catalog.pg_index") &&
+            query.includes("to_regprocedure($1)")
+          ) {
+            return [];
           }
           if (query.includes("database_backfill_states")) {
             return queryBackfillCheckpoint(query, params);

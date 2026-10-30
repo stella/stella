@@ -68,6 +68,11 @@ import {
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import {
+  type CollisionFilteredDecisions,
+  type CollisionFilterProof,
+  filterQuarantinePeerCollisions,
+} from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
 import type {
   FailedSliceCandidate,
   LedgerSlice,
@@ -119,12 +124,7 @@ import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
-import {
-  type CollisionFilteredDecisions,
-  type CollisionFilterProof,
-  filterQuarantinePeerCollisions,
-  isQuarantineListingIdentity,
-} from "@/api/lib/legal-search/quarantine-identity";
+import { isQuarantineListingIdentity } from "@/api/lib/legal-search/quarantine-identity";
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,

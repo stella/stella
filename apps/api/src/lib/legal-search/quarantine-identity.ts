@@ -17,17 +17,12 @@
  * stable fields: each one moves while the record does not.
  */
 
-import { panic } from "better-result";
 import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { CompleteReconciliationScope } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-import type {
-  IngestionResult,
-  ListingIdentity,
-} from "@/api/lib/legal-search/ingestion-types";
+import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import type { ListingObservationReason } from "@/api/lib/legal-search/listing-observation-reasons";
 import {
   LEGACY_QUARANTINE_PREFIXES,
@@ -379,73 +374,6 @@ export const isQuarantineListingIdentity = (
   QUARANTINE_PREFIXES.some((prefix) =>
     identity.sourceDocumentId.startsWith(prefix),
   );
-
-export type CollisionFilterProof =
-  CompleteReconciliationScope | { readonly type: "no-listing-proof" };
-
-const collisionFilteredDecisionsBrand = Symbol("CollisionFilteredDecisions");
-
-/** Only this owner can construct the decisions accepted by page apply paths. */
-export type CollisionFilteredDecisions = {
-  readonly [collisionFilteredDecisionsBrand]: true;
-  readonly decisions: readonly IngestionResult[];
-  readonly collidingIds: readonly string[];
-};
-
-type FilterQuarantinePeerCollisionsOptions = {
-  decisions: readonly IngestionResult[];
-  proof: CollisionFilterProof;
-};
-
-/** A captured peer remains a separate record; absent listing proof cannot authorize adoption. */
-export const filterQuarantinePeerCollisions = ({
-  decisions,
-  proof,
-}: FilterQuarantinePeerCollisionsOptions): CollisionFilteredDecisions => {
-  switch (proof.type) {
-    case "complete-scope": {
-      const collidingIds = quarantinePeerCollisions([
-        ...proof.listedIdentities.flatMap((identity) =>
-          identity.type === "document"
-            ? [{ sourceDocumentId: identity.sourceDocumentId }]
-            : [],
-        ),
-        ...decisions.map((decision) => ({
-          sourceDocumentId: decision.sourceDocumentId ?? "",
-          quarantinePeers: decision.sourceDocumentIdRepairAliases,
-        })),
-      ]);
-      const colliding = new Set(collidingIds);
-      return {
-        [collisionFilteredDecisionsBrand]: true,
-        decisions:
-          colliding.size === 0
-            ? decisions
-            : decisions.map((decision) => ({
-                ...decision,
-                sourceDocumentIdRepairAliases:
-                  decision.sourceDocumentIdRepairAliases?.filter(
-                    (alias) => !colliding.has(alias),
-                  ),
-              })),
-        collidingIds,
-      };
-    }
-    case "no-listing-proof":
-      return {
-        [collisionFilteredDecisionsBrand]: true,
-        decisions: decisions.map((decision) => ({
-          ...decision,
-          sourceDocumentIdRepairAliases: [],
-        })),
-        collidingIds: [],
-      };
-    default: {
-      proof satisfies never;
-      return panic("Unknown listing proof");
-    }
-  }
-};
 
 /** A captured listing is evidence, never a canonical decision identity. */
 const listingObservationIdentitySchema = v.pipe(

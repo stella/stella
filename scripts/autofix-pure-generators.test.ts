@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Reads canonical source-entry JSON; Git staging never changes the literal maps.
+  "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and

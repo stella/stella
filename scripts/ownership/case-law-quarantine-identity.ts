@@ -7,6 +7,7 @@ export default {
   owner: [
     "apps/api/src/lib/legal-search/quarantine-identity.ts",
     "apps/api/src/lib/legal-search/quarantine-prefixes.ts",
+    "apps/api/src/handlers/case-law/ingestion/quarantine-collision-filter.ts",
   ],
   summary:
     "`quarantineIdentity` owns existing stable-field quarantine keys and bounded " +
@@ -16,6 +17,8 @@ export default {
     "usable stable fields, including unserved listing slots. These immutable " +
     "raw observations are stored in `case_law_listing_observations` before " +
     "crawl or reconciliation progress; they never enter canonical identity " +
-    "matching or alias adoption.",
+    "matching or alias adoption. The ingestion collision filter owns the opaque " +
+    "decisions accepted by crawl and reconciliation writes, requiring a " +
+    "complete reconciliation scope before retaining repair candidates.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

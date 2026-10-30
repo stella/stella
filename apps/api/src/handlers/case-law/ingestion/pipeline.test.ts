@@ -56,6 +56,7 @@ import {
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { filterQuarantinePeerCollisions } from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
@@ -95,7 +96,6 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
-  filterQuarantinePeerCollisions,
   LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
   quarantinedListingObservation,

@@ -50,6 +50,11 @@ import {
   sameStreaks,
   writeUnavailableStreaks,
 } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import {
+  type CollisionFilteredDecisions,
+  type CollisionFilterProof,
+  filterQuarantinePeerCollisions,
+} from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
 import { refreshNextSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -77,12 +82,7 @@ import type {
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
-import {
-  type CollisionFilteredDecisions,
-  type CollisionFilterProof,
-  countQuarantineCollisions,
-  filterQuarantinePeerCollisions,
-} from "@/api/lib/legal-search/quarantine-identity";
+import { countQuarantineCollisions } from "@/api/lib/legal-search/quarantine-identity";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
