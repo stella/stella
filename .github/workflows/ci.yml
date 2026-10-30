@@ -7387,6 +7387,10 @@ jobs:
           # every exit, so its verdict is this step's exit status.
           RECORDED_NEEDS="$NEEDS"
           required_jobs='[]'
+          # The unmet checks the full-depth verdict found, kept in the record
+          # so a reader can tell a failure it may excuse from one it may not.
+          violations=""
+          violations_evaluated=false
           reused_from_run_id=""
           # Set by each exit that passes without evaluating any job.
           pass_through_reason=""
@@ -7403,7 +7407,8 @@ jobs:
               --arg event "${EVENT:-}" --arg head "${HEAD_SHA:-}" --arg base "${BASE_SHA:-}" \
               --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
               --arg depth "$depth" --arg profile "${COVERAGE_PROFILE:-}" --arg reused "$reused_from_run_id" \
-              --arg pass_through "$pass_through_reason" '
+              --arg pass_through "$pass_through_reason" \
+              --arg violations "${violations:-}" --arg violations_evaluated "$violations_evaluated" '
               def nonempty: if . == "" then null else . end;
               def count: if test("^[1-9][0-9]*$") then tonumber else null end;
               . as $needs
@@ -7422,6 +7427,8 @@ jobs:
                 pass_through_reason: ($pass_through | nonempty),
                 required: [$counted[] | {job: ., conclusion: ($needs[.].result // "missing")}],
                 not_required: ([keys[] | select(. != "ci-plan")] - $counted),
+                violations_evaluated: ($violations_evaluated == "true"),
+                violations: ($violations | nonempty),
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
           }
@@ -7885,6 +7892,7 @@ jobs:
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
+              violations_evaluated=true
               if [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1

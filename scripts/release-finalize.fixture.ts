@@ -27,7 +27,12 @@ type ProofFixture = {
       name: string;
       status: string;
       conclusion: string | null;
+      steps?: readonly { name: string; conclusion: string | null }[];
     }[];
+    /** The jobs API's total_count; defaults to the number of jobs. */
+    total?: number;
+    /** The ci-required-summary record; no artifact when undefined. */
+    record?: (sha: string) => unknown;
   };
   runSha?: string;
   incidents?: boolean;
@@ -115,8 +120,20 @@ export const finalize = (fixture: ProofFixture = {}) => {
     }
     writeFileSync(
       path.join(root, "jobs.json"),
-      JSON.stringify([{ jobs: fixture.heavyRun?.jobs ?? [] }]),
+      JSON.stringify([
+        {
+          total_count:
+            fixture.heavyRun?.total ?? fixture.heavyRun?.jobs.length ?? 0,
+          jobs: fixture.heavyRun?.jobs ?? [],
+        },
+      ]),
     );
+    if (fixture.heavyRun?.record !== undefined) {
+      writeFileSync(
+        path.join(root, "record.json"),
+        JSON.stringify(fixture.heavyRun.record(sha)),
+      );
+    }
     writeFileSync(
       path.join(root, "incidents.json"),
       JSON.stringify([fixture.incidents ? [{ id: 1 }] : []]),
@@ -133,6 +150,10 @@ esac
 case "$*" in
   'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  'run download '*)
+    [[ -f "$TEST_ROOT/record.json" ]] || { echo "no artifact" >&2; exit 1; }
+    dir="\u0024{!#}"
+    cp "$TEST_ROOT/record.json" "\u0024{dir}/ci-required-summary.json" ;;
   *actions/runs/*/jobs?*) cat "$TEST_ROOT/jobs.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
   *issues?*) cat "$TEST_ROOT/incidents.json" ;;

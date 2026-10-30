@@ -1397,15 +1397,24 @@ const fakeGitHub = (responses: Record<string, unknown>) => {
   return Object.assign(read, { paths });
 };
 
+// The required-jobs record ci-result uploads; null stands for unreadable.
+const fakeRecord = (record: unknown) => async (): Promise<unknown> => {
+  if (record === null) {
+    throw new Error("no ci-required-summary artifact");
+  }
+  return record;
+};
+
 const cutRefusal = async (
   responses: Record<string, unknown>,
+  record: unknown = null,
 ): Promise<string> => {
   const written: string[] = [];
   try {
     await assertReleaseCutReady(
       CUT_SHA,
       false,
-      fakeGitHub(responses),
+      { json: fakeGitHub(responses), record: fakeRecord(record) },
       (text) => {
         written.push(text);
       },
@@ -1427,7 +1436,7 @@ describe("release cut readiness", () => {
     });
     const written: string[] = [];
 
-    await assertReleaseCutReady(CUT_SHA, false, read, (text) => {
+    await assertReleaseCutReady(CUT_SHA, false, { json: read }, (text) => {
       written.push(text);
     });
 
@@ -1468,6 +1477,31 @@ describe("release cut readiness", () => {
   });
 
   const MARKETING_JOB = "suites / marketing-screenshots / check";
+  const COMPARISON_FAILED_STEPS = [
+    { name: "Set up job", conclusion: "success" },
+    { name: "Capture marketing screenshots", conclusion: "failure" },
+    { name: "Read screenshot comparison phase", conclusion: "success" },
+    { name: "Screenshot comparison failed", conclusion: "success" },
+  ];
+  const marketingJob = (steps: unknown[] = COMPARISON_FAILED_STEPS) => ({
+    ...job(MARKETING_JOB, "failure"),
+    steps,
+  });
+  const heavyRecord = (overrides: Record<string, unknown> = {}) => ({
+    version: 1,
+    run_id: 11,
+    head_sha: CUT_SHA,
+    basis: "evaluated",
+    depth: "heavy",
+    verdict: "failure",
+    violations_evaluated: true,
+    violations: "marketing-screenshots (planned, failure)",
+    required: [
+      { job: "ci-tests", conclusion: "success" },
+      { job: "marketing-screenshots", conclusion: "failure" },
+    ],
+    ...overrides,
+  });
   const heavyRun = (overrides: Record<string, unknown> = {}) => ({
     id: 11,
     html_url: `${RUN_PREFIX}11`,
@@ -1481,15 +1515,16 @@ describe("release cut readiness", () => {
     conclusion: "failure",
     ...overrides,
   });
+  type HeavyFailureOptions = { run?: Record<string, unknown>; total?: number };
   const heavyFailure = (
     jobs: unknown[],
-    run: Record<string, unknown> = heavyRun(),
+    { run = heavyRun(), total = jobs.length }: HeavyFailureOptions = {},
   ) => ({
     [STATUSES_PATH]: [
       commitStatus("main/heavy", "failure", 11),
       PR_DEPTH_GREEN,
     ],
-    [jobsPath(11)]: { jobs },
+    [jobsPath(11)]: { total_count: total, jobs },
     "/actions/runs/11": run,
   });
   const rollups = [
@@ -1497,18 +1532,21 @@ describe("release cut readiness", () => {
     job("status", "failure"),
   ];
 
-  test("cuts with a warning when main/heavy failed only in marketing screenshots", async () => {
+  test("cuts with a warning when main/heavy failed only in the screenshot comparison", async () => {
     const written: string[] = [];
     await assertReleaseCutReady(
       CUT_SHA,
       false,
-      fakeGitHub(
-        heavyFailure([
-          job("suites / web-tests", "success"),
-          job(MARKETING_JOB, "failure"),
-          ...rollups,
-        ]),
-      ),
+      {
+        json: fakeGitHub(
+          heavyFailure([
+            job("suites / web-tests", "success"),
+            marketingJob(),
+            ...rollups,
+          ]),
+        ),
+        record: fakeRecord(heavyRecord()),
+      },
       (text) => {
         written.push(text);
       },
@@ -1522,20 +1560,92 @@ describe("release cut readiness", () => {
   test("refuses when another job failed beside marketing screenshots", async () => {
     const message = await cutRefusal(
       heavyFailure([
-        job(MARKETING_JOB, "failure"),
+        marketingJob(),
         job("suites / api-tests (2)", "failure"),
         ...rollups,
       ]),
+      heavyRecord(),
     );
     expect(message).toContain("failing job: suites / api-tests (2) (failure)");
   });
 
   test.each([
-    ["a cancelled advisory job", [job(MARKETING_JOB, "cancelled"), ...rollups]],
-    ["an unknown job name", [job("suites / other-shots / check", "failure")]],
+    [
+      "a skipped planned required job",
+      heavyRecord({
+        required: [
+          { job: "e2e-production-shard", conclusion: "skipped" },
+          { job: "marketing-screenshots", conclusion: "failure" },
+        ],
+      }),
+    ],
+    [
+      "a folded sub-suite that is not success",
+      heavyRecord({
+        violations:
+          "marketing-screenshots (planned, failure), api-image-deps (planned, failure)",
+      }),
+    ],
+    ["an unreadable required-jobs record", null],
+    ["a record of another run", heavyRecord({ run_id: 12 })],
+  ])("refuses an advisory failure beside %s", async (_label, record) => {
+    const message = await cutRefusal(
+      heavyFailure([marketingJob(), ...rollups]),
+      record,
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
+
+  test.each([
+    [
+      "a seed step",
+      [
+        { name: "Set up job", conclusion: "success" },
+        { name: "Capture marketing screenshots", conclusion: "failure" },
+        { name: "Screenshot comparison failed", conclusion: "skipped" },
+      ],
+    ],
+    [
+      "an earlier step beside the comparison",
+      [
+        { name: "Checkout", conclusion: "failure" },
+        { name: "Capture marketing screenshots", conclusion: "failure" },
+        { name: "Screenshot comparison failed", conclusion: "success" },
+      ],
+    ],
+  ])(
+    "refuses a failure in %s inside the screenshots job",
+    async (_label, steps) => {
+      const message = await cutRefusal(
+        heavyFailure([marketingJob(steps), ...rollups]),
+        heavyRecord(),
+      );
+      expect(message).toContain(
+        "failing job: suites / marketing-screenshots / check (failure)",
+      );
+    },
+  );
+
+  test("refuses a job count different from total_count", async () => {
+    const message = await cutRefusal(
+      heavyFailure([marketingJob(), ...rollups], { total: 4 }),
+      heavyRecord(),
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
+
+  test.each([
+    [
+      "a cancelled advisory job",
+      [{ ...marketingJob(), conclusion: "cancelled" }, ...rollups],
+    ],
+    [
+      "an unknown job name",
+      [{ ...marketingJob(), name: "suites / other-shots / check" }],
+    ],
     ["only the aggregates failing", rollups],
   ])("refuses %s", async (_label, jobs) => {
-    expect(await cutRefusal(heavyFailure(jobs))).toContain(
+    expect(await cutRefusal(heavyFailure(jobs), heavyRecord())).toContain(
       "main/heavy: failure",
     );
   });
@@ -1552,32 +1662,37 @@ describe("release cut readiness", () => {
     "refuses an advisory-only status linking to %s",
     async (_label, overrides) => {
       const message = await cutRefusal(
-        heavyFailure(
-          [job(MARKETING_JOB, "failure"), ...rollups],
-          heavyRun(overrides),
-        ),
+        heavyFailure([marketingJob(), ...rollups], {
+          run: heavyRun(overrides),
+        }),
+        heavyRecord(),
       );
       expect(message).toContain("main/heavy: failure");
     },
   );
 
   test("an unreadable run is a refusal", async () => {
-    const responses = heavyFailure([job(MARKETING_JOB, "failure"), ...rollups]);
-    const message = await cutRefusal({
-      ...responses,
-      "/actions/runs/11": new Error("HTTP 502"),
-    });
+    const message = await cutRefusal(
+      {
+        ...heavyFailure([marketingJob(), ...rollups]),
+        "/actions/runs/11": new Error("HTTP 502"),
+      },
+      heavyRecord(),
+    );
     expect(message).toContain("main/heavy: failure");
   });
 
   test("an error status is never advisory", async () => {
-    const message = await cutRefusal({
-      [STATUSES_PATH]: [
-        commitStatus("main/heavy", "error", 11),
-        PR_DEPTH_GREEN,
-      ],
-      [jobsPath(11)]: { jobs: [job(MARKETING_JOB, "failure"), ...rollups] },
-    });
+    const message = await cutRefusal(
+      {
+        [STATUSES_PATH]: [
+          commitStatus("main/heavy", "error", 11),
+          PR_DEPTH_GREEN,
+        ],
+        [jobsPath(11)]: { total_count: 3, jobs: [marketingJob(), ...rollups] },
+      },
+      heavyRecord(),
+    );
     expect(message).toContain("main/heavy: failure (status error)");
   });
 
@@ -1601,7 +1716,12 @@ describe("release cut readiness", () => {
         commitStatus("main/heavy", "failure", 10),
       ],
     });
-    await assertReleaseCutReady(CUT_SHA, false, newerGreen, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: newerGreen },
+      () => undefined,
+    );
   });
 
   test("refuses a missing main/heavy status and says how to run it", async () => {
@@ -1659,7 +1779,12 @@ describe("release cut readiness", () => {
       [STATUSES_PATH]: [HEAVY_GREEN],
       [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("completed", "success"),
     });
-    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
     expect(read.paths).toEqual([STATUSES_PATH, SCHEDULED_PR_DEPTH_PATH]);
 
     const failed = await cutRefusal({
@@ -1726,7 +1851,12 @@ describe("release cut readiness", () => {
       ],
     });
 
-    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
     expect(read.paths).toHaveLength(2);
   });
 
@@ -1736,7 +1866,7 @@ describe("release cut readiness", () => {
     await assertReleaseCutReady(
       CUT_SHA,
       true,
-      fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+      { json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }) },
       (text) => {
         written.push(text);
       },

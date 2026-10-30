@@ -4,12 +4,14 @@ import { panic, Result } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
@@ -968,15 +970,16 @@ const readGitHubPages = async (
   path: string,
   readJson: GitHubJsonReader,
   itemsOf: (payload: unknown) => unknown,
+  onPage?: (payload: unknown) => void,
 ): Promise<unknown[]> => {
   const items: unknown[] = [];
   for (let page = 1; page <= GITHUB_PAGE_LIMIT; page += 1) {
     const separator = path.includes("?") ? "&" : "?";
-    const payload = itemsOf(
-      await readJson(
-        `${path}${separator}per_page=${String(GITHUB_PAGE_SIZE)}&page=${String(page)}`,
-      ),
+    const raw = await readJson(
+      `${path}${separator}per_page=${String(GITHUB_PAGE_SIZE)}&page=${String(page)}`,
     );
+    onPage?.(raw);
+    const payload = itemsOf(raw);
     if (!Array.isArray(payload)) {
       throw new MaintenanceReleaseError(
         `GitHub ${path} returned an unexpected payload`,
@@ -1002,7 +1005,12 @@ const runIdFromUrl = (url: unknown): string | null => {
 };
 
 type RunJobsRead =
-  | { readonly kind: "jobs"; readonly jobs: readonly unknown[] }
+  | {
+      readonly kind: "jobs";
+      readonly jobs: readonly unknown[];
+      /** The API's own count of the run's jobs, to prove the pages complete. */
+      readonly total: unknown;
+    }
   | { readonly kind: "unreadable"; readonly failing: string[] };
 
 const readRunJobs = async (
@@ -1016,11 +1024,15 @@ const readRunJobs = async (
       failing: [`(no workflow run linked: ${String(runUrl)})`],
     };
   }
+  let total: unknown;
   const jobsResult = await Result.tryPromise(async () =>
     readGitHubPages(
       `/actions/runs/${runId}/jobs?filter=latest`,
       readJson,
       (payload) => (isRecord(payload) ? payload["jobs"] : undefined),
+      (payload) => {
+        total ??= isRecord(payload) ? payload["total_count"] : undefined;
+      },
     ),
   );
   if (Result.isError(jobsResult)) {
@@ -1032,7 +1044,7 @@ const readRunJobs = async (
       ],
     };
   }
-  return { kind: "jobs", jobs: jobsResult.value };
+  return { kind: "jobs", jobs: jobsResult.value, total };
 };
 
 const failingJobNames = (read: RunJobsRead): string[] => {
@@ -1063,6 +1075,50 @@ const STATUS_STATES: Record<string, ReleaseCutGate["state"]> = {
 };
 
 const HEAVY_RUN_EVENTS = new Set(["push", "workflow_dispatch", "schedule"]);
+
+/** The `ci-required-summary` record the run's ci-result uploaded. */
+export type RequiredRecordReader = (runId: string) => Promise<unknown>;
+
+const readRequiredRecord: RequiredRecordReader = async (runId) => {
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "stella-required-record-"),
+  );
+  try {
+    const token = githubToken();
+    const download = Bun.spawnSync(
+      [
+        "gh",
+        "run",
+        "download",
+        runId,
+        "-R",
+        "stella/stella",
+        "-n",
+        "ci-required-summary",
+        "-D",
+        directory,
+      ],
+      {
+        env: token === null ? process.env : { ...process.env, GH_TOKEN: token },
+        stderr: "pipe",
+        stdout: "pipe",
+      },
+    );
+    if (!download.success) {
+      throw new MaintenanceReleaseError(
+        `Could not download the required-jobs record of run ${runId}`,
+      );
+    }
+    const text = readFileSync(
+      nodePath.join(directory, "ci-required-summary.json"),
+      "utf-8",
+    );
+    const record: unknown = JSON.parse(text);
+    return record;
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
 
 /**
  * Mirrors the shell gate's provenance check on a failed main/heavy run: the
@@ -1103,12 +1159,21 @@ const failedHeavyRunMatches = async (
   );
 };
 
-const gateFromStatus = async (
-  spec: ReleaseCutGateSpec,
-  sha: string,
-  status: Record<string, unknown>,
-  readJson: GitHubJsonReader,
-): Promise<ReleaseCutGate> => {
+type GateFromStatusOptions = {
+  spec: ReleaseCutGateSpec;
+  sha: string;
+  status: Record<string, unknown>;
+  readJson: GitHubJsonReader;
+  readRecord: RequiredRecordReader;
+};
+
+const gateFromStatus = async ({
+  spec,
+  sha,
+  status,
+  readJson,
+  readRecord,
+}: GateFromStatusOptions): Promise<ReleaseCutGate> => {
   const creator = status["creator"];
   const login = isRecord(creator) ? creator["login"] : undefined;
   const runUrl =
@@ -1144,7 +1209,16 @@ const gateFromStatus = async (
     read.kind === "jobs" &&
     (await failedHeavyRunMatches(runUrl, sha, readJson))
   ) {
-    const verdict = heavyVerdict(read.jobs);
+    const recordResult = await Result.tryPromise(async () =>
+      readRecord(String(runIdFromUrl(runUrl))),
+    );
+    const verdict = heavyVerdict({
+      jobs: read.jobs,
+      total: read.total,
+      record: Result.isOk(recordResult) ? recordResult.value : null,
+      runId: Number(runIdFromUrl(runUrl)),
+      head: sha,
+    });
     if (verdict.advisoryOnly) {
       return {
         ...gate,
@@ -1220,6 +1294,7 @@ const gateFromScheduledRun = async (
 export const readReleaseCutGates = async (
   sha: string,
   readJson: GitHubJsonReader = readGitHubJson,
+  readRecord: RequiredRecordReader = readRequiredRecord,
 ): Promise<readonly ReleaseCutGate[]> => {
   const unreadable = (
     spec: ReleaseCutGateSpec,
@@ -1250,7 +1325,7 @@ export const readReleaseCutGates = async (
       (entry) => isRecord(entry) && entry["context"] === spec.context,
     );
     if (isRecord(status)) {
-      return gateFromStatus(spec, sha, status, readJson);
+      return gateFromStatus({ spec, sha, status, readJson, readRecord });
     }
     if (spec.scheduledRunFallback) {
       return gateFromScheduledRun(spec, sha, readJson);
@@ -1311,6 +1386,11 @@ const resolveHeadSha = (rootDir: string): string => {
   return sha;
 };
 
+export type ReleaseCutReaders = {
+  json?: GitHubJsonReader;
+  record?: RequiredRecordReader;
+};
+
 /**
  * Refuses the cut unless main/heavy and main/pr-depth are green on it. With
  * --allow-unproven-main the same verdict is printed and the cut goes on.
@@ -1318,12 +1398,16 @@ const resolveHeadSha = (rootDir: string): string => {
 export const assertReleaseCutReady = async (
   sha: string,
   allowUnprovenMain: boolean,
-  readJson: GitHubJsonReader = readGitHubJson,
+  readers: ReleaseCutReaders = {},
   write: (text: string) => void = (text) => {
     process.stdout.write(text);
   },
 ): Promise<void> => {
-  const gates = await readReleaseCutGates(sha, readJson);
+  const gates = await readReleaseCutGates(
+    sha,
+    readers.json ?? readGitHubJson,
+    readers.record ?? readRequiredRecord,
+  );
   const refusal = releaseCutRefusal(sha, gates);
   for (const gate of gates) {
     if (gate.advisoryJobs.length > 0) {
@@ -1414,12 +1498,7 @@ export const runCutGate: CutGateRunner = async (gate, context) => {
   switch (gate.check.kind) {
     case "main-statuses":
       // Refuses by throwing; the cut reads a thrown gate as a failed one.
-      await assertReleaseCutReady(
-        context.baseSha,
-        false,
-        readGitHubJson,
-        context.write,
-      );
+      await assertReleaseCutReady(context.baseSha, false, {}, context.write);
       return { passed: true };
     case "command":
       command = gate.check.command;

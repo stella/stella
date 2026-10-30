@@ -66,30 +66,81 @@ test("a retry with the final tag on the candidate publishes without pushing agai
 });
 
 const MARKETING_JOB = "suites / marketing-screenshots / check";
-const heavyJob = (name: string, conclusion: string | null) => ({
+const CAPTURE_STEP = "Capture marketing screenshots";
+const MARKER_STEP = "Screenshot comparison failed";
+// The heavy run is the fixture's second run, so the record names run 2.
+const HEAVY_RUN_ID = 2;
+
+type HeavyStep = { name: string; conclusion: string | null };
+const heavyJob = (
+  name: string,
+  conclusion: string | null,
+  steps?: readonly HeavyStep[],
+) => ({
   name,
   status: conclusion === null ? "in_progress" : "completed",
   conclusion,
+  ...(steps === undefined ? {} : { steps }),
 });
+const COMPARISON_STEPS = [
+  { name: "Set up job", conclusion: "success" },
+  { name: CAPTURE_STEP, conclusion: "failure" },
+  { name: MARKER_STEP, conclusion: "success" },
+];
+const marketingJob = (steps: readonly HeavyStep[] = COMPARISON_STEPS) =>
+  heavyJob(MARKETING_JOB, "failure", steps);
 const ROLLUP_JOBS = [
   heavyJob("suites / ci-result", "failure"),
   heavyJob("status", "failure"),
 ];
-const failedHeavy = (
-  jobs: readonly ReturnType<typeof heavyJob>[],
-  conclusion = "failure",
-) =>
-  finalize({
-    states: { "main/heavy": "failure" },
-    heavyRun: { conclusion, jobs },
+const requiredRecord =
+  (overrides: Record<string, unknown> = {}) =>
+  (sha: string) => ({
+    version: 1,
+    run_id: HEAVY_RUN_ID,
+    head_sha: sha,
+    basis: "evaluated",
+    depth: "heavy",
+    verdict: "failure",
+    violations_evaluated: true,
+    violations: "marketing-screenshots (planned, failure)",
+    required: [
+      { job: "e2e-production-shard", conclusion: "success" },
+      { job: "marketing-screenshots", conclusion: "failure" },
+    ],
+    ...overrides,
   });
 
-test("a heavy run that failed only in marketing screenshots finalizes with a warning", () => {
-  const proof = failedHeavy([
-    heavyJob("suites / web-tests", "success"),
-    heavyJob(MARKETING_JOB, "failure"),
-    ...ROLLUP_JOBS,
-  ]);
+type FailedHeavyOptions = {
+  jobs: readonly ReturnType<typeof heavyJob>[];
+  conclusion?: string;
+  total?: number;
+  record?: ((sha: string) => unknown) | null;
+};
+const failedHeavy = ({
+  jobs,
+  conclusion = "failure",
+  total,
+  record = requiredRecord(),
+}: FailedHeavyOptions) =>
+  finalize({
+    states: { "main/heavy": "failure" },
+    heavyRun: {
+      conclusion,
+      jobs,
+      ...(total === undefined ? {} : { total }),
+      ...(record === null ? {} : { record }),
+    },
+  });
+
+test("a heavy run that failed only in the screenshot comparison finalizes with a warning", () => {
+  const proof = failedHeavy({
+    jobs: [
+      heavyJob("suites / web-tests", "success"),
+      marketingJob(),
+      ...ROLLUP_JOBS,
+    ],
+  });
   expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
   expect(proof.finalSha).toBe(proof.sha);
   const stderr = proof.result.stderr.toString();
@@ -100,11 +151,8 @@ test("a heavy run that failed only in marketing screenshots finalizes with a war
   expect(stderr).toContain("actions/runs/2");
 });
 
-const refusedHeavy = (
-  jobs: readonly ReturnType<typeof heavyJob>[],
-  conclusion?: string,
-) => {
-  const proof = failedHeavy(jobs, conclusion);
+const refusedHeavy = (options: FailedHeavyOptions) => {
+  const proof = failedHeavy(options);
   expect(proof.result.exitCode).not.toBe(0);
   expect(proof.result.stderr.toString()).toContain("RELEASE_HEAVY_NOT_GREEN");
   expect(proof.finalSha).toBeNull();
@@ -112,42 +160,102 @@ const refusedHeavy = (
   return proof;
 };
 
-test("a marketing screenshot failure beside any other failed job still refuses", () => {
-  const proof = refusedHeavy([
-    heavyJob(MARKETING_JOB, "failure"),
-    heavyJob("suites / api-tests (2)", "failure"),
-    ...ROLLUP_JOBS,
-  ]);
+test("a screenshot failure beside any other failed job still refuses", () => {
+  const proof = refusedHeavy({
+    jobs: [
+      marketingJob(),
+      heavyJob("suites / api-tests (2)", "failure"),
+      ...ROLLUP_JOBS,
+    ],
+  });
   expect(proof.result.stderr.toString()).toContain("suites / api-tests (2)");
 });
 
-test("a failure that only the aggregates report refuses", () => {
-  refusedHeavy(ROLLUP_JOBS);
-});
-
-test("a job name the advisory set does not know refuses", () => {
-  refusedHeavy([
-    heavyJob("suites / marketing-screenshots-v2 / check", "failure"),
-    ...ROLLUP_JOBS,
-  ]);
-});
-
-test("a cancelled advisory job or run refuses", () => {
-  refusedHeavy([heavyJob(MARKETING_JOB, "cancelled"), ...ROLLUP_JOBS]);
-  refusedHeavy(
-    [heavyJob(MARKETING_JOB, "failure"), ...ROLLUP_JOBS],
-    "cancelled",
+test("a screenshot failure beside a skipped planned required job refuses", () => {
+  const proof = refusedHeavy({
+    jobs: [marketingJob(), ...ROLLUP_JOBS],
+    record: requiredRecord({
+      required: [
+        { job: "e2e-production-shard", conclusion: "skipped" },
+        { job: "marketing-screenshots", conclusion: "failure" },
+      ],
+    }),
+  });
+  expect(proof.result.stderr.toString()).toContain(
+    "e2e-production-shard (skipped)",
   );
 });
 
+test("a screenshot failure beside an unmet folded sub-suite refuses", () => {
+  refusedHeavy({
+    jobs: [marketingJob(), ...ROLLUP_JOBS],
+    record: requiredRecord({
+      violations:
+        "marketing-screenshots (planned, failure), api-image-deps (planned, failure)",
+    }),
+  });
+});
+
+test("an unreadable required-jobs record refuses", () => {
+  refusedHeavy({ jobs: [marketingJob(), ...ROLLUP_JOBS], record: null });
+});
+
+test("a record of another commit refuses", () => {
+  refusedHeavy({
+    jobs: [marketingJob(), ...ROLLUP_JOBS],
+    record: requiredRecord({ head_sha: "f".repeat(40) }),
+  });
+});
+
+test("a failure in a seed or setup step of the screenshots job refuses", () => {
+  refusedHeavy({
+    jobs: [
+      marketingJob([
+        { name: "Set up job", conclusion: "success" },
+        { name: CAPTURE_STEP, conclusion: "failure" },
+        { name: MARKER_STEP, conclusion: "skipped" },
+      ]),
+      ...ROLLUP_JOBS,
+    ],
+  });
+});
+
+test("a job count different from total_count refuses", () => {
+  refusedHeavy({ jobs: [marketingJob(), ...ROLLUP_JOBS], total: 4 });
+});
+
+test("a failure that only the aggregates report refuses", () => {
+  refusedHeavy({ jobs: ROLLUP_JOBS });
+});
+
+test("a job name the advisory set does not know refuses", () => {
+  refusedHeavy({
+    jobs: [
+      {
+        ...marketingJob(),
+        name: "suites / marketing-screenshots-v2 / check",
+      },
+      ...ROLLUP_JOBS,
+    ],
+  });
+});
+
+test("a cancelled advisory job or run refuses", () => {
+  refusedHeavy({
+    jobs: [{ ...marketingJob(), conclusion: "cancelled" }, ...ROLLUP_JOBS],
+  });
+  refusedHeavy({
+    jobs: [marketingJob(), ...ROLLUP_JOBS],
+    conclusion: "cancelled",
+  });
+});
+
 test("an unfinished job beside the advisory failure refuses", () => {
-  refusedHeavy([
-    heavyJob(MARKETING_JOB, "failure"),
-    heavyJob("suites / e2e", null),
-    ...ROLLUP_JOBS,
-  ]);
+  refusedHeavy({
+    jobs: [marketingJob(), heavyJob("suites / e2e", null), ...ROLLUP_JOBS],
+  });
 });
 
 test("an unreadable job list refuses", () => {
-  refusedHeavy([]);
+  refusedHeavy({ jobs: [] });
 });

@@ -19,7 +19,7 @@ proof="${3:-}"
   echo '::error::RELEASE_HEAVY_NOT_GREEN: invalid repository or SHA' >&2; exit 1;
 }
 refuse() { echo "::error::$1" >&2; exit 1; }
-heavy_verdict_filter="${RELEASE_HEAVY_VERDICT_FILTER:-$script_dir/release-heavy-verdict.jq}"
+heavy_verdict_filter="$script_dir/release-heavy-verdict.jq"
 runs_prefix="https://github.com/$repo/actions/runs/"
 # Exit 0 when the run behind status $1 belongs to workflow $2 and commit $3,
 # carries title pattern $4 and ended with conclusion $5.
@@ -44,14 +44,23 @@ status_run_matches() {
 # are advisory (marketing screenshots never gate a release). Any other state,
 # conclusion, unreadable job list or unclassified job stays a refusal.
 heavy_failed_only_in_advisory_jobs() {
-  local status="$1" commit="$2" url run_id jobs verdict
+  local status="$1" commit="$2" url run_id jobs total record record_dir verdict
   jq -e '.state == "failure" and .creator.login == "github-actions[bot]" and .creator.type == "Bot"' <<< "$status" >/dev/null || return 1
   status_run_matches "$status" ".github/workflows/main-heavy.yml" "$commit" "Main heavy suites" failure || return 1
   url=$(jq -r '.target_url' <<< "$status")
   run_id="${url#"$runs_prefix"}"
   jobs=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/actions/runs/$run_id/jobs?filter=latest&per_page=100") || return 1
+  # The pages must add up to the API's own count, or a job went unread.
+  total=$(jq -ce '.[0].total_count' <<< "$jobs") || return 1
   jobs=$(jq -c '[.[].jobs[]]' <<< "$jobs") || return 1
-  verdict=$(jq -nc --argjson jobs "$jobs" -f "$heavy_verdict_filter") || return 1
+  # ci-result's required-jobs record: the only evidence of why it failed.
+  record_dir=$(mktemp -d)
+  record=null
+  if bash "$gh_retry_script" run download "$run_id" -R "$repo" -n ci-required-summary -D "$record_dir" >/dev/null 2>&1; then
+    record=$(jq -ce . "$record_dir/ci-required-summary.json" 2>/dev/null) || record=null
+  fi
+  rm -rf "$record_dir"
+  verdict=$(jq -nc --argjson jobs "$jobs" --argjson total "$total" --argjson record "$record" --argjson run_id "$run_id" --arg head "$commit" -f "$heavy_verdict_filter") || return 1
   jq -e '.advisoryOnly' <<< "$verdict" >/dev/null || {
     echo "main/heavy failing jobs: $(jq -r '.blocking | join(", ")' <<< "$verdict")" >&2
     return 1

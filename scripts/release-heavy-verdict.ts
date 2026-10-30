@@ -10,6 +10,9 @@ const VERDICT_FILTER = nodePath.join(
 const HeavyVerdictSchema = v.object({
   advisoryJobs: v.optional(v.array(v.string())),
   aggregateJobs: v.optional(v.array(v.string())),
+  advisoryRequiredJob: v.optional(v.string()),
+  advisoryStep: v.optional(v.string()),
+  comparisonMarkerStep: v.optional(v.string()),
   advisory: v.array(v.string()),
   blocking: v.array(v.string()),
   advisoryOnly: v.boolean(),
@@ -22,7 +25,24 @@ export type HeavyVerdict = v.InferOutput<typeof HeavyVerdictSchema>;
  * decision lives in release-heavy-verdict.jq so the shell release gate, which
  * runs where Bun is not installed, applies the very same rule.
  */
-export const heavyVerdict = (jobs: unknown): HeavyVerdict => {
+export type HeavyVerdictInput = {
+  /** The run's latest-attempt jobs, with their steps. */
+  jobs: unknown;
+  /** The jobs API's total_count, which the pages read must equal. */
+  total: unknown;
+  /** The run's `ci-required-summary` record; null when unreadable. */
+  record: unknown;
+  runId: number;
+  head: string;
+};
+
+export const heavyVerdict = ({
+  jobs,
+  total,
+  record,
+  runId,
+  head,
+}: HeavyVerdictInput): HeavyVerdict => {
   const result = Bun.spawnSync(
     [
       "jq",
@@ -30,6 +50,18 @@ export const heavyVerdict = (jobs: unknown): HeavyVerdict => {
       "--argjson",
       "jobs",
       JSON.stringify(jobs),
+      "--argjson",
+      "total",
+      JSON.stringify(total ?? null),
+      "--argjson",
+      "record",
+      JSON.stringify(record ?? null),
+      "--argjson",
+      "run_id",
+      String(runId),
+      "--arg",
+      "head",
+      head,
       "-f",
       VERDICT_FILTER,
     ],
