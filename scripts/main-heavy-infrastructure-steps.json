@@ -21,6 +21,7 @@
       "Login to GitHub Container Registry for image resolution",
       "Plan API test files and shards",
       "Plan Postgres test shards",
+      "Plan UI playground geometry specs",
       "Plan changed PR e2e shards",
       "Plan query performance scope",
       "Plan release marketing screenshots",
