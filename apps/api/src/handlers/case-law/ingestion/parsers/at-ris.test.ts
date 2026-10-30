@@ -166,3 +166,47 @@ it("a publisher heading looks past a break to the paragraph it titles", () => {
     documentAst.blocks.find((block) => block.type === "paragraph"),
   ).toMatchObject({ role: "syllabus" });
 });
+
+const bodyParagraphs = (body: string): string[] =>
+  parseRisDecisionXml({
+    sourceDocumentId: "doc",
+    caseNumber: "1",
+    ecli: undefined,
+    court: "court",
+    decisionDate: undefined,
+    decisionType: undefined,
+    sourceUrl: undefined,
+    xml: `<risdok><nutzdaten><abschnitt>${body}</abschnitt></nutzdaten></risdok>`,
+  })
+    .unwrap()
+    .documentAst.blocks.flatMap((block) =>
+      block.type === "paragraph" ? [block.plainText] : [],
+    );
+
+it.each([
+  [
+    "a short line before a lowercase line",
+    '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt, dass die Projektwerber die Verfügungsbefugnis für die zu nehmenden</absatz><absatz typ="erltext" ct="text">Grundstücksflächen</absatz><absatz typ="erltext" ct="text">erhalten.</absatz>',
+  ],
+  [
+    "an abstand before a lowercase line",
+    '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt, dass die Projektwerber die Verfügungsbefugnis für die</absatz><abstand ct="text"/><absatz typ="erltext" ct="text">nötigen Grundstücksflächen erhalten.</absatz>',
+  ],
+  [
+    "wrapped closing lines",
+    '<schluss typ="Abs" ct="text">Bei der Vorschreibung von Vorkehrungen ist weiters auf die Erfordernisse einer</schluss><schluss typ="Abs" ct="text">zeitgemäßen Land- und Forstwirtschaft Bedacht zu nehmen.</schluss>',
+  ],
+])(
+  "a sentence wrapped across printed lines stays one paragraph: %s",
+  (_, body) => {
+    expect(bodyParagraphs(body)).toHaveLength(1);
+  },
+);
+
+it("an abstand before a capitalised line still ends the paragraph", () => {
+  expect(
+    bodyParagraphs(
+      '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt der zivilrechtlichen Verfügungsbefugnis</absatz><abstand ct="text"/><absatz typ="erltext" ct="text">Die Auflage wird abgeändert.</absatz>',
+    ),
+  ).toHaveLength(2);
+});

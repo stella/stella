@@ -153,10 +153,18 @@ const SENTENCE_END_RE = /[.!?:;]["'’“”»«)\]]*$/u;
 const STRUCTURAL_START_RE =
   /^(?:\(?\d{1,3}[.)]|\(?[IVXLC]{1,6}[.)]|\(?\p{L}\)|[-–•*]|\p{Lu}[\p{L}/ ]{1,30}:\s)/u;
 
+const LOWERCASE_START_RE = /^\p{Ll}/u;
+
+/**
+ * A line that fills the measure and stops mid-sentence goes on in the next.
+ * A shorter one ends its paragraph, unless the next line opens in lowercase:
+ * no sentence starts there, so a justified line that wrapped one long word
+ * (`Grundstücksflächen` / `erhalten.`) still continues.
+ */
 const continuesLine = (above: string, below: string): boolean =>
-  above.length >= MIN_WRAPPED_LINE_CHARS &&
   !SENTENCE_END_RE.test(above) &&
-  !STRUCTURAL_START_RE.test(below);
+  !STRUCTURAL_START_RE.test(below) &&
+  (above.length >= MIN_WRAPPED_LINE_CHARS || LOWERCASE_START_RE.test(below));
 
 /**
  * An apparatus section (citing decisions, norms, numbers) is a register:
@@ -164,7 +172,7 @@ const continuesLine = (above: string, below: string): boolean =>
  */
 const wrappableText = (item: RisItem | undefined): string | undefined =>
   item?.type === "paragraph" &&
-  item.element === "absatz" &&
+  (item.element === "absatz" || item.element === "schluss") &&
   item.layout !== "pre" &&
   paragraphRole(item.contentType) !== "apparatus"
     ? plainTextOf(item.inlines)
@@ -172,31 +180,41 @@ const wrappableText = (item: RisItem | undefined): string | undefined =>
 
 /**
  * Join the printed lines of a transcript into paragraphs: consecutive
- * `absatz` lines of one prose content type, with no `abstand` between them,
- * belong to one paragraph when the first fills a line and stops mid-sentence
- * and the second does not open a point, list item or field. Each boundary is
- * judged on the printed line before it, never on the paragraph joined so far:
- * a short line ends its paragraph even after long lines were joined into it.
+ * `absatz` lines of one prose content type belong to one paragraph when the
+ * first stops mid-sentence and the second goes on (see `continuesLine`). An
+ * `abstand` between them ends the paragraph unless the second line opens in
+ * lowercase: a transcript that spaces its printed lines still continues its
+ * sentence. Each boundary is judged on the printed line before it, never on
+ * the paragraph joined so far.
  */
 export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
   const joined: RisItem[] = [];
   let current: { item: RisParagraphItem; lastLine: string } | undefined;
+  let spacing: RisItem[] = [];
   for (const item of items) {
+    if (item.type === "break" && current !== undefined) {
+      spacing.push(item);
+      continue;
+    }
     const below = wrappableText(item);
     if (
       current !== undefined &&
       item.type === "paragraph" &&
       below !== undefined &&
+      item.element === current.item.element &&
       item.contentType === current.item.contentType &&
-      continuesLine(current.lastLine, below)
+      continuesLine(current.lastLine, below) &&
+      (spacing.length === 0 || LOWERCASE_START_RE.test(below))
     ) {
       current.item.inlines.push({ type: "text", text: " " }, ...item.inlines);
       current.lastLine = below;
+      spacing = [];
       continue;
     }
     if (current !== undefined) {
-      joined.push(current.item);
+      joined.push(current.item, ...spacing);
       current = undefined;
+      spacing = [];
     }
     if (item.type === "paragraph" && below !== undefined) {
       current = {
@@ -208,7 +226,7 @@ export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
     joined.push(item);
   }
   if (current !== undefined) {
-    joined.push(current.item);
+    joined.push(current.item, ...spacing);
   }
   return joined;
 };
