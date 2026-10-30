@@ -1,17 +1,20 @@
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   isDated,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
-  planVersionChanges,
-  readWorkVersionCandidatesTx,
-  refreshWorkVersionChanges,
+  planVersionChangeTasks,
+  prepareVersionChanges,
+  versionChangeWorkKey,
+  writePreparedVersionChangesTx,
 } from "@/api/lib/legal-search/legislation-version-changes";
 import type { LegislationVersionWork } from "@/api/lib/legal-search/legislation-version-changes";
 import { brandValidatedLegislationSourceId } from "@/api/lib/safe-id-boundaries";
@@ -74,20 +77,25 @@ type VersionChangesBackfillPage = {
   superseded: number;
 };
 
-type BackfillVersionChangesPageOptions = {
+type VersionChangesPageOptions = {
   db: ScopedDb;
   after: VersionChangesCursor | null;
   /** Works this page examines. */
   pageSize: number;
-  apply: boolean;
 };
 
-export const backfillVersionChangesPage = async ({
+export const VERSION_CHANGE_WORK_PAGE_MAX = 100;
+const WORK_LANGUAGE_VARIANTS_MAX = 256;
+
+class VersionChangeLanguageLimitError extends TaggedError(
+  "VersionChangeLanguageLimitError",
+)<{ message: string }> {}
+
+export const planVersionChangesPage = async ({
   after,
-  apply,
   db,
   pageSize,
-}: BackfillVersionChangesPageOptions): Promise<VersionChangesBackfillPage> => {
+}: VersionChangesPageOptions) => {
   // The work/version index leads with (source_id, eli) and holds only dated
   // rows, which are the only ones a summary is kept for.
   const works = await db(
@@ -114,60 +122,105 @@ export const backfillVersionChangesPage = async ({
         )
         // A page ends on a whole Work: the languages of the last one are
         // fetched below rather than cut here.
-        .limit(pageSize),
+        .limit(Math.min(pageSize, VERSION_CHANGE_WORK_PAGE_MAX)),
   );
   const last = works.at(-1);
   if (last === undefined) {
-    return { cursor: null, works: 0, planned: 0, written: 0, superseded: 0 };
+    return { after, cursor: null, works: 0, tasks: [] };
   }
-  const lastLanguages = await db(
+  const languageResult = await db(
     async (tx) =>
-      await tx
-        .selectDistinct({ language: legislationDocuments.language })
-        .from(legislationDocuments)
-        .where(
-          and(
-            eq(legislationDocuments.sourceId, last.sourceId),
-            eq(legislationDocuments.eli, last.eli),
-            isDated(legislationVersionRef(legislationDocuments)),
+      await readBounded(
+        tx
+          .selectDistinct({ language: legislationDocuments.language })
+          .from(legislationDocuments)
+          .where(
+            and(
+              eq(legislationDocuments.sourceId, last.sourceId),
+              eq(legislationDocuments.eli, last.eli),
+              isDated(legislationVersionRef(legislationDocuments)),
+            ),
           ),
-        ),
+        WORK_LANGUAGE_VARIANTS_MAX,
+      ),
   );
+  if (languageResult.type === "overflow") {
+    throw new VersionChangeLanguageLimitError({
+      message: "A work exceeds the language-variant batch bound",
+    });
+  }
+  const lastLanguages = languageResult.rows;
   const versionWorks = new Map<string, LegislationVersionWork>();
   for (const work of [
     ...works,
     ...lastLanguages.map(({ language }) => ({ ...last, language })),
   ]) {
-    versionWorks.set(JSON.stringify([work.sourceId, work.eli, work.language]), {
+    versionWorks.set(versionChangeWorkKey(work), {
       sourceId: work.sourceId,
       eli: work.eli,
       language: work.language,
     });
   }
 
-  let planned = 0;
-  let written = 0;
-  let superseded = 0;
-  for (const work of versionWorks.values()) {
-    if (apply) {
-      const refreshed = await refreshWorkVersionChanges({ db, work });
-      planned += refreshed.planned;
-      written += refreshed.written;
-      superseded += refreshed.superseded;
-    } else {
-      const versions = await db(
-        async (tx) => await readWorkVersionCandidatesTx(tx, work),
-      );
-      planned += planVersionChanges({ versions }).length;
-    }
-  }
-
+  const tasks = await planVersionChangeTasks({
+    db,
+    works: [...versionWorks.values()],
+  });
   return {
+    after,
     cursor: { sourceId: last.sourceId, eli: last.eli },
     works: new Set(works.map((work) => `${work.sourceId}\u0000${work.eli}`))
       .size,
-    planned,
+    tasks,
+  };
+};
+
+/** All object I/O finishes before entering the checkpoint transaction. */
+export const prepareVersionChangesPage = async (
+  options: VersionChangesPageOptions,
+) => {
+  const page = await planVersionChangesPage(options);
+  const writes = await prepareVersionChanges({
+    db: options.db,
+    tasks: page.tasks,
+  });
+  return { page, writes };
+};
+
+/** The caller checks the prepared cursor against its locked durable checkpoint. */
+export const applyVersionChangesPageTx = async (
+  tx: Transaction,
+  { page, writes }: Awaited<ReturnType<typeof prepareVersionChangesPage>>,
+): Promise<VersionChangesBackfillPage> => {
+  const written = await writePreparedVersionChangesTx(tx, writes);
+  return {
+    cursor: page.cursor,
+    works: page.works,
+    planned: page.tasks.length,
     written,
-    superseded,
+    superseded: page.tasks.length - written,
+  };
+};
+
+/** A page of works shares candidate and payload reads across every comparison. */
+export const backfillVersionChangesPage = async ({
+  apply,
+  ...options
+}: VersionChangesPageOptions & {
+  apply: boolean;
+}): Promise<VersionChangesBackfillPage> => {
+  if (apply) {
+    const prepared = await prepareVersionChangesPage(options);
+    return await options.db(
+      async (tx) => await applyVersionChangesPageTx(tx, prepared),
+    );
+  }
+  const page = await planVersionChangesPage(options);
+  return {
+    cursor: page.cursor,
+    works: page.works,
+    planned: page.tasks.length,
+    written: 0,
+    superseded: 0,
   };
 };

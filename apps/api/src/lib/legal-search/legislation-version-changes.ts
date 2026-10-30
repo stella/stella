@@ -1,5 +1,5 @@
-import { panic, Result } from "better-result";
-import { and, asc, desc, eq, exists, sql } from "drizzle-orm";
+import { panic, Result, TaggedError } from "better-result";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/statute-version-changes";
 import type { StoredStatuteVersionChanges } from "@stll/api-contract/statute-version-changes";
 import { compareCodeUnit } from "@stll/collation";
-import type { Block } from "@stll/legal-ast/document-ast";
+import { chunk } from "@stll/concurrency/chunk";
 import {
   compareStatuteBlocks,
   countStatuteChanges,
@@ -21,13 +21,18 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   eligibleExpression,
   isDated,
   legislationVersionRef,
   precedesInHistory,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import {
+  readVersionChangePayloads,
+  VERSION_CHANGE_PAYLOAD_BATCH_MAX,
+} from "@/api/lib/legal-search/legislation-version-blocks";
+import type { VersionChangePayload } from "@/api/lib/legal-search/legislation-version-blocks";
 
 /**
  * What each consolidation of a Work changed against the eligible
@@ -46,8 +51,8 @@ import {
  * so a run that loses a race to a newer write leaves the newer summary.
  */
 
-/** More versions than any Work's history holds; see `readWorkVersionCandidatesTx`. */
-const WORK_VERSIONS_MAX = 10_000;
+/** Maximum metadata rows transferred while planning one work page. */
+const VERSION_CHANGE_HISTORY_BATCH_MAX = 10_000;
 
 /** The version identity the summaries are kept within. */
 export type LegislationVersionWork = {
@@ -174,42 +179,6 @@ export const planVersionChanges = ({
   return tasks;
 };
 
-/** One version's text as the comparison reads it. */
-type VersionBlocks =
-  | { type: "blocks"; blocks: readonly Block[]; payloadRevision: bigint }
-  | { type: "no-blocks"; payloadRevision: bigint }
-  | { type: "unreadable"; payloadRevision: bigint }
-  | { type: "missing" };
-
-const readVersionBlocksTx = async (
-  tx: Transaction,
-  id: SafeId<"legislationDocument">,
-): Promise<VersionBlocks> => {
-  const row = (
-    await tx
-      .select({
-        documentAst: legislationDocuments.documentAst,
-        payloadRevision: legislationDocuments.payloadRevision,
-      })
-      .from(legislationDocuments)
-      .where(eq(legislationDocuments.id, id))
-      .limit(1)
-  ).at(0);
-  if (row === undefined) {
-    return { type: "missing" };
-  }
-  const { payloadRevision } = row;
-  const ast = Result.try(() => parsePersistedCorpusAst(row.documentAst));
-  if (Result.isError(ast)) {
-    return { type: "unreadable", payloadRevision };
-  }
-  const blocks =
-    ast.value !== null && "blocks" in ast.value ? ast.value.blocks : [];
-  return blocks.length === 0
-    ? { type: "no-blocks", payloadRevision }
-    : { type: "blocks", blocks, payloadRevision };
-};
-
 type ComputedSummary = {
   summary: StoredStatuteVersionChanges;
   base: { id: SafeId<"legislationDocument">; payloadRevision: bigint } | null;
@@ -221,14 +190,12 @@ type ComputedSummary = {
  * lands between planning and reading is either what was compared or what
  * makes the write below refuse.
  */
-const computeSummary = async (
-  db: ScopedDb,
+const computeSummary = (
+  payloads: ReadonlyMap<SafeId<"legislationDocument">, VersionChangePayload>,
   { base, target }: VersionChangeTask,
-): Promise<ComputedSummary | null> => {
-  const newer = await db(
-    async (tx) => await readVersionBlocksTx(tx, target.id),
-  );
-  if (newer.type === "missing") {
+): ComputedSummary | null => {
+  const newer = payloads.get(target.id);
+  if (newer === undefined) {
     return null;
   }
   const provenance = {
@@ -238,8 +205,8 @@ const computeSummary = async (
   if (base === null) {
     return { summary: { type: "first", ...provenance }, base: null };
   }
-  const older = await db(async (tx) => await readVersionBlocksTx(tx, base.id));
-  if (older.type === "missing") {
+  const older = payloads.get(base.id);
+  if (older === undefined) {
     return null;
   }
   const baseRef = {
@@ -309,153 +276,217 @@ const predecessorIdOf = (tx: Transaction): SQL => {
   return sql`(${predecessor})`;
 };
 
-/**
- * Store a summary only while both versions still hold the revisions it was
- * computed from and the version before is still its base. Returns whether it
- * was written; a refusal means a newer write owns the row's summary.
- */
-const writeSummaryTx = async (
-  tx: Transaction,
-  target: SafeId<"legislationDocument">,
-  { base, summary }: ComputedSummary,
-): Promise<boolean> => {
-  const current = alias(legislationDocuments, "current_base");
-  const baseHolds =
-    base === null
-      ? sql`${predecessorIdOf(tx)} IS NULL`
-      : and(
-          sql`${predecessorIdOf(tx)} = ${base.id}`,
-          exists(
-            tx
-              .select({ id: current.id })
-              .from(current)
-              .where(
-                and(
-                  eq(current.id, base.id),
-                  eq(current.payloadRevision, base.payloadRevision),
+/** Work keys are shared by candidate grouping and page planning. */
+export const versionChangeWorkKey = ({
+  sourceId,
+  eli,
+  language,
+}: LegislationVersionWork) => JSON.stringify([sourceId, eli, language]);
+
+const SUMMARY_WRITE_BATCH_MAX = 100;
+const COMPARISON_BATCH_MAX = VERSION_CHANGE_PAYLOAD_BATCH_MAX / 2;
+
+class VersionChangeReadLimitError extends TaggedError(
+  "VersionChangeReadLimitError",
+)<{
+  message: string;
+  cap: number;
+}> {}
+
+type PlanVersionChangeTasksOptions = {
+  db: ScopedDb;
+  works: readonly LegislationVersionWork[];
+  around?: SafeId<"legislationDocument">;
+};
+
+export type WorkVersionChangeTask = VersionChangeTask & {
+  work: LegislationVersionWork;
+};
+
+/** Read one bounded history batch, refusing a truncated predecessor sequence. */
+export const planVersionChangeTasks = async ({
+  db,
+  works,
+  around,
+}: PlanVersionChangeTasksOptions): Promise<WorkVersionChangeTask[]> => {
+  if (works.length === 0) {
+    return [];
+  }
+  const result = await db(
+    async (tx) =>
+      await readBounded(
+        tx
+          .select({
+            sourceId: legislationDocuments.sourceId,
+            eli: legislationDocuments.eli,
+            language: legislationDocuments.language,
+            id: legislationDocuments.id,
+            versionValidFrom: legislationDocuments.versionValidFrom,
+            payloadRevision: legislationDocuments.payloadRevision,
+            expressionKind: legislationDocuments.expressionKind,
+            windowDisposition: legislationDocuments.windowDisposition,
+            changeSummary: legislationDocuments.changeSummary,
+          })
+          .from(legislationDocuments)
+          .where(
+            and(
+              or(
+                ...works.map((work) =>
+                  and(
+                    eq(legislationDocuments.sourceId, work.sourceId),
+                    eq(legislationDocuments.eli, work.eli),
+                    eq(legislationDocuments.language, work.language),
+                  ),
                 ),
               ),
+              isDated(legislationVersionRef(legislationDocuments)),
+            ),
+          )
+          .orderBy(
+            asc(legislationDocuments.sourceId),
+            asc(legislationDocuments.eli),
+            asc(legislationDocuments.language),
+            asc(legislationDocuments.versionValidFrom),
+            asc(legislationDocuments.id),
           ),
-        );
-  // audit: skip — derived corpus state computed from public legislation; no user action
-  const written = await tx
-    .update(legislationDocuments)
-    .set({
-      changeSummary: summary,
-      // Derived from the payload, not a change to it: the version's own
-      // modification time (and the sitemap's lastmod) stay where they are.
-      updatedAt: sql`${legislationDocuments.updatedAt}`,
-    })
-    .where(
-      and(
-        eq(legislationDocuments.id, target),
-        eq(
-          legislationDocuments.payloadRevision,
-          BigInt(summary.payloadRevision),
-        ),
-        baseHolds,
+        VERSION_CHANGE_HISTORY_BATCH_MAX,
       ),
-    )
-    .returning({ id: legislationDocuments.id });
-  return written.length > 0;
-};
-
-/** One Work's dated versions, as the planner reads them. */
-export const readWorkVersionCandidatesTx = async (
-  tx: Transaction,
-  work: LegislationVersionWork,
-): Promise<VersionChangeCandidate[]> => {
-  const rows = await tx
-    .select({
-      id: legislationDocuments.id,
-      versionValidFrom: legislationDocuments.versionValidFrom,
-      payloadRevision: legislationDocuments.payloadRevision,
-      expressionKind: legislationDocuments.expressionKind,
-      windowDisposition: legislationDocuments.windowDisposition,
-      changeSummary: legislationDocuments.changeSummary,
-    })
-    .from(legislationDocuments)
-    .where(
-      and(
-        eq(legislationDocuments.sourceId, work.sourceId),
-        eq(legislationDocuments.eli, work.eli),
-        eq(legislationDocuments.language, work.language),
-        isDated(legislationVersionRef(legislationDocuments)),
-      ),
-    )
-    .orderBy(
-      asc(legislationDocuments.versionValidFrom),
-      asc(legislationDocuments.id),
-    )
-    // One Work's versions: a bound far above any act's history, so a
-    // malformed source cannot make one refresh read without end.
-    .limit(WORK_VERSIONS_MAX);
-  return rows.flatMap((row) =>
-    row.versionValidFrom === null
-      ? []
-      : [
-          {
-            id: row.id,
-            versionValidFrom: row.versionValidFrom,
-            payloadRevision: row.payloadRevision,
-            eligible: isEligibleLegislationExpression(row),
-            changeSummary: row.changeSummary,
-          },
-        ],
   );
+  if (result.type === "overflow") {
+    throw new VersionChangeReadLimitError({
+      message:
+        "Version histories exceed the comparison batch bound; use a smaller work page",
+      cap: result.cap,
+    });
+  }
+  const grouped = new Map<string, VersionChangeCandidate[]>();
+  for (const work of works) {
+    grouped.set(versionChangeWorkKey(work), []);
+  }
+  for (const row of result.rows) {
+    const versions = grouped.get(versionChangeWorkKey(row));
+    if (versions === undefined || row.versionValidFrom === null) {
+      panic(
+        "Version history query returned a row outside its work/date boundary",
+      );
+    }
+    versions.push({
+      id: row.id,
+      versionValidFrom: row.versionValidFrom,
+      payloadRevision: row.payloadRevision,
+      eligible: isEligibleLegislationExpression(row),
+      changeSummary: row.changeSummary,
+    });
+  }
+  return works.flatMap((work) => {
+    const versions = grouped.get(versionChangeWorkKey(work));
+    if (versions === undefined) {
+      return panic("Version history batch omitted a requested work");
+    }
+    return planVersionChanges({ versions, around }).map((task) => ({
+      ...task,
+      work,
+    }));
+  });
 };
 
-type VersionChangeRefresh = {
-  /** Summaries found missing or stale. */
-  planned: number;
-  /** Summaries written. */
-  written: number;
-  /** Summaries a newer write made obsolete before this one could land. */
-  superseded: number;
+export type PreparedVersionChange = ComputedSummary & {
+  targetId: SafeId<"legislationDocument">;
+  work: LegislationVersionWork;
+};
+
+type PrepareVersionChangesOptions = {
+  db: ScopedDb;
+  tasks: readonly WorkVersionChangeTask[];
+  readPayloads?: typeof readVersionChangePayloads;
+};
+
+/** Payloads are read outside write transactions and released after each bounded comparison batch. */
+export const prepareVersionChanges = async ({
+  db,
+  tasks,
+  readPayloads = readVersionChangePayloads,
+}: PrepareVersionChangesOptions): Promise<PreparedVersionChange[]> => {
+  const writes: PreparedVersionChange[] = [];
+  for (const batch of chunk(tasks, COMPARISON_BATCH_MAX)) {
+    const ids = [
+      ...new Set(
+        batch.flatMap(({ target, base }) =>
+          base === null ? [target.id] : [target.id, base.id],
+        ),
+      ),
+    ];
+    const payloads = await readPayloads({ db, ids });
+    for (const task of batch) {
+      const computed = computeSummary(payloads, task);
+      if (computed !== null) {
+        writes.push({ ...computed, targetId: task.target.id, work: task.work });
+      }
+    }
+  }
+  return writes;
+};
+
+/** Each row checks both payload revisions and its current predecessor in the same batched statement. */
+export const writePreparedVersionChangesTx = async (
+  tx: Transaction,
+  writes: readonly PreparedVersionChange[],
+): Promise<number> => {
+  let written = 0;
+  for (const batch of chunk(writes, SUMMARY_WRITE_BATCH_MAX)) {
+    const values = batch.map(
+      ({ targetId, base, summary }) =>
+        sql`(${targetId}::uuid, ${summary.payloadRevision}::bigint, ${base?.id ?? null}::uuid, ${base?.payloadRevision ?? null}::bigint, ${JSON.stringify(summary)}::text::jsonb)`,
+    );
+    const current = alias(legislationDocuments, "current_base");
+    const predecessor = predecessorIdOf(tx);
+    const baseRevision = tx
+      .select({ revision: current.payloadRevision })
+      .from(current)
+      .where(eq(current.id, sql`batch.base_id`))
+      .limit(1);
+    // audit: skip — derived public legislation state; no user action
+    const changed = await tx
+      .update(legislationDocuments)
+      .set({
+        changeSummary: sql`batch.summary`,
+        updatedAt: sql`${legislationDocuments.updatedAt}`,
+      })
+      .from(
+        sql`(VALUES ${sql.join(values, sql`, `)}) AS batch(target_id, target_revision, base_id, base_revision, summary)`,
+      )
+      .where(
+        and(
+          eq(legislationDocuments.id, sql`batch.target_id`),
+          eq(legislationDocuments.payloadRevision, sql`batch.target_revision`),
+          sql`${predecessor} IS NOT DISTINCT FROM batch.base_id`,
+          sql`(${baseRevision}) IS NOT DISTINCT FROM batch.base_revision`,
+        ),
+      )
+      .returning({ id: legislationDocuments.id });
+    written += changed.length;
+  }
+  return written;
 };
 
 type RefreshWorkVersionChangesOptions = {
-  /**
-   * Runs each step. Ingestion passes its scoped database, so each read and
-   * write is its own short transaction; the backfill passes its batch
-   * transaction.
-   */
   db: ScopedDb;
   work: LegislationVersionWork;
-  /** See `planVersionChanges`. */
   around?: SafeId<"legislationDocument"> | undefined;
+  readPayloads?: typeof readVersionChangePayloads;
 };
 
-/**
- * Bring a Work's change summaries up to its stored versions. Idempotent: a
- * Work whose summaries are fresh plans nothing and writes nothing, so a
- * repeated run converges without recomputing.
- */
+/** Refresh the same canonical comparison plan used by the backfill. */
 export const refreshWorkVersionChanges = async ({
-  around,
   db,
   work,
-}: RefreshWorkVersionChangesOptions): Promise<VersionChangeRefresh> => {
-  const versions = await db(
-    async (tx) => await readWorkVersionCandidatesTx(tx, work),
+  around,
+  readPayloads,
+}: RefreshWorkVersionChangesOptions) => {
+  const tasks = await planVersionChangeTasks({ db, works: [work], around });
+  const writes = await prepareVersionChanges({ db, tasks, readPayloads });
+  const written = await db(
+    async (tx) => await writePreparedVersionChangesTx(tx, writes),
   );
-  const tasks = planVersionChanges({ versions, around });
-  let written = 0;
-  let superseded = 0;
-
-  for (const task of tasks) {
-    const computed = await computeSummary(db, task);
-    const stored =
-      computed !== null &&
-      (await db(
-        async (tx) => await writeSummaryTx(tx, task.target.id, computed),
-      ));
-    if (stored) {
-      written += 1;
-    } else {
-      superseded += 1;
-    }
-  }
-
-  return { planned: tasks.length, written, superseded };
+  return { planned: tasks.length, written, superseded: tasks.length - written };
 };

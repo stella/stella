@@ -73,6 +73,8 @@ export {
   INVOICE_LINE_INPUT_LIMITS,
   INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
+  INVOICE_PAYMENT_INPUT_LIMITS,
+  INVOICE_PAYMENT_METHODS,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   NUMBER_SERIES_DOCUMENT_TYPES,
@@ -89,6 +91,7 @@ export type {
   ExpenseCategory,
   InvoiceLanguage,
   InvoiceLineSource,
+  InvoicePaymentMethod,
   InvoiceStatus,
   TimeEntrySource,
   TimeEntryActivityGroup,
@@ -100,6 +103,7 @@ export {
   BUSINESS_REGISTRY_CONFIGURATION,
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
   isBusinessRegistryCredentialSlug,
   isBusinessRegistrySlug,
 } from "./business-registries";
@@ -107,6 +111,7 @@ export type {
   BusinessRegistrySlug,
   BusinessRegistryCredentialSlug,
   BusinessRegistryLookupDetail,
+  BusinessRegistrySearchCapabilities,
 } from "./business-registries";
 export {
   CHAT_RUN_MODE,
@@ -346,6 +351,8 @@ export {
   API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,

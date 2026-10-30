@@ -3,7 +3,7 @@ import type { DocumentTextPiece } from "@stll/legal-ast/document-search-pieces";
 import {
   foldMarkText,
   originalWordRange,
-  queryHighlightTokens,
+  queryFindTokens,
   wordSpans,
 } from "./query-marks";
 import type { FoldedMarkText } from "./query-marks";
@@ -137,8 +137,9 @@ export const searchReaderIndex = (
 ): SearchResults => {
   // Folding before tokenising is what lets a reader type "nahrada skody" and
   // reach "Náhrada škody": the tokeniser then splits the folded string by the
-  // rule the results table splits the same query by.
-  const tokens = queryHighlightTokens(query);
+  // rule the results table splits the same query by, keeping the short words
+  // the table leaves out: a reader finding "1" is looking for § 1.
+  const tokens = queryFindTokens(query);
   if (tokens.length === 0) {
     return { matchCount: 0, rangesByPieceId: {} };
   }

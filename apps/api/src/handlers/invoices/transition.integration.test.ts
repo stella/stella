@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -812,16 +813,15 @@ describe("invoice transition integration", () => {
     ).toEqual({ invoiceNumber: "MANUAL-001" });
   });
 
-  test("marking an invoice paid records the time and voiding clears it", async () => {
-    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
-    expect(await runTransition(invoiceId, "mark_paid")).toEqual({
-      id: invoiceId,
-    });
-    const paid = await testDb.query.invoices.findFirst({
-      where: { id: { eq: invoiceId } },
-      columns: { paidAt: true },
-    });
-    expect(paid?.paidAt).toBeInstanceOf(Date);
+  test("paid is not a transition, and voiding clears the paid timestamp", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await testDb
+      .update(invoices)
+      .set({ paidAt: new Date("2026-06-30T10:00:00Z") })
+      .where(eq(invoices.id, invoiceId));
+    expect(v.is(transitionInvoice.config.body, { action: "mark_paid" })).toBe(
+      false,
+    );
     expect(await runTransition(invoiceId, "void")).toEqual({ id: invoiceId });
     expect(
       await testDb.query.invoices.findFirst({

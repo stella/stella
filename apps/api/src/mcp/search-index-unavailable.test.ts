@@ -687,7 +687,7 @@ describe("public corpus statement budgets", () => {
           searchDecisionsHandler: async () =>
             abortTransaction(
               new ActionAdmissionError({
-                reason: "unavailable",
+                reason: "lease_lost",
                 message: "Action lease was lost",
               }),
             ),
@@ -696,7 +696,7 @@ describe("public corpus statement budgets", () => {
     });
     expect(result.isError).toBe(true);
     expect(payloadOf(result)).toMatchObject({
-      error: { code: "action_admission_unavailable", retryable: true },
+      error: { code: "action_admission_lease_lost", retryable: true },
     });
   });
 

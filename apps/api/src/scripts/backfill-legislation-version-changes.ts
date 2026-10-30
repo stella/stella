@@ -1,3 +1,9 @@
+import { panic } from "better-result";
+
+import {
+  BackfillHeldError,
+  runBackfillPass,
+} from "@stll/db-load-gate/backfill-pass";
 /**
  * Compute what each stored consolidation changed against the eligible one
  * before it, for versions stored before ingestion wrote those summaries.
@@ -19,15 +25,23 @@
  *   # compute and write, bounded and resumable
  *   bun run src/scripts/backfill-legislation-version-changes.ts --apply [--limit 100000] [--page 20] [--after <source id>/<eli>]
  */
+import { decideStart } from "@stll/db-load-gate/health";
+import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
+import { Temporal } from "@stll/time";
 
-import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-
-import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import {
+  createScriptBackfillHealthReader,
+  createScriptBackfillRuntime,
+} from "@/api/db/backfill-runtime";
+import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  applyVersionChangesPageTx,
   backfillVersionChangesPage,
   decodeVersionChangesCursor,
   encodeVersionChangesCursor,
+  prepareVersionChangesPage,
+  VERSION_CHANGE_WORK_PAGE_MAX,
 } from "@/api/handlers/legislation/version-changes-backfill";
 import type { VersionChangesCursor } from "@/api/handlers/legislation/version-changes-backfill";
 import {
@@ -70,76 +84,206 @@ let works = 0;
 let planned = 0;
 let written = 0;
 let superseded = 0;
+let nextPageSize = Math.min(plan.initialSize, VERSION_CHANGE_WORK_PAGE_MAX);
 const progress = { reachedEnd: false };
-const runtime = apply
-  ? plan.open((options) =>
-      createScriptBackfillRuntime({ ...options, db: rootDb }),
-    )
-  : null;
+const runVersionChangesPass = async (
+  slot: ReturnType<typeof createHeavyWorkSlot> | null,
+) => {
+  const runtime =
+    slot !== null
+      ? plan.open((options) => {
+          const acquire = async () => {
+            const result = await slot.tryAcquire();
+            if (result.isErr()) {
+              throw result.error;
+            }
+            return result.value;
+          };
+          return {
+            ...createScriptBackfillRuntime({
+              ...options,
+              db: rootDb,
+              slot: { tryAcquire: acquire, release: slot.release },
+            }),
+            acquire,
+            release: slot.release,
+            health: createScriptBackfillHealthReader({
+              db: rootDb,
+              tableName: options.tableName,
+              clock: () => Temporal.Now.instant().epochMilliseconds,
+            }),
+          };
+        })
+      : null;
 
-try {
-  const pass = await runBackfillPass({
-    step: async () => {
-      const remaining = limit - works;
-      if (runtime === null) {
-        const page = await backfillVersionChangesPage({
-          db,
-          after: cursor,
-          pageSize: Math.min(plan.initialSize, remaining),
-          apply: false,
-        });
-        return {
-          done: page.cursor === null || works + page.works >= limit,
-          sleepMs: 0,
-          value: page,
-        };
-      }
-      const result = await runtime.step(
-        async ({ tx, size, cursor: persistedCursor }) => {
-          const after =
-            persistedCursor === null
-              ? cursor
-              : decodeVersionChangesCursor(persistedCursor);
+  try {
+    const pass = await runBackfillPass({
+      step: async () => {
+        const remaining = limit - works;
+        if (runtime === null) {
           const page = await backfillVersionChangesPage({
-            db: async (work) => await work(tx),
-            after,
-            pageSize: Math.min(size, remaining),
-            apply: true,
+            db,
+            after: cursor,
+            pageSize: Math.min(plan.initialSize, remaining),
+            apply: false,
           });
           return {
-            cursor:
-              page.cursor === null
-                ? persistedCursor
-                : encodeVersionChangesCursor(page.cursor),
-            done: page.cursor === null,
-            value: page,
+            done: page.cursor === null || works + page.works >= limit,
+            sleepMs: 0,
+            value: {
+              type: "page",
+              page,
+              pageSize: Math.min(
+                plan.initialSize,
+                remaining,
+                VERSION_CHANGE_WORK_PAGE_MAX,
+              ),
+            } as const,
           };
-        },
-      );
-      // The operator limit ends this pass without completing its durable checkpoint.
-      return {
-        ...result,
-        done: result.done || works + result.value.works >= limit,
-      };
-    },
-    onBatch: ({ value: page }) => {
-      if (page.cursor === null) {
-        progress.reachedEnd = true;
-        return;
-      }
-      cursor = page.cursor;
-      works += page.works;
-      planned += page.planned;
-      written += page.written;
-      superseded += page.superseded;
-    },
-    sleep: Bun.sleep,
-  });
-  if (pass.isErr()) {
-    throw pass.error;
+        }
+
+        const verdict = await (async () => {
+          try {
+            return await runtime.health.readVerdict();
+          } finally {
+            await runtime.health.settle();
+          }
+        })();
+        if (decideStart(verdict, "backfill_batch").decision === "wait") {
+          throw new BackfillHeldError({
+            message: "Version comparison preparation deferred by the load gate",
+            holdUntil: null,
+            heldSince: Temporal.Now.instant().epochMilliseconds,
+          });
+        }
+        if (!(await runtime.acquire())) {
+          throw new BackfillHeldError({
+            message:
+              "Version comparison preparation deferred by the heavy-work slot",
+            holdUntil: null,
+            heldSince: Temporal.Now.instant().epochMilliseconds,
+          });
+        }
+        try {
+          const preparedSize = Math.min(nextPageSize, remaining);
+          const prepared = await prepareVersionChangesPage({
+            db,
+            after: cursor,
+            pageSize: preparedSize,
+          });
+          const result = await runtime.step(
+            async ({ tx, size, cursor: persistedCursor }) => {
+              const actualAfter =
+                persistedCursor === null
+                  ? cursor
+                  : decodeVersionChangesCursor(persistedCursor);
+              const actualKey =
+                actualAfter === null
+                  ? null
+                  : encodeVersionChangesCursor(actualAfter);
+              const preparedKey =
+                prepared.page.after === null
+                  ? null
+                  : encodeVersionChangesCursor(prepared.page.after);
+              const pageSize = Math.min(
+                size,
+                remaining,
+                VERSION_CHANGE_WORK_PAGE_MAX,
+              );
+              if (actualKey !== preparedKey || pageSize < preparedSize) {
+                return {
+                  cursor: persistedCursor,
+                  done: false,
+                  value: {
+                    type: "retry",
+                    cursor: actualAfter,
+                    pageSize,
+                  } as const,
+                };
+              }
+              const page = await applyVersionChangesPageTx(tx, prepared);
+              return {
+                cursor:
+                  page.cursor === null
+                    ? persistedCursor
+                    : encodeVersionChangesCursor(page.cursor),
+                done: page.cursor === null,
+                value: { type: "page", page, pageSize } as const,
+              };
+            },
+          );
+          return {
+            ...result,
+            done:
+              result.done ||
+              (result.value.type === "page" &&
+                works + result.value.page.works >= limit),
+          };
+        } finally {
+          await runtime.release();
+        }
+      },
+      onBatch: ({ value }) => {
+        switch (value.type) {
+          case "retry":
+            cursor = value.cursor;
+            nextPageSize = value.pageSize;
+            return;
+          case "page": {
+            const { page } = value;
+            nextPageSize = value.pageSize;
+            if (page.cursor === null) {
+              progress.reachedEnd = true;
+              return;
+            }
+            cursor = page.cursor;
+            works += page.works;
+            planned += page.planned;
+            written += page.written;
+            superseded += page.superseded;
+            return;
+          }
+          default:
+            value satisfies never;
+            return panic("Unhandled version change batch result");
+        }
+      },
+      sleep: Bun.sleep,
+    });
+    if (pass.isErr()) {
+      throw pass.error;
+    }
+  } finally {
+    await runtime?.close();
   }
-} finally {
-  await runtime?.close();
+};
+
+if (apply) {
+  await withLongRunningConnection(
+    {
+      statementTimeout: 5000,
+      lockTimeout: 1000,
+      signal: new AbortController().signal,
+    },
+    async ({ connection }) => {
+      const slot = createHeavyWorkSlot({
+        kind: "backfill_batch",
+        session: {
+          query: async (statement, parameters) =>
+            await connection.unsafe<{ acquired: boolean }[]>(statement, [
+              ...parameters,
+            ]),
+        },
+      });
+      try {
+        await runVersionChangesPass(slot);
+      } finally {
+        await slot.close();
+      }
+    },
+  );
+} else {
+  await runVersionChangesPass(null);
 }
 
 const outcome = apply

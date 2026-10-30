@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
@@ -18,8 +18,13 @@ import type { VersionChangesCursor } from "@/api/handlers/legislation/version-ch
 import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
+import {
+  parsePersistedCorpusAst,
+  planCorpusDocumentWrite,
+} from "@/api/lib/legal-search/corpus-storage";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
+import { readVersionChangePayloads } from "@/api/lib/legal-search/legislation-version-blocks";
+import { refreshWorkVersionChanges } from "@/api/lib/legal-search/legislation-version-changes";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -399,4 +404,162 @@ describe("backfill", () => {
       },
     ]);
   });
+});
+
+test("query count grows by comparison batches rather than by work or version", async () => {
+  const reportCounts: number[] = [];
+  const applyCounts: number[] = [];
+  for (const count of [2, 4, 8]) {
+    const benchmarkSource = createSafeId<"legislationSource">();
+    await db.insert(legislationSources).values({
+      id: benchmarkSource,
+      adapterKey: `version-query-budget-${count}`,
+      name: "Version query budget",
+    });
+    for (let index = 0; index < count; index += 1) {
+      await storeAll(
+        work(`eli/cz/budget/${count}/${index}`).map((input) => ({
+          ...input,
+          sourceId: benchmarkSource,
+        })),
+      );
+    }
+    await db
+      .update(legislationDocuments)
+      .set({ changeSummary: null })
+      .where(eq(legislationDocuments.sourceId, benchmarkSource));
+    let statements = 0;
+    const measured = drizzle({
+      client,
+      logger: {
+        logQuery: (query) => {
+          if (/^\s*(?:select|with|update)\b/iu.test(query)) {
+            statements += 1;
+          }
+        },
+      },
+    });
+    const measuredDb: ScopedDb = async (callback) =>
+      await measured.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const options = {
+      db: measuredDb,
+      after: { sourceId: benchmarkSource, eli: "" },
+      pageSize: count,
+    };
+    const report = await backfillVersionChangesPage({
+      ...options,
+      apply: false,
+    });
+    expect(report.planned).toBe(3 * count);
+    reportCounts.push(statements);
+    statements = 0;
+    const applied = await backfillVersionChangesPage({
+      ...options,
+      apply: true,
+    });
+    expect(applied.written).toBe(3 * count);
+    applyCounts.push(statements);
+  }
+  expect(reportCounts).toEqual([3, 3, 3]);
+  // Each payload read holds at most two comparisons within the decoded-byte budget.
+  expect(applyCounts).toEqual([7, 10, 16]);
+});
+
+test("canonical object ASTs are compared outside SQL transactions", async () => {
+  const eli = "eli/cz/canonical-summary";
+  await storeAll(work(eli));
+  const rows = await db
+    .select({
+      id: legislationDocuments.id,
+      documentAst: legislationDocuments.documentAst,
+    })
+    .from(legislationDocuments)
+    .where(eq(legislationDocuments.eli, eli));
+  const objects = new Map(
+    rows.map(
+      (row) =>
+        [
+          `legislation/cze/versions/${row.id}/ast.zst`,
+          parsePersistedCorpusAst(row.documentAst),
+        ] as const,
+    ),
+  );
+  await db
+    .update(legislationDocuments)
+    .set({
+      documentAst: null,
+      astS3Key: sql`'legislation/cze/versions/' || ${legislationDocuments.id} || '/ast.zst'`,
+      changeSummary: null,
+    })
+    .where(eq(legislationDocuments.eli, eli));
+  let insideTransaction = false;
+  const objectReads = new Set<string>();
+  const trackedDb: ScopedDb = async (callback) =>
+    await scopedDb(async (tx) => {
+      insideTransaction = true;
+      try {
+        return await callback(tx);
+      } finally {
+        insideTransaction = false;
+      }
+    });
+  const refreshed = await refreshWorkVersionChanges({
+    db: trackedDb,
+    work: { sourceId, eli, language: "cs" },
+    readPayloads: async (options) =>
+      await readVersionChangePayloads({
+        ...options,
+        mode: "canonical",
+        readObjectAst: async (key) => {
+          objectReads.add(key);
+          expect(insideTransaction).toBe(false);
+          const object = objects.get(key);
+          return object === undefined
+            ? panic("Canonical fixture object is missing")
+            : object;
+        },
+      }),
+  });
+  expect(refreshed.written).toBe(3);
+  expect([...objectReads].toSorted()).toEqual([...objects.keys()].toSorted());
+  expect(await countsOf(eli)).toEqual(["first", ONE_WORD, ONE_PROVISION_ADDED]);
+});
+
+test("batch summaries refuse target and base revisions replaced after their read", async () => {
+  const eli = "eli/cz/revision-race-summary";
+  const ids = await storeAll(work(eli));
+  const first = ids.at(0);
+  if (first === undefined) {
+    return panic("Revision race fixture has a first version");
+  }
+  await db
+    .update(legislationDocuments)
+    .set({ changeSummary: null })
+    .where(eq(legislationDocuments.eli, eli));
+  let replaced = false;
+  const result = await refreshWorkVersionChanges({
+    db: scopedDb,
+    work: { sourceId, eli, language: "cs" },
+    readPayloads: async (options) => {
+      const payloads = await readVersionChangePayloads(options);
+      if (!replaced && payloads.has(first)) {
+        replaced = true;
+        await db
+          .update(legislationDocuments)
+          .set({
+            documentAst: ast([
+              heading("§ 1"),
+              paragraph("p1", "Změněné znění."),
+            ]),
+          })
+          .where(eq(legislationDocuments.id, first));
+      }
+      return payloads;
+    },
+  });
+  expect(replaced).toBe(true);
+  expect(result).toEqual({ planned: 3, written: 1, superseded: 2 });
+  expect(
+    (await summaries(eli)).map(({ summary }) => summary?.type ?? null),
+  ).toEqual([null, null, "compared"]);
 });

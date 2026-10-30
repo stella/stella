@@ -21,8 +21,8 @@ const renderRow = (changes: StatuteChangeCounts) =>
     </IntlProvider>,
   );
 
-const cells = (container: HTMLElement): (string | null)[] =>
-  [...container.querySelectorAll("[data-cell]")].map(
+const cells = (container: HTMLElement) =>
+  [...container.querySelectorAll<HTMLElement>("[data-cell]")].map(
     (cell) => cell.dataset.cell,
   );
 

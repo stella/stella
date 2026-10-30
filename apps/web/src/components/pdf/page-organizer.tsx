@@ -1469,6 +1469,7 @@ const LoadedPDFPageOrganizer = ({
         </Button>
         {pdfSign !== null && (
           <PageOrganizerSignAction
+            closeEditor={onClose}
             disabled={isBusy || (isDirty && !canSaveVersion)}
             isDirty={isDirty}
             saveVersion={async () =>

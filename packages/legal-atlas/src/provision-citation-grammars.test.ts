@@ -393,6 +393,18 @@ test("work normalization uses the selected grammar's gazette", () => {
   });
 });
 
+test("Czech citations keep a sentence and a slash-closed letter", () => {
+  const citations = czech.locateAbbreviatedProvisions(
+    "§ 103 odst. 1 věta druhá s. ř. s. a § 5 písm. b/ s. ř. s.",
+  );
+  expect(
+    citations.map(({ anchor, reference }) => [anchor, reference.sentence]),
+  ).toEqual([
+    ["par_103-odst_1", "2"],
+    ["par_5-pism_b", null],
+  ]);
+});
+
 describe("Slovak reader citations", () => {
   const slovak = PROVISION_CITATION_GRAMMARS.SVK;
   const sspEli = "https://www.slov-lex.sk/eli/sk/zz/2015/162";
@@ -454,6 +466,45 @@ describe("Slovak reader citations", () => {
         .locateAbbreviatedProvisions("§439 ods.2 písm.d) bod1 SSP")
         .map(({ anchor }) => anchor),
     ).toEqual(["paragraf-439.odsek-2.pismeno-d.bod-1"]);
+  });
+
+  test("a letter closed by a slash keeps the act", () => {
+    const text = "(§ 439 ods. 2 písm. d/ SSP)";
+    const citations = slovak.locateAbbreviatedProvisions(text);
+    expect(citations.map(({ anchor }) => anchor)).toEqual([
+      "paragraf-439.odsek-2.pismeno-d",
+    ]);
+    expect(printed(text, citations)).toEqual(["§ 439 ods. 2 písm. d/"]);
+  });
+
+  test.each([
+    ["§ 18 ods. 2 prvá veta SSP", "1"],
+    ["§ 18 ods. 2 veta prvá SSP", "1"],
+    ["§ 18 ods. 2 veta 2 SSP", "2"],
+  ])(
+    "%s records the sentence on the provision it refines",
+    (text, sentence) => {
+      const citations = slovak.locateAbbreviatedProvisions(text);
+      expect(
+        citations.map(({ anchor, reference }) => ({
+          anchor,
+          sentence: reference.sentence,
+        })),
+      ).toEqual([{ anchor: "paragraf-18.odsek-2", sentence }]);
+      expect(printed(text, citations)).toEqual(["§ 18 ods. 2"]);
+    },
+  );
+
+  test("a sentence refines only the last coordinated provision", () => {
+    const citations = slovak.locateAbbreviatedProvisions(
+      "§ 9 ods. 1 a § 18 ods. 2 prvá veta SSP",
+    );
+    expect(
+      citations.map(({ anchor, reference }) => [anchor, reference.sentence]),
+    ).toEqual([
+      ["paragraf-9.odsek-1", null],
+      ["paragraf-18.odsek-2", "1"],
+    ]);
   });
 
   test.each([

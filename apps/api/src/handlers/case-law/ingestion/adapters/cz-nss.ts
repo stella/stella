@@ -2,6 +2,8 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
+import { load } from "cheerio";
+import type { CheerioAPI } from "cheerio";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
@@ -50,6 +52,15 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import {
+  decodeNssDocument,
+  isNssDocumentPlaceholder,
+  listNssRegistryFields,
+  NSS_REGISTRY_FIELDS,
+  nssRegistryDocumentUrl,
+  nssRegistryUrl,
+  parseNssPdf,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   readBodyText,
@@ -59,6 +70,7 @@ import {
   unreadPublisherError,
   type UnreadPublisherOutcome,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   adapterCatch,
   INGESTION_USER_AGENT,
@@ -82,7 +94,6 @@ import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
   READ_OUTCOME_METADATA_KEY,
-  readAbsent,
   type ReadOutcome,
   type StoredReadOutcome,
   storedReadUnavailable,
@@ -639,6 +650,7 @@ type DecisionContent = {
    * leave that row with nothing to re-read.
    */
   fallbackText: string | undefined;
+  recovery?: SourceRawParts;
 };
 
 /**
@@ -655,6 +667,8 @@ const CZ_NSS_RAW_PART = {
   DETAIL: "detail",
   TEXT: "text",
   LISTING: "listing",
+  REGISTRY: "extended-chamber-registry",
+  PDF: "extended-chamber-pdf-base64",
 } as const;
 
 type CzNssRawPart = (typeof CZ_NSS_RAW_PART)[keyof typeof CZ_NSS_RAW_PART];
@@ -737,7 +751,11 @@ const storedDocumentReadOutcome = (read: UnreadNssRead): StoredReadOutcome =>
  */
 type DecisionContentRead =
   | { type: "read"; content: DecisionContent }
-  | { type: "unavailable"; readOutcome: StoredReadOutcome | null };
+  | {
+      type: "unavailable";
+      readOutcome: StoredReadOutcome | null;
+      content?: DecisionContent;
+    };
 
 type ObserveDocumentReadFailedOptions = {
   documentId: string;
@@ -753,7 +771,10 @@ const observeDocumentReadFailed = ({
   documentId,
   phase,
   read,
-}: ObserveDocumentReadFailedOptions): DecisionContentRead => {
+}: ObserveDocumentReadFailedOptions): Extract<
+  DecisionContentRead,
+  { type: "unavailable" }
+> => {
   observeFailure(
     publisherReadFailure(
       unreadPublisherError({
@@ -775,15 +796,13 @@ const observeDocumentReadFailed = ({
  * The placeholder page the portal serves for a document it holds no rich
  * original of.
  */
-const isRichDocumentPlaceholder = (html: string): boolean =>
-  html.length <= 200 || html.includes("<body>\n    N/A\n</body>");
+const isRichDocumentPlaceholder = isNssDocumentPlaceholder;
 
 /**
  * Read the rich HTML from /DokumentOriginal/Html/{id}.
  *
- * Absent where the portal answers 404 or 410, or serves its placeholder page:
- * it holds no rich original, and the plain-text endpoint is read instead. A
- * failed read is not that absence. A read the page's signal aborts goes back
+ * A 404 or 410 is absent. A decoded placeholder is kept for the raw archive,
+ * then the caller tries the text rendering. A failed read is not an absence. A read the page's signal aborts goes back
  * to the crawl, which disposes of the row together with the rest of its page.
  */
 const fetchRichDocument = async (
@@ -791,7 +810,7 @@ const fetchRichDocument = async (
   session: SessionState,
   signal: AbortSignal,
 ): Promise<ReadOutcome<string>> => {
-  const read = await readPublisherText(
+  const read = await readPublisherBytes(
     `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
     {
       fetchStage: "document",
@@ -807,9 +826,11 @@ const fetchRichDocument = async (
       refusalScope: "document",
     },
   );
-  return read.type === "present" && isRichDocumentPlaceholder(read.value)
-    ? readAbsent("publisher-typed-absence")
-    : read;
+  if (read.type !== "present") {
+    return read;
+  }
+  const html = decodeNssDocument(read.value);
+  return { type: "present", value: html };
 };
 
 /**
@@ -844,6 +865,12 @@ const fetchDecisionContent = async (
       return panic(`Unhandled NSS document read: ${String(rich)}`);
   }
   const html = rich.value;
+  if (isRichDocumentPlaceholder(html)) {
+    const fallback = await fetchPlainTextContent(documentId, session, signal);
+    return fallback.type === "read"
+      ? { type: "read", content: { ...fallback.content, sourceRaw: html } }
+      : { ...fallback, content: { ...EMPTY_CONTENT, sourceRaw: html } };
+  }
   const parsed = Result.try({
     try: () =>
       parseNssDecisionHtml({
@@ -866,7 +893,7 @@ const fetchDecisionContent = async (
       }),
     catch: (cause: unknown) => cause,
   });
-  if (Result.isOk(parsed)) {
+  if (Result.isOk(parsed) && parsed.value.documentAst.blocks.length > 0) {
     return {
       type: "read",
       content: {
@@ -880,18 +907,22 @@ const fetchDecisionContent = async (
   // Each parser failure is reported, which keeps it apart from decisions
   // the portal serves as plain text. It is observed unclassified, as the
   // parser's own failure.
-  observeFailure(parsed.error, {
-    sink: documentParseFailed,
-    ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
-  });
-  return await fetchPlainTextContent(documentId, session, signal);
+  if (Result.isError(parsed)) {
+    observeFailure(parsed.error, {
+      sink: documentParseFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+    });
+  }
+  const fallback = await fetchPlainTextContent(documentId, session, signal);
+  return fallback.type === "read"
+    ? { type: "read", content: { ...fallback.content, sourceRaw: html } }
+    : { ...fallback, content: { ...EMPTY_CONTENT, sourceRaw: html } };
 };
 
 /**
- * Read plain text from /DokumentOriginal/Text/{id}, which the portal serves
- * as UTF-16. A 404 or 410 states the portal has no text either: the content
- * is empty and the row is stored listing-only. A failed read, an empty body
- * included, is reported unavailable.
+ * Read the portal's UTF-16 text rendering. A 404, 410 or placeholder can
+ * still have an original in the separate court registry. Failed reads remain
+ * unavailable; they do not establish publisher absence.
  */
 const fetchPlainTextContent = async (
   documentId: string,
@@ -930,9 +961,10 @@ const fetchPlainTextContent = async (
       read satisfies never;
       return panic(`Unhandled NSS text read: ${String(read)}`);
   }
-  const text = new TextDecoder("utf-16").decode(read.value);
+  const text = decodeNssDocument(read.value, "utf-16le");
   const body = stripHtml(text);
-  const usable = body.length > CZ_NSS_MIN_FULLTEXT_CHARS;
+  const usable =
+    !isNssDocumentPlaceholder(text) && body.length > CZ_NSS_MIN_FULLTEXT_CHARS;
   return {
     type: "read",
     content: {
@@ -941,7 +973,160 @@ const fetchPlainTextContent = async (
       sourceRaw: undefined,
       // Decoded rather than verbatim: the endpoint serves UTF-16, and the raw
       // is stored as text. It is the payload this row's fulltext came from.
-      fallbackText: usable ? text : undefined,
+      fallbackText: text,
+    },
+  };
+};
+
+type FetchRegistryDocumentOptions = {
+  row: ParsedRow;
+  detail: CzNssDetailMetadata;
+  signal: AbortSignal;
+};
+
+/** A broken portal conversion can still have its original in the court's RS registry. */
+const fetchRegistryDocument = async ({
+  row,
+  detail,
+  signal,
+}: FetchRegistryDocumentOptions): Promise<DecisionContentRead> => {
+  const reference = row.publishedCaseNumber ?? row.caseNumber;
+  const documentId = czNssSourceDocumentId(row);
+  if (documentId === undefined) {
+    return { type: "read", content: EMPTY_CONTENT };
+  }
+  const listingTarget = publisherTarget(
+    ADAPTER_KEYS.CZ_NSS,
+    nssRegistryUrl(reference),
+  );
+  if (Result.isError(listingTarget)) {
+    return observeDocumentReadFailed({
+      documentId,
+      phase: CZ_NSS_RAW_PART.REGISTRY,
+      read: {
+        type: "unavailable",
+        cause: { kind: "thrown", error: listingTarget.error },
+      },
+    });
+  }
+  const listing = await readPublisherText(listingTarget.value, {
+    fetchStage: "document",
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
+    signal,
+    headers: COMMON_HEADERS,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "document",
+  });
+  if (listing.type === "absent") {
+    return { type: "read", content: EMPTY_CONTENT };
+  }
+  if (listing.type !== "present") {
+    return observeDocumentReadFailed({
+      documentId,
+      phase: CZ_NSS_RAW_PART.REGISTRY,
+      read: listing,
+    });
+  }
+  const recovery = { [CZ_NSS_RAW_PART.REGISTRY]: listing.value };
+  const listingOnlyContent = { ...EMPTY_CONTENT, recovery };
+  const discovered = nssRegistryDocumentUrl({ html: listing.value, reference });
+  if (Result.isError(discovered)) {
+    return {
+      ...observeDocumentReadFailed({
+        documentId,
+        phase: CZ_NSS_RAW_PART.REGISTRY,
+        read: {
+          type: "unavailable",
+          cause: { kind: "thrown", error: discovered.error },
+        },
+      }),
+      content: listingOnlyContent,
+    };
+  }
+  if (discovered.value === null) {
+    return { type: "read", content: listingOnlyContent };
+  }
+  const target = publisherTarget(ADAPTER_KEYS.CZ_NSS, discovered.value);
+  if (Result.isError(target)) {
+    return observeDocumentReadFailed({
+      documentId,
+      phase: CZ_NSS_RAW_PART.PDF,
+      read: {
+        type: "unavailable",
+        cause: { kind: "thrown", error: target.error },
+      },
+    });
+  }
+  const pdf = await readPublisherBytes(target.value, {
+    fetchStage: "document",
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
+    signal,
+    headers: COMMON_HEADERS,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "document",
+  });
+  if (pdf.type === "absent") {
+    return { type: "read", content: listingOnlyContent };
+  }
+  if (pdf.type !== "present") {
+    return {
+      ...observeDocumentReadFailed({
+        documentId,
+        phase: CZ_NSS_RAW_PART.PDF,
+        read: pdf,
+      }),
+      content: listingOnlyContent,
+    };
+  }
+  const pdfRecovery = {
+    ...recovery,
+    [CZ_NSS_RAW_PART.PDF]: Buffer.from(pdf.value).toString("base64"),
+  };
+  const rawDecisionDate = detail.decisionDate ?? row.decisionDate;
+  const parsed = await Result.tryPromise({
+    try: async () =>
+      await parseNssPdf({
+        bytes: pdf.value,
+        input: {
+          caseNumber: row.caseNumber,
+          ecli: detail.ecli,
+          court: czNssCourt(detail.ecli, documentId),
+          decisionDate:
+            rawDecisionDate === undefined
+              ? undefined
+              : parseCeDate(rawDecisionDate),
+          decisionType: (
+            detail.decisionType ?? row.decisionType
+          )?.toLowerCase(),
+          sourceUrl: row.documentUrl,
+          detailMetadata: { ...detail },
+        },
+      }),
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(parsed)) {
+    observeFailure(parsed.error, {
+      sink: documentParseFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+    });
+    return {
+      type: "unavailable",
+      content: { ...EMPTY_CONTENT, recovery: pdfRecovery },
+      readOutcome: storedReadUnavailable({
+        scope: "document",
+        consecutiveCycles: 1,
+        cause: { kind: "thrown", error: parsed.error },
+      }),
+    };
+  }
+  return {
+    type: "read",
+    content: {
+      fulltext: parsed.value.fulltext,
+      documentAst: parsed.value.documentAst,
+      sourceRaw: undefined,
+      fallbackText: undefined,
+      recovery: pdfRecovery,
     },
   };
 };
@@ -962,6 +1147,7 @@ const fetchPlainTextContent = async (
  * added here without a disposition does not compile.
  */
 const CZ_NSS_SOURCE_FIELDS = [
+  ...NSS_REGISTRY_FIELDS,
   "aktualizovano",
   "aplikovanepravnipredpisysb§",
   "aplikovanepravnipredpisysbcislo",
@@ -979,6 +1165,7 @@ const CZ_NSS_SOURCE_FIELDS = [
   "datumrozhodnutikrajskehosoudu",
   "datumskonceniirizeni",
   "datumvydanirozhodnuti",
+  "datumvydanivsbnss",
   "datumvyhotovenirozhodnuti",
   "datumvypravenirozhodnuti",
   "datumzahajenirizeni",
@@ -1000,6 +1187,10 @@ const CZ_NSS_SOURCE_FIELDS = [
   "kasacniustavnistiznost",
   "krajskysoud",
   "napadeno",
+  "nssrok",
+  "nsssesit",
+  "nssjudikat",
+  "nadpis",
   "nazevorganu",
   "nazevsoudusubjektu",
   "nazevspravnihoorganu",
@@ -1013,6 +1204,7 @@ const CZ_NSS_SOURCE_FIELDS = [
   "podanakasacnistiznostD",
   "povaha",
   "pravnivetaanv",
+  "pravnivetaan",
   "pravnivetaupravena",
   "prejudikaturaoznacenivecideleneclistu",
   "prejudikaturaoznacenivecideleneporc",
@@ -1021,6 +1213,7 @@ const CZ_NSS_SOURCE_FIELDS = [
   "prejudikaturaoznacenivecidelenesenat",
   "prejudikaturaoznacenivecivcelku",
   "rozhodnuto",
+  "rozpornaprejudikatura",
   "rozhodnutivevztahukrizeni",
   "rozhodnutonapkasst",
   "sbnsspublikovano",
@@ -1038,6 +1231,8 @@ const CZ_NSS_SOURCE_FIELDS = [
   "ucastnicirizeniz",
   "ucastnikrizeni",
   "vyrokrozhodnuti",
+  "vztahkpredpisům",
+  "vyhledavanidlehesel",
   "zastupce",
   "zobrazovanedatum",
 ] as const;
@@ -1069,6 +1264,47 @@ const CZ_NSS_EXCLUSION = {
 } as const;
 
 const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
+  datumvydanivsbnss: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publicationDate" },
+  },
+  nadpis: { disposition: "stored", target: { type: "metadata", key: "title" } },
+  nssjudikat: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
+  nssrok: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
+  nsssesit: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
+  pravnivetaan: excludedSourceField(
+    "The reporter's ano/ne headnote flag repeats whether the stored legal sentence is present.",
+  ),
+  rozpornaprejudikatura: {
+    disposition: "stored",
+    target: { type: "metadata", key: "referencedCourtCases" },
+  },
+  vyhledavanidlehesel: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+  vztahkpredpisům: {
+    disposition: "stored",
+    target: { type: "metadata", key: "statutes" },
+  },
+
+  "registry:Spisová značka": excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  "registry:Předkládací usnesení": excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  "registry:Datum předložení": excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  ),
+  "registry:Proti věci": excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
+  "registry:Stav": excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  "registry:Datum rozhodnutí RS": excludedSourceField(
+    "The decision date is already stored from the portal detail page; the registry repeats it for the extended-chamber proceeding.",
+  ),
+  "registry:Rozhodnutí RS": excludedSourceField(
+    "The complete reference is already stored from the portal listing, including its sheet. The registry link is used to select that exact original.",
+  ),
+  "registry:Anotace": excludedSourceField(
+    "The registry's explanatory proceeding note is distinct from the decision and its legal sentence; the decision row has no proceeding-annotation field.",
+  ),
   aktualizovano: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
   "aplikovanepravnipredpisysb§": excludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
@@ -1282,10 +1518,11 @@ const decodeNumericEntities = (value: string): string =>
 /**
  * What the portal states as a field, by the names it gives them.
  *
- * The detail part is the only one that names fields: the document and the
- * plain-text rendering beside it are the decision itself, under no labels.
+ * Detail fields have publisher IDs; the recovery registry states table labels.
+ * The document and its plain-text rendering carry the decision itself.
  */
 const listCzNssSourceFields = (parts: SourceRawParts): readonly string[] => [
+  ...listNssRegistryFields(parts[CZ_NSS_RAW_PART.REGISTRY] ?? ""),
   ...new Set(
     [...(parts[CZ_NSS_RAW_PART.DETAIL] ?? "").matchAll(CZ_NSS_FIELD_ID_RE)].map(
       (match) => decodeNumericEntities(match.groups?.["field"] ?? ""),
@@ -1299,7 +1536,7 @@ const listCzNssSourceFields = (parts: SourceRawParts): readonly string[] => [
  * second reader — a backfill that fetches this page for the headnote alone —
  * must bind to the same shape rather than restate its keys.
  */
-export type CzNssDetailMetadata = {
+type CzNssDetailValues = {
   ecli: string | undefined;
   judge: string | undefined;
   senate: string | undefined;
@@ -1313,85 +1550,217 @@ export type CzNssDetailMetadata = {
   administrativeAuthority: string | undefined;
   citation: string | undefined;
   legalSentence: string | undefined;
+  title: string | undefined;
+  statutes: string | undefined;
+  publicationDate: string | undefined;
+  conflictingPrecedents: string | undefined;
 };
 
-type ExtractDivTextOptions = {
-  html: string;
-  divId: string;
-  emptyValue?: "preserve" | "omit";
+const NSS_DETAIL_FIELD_KIND = {
+  SCALAR: "scalar",
+  MULTIPLE: "multiple",
+} as const;
+type DetailFieldDefinition = {
+  field: CzNssSourceField;
+  kind: (typeof NSS_DETAIL_FIELD_KIND)[keyof typeof NSS_DETAIL_FIELD_KIND];
+  emptyValue: "preserve" | "omit";
+};
+const NSS_DETAIL_FIELDS = {
+  ecli: {
+    field: "ecli",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  judge: {
+    field: "soudcezpravodaj",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  senate: {
+    field: "soudsenat",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  legalArea: {
+    field: "oblastupravy",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  decisionType: {
+    field: "druhdokumentuavyrokrozhodnuti",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  decisionDate: {
+    field: "datumvydanirozhodnuti",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  outcome: {
+    field: "vyrokrozhodnuti",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  caseType: {
+    field: "typrizeni",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  parties: {
+    field: "ucastnicirizeniz",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  caseStatus: {
+    field: "stavrizeni",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  administrativeAuthority: {
+    field: "nazevspravnihoorganu",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  citation: {
+    field: "citace",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  legalSentence: {
+    field: "pravnivetaupravena",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "preserve",
+  },
+  title: {
+    field: "nadpis",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  statutes: {
+    field: "vztahkpredpisům",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  publicationDate: {
+    field: "datumvydanivsbnss",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  conflictingPrecedents: {
+    field: "rozpornaprejudikatura",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+} as const satisfies Record<keyof CzNssDetailValues, DetailFieldDefinition>;
+
+type DetailFieldEvidence = {
+  type: "related" | "scalar_conflict";
+  field: (typeof NSS_DETAIL_FIELDS)[keyof typeof NSS_DETAIL_FIELDS]["field"];
+  values: string[];
+};
+export type CzNssDetailMetadata = CzNssDetailValues & {
+  detailFieldEvidence?: DetailFieldEvidence[];
 };
 
-/** Extract a div's value text by its ID, skipping the label span. */
-const extractDivText = ({
-  html,
-  divId,
-  emptyValue = "omit",
-}: ExtractDivTextOptions): string | undefined => {
-  const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "iu");
-  const match = html.match(pattern);
-  if (!match?.[1]) {
-    return undefined;
-  }
+type ExtractDetailFieldTextOptions = {
+  document: CheerioAPI;
+  definition: (typeof NSS_DETAIL_FIELDS)[keyof typeof NSS_DETAIL_FIELDS];
+  evidence: DetailFieldEvidence[];
+};
 
-  // Structure: <span class="det-textitle">Label:</span>
-  //            <span class="det-textval" title="Value">Value</span>
-  const valPattern =
-    /class="det-textval[^"]*"[^>]*>(?<value>[\s\S]*?)<\/span>/giu;
-  let valMatch: RegExpExecArray | null;
+/** Scalar record cards and related-record table cells have different owners. */
+const extractDetailFieldText = ({
+  document: $,
+  definition: { field: fieldId, kind, emptyValue },
+  evidence,
+}: ExtractDetailFieldTextOptions): string | undefined => {
+  const fields = $(`[id="${fieldId}"], [data-field-id="${fieldId}"]`);
   const texts: string[] = [];
+  const related: string[] = [];
   let statedValueCount = 0;
-  while ((valMatch = valPattern.exec(match[1])) !== null) {
-    statedValueCount += 1;
-    const text = stripHtml(valMatch.groups?.["value"] ?? "").trim();
-    if (text) {
-      texts.push(text);
+  for (const element of fields) {
+    const field = $(element);
+    const values = field.hasClass("det-textval")
+      ? field
+      : field.find(".det-textval");
+    for (const value of values) {
+      const cell = $(value);
+      const text = stripHtml(cell.html() ?? "").trim();
+      if (
+        kind === NSS_DETAIL_FIELD_KIND.SCALAR &&
+        cell.closest("table").length > 0
+      ) {
+        if (text) {
+          related.push(text);
+        }
+        continue;
+      }
+      statedValueCount += 1;
+      if (text) {
+        texts.push(text);
+      }
     }
   }
-  if (texts.length > 0) {
-    return texts.join(", ");
+  if (related.length > 0) {
+    evidence.push({ type: "related", field: fieldId, values: related });
   }
-
-  return emptyValue === "preserve" && statedValueCount > 0 ? "" : undefined;
+  switch (kind) {
+    case NSS_DETAIL_FIELD_KIND.SCALAR: {
+      const distinct = [...new Set(texts)];
+      if (distinct.length > 1) {
+        evidence.push({
+          type: "scalar_conflict",
+          field: fieldId,
+          values: distinct,
+        });
+        return undefined;
+      }
+      return distinct.at(0);
+    }
+    case NSS_DETAIL_FIELD_KIND.MULTIPLE:
+      if (texts.length > 0) {
+        return texts.join(", ");
+      }
+      return emptyValue === "preserve" && statedValueCount > 0 ? "" : undefined;
+    default:
+      kind satisfies never;
+      return panic(`Unhandled NSS detail field kind: ${String(kind)}`);
+  }
 };
 
-/**
- * Read the detail page's fields out of its markup.
- *
- * Split from the fetch below so a caller that already holds the page — a
- * backfill reading the headnote off it, its own tests — parses it through
- * the adapter rather than through a second copy of these field names.
- */
-export const parseCzNssDetailMetadata = (
-  html: string,
-): CzNssDetailMetadata => ({
-  ecli: extractDivText({ html, divId: "ecli" }),
-  judge: extractDivText({ html, divId: "soudcezpravodaj" }),
-  senate: extractDivText({ html, divId: "soudsenat" }),
-  legalArea: extractDivText({ html, divId: "oblastupravy" }),
-  decisionType: statedDecisionType(
-    extractDivText({ html, divId: "druhdokumentuavyrokrozhodnuti" }),
-  ),
-  decisionDate: extractDivText({ html, divId: "datumvydanirozhodnuti" }),
-  outcome: extractDivText({ html, divId: "vyrokrozhodnuti" }),
-  caseType: extractDivText({ html, divId: "typrizeni" }),
-  parties: extractDivText({ html, divId: "ucastnicirizeniz" }),
-  caseStatus: extractDivText({ html, divId: "stavrizeni" }),
-  administrativeAuthority: extractDivText({
-    html,
-    divId: "nazevspravnihoorganu",
-  }),
-  citation: extractDivText({ html, divId: "citace" }),
-  // The headnote the court writes for a decision it selects into its
-  // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
-  // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
-  // and the field is on the detail page alone: neither document
-  // endpoint carries it.
-  legalSentence: extractDivText({
-    html,
-    divId: "pravnivetaupravena",
-    emptyValue: "preserve",
-  }),
-});
+export const parseCzNssDetailMetadata = (html: string): CzNssDetailMetadata => {
+  const document = load(html);
+  const evidence: DetailFieldEvidence[] = [];
+  const read = (key: keyof typeof NSS_DETAIL_FIELDS) =>
+    extractDetailFieldText({
+      document,
+      definition: NSS_DETAIL_FIELDS[key],
+      evidence,
+    });
+  const values = {
+    ecli: read("ecli"),
+    judge: read("judge"),
+    senate: read("senate"),
+    legalArea: read("legalArea"),
+    decisionType: statedDecisionType(read("decisionType")),
+    decisionDate: read("decisionDate"),
+    outcome: read("outcome"),
+    caseType: read("caseType"),
+    parties: read("parties"),
+    caseStatus: read("caseStatus"),
+    administrativeAuthority: read("administrativeAuthority"),
+    citation: read("citation"),
+    legalSentence: read("legalSentence"),
+    title: read("title"),
+    statutes: read("statutes"),
+    publicationDate: read("publicationDate"),
+    conflictingPrecedents: read("conflictingPrecedents"),
+  } satisfies CzNssDetailValues;
+  return {
+    ...values,
+    ...(evidence.length === 0 ? {} : { detailFieldEvidence: evidence }),
+  };
+};
 
 /**
  * Fetch structured metadata from /DokumentDetail/Index/{id}.
@@ -1412,6 +1781,10 @@ const EMPTY_DETAIL: CzNssDetailMetadata = {
   administrativeAuthority: undefined,
   citation: undefined,
   legalSentence: undefined,
+  title: undefined,
+  statutes: undefined,
+  publicationDate: undefined,
+  conflictingPrecedents: undefined,
 };
 
 /**
@@ -1539,6 +1912,17 @@ type RowToResultOptions = {
 const detailMetadataFields = (
   detail: CzNssDetailMetadata,
 ): Record<string, unknown> => ({
+  detailFieldEvidence: detail.detailFieldEvidence,
+  title: detail.title,
+  statutes: detail.statutes === undefined ? undefined : [detail.statutes],
+  publicationDate: detail.publicationDate,
+  referencedCourtCases:
+    detail.conflictingPrecedents === undefined
+      ? undefined
+      : {
+          relation: "conflicting-precedent",
+          text: detail.conflictingPrecedents,
+        },
   ecli: detail.ecli,
   judge: detail.judge,
   senate: detail.senate,
@@ -1602,6 +1986,11 @@ const rowToResult = ({
     ...(content.fallbackText === undefined
       ? {}
       : { [CZ_NSS_RAW_PART.TEXT]: content.fallbackText }),
+    ...(content.recovery === undefined
+      ? {}
+      : {
+          ...content.recovery,
+        }),
     ...(detailHtml === null ? {} : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
     [CZ_NSS_RAW_PART.LISTING]: storedListingRow(row),
   };
@@ -1710,7 +2099,9 @@ const storedPublishedCaseNumber = ({
  * plain text the portal serves where that endpoint answered instead.
  */
 type StoredDocument =
-  { type: "html"; html: string } | { type: "text"; text: string };
+  | { type: "html"; html: string }
+  | { type: "text"; text: string }
+  | { type: "pdf"; base64: string };
 
 const storedDocumentOf = (
   raw: string,
@@ -1721,12 +2112,23 @@ const storedDocumentOf = (
   if (parts === null) {
     return { type: "html", html: raw };
   }
+  const pdf = parts[CZ_NSS_RAW_PART.PDF];
+  if (pdf !== undefined) {
+    return { type: "pdf", base64: pdf };
+  }
+  const text = parts[CZ_NSS_RAW_PART.TEXT];
+  if (
+    text !== undefined &&
+    !isNssDocumentPlaceholder(text) &&
+    stripHtml(text).length > CZ_NSS_MIN_FULLTEXT_CHARS
+  ) {
+    return { type: "text", text };
+  }
   const html = parts[CZ_NSS_RAW_PART.DOCUMENT];
   if (html !== undefined) {
     return { type: "html", html };
   }
-  const text = parts[CZ_NSS_RAW_PART.TEXT];
-  return text === undefined ? null : { type: "text", text };
+  return null;
 };
 
 type RebuildStoredDocumentOptions = {
@@ -1749,7 +2151,7 @@ type RebuiltDocument = {
  * What the crawl built from this payload, rebuilt from the payload alone, or
  * `null` where it holds nothing a row could be stored on.
  */
-const rebuildStoredDocument = ({
+const rebuildStoredDocument = async ({
   caseNumber,
   court,
   decisionDate,
@@ -1758,30 +2160,51 @@ const rebuildStoredDocument = ({
   document,
   ecli,
   sourceUrl,
-}: RebuildStoredDocumentOptions): RebuiltDocument | null => {
-  if (document.type === "text") {
-    // The same reading the crawl takes from this endpoint, down to the floor
-    // that tells a document from a portal error page.
-    const body = stripHtml(document.text);
-    return body.length > CZ_NSS_MIN_FULLTEXT_CHARS
-      ? { fulltext: body, documentAst: EMPTY_AST }
-      : null;
+}: RebuildStoredDocumentOptions): Promise<RebuiltDocument | null> => {
+  switch (document.type) {
+    case "text": {
+      const body = stripHtml(document.text);
+      return body.length > CZ_NSS_MIN_FULLTEXT_CHARS
+        ? { fulltext: body, documentAst: EMPTY_AST }
+        : null;
+    }
+    case "pdf": {
+      const parsed = await parseNssPdf({
+        bytes: Buffer.from(document.base64, "base64"),
+        input: {
+          caseNumber,
+          ecli,
+          court,
+          decisionDate,
+          decisionType,
+          sourceUrl,
+          detailMetadata,
+        },
+      });
+      return parsed.documentAst.blocks.length === 0 ? null : parsed;
+    }
+    case "html": {
+      if (isNssDocumentPlaceholder(document.html)) {
+        return null;
+      }
+      const parsed = parseNssDecisionHtml({
+        caseNumber,
+        ecli,
+        court,
+        decisionDate,
+        decisionType,
+        sourceUrl,
+        html: document.html,
+        detailMetadata,
+      });
+      return parsed.documentAst.blocks.length === 0
+        ? null
+        : { fulltext: parsed.fulltext, documentAst: parsed.documentAst };
+    }
+    default:
+      document satisfies never;
+      return panic(`Unhandled NSS stored document: ${String(document)}`);
   }
-
-  const parsed = parseNssDecisionHtml({
-    caseNumber,
-    ecli,
-    court,
-    decisionDate,
-    decisionType,
-    sourceUrl,
-    html: document.html,
-    detailMetadata,
-  });
-
-  return parsed.documentAst.blocks.length === 0
-    ? null
-    : { fulltext: parsed.fulltext, documentAst: parsed.documentAst };
 };
 
 /**
@@ -1794,15 +2217,15 @@ const rebuildStoredDocument = ({
  * before it carries the document alone: its metadata is whatever the ingest
  * of the day wrote, and only a re-crawl can add to it.
  *
- * The document itself is whichever of the two endpoints answered for this
- * decision, and a replay rebuilds what the crawl built from it: an AST from
- * the rich HTML, plain fulltext under an empty AST from the text endpoint. A
+ * Replay reads the archived registry PDF when recovery supplied it; otherwise
+ * it rebuilds the rich HTML or the usable plain-text rendering. Older rows
+ * without a registry capture need a re-crawl to discover that original. A
  * replay that read only the rich part would reject every text-served row as
  * having no document, which is a row the crawl stored quite deliberately.
  */
-const reparseStoredRaw = (
+const reparseStoredRaw = async (
   stored: StoredRawReparseInput,
-): StoredRawReparseOutcome => {
+): Promise<StoredRawReparseOutcome> => {
   if (
     stored.contentType !== null &&
     !CZ_NSS_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
@@ -1831,7 +2254,7 @@ const reparseStoredRaw = (
   const rebuilt =
     storedDocument === null
       ? null
-      : rebuildStoredDocument({
+      : await rebuildStoredDocument({
           document: storedDocument,
           caseNumber: stored.caseNumber,
           ecli,
@@ -2390,19 +2813,59 @@ export const buildCzNssDecision = async ({
     return {
       type: "detail-unavailable",
       decision: listingOnlyDecision(
-        rowToResult({ row, content: EMPTY_CONTENT, detail, detailHtml }),
+        rowToResult({
+          row,
+          content: contentRead.content ?? EMPTY_CONTENT,
+          detail,
+          detailHtml,
+        }),
         contentRead.readOutcome,
       ),
     };
   }
-  const { content } = contentRead;
+  let { content } = contentRead;
+  if (
+    !content.fulltext &&
+    (content.documentAst !== undefined && "blocks" in content.documentAst
+      ? content.documentAst.blocks.length
+      : 0) === 0
+  ) {
+    const recovered = await fetchRegistryDocument({ row, detail, signal });
+    if (recovered.type === "unavailable") {
+      return {
+        type: "detail-unavailable",
+        decision: listingOnlyDecision(
+          rowToResult({
+            row,
+            content: {
+              ...content,
+              ...(recovered.content?.recovery === undefined
+                ? {}
+                : { recovery: recovered.content.recovery }),
+            },
+            detail,
+            detailHtml,
+          }),
+          recovered.readOutcome,
+        ),
+      };
+    }
+    content = {
+      ...recovered.content,
+      sourceRaw: content.sourceRaw,
+      fallbackText: content.fallbackText,
+    };
+  }
   const decision = rowToResult({ row, content, detail, detailHtml });
 
   // Both document endpoints answered with nothing usable. The metadata row is
   // still a decision to the crawl, stored listing-only so the reconciliation
   // reads the document again; to the reconciliation it is a document that has
   // not been read yet.
-  return content.sourceRaw === undefined && content.fulltext === undefined
+  return !content.fulltext &&
+    (content.documentAst !== undefined && "blocks" in content.documentAst
+      ? content.documentAst.blocks.length
+      : 0) === 0
     ? {
         type: "detail-unavailable",
         decision: listingOnlyDecision(decision, null),
@@ -2734,6 +3197,8 @@ const SOURCE_SURFACES = [
   "original",
   "export",
   "citation-copy",
+  "extended-chamber-registry",
+  "extended-chamber-document",
 ] as const;
 
 const CZ_NSS_SOURCE_SURFACES = {
@@ -2744,6 +3209,8 @@ const CZ_NSS_SOURCE_SURFACES = {
     listing: storedSourceSurface(CZ_NSS_RAW_PART.LISTING),
     detail: storedSourceSurface(CZ_NSS_RAW_PART.DETAIL),
     document: storedSourceSurface(CZ_NSS_RAW_PART.DOCUMENT),
+    "extended-chamber-registry": storedSourceSurface(CZ_NSS_RAW_PART.REGISTRY),
+    "extended-chamber-document": storedSourceSurface(CZ_NSS_RAW_PART.PDF),
     text: backlogSurface(
       ADAPTER_KEYS.CZ_NSS,
       "the plain-text rendering is fetched only where the rich document is absent, so the part is missing from every capture of a decision the portal served in full",
