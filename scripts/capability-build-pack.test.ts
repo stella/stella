@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
 } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -33,35 +33,52 @@ const catalogBytes = async (directory: string) => {
   );
 };
 
-// timeout: exercises the release packer's two full CLI builds.
+// timeout: installs with lifecycle scripts, prepares sources and builds the API,
+// then exercises the release packer's two full CLI builds.
 test(
-  "the reproducible CLI release pack contains freshly generated capability shards",
+  "a clean checkout installs, prepares and builds without capability shards and packs a fresh catalog",
   async () => {
     const temporary = mkdtempSync(path.join(tmpdir(), "stella-cli-build-"));
     const checkout = path.join(temporary, "checkout");
     try {
-      run(
+      const sourceFiles = Bun.spawnSync(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(sourceFiles.exitCode, sourceFiles.stderr.toString()).toBe(0);
+      // Copy source bytes, including pending edits, without sharing inodes or
+      // dependencies: install and generators must own all their writes.
+      const copy = Bun.spawnSync(
         [
           "rsync",
           "-a",
-          `--link-dest=${ROOT}`,
-          "--exclude=.git",
-          "--exclude=/node_modules",
-          "--exclude=packages/cli/dist",
+          "--from0",
+          "--files-from=-",
+          "--exclude=node_modules",
+          "--exclude=.cache",
+          "--exclude=.turbo",
+          "--exclude=/packages/cli/capabilities",
           `${ROOT}/`,
           checkout,
         ],
-        ROOT,
+        {
+          cwd: ROOT,
+          stdin: sourceFiles.stdout,
+          stdout: "pipe",
+          stderr: "pipe",
+        },
       );
-      symlinkSync(
-        path.join(ROOT, "node_modules"),
-        path.join(checkout, "node_modules"),
-        "dir",
-      );
-      await rm(path.join(checkout, "packages/cli/capabilities"), {
-        recursive: true,
-        force: true,
-      });
+      expect(copy.exitCode, copy.stderr.toString()).toBe(0);
+      const catalog = path.join(checkout, "packages/cli/capabilities");
+      expect(existsSync(catalog)).toBe(false);
+      for (const command of [
+        ["bun", "install"],
+        ["bun", "scripts/ci-generated-sources.ts", "prepare"],
+        ["bun", "--cwd=apps/api", "run", "build"],
+      ]) {
+        run(command, checkout);
+        expect(existsSync(catalog), command.join(" ")).toBe(false);
+      }
       const destination = path.join(temporary, "packed");
       run(
         ["bash", "scripts/pack-reproducibly.sh", "cli", destination],

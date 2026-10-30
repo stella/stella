@@ -881,7 +881,7 @@ const main = async () => {
       const generated = await passThrough({
         args: ["--runtime-only"],
         env: {},
-        script: path.join(root, "packages/cli/src/codegen.ts"),
+        script: path.join(root, "packages/cli/scripts/codegen.ts"),
       });
       if (generated !== 0) {
         process.exitCode = generated;

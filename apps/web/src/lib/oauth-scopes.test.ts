@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { createTranslator } from "use-intl";
 import * as v from "valibot";
 
@@ -19,6 +17,8 @@ import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeSummary,
 } from "@/lib/oauth-scopes";
+
+import { buildCapabilityCatalog } from "../../../api/scripts/export-capability-catalog";
 
 describe("OAuth scope display groups", () => {
   test("discloses every scope in each resource grant using translated consent copy", () => {
@@ -203,21 +203,14 @@ describe("OAuth scope display groups", () => {
     });
   });
 
-  test("every destructive capability scope triggers the single deletion warning", () => {
-    const catalog = path.resolve(
-      import.meta.dir,
-      "../../../../packages/cli/capabilities",
-    );
+  test("every destructive capability scope triggers the single deletion warning", async () => {
     const capabilitySchema = v.object({
       scope: v.string(),
       destructive: v.boolean(),
     });
     const destructiveScopes = new Set<string>();
-    for (const file of new Bun.Glob("*.json").scanSync({ cwd: catalog })) {
-      const capability = v.parse(
-        capabilitySchema,
-        JSON.parse(readFileSync(path.join(catalog, file), "utf-8")),
-      );
+    for (const entry of await buildCapabilityCatalog()) {
+      const capability = v.parse(capabilitySchema, entry);
       if (capability.destructive) {
         destructiveScopes.add(capability.scope);
       }

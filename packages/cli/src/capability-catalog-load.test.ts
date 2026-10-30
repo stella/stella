@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 // `parseCapabilityCatalog` is the trust boundary between the committed catalog
 // snapshot (produced api-side) and both consumers: build-time codegen (which
@@ -266,7 +268,7 @@ const CAPABILITY_ID_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
 describe("generated capability-catalog snapshot", () => {
   test("every id is dotted lowercase kebab-case", async () => {
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }

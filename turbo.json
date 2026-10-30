@@ -767,11 +767,13 @@
       "inputs": ["$TURBO_DEFAULT$"]
     },
     "@stll/cli#codegen:runtime": {
-      "dependsOn": ["generate:capabilities"],
+      "dependsOn": ["@stll/mcp-apps#build"],
       "inputs": [
         "package.json",
-        "capabilities/**",
-        "src/codegen.ts",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/**",
+        "$TURBO_ROOT$/packages/**/src/**",
+        "scripts/codegen.ts",
         "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
@@ -1742,7 +1744,6 @@
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/cli/capabilities/**",
         "$TURBO_ROOT$/packages/ui/src/**",
         "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",

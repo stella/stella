@@ -4,10 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
 import {
   checkCapabilityRegistry,
   readCapabilityCatalog,
 } from "./capability-catalog-data.js";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const withShards = (
   shards: Record<string, string>,
@@ -102,7 +105,7 @@ test("curated capability references fail when the registry snapshot loses their 
 });
 
 test("published capability catalogs exclude API handler metadata", () => {
-  const entries = readCapabilityCatalog();
+  const entries = repositoryCapabilityCatalog;
   expect(entries.length).toBeGreaterThan(0);
   for (const entry of entries) {
     expect(entry).not.toHaveProperty("handler");

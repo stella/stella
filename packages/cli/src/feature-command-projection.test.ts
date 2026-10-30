@@ -5,11 +5,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
 import { buildApp } from "./build-cli-tree.js";
-import {
-  loadBakedCapabilityCatalog,
-  parseCapabilityCatalog,
-} from "./capability-catalog-load.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   hasFeatureCommands,
   projectFeatureCommands,
@@ -32,6 +30,8 @@ import {
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RouteNode } from "./route-types.js";
 
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
 const ORIGIN = "https://feature-projection.example";
 const FEATURE = "list-verification";
 
@@ -47,7 +47,7 @@ test("generated views have no CLI discovery entry", () => {
 const CAPABILITY = "lists.verifications.get";
 // List verification uses capability adapters; the curated tool exercises time billing.
 const TOOL = "list_time_entries";
-const catalog = loadBakedCapabilityCatalog();
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null || !catalog.some((entry) => entry.id === CAPABILITY)) {
   throw new Error("Real catalog fixture is incomplete");
 }
@@ -454,7 +454,7 @@ test("invalid feature metadata rejects fetched registry admission", () => {
 });
 
 test("the real legal-list catalogue projects every granted command", () => {
-  const actualEntries = loadBakedCapabilityCatalog();
+  const actualEntries = parseCapabilityCatalog(repositoryCapabilityCatalog);
   if (actualEntries === null) {
     panic("Capability catalogue required");
   }

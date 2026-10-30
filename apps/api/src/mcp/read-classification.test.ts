@@ -1,8 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
-
 import type {
   HandlerConfig,
   McpExposure,
@@ -20,7 +18,11 @@ import {
   resolveMcpReadClass,
 } from "@/api/mcp/tool-types";
 
-const catalog = parseCatalog(readCapabilityCatalog());
+import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
+const catalog = parseCatalog(repositoryCapabilityCatalog);
 
 describe("MCP reads retain their canonical source classification", () => {
   test("a native read cannot omit its classification", () => {

@@ -112,7 +112,17 @@ export const requireUnchangedGeneratedInputs = (
   }
 };
 
-export const validatePreparedManifest = (root: string, raw: unknown) => {
+type ValidatePreparedManifestOptions = {
+  root: string;
+  raw: unknown;
+  generatedRoot?: string;
+};
+
+export const validatePreparedManifest = ({
+  root,
+  raw,
+  generatedRoot = root,
+}: ValidatePreparedManifestOptions) => {
   const manifest = v.parse(preparedManifestSchema, raw);
   const expected = generatedInputIdentity(root);
   if (
@@ -124,8 +134,11 @@ export const validatePreparedManifest = (root: string, raw: unknown) => {
     panic("Generated source artifact does not match this source and toolchain");
   }
   if (
-    Object.keys(manifest.files).length !== ciGeneratedFiles(root).length ||
-    ciGeneratedFiles(root).some((file) => !Object.hasOwn(manifest.files, file))
+    Object.keys(manifest.files).length !==
+      ciGeneratedFiles(root, { generatedRoot }).length ||
+    ciGeneratedFiles(root, { generatedRoot }).some(
+      (file) => !Object.hasOwn(manifest.files, file),
+    )
   ) {
     panic("Generated source artifact has an incomplete output inventory");
   }
@@ -136,7 +149,7 @@ export const preparedManifestPath = (root: string) =>
   path.join(root, ".cache/ci-generated-sources/manifest.json");
 
 export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
-  const manifest = validatePreparedManifest(root, raw);
+  const manifest = validatePreparedManifest({ root, raw });
   for (const file of ciGeneratedFiles(root)) {
     if (
       generatedFileHash(readFileSync(path.join(root, file))) !==
@@ -206,13 +219,15 @@ export const restorePreparedGeneratedSources = (
   root: string,
   source: string,
 ) => {
-  const manifest = validatePreparedManifest(
+  const generatedRoot = path.join(source, "files");
+  const manifest = validatePreparedManifest({
     root,
-    JSON.parse(readFileSync(path.join(source, "manifest.json"), "utf-8")),
-  );
+    raw: JSON.parse(readFileSync(path.join(source, "manifest.json"), "utf-8")),
+    generatedRoot,
+  });
   // Validate every byte before writing any output; only the canonical inventory
   // can name a destination in the checkout.
-  const files = ciGeneratedFiles(root).map((file) => {
+  const files = ciGeneratedFiles(root, { generatedRoot }).map((file) => {
     const bytes = readFileSync(path.join(source, "files", file));
     if (generatedFileHash(bytes) !== manifest.files[file]) {
       panic(`Generated source artifact differs: ${file}`);

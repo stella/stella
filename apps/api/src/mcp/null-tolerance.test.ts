@@ -11,6 +11,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
 beforeEach(() => {
   loadOrgSettingsMock.mockClear();
 });
@@ -114,11 +118,9 @@ const loadOrgSettingsMock = mock(async () => ({
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
 const { parseCapabilityCatalog } =
   await import("../../../../packages/cli/src/capability-catalog-load");
-const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {
   throw new TypeError("Invalid capability catalog");
 }

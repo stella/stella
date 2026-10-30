@@ -30,11 +30,10 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
+import { buildCapabilityCatalog } from "./export-capability-catalog";
 import { deriveCapabilityId } from "./lib/capability-catalog";
 import type {
   Finding,
@@ -59,7 +58,6 @@ import {
 } from "./lib/enumerate-safe-handlers";
 
 const BASELINE_FILE = "apps/api/deployment-feature-routes-baseline.json";
-const CATALOG_DIRECTORY = "packages/cli/capabilities";
 
 /**
  * Path prefixes that serve an always-on surface: no deployment flag may gate
@@ -156,11 +154,11 @@ const readRecord = (file: string): SourceRecord => ({
   source: readFileSync(path.join(REPO_ROOT, file), "utf-8"),
 });
 
-const readCatalogFeatures = (): Map<string, string | undefined> => {
+const readCatalogFeatures = async (): Promise<
+  Map<string, string | undefined>
+> => {
   const features = new Map<string, string | undefined>();
-  const entries = readCapabilityCatalog(
-    pathToFileURL(`${path.join(REPO_ROOT, CATALOG_DIRECTORY)}/`),
-  );
+  const entries = await buildCapabilityCatalog();
   for (const entry of entries) {
     if (!isRecord(entry) || typeof entry["id"] !== "string") {
       return panic("deployment-feature-guard: malformed catalog entry");
@@ -219,7 +217,7 @@ export const loadRealInput = async (): Promise<ScanInput> => {
   const allFiles = new Set(scanFiles(["apps/api/src/**/*.{ts,tsx}"]));
   const withFlagText = (files: readonly string[]) =>
     files.map(readRecord).filter(({ source }) => source.includes("FEATURE_"));
-  const catalogFeatures = readCatalogFeatures();
+  const catalogFeatures = await readCatalogFeatures();
   return {
     ownerSource: readRecord(DEPLOYMENT_FEATURE_OWNER_FILE).source,
     readerFiles: withFlagText([...allFiles]),

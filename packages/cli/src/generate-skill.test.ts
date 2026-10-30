@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   CAPABILITY_NAMESPACE,
@@ -17,6 +17,8 @@ import {
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import type { RegistryToolListing } from "./route-types.js";
 
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
 const snapshotUrl = new URL(
   "generated/registry-snapshot.json",
   import.meta.url,
@@ -28,7 +30,7 @@ const listings: readonly RegistryToolListing[] =
 // way `codegen.ts` does. Worked capability examples in the generated skill
 // (see generate-skill.ts) resolve a real leaf out of this tree, so the test
 // input has to carry one instead of a hand-trimmed stand-in.
-const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null) {
   throw new TypeError("Invalid capability catalog");
 }

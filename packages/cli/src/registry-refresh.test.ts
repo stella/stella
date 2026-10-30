@@ -4,7 +4,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import { projectFeatureCommands } from "./feature-command-projection.js";
 import { generatedRouteMap } from "./generated/route-map.js";
@@ -25,7 +26,9 @@ import {
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RegistryToolListing, RouteNode } from "./route-types.js";
 
-const capabilityCatalog = loadBakedCapabilityCatalog();
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {
   panic("Invalid committed refresh-test capability catalog");
 }
@@ -189,6 +192,7 @@ describe("resolveCommandTree (S5.3)", () => {
       admittedFeatures,
     ]) {
       const resolved = await resolveCommandTree({
+        loadCatalog: () => capabilityCatalog,
         serverOrigin: ORIGIN,
         env,
         registry,
@@ -242,6 +246,7 @@ describe("resolveCommandTree (S5.3)", () => {
     }
     expect(outcome.featureAccess).toEqual(admittedFeatures);
     const resolved = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry: outcome.registry,
@@ -258,6 +263,7 @@ describe("resolveCommandTree (S5.3)", () => {
   test("no cache hides deployment and caller feature commands without drift", async () => {
     const env = await makeCacheEnv();
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
     });
@@ -281,6 +287,7 @@ describe("resolveCommandTree (S5.3)", () => {
       featureOmittedCapabilities: ["usage.entitlement.get"],
     });
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -305,6 +312,7 @@ describe("resolveCommandTree (S5.3)", () => {
       delta: { added: [], removed: [], changed: [] },
     });
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -325,6 +333,7 @@ describe("resolveCommandTree (S5.3)", () => {
       delta: { added: ["list_widgets"], removed: [], changed: [] },
     });
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -346,6 +355,7 @@ describe("resolveCommandTree (S5.3)", () => {
       delta: { added: ["list_widgets"], removed: [], changed: [] },
     });
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -379,6 +389,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -408,6 +419,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -428,6 +440,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -451,6 +464,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -472,6 +486,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -492,6 +507,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -513,6 +529,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -531,6 +548,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
     // The cache path is keyed by ORIGIN's hash, so plant the mismatched file there.
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -667,6 +685,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       "time-entries.csv.export",
     ]);
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
     });
@@ -760,6 +779,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       throw new Error("Expected fresh registry");
     }
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry: outcome.registry,

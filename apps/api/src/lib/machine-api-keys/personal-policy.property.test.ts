@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { roles, statements } from "@stll/permissions";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
@@ -32,6 +31,10 @@ import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 
+import { buildCapabilityCatalog } from "../../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
 const roleNames = Object.keys(roles).filter(isMemberRole);
 const roleArbitrary = fc.constantFrom(...roleNames);
 const createdAt = new Date();
@@ -44,7 +47,7 @@ const capabilityCatalog = v.parse(
       permissions: v.optional(v.nullable(machineApiKeyPermissionsSchema)),
     }),
   ),
-  readCapabilityCatalog(),
+  repositoryCapabilityCatalog,
 );
 const positiveWriteCapabilities = {
   "stella:documents_write": "entities.blank-document.create",

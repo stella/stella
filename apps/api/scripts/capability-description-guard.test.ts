@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import ledger from "../capability-description-ledger.json" with { type: "json" };
 import {
   computeLedgerDiff,
   findUndescribedIds,
 } from "./capability-description-guard";
+import { buildCapabilityCatalog } from "./export-capability-catalog";
 import { isRecord } from "./lib/enumerate-safe-handlers";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const readEntries = (
   catalog: unknown,
@@ -23,7 +25,7 @@ const readEntries = (
     return typeof description === "string" ? { id, description } : { id };
   });
 
-const entries = readEntries(readCapabilityCatalog());
+const entries = readEntries(repositoryCapabilityCatalog);
 const ledgerIds: string[] = Array.isArray(ledger) ? ledger : [];
 
 /** Every subset of `items`, so a property can be driven over the whole

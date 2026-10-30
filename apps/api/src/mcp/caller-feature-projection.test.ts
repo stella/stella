@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import type {
   legalListFactDetails,
@@ -34,6 +33,10 @@ import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const matterId = "a1111111-1111-4111-8111-111111111111";
 const listId = "a2222222-2222-4222-8222-222222222222";
@@ -349,7 +352,7 @@ for (const transport of [
     );
   }
 }
-const requiredCapabilities = parseCatalog(readCapabilityCatalog()).filter(
+const requiredCapabilities = parseCatalog(repositoryCapabilityCatalog).filter(
   (entry) =>
     "featureId" in entry &&
     entry.featureId === LIST_VERIFICATION_FEATURE_ID &&
@@ -423,7 +426,7 @@ test("conditional view schemas follow caller discovery", async () => {
   const granted = contextFor(true, "lists.items.list").context;
   const hidden = contextFor(false, "lists.items.list").context;
   let projected = 0;
-  for (const { id } of parseCatalog(readCapabilityCatalog()).filter(
+  for (const { id } of parseCatalog(repositoryCapabilityCatalog).filter(
     (entry) =>
       "featureId" in entry &&
       entry.featureId === LIST_VERIFICATION_FEATURE_ID &&

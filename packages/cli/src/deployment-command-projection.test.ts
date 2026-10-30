@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import { projectFeatureCommands } from "./feature-command-projection.js";
@@ -27,7 +27,9 @@ import type { CurrentRegistry } from "./registry-refresh.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RouteNode } from "./route-types.js";
 
-const rawCatalog = readCapabilityCatalog();
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
+const rawCatalog = repositoryCapabilityCatalog;
 const catalog = parseCapabilityCatalog(rawCatalog);
 if (catalog === null) {
   panic("Invalid committed deployment projection catalog");

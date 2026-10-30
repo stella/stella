@@ -652,7 +652,7 @@
     "packages/agent-engine/src/bun-docker/provider.ts": 1,
     "packages/auth-model/src/contract.ts": 1,
     "packages/cli/src/build-cli-tree.ts": 21,
-    "packages/cli/src/codegen.ts": 2,
+    "packages/cli/scripts/codegen.ts": 2,
     "packages/cli/src/generate-capability-tree.ts": 2,
     "packages/cli/src/generate-resource-tree.ts": 1,
     "packages/cli/src/generate-route-map.ts": 1,

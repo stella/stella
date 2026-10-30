@@ -630,7 +630,9 @@ test("CLI runtime determinism remains a fresh generation proof", () => {
     new URL("check-cli-runtime-generation.ts", import.meta.url),
     "utf-8",
   );
-  expect(source).toContain('["packages/cli/src/codegen.ts", "--runtime-only"]');
+  expect(source).toContain(
+    '["packages/cli/scripts/codegen.ts", "--runtime-only"]',
+  );
   expect(source).not.toContain('"codegen:runtime"');
 });
 

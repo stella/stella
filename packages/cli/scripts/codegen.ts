@@ -3,8 +3,8 @@
 // registry snapshot (produced by `apps/api/scripts/export-mcp-tool-registry.ts`,
 // the only place the heavy registry imports resolve), runs the pure
 // `generateRouteMap` with the baked-in Annotation Table, and writes the result
-// to `generated/route-map.ts`. The snapshot keeps `@stll/cli` free of any
-// `apps/api` import. Runtime modules are derived from committed inputs.
+// to `src/generated/route-map.ts`. Repository codegen builds capability data
+// from the API exporter; published runtime modules use the packaged shards.
 //
 // Full codegen refreshes snapshots; --runtime-only derives just runtime modules.
 
@@ -12,42 +12,40 @@ import { panic, Result } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
-import {
-  checkCapabilityRegistry,
-  readCapabilityCatalog,
-} from "./capability-catalog-data.js";
-import { parseCapabilityCatalog } from "./capability-catalog-load.js";
+import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
+import { checkCapabilityRegistry } from "../src/capability-catalog-data.js";
+import { parseCapabilityCatalog } from "../src/capability-catalog-load.js";
 import {
   buildCliRouteTree,
   capabilityDomainsOf,
-} from "./generate-capability-tree.js";
-import { MCP_CLI_TOOL_SCOPES } from "./generated/mcp-contract.js";
-import type { ResourceListing } from "./resource-types.js";
+} from "../src/generate-capability-tree.js";
+import { MCP_CLI_TOOL_SCOPES } from "../src/generated/mcp-contract.js";
+import type { ResourceListing } from "../src/resource-types.js";
 import type {
   DiscriminatorSubcommand,
   RegistryToolListing,
   ToolAnnotation,
-} from "./route-types.js";
-import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
-import { writeGeneratedFile } from "./write-generated-file.js";
+} from "../src/route-types.js";
+import { MAX_REQUEST_TIMEOUT_MS } from "../src/route-types.js";
+import { writeGeneratedFile } from "../src/write-generated-file.js";
 
 const runtimeOnly = process.argv.includes("--runtime-only");
 
 const snapshotUrl = new URL(
-  "generated/registry-snapshot.json",
+  "../src/generated/registry-snapshot.json",
   import.meta.url,
 );
-const outputUrl = new URL("generated/route-map.ts", import.meta.url);
+const outputUrl = new URL("../src/generated/route-map.ts", import.meta.url);
 const resourceSnapshotUrl = new URL(
-  "generated/resources-snapshot.json",
+  "../src/generated/resources-snapshot.json",
   import.meta.url,
 );
 const resourceOutputUrl = new URL(
-  "generated/resource-tree.ts",
+  "../src/generated/resource-tree.ts",
   import.meta.url,
 );
 const annotationOutputUrl = new URL(
-  "generated/tool-annotations.ts",
+  "../src/generated/tool-annotations.ts",
   import.meta.url,
 );
 
@@ -245,12 +243,12 @@ for (const tool of snapshot.output) {
   toolAnnotations[tool.name] = projectToolAnnotation(tool.cli);
 }
 
-// Project the committed capability-catalog snapshot into leaf commands and
+// Project the in-memory capability catalog into leaf commands and
 // merge them into the SAME curated tree (spec 049 Phase 3), through the ONE
 // shared `buildCliRouteTree` the runtime registry-refresh path also uses. The
-// catalog is trusted, committed data (owned by the api-side exporter),
-// validated to the fields the CLI consumes so a malformed snapshot fails loudly.
-const rawCatalog = readCapabilityCatalog();
+// catalog comes from the API exporter and is validated to the fields the CLI
+// consumes before generating commands.
+const rawCatalog = await buildCapabilityCatalog();
 checkCapabilityRegistry(rawCatalog, new Set(listings.map(({ name }) => name)));
 const catalogEntries = parseCapabilityCatalog(rawCatalog);
 if (catalogEntries === null) {
@@ -320,7 +318,8 @@ if (runtimeOnly) {
   process.exit(0);
 }
 
-const { generateCliSkill, SKILL_NAME } = await import("./generate-skill.js");
+const { generateCliSkill, SKILL_NAME } =
+  await import("../src/generate-skill.js");
 // Emit the TanStack Intent agent skill from the same registry inputs, into the
 // spec-mandated `skills/<name>/SKILL.md` at the package root. Committing it means
 // registry drift shows up as a diff here too (guarded by scripts/verify.sh and
@@ -339,7 +338,8 @@ await writeFile(
 );
 process.stderr.write(`Wrote ${skillUrl.pathname}\n`);
 
-const { generateResourceTree } = await import("./generate-resource-tree.js");
+const { generateResourceTree } =
+  await import("../src/generate-resource-tree.js");
 
 // The resource tree (spec 051 S5.4) is generated the same way from its own
 // snapshot so `reference list`/`reference show` can never drift from the
@@ -397,3 +397,5 @@ await writeFile(
 );
 
 process.stderr.write(`Wrote ${resourceOutputUrl.pathname}\n`);
+
+process.exit(0);
