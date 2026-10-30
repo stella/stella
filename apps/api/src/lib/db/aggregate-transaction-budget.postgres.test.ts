@@ -98,6 +98,32 @@ if (!databaseUrl || !enabled) {
       },
     );
 
+    test("a wrapped read preserves every row with its timer installed", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        await openClient().db.transaction(async (tx) => {
+          const setting = prepareTransactionBudgetSetting(
+            tx,
+            AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+          );
+          if (setting === undefined) {
+            return panic("A capped fixture requires a timer setting");
+          }
+          expect(
+            await tx.execute(
+              budgetedSetupRead({
+                setting,
+                statement: drizzleSql`SELECT value, current_setting('transaction_timeout') AS timeout FROM generate_series(1, 3) AS value ORDER BY value`,
+              }),
+            ),
+          ).toEqual([
+            { value: 1, timeout: "30s" },
+            { value: 2, timeout: "30s" },
+            { value: 3, timeout: "30s" },
+          ]);
+        });
+      });
+    });
+
     test("an empty setup read still installs the timer", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         await openClient().db.transaction(async (tx) => {

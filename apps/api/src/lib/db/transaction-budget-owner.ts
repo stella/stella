@@ -90,7 +90,7 @@ type BudgetedSetupReadOptions = {
   statement: SQL;
 };
 
-/** Setup reads return at most one row. The correlated LIMIT forces the timer before their work, including empty identity lookups. */
+/** The correlated LIMIT forces the timer before the read without restricting its rows. */
 export const budgetedSetupRead = ({
   setting,
   statement,
@@ -99,7 +99,7 @@ export const budgetedSetupRead = ({
   SELECT scoped_setup.* FROM stella_budget
   CROSS JOIN LATERAL (
     SELECT * FROM (${statement}) AS setup_read
-    LIMIT CASE WHEN stella_budget.applied IS NOT NULL THEN 1 ELSE 0 END
+    LIMIT CASE WHEN stella_budget.applied IS NOT NULL THEN NULL ELSE 0 END
   ) AS scoped_setup
 `;
 
