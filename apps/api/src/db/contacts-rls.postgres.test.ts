@@ -1,10 +1,11 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import { contacts } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
@@ -49,6 +50,45 @@ describe.skipIf(!enabled)(
               displayName: "Contact A",
             });
           });
+
+          // WITH CHECK: an organization can neither write a contact for
+          // another organization nor move its own contact there.
+          const sqlStateOf = async (operation: () => Promise<unknown>) => {
+            const outcome = await Result.tryPromise(operation);
+            return outcome.isErr()
+              ? getPgErrorCode(outcome.error)
+              : "committed";
+          };
+          expect(
+            await sqlStateOf(
+              async () =>
+                await db.transaction(async (tx) => {
+                  await tx.execute(
+                    sql`SELECT set_config('app.organization_id', ${organizationA}, true)`,
+                  );
+                  await tx.insert(contacts).values({
+                    id: createSafeId<"contact">(),
+                    organizationId: organizationB,
+                    type: "person",
+                    displayName: "Contact B",
+                  });
+                }),
+            ),
+          ).toBe("42501");
+          expect(
+            await sqlStateOf(
+              async () =>
+                await db.transaction(async (tx) => {
+                  await tx.execute(
+                    sql`SELECT set_config('app.organization_id', ${organizationA}, true)`,
+                  );
+                  await tx
+                    .update(contacts)
+                    .set({ organizationId: organizationB })
+                    .where(eq(contacts.id, contactA));
+                }),
+            ),
+          ).toBe("42501");
 
           await db.transaction(async (tx) => {
             const settings = await tx.execute<{
