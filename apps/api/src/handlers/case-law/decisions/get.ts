@@ -352,6 +352,7 @@ export const decisionRecordQuery = (
       languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
       decisionDate: publishedCaseLawDecisions.decisionDate,
       decisionType: publishedCaseLawDecisions.decisionType,
+      extractionWarnings: publishedCaseLawDecisions.extractionWarnings,
       citationCount: publishedCaseLawDecisions.citationCount,
       pgAstPresent: sql<boolean>`${publishedCaseLawDecisions.documentAst} IS NOT NULL`,
       sourceUrl: publishedCaseLawDecisions.sourceUrl,
@@ -627,6 +628,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionType: decision.decisionType,
       citationCount: decision.citationCount,
       documentAst,
+      extractionWarnings: decision.extractionWarnings,
       sections,
       projectionDigest:
         decision.redactedAt === null ? astRead.projectionDigest : null,

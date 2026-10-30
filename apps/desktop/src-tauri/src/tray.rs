@@ -340,38 +340,53 @@ fn build_tray_menu_with_activity(
     builder = builder.separator();
   }
 
-  if !crate::managed_policy::current().clipboard_disabled {
+  let clipboard_enabled = !crate::managed_policy::current().clipboard_disabled;
+  if clipboard_enabled {
     builder = builder.item(
       &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard"))
         .build(app)?,
     );
   }
-  if let Some(activity) = activity {
-    builder = builder.item(
-      &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
-        .enabled(false)
-        .build(app)?,
-    );
-    if activity.status == ActivityRecordingStatus::Recording
-      && let Some(name) = &activity.now
-    {
+  // Activity gets its own group: status, the recording toggle and the window.
+  let activity_enabled = crate::activity::is_enabled(app);
+  if activity.is_some() || activity_enabled {
+    if clipboard_enabled {
+      builder = builder.separator();
+    }
+    if let Some(activity) = activity {
       builder = builder.item(
         &MenuItemBuilder::with_id(
-          ACTIVITY_NOW_ITEM,
-          t_fmt("tray.activityNow", &[("name", name)]),
+          ACTIVITY_STATUS_ITEM,
+          activity_status_label(activity),
         )
         .enabled(false)
         .build(app)?,
       );
+      if activity.status == ActivityRecordingStatus::Recording
+        && let Some(name) = &activity.now
+      {
+        builder = builder.item(
+          &MenuItemBuilder::with_id(
+            ACTIVITY_NOW_ITEM,
+            t_fmt("tray.activityNow", &[("name", name)]),
+          )
+          .enabled(false)
+          .build(app)?,
+        );
+      }
+      if let Some((action, label)) = activity_action(activity.status) {
+        builder = builder.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+      }
     }
-    if let Some((action, label)) = activity_action(activity.status) {
-      builder = builder.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+    if activity_enabled {
+      builder = builder.item(
+        &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.activity"))
+          .build(app)?,
+      );
     }
-  }
-  if crate::activity::is_enabled(app) {
-    builder = builder.item(
-      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.activity")).build(app)?,
-    );
+    builder = builder.separator();
+  } else if clipboard_enabled {
+    builder = builder.separator();
   }
 
   // Settings

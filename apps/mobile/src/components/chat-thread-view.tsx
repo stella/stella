@@ -10,12 +10,13 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatMessage } from "@/components/chat-message";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
-import { Text } from "@/components/ui/text";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
 import { epochMilliseconds } from "@/connection/clock";

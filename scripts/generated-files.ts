@@ -260,6 +260,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/http/*",
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
+    "apps/api/src/lib/account-export/enqueue.ts",
+    "apps/api/src/lib/account-export/store.ts",
     "apps/api/src/lib/agent-skills/*",
     "apps/api/src/lib/analytics/*",
     "apps/api/src/lib/auth/*",
@@ -871,6 +873,26 @@ const TRANSITIVE_GENERATOR_INPUTS = {
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "main-heavy-infrastructure-steps",
+    outputKind: "committed",
+    outputs: ["scripts/main-heavy-infrastructure-steps.json"],
+    inputs: [
+      ".github/workflows/ci.yml",
+      "scripts/generate-main-heavy-infrastructure-steps.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "bunfig.toml",
+      ".prettierrc.yml",
+    ],
+    write: ["bun", "scripts/generate-main-heavy-infrastructure-steps.ts"],
+    check: [
+      "bun",
+      "scripts/generate-main-heavy-infrastructure-steps.ts",
+      "--check",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "tailwind-class-cache",
     outputKind: "committed",
     outputs: [".tailwind-cache/**"],
@@ -1107,13 +1129,11 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: [
       "apps/mobile/src/icons.gen.ts",
-      "apps/mobile/src/brand.gen.ts",
       "apps/mobile/src/bar-glyphs.gen.ts",
       "apps/mobile/assets/bar-glyphs/**",
     ],
     inputs: [
       "packages/ui/src/icons.ts",
-      "packages/ui/src/components/stella-wordmark.tsx",
       "scripts/generate-mobile-icons.ts",
       // lucide-static's outlined glyphs, at the version the lockfile pins.
       "apps/mobile/package.json",
