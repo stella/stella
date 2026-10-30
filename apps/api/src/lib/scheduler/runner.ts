@@ -1,4 +1,4 @@
-import { Err, panic } from "better-result";
+import { Err, panic, Result } from "better-result";
 import {
   and,
   asc,
@@ -55,9 +55,10 @@ import {
 import type { SchedulerTableName } from "./table-declarations";
 
 // Lifecycle writes accompany every execution, including tasks with no domain tables.
-const SCHEDULER_INFRASTRUCTURE_TABLES = [
+export const SCHEDULER_INFRASTRUCTURE_TABLES = [
   "scheduler_jobs",
   "scheduler_job_runs",
+  "scheduler_table_lease_activity",
 ] as const satisfies readonly SchedulerTableName[];
 
 const executionTableNames = (taskTables: readonly string[]) => [
@@ -478,7 +479,6 @@ type StartLeaseHeartbeatOptions = {
   onLeaseLost: () => void;
   runnerId: string;
   signal: AbortSignal;
-  tableCount?: number;
 };
 
 // A renewal that matches no row means the lease token no longer owns the job:
@@ -496,7 +496,6 @@ export const startLeaseHeartbeat = ({
   onLeaseLost,
   runnerId,
   signal,
-  tableCount,
 }: StartLeaseHeartbeatOptions): LeaseHeartbeat => {
   let stopped = false;
   // Read through a function: `stopped` changes in `stop()` while a renewal
@@ -542,16 +541,6 @@ export const startLeaseHeartbeat = ({
           ),
         )
         .returning({ id: schedulerJobs.id });
-      if (renewedJobs.length > 0) {
-        const renewedCount = await renewJobTableLeases(
-          tx,
-          tableLeaseHolderId(jobId, leaseToken),
-          leaseMs,
-        );
-        if (tableCount !== undefined && renewedCount !== tableCount) {
-          return [];
-        }
-      }
       return renewedJobs;
     });
 
@@ -641,6 +630,165 @@ const logPausedJobRan = (job: PausedJob) => {
   logger.error("scheduler.job.paused_job_ran", pausedJobAttributes(job));
 };
 
+type StartTaskTableLeaseLifetimeOptions = {
+  db: SchedulerDb;
+  holderId: string;
+  intervalMs: number;
+  leaseMs: number;
+  tableCount: number | undefined;
+  onLeaseLost: () => void;
+  jobId: string;
+};
+
+/** Task resources may outlive a runtime timeout, so their leases follow settlement. */
+const startTaskTableLeaseLifetime = ({
+  db,
+  holderId,
+  intervalMs,
+  leaseMs,
+  tableCount,
+  onLeaseLost,
+  jobId,
+}: StartTaskTableLeaseLifetimeOptions) => {
+  let taskState:
+    | { type: "not_started" }
+    | { type: "running"; promise: Promise<unknown> }
+    | { type: "settled" } = { type: "not_started" };
+  let renewal: Promise<void> | undefined;
+  let lastRenewedAt = performance.now();
+  let ownershipLost = false;
+  const markLost = () => {
+    if (ownershipLost) {
+      return;
+    }
+    ownershipLost = true;
+    logger.warn("scheduler.table_lease_lost", {
+      "scheduler.holder_id": holderId,
+    });
+    onLeaseLost();
+  };
+  const renew = async () => {
+    const startedAt = performance.now();
+    const result = await Result.tryPromise(
+      async () => await renewJobTableLeases(db, holderId, leaseMs),
+    );
+    if (result.isErr()) {
+      captureError(
+        result.error,
+        handlerErrorContext("scheduler.tableLeaseHeartbeat", {
+          schedulerJobId: jobId,
+        }),
+      );
+      logger.warn("scheduler.table_lease_heartbeat_failed", {
+        "scheduler.holder_id": holderId,
+        "error.type": errorTag(result.error),
+      });
+      if (performance.now() - lastRenewedAt >= leaseMs) {
+        markLost();
+      }
+      return;
+    }
+    if (tableCount !== undefined && result.value !== tableCount) {
+      markLost();
+      return;
+    }
+    lastRenewedAt = startedAt;
+  };
+  const timer = setInterval(() => {
+    if (renewal !== undefined) {
+      return;
+    }
+    renewal = renew().finally(() => {
+      renewal = undefined;
+    });
+    detached(renewal, "scheduler-runner.renew-task-tables");
+  }, intervalMs);
+  const release = async () => {
+    clearInterval(timer);
+    try {
+      await renewal;
+    } finally {
+      await releaseJobTableLeases(db, holderId);
+    }
+  };
+  const runTask = <T>(work: () => T) => {
+    const promise = Promise.resolve()
+      .then(work)
+      .finally(() => {
+        taskState = { type: "settled" };
+      });
+    taskState = { type: "running", promise };
+    return promise;
+  };
+  return {
+    runTask,
+    finish: async () => {
+      switch (taskState.type) {
+        case "running": {
+          const pending = taskState.promise;
+          // Scheduler completion is final; a late exception is telemetry only,
+          // and table ownership still follows the task's actual settlement.
+          detached(
+            (async () => {
+              const outcome = await Result.tryPromise(
+                async () => await pending,
+              );
+              try {
+                if (outcome.isErr()) {
+                  captureError(
+                    outcome.error,
+                    handlerErrorContext(
+                      "scheduler.taskSettledAfterCompletion",
+                      {
+                        schedulerJobId: jobId,
+                      },
+                    ),
+                  );
+                }
+              } finally {
+                await release();
+              }
+            })(),
+            "scheduler-runner.release-task-tables",
+          );
+          return;
+        }
+        case "not_started":
+        case "settled":
+          await release();
+          return;
+        default:
+          taskState satisfies never;
+          return panic("Unknown task table lease lifetime state");
+      }
+    },
+  };
+};
+
+type ReadJobOperatorStateOptions = {
+  db: SchedulerDb;
+  jobId: string;
+  eligibilityTime: SQL;
+};
+
+const readJobOperatorState = async ({
+  db,
+  jobId,
+  eligibilityTime,
+}: ReadJobOperatorStateOptions) => {
+  const [current] = await db
+    .select({
+      enabled: schedulerJobs.enabled,
+      paused: sql<boolean>`coalesce(${schedulerJobs.pausedUntil} > ${eligibilityTime}, false)`,
+      pausedBy: schedulerJobs.pausedBy,
+      pauseReason: schedulerJobs.pauseReason,
+    })
+    .from(schedulerJobs)
+    .where(eq(schedulerJobs.id, jobId))
+    .limit(1);
+  return current ?? panic("Leased scheduler job disappeared before execution");
+};
+
 type RunJobOptions = {
   db: SchedulerDb;
   heartbeatIntervalMs: number;
@@ -672,199 +820,213 @@ export const runJob = async ({
     { type: "job", jobId: job.id, task: job.task },
     async () => {
       const leaseToken = leaseTokenOf(job);
-      const startedAt = new Date();
-      const runId = await createRun({ db, job, runnerId, startedAt });
-      // Re-read operator state: a pause may have committed after acquisition.
-      const eligibilityTime = now
-        ? sql`${new Date(now())}::timestamptz`
-        : sql`now()`;
-      const [current] = await db
-        .select({
-          enabled: schedulerJobs.enabled,
-          paused: sql<boolean>`coalesce(${schedulerJobs.pausedUntil} > ${eligibilityTime}, false)`,
-          pausedBy: schedulerJobs.pausedBy,
-          pauseReason: schedulerJobs.pauseReason,
-        })
-        .from(schedulerJobs)
-        .where(eq(schedulerJobs.id, job.id))
-        .limit(1);
-      if (!current) {
-        return panic("Leased scheduler job disappeared before execution");
-      }
-      if (current.paused || !current.enabled) {
-        if (current.paused) {
-          logOperatorPause(
-            { id: job.id, task: job.task, ...current },
-            "before_start",
-          );
-        }
-        await finishRunSkipped({
-          db,
-          job,
-          leaseToken,
-          reason: current.paused
-            ? "SchedulerOperatorPaused"
-            : "SchedulerJobDisabled",
-          runId,
-          startedAt,
-        });
-        return "skipped";
-      }
-
-      const controller = new AbortController();
-      const abortListener = () => controller.abort();
-      signal?.addEventListener("abort", abortListener, { once: true });
-
-      // A parent abort that fired while createRun() was awaited would not replay
-      // through the listener attached above. Re-check synchronously and bail before
-      // any task or heartbeat starts, releasing the lease cleanly.
-      if (signal?.aborted) {
-        controller.abort();
-        signal.removeEventListener("abort", abortListener);
-        await finishRunSkipped({
-          db,
-          job,
-          leaseToken,
-          reason: "SchedulerAborted",
-          runId,
-          startedAt,
-        });
-        return "skipped";
-      }
-
-      let leaseLost = false;
-      // Read through a function: the heartbeat sets `leaseLost` from a callback,
-      // which flow narrowing cannot see.
-      const isLeaseLost = (): boolean => leaseLost;
-      const heartbeat = startLeaseHeartbeat({
-        db,
-        intervalMs: heartbeatIntervalMs,
-        jobId: job.id,
-        leaseMs,
-        leaseToken,
-        onLeaseLost: () => {
-          leaseLost = true;
-          controller.abort();
-        },
-        runnerId,
-        signal: controller.signal,
-        tableCount,
-      });
-      const task = registry.get(job.task);
-      let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-      // Set the instant the ceiling fires, before the abort is broadcast, and
-      // consulted after the race regardless of how it settled. The race outcome
-      // alone is not authoritative: a cooperative task that resolves (or rejects)
-      // from its abort listener can fulfill the race even though the ceiling already
-      // fired, so that fulfillment is a zombie result, not a success.
-      let timeoutError: SchedulerJobTimeoutError | undefined;
-      let raceError: unknown;
-      let raceRejected = false;
-      let continuationAt: Date | undefined;
-
+      let tableLifetime:
+        ReturnType<typeof startTaskTableLeaseLifetime> | undefined;
       try {
-        if (!task) {
-          throw new ConfigurationError({
-            message: `No scheduler task registered for ${job.task}`,
-          });
-        }
-
-        // Bound the task's runtime. A JS promise cannot be force-cancelled, so on
-        // expiry we abort the task's signal, giving a cooperative task a chance to
-        // stop before its lease is released; a task that ignores the signal keeps
-        // running as a "zombie". We never chain a completion write onto it, and the
-        // guarded completion writes below reject a late write anyway, so a zombie
-        // can never overwrite the timed-out state.
-        const timeout = new Promise<never>((_resolve, reject) => {
-          timeoutTimer = setTimeout(() => {
-            const ceilingError = new SchedulerJobTimeoutError({
-              jobId: job.id,
-              message: `Scheduler job ${job.id} exceeded its ${maxRuntimeMs}ms runtime ceiling`,
-              timeoutMs: maxRuntimeMs,
-            });
-            timeoutError = ceilingError;
-            controller.abort();
-            reject(ceilingError);
-          }, maxRuntimeMs);
-        });
-
-        const outcome = await Promise.race([
-          Promise.resolve(
-            task({
-              db,
-              dueAt: DueSlot.of(job),
-              job,
-              logger,
-              payload: job.payload,
-              runId,
-              scheduleContinuation: (nextRunAt) => {
-                continuationAt = nextRunAt;
-              },
-              signal: controller.signal,
-            }),
-          ),
-          timeout,
-        ]);
-        if (outcome instanceof Err) {
-          raceError = outcome.error.cause;
-          raceRejected = true;
-        }
-      } catch (error: unknown) {
-        raceError = error;
-        raceRejected = true;
-      } finally {
-        if (timeoutTimer) {
-          clearTimeout(timeoutTimer);
-        }
-        signal?.removeEventListener("abort", abortListener);
-      }
-
-      // Stop heartbeating before any completion write: the lease must not be renewed
-      // while we release it, and the completion transaction must not race a renewal
-      // on the same connection.
-      heartbeat.stop();
-
-      // A short task can finish between heartbeats after a pause commits. Report
-      // that overlap while still recording completed work once, avoiding replay.
-      if (!isLeaseLost()) {
-        const completionTime = now
+        const startedAt = new Date();
+        const runId = await createRun({ db, job, runnerId, startedAt });
+        // Re-read operator state: a pause may have committed after acquisition.
+        const eligibilityTime = now
           ? sql`${new Date(now())}::timestamptz`
           : sql`now()`;
-        const [pausedJob] = await db
-          .select({
-            id: schedulerJobs.id,
-            task: schedulerJobs.task,
-            pausedBy: schedulerJobs.pausedBy,
-            pauseReason: schedulerJobs.pauseReason,
-          })
-          .from(schedulerJobs)
-          .where(
-            and(
-              eq(schedulerJobs.id, job.id),
-              sql`${schedulerJobs.pausedUntil} > ${completionTime}`,
+        const current = await readJobOperatorState({
+          db,
+          jobId: job.id,
+          eligibilityTime,
+        });
+        if (current.paused || !current.enabled) {
+          if (current.paused) {
+            logOperatorPause(
+              { id: job.id, task: job.task, ...current },
+              "before_start",
+            );
+          }
+          await finishRunSkipped({
+            db,
+            job,
+            leaseToken,
+            reason: current.paused
+              ? "SchedulerOperatorPaused"
+              : "SchedulerJobDisabled",
+            runId,
+            startedAt,
+          });
+          return "skipped";
+        }
+
+        const controller = new AbortController();
+        const abortListener = () => controller.abort();
+        signal?.addEventListener("abort", abortListener, { once: true });
+
+        // A parent abort that fired while createRun() was awaited would not replay
+        // through the listener attached above. Re-check synchronously and bail before
+        // any task or heartbeat starts, releasing the lease cleanly.
+        if (signal?.aborted) {
+          controller.abort();
+          signal.removeEventListener("abort", abortListener);
+          await finishRunSkipped({
+            db,
+            job,
+            leaseToken,
+            reason: "SchedulerAborted",
+            runId,
+            startedAt,
+          });
+          return "skipped";
+        }
+
+        let leaseLost = false;
+        // Read through a function: the heartbeat sets `leaseLost` from a callback,
+        // which flow narrowing cannot see.
+        const isLeaseLost = (): boolean => leaseLost;
+        tableLifetime = startTaskTableLeaseLifetime({
+          db,
+          holderId: tableLeaseHolderId(job.id, leaseToken),
+          intervalMs: heartbeatIntervalMs,
+          leaseMs,
+          tableCount,
+          jobId: job.id,
+          onLeaseLost: () => {
+            leaseLost = true;
+            controller.abort();
+          },
+        });
+        const heartbeat = startLeaseHeartbeat({
+          db,
+          intervalMs: heartbeatIntervalMs,
+          jobId: job.id,
+          leaseMs,
+          leaseToken,
+          onLeaseLost: () => {
+            leaseLost = true;
+            controller.abort();
+          },
+          runnerId,
+          signal: controller.signal,
+        });
+        const task = registry.get(job.task);
+        let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+        // Set the instant the ceiling fires, before the abort is broadcast, and
+        // consulted after the race regardless of how it settled. The race outcome
+        // alone is not authoritative: a cooperative task that resolves (or rejects)
+        // from its abort listener can fulfill the race even though the ceiling already
+        // fired, so that fulfillment is a zombie result, not a success.
+        let timeoutError: SchedulerJobTimeoutError | undefined;
+        let raceError: unknown;
+        let raceRejected = false;
+        let continuationAt: Date | undefined;
+
+        try {
+          if (!task) {
+            throw new ConfigurationError({
+              message: `No scheduler task registered for ${job.task}`,
+            });
+          }
+
+          // Bound the task's runtime. A JS promise cannot be force-cancelled, so on
+          // expiry we abort the task's signal. Scheduler completion remains bounded,
+          // while table ownership continues until the actual task settles. A late
+          // result cannot overwrite the guarded timeout outcome.
+          const timeout = new Promise<never>((_resolve, reject) => {
+            timeoutTimer = setTimeout(() => {
+              const ceilingError = new SchedulerJobTimeoutError({
+                jobId: job.id,
+                message: `Scheduler job ${job.id} exceeded its ${maxRuntimeMs}ms runtime ceiling`,
+                timeoutMs: maxRuntimeMs,
+              });
+              timeoutError = ceilingError;
+              controller.abort();
+              reject(ceilingError);
+            }, maxRuntimeMs);
+          });
+
+          const outcome = await Promise.race([
+            tableLifetime.runTask(() =>
+              task({
+                db,
+                dueAt: DueSlot.of(job),
+                job,
+                logger,
+                payload: job.payload,
+                runId,
+                scheduleContinuation: (nextRunAt) => {
+                  continuationAt = nextRunAt;
+                },
+                signal: controller.signal,
+              }),
             ),
-          )
-          .limit(1);
-        if (pausedJob) {
-          logPausedJobRan(pausedJob);
+            timeout,
+          ]);
+          if (outcome instanceof Err) {
+            raceError = outcome.error.cause;
+            raceRejected = true;
+          }
+        } catch (error: unknown) {
+          raceError = error;
+          raceRejected = true;
+        } finally {
+          if (timeoutTimer) {
+            clearTimeout(timeoutTimer);
+          }
+          signal?.removeEventListener("abort", abortListener);
+        }
+
+        // Stop heartbeating before any completion write: the lease must not be renewed
+        // while we release it, and the completion transaction must not race a renewal
+        // on the same connection.
+        heartbeat.stop();
+
+        // A short task can finish between heartbeats after a pause commits. Report
+        // that overlap while still recording completed work once, avoiding replay.
+        if (!isLeaseLost()) {
+          const completionTime = now
+            ? sql`${new Date(now())}::timestamptz`
+            : sql`now()`;
+          const [pausedJob] = await db
+            .select({
+              id: schedulerJobs.id,
+              task: schedulerJobs.task,
+              pausedBy: schedulerJobs.pausedBy,
+              pauseReason: schedulerJobs.pauseReason,
+            })
+            .from(schedulerJobs)
+            .where(
+              and(
+                eq(schedulerJobs.id, job.id),
+                sql`${schedulerJobs.pausedUntil} > ${completionTime}`,
+              ),
+            )
+            .limit(1);
+          if (pausedJob) {
+            logPausedJobRan(pausedJob);
+          }
+        }
+
+        return await resolveRunOutcome({
+          aborted: controller.signal.aborted,
+          db,
+          job,
+          leaseLost,
+          leaseToken,
+          maxRuntimeMs,
+          raceError,
+          raceRejected,
+          runId,
+          runnerId,
+          startedAt,
+          continuationAt,
+          timeoutError,
+        });
+      } finally {
+        if (tableLifetime) {
+          await tableLifetime.finish();
+        } else {
+          await releaseJobTableLeases(
+            db,
+            tableLeaseHolderId(job.id, leaseToken),
+          );
         }
       }
-
-      return await resolveRunOutcome({
-        aborted: controller.signal.aborted,
-        db,
-        job,
-        leaseLost,
-        leaseToken,
-        maxRuntimeMs,
-        raceError,
-        raceRejected,
-        runId,
-        runnerId,
-        startedAt,
-        continuationAt,
-        timeoutError,
-      });
     },
   );
 
@@ -886,7 +1048,7 @@ type ResolveRunOutcomeOptions = {
 
 // Single-homed post-race classification, in strict precedence:
 //   1. the ceiling fired  -> timeout failure: the result is a zombie, the lease
-//      was already released, and the job must be rescheduled.
+//      scheduler lease may be released, and the job must be rescheduled.
 //   2. the lease was lost  -> skip: another runner owns the job now, so this
 //      execution records nothing on the job, whatever the task returned.
 //   3. the race fulfilled  -> success, even if the parent signal aborted
@@ -1086,7 +1248,6 @@ const completeRun = async ({
       .returning({ id: schedulerJobRuns.id });
 
     if (!updatedRun) {
-      await releaseJobTableLeases(tx, tableLeaseHolderId(jobId, leaseToken));
       return;
     }
 
@@ -1099,7 +1260,6 @@ const completeRun = async ({
           eq(schedulerJobs.lockedBy, leaseToken),
         ),
       );
-    await releaseJobTableLeases(tx, tableLeaseHolderId(jobId, leaseToken));
   });
 };
 

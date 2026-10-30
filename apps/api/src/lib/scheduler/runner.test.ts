@@ -8,7 +8,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { desc, DrizzleQueryError, eq, getTableName } from "drizzle-orm";
+import { desc, DrizzleQueryError, eq, getTableName, like } from "drizzle-orm";
 
 import {
   BackfillFailedError,
@@ -25,7 +25,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { schedulerTableLeases } from "../../db/schema/table-leases";
+import {
+  schedulerTableLeaseActivity,
+  schedulerTableLeases,
+} from "../../db/schema/table-leases";
 import {
   acquireNextDueJob,
   finishRunFailure,
@@ -383,6 +386,7 @@ test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
         [
           getTableName(schedulerJobs),
           getTableName(schedulerJobRuns),
+          getTableName(schedulerTableLeaseActivity),
         ].toSorted(),
       );
     } finally {
@@ -751,6 +755,17 @@ describe("per-job runtime ceiling", () => {
     const timedOutRun = await readLatestRun("hanging.job");
     expect(timedOutRun.status).toBe("failed");
     expect(timedOutRun.error).toBe("SchedulerJobTimeoutError");
+    const retained = await testDb
+      .select({ tableName: schedulerTableLeases.tableName })
+      .from(schedulerTableLeases)
+      .where(like(schedulerTableLeases.holderId, "hanging.job:%"));
+    expect(retained.map(({ tableName }) => tableName).toSorted()).toEqual(
+      [
+        getTableName(schedulerJobs),
+        getTableName(schedulerJobRuns),
+        getTableName(schedulerTableLeaseActivity),
+      ].toSorted(),
+    );
 
     // The zombie task finishes late and attempts to record success. The
     // lease-token (lockedBy) and run-generation (status) guards must reject it.
@@ -777,13 +792,14 @@ describe("per-job runtime ceiling", () => {
 
     let signalAborted = false;
     // The task hangs past the ceiling; a cooperative task observes the abort on
-    // its signal instead of running blind past its lease release. The promise
-    // stays pending so the timeout (not a synchronous resolve) settles the race.
+    // its signal instead of running blind past scheduler completion.
     const registry = registryOf("test.cooperative", async ({ signal }) => {
-      signal.addEventListener("abort", () => {
-        signalAborted = true;
+      await new Promise<void>((resolve) => {
+        signal.addEventListener("abort", () => {
+          signalAborted = true;
+          resolve();
+        });
       });
-      await new Promise<void>(() => {});
     });
 
     const result = await runSchedulerOnce({
