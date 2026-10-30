@@ -908,6 +908,13 @@ type SearchPathSetting =
 const CANONICAL_SEARCH_PATH_PATTERN =
   /^\s*(?:=|TO)\s*(?:(?!pg_temp)[a-z_][a-z0-9_]*\s*,\s*)*pg_temp\s*$/u;
 
+// Setting names are case-insensitive and may be quoted, so a quoted
+// "search_path" names the same setting as the bare keyword.
+const isSearchPathName = (token: IndexToken | undefined): boolean =>
+  token !== undefined &&
+  token.kind !== "punctuation" &&
+  token.value.toLowerCase() === "search_path";
+
 const readSecurityDefinerSearchPath = (
   statement: Statement,
 ): { functionName: string; setting: SearchPathSetting } | undefined => {
@@ -932,14 +939,13 @@ const readSecurityDefinerSearchPath = (
     .map(({ value }) => value)
     .join("");
   const settingIndexes = tokens.flatMap((token, index) =>
-    isIndexKeyword(token, "set") &&
-    tokens[index + 1]?.value.toLowerCase() === "search_path"
+    isIndexKeyword(token, "set") && isSearchPathName(tokens[index + 1])
       ? [index]
       : [],
   );
   const resetIndexes = tokens.flatMap((token, index) =>
     isIndexKeyword(token, "reset") &&
-    (isIndexKeyword(tokens[index + 1], "search_path") ||
+    (isSearchPathName(tokens[index + 1]) ||
       isIndexKeyword(tokens[index + 1], "all"))
       ? [index]
       : [],

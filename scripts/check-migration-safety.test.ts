@@ -223,11 +223,14 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("rejects ALTER FUNCTION search path resets", () => {
-      expectFinding(
-        runChecker("ALTER FUNCTION f(int) RESET search_path;"),
-        "security-definer-search-path",
-      );
+    it.each([
+      "ALTER FUNCTION f(int) RESET search_path;",
+      'ALTER FUNCTION f(int) RESET "search_path";',
+      'ALTER FUNCTION f(int) RESET "SEARCH_PATH";',
+      'ALTER FUNCTION f(int) SET "search_path" = public;',
+      'ALTER FUNCTION f(int) SET "search_path" = pg_catalog, pg_temp;',
+    ])("rejects ALTER FUNCTION search path reset or quoted name %s", (sql) => {
+      expectFinding(runChecker(sql), "security-definer-search-path");
     });
 
     it("accepts a canonical ALTER FUNCTION search path", () => {
