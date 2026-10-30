@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Stored-object replay reuses the ingestion PDF parser and assembly without changing their output.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
@@ -7,24 +8,6 @@ import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  STORED_RAW_REPLAY_STATUS,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-  StoredRawReparseValue,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisherBytes,
@@ -59,6 +42,24 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+} from "@/api/lib/legal-search/ingestion-types";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
