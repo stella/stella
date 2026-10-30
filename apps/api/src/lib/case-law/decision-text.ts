@@ -1,5 +1,6 @@
 // parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 // parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
+// parser-output-unchanged: The text fidelity check only validates a `textFidelity` entry a source sets and adds, drops or changes nothing; no source's parsed output differs.
 import { panic } from "better-result";
 
 import {
