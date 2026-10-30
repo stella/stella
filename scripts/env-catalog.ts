@@ -1503,6 +1503,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
   // The merge group's base revision.
+  "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",

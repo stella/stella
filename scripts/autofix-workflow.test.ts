@@ -15,10 +15,7 @@ const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
 );
-const CI_CHECKS_REST_URL = new URL(
-  "../.github/ci-checks/ci-checks-rest.yml",
-  import.meta.url,
-);
+const CI_WORKFLOW_URL = new URL("../.github/workflows/ci.yml", import.meta.url);
 const HELPER_URL = new URL("dependabot-changeset.ts", import.meta.url);
 const HELPER_TEST_URL = new URL(
   "dependabot-changeset.test.ts",
@@ -100,15 +97,15 @@ test("no edit selects the classification digest refresh as an autofix", () => {
 });
 
 test("the bridge guard uses the merge-group base in merge queue runs", async () => {
-  const workflow = await Bun.file(CI_CHECKS_REST_URL).text();
-  const guard = workflow.slice(
-    workflow.indexOf("- name: Bridge-version guard"),
+  const workflow: unknown = Bun.YAML.parse(
+    await Bun.file(CI_WORKFLOW_URL).text(),
   );
+  const guard = namedCiStep(workflow, "Bridge-version guard");
 
-  expect(guard).toContain("github.event_name == 'merge_group'");
-  expect(guard).toContain(
-    String.raw`BRIDGE_BASE_SHA: \${{ github.event.merge_group.base_sha }}`,
-  );
+  expect(guard["if"]).toContain("github.event_name == 'merge_group'");
+  expect(guard["env"]).toMatchObject({
+    BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+  });
 });
 
 const namedCiStep = (workflow: unknown, name: string) => {

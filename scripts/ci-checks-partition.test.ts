@@ -1173,6 +1173,27 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Bridge-version guard" &&
+    fields.if?.includes("github.event_name == 'pull_request'") &&
+    (!v.is(v.record(v.string(), v.unknown()), fields.env) ||
+      fields.env["BRIDGE_BASE_SHA"] === undefined)
+  ) {
+    const env = v.is(v.record(v.string(), v.unknown()), fields.env)
+      ? fields.env
+      : {};
+    return {
+      ...step,
+      env: {
+        ...env,
+        BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+      },
+      if: fields.if.replace(
+        "github.event_name == 'pull_request'",
+        "github.event_name == 'pull_request' || github.event_name == 'merge_group'",
+      ),
+    };
+  }
   if (step.name === "CLI sharded registry and derived runtime guard") {
     const run = v.parse(v.string(), fields.run);
     const continuation = " \\";
