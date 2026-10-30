@@ -9,8 +9,8 @@ import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 import type { TextVariant } from "@stll/ui/text";
 
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
-import { RetryButton } from "@/components/retry-button";
+import { screenStyles } from "@/components/empty-state-screen";
+import { LoadFailedCard } from "@/components/load-failure";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import type { Load } from "@/state/api-request";
 import type { Decision } from "@/state/case-law";
@@ -41,9 +41,12 @@ export const DecisionReader = ({
   if (Result.isError(result)) {
     return (
       <View className="flex-1 p-4">
-        <EmptyCard description={t("loadFailed")} title={t("unavailable")}>
-          <RetryButton label={t("retry")} onPress={onReload} />
-        </EmptyCard>
+        <LoadFailedCard
+          error={result.error}
+          onRetry={onReload}
+          retryLabel={t("retry")}
+          title={t("loadFailed")}
+        />
       </View>
     );
   }
