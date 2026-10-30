@@ -173,3 +173,85 @@ test("property presence accepts nonempty declarations rather than substrings", (
     ).toBe(true);
   }
 });
+
+const nested = (html: string) => {
+  const node = cheerio.load(html)("#target").get(0);
+  if (node === undefined) {
+    throw new Error("Missing fixture target");
+  }
+  return node;
+};
+
+describe("CSS-wide keywords", () => {
+  test("initial resets an earlier declaration to normal", () => {
+    expect(
+      inlineStyleIsBold(element("font-weight:bold; font-weight:initial")),
+    ).toBe(false);
+    expect(
+      inlineStyleIsItalic(element("font-style:italic; font-style:initial")),
+    ).toBe(false);
+  });
+
+  test("importance decides between a value and a keyword", () => {
+    expect(
+      inlineStyleIsBold(
+        element("font-weight:bold !important; font-weight:initial"),
+      ),
+    ).toBe(true);
+    expect(
+      inlineStyleIsBold(
+        element("font-weight:bold; font-weight:initial !important"),
+      ),
+    ).toBe(false);
+  });
+
+  test("inherit and unset take the parent's computed value", () => {
+    for (const keyword of ["inherit", "unset"]) {
+      expect(
+        inlineStyleIsBold(
+          nested(
+            `<span style="font-weight:bold"><span id="target" style="font-weight:normal; font-weight:${keyword}"></span></span>`,
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        inlineStyleIsBold(
+          nested(
+            `<span style="font-weight:normal"><span id="target" style="font-weight:bold; font-weight:${keyword}"></span></span>`,
+          ),
+        ),
+      ).toBe(false);
+      expect(
+        inlineStyleIsItalic(
+          nested(
+            `<em><span id="target" style="font-style:normal; font-style:${keyword}"></span></em>`,
+          ),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("revert falls back to the element's default style", () => {
+    expect(
+      inlineStyleIsBold(
+        nested(
+          '<b id="target" style="font-weight:normal; font-weight:revert"></b>',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      inlineStyleIsBold(
+        nested(
+          '<span id="target" style="font-weight:bold; font-weight:revert"></span>',
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      inlineStyleIsItalic(
+        nested(
+          '<i id="target" style="font-style:normal; font-style:revert"></i>',
+        ),
+      ),
+    ).toBe(true);
+  });
+});
