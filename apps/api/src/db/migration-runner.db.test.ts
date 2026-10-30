@@ -2105,6 +2105,122 @@ if (!runPostgresTests || databaseUrl === undefined) {
         );
       });
 
+      test("an active leftover migrate pause expiring during the schema phase is adopted and cleared afterwards", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "migrate",
+              reason: "Leftover pause",
+              interval: "5 seconds",
+            });
+            const leftover = rowOf(await schedulerRows(observer), "job.other");
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              await waitForExternalState({
+                description: "the leftover pause's own deadline has passed",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ past: boolean }[]>(
+                    "SELECT now() > $1::timestamptz AS past",
+                    [leftover?.paused_until],
+                  );
+                  return row?.past === true;
+                },
+              });
+              const during = rowOf(await schedulerRows(observer), "job.other");
+              expect(during?.paused_by).toBe("migrate");
+              expect((during?.paused_until?.getTime() ?? 0) > Date.now()).toBe(
+                true,
+              );
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { outcome: "drained", pausedCount: 3, takenOverCount: 0 },
+                { outcome: "resumed", resumedCount: 3, restoredCount: 0 },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            expect(
+              rowOf(await schedulerRows(observer), "job.other")?.paused_until,
+            ).toBeNull();
+          },
+        );
+      });
+
+      test("a target that changes between selection and update is still taken over before the work starts", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Elapsed hold",
+              interval: "-1 minute",
+            });
+            // A session holds the row, so the pause statement scans it and
+            // waits to update it; the holder replaces the expired pause with
+            // a short active one, which fails the statement's recheck.
+            const replaced = Promise.withResolvers<undefined>();
+            const holder = openClient().begin(async (tx) => {
+              await tx.unsafe(
+                "SELECT 1 FROM scheduler_jobs WHERE id = 'job.other' FOR UPDATE",
+              );
+              replaced.resolve(undefined);
+              await waitForExternalState({
+                description: "the pause statement waits on the held row",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ blocked: number }[]>(
+                    "SELECT count(*)::int AS blocked FROM pg_stat_activity WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0",
+                  );
+                  return (row?.blocked ?? 0) > 0;
+                },
+              });
+              await tx.unsafe(
+                "UPDATE scheduler_jobs SET paused_by = 'operator', pause_reason = 'Replaced hold', paused_until = now() + interval '10 minutes' WHERE id = 'job.other'",
+              );
+            });
+            await replaced.promise;
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            await holder;
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+              { outcome: "resumed", resumedCount: 2, restoredCount: 1 },
+            ]);
+            expect(
+              rowOf(await schedulerRows(observer), "job.other"),
+            ).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Replaced hold",
+            });
+          },
+        );
+      });
+
       test("no pending schema migration pauses nothing", async () => {
         await withSchedulerBundle(
           ALTER_AFTER_DRAIN,

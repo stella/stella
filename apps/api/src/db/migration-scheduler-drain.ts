@@ -36,6 +36,12 @@ export const UNPAUSABLE_SCHEDULER_JOB_ID = "scheduler.pauseAudit.hourly";
 /** A pause outlives a dead migrate task by at most this long. */
 export const SCHEDULER_DRAIN_PAUSE_BOUND_MS = 30 * 60_000;
 /**
+ * Every pausable job stays paused at least this long when the schema phase
+ * starts, whoever paused it. It exceeds the drain deadline plus the lock-wait
+ * ladder, and sits below the bound so the step's own pause stays above it.
+ */
+export const SCHEDULER_DRAIN_PAUSE_FLOOR_MS = 15 * 60_000;
+/**
  * How long running jobs get to notice the pause. The scheduler checks it at
  * each heartbeat, a few seconds to minutes apart; a run that ignores it for
  * longer is one the promote should not cut under.
@@ -107,7 +113,7 @@ const hasPauseColumns = async (connection: ReservedSQL): Promise<boolean> => {
   return row?.present === REQUIRED_COLUMNS.length;
 };
 
-/** An operator pause that ends within the pause bound, as it was before the takeover. */
+/** Another actor's pause that ends within the pause floor, as it was before the takeover. */
 type TakenOverPause = {
   id: string;
   pausedBy: string;
@@ -117,17 +123,39 @@ type TakenOverPause = {
 };
 
 type PauseOutcome = {
-  /** Jobs that were not paused; cleared on resume. */
+  /** Jobs unpaused or paused by this step: cleared on resume. */
   pausedIds: string[];
-  /** Operator pauses that would have ended during the schema phase; restored on resume. */
+  /** Other actors' pauses that would have ended during the schema phase; restored on resume. */
   takenOver: TakenOverPause[];
 };
 
 /**
- * One statement pauses every job whose pause (if any) ends before this step's
- * would, and returns the pauses it replaced. A pause that outlasts the step's
- * bound stays untouched. `paused_since` is kept by the database trigger, which
- * preserves it while one active pause replaces another.
+ * The invariant before `work` starts: every pausable row stays paused for at
+ * least the pause floor, whoever paused it. A row is eligible while it is not.
+ * The floor sits below the pause bound the step writes, so the step's own
+ * pause never counts as eligible again as time passes.
+ */
+const eligibleSql = (floor: string, audit: string) =>
+  `id <> ${audit}
+         AND (paused_until IS NULL
+              OR paused_until < now() + ${floor}::integer * interval '1 millisecond')`;
+
+const readEligible = async (connection: ReservedSQL): Promise<string[]> => {
+  const rows = await connection.unsafe<{ id: string }[]>(
+    `SELECT id FROM scheduler_jobs WHERE ${eligibleSql("$1", "$2")} ORDER BY id`,
+    [SCHEDULER_DRAIN_PAUSE_FLOOR_MS, UNPAUSABLE_SCHEDULER_JOB_ID],
+  );
+  return rows.map(({ id }) => id);
+};
+
+/**
+ * One statement pauses every eligible job and returns the pauses it replaced.
+ * An unpaused or expired job is paused; a pause of this step ending sooner is
+ * adopted (extended, cleared on resume, there is no other state to restore);
+ * another actor's pause ending sooner is taken over and restored exactly.
+ * `paused_since` is kept by the database trigger, which preserves it while one
+ * active pause replaces another. A row changed after the scan fails the
+ * write's compare-and-set and is left for the next pass.
  */
 const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
   const rows = await connection.unsafe<
@@ -141,14 +169,10 @@ const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
   >(
     `WITH targets AS (
        SELECT id, paused_by, pause_reason, paused_until AS raw_paused_until,
-              coalesce(paused_until > now(), false) AS taken_over,
+              coalesce(paused_until > now() AND paused_by <> $2, false) AS taken_over,
               paused_until::text AS paused_until_text
        FROM scheduler_jobs
-       WHERE id <> $4
-         AND NOT (coalesce(paused_by = $2, false)
-                  AND coalesce(paused_until > now(), false))
-         AND (paused_until IS NULL
-              OR paused_until < now() + $1::integer * interval '1 millisecond')
+       WHERE ${eligibleSql("$4", "$5")}
      ), paused AS (
        UPDATE scheduler_jobs job
        SET paused_until = now() + $1::integer * interval '1 millisecond',
@@ -169,6 +193,7 @@ const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
       SCHEDULER_DRAIN_PAUSE_BOUND_MS,
       SCHEDULER_DRAIN_ACTOR,
       PAUSE_REASON,
+      SCHEDULER_DRAIN_PAUSE_FLOOR_MS,
       UNPAUSABLE_SCHEDULER_JOB_ID,
     ],
   );
@@ -197,22 +222,25 @@ const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
 const MAX_PAUSE_PASSES = 5;
 
 /**
- * A row an operator changes between the scan and the write fails the write's
- * compare-and-set (PostgreSQL rechecks it against the new row version), so it
- * is skipped rather than overwritten with stale originals; another pass picks
- * it up. The loop ends on the first pass that pauses nothing.
+ * Repeats the pause until a fresh scan finds no eligible job: a pass that
+ * wrote nothing proves nothing, since compare-and-set losers are retried.
  */
 const pauseJobs = async (connection: ReservedSQL): Promise<PauseOutcome> => {
   const total: PauseOutcome = { pausedIds: [], takenOver: [] };
-  for (let pass = 0; pass < MAX_PAUSE_PASSES; pass += 1) {
-    const outcome = await pauseOnce(connection);
-    if (outcome.pausedIds.length + outcome.takenOver.length === 0) {
+  for (let pass = 0; ; pass += 1) {
+    const eligible = await readEligible(connection);
+    if (eligible.length === 0) {
       return total;
     }
+    if (pass === MAX_PAUSE_PASSES) {
+      return panic(
+        `Scheduler jobs kept changing; the drain could not pause: ${eligible.join(", ")}`,
+      );
+    }
+    const outcome = await pauseOnce(connection);
     total.pausedIds.push(...outcome.pausedIds);
     total.takenOver.push(...outcome.takenOver);
   }
-  return panic("Scheduler jobs kept changing; the drain could not pause them");
 };
 
 /**
