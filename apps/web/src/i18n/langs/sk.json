@@ -814,8 +814,10 @@
       "deleteRateTable": "Odstrániť tabuľku sadzieb",
       "editRateTable": "Upraviť tabuľku sadzieb",
       "effectiveFrom": "Platná od",
+      "effectiveRateRequired": "Pre tento spis, osobu a dátum nie je nastavená platná sadzba. Pridajte sadzbu alebo zaznamenajte čas ako nefakturovateľný.",
       "effectiveTo": "Platná do",
       "hourlyRate": "Hodinová sadzba",
+      "logNonBillable": "Zaznamenať ako nefakturovateľný",
       "noRateEntries": "Zatiaľ žiadne sadzby",
       "noRateFound": "Sadzba nie je nakonfigurovaná",
       "noRateTables": "Zatiaľ žiadne tabuľky sadzieb",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
-      "remove": "Odstrániť filter {filter}"
+      "countryMismatch": "Filtre boli odstránené, pretože nepatria do krajiny {country}: {filters}.",
+      "remove": "Odstrániť filter {filter}",
+      "showInCountry": "Zobraziť {filter} pre krajinu {country}"
     },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
     "activity": {
+      "newerVersion": "Tento obsah sa zobrazí v novšej verzii.",
       "review": "Informácie o revízii"
     },
     "aiPrompt": "Pole správy pre AI",
@@ -2357,6 +2362,7 @@
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
     "unsavedChanges": "Neuložené zmeny",
+    "unsavedChangesClose": "Neuložené zmeny. Ďalším zatvorením ich zahodíte",
     "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
@@ -5051,6 +5057,8 @@
       "desktopCardConnectedTitle": "stella desktop je prepojený",
       "desktopCardMissingDetail": "Nainštalujte ho, alebo ho pripojte, ak už na tomto počítači nainštalovaný je.",
       "desktopCardMissingTitle": "stella desktop zatiaľ nie je prepojený",
+      "desktopCardOpeningDetail": "Prepájame tento počítač s účtom <bdi>{identity}</bdi> na {host}. Ak sa prehliadač opýta, povoľte otvorenie stella desktop.",
+      "desktopCardOpeningTitle": "Otvára sa stella desktop...",
       "desktopCardOutdatedDetail": "Verzia {version} je prepojená s účtom <bdi>{identity}</bdi>. Nainštalujte najnovšiu verziu, aby dokumenty a aktivita ďalej fungovali.",
       "desktopCardOutdatedTitle": "stella desktop potrebuje aktualizáciu",
       "desktopClipboardDescription": "Otvárajte, prehľadávajte, usporadúvajte a znova používajte text skopírovaný z ľubovoľnej aplikácie.",
@@ -5070,6 +5078,7 @@
       "desktopInstallOpenStep": "Raz otvorte stella desktop. Schránka sa zobrazí okamžite a zostane dostupná z panela ponúk systému macOS alebo z oblasti oznámení systému Windows.",
       "desktopInstallTitle": "Inštalácia a otvorenie",
       "desktopInstallWindowsStep": "Spustite inštalátor a postupujte podľa pokynov.",
+      "desktopOpenApp": "Otvoriť stella desktop",
       "desktopPrivacyDescription": "História schránky je šifrovaná a uložená v tomto zariadení.",
       "desktopPrivacyTitle": "Predvolene súkromné",
       "desktopSelfHostDescription": "Dôverujte tejto URL stella v podpísanej desktopovej aplikácii, aby sa dokumenty z tejto inštalácie mohli otvárať lokálne.",
@@ -5425,6 +5434,7 @@
     "showCitedPartOnly": "Zobraziť len citovanú časť",
     "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
+    "sortNeedsYear": "Na zoradenie podľa tohto stĺpca vyberte vo filtroch rok.",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
       "current": "Účinné",
@@ -6522,6 +6532,14 @@
           "started": "Spustil(a) kontrolu dokumentu"
         },
         "empty": "V tomto spise zatiaľ nie je žiadna aktivita.",
+        "fields": {
+          "dueDate": "termín",
+          "parentFolder": "nadradený priečinok",
+          "priority": "priorita",
+          "property": "vlastnosť",
+          "schedule": "plán",
+          "sortOrder": "poradie"
+        },
         "filterLabel": "Filtrovať aktivitu",
         "filters": {
           "all": "Všetka aktivita",
@@ -6571,6 +6589,7 @@
           "translation": "preklad"
         },
         "title": "Aktivita",
+        "updatedFields": "Aktualizované: {fields}",
         "views": {
           "list": "Zoznam",
           "timeline": "Časová os"

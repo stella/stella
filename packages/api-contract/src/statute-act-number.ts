@@ -8,10 +8,7 @@
  */
 
 import { statuteGazetteAbbreviation } from "./statute-gazette";
-
-/** `…/eli/<country>/<collection>/<year>/<number>`, optionally with a tail. */
-const ELI_ACT_TAIL_RE =
-  /\/eli\/[a-z]{2}\/([a-z0-9]+)\/(\d{4})\/(\d{1,5})(?:\/|$)/u;
+import { parseStatuteEliIdentity } from "./statute-identity";
 
 /** The same prefix the API strips for name matching (`legislationTitleName`). */
 const TITLE_NUMBER_PREFIX_RE = /^\d+\/\d{4} [^,]*, /u;
@@ -24,19 +21,13 @@ export type StatuteEliParts = {
   number: string | null;
 };
 
-/** The same ELI reader feeds number labels and document identity badges. */
+/**
+ * The same ELI reader feeds number labels, document identity badges, the
+ * list's year filter and its order by number (`parseStatuteEliIdentity`).
+ */
 export const statuteEliParts = (
   eli: string | null | undefined,
-): StatuteEliParts => {
-  const match =
-    eli === null || eli === undefined ? null : ELI_ACT_TAIL_RE.exec(eli);
-  const ordinal = match?.[3];
-  return {
-    collection: match?.[1] ?? null,
-    year: match?.[2] ?? null,
-    number: ordinal === undefined ? null : String(Number(ordinal)),
-  };
-};
+): StatuteEliParts => parseStatuteEliIdentity(eli);
 
 /** `89/2012 Sb.`, or null for an ELI that carries no act number. */
 export const statuteActNumber = (eli: string): string | null => {

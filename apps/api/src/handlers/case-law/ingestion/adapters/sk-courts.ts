@@ -2124,7 +2124,7 @@ const reparseStoredRaw = async (
     return metadata;
   }
   const { result } = metadata;
-  const document = await parsePendingDocument(
+  const parsed = await parsePendingDocument(
     {
       caseNumber: result.caseNumber,
       court: result.court,
@@ -2134,6 +2134,14 @@ const reparseStoredRaw = async (
     },
     bytes,
   );
+  if (parsed.isErr()) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `${parsed.error.code}: ${parsed.error.paths.join(", ")}`,
+    };
+  }
+  const document = parsed.value;
   if (document === undefined) {
     return {
       type: "rejected",
