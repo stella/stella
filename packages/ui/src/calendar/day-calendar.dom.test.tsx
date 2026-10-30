@@ -29,7 +29,7 @@ const activityColumn = {
   blocks: [
     {
       accessibleLabel: "Editor, contract review",
-      detail: "08:05–08:40",
+      caption: "08:05–08:40",
       endMs: at(8, 40),
       id: "editor",
       kind: "segment",

@@ -47,7 +47,7 @@ export type DayCalendarEntryState = "draft" | "final" | "suggestion";
 
 type DayCalendarBlockFields = DayCalendarRange & {
   accessibleLabel: string;
-  detail?: ReactNode;
+  caption?: ReactNode;
   id: string;
   title: ReactNode;
   tone: DayCalendarTone;
@@ -562,7 +562,7 @@ const ColumnBlocks = ({
   });
 };
 
-/** Below this height a block puts its title and detail on one line. */
+/** Below this height a block puts its title and caption on one line. */
 const TWO_LINE_BLOCK_MIN_PX = 40;
 
 /** A brief block paints at least this tall, unless the grid ends sooner. */
@@ -618,9 +618,9 @@ const DayCalendarBlockView = ({
       <span className="min-w-0 shrink-0 truncate font-medium">
         {block.title}
       </span>
-      {block.detail === undefined ? null : (
+      {block.caption === undefined ? null : (
         <span className="text-muted-foreground min-w-0 truncate tabular-nums">
-          {block.detail}
+          {block.caption}
         </span>
       )}
     </>
