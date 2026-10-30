@@ -2,9 +2,10 @@ import { Link, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { Text } from "@stll/ui/text";
+
 import { useLayout, useSelection } from "@/components/selection";
-import { MatterIcon } from "@/components/ui/matter-icon";
-import { Text } from "@/components/ui/text";
 import { useScan } from "@/components/use-scan";
 import { canScan } from "@/native/document-scanner";
 import type { MatterSummary } from "@/state/matters";

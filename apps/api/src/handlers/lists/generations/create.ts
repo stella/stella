@@ -33,6 +33,7 @@ const bodySchema = v.object({
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Start a generation run over a list: an instruction plus the document " +

@@ -4082,6 +4082,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
   }
   return toolDataResult({
     asOf: coverage.generatedAt,
+    freshness: coverage.freshness,
     countries: countries.map((entry) => {
       switch (entry.availability) {
         case "in-preparation":
