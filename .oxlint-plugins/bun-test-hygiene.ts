@@ -38,6 +38,14 @@
 //            `@stll/property-testing/rejection`) for a rejection. Another
 //            framework's `expect` (Playwright) is not considered.
 //
+// no-global-testing-library-screen
+//   Flagged: binding `screen` from a `@testing-library/*` package, by import or
+//            by destructuring `await import("@testing-library/...")`.
+//   `screen` is bound to the `document` that was global when Testing Library
+//   first loaded. DOM test files register their own happy-dom window, so in a
+//   process that runs several of them `screen` queries another file's
+//   document. Tests query through the object `render()` returns instead.
+//
 // no-unmanaged-database-client
 //   Flagged: constructing a database client, called or with `new`, through
 //            its import: `SQL` from `bun` (and `Bun.SQL`), `createSqlClient`
@@ -481,6 +489,9 @@ const enclosingBlock = (node: AstNode): EnclosingBlock => {
   }
   return { node: null, conditional: false };
 };
+
+const TESTING_LIBRARY_SCOPE = "@testing-library/";
+const SCREEN_EXPORT = "screen";
 
 const mentionsBunTest = (text: string): boolean =>
   text.includes(BUN_TEST_MODULE);
@@ -1291,6 +1302,77 @@ export default eslintCompatPlugin({
               messageId: "disabled",
               data: { call: describeRegistration(registration) },
             });
+          },
+        };
+      },
+    },
+    "no-global-testing-library-screen": {
+      meta: {
+        type: "problem",
+        messages: {
+          globalScreen:
+            "`screen` stays bound to the document of whichever test file " +
+            "loaded Testing Library first, so it reads the wrong DOM when " +
+            "several DOM test files share a process. Query through the " +
+            "object `render()` returns (`const view = render(...)`; " +
+            "`view.getByRole(...)`) or `within(view.container)`.",
+        },
+      },
+      createOnce(context) {
+        const report = (node: AstNode) =>
+          context.report({ node, messageId: "globalScreen" });
+        return {
+          before() {
+            return context.sourceCode.text.includes(TESTING_LIBRARY_SCOPE);
+          },
+          ImportSpecifier(node) {
+            const { parent } = node;
+            if (
+              !isAstNode(parent) ||
+              !isAstNode(parent.source) ||
+              !isStringLiteral(parent.source) ||
+              !parent.source.value.startsWith(TESTING_LIBRARY_SCOPE)
+            ) {
+              return;
+            }
+            if (
+              isAstNode(node.imported) &&
+              getPropertyName(node.imported) === SCREEN_EXPORT
+            ) {
+              report(node);
+            }
+          },
+          Property(node) {
+            const { parent } = node;
+            if (
+              !isAstNode(parent) ||
+              parent.type !== "ObjectPattern" ||
+              !isAstNode(node.key) ||
+              getPropertyName(node.key) !== SCREEN_EXPORT
+            ) {
+              return;
+            }
+            const declarator = parent.parent;
+            if (
+              !isAstNode(declarator) ||
+              declarator.type !== "VariableDeclarator"
+            ) {
+              return;
+            }
+            const init = unwrapExpression(declarator.init);
+            const loaded =
+              isAstNode(init) && init.type === "AwaitExpression"
+                ? unwrapExpression(init.argument)
+                : init;
+            if (
+              isAstNode(loaded) &&
+              loaded.type === "ImportExpression" &&
+              isAstNode(loaded.source) &&
+              isStringLiteral(loaded.source) &&
+              loaded.source.value.startsWith(TESTING_LIBRARY_SCOPE)
+            ) {
+              report(node);
+            }
           },
         };
       },
