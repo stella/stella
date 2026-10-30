@@ -636,6 +636,37 @@ describe("parseNsDecisionHtml", () => {
   });
 });
 
+describe("labelled section headings", () => {
+  // The numeral and the title are set on two lines of one centred block; the
+  // spacing around the break is the court editor's, not part of the heading.
+  test.each([
+    ["", ""],
+    [" ", " "],
+    ["  \n  ", "\n   "],
+    ["&nbsp;", " "],
+  ])(
+    "keeps the title's link whatever surrounds the line break (%p, %p)",
+    (before, after) => {
+      const { documentAst } = parseNsDecisionHtml(
+        baseInput(
+          `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><p align="center"><b>II.</b>${before}<br>${after}<a href="https://example.test/posouzeni">Posouzení věci</a></p><p>Text odůvodnění.</p></body></html>`,
+        ),
+      );
+      const heading = documentAst.blocks.find(
+        (block) => block.plainText === "II. Posouzení věci",
+      );
+      expect(heading?.type).toBe("heading");
+      expect(
+        heading !== undefined &&
+          "inlines" in heading &&
+          JSON.stringify(heading.inlines).includes(
+            '"href":"https://example.test/posouzeni"',
+          ),
+      ).toBe(true);
+    },
+  );
+});
+
 describe("source table text retention", () => {
   test("preserves breaks in unknown, additional and recognized metadata cells", () => {
     for (const separator of [

@@ -31,6 +31,7 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
+import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
@@ -1111,14 +1112,18 @@ const classifyBlocks = (
     // are one heading.
     const labelled = centered ? labelledHeading(plainText) : null;
     if (labelled !== null) {
-      const joined = withoutLineBreaks(inlines);
+      // However the court spaced the break, the heading keeps its inlines.
+      const joined = rewriteInlineWhitespace(
+        withoutLineBreaks(inlines),
+        (text) => text.replace(/\s+/gu, " ").trim(),
+      );
       blocks.push({
         id,
         anchorId,
         type: "heading",
         level: 3,
         inlines:
-          inlinesToPlainText(joined).trim() === labelled.text
+          inlinesToPlainText(joined) === labelled.text
             ? joined
             : [{ type: "text", text: labelled.text }],
         plainText: labelled.text,
