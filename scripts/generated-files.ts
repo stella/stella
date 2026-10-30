@@ -1387,6 +1387,10 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
+      "apps/api/src/lib/db/aggregate-chain-entries/*.ts",
+      "apps/api/src/lib/db/aggregate-lock-entries/*.ts",
+      "apps/api/src/lib/db/mcp-read-budget-entries/*.ts",
+      "apps/api/src/lib/db/read-budget-entries/*.ts",
       "apps/api/scripts/export-mcp-tool-registry.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",

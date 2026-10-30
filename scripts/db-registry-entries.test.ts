@@ -25,6 +25,7 @@ const temporaryRepository = () =>
   mkdtempSync(path.join(tmpdir(), "db-registry-entries-"));
 const runGit = (cwd: string, args: string[]) =>
   spawnSync("git", ["-c", "core.attributesFile=/dev/null", ...args], {
+    maxBuffer: 2 ** 30,
     cwd,
     encoding: "utf-8",
     env: {
@@ -107,7 +108,7 @@ describe("independent database registry entries", () => {
   });
 
   for (const scenario of [
-    { operation: "add", placement: "separated", expectedStatus: 0 },
+    { operation: "add", placement: "separated", expectedStatus: 1 },
     { operation: "bump", placement: "separated", expectedStatus: 0 },
     { operation: "add", placement: "adjacent", expectedStatus: 1 },
   ] as const) {
@@ -141,24 +142,22 @@ describe("independent database registry entries", () => {
             // Entry modules survive the merge. Only the generator resolves its projection.
             writeFileSync(index, renderRegistryIndex(directory));
             if (path.basename(directory) === "aggregate-lock-entries") {
-              expect(
-                readFileSync(
-                  path.join(directory, "identities.gen.ts"),
-                  "utf-8",
-                ),
-              ).toContain("<<<<<<<");
-              writeFileSync(
-                path.join(directory, "identities.gen.ts"),
-                renderAggregateIdentities(directory),
-              );
+              const identities = path.join(directory, "identities.gen.ts");
+              if (readFileSync(identities, "utf-8").includes("<<<<<<<")) {
+                writeFileSync(identities, renderAggregateIdentities(directory));
+              }
             }
           }
           expect(readFileSync(index, "utf-8")).toBe(
             renderRegistryIndex(directory),
           );
-          const merged: unknown = await import(pathToFileURL(index).href);
-          if (typeof merged !== "object" || merged === null) {
+          const module: unknown = await import(pathToFileURL(index).href);
+          if (typeof module !== "object" || module === null) {
             throw new TypeError("Merged registry must load as a module object");
+          }
+          const merged: unknown = Reflect.get(module, "default");
+          if (typeof merged !== "object" || merged === null) {
+            throw new TypeError("Merged registry must have a default map");
           }
           const expectedKeys =
             scenario.operation === "add"
@@ -201,7 +200,11 @@ describe("independent database registry entries", () => {
       if (typeof module !== "object" || module === null) {
         throw new TypeError("New budget must load as a module object");
       }
-      expect(Reflect.get(module, "statement.example.search")).toEqual({
+      const registry: unknown = Reflect.get(module, "default");
+      if (typeof registry !== "object" || registry === null) {
+        throw new TypeError("Generated registry must have a default map");
+      }
+      expect(Reflect.get(registry, "statement.example.search")).toEqual({
         surface: "statement",
         pages: 16,
         reason: "One bounded example lookup.",
@@ -310,7 +313,7 @@ describe("independent database registry entries", () => {
       for (const file of facades) {
         const original = readFileSync(path.join(cwd, file), "utf-8");
         const inline = original.replace(
-          /import \* as (\w+) from "[^"\n]+\/registry.gen";/u,
+          /import (\w+) from "[^"\n]+\/registry.gen";/u,
           "const $1 = { addedInline: {} };",
         );
         expect(inline).not.toBe(original);

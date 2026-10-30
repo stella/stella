@@ -6,12 +6,12 @@ import type {
 } from "@/api/lib/db/read-budgets";
 
 import type { CorpusReadBudgetSeed } from "./corpus-seed";
-import * as corpusStatements from "./corpus-statement-entries/registry.gen";
+import corpusStatements from "./corpus-statement-entries/registry.gen";
 import type { ScheduledJobMeasurement } from "./measurement-definition";
-import * as readBudgetProfiles from "./profile-entries/registry.gen";
-import * as scheduledJobMeasurements from "./scheduled-job-entries/registry.gen";
+import readBudgetProfiles from "./profile-entries/registry.gen";
+import scheduledJobMeasurements from "./scheduled-job-entries/registry.gen";
 import type { seedQueryPerf } from "./seed";
-import * as tenantStatements from "./tenant-statement-entries/registry.gen";
+import tenantStatements from "./tenant-statement-entries/registry.gen";
 
 export type { ScheduledJobScenario } from "./measurement-definition";
 

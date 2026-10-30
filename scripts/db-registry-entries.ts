@@ -30,7 +30,17 @@ export const renderRegistryIndex = (directory: string) => {
       `Invalid registry entry filename: ${name}`,
     );
   }
-  return `${names.map((name) => `export { default as ${JSON.stringify(name)} } from ${JSON.stringify(`./${name}`)};`).join("\n")}\n`;
+  return [
+    ...names.map(
+      (name, index) =>
+        `import entry${index} from ${JSON.stringify(`./${name}`)};`,
+    ),
+    "",
+    "export default {",
+    ...names.map((name, index) => `  ${JSON.stringify(name)}: entry${index},`),
+    "} as const;",
+    "",
+  ].join("\n");
 };
 
 export const renderAggregateIdentities = (directory: string) => {
@@ -114,7 +124,7 @@ export const registryLayoutProblems = (root: string) => {
   const problems: string[] = [];
   for (const [file, binding, specifier] of REGISTRY_BINDINGS) {
     const source = readFileSync(path.join(root, file), "utf-8");
-    if (!source.includes(`import * as ${binding} from "${specifier}";`)) {
+    if (!source.includes(`import ${binding} from "${specifier}";`)) {
       problems.push(`${file}: ${binding} must come from its entry index`);
     }
   }

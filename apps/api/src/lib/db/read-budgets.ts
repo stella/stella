@@ -1,5 +1,5 @@
-import * as mcpToolReadBudgets from "./mcp-read-budget-entries/registry.gen";
-import * as readBudgets from "./read-budget-entries/registry.gen";
+import mcpToolReadBudgets from "./mcp-read-budget-entries/registry.gen";
+import readBudgets from "./read-budget-entries/registry.gen";
 /**
  * Read budgets: how many shared buffers (8 KiB pages, hit or read) one call
  * of a hot statement, or one run of a scheduled job, may touch.

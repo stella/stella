@@ -1,3 +1,9 @@
-export { default as "search" } from "./search";
-export { default as "search_across_matters" } from "./search_across_matters";
-export { default as "search_legislation" } from "./search_legislation";
+import entry0 from "./search";
+import entry1 from "./search_across_matters";
+import entry2 from "./search_legislation";
+
+export default {
+  "search": entry0,
+  "search_across_matters": entry1,
+  "search_legislation": entry2,
+} as const;

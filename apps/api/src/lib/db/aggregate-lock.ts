@@ -64,9 +64,9 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
-import * as aggregateChains from "./aggregate-chain-entries/registry.gen";
+import aggregateChains from "./aggregate-chain-entries/registry.gen";
 import type { AggregateIdentities } from "./aggregate-lock-entries/identities.gen";
-import * as aggregateLocks from "./aggregate-lock-entries/registry.gen";
+import aggregateLocks from "./aggregate-lock-entries/registry.gen";
 
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = { ...aggregateLocks } as const;
