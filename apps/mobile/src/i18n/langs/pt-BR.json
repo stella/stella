@@ -75,7 +75,14 @@
     "statusFailed": "Não foi possível alterar a tarefa. Tente novamente.",
     "pickTitle": "Escolha uma tarefa",
     "pickDescription": "Escolha uma tarefa da lista para vê-la aqui.",
-    "openMatter": "Abrir caso"
+    "openMatter": "Abrir caso",
+    "assignedTo": "Atribuída a",
+    "nobody": "Não atribuído",
+    "assign": "Atribuir",
+    "doneAssigning": "Concluído",
+    "someone": "Alguém",
+    "membersFailed": "Não foi possível carregar os membros do caso.",
+    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",

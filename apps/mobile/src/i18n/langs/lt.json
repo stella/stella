@@ -75,7 +75,14 @@
     "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą.",
     "pickTitle": "Pasirinkite užduotį",
     "pickDescription": "Pasirinkite užduotį iš sąrašo, kad ją matytumėte čia.",
-    "openMatter": "Atidaryti bylą"
+    "openMatter": "Atidaryti bylą",
+    "assignedTo": "Priskirta",
+    "nobody": "Nepriskirta",
+    "assign": "Priskirti",
+    "doneAssigning": "Atlikta",
+    "someone": "Kažkas",
+    "membersFailed": "Nepavyko įkelti bylos narių.",
+    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",

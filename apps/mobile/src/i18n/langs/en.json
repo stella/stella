@@ -75,7 +75,14 @@
     "statusFailed": "The task could not be changed. Try again.",
     "pickTitle": "Pick a task",
     "pickDescription": "Choose a task from the list to see it here.",
-    "openMatter": "Open matter"
+    "openMatter": "Open matter",
+    "assignedTo": "Assigned to",
+    "nobody": "Unassigned",
+    "assign": "Assign",
+    "doneAssigning": "Done",
+    "someone": "Someone",
+    "membersFailed": "The matter's members could not be loaded.",
+    "assignFailed": "The task could not be assigned. Try again."
   },
   "matters": {
     "emptyTitle": "No matters yet",

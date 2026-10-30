@@ -75,7 +75,14 @@
     "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo.",
     "pickTitle": "Elija una tarea",
     "pickDescription": "Elija una tarea de la lista para verla aquí.",
-    "openMatter": "Abrir asunto"
+    "openMatter": "Abrir asunto",
+    "assignedTo": "Asignada a",
+    "nobody": "Sin asignar",
+    "assign": "Asignar",
+    "doneAssigning": "Hecho",
+    "someone": "Alguien",
+    "membersFailed": "No se pudieron cargar los miembros del asunto.",
+    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",

@@ -89,6 +89,19 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/update.ts",
   },
+  // Who works on a task: the people it can go to are the matter's members.
+  "GET /v1/workspaces/:workspaceId/members": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/routes.ts",
+  },
+  "POST /v1/tasks/:workspaceId/assignees": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/assignees/add.ts",
+  },
+  "DELETE /v1/tasks/:workspaceId/assignees": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/assignees/remove.ts",
+  },
   "GET /v1/entities/:workspaceId/entity/:entityId/versions": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/entities/versions/list.ts",
