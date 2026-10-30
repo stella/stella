@@ -1480,8 +1480,6 @@ const closeConversation = async ({ real }: { real: Real }) => {
   await real.harness.close();
 };
 
-const CONVERSATION_RUNS = { numRuns: 25 } as const;
-
 const conversationsProperty = (
   commands: fc.Arbitrary<Iterable<fc.AsyncCommand<Model, Real>>>,
 ) =>
@@ -2477,7 +2475,7 @@ describe("a conversation's live view", () => {
         conversationsProperty(
           fc.commands(conversationCommands, { maxCommands: 6 }),
         ),
-        CONVERSATION_RUNS,
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2741,7 +2739,7 @@ describe("a conversation's live view", () => {
             maxCommands: 6,
           }),
         ),
-        CONVERSATION_RUNS,
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2757,7 +2755,7 @@ describe("a conversation's live view", () => {
             maxCommands: 6,
           }),
         ),
-        CONVERSATION_RUNS,
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
