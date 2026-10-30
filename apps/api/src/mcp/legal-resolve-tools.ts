@@ -77,7 +77,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+      "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {

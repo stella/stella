@@ -61,12 +61,13 @@ import {
 } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { createSkillSummaryProjection } from "@/api/lib/chat/skill-summary-projection";
+import type { WithThreadStoredContentEgress } from "@/api/lib/chat/thread-stored-content-egress";
 import {
-  readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
   threadStoredContentSendModeOf,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -150,7 +151,8 @@ type RunChatThreadCompactionOptions = {
   abortSignal: AbortSignal;
   /** The drain's background admission; the thread's sends drew the actions. */
   admission: ModelDispatchAdmission;
-  dataWorkspaceIds: readonly SafeId<"workspace">[];
+  /** Test seam immediately before the dispatch authority is minted. */
+  beforeDispatchAuthorization?: (() => Promise<void>) | undefined;
   /**
    * Whether this deployment may derive AI memory from chat. Passed in rather
    * than read from `env` here so the value that lands on the checkpoint is the
@@ -168,12 +170,25 @@ type RunChatThreadCompactionOptions = {
   summarize?: ChatCompactionSummarize | undefined;
   threadId: SafeId<"chatThread">;
   triggerTokens: number;
+  userId: SafeId<"user">;
+  withStoredContentEgress: WithThreadStoredContentEgress;
   analytics?: ChatCompactionAnalytics | undefined;
 };
 
 export type ChatCompactionSummarize = (
   prompt: IncrementalSummaryPrompt,
+  authority: ChatCompactionDispatchAuthority,
 ) => Promise<string>;
+
+/**
+ * The current tenant scope captured at the provider dispatch linearization
+ * point. Keeping it beside the model call makes it impossible for a queued
+ * claim's older scope to drive provider-bound redaction.
+ */
+type ChatCompactionDispatchAuthority = {
+  dataWorkspaceIds: readonly SafeId<"workspace">[];
+  type: "authorized";
+};
 
 type ChatCompactionAnalytics = Pick<
   TanStackAIAnalyticsCallbacks,
@@ -189,6 +204,17 @@ type ChatCompactionAnalytics = Pick<
 export const runChatThreadCompaction = async (
   options: RunChatThreadCompactionOptions,
 ): Promise<Result<ChatCompactionOutcome, ChatCompactionError | SafeDbError>> =>
+  await options.withStoredContentEgress({
+    organizationId: options.organizationId,
+    signal: options.abortSignal,
+    threadId: options.threadId,
+    userId: options.userId,
+    work: async () => await runChatThreadCompactionUnderEgressFence(options),
+  });
+
+const runChatThreadCompactionUnderEgressFence = async (
+  options: RunChatThreadCompactionOptions,
+): Promise<Result<ChatCompactionOutcome, ChatCompactionError | SafeDbError>> =>
   await Result.gen(async function* () {
     const { safeDb, threadId } = options;
 
@@ -197,19 +223,24 @@ export const runChatThreadCompaction = async (
     );
     const { checkpoint } = observed;
 
-    const delta = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await readCompactionDeltaOnTx({
-            cursor: decodeCheckpointCursor(checkpoint),
-            threadId,
-            tx,
-          }),
-      ),
+    const deltaSnapshot = yield* Result.await(
+      safeDb(async (tx) => {
+        const gate = await readCompactionGateOnTx({
+          lock: false,
+          threadId,
+          tx,
+        });
+        const delta = await readCompactionDeltaOnTx({
+          cursor: decodeCheckpointCursor(checkpoint),
+          threadId,
+          tx,
+        });
+        return { dataWorkspaceIds: gate.dataWorkspaceIds, delta };
+      }),
     );
 
     const plan = planIncrementalCompaction({
-      delta,
+      delta: deltaSnapshot.delta,
       preserveTokens: options.preserveTokens,
       priorSummaryTokens: estimateSummaryTokens(checkpoint),
       triggerTokens: options.triggerTokens,
@@ -218,24 +249,47 @@ export const runChatThreadCompaction = async (
       return Result.ok<ChatCompactionOutcome>({ type: "up-to-date" });
     }
 
-    // The claim filtered anonymized threads, but a turn may have switched this
-    // one since. Read again after the delta, right before it is sent.
-    const sendMode = yield* Result.await(
+    await options.beforeDispatchAuthorization?.();
+
+    // This short transaction is the provider dispatch linearization point.
+    // It locks the thread and, through the scheduler's safeDb wrapper, the
+    // owner's current membership and every matter in the current scope. A
+    // revocation either commits first and refuses this dispatch, or waits and
+    // is ordered after it. The network call itself stays outside the
+    // transaction.
+    const dispatch = yield* Result.await(
       safeDb(
         async (tx) =>
-          await readThreadStoredContentSendModeOnTx({ threadId, tx }),
+          await authorizeCompactionDispatchOnTx({
+            dataWorkspaceIds: deltaSnapshot.dataWorkspaceIds,
+            observed,
+            threadId,
+            tx,
+          }),
       ),
     );
-    if (sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
-      return Result.ok<ChatCompactionOutcome>({ type: "anonymized" });
+    switch (dispatch.type) {
+      case "anonymized":
+        return Result.ok<ChatCompactionOutcome>({ type: "anonymized" });
+      case "superseded":
+        return Result.ok<ChatCompactionOutcome>({ type: "superseded" });
+      case "authorized":
+        break;
+      default:
+        dispatch satisfies never;
+        return panic(`Unhandled compaction dispatch: ${String(dispatch)}`);
     }
 
     const summaryMarkdown = yield* Result.await(
       summarizeDelta({
+        authority: dispatch,
         availableMessages:
-          delta.nextMessage === null
-            ? delta.messages
-            : [...delta.messages, delta.nextMessage],
+          deltaSnapshot.delta.nextMessage === null
+            ? deltaSnapshot.delta.messages
+            : [
+                ...deltaSnapshot.delta.messages,
+                deltaSnapshot.delta.nextMessage,
+              ],
         options,
         plan,
         priorSummary: checkpoint,
@@ -301,7 +355,21 @@ const readActiveCheckpointOnTx = async ({
     .orderBy(desc(chatThreadCompactions.createdAt))
     .limit(1);
 
-  return row.at(0) ?? null;
+  const checkpoint = row.at(0);
+  if (checkpoint === undefined) {
+    return null;
+  }
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: checkpoint,
+  });
+  return {
+    ...checkpoint,
+    summaryMarkdown:
+      projection.marker(checkpoint, subjectByThread.get(threadId)) ??
+      checkpoint.summaryMarkdown,
+  };
 };
 
 /**
@@ -326,6 +394,7 @@ const readChainStateOnTx = async ({
 };
 
 type CompactionGate = {
+  dataWorkspaceIds: readonly SafeId<"workspace">[];
   epoch: number;
   sendMode: ThreadStoredContentSendMode;
 };
@@ -350,6 +419,7 @@ const readCompactionGateOnTx = async ({
   const query = tx
     .select({
       compactionEpoch: chatThreads.compactionEpoch,
+      dataWorkspaceIds: chatThreads.dataWorkspaceIds,
       usedAnonymization: chatThreads.usedAnonymization,
     })
     .from(chatThreads)
@@ -362,11 +432,62 @@ const readCompactionGateOnTx = async ({
   const rows = lock ? await query.for("update") : await query;
   const row = rows.at(0);
   return {
+    dataWorkspaceIds: row === undefined ? [] : row.dataWorkspaceIds,
     // A missing thread cannot match any observed epoch, so the advance
     // declines.
     epoch: row?.compactionEpoch ?? MISSING_THREAD_EPOCH,
     sendMode: threadStoredContentSendModeOf(row),
   };
+};
+
+type CompactionDispatchDecision =
+  | ChatCompactionDispatchAuthority
+  | { type: "anonymized" }
+  | { type: "superseded" };
+
+/**
+ * Mint the one-run dispatch authority from the locked current thread state.
+ * The checkpoint and epoch bind it to the transcript snapshot; the returned
+ * workspace ids are the exact current scope that authorized that snapshot.
+ */
+const authorizeCompactionDispatchOnTx = async ({
+  dataWorkspaceIds,
+  observed,
+  threadId,
+  tx,
+}: {
+  dataWorkspaceIds: readonly SafeId<"workspace">[];
+  observed: ChatCompactionChainState;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<CompactionDispatchDecision> => {
+  const gate = await readCompactionGateOnTx({ lock: true, threadId, tx });
+  if (gate.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
+    return { type: "anonymized" };
+  }
+  const checkpoint = await readActiveCheckpointOnTx({ threadId, tx });
+  if (
+    gate.epoch !== observed.epoch ||
+    checkpoint?.id !== observed.checkpoint?.id ||
+    !sameWorkspaceScope(gate.dataWorkspaceIds, dataWorkspaceIds)
+  ) {
+    return { type: "superseded" };
+  }
+  return {
+    dataWorkspaceIds,
+    type: "authorized",
+  };
+};
+
+const sameWorkspaceScope = (
+  left: readonly SafeId<"workspace">[],
+  right: readonly SafeId<"workspace">[],
+): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const leftIds = new Set(left);
+  return right.every((id) => leftIds.has(id));
 };
 
 /**
@@ -432,8 +553,15 @@ const readCompactionDeltaOnTx = async ({
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
     .limit(CHAT_COMPACTION_DELTA_BATCH_MAX + 1);
 
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: rows,
+  });
   return {
-    messages: rows.slice(0, CHAT_COMPACTION_DELTA_BATCH_MAX),
+    messages: rows
+      .slice(0, CHAT_COMPACTION_DELTA_BATCH_MAX)
+      .map((row) => projection.chat(row, subjectByThread.get(threadId))),
     nextMessage: rows.at(CHAT_COMPACTION_DELTA_BATCH_MAX) ?? null,
   };
 };
@@ -647,6 +775,7 @@ const trimToUserTurn = (preserved: readonly DeltaMessage[]): DeltaMessage[] => {
 };
 
 type SummarizeDeltaOptions = {
+  authority: ChatCompactionDispatchAuthority;
   availableMessages: readonly DeltaMessage[];
   options: RunChatThreadCompactionOptions;
   plan: Extract<IncrementalCompactionPlan, { type: "compact" }>;
@@ -660,6 +789,7 @@ type SummarizeDeltaOptions = {
  * as complete.
  */
 const summarizeDelta = async ({
+  authority,
   availableMessages,
   options,
   plan,
@@ -672,13 +802,16 @@ const summarizeDelta = async ({
     try: async () => {
       const availableParts = availableMessages.map(deltaMessageParts);
       const projection = createSkillSummaryProjection(availableParts);
-      return await summarize({
-        newMessages: renderDeltaTranscript(
-          plan.messagesToSummarize,
-          projection.parts,
-        ),
-        previousCheckpoint: priorSummary?.summaryMarkdown ?? null,
-      });
+      return await summarize(
+        {
+          newMessages: renderDeltaTranscript(
+            plan.messagesToSummarize,
+            projection.parts,
+          ),
+          previousCheckpoint: priorSummary?.summaryMarkdown ?? null,
+        },
+        authority,
+      );
     },
     catch: (cause) =>
       new ChatCompactionError({
@@ -697,7 +830,7 @@ const summarizeDelta = async ({
 
 const createModelSummarizer =
   (options: RunChatThreadCompactionOptions): ChatCompactionSummarize =>
-  async (prompt) =>
+  async (prompt, authority) =>
     await generateTanStackTextForTask({
       userId: options.admission.userId,
       dataClass: "customer",
@@ -721,7 +854,7 @@ const createModelSummarizer =
       temperature: 0,
       // The thread's own matter scope: the summarizer must not see raw
       // workspace ids, and no wider set is in scope for a persisted turn.
-      tenantWorkspaceIds: options.dataWorkspaceIds,
+      tenantWorkspaceIds: authority.dataWorkspaceIds,
     });
 
 type AdvanceCheckpointOptions = {

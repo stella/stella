@@ -9,6 +9,7 @@ export const MCP_SHARED_UI_MODULE_FILES = [
       .filter((file) => file.endsWith(".tsx"))
       .map((file) => `packages/decision-reader/${file.replace(/^\.\//u, "")}`),
     ...Object.values(uiPackage.exports)
+      .map((target) => (typeof target === "string" ? target : target.default))
       .filter((file) => file.endsWith(".tsx"))
       .map((file) => `packages/ui/${file.replace(/^\.\//u, "")}`),
   ]),

@@ -28,7 +28,7 @@ export const resolveDecisionArgsSchema = nullAsAbsent(
     identifier: v.pipe(
       citationText,
       v.description(
-        "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case.",
+        "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions.",
       ),
     ),
   }),

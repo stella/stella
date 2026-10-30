@@ -14,11 +14,11 @@
   "vendor-tanstack-server-fn": 1538,
   "wasm-vendor": 0,
   "mcpApps": {
-    "document-upload": 496979,
-    "file-comparison": 496576,
-    "case-law-results": 826086,
-    "decision-reader": 714192,
-    "citation-graph": 518052,
-    "statute-timeline": 576810
+    "document-upload": 508423,
+    "file-comparison": 508217,
+    "case-law-results": 824147,
+    "decision-reader": 719948,
+    "citation-graph": 523000,
+    "statute-timeline": 581607
   }
 }

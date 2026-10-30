@@ -251,3 +251,20 @@ test.each([
     ).toEqual(["Nejvyšší soud", "Ústavní soud"]);
   },
 );
+test("metadata-only search hits visibly distinguish summaries from decision text", () => {
+  const host = fakeBridge({
+    ...baseSnapshot,
+    result: {
+      status: "ready",
+      view: searchView({
+        ...APP_SEARCH_FIXTURE,
+        results: APP_SEARCH_FIXTURE.results.map((row) => ({
+          ...row,
+          textAvailability: "metadata_only" as const,
+        })),
+      }),
+    },
+  });
+  const ui = render(<CaseLawApp bridge={host.bridge} />);
+  expect(ui.getByText("Rozhodnutí nemá text")).toBeDefined();
+});

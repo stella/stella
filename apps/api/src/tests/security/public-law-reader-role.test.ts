@@ -1352,14 +1352,13 @@ describe("public-law reader role", () => {
     const viewRelations = new Set([
       "case_law_published_decisions",
       "case_law_unredacted_decisions",
+      "case_law_withdrawal_status",
     ]);
     const requiredRelations = declaredColumnPairs
       .filter(({ grant }) => grant === "required")
       .map(({ relation }) => relation);
     const policyRelations = requiredRelations.filter(
-      (relation) =>
-        relation !== "case_law_published_decisions" &&
-        relation !== "case_law_unredacted_decisions",
+      (relation) => !viewRelations.has(relation),
     );
     const declaredRelations = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
     expect(

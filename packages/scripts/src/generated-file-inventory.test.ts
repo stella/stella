@@ -27,6 +27,8 @@ test("inventories derived MCP outputs before they exist and follows source addit
       ...CI_GENERATED_FILES,
       "apps/api/src/mcp/generated/capability-dispatch/example.read.ts",
       "packages/mcp-apps/src/reader/generated/app.html.txt",
+      "packages/mcp-apps/src/reader/generated/app.js.txt",
+      "packages/mcp-apps/src/reader/generated/app.css.txt",
       ...Object.values(MCP_APP_GENERATED_OUTPUTS).flat(),
     ].toSorted();
     expect(ciGeneratedFiles(root)).toEqual(expected);
@@ -40,7 +42,7 @@ test("inventories derived MCP outputs before they exist and follows source addit
         (file) =>
           file !==
             "apps/api/src/mcp/generated/capability-dispatch/example.read.ts" &&
-          file !== "packages/mcp-apps/src/reader/generated/app.html.txt",
+          !file.startsWith("packages/mcp-apps/src/reader/generated/"),
       ),
     );
   } finally {

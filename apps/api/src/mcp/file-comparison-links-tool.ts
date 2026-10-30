@@ -10,15 +10,13 @@ import * as v from "valibot";
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { createSha256 } from "@stll/sha256/bun";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { probeEncryptedOoxml } from "@/api/lib/files/encrypted-ooxml";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { presignUploadUrl, putPresignedUpload } from "@/api/lib/s3-presign";
-import {
-  parseSafeOutboundUrl,
-  safeOutboundFetchBytes,
-} from "@/api/lib/safe-outbound-fetch";
+import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   FILE_COMPARISON_MAX_BYTES,

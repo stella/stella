@@ -79,6 +79,8 @@ import {
   skUsFixture,
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { deferredSkDocumentRawFixture } from "@/api/tests/helpers/sk-document-raw-storage";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
@@ -105,6 +107,7 @@ type SurfaceEvidence =
   | { readonly kind: "built"; readonly fixture: () => EnrolledAdapterFixture }
   | { readonly kind: "page-recording"; readonly file: string }
   | { readonly kind: "shared-path"; readonly with: SourceRegistrationKey }
+  | { readonly kind: "deferred-document" }
   | { readonly kind: "none"; readonly reason: string };
 
 /**
@@ -126,7 +129,10 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: czNsFixture },
     { kind: "page-recording", file: "cz-ns-page.json.gz" },
   ],
-  [ADAPTER_KEYS.CZ_NSS]: [{ kind: "built", fixture: czNssFixture }],
+  [ADAPTER_KEYS.CZ_NSS]: [
+    { kind: "built", fixture: czNssFixture },
+    { kind: "built", fixture: nssRecoveryFixture },
+  ],
   [ADAPTER_KEYS.CZ_US]: [
     { kind: "built", fixture: czUsFixture },
     { kind: "page-recording", file: "cz-us-page.json.gz" },
@@ -136,6 +142,7 @@ const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },
+    { kind: "deferred-document" },
   ],
   [ADAPTER_KEYS.SK_US]: [{ kind: "built", fixture: skUsFixture }],
   [ADAPTER_KEYS.PL_COURTS]: [
@@ -287,6 +294,11 @@ const evidenceNames = async (
       case "shared-path":
         add(await evidenceNames(evidence.with));
         break;
+      case "deferred-document": {
+        const { raw } = await deferredSkDocumentRawFixture();
+        add(Object.keys(decodeSourceRawEnvelopeObjects(raw)));
+        break;
+      }
       case "none":
         break;
       default:

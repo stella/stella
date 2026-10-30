@@ -37,6 +37,7 @@ import { ProvisionHistory } from "@/features/statutes/components/provision-histo
 import { ProvisionLeadingDecisions } from "@/features/statutes/components/provision-leading-decisions";
 import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
@@ -159,7 +160,7 @@ export const ProvisionInspectorView = ({
   const contentRef = useRef<HTMLDivElement | null>(null);
   // The wording's own query, read here only for whether there is text to
   // search yet; the fetch is the one `ProvisionWording` already makes.
-  const { isSuccess: wordingReady } = useQuery(
+  const { data: statute, isSuccess: wordingReady } = useQuery(
     statuteOptions(payload.documentId),
   );
   // Cmd/Ctrl+F belongs to the provision in front of the reader rather than to
@@ -185,7 +186,19 @@ export const ProvisionInspectorView = ({
       className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
       ref={panelRef}
     >
-      <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <InspectorTabHeader
+        label={tab.label}
+        labelOverflow="wrap"
+        labelContent={
+          statute === undefined ? undefined : (
+            <>
+              <span className="block">{payload.provisionLabel}</span>
+              <StatuteDisplayLabel statute={statute} />
+            </>
+          )
+        }
+        onClose={onClose}
+      />
       <InspectorFindBar find={find} />
       {/* The bar floats over the provision the way it floats over a PDF page;
           the scroll area below it moves, the corner does not. */}

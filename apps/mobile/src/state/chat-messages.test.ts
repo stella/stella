@@ -23,6 +23,7 @@ const SESSION: StoredSession = {
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 const sourceFor = (fetch: Fetch) =>
@@ -130,6 +131,31 @@ describe("reading a thread", () => {
       "https://stella.example.com/v1/chat/threads/t%201/messages?workspaceId=matter%201",
       "https://stella.example.com/v1/chat/threads/t%201/messages/older?before=cursor%2F1&workspaceId=matter%201",
     ]);
+  });
+
+  test("says whether the thread has sent anonymized text", async () => {
+    const pageFor =
+      (usedAnonymization?: boolean): Fetch =>
+      async () =>
+        Response.json({
+          messages: [],
+          olderCursor: null,
+          activeTurnId: null,
+          ...(usedAnonymization === undefined ? {} : { usedAnonymization }),
+        });
+    const read = async (fetch: Fetch) => {
+      const page = await readChatThread({
+        fetch,
+        matterId: undefined,
+        source: sourceFor(fetch),
+        threadId: "t1",
+      });
+      return page.isOk() ? page.value.usedAnonymization : page.error._tag;
+    };
+    expect(await read(pageFor(true))).toBe(true);
+    expect(await read(pageFor(false))).toBe(false);
+    // A server from before the field reads as a thread that never anonymized.
+    expect(await read(pageFor(undefined))).toBe(false);
   });
 
   test("a global thread is read without a matter", () => {

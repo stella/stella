@@ -615,6 +615,7 @@ type ErrorEnvelope = {
   hint: string | undefined;
   issues: readonly ErrorIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId: string | undefined;
 };
@@ -646,7 +647,7 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
 
 /**
  * Parse the structured tool-error envelope
- * (`{"error":{"code","message","hint?","issues?","retryable?"}}`) a modern
+ * (`{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?"}}`) a modern
  * server tags every tool failure with. Unknown fields are ignored, so a newer
  * server that grows the envelope never breaks this parser. Returns `null` for a
  * legacy plain-text or bare-`{code}` error so the caller falls back to today's
@@ -674,6 +675,11 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     requestId: parseRequestId(error["requestId"]),
     ...(typeof error["retryable"] === "boolean"
       ? { retryable: error["retryable"] }
+      : {}),
+    ...(typeof error["retryAfterMs"] === "number" &&
+    Number.isFinite(error["retryAfterMs"]) &&
+    error["retryAfterMs"] >= 0
+      ? { retryAfterMs: error["retryAfterMs"] }
       : {}),
     ...(typeof error["contactUrl"] === "string"
       ? { contactUrl: error["contactUrl"] }
@@ -1128,6 +1134,7 @@ export const toolErrorLines = (
     message: string;
     code?: string;
     retryable?: boolean;
+    retryAfterMs?: number;
     contactUrl?: string;
     hint: string | undefined;
     issues: readonly { path: string; message: string }[];
