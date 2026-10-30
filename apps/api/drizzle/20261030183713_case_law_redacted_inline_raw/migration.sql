@@ -77,8 +77,8 @@ $function$;
 -- migration validates this constraint; NOT VALID still protects every new
 -- insert and update during that repair.
 -- stella-migration-safety: reviewed drop-constraint - replaces one unvalidated CHECK atomically with a stronger compatible check; old and new tasks already clear inline raw on ordinary redaction, and rollback is a forward migration restoring the earlier expression.
-ALTER TABLE "case_law_decisions"
-  DROP CONSTRAINT "case_law_decisions_redacted_payload_erased";
+-- squawk-ignore ban-drop-constraint
+ALTER TABLE "case_law_decisions" DROP CONSTRAINT "case_law_decisions_redacted_payload_erased";
 --> statement-breakpoint
 ALTER TABLE "case_law_decisions"
   ADD CONSTRAINT "case_law_decisions_redacted_payload_erased"
