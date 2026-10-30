@@ -33,6 +33,17 @@ describe("beforeAll fetch replacement cleanup", () => {
     ).toEqual([3]);
   });
 
+  test("reports a bracket-form replacement without a restore", async () => {
+    expect(
+      await lint(
+        'import { beforeAll, describe } from "bun:test";',
+        'describe("leaking", () => {',
+        '  beforeAll(() => { globalThis["fetch"] = replacement; });',
+        "});",
+      ),
+    ).toEqual([3]);
+  });
+
   test("does not accept a restore in a sibling describe", async () => {
     expect(
       await lint(

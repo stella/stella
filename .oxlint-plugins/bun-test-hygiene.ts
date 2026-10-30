@@ -1002,9 +1002,12 @@ export default eslintCompatPlugin({
           before() {
             replacements.length = 0;
             restoredScopes.clear();
+            // Both `globalThis.fetch` and `globalThis["fetch"]` reach the
+            // assignment check; the prefilter only skips files naming neither.
             return (
               mentionsBunTest(context.sourceCode.text) &&
-              context.sourceCode.text.includes("globalThis.fetch")
+              context.sourceCode.text.includes("globalThis") &&
+              context.sourceCode.text.includes("fetch")
             );
           },
           AssignmentExpression(node) {
