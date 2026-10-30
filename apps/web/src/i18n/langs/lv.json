@@ -2084,8 +2084,6 @@
     "clearFilters": "Notīrīt filtrus",
     "clearSearch": "Notīrīt meklēšanu",
     "close": "Aizvērt",
-    "closeAll": "Aizvērt visu",
-    "closeOthers": "Aizvērt citus",
     "columns": "Kolonnas",
     "comfortable": "Ērts",
     "comingSoon": "Drīzumā",
@@ -3674,6 +3672,9 @@
       "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
+    "closeAllTabs": "Aizvērt {count, plural, zero {visas # cilnes} one {# cilni} other {visas # cilnes}}",
+    "closeOtherTabs": "Aizvērt {count, plural, zero {# citu cilņu} one {# citu cilni} other {# citas cilnes}}",
+    "closeTab": "Aizvērt <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
       "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",

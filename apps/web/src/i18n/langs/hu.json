@@ -2084,8 +2084,6 @@
     "clearFilters": "Szűrők törlése",
     "clearSearch": "Keresés törlése",
     "close": "Bezárás",
-    "closeAll": "Összes bezárása",
-    "closeOthers": "Többi bezárása",
     "columns": "Oszlopok",
     "comfortable": "Kényelmes",
     "comingSoon": "Hamarosan",
@@ -3674,6 +3672,9 @@
       "unsupportedVisualContent": "Ez a fájl képeket vagy vektorgrafikákat tartalmaz, amelyekben nem ellenőrizhető az érzékeny szöveg. Az exportálás nem érhető el.",
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
+    "closeAllTabs": "{count, plural, one {# lap} other {Mind a # lap}} bezárása",
+    "closeOtherTabs": "{count, plural, one {# másik lap} other {# másik lap}} bezárása",
+    "closeTab": "<bdi>{name}</bdi> bezárása",
     "conversionRefusal": {
       "legacyFormat": "Ez egy régi formátumú {format}-fájl. A konvertáláshoz mentse újra {replacementExtension} formátumban.",
       "unsupportedEncoding": "Ez a dokumentum nem támogatott {encoding} kódolást használ, ezért nem konvertálható.",
