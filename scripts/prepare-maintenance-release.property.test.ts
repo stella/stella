@@ -1467,6 +1467,73 @@ describe("release cut readiness", () => {
     );
   });
 
+  const MARKETING_JOB = "suites / marketing-screenshots / check";
+  const heavyFailure = (jobs: unknown[]) => ({
+    [STATUSES_PATH]: [
+      commitStatus("main/heavy", "failure", 11),
+      PR_DEPTH_GREEN,
+    ],
+    [jobsPath(11)]: { jobs },
+  });
+  const rollups = [
+    job("suites / ci-result", "failure"),
+    job("status", "failure"),
+  ];
+
+  test("cuts with a warning when main/heavy failed only in marketing screenshots", async () => {
+    const written: string[] = [];
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      fakeGitHub(
+        heavyFailure([
+          job("suites / web-tests", "success"),
+          job(MARKETING_JOB, "failure"),
+          ...rollups,
+        ]),
+      ),
+      (text) => {
+        written.push(text);
+      },
+    );
+    expect(written).toEqual([
+      `::warning::maintenance-release: main/heavy failed only in advisory jobs (${MARKETING_JOB}) ${RUN_PREFIX}11\n`,
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("refuses when another job failed beside marketing screenshots", async () => {
+    const message = await cutRefusal(
+      heavyFailure([
+        job(MARKETING_JOB, "failure"),
+        job("suites / api-tests (2)", "failure"),
+        ...rollups,
+      ]),
+    );
+    expect(message).toContain("failing job: suites / api-tests (2) (failure)");
+  });
+
+  test.each([
+    ["a cancelled advisory job", [job(MARKETING_JOB, "cancelled"), ...rollups]],
+    ["an unknown job name", [job("suites / other-shots / check", "failure")]],
+    ["only the aggregates failing", rollups],
+  ])("refuses %s", async (_label, jobs) => {
+    expect(await cutRefusal(heavyFailure(jobs))).toContain(
+      "main/heavy: failure",
+    );
+  });
+
+  test("an error status is never advisory", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "error", 11),
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(11)]: { jobs: [job(MARKETING_JOB, "failure"), ...rollups] },
+    });
+    expect(message).toContain("main/heavy: failure (status error)");
+  });
+
   test("reads only the newest status of each gate", async () => {
     const newerRed = await cutRefusal({
       [STATUSES_PATH]: [

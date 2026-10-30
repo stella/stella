@@ -23,6 +23,7 @@ import {
   type PreCutGate,
   preCutGates,
 } from "./prepare-maintenance-release-gates";
+import { heavyVerdict } from "./release-heavy-verdict";
 
 // Computed filesystem reads retain these repository Markdown inputs.
 export const CI_MARKDOWN_READER_INPUTS = [
@@ -959,6 +960,8 @@ export type ReleaseCutGate = {
   evidence: string;
   runUrl: string | null;
   failingJobs: readonly string[];
+  /** Advisory jobs that failed in a run the gate still counts as green. */
+  advisoryJobs: readonly string[];
 };
 
 const readGitHubPages = async (
@@ -998,13 +1001,20 @@ const runIdFromUrl = (url: unknown): string | null => {
   return /^[1-9]\d*$/u.test(id) ? id : null;
 };
 
-const failingJobNames = async (
+type RunJobsRead =
+  | { readonly kind: "jobs"; readonly jobs: readonly unknown[] }
+  | { readonly kind: "unreadable"; readonly failing: string[] };
+
+const readRunJobs = async (
   runUrl: string | null,
   readJson: GitHubJsonReader,
-): Promise<string[]> => {
+): Promise<RunJobsRead> => {
   const runId = runIdFromUrl(runUrl);
   if (runId === null) {
-    return [`(no workflow run linked: ${String(runUrl)})`];
+    return {
+      kind: "unreadable",
+      failing: [`(no workflow run linked: ${String(runUrl)})`],
+    };
   }
   const jobsResult = await Result.tryPromise(async () =>
     readGitHubPages(
@@ -1015,11 +1025,21 @@ const failingJobNames = async (
   );
   if (Result.isError(jobsResult)) {
     const { cause } = jobsResult.error;
-    return [
-      `(jobs unreadable: ${cause instanceof Error ? cause.message : String(cause)})`,
-    ];
+    return {
+      kind: "unreadable",
+      failing: [
+        `(jobs unreadable: ${cause instanceof Error ? cause.message : String(cause)})`,
+      ],
+    };
   }
-  return jobsResult.value.flatMap((job) => {
+  return { kind: "jobs", jobs: jobsResult.value };
+};
+
+const failingJobNames = (read: RunJobsRead): string[] => {
+  if (read.kind === "unreadable") {
+    return read.failing;
+  }
+  return read.jobs.flatMap((job) => {
     const name = isRecord(job) ? job["name"] : undefined;
     if (!isRecord(job) || typeof name !== "string") {
       return ["(a job GitHub returned without a name)"];
@@ -1060,15 +1080,38 @@ const gateFromStatus = async (
     login === TRUSTED_STATUS_CREATOR
       ? `status ${String(status["state"])}`
       : `status ${String(status["state"])} set by ${String(login)}, not ${TRUSTED_STATUS_CREATOR}`;
-  return {
+  const gate: ReleaseCutGate = {
     context: spec.context,
     workflow: spec.workflow,
     state,
     evidence,
     runUrl,
-    failingJobs:
-      state === "success" ? [] : await failingJobNames(runUrl, readJson),
+    failingJobs: [],
+    advisoryJobs: [],
   };
+  if (state === "success") {
+    return gate;
+  }
+  const read = await readRunJobs(runUrl, readJson);
+  // Only a plain `failure` status can be advisory: `error` means the run
+  // failed for infrastructure reasons, and an untrusted creator proves nothing.
+  if (
+    spec.context === "main/heavy" &&
+    login === TRUSTED_STATUS_CREATOR &&
+    status["state"] === "failure" &&
+    read.kind === "jobs"
+  ) {
+    const verdict = heavyVerdict(read.jobs);
+    if (verdict.advisoryOnly) {
+      return {
+        ...gate,
+        state: "success",
+        evidence: `${evidence}; only advisory jobs failed`,
+        advisoryJobs: verdict.advisory,
+      };
+    }
+  }
+  return { ...gate, failingJobs: failingJobNames(read) };
 };
 
 const gateFromScheduledRun = async (
@@ -1095,6 +1138,7 @@ const gateFromScheduledRun = async (
       evidence: "no status and no scheduled run on the commit",
       runUrl: null,
       failingJobs: [],
+      advisoryJobs: [],
     };
   }
   if (latest["head_sha"] !== sha || latest["event"] !== "schedule") {
@@ -1117,7 +1161,10 @@ const gateFromScheduledRun = async (
     evidence: `no status; latest scheduled run ${String(latest["status"])}/${String(latest["conclusion"])}`,
     runUrl,
     failingJobs:
-      state === "success" ? [] : await failingJobNames(runUrl, readJson),
+      state === "success"
+        ? []
+        : failingJobNames(await readRunJobs(runUrl, readJson)),
+    advisoryJobs: [],
   };
 };
 
@@ -1141,6 +1188,7 @@ export const readReleaseCutGates = async (
     evidence: cause instanceof Error ? cause.message : String(cause),
     runUrl: null,
     failingJobs: [],
+    advisoryJobs: [],
   });
   const statusesResult = await Result.tryPromise(async () =>
     readGitHubPages(`/commits/${sha}/statuses`, readJson, (payload) => payload),
@@ -1171,6 +1219,7 @@ export const readReleaseCutGates = async (
       evidence: "no status on the commit",
       runUrl: null,
       failingJobs: [],
+      advisoryJobs: [],
     };
   };
   return Promise.all(
@@ -1231,10 +1280,15 @@ export const assertReleaseCutReady = async (
     process.stdout.write(text);
   },
 ): Promise<void> => {
-  const refusal = releaseCutRefusal(
-    sha,
-    await readReleaseCutGates(sha, readJson),
-  );
+  const gates = await readReleaseCutGates(sha, readJson);
+  const refusal = releaseCutRefusal(sha, gates);
+  for (const gate of gates) {
+    if (gate.advisoryJobs.length > 0) {
+      write(
+        `::warning::maintenance-release: ${gate.context} failed only in advisory jobs (${gate.advisoryJobs.join(", ")}) ${gate.runUrl ?? ""}\n`,
+      );
+    }
+  }
   if (refusal === null) {
     write(
       `maintenance-release: main/heavy and main/pr-depth are green on ${sha}\n`,
