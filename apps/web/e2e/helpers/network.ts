@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
+import { panic } from "better-result";
 import {
   appendFileSync,
   existsSync,
@@ -49,19 +50,21 @@ const NETWORK_ROUND_POLL_MS = 10;
 
 // --- collector -------------------------------------------------------------
 
+export type ResponseSizeOutcome =
+  | { status: "measured"; bytes: number }
+  | { status: "streamed" }
+  | { status: "failed"; error: string }
+  | { status: "unreadable"; error: string };
+
+type ResponseSizeFailure = Extract<ResponseSizeOutcome, { error: string }>;
+
 export type NetworkCapture = {
   requests: {
     method: string;
     pathname: string;
     dbQueries: number | null;
     dbQueryHeaderMissing: boolean;
-    // Response body size in bytes; null for a streamed response (excluded by
-    // content-type, see STREAMED_RESPONSE_CONTENT_TYPE) or one whose body
-    // Playwright never resolved (see responseBytesUnavailable).
-    responseBytes: number | null;
-    // True only when Playwright saw a non-streamed response and reading its
-    // body failed (e.g. aborted/redirected mid-navigation).
-    responseBytesUnavailable: boolean;
+    responseSize: ResponseSizeOutcome;
   }[];
   // Scheduled release rounds; only measurement navigations install the barrier.
   depthChain: string[][];
@@ -77,7 +80,7 @@ export type NetworkCollector = {
   // Long-lived SSE streams do not block this: only their request/response
   // events count as activity, not the open connection itself.
   waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
-  // Async: waits for in-flight response-body reads so response sizes are
+  // Async: waits for in-flight protocol size measurements so sizes are
   // populated before the caller summarizes the capture.
   capture: () => Promise<NetworkCapture>;
 };
@@ -139,10 +142,8 @@ type NetworkRecord = {
   // True only when Playwright saw a response and that response did not expose
   // the dev/test query-count header.
   dbQueryHeaderMissing: boolean;
-  // Response body length in bytes; null until the async body read resolves,
-  // and permanently null for a streamed (SSE) response.
-  responseBytes: number | null;
-  responseBytesUnavailable: boolean;
+  responseSize: ResponseSizeOutcome;
+  contentEncoding: string | undefined;
 };
 
 const BACKGROUND_POLL_PATHS = new Set(["/health"]);
@@ -176,19 +177,41 @@ const isStreamedResponse = (response: Response): boolean =>
     .toLowerCase()
     .includes(STREAMED_RESPONSE_CONTENT_TYPE);
 
-// Playwright's body() rejects for a response that never finishes (aborted or
-// redirected mid-navigation); that is a legitimate outcome here, not a bug in
-// the collector, so it is caught and recorded rather than left to reject the
-// whole route walk.
-const readResponseBytes = async (
-  response: Response,
-  record: NetworkRecord,
-): Promise<void> => {
+/** Protocol sizes survive navigation; response bodies can already be discarded. */
+export const measureResponseSize = async (
+  request: Pick<Request, "sizes" | "failure">,
+  contentEncoding?: string,
+): Promise<ResponseSizeOutcome> => {
+  const failure = request.failure();
+  if (failure !== null) {
+    return { status: "failed", error: failure.errorText };
+  }
+  // sizes() reports encoded bytes, while the existing budgets measure decoded
+  // bytes. Measurement navigation requests identity encoding; reject a server
+  // that ignores it rather than silently making compressed payloads cheaper.
+  if (
+    contentEncoding !== undefined &&
+    contentEncoding.trim().toLowerCase() !== "identity"
+  ) {
+    return {
+      status: "unreadable",
+      error: `Cannot compare ${contentEncoding} protocol bytes with decoded-byte budgets`,
+    };
+  }
   try {
-    const body = await response.body();
-    record.responseBytes = body.length;
-  } catch {
-    record.responseBytesUnavailable = true;
+    const { responseBodySize } = await request.sizes();
+    if (!Number.isFinite(responseBodySize) || responseBodySize < 0) {
+      return {
+        status: "unreadable",
+        error: `Invalid protocol response size: ${responseBodySize}`,
+      };
+    }
+    return { status: "measured", bytes: responseBodySize };
+  } catch (error) {
+    return {
+      status: "unreadable",
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 };
 
@@ -199,9 +222,8 @@ export const createNetworkCollector = (
     collectorOptions.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
   const records: NetworkRecord[] = [];
   const byRequest = new Map<Request, NetworkRecord>();
-  // Body reads are async (Playwright must finish downloading the response),
-  // so capture() awaits these before reading responseBytes off the records.
-  const pendingBodyReads: Promise<void>[] = [];
+  // Size metadata resolves asynchronously after requestfinished.
+  const pendingMeasurements: Promise<void>[] = [];
   let lastActivityAt = Date.now();
   const rounds = createNetworkRoundController<Request>();
   const released = new Set<Request>();
@@ -216,12 +238,15 @@ export const createNetworkCollector = (
         (url) => url.origin === apiOrigin,
         async (route) => {
           const request = route.request();
+          const headers = isTrackedApiRequest(request, apiOrigin)
+            ? { ...(await request.allHeaders()), "accept-encoding": "identity" }
+            : undefined;
           if (
             !isTrackedApiRequest(request, apiOrigin) ||
             !countsTowardsWaterfall(requestDetails(request)) ||
             rounds.loaded
           ) {
-            await route.continue();
+            await route.continue({ headers });
             return;
           }
           rounds.arrive({
@@ -249,7 +274,7 @@ export const createNetworkCollector = (
             }
             await ownerSleep(NETWORK_ROUND_POLL_MS);
           }
-          await route.continue();
+          await route.continue({ headers });
         },
       );
     },
@@ -268,8 +293,11 @@ export const createNetworkCollector = (
           startedAt: Date.now(),
           dbQueries: null,
           dbQueryHeaderMissing: false,
-          responseBytes: null,
-          responseBytesUnavailable: false,
+          responseSize: {
+            status: "unreadable",
+            error: "Request did not finish",
+          },
+          contentEncoding: undefined,
         };
         records.push(record);
         byRequest.set(request, record);
@@ -286,12 +314,42 @@ export const createNetworkCollector = (
         }
       };
 
+      const onFinished = (request: Request) => {
+        onSettled(request);
+        const record = byRequest.get(request);
+        if (record === undefined || record.responseSize.status === "streamed") {
+          return;
+        }
+        pendingMeasurements.push(
+          measureResponseSize(request, record.contentEncoding).then(
+            (outcome) => {
+              record.responseSize = outcome;
+              return undefined;
+            },
+          ),
+        );
+      };
+
+      const onFailed = (request: Request) => {
+        onSettled(request);
+        const record = byRequest.get(request);
+        if (record !== undefined) {
+          record.responseSize = {
+            status: "failed",
+            error:
+              request.failure()?.errorText ??
+              "requestfailed without an errorText",
+          };
+        }
+      };
+
       const onResponse = (response: Response) => {
         const record = byRequest.get(response.request());
         if (!record) {
           return;
         }
         markActivity();
+        record.contentEncoding = response.headers()["content-encoding"];
         const header = response.headers()[DB_QUERIES_HEADER];
         if (header !== undefined) {
           record.dbQueries = Number(header);
@@ -300,27 +358,27 @@ export const createNetworkCollector = (
         }
 
         if (isStreamedResponse(response)) {
+          record.responseSize = { status: "streamed" };
           // Streams never finish; headers establish that the channel opened.
           if (countsTowardsWaterfall(requestDetails(response.request()))) {
             rounds.complete(response.request(), Date.now());
           }
           return;
         }
-        pendingBodyReads.push(readResponseBytes(response, record));
       };
 
       page.on("request", onRequest);
       page.on("response", onResponse);
-      page.on("requestfinished", onSettled);
-      page.on("requestfailed", onSettled);
+      page.on("requestfinished", onFinished);
+      page.on("requestfailed", onFailed);
 
       return () => {
         rounds.finish();
         released.clear();
         page.off("request", onRequest);
         page.off("response", onResponse);
-        page.off("requestfinished", onSettled);
-        page.off("requestfailed", onSettled);
+        page.off("requestfinished", onFinished);
+        page.off("requestfailed", onFailed);
       };
     },
 
@@ -331,27 +389,17 @@ export const createNetworkCollector = (
       }),
 
     capture: async () => {
-      await Promise.all(pendingBodyReads);
+      await Promise.all(pendingMeasurements);
       return {
         depthChain: rounds.rounds,
         duplicateGetCounts: countDuplicateGets(records),
-        requests: records.map(
-          ({
-            method,
-            pathname,
-            dbQueries,
-            dbQueryHeaderMissing,
-            responseBytes,
-            responseBytesUnavailable,
-          }) => ({
-            method,
-            pathname,
-            dbQueries,
-            dbQueryHeaderMissing,
-            responseBytes,
-            responseBytesUnavailable,
-          }),
-        ),
+        requests: records.map((record) => ({
+          method: record.method,
+          pathname: record.pathname,
+          dbQueries: record.dbQueries,
+          dbQueryHeaderMissing: record.dbQueryHeaderMissing,
+          responseSize: record.responseSize,
+        })),
       };
     },
   };
@@ -431,10 +479,10 @@ export type RouteNetworkMetrics = {
   // Per request key, how many completed responses omitted `x-db-queries`.
   missingDbQueryCounts: Record<string, number>;
   // Per request key, the max response body size (bytes) observed this run.
-  // Streamed (SSE) responses and keys whose body never resolved are absent.
+  // Streams and keys without a completed size measurement are absent.
   responseSizes: Record<string, number>;
-  // Per request key, how many non-streamed responses failed to yield a body.
-  missingResponseSizeCounts: Record<string, number>;
+  // Protocol and request failures retain their reasons for route diagnostics.
+  responseSizeFailures: Record<string, ResponseSizeFailure[]>;
 };
 
 export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
@@ -461,7 +509,7 @@ export const summarizeCapture = (
   const dbQueries: Record<string, number> = {};
   const missingDbQueryCounts: Record<string, number> = {};
   const responseSizes: Record<string, number> = {};
-  const missingResponseSizeCounts: Record<string, number> = {};
+  const responseSizeFailures: Record<string, ResponseSizeFailure[]> = {};
   const requestCounts: Record<string, number> = {};
   const depthChain = capture.depthChain;
   for (const request of capture.requests) {
@@ -473,18 +521,20 @@ export const summarizeCapture = (
     if (request.dbQueries !== null && !Number.isNaN(request.dbQueries)) {
       dbQueries[key] = Math.max(dbQueries[key] ?? 0, request.dbQueries);
     }
-    if (request.responseBytesUnavailable) {
-      missingResponseSizeCounts[key] =
-        (missingResponseSizeCounts[key] ?? 0) + 1;
-    }
-    if (
-      request.responseBytes !== null &&
-      !Number.isNaN(request.responseBytes)
-    ) {
-      responseSizes[key] = Math.max(
-        responseSizes[key] ?? 0,
-        request.responseBytes,
-      );
+    const outcome = request.responseSize;
+    switch (outcome.status) {
+      case "measured":
+        responseSizes[key] = Math.max(responseSizes[key] ?? 0, outcome.bytes);
+        break;
+      case "streamed":
+        break;
+      case "failed":
+      case "unreadable":
+        (responseSizeFailures[key] ??= []).push(outcome);
+        break;
+      default:
+        outcome satisfies never;
+        panic("Unhandled response-size outcome");
     }
   }
   return {
@@ -506,8 +556,8 @@ export const summarizeCapture = (
     responseSizes: Object.fromEntries(
       Object.entries(responseSizes).toSorted(([a], [b]) => a.localeCompare(b)),
     ),
-    missingResponseSizeCounts: Object.fromEntries(
-      Object.entries(missingResponseSizeCounts).toSorted(([a], [b]) =>
+    responseSizeFailures: Object.fromEntries(
+      Object.entries(responseSizeFailures).toSorted(([a], [b]) =>
         a.localeCompare(b),
       ),
     ),
@@ -664,15 +714,21 @@ const pushResponseSizeProblems = ({
 }) => {
   const baselineSizes = entry.responseSizes ?? {};
   for (const key of Object.keys(baselineSizes)) {
-    if (metrics.missingResponseSizeCounts[key] === undefined) {
+    if (metrics.requestCounts[key] === undefined) {
       continue;
     }
+    const failures = metrics.responseSizeFailures[key] ?? [];
+    const hasFailure = failures.length > 0;
+    if (metrics.responseSizes[key] !== undefined && !hasFailure) {
+      continue;
+    }
+    const details = failures.map(
+      ({ status, error }) => `  ${status}: ${error}`,
+    );
     problems.push(
       `Response size missing on ${route}: ${key}\n` +
-        `  This request has a committed response-size budget, but Playwright\n` +
-        `  could not read the response body (aborted or redirected mid-\n` +
-        `  navigation is the usual cause). Re-run the suite; if it persists,\n` +
-        `  investigate before trusting this route's payload-size budget.`,
+        `  This request has a committed response-size budget, but no readable\n` +
+        `  sample was measured or a request/size measurement failed.\n${details.join("\n")}`,
     );
   }
   for (const [key, observed] of Object.entries(metrics.responseSizes)) {
