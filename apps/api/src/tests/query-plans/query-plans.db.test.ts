@@ -309,6 +309,31 @@ test("outstanding-document probe is an index-only LIMIT 1 lookup", async () => {
   expect(scans[0]?.limitRows).toBeLessThanOrEqual(1);
 });
 
+/**
+ * A work-anchored citation read scans the citation table two ways: its anchor
+ * ranges, keyed by a version id the statement binds, and the canonical rule's
+ * rival probes, keyed by a citing version the row names.
+ */
+const citationScansOf = (scans: readonly ScanOccurrence[]) => {
+  const citations = scans.filter(
+    ({ relation }) => relation === "case_law_citations",
+  );
+  const isAnchor = ({ indexCond }: ScanOccurrence) =>
+    indexCond?.includes("'::uuid") ?? false;
+  return {
+    anchors: citations.filter(isAnchor),
+    probes: citations.filter((scan) => !isAnchor(scan)),
+  };
+};
+
+/** Rivals are found through a citing version's own rows, never the cited side. */
+const expectCitingSideProbes = (probes: readonly ScanOccurrence[]) => {
+  for (const probe of probes) {
+    expect(probe.index).toBe("case_law_citations_citing_page_idx");
+    expect(probe.indexCond ?? "").toContain("citing_decision_id");
+  }
+};
+
 test("citation summary caps both indexed citation scans before joining decisions", async () => {
   const entry = QUERY_PLAN_REGISTRY.find(
     (candidate) => candidate.id === "case-law.citation-summary",
@@ -317,9 +342,8 @@ test("citation summary caps both indexed citation scans before joining decisions
     panic("Citation summary has no query-plan entry");
   }
   const scans = await explainPhysical(entry.role, entry.build, entry.planMode);
-  const citations = scans.filter(
-    ({ relation }) => relation === "case_law_citations",
-  );
+  const { anchors: citations, probes } = citationScansOf(scans);
+  expectCitingSideProbes(probes);
   expect(citations).toHaveLength(2);
   expect(
     citations.map(({ index }) => index ?? "").toSorted(compareCodeUnit),
@@ -341,9 +365,8 @@ test("top citing decisions cap the indexed citation scan before joining decision
     panic("Top citing decisions have no query-plan entry");
   }
   const scans = await explainPhysical(entry.role, entry.build, entry.planMode);
-  const citations = scans.filter(
-    ({ relation }) => relation === "case_law_citations",
-  );
+  const { anchors: citations, probes } = citationScansOf(scans);
+  expectCitingSideProbes(probes);
   expect(citations).toHaveLength(1);
   expect(citations.map(({ index }) => index)).toEqual([
     "case_law_citations_cited_page_idx",
@@ -433,9 +456,7 @@ test(
     const decisions = scans.filter(
       ({ relation }) => relation === "case_law_decisions",
     );
-    expect(decisions).toHaveLength(2);
-    expect(decisions[1]?.index).toBe("case_law_decisions_lang_group_idx");
-    expect(decisions[1]?.indexCond).toMatch(/language_group_key/u);
+    expect(decisions).toHaveLength(3);
     expect(decisions[0]?.nodeType).not.toBe("Seq Scan");
     expect(decisions[0]?.index).toBe(
       "case_law_decisions_sitemap_shard_published_idx",
@@ -453,6 +474,58 @@ test(
     ).toEqual([]);
   },
   DB_TEST_TIMEOUT_MS,
+);
+
+test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
+  "%s confines representative and alternate probes to the document group",
+  async (id) => {
+    const entry =
+      QUERY_PLAN_REGISTRY.find((candidate) => candidate.id === id) ??
+      panic(`Sitemap query is absent from the plan registry: ${id}`);
+    const scans = await explainPhysical(
+      entry.role,
+      entry.build,
+      "planMode" in entry ? entry.planMode : undefined,
+    );
+    const decisions = scans.filter(
+      ({ relation }) => relation === "case_law_decisions",
+    );
+    expect(decisions).toHaveLength(3);
+    const outer = decisions.find(({ alias }) => alias === "case_law_decisions");
+    expect(outer?.index).toBe("case_law_decisions_sitemap_shard_published_idx");
+    expect(outer?.indexCond).toMatch(/\bcountry(?:\)::text)? = /u);
+    expect(outer?.indexCond).toMatch(/\bdecision_date >= /u);
+    expect(outer?.indexCond).toMatch(/\bdecision_date < /u);
+    const representative = decisions.find(({ filter }) =>
+      filter?.includes("id < case_law_decisions.id"),
+    );
+    const alternate = decisions.find(({ filter }) =>
+      filter?.includes("language)::text <> (case_law_decisions.language"),
+    );
+    expect(representative).toBeDefined();
+    expect(alternate).toBeDefined();
+    for (const probe of [representative, alternate]) {
+      expect(probe?.index?.split(", ")).toContain(
+        "case_law_decisions_lang_group_idx",
+      );
+      expect(probe?.indexCond).toMatch(
+        /language_group_key\)::text = \(case_law_decisions.language_group_key/u,
+      );
+      expect([probe?.indexCond, probe?.filter].join(" ")).toMatch(
+        /country\)::text = \(case_law_decisions.country/u,
+      );
+      expect(probe?.filter).toContain("redacted_at IS NULL");
+      expect(probe?.filter).toContain("isListingOnly");
+    }
+    for (const alias of [
+      "sitemap_sibling_source",
+      "sitemap_alternate_source",
+    ]) {
+      const source = scans.find((scan) => scan.alias === alias);
+      expect(source?.relation).toBe("case_law_sources");
+      expect(source?.filter).toContain("allowsRedistribution");
+    }
+  },
 );
 
 test("every shared public-law query has a registered or reasoned disposition", () => {

@@ -48,6 +48,7 @@ const decision = {
   documentUnavailable: false,
   documentUrl: null,
   ecli: null,
+  extractionWarnings: [],
   fulltext: "Fixture decision text.",
   headnote: absentText,
   id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000011"),
@@ -69,6 +70,7 @@ const decision = {
     name: "Fixture source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: absentText,

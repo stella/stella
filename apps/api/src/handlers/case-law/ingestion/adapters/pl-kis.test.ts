@@ -5,22 +5,6 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-/**
- * pl-kis against payloads eureka.mf.gov.pl served.
- *
- * One listing page and one detail per ingested category are captured verbatim
- * with provenance sidecars. Paging, resuming and the tip are driven through a
- * stubbed transport, because the behaviour under test is the cursor's.
- */
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assemblePlKisDecision,
   encodePlKisCursor,
   parsePlKisCursor,
@@ -47,7 +31,23 @@ import {
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
+/**
+ * pl-kis against payloads eureka.mf.gov.pl served.
+ *
+ * One listing page and one detail per ingested category are captured verbatim
+ * with provenance sidecars. Paging, resuming and the tip are driven through a
+ * stubbed transport, because the behaviour under test is the cursor's.
+ */
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
