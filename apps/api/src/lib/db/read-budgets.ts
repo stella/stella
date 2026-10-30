@@ -53,6 +53,13 @@ export const READ_BUDGETS = {
     reason:
       "Four fixture sources: eight date endpoint seeks at eight pages each (64), ninety precomputed court rows at two pages each (180), and twelve pages for the twenty-row uncached court source and grouped pending-text read: 256 pages total. Rejected filing dates must cost no heap walk.",
   },
+  "statement.caseLaw.euCompletionPage": {
+    surface: "statement",
+    pages: 1500,
+    statementDeadlineMs: 10_000,
+    reason:
+      "One 100-row completion page measured against a fully completed 100,000-decision source: 1,201 shared pages, plus 299 pages (25% headroom) for B-tree layout variation. The source page, receipt, and index-job decision indexes bound work before eligibility filtering.",
+  },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,
