@@ -893,9 +893,8 @@ describe("language variant completion", () => {
 });
 
 describe("translations published as the Court's HTML", () => {
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const HTML_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0011.01";

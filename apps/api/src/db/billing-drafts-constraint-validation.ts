@@ -19,7 +19,7 @@ export const BILLING_DRAFTS_CONSTRAINT_VALIDATIONS =
   BILLING_DRAFTS_CONSTRAINTS.map(
     (constraint) =>
       ({
-        introducedBy: "20261030100000_activity_billing_drafts",
+        introducedBy: "20261030103100_activity_billing_drafts",
         name: constraint.constraintName,
         readCompletion: async (connection) =>
           await readConstraintCompletion({
