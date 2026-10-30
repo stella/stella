@@ -79,6 +79,37 @@ describe("unreadable PDF failures", () => {
 });
 
 describe("PDF source line retention", () => {
+  test("keeps anonymized PDF segments and printed placeholders in the AST", () => {
+    for (const placeholder of ["anonymizované", "[anonymizované]", "J. N."]) {
+      const text = `Sťažovateľ ${placeholder} podal návrh.`;
+      const blocks = buildSkDecisionPdfBlocks({
+        lines: [
+          {
+            text,
+            segments: [
+              { text: "Sťažovateľ" },
+              { text: placeholder, anonymized: true },
+              { text: "podal návrh." },
+            ],
+            bold: false,
+            fontSize: 10,
+            pageIndex: 0,
+          },
+        ],
+        metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+      });
+
+      expect(blocks.map((block) => block.plainText).join("\n")).toBe(text);
+      expect(blocks).toHaveLength(1);
+      expect(blocks.at(0)).toMatchObject({
+        type: "paragraph",
+        inlines: expect.arrayContaining([
+          { type: "text", text: placeholder, anonymized: true },
+        ]),
+      });
+    }
+  });
+
   const blocksFrom = (texts: string[]) =>
     buildSkDecisionPdfBlocks({
       lines: texts.map((text) => ({

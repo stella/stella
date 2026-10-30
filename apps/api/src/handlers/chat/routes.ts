@@ -22,6 +22,7 @@ import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import savedSecret from "@/api/handlers/chat/saved-secret";
 import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
@@ -44,6 +45,7 @@ export const chatRoute = routes(
     "/link-icons/:hostname": { GET: getLinkIcon },
     "/": { POST: sendMessage },
     "/threads/:threadId/secrets/:toolCallId": { POST: submitSecret },
+    "/threads/:threadId/connectors/:toolCallId": { POST: submitConnector },
     "/threads/:threadId/saved-secret": { GET: savedSecret },
     "/tool-grants": { GET: listChatToolGrants, POST: createChatToolGrant },
     "/tool-grants/coverage": { GET: readChatToolGrantCoverage },

@@ -73,6 +73,13 @@ export type ApiError<TResponses> = [ErrorKey<TResponses>] extends [never]
       };
     }[ErrorKey<TResponses>];
 
+export type ApiTransportError = {
+  readonly kind: "network" | "timeout" | "aborted";
+  readonly cause: unknown;
+  readonly status: 0;
+  readonly value: null;
+};
+
 /** What every request resolves to: the decoded answer, or the refusal. */
 export type ApiResult<TResponses> =
   | {
@@ -84,7 +91,7 @@ export type ApiResult<TResponses> =
     }
   | {
       readonly data: null;
-      readonly error: ApiError<TResponses>;
+      readonly error: ApiError<TResponses> | ApiTransportError;
       readonly status: number;
       readonly response: Response;
       readonly headers: Headers;
@@ -106,11 +113,30 @@ type HeadersOption<THeaders> = unknown extends THeaders
     ? { readonly headers?: THeaders & HeaderValues }
     : { readonly headers: THeaders & HeaderValues };
 
+type RequestFetchHeaders<THeaders> = THeaders extends {
+  readonly "Idempotency-Key"?: infer TReplayKey;
+}
+  ? string extends TReplayKey
+    ? HeadersInit
+    : Readonly<Record<string, string>> & {
+        readonly "Idempotency-Key"?: TReplayKey;
+      }
+  : HeadersInit;
+
+// Required route headers belong to options.headers; fetch overrides retain
+// the reserved replay-key prohibition without requiring those headers twice.
+type RequestFetchOptions<THeaders> = Omit<RequestInit, "headers"> & {
+  readonly timeoutMs?: number;
+  readonly headers?: RequestFetchHeaders<THeaders>;
+};
+
 /** Per-request options: the route's query and headers, and fetch settings. */
 export type RequestOptions<TRoute extends RouteShape> = QueryOption<
   TRoute["query"]
 > &
-  HeadersOption<TRoute["headers"]> & { readonly fetch?: RequestInit };
+  HeadersOption<TRoute["headers"]> & {
+    readonly fetch?: RequestFetchOptions<TRoute["headers"]>;
+  };
 
 type OptionsArgs<TRoute extends RouteShape> =
   NoOptions extends RequestOptions<TRoute>
@@ -164,13 +190,23 @@ export type ApiClient<TNode> = {
 
 type MaybePromise<TValue> = TValue | Promise<TValue>;
 
+export type RequestReplayRoute = {
+  readonly method: string;
+  readonly path: string;
+};
+
 export type ApiClientOptions = {
+  /** Only declared method/template pairs may carry an Idempotency-Key. */
+  readonly requestReplayRoutes?: readonly RequestReplayRoute[];
   /** Observes the same unread response with its declared route, before decoding. */
   readonly onScopedResponse?: ScopedResponseObserver;
   /** Fetch settings every request starts from; credentials default to `include`. */
   readonly fetch?: RequestInit;
   /** Sends the request; `globalThis.fetch` when absent. */
-  readonly fetcher?: (url: string, init: RequestInit) => Promise<Response>;
+  readonly fetcher?: (
+    url: string,
+    init: RequestInit & { readonly timeoutMs?: number },
+  ) => Promise<Response>;
   /** Headers every request carries, or a function computing them per request. */
   readonly headers?:
     | HeaderValues
@@ -189,6 +225,7 @@ export type ApiClientOptions = {
 type ClientConfig = {
   readonly origin: string;
   readonly options: ApiClientOptions;
+  readonly requestReplayRoutes: ReadonlySet<string>;
 };
 
 type ClientPath = {
@@ -199,14 +236,16 @@ type ClientPath = {
 type CallOptions = {
   readonly query: unknown;
   readonly headers: unknown;
-  readonly fetch: RequestInit | undefined;
+  readonly fetch: (RequestInit & { readonly timeoutMs?: number }) | undefined;
 };
 
-const readRequestInit = (value: unknown): RequestInit | undefined => {
+const readRequestInit = (
+  value: unknown,
+): (RequestInit & { readonly timeoutMs?: number }) | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
-  const init: RequestInit = value;
+  const init: RequestInit & { readonly timeoutMs?: number } = value;
   return init;
 };
 
@@ -254,6 +293,25 @@ const queryString = (query: unknown): string => {
 };
 
 const setHeaders = (target: Headers, values: unknown): void => {
+  if (values instanceof Headers) {
+    for (const [name, value] of values) {
+      target.set(name, value);
+    }
+    return;
+  }
+  if (Array.isArray(values)) {
+    for (const entry of values) {
+      if (
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === "string" &&
+        typeof entry[1] === "string"
+      ) {
+        target.set(entry[0], entry[1]);
+      }
+    }
+    return;
+  }
   if (typeof values !== "object" || values === null) {
     return;
   }
@@ -404,7 +462,7 @@ const send = async (
 
   const headers = new Headers(clientFetch?.headers);
   setHeaders(headers, options.fetch?.headers);
-  const init: RequestInit = {
+  const init: RequestInit & { readonly timeoutMs?: number } = {
     ...clientFetch,
     ...options.fetch,
     credentials:
@@ -425,16 +483,48 @@ const send = async (
   }
 
   await config.options.onRequest?.(path, init);
+  const routeTemplate = `/${clientPath.template.join("/")}`;
+  if (
+    !config.requestReplayRoutes.has(`${method.toUpperCase()} ${routeTemplate}`)
+  ) {
+    const outgoingHeaders = new Headers(init.headers);
+    outgoingHeaders.delete("Idempotency-Key");
+    init.headers = outgoingHeaders;
+  }
+
   const url = `${config.origin}${path}${queryString(options.query)}`;
-  const response = await (config.options.fetcher === undefined
-    ? globalThis.fetch(url, init)
-    : config.options.fetcher(url, init));
+  const request = await Result.tryPromise({
+    try: async () =>
+      config.options.fetcher === undefined
+        ? globalThis.fetch(url, init)
+        : config.options.fetcher(url, init),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(request)) {
+    const cause = request.error;
+    const name = cause instanceof Error ? cause.name : undefined;
+    let kind: "network" | "timeout" | "aborted" = "network";
+    if (name === "AbortError") {
+      kind = "aborted";
+    } else if (name === "TimeoutError") {
+      kind = "timeout";
+    }
+    const response = Response.error();
+    return {
+      data: null,
+      error: { kind, cause, status: 0, value: null },
+      status: 0,
+      response,
+      headers: response.headers,
+    };
+  }
+  const response = request.value;
   await config.options.onScopedResponse?.({
     response,
     scope: {
       type: "request",
       method: method.toUpperCase(),
-      routeTemplate: `/${clientPath.template.join("/")}`,
+      routeTemplate,
     },
   });
   await config.options.onResponse?.(response);
@@ -522,7 +612,15 @@ export function createApiClient(
   options: ApiClientOptions = {},
 ): unknown {
   return node(
-    { origin: withoutTrailingSlashes(origin), options },
+    {
+      origin: withoutTrailingSlashes(origin),
+      options,
+      requestReplayRoutes: new Set(
+        (options.requestReplayRoutes ?? []).map(
+          ({ method, path }) => `${method.toUpperCase()} ${path}`,
+        ),
+      ),
+    },
     { segments: [], template: [] },
   );
 }

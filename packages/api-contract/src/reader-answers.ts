@@ -64,16 +64,19 @@ type ReaderAnswerCreateFields = ReaderAnswerModelOptions & {
   decisionId: SafeId<"caseLawDecision">;
   /** Any spans; the API admits them only when they match the decision text. */
   anchor: { spans: ReaderAnswerSpan[] };
-  locale: string;
+  /** Omission uses the account's answer language preference, then the document language. */
+  locale?: string;
 };
 export type CreateReaderAnswer = ReaderAnswerCreateFields &
   ({ kind: "ask"; question: string } | { kind: "explain"; question?: never });
 export type ReaderAnswerFollowUp = ReaderAnswerModelOptions & {
   question: string;
-  locale: string;
+  /** Omission uses the account's answer language preference, then the document language. */
+  locale?: string;
 };
 export type ReaderAnswerRegenerate = ReaderAnswerModelOptions & {
-  locale: string;
+  /** Omission uses the account's answer language preference, then the document language. */
+  locale?: string;
 };
 
 export type ReaderAnswerMessage = {

@@ -154,13 +154,52 @@ test("failed Bun tests keep the package scope and file header they ran under", (
 
 test("a test run's tail lists only the failures, after everything else", () => {
   const tail = renderTail(BUN_FAILURE);
-  expect(tail.split("\n").at(0)).toBe("---- failing tests (1 of 1) ----");
+  expect(tail.split("\n").at(0)).toBe("---- failing test names (1) ----");
+  expect(tail).toContain("@stll/api (1 failure)\n  src/math.test.ts");
   expect(tail).toContain(
     "@stll/api: (fail) math > adds (apps/api/src/math.test.ts:12)",
   );
   expect(tail).toContain("    Expected: 3");
   expect(tail).not.toContain("(pass)");
   expect(renderTail(["(pass) a [1ms]", " 1 pass"])).toBe("");
+});
+
+test("a test run's tail lists every failure name and package count", () => {
+  const lines = Array.from({ length: 45 }, (_, index) => {
+    const scope = index < 32 ? "@stll/api" : "@stll/web";
+    const file = index < 32 ? "src/api.test.ts" : "src/web.test.ts";
+    return [
+      `${scope}:test: ${file}:`,
+      `${scope}:test: (fail) case ${index + 1} [1ms]`,
+    ];
+  }).flat();
+  const tail = renderTail(lines);
+
+  expect(tail).toContain("@stll/api (32 failures)");
+  expect(tail).toContain("@stll/web (13 failures)");
+  for (let index = 1; index <= 45; index += 1) {
+    expect(tail).toContain(`    (fail) case ${index}`);
+  }
+  expect(tail).toContain("---- failure details (30 of 45) ----");
+  expect(tail.match(/^ {4}\(fail\) case \d+$/gmu)).toHaveLength(45);
+  expect(tail.match(/^@stll\/(?:api|web): \(fail\)/gmu)).toHaveLength(30);
+});
+
+test("a failure after a very long diff remains in the complete name list", () => {
+  const longDiff = Array.from(
+    { length: 500 },
+    (_, index) => `@stll/api:test: ${index} | ${"x".repeat(300)}`,
+  );
+  const tail = renderTail([
+    "@stll/api:test: src/early.test.ts:",
+    ...longDiff,
+    "@stll/api:test: (fail) early failure [1ms]",
+    "@stll/web:test: src/later.test.ts:",
+    "@stll/web:test: error: later assertion",
+    "@stll/web:test: (fail) later failure [1ms]",
+  ]);
+
+  expect(tail).toContain("  src/later.test.ts\n    (fail) later failure");
 });
 
 test("typecheck diagnostics in tsc and tsgo formats carry file and line", () => {

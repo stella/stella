@@ -37,6 +37,7 @@ import * as compactionBudget from "@/api/lib/chat/compaction-budget";
 import { logger } from "@/api/lib/observability/logger";
 import type {
   SchedulerDb,
+  SchedulerTask,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
@@ -55,8 +56,16 @@ import {
 setDefaultTimeout(120_000);
 
 const { testDb, ids } = await getRlsFixture();
+const withTestStoredContentEgress = async <T>({
+  work,
+}: {
+  signal: AbortSignal;
+  threadId: SafeId<"chatThread">;
+  work: () => Promise<T>;
+}): Promise<T> => await work();
 const compactChatThreads = createChatThreadCompactor({
   database: asTestRaw<RlsDatabase<Transaction>>(testDb),
+  withStoredContentEgress: withTestStoredContentEgress,
 });
 
 const originalOrganizationMember = (
@@ -192,8 +201,8 @@ const seedDueThread = async (
   return threadId;
 };
 
-const runCompactor = async () => {
-  await compactChatThreads(
+const runCompactor = async (task: SchedulerTask = compactChatThreads) => {
+  await task(
     asTestRaw<SchedulerTaskContext>({
       db: asTestRaw<SchedulerDb>(testDb),
       logger,
@@ -244,6 +253,51 @@ describe("chat thread compactor", () => {
       compactionScheduledAt: null,
     });
     expect(accessLostLogs()).toEqual([]);
+  });
+
+  test("uses the current authorized data scope at provider dispatch", async () => {
+    const threadId = await seedDueThread([ids.wsA1]);
+    settingsSpy.mockImplementation(async () => {
+      const firstMessage = await testDb.query.chatMessages.findFirst({
+        where: { threadId: { eq: threadId } },
+        orderBy: { createdAt: "asc" },
+      });
+      if (firstMessage === undefined) {
+        panic("Expected a seeded compaction message");
+      }
+      await testDb.transaction(async (tx) => {
+        await tx
+          .update(chatThreads)
+          .set({ dataWorkspaceIds: [ids.wsA1, ids.wsA2] })
+          .where(eq(chatThreads.id, threadId));
+        await tx
+          .update(chatMessages)
+          .set({
+            content: toPersistedChatMessageContentV3({
+              data: [
+                {
+                  type: "text",
+                  content: `current matter id ${ids.wsA2}`,
+                },
+              ],
+            }),
+          })
+          .where(eq(chatMessages.id, firstMessage.id));
+      });
+      return Result.ok({
+        orgAIConfig: null,
+        promptCachingEnabled: false,
+        managedAIResidency: DEFAULT_MANAGED_AI_RESIDENCY,
+      });
+    });
+
+    await runCompactor();
+
+    const request = modelSpy.mock.calls
+      .map(([options]) => options)
+      .find(({ prompt }) => prompt?.includes(ids.wsA2));
+    expect(request?.tenantWorkspaceIds).toEqual([ids.wsA1, ids.wsA2]);
+    expect(await readCheckpoints(threadId)).toEqual([{ status: "active" }]);
   });
 
   test("a thread is not compacted when its owner has left the organization", async () => {
@@ -331,6 +385,80 @@ describe("chat thread compactor", () => {
         attributes: expect.objectContaining({
           "thread.id": threadId,
           "thread.skip_reason": OWNER_ACCESS_LOST_REASON.ORGANIZATION,
+        }),
+      }),
+    );
+  });
+
+  test("an owner removed at the dispatch seam reaches no provider", async () => {
+    const threadId = await seedDueThread([], null);
+    const task = createChatThreadCompactor({
+      beforeDispatchAuthorization: async () => {
+        await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+      },
+      database: asTestRaw<RlsDatabase<Transaction>>(testDb),
+      withStoredContentEgress: withTestStoredContentEgress,
+    });
+
+    await runCompactor(task);
+
+    expect(modelSpy).not.toHaveBeenCalled();
+    expect(await readCheckpoints(threadId)).toEqual([]);
+    expect(accessLostLogs()).toContainEqual(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          "thread.id": threadId,
+          "thread.skip_reason": OWNER_ACCESS_LOST_REASON.ORGANIZATION,
+        }),
+      }),
+    );
+  });
+
+  test("a matter removal at the dispatch seam reaches no provider", async () => {
+    const threadId = await seedDueThread([ids.wsA1, ids.wsA2]);
+    const task = createChatThreadCompactor({
+      beforeDispatchAuthorization: async () => {
+        await testDb
+          .delete(workspaceMembers)
+          .where(eq(workspaceMembers.id, ids.memberA1wsA2));
+      },
+      database: asTestRaw<RlsDatabase<Transaction>>(testDb),
+      withStoredContentEgress: withTestStoredContentEgress,
+    });
+
+    await runCompactor(task);
+
+    expect(modelSpy).not.toHaveBeenCalled();
+    expect(await readCheckpoints(threadId)).toEqual([]);
+    expect(accessLostLogs()).toContainEqual(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          "thread.id": threadId,
+          "thread.skip_reason": OWNER_ACCESS_LOST_REASON.THREAD,
+        }),
+      }),
+    );
+  });
+
+  test("thread deletion at the dispatch seam reaches no provider", async () => {
+    const threadId = await seedDueThread([ids.wsA1]);
+    const task = createChatThreadCompactor({
+      beforeDispatchAuthorization: async () => {
+        await testDb.delete(chatThreads).where(eq(chatThreads.id, threadId));
+      },
+      database: asTestRaw<RlsDatabase<Transaction>>(testDb),
+      withStoredContentEgress: withTestStoredContentEgress,
+    });
+
+    await runCompactor(task);
+
+    expect(modelSpy).not.toHaveBeenCalled();
+    expect(await readCheckpoints(threadId)).toEqual([]);
+    expect(accessLostLogs()).toContainEqual(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          "thread.id": threadId,
+          "thread.skip_reason": OWNER_ACCESS_LOST_REASON.THREAD,
         }),
       }),
     );

@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +15,7 @@ import { decisionKeyFromPath, writeDecision } from "./decisions";
 import { generateClassification, readClassificationInputs } from "./generate";
 import type { DerivedJob } from "./generate";
 import { decisionPathForKey } from "./inputs";
+import { verifyPublicMetadata } from "./public-metadata";
 import { writeSnapshots } from "./snapshots";
 
 const git = (directory: string, ...args: string[]) => {
@@ -141,7 +143,9 @@ test("a bumped pin snapshots the new revision and preserves the review decision"
     path.join(fixture.root, ".github/ci-job-classification-decisions"),
   )
     .map((name) =>
-      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+      decisionKeyFromPath(
+        `.github/ci-job-classification-decisions/${name}/decision.json`,
+      ),
     )
     .find((key) => key.startsWith("supplier7:"));
   expect(remoteDecision).toBe("supplier7:.github/workflows/shared.yml/shared");
@@ -256,7 +260,9 @@ test("a bump of one of two workflows from one source moves only that job's decis
     path.join(root, ".github/ci-job-classification-decisions"),
   )
     .map((name) =>
-      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+      decisionKeyFromPath(
+        `.github/ci-job-classification-decisions/${name}/decision.json`,
+      ),
     )
     .filter((key) => key.startsWith("supplier"))
     .toSorted();
@@ -396,7 +402,9 @@ const createConvergingFixture = (
     path.join(root, ".github/ci-job-classification-decisions"),
   )
     .map((name) =>
-      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+      decisionKeyFromPath(
+        `.github/ci-job-classification-decisions/${name}/decision.json`,
+      ),
     )
     .filter((key) => key.startsWith("supplier"));
   const kindOf = (sha: string) => {
@@ -438,5 +446,105 @@ test("two old revisions converging on one with different kinds need a review", (
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain("Missing or changed job review");
+  }
+});
+
+test("nested composite actions retain the reusable workflow checkout mount", () => {
+  const sha = "a".repeat(40);
+  const fixture = createFixture(
+    reusable(`uses: actions/checkout@${sha}
+        with:
+          ref: \${{ job.workflow_sha }}
+          path: .tooling
+      - uses: ./.tooling/.github/actions/outer`),
+  );
+  for (const { name, next } of [
+    { name: "outer", next: "middle" },
+    { name: "middle", next: "inner" },
+  ]) {
+    write(
+      fixture.source,
+      `.github/actions/${name}/action.yml`,
+      `runs:
+  using: composite
+  steps:
+    - uses: ./.tooling/.github/actions/${next}
+`,
+    );
+  }
+  write(
+    fixture.source,
+    ".github/actions/inner/action.yml",
+    `runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo nested
+`,
+  );
+  const revision = commit(fixture.source, "nested metadata closure");
+  write(fixture.root, ".github/workflows/caller.yml", caller(revision));
+  writeSnapshots({
+    root: fixture.root,
+    sources: sources(fixture.source, revision),
+    base: fixture.base,
+  });
+  const inputs = readClassificationInputs(fixture.root);
+  const snapshot = Object.values(inputs.snapshots).find(
+    ({ origin }) => origin.sha === revision,
+  );
+  expect(Object.keys(snapshot?.documents ?? {}).toSorted()).toEqual([
+    ".github/actions/inner/action.yml",
+    ".github/actions/middle/action.yml",
+    ".github/actions/outer/action.yml",
+    ".github/workflows/shared.yml",
+  ]);
+  // Fixture review decisions are explicit; production refresh never invents them.
+  rmSync(path.join(fixture.root, ".github/ci-job-classification-decisions"), {
+    recursive: true,
+  });
+  mkdirSync(path.join(fixture.root, ".github/ci-job-classification-decisions"));
+  generateClassification({
+    ...readClassificationInputs(fixture.root),
+    observeJobs: (jobs) => {
+      for (const [key, job] of jobs) {
+        rmSync(path.dirname(path.join(fixture.root, decisionPathForKey(key))), {
+          recursive: true,
+          force: true,
+        });
+        writeDecision(fixture.root, key, {
+          kind: "ordinary",
+          qualifier: `fixture ${key}`,
+          reviewedDigest: job.digest,
+        });
+      }
+    },
+  });
+  const generated = generateClassification(
+    readClassificationInputs(fixture.root),
+  );
+  if (generated.isErr()) {
+    throw generated.error;
+  }
+  expect(generated.isOk()).toBe(true);
+  const nested = generated.value.nodes.filter(
+    (node) => node.type === "metadata" && node.path.includes("/actions/"),
+  );
+  expect(nested).toHaveLength(3);
+  const changedOrigin = verifyPublicMetadata({
+    manifest: generated.value,
+    reader: {
+      ...inputs.reader,
+      read: (repository, file) => {
+        const text = inputs.reader.read(repository, file);
+        return file === ".github/workflows/shared.yml"
+          ? text.replace(`\${{ job.workflow_sha }}`, "main")
+          : text;
+      },
+    },
+  });
+  expect(changedOrigin.isErr()).toBe(true);
+  if (changedOrigin.isErr()) {
+    expect(changedOrigin.error.message).toContain("origin mismatch");
   }
 });
