@@ -280,6 +280,118 @@ const bindModelModule = ({
   return changed;
 };
 
+const isAliasDeclaration = (
+  node: ts.Node,
+): node is
+  ts.VariableDeclaration | ts.ParameterDeclaration | ts.BindingElement =>
+  ts.isVariableDeclaration(node) ||
+  ts.isParameter(node) ||
+  ts.isBindingElement(node);
+
+const followedModuleBinding = (binding: ts.BindingName): boolean => {
+  if (ts.isIdentifier(binding)) {
+    return true;
+  }
+  return (
+    ts.isObjectBindingPattern(binding) &&
+    binding.elements.every(
+      (element) =>
+        !element.dotDotDotToken &&
+        ts.isIdentifier(element.name) &&
+        (element.propertyName === undefined ||
+          ts.isIdentifier(element.propertyName) ||
+          ts.isStringLiteral(element.propertyName)),
+    )
+  );
+};
+
+const isExportedAlias = (node: ts.Node): boolean =>
+  ts.isVariableDeclaration(node) &&
+  ts.isVariableDeclarationList(node.parent) &&
+  ts.isVariableStatement(node.parent.parent) &&
+  (node.parent.parent.modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+  ) ??
+    false);
+
+/** Every forwarded value must terminate in a counted call or a tracked alias. */
+const accountedModelReference = (
+  node: ts.Expression,
+  resolve: ReturnType<typeof modelReference>,
+): boolean => {
+  const parent = node.parent;
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isIdentifier(node.left) &&
+    ts.isExpressionStatement(parent)
+  ) {
+    return true;
+  }
+  if (
+    ts.isParenthesizedExpression(parent) ||
+    ts.isAwaitExpression(parent) ||
+    ts.isAsExpression(parent) ||
+    ts.isSatisfiesExpression(parent) ||
+    ts.isNonNullExpression(parent) ||
+    ts.isTypeAssertionExpression(parent)
+  ) {
+    return parent.expression === node;
+  }
+  if (ts.isConditionalExpression(parent)) {
+    return parent.whenTrue === node || parent.whenFalse === node;
+  }
+  if (ts.isBinaryExpression(parent)) {
+    if (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      return (
+        ts.isIdentifier(parent.left) &&
+        (resolve(parent.right).has("operation") ||
+          resolve(parent.right).has("module"))
+      );
+    }
+    return (
+      parent.operatorToken.kind < ts.SyntaxKind.FirstAssignment ||
+      parent.operatorToken.kind > ts.SyntaxKind.LastAssignment
+    );
+  }
+  if (ts.isCallExpression(parent) && parent.expression === node) {
+    return resolve(node).has("operation") || resolve(node).has("continuation");
+  }
+  if (
+    (ts.isPropertyAccessExpression(parent) ||
+      ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+  ) {
+    return resolve(node).has("module");
+  }
+  if (isAliasDeclaration(parent) && parent.initializer === node) {
+    return (
+      !isExportedAlias(parent) &&
+      ((resolve(node).has("operation") && ts.isIdentifier(parent.name)) ||
+        (resolve(node).has("module") && followedModuleBinding(parent.name)))
+    );
+  }
+  return false;
+};
+
+const isBindingName = (node: ts.Expression): boolean => {
+  const parent = node.parent;
+  return (
+    (isAliasDeclaration(parent) && parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.propertyName === node) ||
+    ((ts.isPropertyAccessExpression(parent) ||
+      ts.isPropertyAssignment(parent)) &&
+      parent.name === node) ||
+    ((ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isMethodDeclaration(parent)) &&
+      parent.name === node) ||
+    (ts.isBinaryExpression(parent) &&
+      parent.left === node &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken)
+  );
+};
+
 export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
   // Escaped strings still take the AST path; unrelated modules need no parse.
   if (
@@ -287,7 +399,7 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       (token) => source.includes(token),
     )
   ) {
-    return { modelImport: false, legacyCalls: 0, writes: [] };
+    return { modelImport: false, legacyCalls: 0, writes: [], escapes: [] };
   }
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const bindings = new Set<string>();
@@ -350,20 +462,30 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       changed =
         bindModelModule({ binding: imported, bindings, namespaces }) || changed;
     }
+    let alias: { name: string; value: ts.Expression } | undefined;
     if (
-      !(
-        ts.isVariableDeclaration(node) ||
-        ts.isParameter(node) ||
-        ts.isBindingElement(node)
-      ) ||
-      !ts.isIdentifier(node.name) ||
-      node.initializer === undefined ||
-      !resolve(node.initializer).has("operation")
+      isAliasDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
     ) {
+      alias = { name: node.name.text, value: node.initializer };
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left)
+    ) {
+      alias = { name: node.left.text, value: node.right };
+    }
+    if (alias === undefined) {
       return;
     }
-    if (!bindings.has(node.name.text)) {
-      bindings.add(node.name.text);
+    const kinds = resolve(alias.value);
+    if (kinds.has("operation") && !bindings.has(alias.name)) {
+      bindings.add(alias.name);
+      changed = true;
+    }
+    if (kinds.has("module") && !namespaces.has(alias.name)) {
+      namespaces.add(alias.name);
       changed = true;
     }
   };
@@ -418,7 +540,42 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       }
     }
   });
-  return { modelImport, legacyCalls, writes };
+  const escapes = new Set<number>();
+  const inspectReferences = (node: ts.Node) => {
+    if (
+      ts.isImportDeclaration(node) ||
+      ts.isTypeNode(node) ||
+      (ts.isExportDeclaration(node) && node.isTypeOnly) ||
+      (ts.isExportSpecifier(node) && node.isTypeOnly)
+    ) {
+      return;
+    }
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      MODEL_MODULES.has(modulePath(file, node.moduleSpecifier.text))
+    ) {
+      modelImport = true;
+      escapes.add(tree.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+    }
+    if (ts.isExpression(node) && !isBindingName(node)) {
+      const kinds = resolve(node);
+      if (
+        (kinds.has("operation") ||
+          kinds.has("module") ||
+          kinds.has("continuation")) &&
+        !accountedModelReference(node, resolve)
+      ) {
+        escapes.add(
+          tree.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+        );
+      }
+    }
+    ts.forEachChild(node, inspectReferences);
+  };
+  inspectReferences(tree);
+  return { modelImport, legacyCalls, writes, escapes: [...escapes] };
 };
 
 /** Generation dispatch exports follow the existing collect/generate/stream API. */
@@ -471,6 +628,11 @@ export const assessArtefactGenerator = ({
   if (scanned.legacyCalls !== (ledger[file] ?? 0)) {
     errors.push(
       `${file}: raw generation count ${scanned.legacyCalls}; migrate through generateArtefact and shrink the transition list`,
+    );
+  }
+  for (const line of scanned.escapes) {
+    errors.push(
+      `${file}:${line}: model operation reference escapes the provenance census`,
     );
   }
   for (const line of scanned.writes) {
