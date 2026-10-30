@@ -254,14 +254,14 @@ type LockProbeHolder = {
 };
 
 /** A second session holding a lock the ALTER in `ALTER_LOCK_PROBE` conflicts with. */
-const holdLockProbe = (client: SQL): LockProbeHolder => {
+const holdLockProbe = (client: SQL, table = "lock_probe"): LockProbeHolder => {
   const held = Promise.withResolvers<number>();
   const release = Promise.withResolvers<undefined>();
   const done = client.begin(async (tx) => {
     await tx.unsafe(
       `SET LOCAL application_name = '${LOCK_PROBE_HOLDER_APPLICATION}'`,
     );
-    await tx.unsafe("LOCK TABLE lock_probe IN ACCESS SHARE MODE");
+    await tx.unsafe(`LOCK TABLE ${table} IN ACCESS SHARE MODE`);
     held.resolve(await backendPid(tx));
     await release.promise;
   });
@@ -1194,10 +1194,11 @@ if (!runPostgresTests || databaseUrl === undefined) {
               });
               expect(sleeps).toEqual([10]);
               expect(
-                timings.find(({ event }) => event === "migrate.schema_apply"),
+                timings.find(({ event }) => event === "migrate.schema_step"),
               ).toMatchObject({
+                step: "apply",
                 migrations: [A, B],
-                outcome: "applied",
+                outcome: "done",
                 attempts: 2,
                 retriesSpent: 1,
               });
@@ -1296,7 +1297,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 expect(sleeps).toEqual([10]);
                 expect(timings).toHaveLength(2);
                 expect(timings.at(0)).toMatchObject({
-                  event: "migrate.schema_apply",
+                  event: "migrate.schema_step",
+                  step: "apply",
                   migrations: [A, B],
                   outcome: "failed",
                   attempts: 2,
@@ -1329,6 +1331,130 @@ if (!runPostgresTests || databaseUrl === undefined) {
           );
         },
       );
+    });
+
+    const LEDGER = "drizzle.__drizzle_migrations";
+
+    test("a preflight that loses its ledger lock retries in a fresh transaction and succeeds", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, openClient, run, scratchUrl }) => {
+          await run(folder);
+          const holder = holdLockProbe(openClient(), LEDGER);
+          const connection = await openClient().reserve();
+          const timings: MigrationTimingRecord[] = [];
+          const stdout = spyOn(process.stdout, "write").mockImplementation(
+            () => true,
+          );
+          try {
+            await holder.held;
+            const result = await runMigrations({
+              connection,
+              databaseUrl: scratchUrl,
+              ebs: DISABLED_EBS,
+              migrationsFolder: folder,
+              runOnline: async () => ONLINE_COMPLETE,
+              timing: {
+                clock: () => performance.now(),
+                emit: (record) => {
+                  timings.push(record);
+                },
+              },
+              lockWaitRetry: {
+                lockTimeoutsMs: [50, 100],
+                pauseBaseMs: 10,
+                pauseCapMs: 10,
+                random: () => 1,
+                budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                now: () => performance.now(),
+                sleep: async () => {
+                  await holder.release();
+                },
+              },
+            });
+            expect(result).toMatchObject({ status: "applied" });
+            expect(
+              timings.find(
+                (record) =>
+                  record.event === "migrate.schema_step" &&
+                  record.step === "preflight",
+              ),
+            ).toMatchObject({ outcome: "done", attempts: 2, retriesSpent: 1 });
+          } finally {
+            stdout.mockRestore();
+            await holder.release();
+            await connection.release();
+          }
+          expect(await laneHolders(observer)).toBe(0);
+        });
+      });
+    });
+
+    test("a preflight held past the budget fails naming the ledger holder", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, openClient, run, scratchUrl }) => {
+          await run(folder);
+          const holder = holdLockProbe(openClient(), LEDGER);
+          const connection = await openClient().reserve();
+          const timings: MigrationTimingRecord[] = [];
+          const stdout = spyOn(process.stdout, "write").mockImplementation(
+            () => true,
+          );
+          try {
+            const holderPid = await holder.held;
+            const rejection = await rejectionOf(
+              async () =>
+                await runMigrations({
+                  connection,
+                  databaseUrl: scratchUrl,
+                  ebs: DISABLED_EBS,
+                  migrationsFolder: folder,
+                  runOnline: async () => ONLINE_COMPLETE,
+                  timing: {
+                    clock: () => performance.now(),
+                    emit: (record) => {
+                      timings.push(record);
+                    },
+                  },
+                  lockWaitRetry: {
+                    // Waits long enough for the observer to sample the holder.
+                    lockTimeoutsMs: [250, 300],
+                    pauseBaseMs: 10,
+                    pauseCapMs: 10,
+                    random: () => 1,
+                    budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                    now: () => performance.now(),
+                    sleep: async () => await Promise.resolve(),
+                  },
+                }),
+            );
+            expect(MigrationLockWaitError.is(rejection)).toBe(true);
+            expect(rejection).toMatchObject({
+              reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
+              attempts: 2,
+              message: expect.stringContaining("Migration preflight"),
+              blockers: [
+                expect.objectContaining({
+                  pid: holderPid,
+                  state: "idle in transaction",
+                  applicationName: LOCK_PROBE_HOLDER_APPLICATION,
+                }),
+              ],
+            });
+            expect(
+              timings.find(
+                (record) =>
+                  record.event === "migrate.schema_step" &&
+                  record.step === "preflight",
+              ),
+            ).toMatchObject({ outcome: "failed", attempts: 2 });
+          } finally {
+            stdout.mockRestore();
+            await holder.release();
+            await connection.release();
+          }
+          expect(await laneHolders(observer)).toBe(0);
+        });
+      });
     });
 
     test("new receipts equal the preflight prediction in file order", async () => {

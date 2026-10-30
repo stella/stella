@@ -502,6 +502,33 @@ test("an exhausted ladder names each blocking session without query text", async
   );
   expect(MigrationLockWaitError.is(rejection)).toBe(true);
   expect(rejection).toMatchObject({ blockers: [blocker] });
+  expect(
+    await applyPendingRetryingLockWaits({
+      label: "Migration preflight",
+      apply: async () => {
+        throw lockWaitLoss();
+      },
+      classifyLedger: async () => ({
+        status: "unchanged",
+        committedReceipts: 0,
+      }),
+      blockers: () => [],
+      retry: {
+        ...DEFAULT_LOCK_RETRY_CONFIG,
+        lockTimeoutsMs: [10],
+        random: () => 0.5,
+        now: () => 0,
+        sleep: async () => await Promise.resolve(),
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    ),
+  ).toMatchObject({
+    message: expect.stringContaining(
+      "Migration preflight lost a lock wait after 1 attempts",
+    ),
+  });
   const { message } = MigrationLockWaitError.is(rejection)
     ? rejection
     : { message: "" };
