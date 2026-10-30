@@ -78,7 +78,8 @@ export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
   {
     id: "require-fetch-after-all",
     rules: ["bun-test-hygiene/require-fetch-after-all"],
-    type: "full",
+    type: "changed-lines",
+    expiresAt: "2026-11-06T00:00:00.000Z",
     check: [
       "bun",
       "--bun",

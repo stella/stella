@@ -87,12 +87,18 @@ test("keeps a beforeAll replacement for every test in its scope", () => {
 });
 
 test("restores a module-scope replacement when its file ends", () => {
-  const fixture = runFixture(`
+  const fixture = runFixtures([
+    `
     import { expect, test } from "bun:test";
     const processFetch = globalThis.fetch;
     globalThis.fetch = ${fetchReplacement};
     test("uses replacement", () => expect(globalThis.fetch).not.toBe(processFetch));
-  `);
+  `,
+    `
+    import { expect, test } from "bun:test";
+    test("sees process fetch", () => expect(globalThis.fetch.name).toBe("fetch"));
+  `,
+  ]);
 
   expect(fixture.exitCode).toBe(0);
 });
