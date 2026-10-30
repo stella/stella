@@ -71,6 +71,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./heading-designator-levels": {
+      "types": "./src/heading-designator-levels.ts",
+      "import": "./src/heading-designator-levels.ts"
+    },
     "./document-kind": {
       "types": "./src/document-kind.ts",
       "import": "./src/document-kind.ts"
@@ -98,6 +102,10 @@
     "./paragraph-range": {
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
+    },
+    "./closed-quotation-paragraphs": {
+      "types": "./src/closed-quotation-paragraphs.ts",
+      "import": "./src/closed-quotation-paragraphs.ts"
     },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
@@ -135,6 +143,14 @@
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
     },
+    "./source-contents": {
+      "types": "./src/source-contents.ts",
+      "import": "./src/source-contents.ts"
+    },
+    "./spot-place": {
+      "types": "./src/spot-place.ts",
+      "import": "./src/spot-place.ts"
+    },
     "./statute-anchor-scheme": {
       "types": "./src/statute-anchor-scheme.ts",
       "import": "./src/statute-anchor-scheme.ts"
@@ -165,6 +181,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",

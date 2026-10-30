@@ -38,6 +38,7 @@ export const MIGRATION_SAFETY_RULE_IDS = [
   "code-owned-table-write",
   "volatile-data-write",
   "high-volume-table-dml",
+  "add-unique-constraint",
   "missing-lock-timeout",
   "missing-statement-timeout",
 ] as const;

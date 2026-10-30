@@ -19,6 +19,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -309,6 +310,7 @@ const ProvisionWording = ({
 }: ProvisionWordingProps) => (
   <div
     className={cn(
+      LEGAL_TEXT_CLASS_NAME,
       "reader-quote flex flex-col gap-[var(--reader-paragraph-gap)] text-pretty",
       WORDING_TYPE[placement],
     )}

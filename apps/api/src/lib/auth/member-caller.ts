@@ -1,10 +1,8 @@
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SseStreamBinding } from "@/api/lib/sse";
@@ -21,7 +19,7 @@ export type AuditRecorderFactory = (opts?: {
  * session proves one for a capability call. Handlers are written against
  * this type, so both transports hand them the same thing.
  */
-export type MemberCaller = {
+export type MemberCaller = Readonly<OrgSettingsForAuth> & {
   readonly user: { readonly id: SafeId<"user">; readonly email: string };
   readonly session: {
     /** The browser session, or `null` for a credential that has none (MCP). */
@@ -57,21 +55,6 @@ export type MemberCaller = {
   ) => boolean;
   /** The member's role, attenuated by the credential's own grants. */
   readonly memberRole: AuthorizedMemberRole;
-  readonly orgAIConfig: OrgAIConfig | null;
-  /**
-   * Whether `orgAIConfig` reflects the org's stored configuration.
-   * `unreadable` means a stored row failed to decrypt, so the null
-   * config above must not be read as "this org has none": pass this
-   * to `requireTanStackAIAvailableForTask` before any model call.
-   */
-  readonly orgAIConfigStatus: OrgAIConfigStatus;
-  /**
-   * Whether stella may annotate AI requests for this org with
-   * prompt-cache markers. Provider adapters strip any markers when
-   * `false` regardless of what call sites set.
-   */
-  readonly promptCachingEnabled: boolean;
-  readonly managedAIResidency: ManagedAIResidency;
   /**
    * Records an audit row in the supplied transaction. Identity fields
    * (org/user/IP/UA) are bound from the request; workspaceId defaults to

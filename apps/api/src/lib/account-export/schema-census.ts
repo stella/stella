@@ -1,9 +1,12 @@
-import { is } from "drizzle-orm";
+import { getColumns, is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { isDecisionReferenceKey } from "@/api/lib/case-law/withdrawn-copy-fields";
+
+export type DatabaseSchema = typeof schema;
 
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
 
@@ -47,4 +50,35 @@ export const userOwnedTableNames = (): string[] => {
   }
 
   return [...names].toSorted();
+};
+
+/** Schema names of tenant stores associated with a decision by key, target, or FK. */
+export const tenantDecisionTableNames = (
+  tables: Record<string, unknown> = schema,
+): string[] => {
+  const names: string[] = [];
+  for (const [name, value] of Object.entries(tables)) {
+    if (!isPgTable(value)) {
+      continue;
+    }
+    const columns = getColumns(value);
+    if (!("organizationId" in columns) && !("workspaceId" in columns)) {
+      continue;
+    }
+    const hasDecisionKey = Object.values(columns).some((column) =>
+      isDecisionReferenceKey(column.name),
+    );
+    const hasDecisionTarget =
+      columns["targetType"]?.enumValues?.includes("decision") === true &&
+      "targetId" in columns;
+    const hasDecisionForeignKey = getTableConfig(value).foreignKeys.some(
+      (foreignKey) =>
+        getTableConfig(foreignKey.reference().foreignTable).name ===
+        getTableConfig(schema.caseLawDecisions).name,
+    );
+    if (hasDecisionKey || hasDecisionTarget || hasDecisionForeignKey) {
+      names.push(name);
+    }
+  }
+  return names;
 };

@@ -4898,6 +4898,7 @@ version = "0.0.1"
 dependencies = [
  "block2",
  "core-foundation 0.10.1",
+ "libc",
  "objc2",
  "objc2-app-kit",
  "objc2-core-foundation",
@@ -4906,6 +4907,7 @@ dependencies = [
  "objc2-user-notifications",
  "objc2-web-kit",
  "tauri",
+ "tokio",
  "windows-sys 0.61.2",
 ]
 

@@ -190,7 +190,7 @@ export const ChatTabPanel = ({
     },
     [t],
   );
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
 
   // Read live tab state on every send. The Chat instance is created
   // once and cached per `threadRef`, so a plain closure over `tab`
@@ -739,6 +739,7 @@ export const ChatTabPanel = ({
               chat. The chips ride the same one geometry through the
               `followupChips` slot. */}
           <PromptBar
+            sendDisabled={availability !== "available"}
             anonymized={anonymized}
             attachmentsEnabled
             context={{ activeOrganizationId, threadRef }}

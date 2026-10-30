@@ -60,6 +60,7 @@ import { useQueryViewError } from "@/lib/use-query-view";
  */
 export const StatuteInspectorView = ({
   onClose,
+  onMoveToMain,
   tab,
 }: InspectorViewRenderProps<StatuteViewPayload>) => {
   const t = useTranslations();
@@ -153,7 +154,7 @@ export const StatuteInspectorView = ({
             // The wording moves to the page, so the tab that held it goes.
             render: () => (
               <StatuteMainViewAction
-                onMoveToMain={onClose}
+                onMoveToMain={onMoveToMain}
                 payload={payload}
                 searchQuery={find.findQuery}
               />

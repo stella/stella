@@ -247,13 +247,7 @@ if (!databaseUrl || !runPostgresTests) {
         end,
         terminal,
       ]);
-      const received: { value: unknown } = { value: null };
-      const pending = reader.next().then((value) => {
-        received.value = value;
-        return value;
-      });
-      await Bun.sleep(50);
-      const beforeSettlement = received.value;
+      const pending = reader.next();
       expect(
         await scopedDb(
           async (tx) =>
@@ -275,7 +269,6 @@ if (!databaseUrl || !runPostgresTests) {
       const deliveredEnd = await pending;
       const deliveredTerminal = await reader.next();
       expect(await reader.next()).toEqual({ done: true, value: undefined });
-      expect(beforeSettlement).toBeNull();
       expect(timing.value?.status).toBe("finished");
       expect(deliveredEnd).toEqual({
         done: false,

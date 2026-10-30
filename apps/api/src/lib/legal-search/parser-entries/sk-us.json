@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "SK_US",
+  "key": "sk-us",
+  "parserVersion": 19,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage."
+  }
+}
