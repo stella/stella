@@ -1,4 +1,29 @@
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
+// parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
+// parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vwgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-lvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-asylgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-ubas] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-uvs] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-verg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-umse] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bks] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -24,6 +49,7 @@ import {
 } from "./document-kind.js";
 import type { DocumentIssuer, GuidanceKind } from "./document-kind.js";
 import {
+  flattenInlineText,
   inlineSchema,
   isKnownInlineType,
   persistedInlineArraySchema,
@@ -411,25 +437,8 @@ export type DecisionDocumentAst = DocumentAst<DecisionMetadata>;
  * character for character. Nothing here may normalize, trim or collapse:
  * one character of drift moves every anchor after it.
  */
-export const plainTextOf = (inlines: readonly Inline[]): string => {
-  let out = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      out += node.text;
-    } else if (node.type === "line-break") {
-      out += "\n";
-    } else if (node.type === "page-anchor") {
-      // Zero characters: a page break is typography, and it may fall
-      // mid-word — the word must stay whole on this axis.
-    } else {
-      // A citation's `cite` is zero characters here for the same reason:
-      // the printed reference is the children, `cite` is metadata beside
-      // them.
-      out += plainTextOf(node.children);
-    }
-  }
-  return out;
-};
+export const plainTextOf = (inlines: readonly Inline[]): string =>
+  flattenInlineText(inlines, "rendered");
 
 /**
  * Trailing spaces and tabs before a line break, which carry no meaning
@@ -441,7 +450,8 @@ const NO_BREAK_SPACE = /\u00a0/gu;
 
 /**
  * `inlines` reduced to the text that feeds search and AI reads: the raw
- * flattening with no-break spaces normalized, spaces before a line break
+ * projection with numeric superscript indices delimited, no-break spaces
+ * normalized, spaces before a line break
  * dropped, the ends trimmed, and letter-spaced runs collapsed so a
  * court's "R O Z S U D E K" is findable as "ROZSUDEK".
  *
@@ -455,7 +465,7 @@ const NO_BREAK_SPACE = /\u00a0/gu;
  */
 export const projectPlainText = (inlines: readonly Inline[]): string =>
   collapseSpacedLetters(
-    plainTextOf(inlines)
+    flattenInlineText(inlines)
       .replace(NO_BREAK_SPACE, " ")
       .replace(SPACE_BEFORE_NEWLINE, "\n")
       .trim(),

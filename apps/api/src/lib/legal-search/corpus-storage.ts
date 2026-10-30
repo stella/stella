@@ -196,11 +196,24 @@ const STORED_CORPUS_VALIDATION_SINK = failureSink({
   expected: [],
 });
 
+const reportedStoredValidationErrors = new WeakMap<
+  StoredCorpusValidationError,
+  Set<string>
+>();
+
 /** Correlate a rejected payload without logging its values or validator messages. */
 const reportStoredCorpusValidation = (
   error: StoredCorpusValidationError,
   documentId: string,
 ): void => {
+  // A row parser and its recovery boundary can observe the same rejection.
+  const reportedDecisions =
+    reportedStoredValidationErrors.get(error) ?? new Set<string>();
+  if (reportedDecisions.has(documentId)) {
+    return;
+  }
+  reportedDecisions.add(documentId);
+  reportedStoredValidationErrors.set(error, reportedDecisions);
   observeFailure(error, {
     sink: STORED_CORPUS_VALIDATION_SINK,
     ctx: { decisionId: documentId },

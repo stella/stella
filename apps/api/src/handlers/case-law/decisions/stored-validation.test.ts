@@ -10,6 +10,7 @@ import { createDecisionRowAstCache } from "@/api/lib/case-law/decision-row-ast-c
 import { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
@@ -135,6 +136,43 @@ describe("invalid stored decision payloads", () => {
     validationFailureOf(missingBlockFields);
     expect(logged).not.toHaveBeenCalled();
     expect(captured).not.toHaveBeenCalled();
+  });
+
+  test("propagated validation reports once while distinct failures remain observable", async () => {
+    const reports = recordReports();
+    const first = validationFailureOf(invalidStoredAst, decisionId);
+    for (let boundary = 0; boundary < 2; boundary += 1) {
+      const recovered = await readCorpusForRecovery({
+        documentId: decisionId,
+        read: async () => {
+          throw first;
+        },
+      });
+      expect(recovered.isErr()).toBe(true);
+    }
+    expectStoredValidationReports(reports);
+    const second = validationFailureOf(invalidStoredAst, decisionId);
+    expect(second).not.toBe(first);
+    expect(reports.logged).toHaveBeenCalledTimes(2);
+    expect(reports.captured).toHaveBeenCalledTimes(2);
+    expect(reports.captured.mock.calls.map(([error]) => error)).toEqual([
+      first,
+      second,
+    ]);
+    const otherDecisionId = createSafeId<"caseLawDecision">();
+    const other = await readCorpusForRecovery({
+      documentId: otherDecisionId,
+      read: async () => {
+        throw first;
+      },
+    });
+    expect(other.isErr()).toBe(true);
+    expect(reports.logged).toHaveBeenCalledTimes(3);
+    expect(reports.captured).toHaveBeenCalledTimes(3);
+    expect(reports.logged.mock.calls.at(-1)).toEqual([
+      "case_law.decision.stored_payload_invalid",
+      expect.objectContaining({ decisionId: otherDecisionId }),
+    ]);
   });
 
   test("an invalid stored object served from the row copy is reported once", async () => {
