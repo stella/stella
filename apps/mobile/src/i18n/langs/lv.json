@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Konts",
     "server": "Serveris",
-    "signOut": "Atslēgties"
+    "signOut": "Atslēgties",
+    "deleteAccount": "Dzēst kontu",
+    "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu."
   },
   "header": {
     "search": "Meklēt"
@@ -199,7 +201,8 @@
     "retry": "Mēģināt vēlreiz",
     "unavailable": "Jūsu organizācijā laika uzskaite nav ieslēgta.",
     "startFailed": "Taimeri neizdevās sākt. Mēģiniet vēlreiz.",
-    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz."
+    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz.",
+    "more": "{count, plural, zero {vēl # taimeru} one {vēl # taimeris} other {vēl # taimeri}}"
   },
   "scan": {
     "title": "Skenēt dokumentu",

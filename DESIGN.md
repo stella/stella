@@ -171,10 +171,11 @@ Icons: **lucide-react**.
 
 ### Key Components
 
-Accordion, AlertDialog, Avatar, Breadcrumb, Button, Checkbox,
+Accordion, AlertDialog, Avatar, Badge, Breadcrumb, Button, Checkbox,
 Collapsible, Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
 Menu, Pagination, Popover, PreviewCard, ScrollArea, Select,
-Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
+Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip,
+TruncatedText.
 
 ### Component Conventions
 
@@ -193,6 +194,9 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
   `overflow-auto`/`overflow-scroll` utility outside the textareas,
   `<pre>` blocks, editor canvases and wide tables that need a native
   scroller.
+- Text that may not fit renders through `TruncatedText`
+  (`@stll/ui/truncated-text`), never `truncate` plus a `title=`: it
+  shows the full text only when it was cut, and on touch as well.
 - Use semantic HTML (`<nav>`, `<main>`, `<section>`) over generic
   `<div>` with ARIA roles.
 - All interactive elements require a 44x44px minimum touch target

@@ -1,8 +1,9 @@
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { MarkdownView } from "@/components/markdown-view";
-import { Text } from "@/components/ui/text";
 import type { ChatEntry } from "@/state/chat-messages";
 
 /**
