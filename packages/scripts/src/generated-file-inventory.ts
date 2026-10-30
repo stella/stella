@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -25,10 +26,11 @@ export const ciGeneratedFiles = (
         ...readFileSync(aggregator, "utf-8").matchAll(
           /from "\.\/capability-dispatch\/([a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+)"/gu,
         ),
-      ].map(
-        (match) =>
-          `apps/api/src/mcp/generated/capability-dispatch/${match[1]}.ts`,
-      )
+      ].map((match) => {
+        const id =
+          match[1] ?? panic("Dispatch import is missing its capability id");
+        return `apps/api/src/mcp/generated/capability-dispatch/${id}.ts`;
+      })
     : [];
   const bundles = existsSync(apps)
     ? readdirSync(apps, { withFileTypes: true })

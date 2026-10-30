@@ -79,7 +79,7 @@
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "file-derivative-worker": "bun src/scripts/file-derivative-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
+    "generate:capability-runtime": "bun ../../scripts/prepare-mcp-apps.ts && bun scripts/generate-capability-runtime.ts",
     "generate:case-law-decision-view-grants": "bun scripts/generate-case-law-decision-view-grants.ts",
     "generate:mcp-app-contracts": "bun scripts/generate-mcp-app-contracts.ts",
     "generate:typecheck-declarations": "bun ../../packages/scripts/src/api-typecheck-declarations.ts tsconfig.declarations.json",

@@ -924,8 +924,7 @@ const createWorkspaceRoot = ({
       },
       name: "@stll/landing",
       scripts: {
-        typecheck:
-          "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
+        typecheck: "bun --bun astro check",
       },
     }),
   );

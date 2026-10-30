@@ -12,6 +12,7 @@ import { panic, Result } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
+import { childExitStatus } from "../../scripts/src/child-exit-status";
 import {
   checkCapabilityRegistry,
   readCapabilityCatalog,
@@ -318,6 +319,17 @@ process.stderr.write(`Wrote ${outputUrl.pathname}\n`);
 
 if (runtimeOnly) {
   process.exit(0);
+}
+
+const toolReference = Bun.spawnSync(
+  [
+    process.execPath,
+    new URL("generate-tool-reference.ts", import.meta.url).pathname,
+  ],
+  { stdout: "inherit", stderr: "inherit" },
+);
+if (childExitStatus(toolReference) !== 0) {
+  process.exit(childExitStatus(toolReference));
 }
 
 const { generateCliSkill, SKILL_NAME } =

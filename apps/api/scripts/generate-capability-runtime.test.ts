@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import { createProgram } from "@stll/scripts/src/typescript-program";
 
+import apiPackage from "../package.json";
 import {
   generateCapabilityCatalogRuntime,
   generateCapabilityRuntime,
@@ -148,6 +149,51 @@ test("capability registry declarations retain ids without importing handler type
     } finally {
       await opened.close();
     }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("direct API runtime preparation builds MCP bundles before importing their consumers", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "capability-runtime-order-"),
+  );
+  try {
+    await mkdir(path.join(directory, "apps/api/scripts"), { recursive: true });
+    await mkdir(path.join(directory, "scripts"), { recursive: true });
+    await writeFile(
+      path.join(directory, "apps/api/package.json"),
+      JSON.stringify({
+        name: "@stll/api",
+        scripts: {
+          "generate:capability-runtime":
+            apiPackage.scripts["generate:capability-runtime"],
+        },
+      }),
+    );
+    await writeFile(
+      path.join(directory, "scripts/prepare-mcp-apps.ts"),
+      `await Bun.write(new URL("../packages/mcp-apps/src/generated/bundles.ts", import.meta.url), 'export const BUNDLES = ["prepared MCP source"];');`,
+    );
+    await writeFile(
+      path.join(directory, "apps/api/scripts/generate-capability-runtime.ts"),
+      `import { BUNDLES } from "../../../packages/mcp-apps/src/generated/bundles";
+await Bun.write(new URL("../runtime.json", import.meta.url), JSON.stringify(BUNDLES));`,
+    );
+    const result = Bun.spawnSync(
+      [process.execPath, "run", "generate:capability-runtime"],
+      {
+        cwd: path.join(directory, "apps/api"),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(
+      JSON.parse(
+        await readFile(path.join(directory, "apps/api/runtime.json"), "utf-8"),
+      ),
+    ).toEqual(["prepared MCP source"]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
