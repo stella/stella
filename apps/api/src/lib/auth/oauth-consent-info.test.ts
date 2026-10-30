@@ -361,12 +361,12 @@ describe("OAuth consent app details", () => {
   });
 
   test("a first-party redirect matches its client's shape", () => {
-    const cli = findFirstPartyOAuthClient(CLI_DOCUMENT, origins);
-    const mobile = findFirstPartyOAuthClient(MOBILE_DOCUMENT, origins);
-    const connector = findFirstPartyOAuthClient(CONNECTOR_DOCUMENT, origins);
-    if (!cli || !mobile || !connector) {
-      return panic("Every first-party document must resolve");
-    }
+    const firstParty = (clientId: string) =>
+      findFirstPartyOAuthClient(clientId, origins) ??
+      panic(`${clientId} must resolve as a first-party client`);
+    const cli = firstParty(CLI_DOCUMENT);
+    const mobile = firstParty(MOBILE_DOCUMENT);
+    const connector = firstParty(CONNECTOR_DOCUMENT);
     for (const [match, redirectUri, allowed] of [
       // Loopback: any port, the exact path, http only.
       [cli, "http://127.0.0.1/callback", true],

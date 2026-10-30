@@ -462,24 +462,28 @@ const createOAuthPolicyMiddleware = ({
 const createFirstPartyRedirectMiddleware = (
   verifiedOrigins: readonly string[],
 ) =>
-  createAuthMiddleware(async (ctx) => {
+  createAuthMiddleware((ctx) => {
     const parameters: unknown = readsAuthorizationBody(ctx)
       ? ctx.body
       : ctx.query;
-    if (
-      !isRecord(parameters) ||
-      typeof parameters["client_id"] !== "string" ||
-      !refusesFirstPartyRedirect({
+    const refused =
+      isRecord(parameters) &&
+      typeof parameters["client_id"] === "string" &&
+      refusesFirstPartyRedirect({
         clientId: parameters["client_id"],
         redirectUri: parameters["redirect_uri"],
         verifiedOrigins,
-      })
-    ) {
-      return UNCHANGED;
-    }
-    return Response.json(
-      { error: "invalid_redirect", error_description: "invalid redirect uri" },
-      { status: 400 },
+      });
+    return Promise.resolve(
+      refused
+        ? Response.json(
+            {
+              error: "invalid_redirect",
+              error_description: "invalid redirect uri",
+            },
+            { status: 400 },
+          )
+        : UNCHANGED,
     );
   });
 

@@ -196,13 +196,13 @@ type FirstPartyOAuthClientEntry = {
   readonly documentPath: `/${string}`;
   readonly redirect: FirstPartyRedirect;
   readonly brand: FirstPartyBrand;
-  readonly scopePolicy: (typeof OAUTH_REGISTRATION_SCOPE_POLICY)[McpOAuthScope];
 };
 
 /**
- * stella's own OAuth clients. Only these are first-party: a client is one when
- * its id is exactly an entry's document URL, never by its name or redirects,
- * so a dynamically registered client (whose id the server generates) never is.
+ * stella's own OAuth clients, which may hold elevated scopes. Only these are
+ * first-party: a client is one when its id is exactly an entry's document URL,
+ * never by its name or redirects, so a dynamically registered client (whose
+ * id the server generates) never is.
  * The desktop app signs in with a device-bound link grant, not OAuth, so it
  * has no entry.
  */
@@ -211,20 +211,17 @@ export const FIRST_PARTY_OAUTH_CLIENTS = {
     documentPath: CLI_CLIENT_METADATA_PATH,
     redirect: { type: "loopback", path: LOOPBACK_REDIRECT_PATH },
     brand: "stella",
-    scopePolicy: "elevated",
   },
   mobile: {
     documentPath: MOBILE_CLIENT_METADATA_PATH,
     redirect: { type: "exact", uris: MOBILE_REDIRECT_URIS },
     brand: "stella_ios",
-    scopePolicy: "elevated",
   },
   // stella connecting to an MCP server as a client.
   mcp_connector: {
     documentPath: "/v1/mcp/oauth/client-metadata.json",
     redirect: { type: "document_origin", path: "/v1/mcp/oauth/callback" },
     brand: "stella",
-    scopePolicy: "elevated",
   },
 } as const satisfies Record<string, FirstPartyOAuthClientEntry>;
 
@@ -308,9 +305,8 @@ export const mayMetadataDocumentClientHoldElevatedScopes = (
   clientId: string,
   verifiedOrigins: readonly string[],
 ): boolean => {
-  const firstParty = findFirstPartyOAuthClient(clientId, verifiedOrigins);
-  if (firstParty) {
-    return firstParty.entry.scopePolicy === "elevated";
+  if (findFirstPartyOAuthClient(clientId, verifiedOrigins)) {
+    return true;
   }
   const url = URL.parse(clientId);
   return (
@@ -356,11 +352,10 @@ const documentEvidence = (
   if (!firstParty) {
     return thirdPartyEvidence(clientUrl, VERIFIED_THIRD_PARTY_CLIENT_IDS);
   }
-  return (client.redirectUris ?? []).every((uri) =>
+  const redirectsFit = client.redirectUris?.every((uri) =>
     isFirstPartyRedirectAllowed(firstParty, uri),
-  )
-    ? firstParty.entry.brand
-    : null;
+  );
+  return redirectsFit === true ? firstParty.entry.brand : null;
 };
 
 /**
