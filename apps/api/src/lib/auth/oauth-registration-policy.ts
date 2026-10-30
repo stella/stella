@@ -167,6 +167,7 @@ export const OAUTH_ENDPOINT_POLICY = {
   [OAUTH_CLIENT_REGISTRATION_PATH]: "scope-policy",
   "/oauth2/create-client": "disabled",
   "/oauth2/update-client": "disabled",
+  "/oauth2/client/rotate-keys": "disabled",
   "/oauth2/client/rotate-secret": "disabled",
   "/oauth2/delete-client": "disabled",
   "/oauth2/update-consent": "disabled",

@@ -89,6 +89,42 @@ test("moving a source preserves existing sites but cannot add or replace constra
     expect(check([movedEntry, `${moved}::Form::maxLength:64::2`])).toBe(1);
     expect(check([`${moved}::Form::maxLength:128::1`])).toBe(1);
     expect(check([`${moved}::OtherForm::maxLength:64::1`])).toBe(1);
+    const reviewedEntry = `${moved}::Form::maxLength:64::2`;
+    writeFileSync(
+      path.join(repoRoot, "ledger.json"),
+      serialize([reviewedEntry]),
+    );
+    const logs: string[] = [];
+    const runReviewed = (reason: string | undefined) =>
+      runLedgerMembershipGuard({
+        repoRoot,
+        ledgerRel: "ledger.json",
+        parseLedger: (text, label) =>
+          parseContractDomainLedger(text, label).map(({ id }) => id),
+        normalizeBaseEntries: (baseEntries, resolvedCommit) =>
+          relocateContractDomainEntries({
+            entries: baseEntries,
+            baseCommit: resolvedCommit,
+            repoRoot,
+          }),
+        label: "fixture",
+        remediation: "use the contract",
+        args: ["--base", baseCommit],
+        reviewedEntryAdmission: {
+          type: "reasoned",
+          entries: [{ id: reviewedEntry, reason: reason ?? "" }],
+        },
+        log: (message) => {
+          logs.push(message);
+        },
+        error: () => {},
+      });
+    expect(runReviewed("Intentional boundary.")).toBe(0);
+    expect(logs).toContain(
+      `reviewed entry admitted: ${reviewedEntry} (Intentional boundary.)`,
+    );
+    expect(runReviewed(undefined)).toBe(1);
+    expect(check([reviewedEntry])).toBe(1);
     // A copy leaves the original owner in place and earns no exception.
     writeFileSync(path.join(repoRoot, original), "export const bound = 64;\n");
     git("add", "-A");

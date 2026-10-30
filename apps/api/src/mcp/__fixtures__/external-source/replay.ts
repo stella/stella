@@ -5,6 +5,7 @@ import { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   BUSINESS_REGISTRY_DISPATCH,
+  NO_REGISTRY_WEB_SEARCH,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -57,11 +58,11 @@ export const replayRegistryLookup = async (
 ) => {
   const result = await replay({
     body,
-    sourceUrl:
-      "https://data.brreg.no/enhetsregisteret/api/enheter/123456785",
+    sourceUrl: "https://data.brreg.no/enhetsregisteret/api/enheter/123456785",
     contentType: "application/json",
     operation: async () =>
       await executeRegistryLookup({
+        loadWebSearch: NO_REGISTRY_WEB_SEARCH,
         handler: BUSINESS_REGISTRY_DISPATCH.brreg,
         query: "123456785",
         observer: "unobserved",

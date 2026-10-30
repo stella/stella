@@ -269,6 +269,8 @@ const runRecord = async (deploySha: string, statusOwnerRun = 9) => {
       GITHUB_RUN_ID: "9",
       GITHUB_SERVER_URL: "https://github.com",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
       MCP_SMOKE: "success",
       CORPUS_PREFLIGHT: "success",
       CORPUS_SEARCH_WAIVED: "false",

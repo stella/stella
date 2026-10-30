@@ -23,6 +23,7 @@ import {
   plUodoSourceTexts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import type { ParsePlUodoDecisionOutput } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
+import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 
 const SHORT_DECISION = new URL(
   "__fixtures__/pl-uodo-zsoss-440-82-2019.xml",
@@ -202,6 +203,23 @@ describe("a long decision", () => {
       "[3]",
       "[4]",
     ]);
+  });
+
+  test("the served text lists each footnote under the mark the body cites it by", async () => {
+    // The label is structure, not the note's text: served without it, the
+    // notes closing the text could not be matched to the body's marks.
+    const { documentAst } = await parse(LONG_DECISION);
+    const text = toPlainCorpusText({
+      blocks: documentAst.blocks,
+      fulltext: null,
+    });
+    const notes = paragraphs(documentAst.blocks).filter(
+      (block) => block.note !== undefined,
+    );
+    expect(notes).toHaveLength(4);
+    for (const note of notes) {
+      expect(text).toContain(`\n\n${note.note?.label ?? ""} ${note.plainText}`);
+    }
   });
 
   test("a quoted passage is a quotation, opening with the source's mark", async () => {
