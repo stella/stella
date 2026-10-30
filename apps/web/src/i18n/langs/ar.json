@@ -1912,6 +1912,11 @@
       "replyReadyBody": "أنهت stella الرد في الدردشة.",
       "replyReadyTitle": "الرد جاهز"
     },
+    "turnStatus": {
+      "waitingForApproval": "في انتظار الموافقة",
+      "waitingForInput": "في انتظار الإدخال",
+      "writing": "جارٍ الكتابة"
+    },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
     "usageFallbackNotice": "استُنفدت الحصة اليومية للذكاء الاصطناعي — تستمر الردود على النموذج القياسي.",

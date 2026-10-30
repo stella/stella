@@ -1912,6 +1912,11 @@
       "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
       "replyReadyTitle": "Odpoveď je hotová"
     },
+    "turnStatus": {
+      "waitingForApproval": "Čakanie na schválenie",
+      "waitingForInput": "Čakanie na zadanie",
+      "writing": "Písanie"
+    },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
     "usageFallbackNotice": "Denný prídel AI je vyčerpaný — odpovede pokračujú na štandardnom modeli.",

@@ -1912,6 +1912,11 @@
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
     },
+    "turnStatus": {
+      "waitingForApproval": "Waiting for approval",
+      "waitingForInput": "Waiting for input",
+      "writing": "Writing"
+    },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
     "usageFallbackNotice": "Daily AI allowance used — replies continue on the standard model.",

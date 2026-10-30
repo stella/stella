@@ -1912,6 +1912,11 @@
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
     },
+    "turnStatus": {
+      "waitingForApproval": "Oczekiwanie na zatwierdzenie",
+      "waitingForInput": "Oczekiwanie na dane",
+      "writing": "Pisanie"
+    },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
     "usageFallbackNotice": "Dzienny limit AI wyczerpany — odpowiedzi działają dalej na modelu standardowym.",

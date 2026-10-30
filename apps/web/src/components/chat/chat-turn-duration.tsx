@@ -16,7 +16,7 @@ type ChatTurnDurationProps = {
 };
 
 export const ChatTurnDuration = ({ timing }: ChatTurnDurationProps) => {
-  if (timing === undefined || timing === null) {
+  if (timing === undefined || timing === null || timing.status === "running") {
     return null;
   }
   return <TimedChatTurnDuration timing={timing} />;

@@ -1912,6 +1912,11 @@
       "replyReadyBody": "stella a fini de répondre dans votre conversation.",
       "replyReadyTitle": "Réponse prête"
     },
+    "turnStatus": {
+      "waitingForApproval": "En attente d’approbation",
+      "waitingForInput": "En attente de saisie",
+      "writing": "Rédaction"
+    },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
     "usageFallbackNotice": "Quota d’IA quotidien épuisé — les réponses se poursuivent sur le modèle standard.",

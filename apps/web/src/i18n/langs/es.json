@@ -1912,6 +1912,11 @@
       "replyReadyBody": "stella terminó de responder en tu chat.",
       "replyReadyTitle": "Respuesta lista"
     },
+    "turnStatus": {
+      "waitingForApproval": "Esperando aprobación",
+      "waitingForInput": "Esperando información",
+      "writing": "Redactando"
+    },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
     "usageFallbackNotice": "Se agotó la asignación diaria de IA: las respuestas continúan con el modelo estándar.",

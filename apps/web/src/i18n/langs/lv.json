@@ -1912,6 +1912,11 @@
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
     },
+    "turnStatus": {
+      "waitingForApproval": "Gaida apstiprinājumu",
+      "waitingForInput": "Gaida ievadi",
+      "writing": "Raksta"
+    },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
     "usageFallbackNotice": "Dienas AI apjoms izlietots — atbildes turpinās ar standarta modeli.",

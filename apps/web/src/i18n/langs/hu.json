@@ -1912,6 +1912,11 @@
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
     },
+    "turnStatus": {
+      "waitingForApproval": "Jóváhagyásra vár",
+      "waitingForInput": "Bevitelre vár",
+      "writing": "Írás"
+    },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
     "usageFallbackNotice": "A napi AI-keret elfogyott — a válaszok a normál modellen folytatódnak.",

@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
+import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
@@ -30,7 +31,6 @@ import {
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
 import { cn } from "@stll/ui/utils";
@@ -50,10 +50,7 @@ import {
   getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
-import type {
-  ChatActivityIndicatorState,
-  ProcessSummaryKind,
-} from "@/components/chat/chat-activity.logic";
+import type { ProcessSummaryKind } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
@@ -83,6 +80,7 @@ import {
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
 import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
+import { ChatTurnStatus } from "@/components/chat/chat-turn-status";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -125,7 +123,6 @@ import {
 } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
-import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
@@ -146,7 +143,6 @@ import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
-import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -175,6 +171,21 @@ type OlderMessagePagingOptions = {
   loadOlderError: boolean;
   onLoadOlder: ChatThreadMessagesProps["onLoadOlder"];
   scrollRef: RefObject<HTMLDivElement | null> | null;
+};
+
+const getTurnClientState = ({
+  error,
+  generationActive,
+  isLatest,
+}: {
+  error: Error | undefined;
+  generationActive: boolean;
+  isLatest: boolean;
+}): ChatClientState => {
+  if (error !== undefined) {
+    return "error";
+  }
+  return generationActive && isLatest ? "streaming" : "ready";
 };
 
 // Pages older messages in from a top sentinel and keeps the viewport
@@ -298,7 +309,7 @@ export const ChatThreadMessages = ({
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
   onOpenPlaybook,
-  showThinkingIndicator = false,
+  showThinkingIndicator: _showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
@@ -417,6 +428,21 @@ export const ChatThreadMessages = ({
                         threadRef={threadRef}
                       />
                       <ChatTurnDuration timing={message.metadata?.turnTiming} />
+                      <ChatTurnStatus
+                        turn={{
+                          phase:
+                            activityIndicatorState === "solving"
+                              ? { type: "analyzing-sources" }
+                              : { type: "thinking" },
+                          state: getTurnClientState({
+                            error,
+                            generationActive,
+                            isLatest:
+                              message.id === retryableAssistantMessageId,
+                          }),
+                          timing: message.metadata?.turnTiming,
+                        }}
+                      />
                       <div
                         className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
                         data-chat-answer-footer
@@ -534,11 +560,6 @@ export const ChatThreadMessages = ({
             onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-        {showThinkingIndicator &&
-          generationActive &&
-          activityIndicatorState && (
-            <ThinkingIndicator state={activityIndicatorState} />
-          )}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -805,12 +826,7 @@ const LoadOlderSentinel = ({
   return (
     <div className="flex justify-center py-1" ref={ref}>
       {isLoadingOlder ? (
-        <span
-          aria-busy="true"
-          className="text-muted-foreground flex items-center gap-2 text-xs"
-          role="status"
-        >
-          <Loader className="size-3.5" size="sm" variant="decorative" />
+        <span aria-busy="true" className="text-muted-foreground text-xs">
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (
@@ -1041,27 +1057,6 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
         <p className="text-muted-foreground text-sm">
           {t("chat.messageUnavailable")}
         </p>
-      </MessageContent>
-    </Message>
-  );
-};
-
-const ThinkingIndicator = ({
-  state,
-}: {
-  state: ChatActivityIndicatorState;
-}) => {
-  const t = useTranslations();
-
-  return (
-    <Message from="assistant">
-      <MessageContent>
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <StatusMark status="running" />
-          <span className={CHAT_PENDING_TEXT_CLASS}>
-            {t(state === "solving" ? "chat.analyzingSources" : "chat.thinking")}
-          </span>
-        </div>
       </MessageContent>
     </Message>
   );
@@ -2141,19 +2136,6 @@ const LIVE_STEP_MIN_DWELL_MS = 1500;
 
 // Whole seconds: counted up while the run is live, then its rounded duration
 // (at least one); null when this view never saw it run.
-const processElapsedSeconds = (
-  elapsedMs: number | undefined,
-  isLive: boolean,
-): number | null => {
-  if (elapsedMs === undefined) {
-    return null;
-  }
-  if (isLive) {
-    return Math.floor(elapsedMs / 1000);
-  }
-  return Math.max(1, Math.round(elapsedMs / 1000));
-};
-
 /**
  * One run of consecutive process steps (reasoning traces and tool rows),
  * folded into a single disclosure so the transcript reads as question and
@@ -2170,7 +2152,6 @@ const AssistantProcessGroup = ({
   workCounts,
 }: AssistantProcessGroupProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   // A run that appears mid-stream fades in where the thinking indicator was;
   // one that renders settled (a reload) simply is there.
@@ -2188,17 +2169,6 @@ const AssistantProcessGroup = ({
     shownStepKey !== null
       ? t(shownStepKey)
       : workSummary || t("common.stepCount", { count: stepCount });
-  const elapsedMs = useLiveElapsedMs(isLive);
-  const elapsedSeconds = processElapsedSeconds(elapsedMs, isLive);
-  // A live timer appears from its first whole second, never as "0s".
-  const elapsed =
-    elapsedSeconds === null || elapsedSeconds === 0
-      ? null
-      : format.number(elapsedSeconds, {
-          style: "unit",
-          unit: "second",
-          unitDisplay: "narrow",
-        });
   return (
     <details
       data-slot="chat-step-list"
@@ -2236,18 +2206,6 @@ const AssistantProcessGroup = ({
             text={label}
           />
         </span>
-        {elapsed !== null && (
-          <>
-            <span aria-hidden="true" className="text-foreground-placeholder">
-              ·
-            </span>
-            {/* The timer ticks plainly: a fade every second is motion for
-                its own sake. */}
-            <span className="text-foreground-ghost tabular-nums">
-              {elapsed}
-            </span>
-          </>
-        )}
       </summary>
       <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
     </details>
@@ -2359,19 +2317,9 @@ const AssistantThinkingHeader = ({
   reasoningTokenCount: number | null;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const elapsedMs = useLiveElapsedMs(isStreaming);
-  const elapsed =
-    elapsedMs === undefined || isStreaming
-      ? null
-      : format.number(Math.max(1, Math.round(elapsedMs / 1000)), {
-          style: "unit",
-          unit: "second",
-          unitDisplay: "narrow",
-        });
   return (
     <>
-      <StatusMark status={isStreaming ? "running" : "done"} />
+      <StatusMark status="done" />
       <span
         className={cn(
           "min-w-0 truncate",
@@ -2382,11 +2330,6 @@ const AssistantThinkingHeader = ({
       </span>
       {reasoningTokenCount !== null && (
         <ReasoningTokenCount count={reasoningTokenCount} />
-      )}
-      {elapsed !== null && (
-        <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
-          {elapsed}
-        </span>
       )}
       <span
         aria-hidden="true"

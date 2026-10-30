@@ -1912,6 +1912,11 @@
       "replyReadyBody": "stella lõpetas vestluses vastamise.",
       "replyReadyTitle": "Vastus on valmis"
     },
+    "turnStatus": {
+      "waitingForApproval": "Kinnituse ootamine",
+      "waitingForInput": "Sisendi ootamine",
+      "writing": "Kirjutamine"
+    },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
     "usageFallbackNotice": "Päevane AI-maht on täis — vastused jätkuvad tavamudeliga.",
