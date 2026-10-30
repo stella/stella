@@ -10,6 +10,7 @@ import type { LegislationReadTransaction } from "@/api/lib/legislation-public-re
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
+import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -23,6 +24,7 @@ import {
 } from "./corpus-seed";
 import { measureHostedErasureHistory } from "./hosted-erasure-run";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
+import type { RequestReceiptScenario } from "./request-receipt-seed";
 import type { seedQueryPerf } from "./seed";
 
 /** Tenant statements, measured as `stella` under row security per profile. */
@@ -70,12 +72,18 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
     ownerDeadlineMs: number | undefined;
   }[];
 
+export type ScheduledJobScenario =
+  { type: "case-law"; served: ServedCaseLaw } | RequestReceiptScenario;
+
 type ScheduledJobMeasurement =
   | {
       type: "corpus";
       prepare?: typeof seedSitemapReadBudget;
       task: string;
-      scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
+      scenarios: readonly {
+        size: ScheduledJobScenario;
+        double?: ScheduledJobScenario;
+      }[];
     }
   | {
       type: "writing";
@@ -103,13 +111,28 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
     type: "corpus",
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     prepare: seedSitemapReadBudget,
-    scenarios: [CASE_LAW_SCENARIOS.quiet],
+    scenarios: [
+      { size: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.size } },
+    ],
+  },
+  "requests.sweepReceipts.hourly": {
+    type: "corpus",
+    task: SWEEP_REQUEST_RECEIPTS_TASK,
+    scenarios: (["expired", "quiet", "mixed"] as const).map((cohort) => ({
+      size: { type: "request-receipts", rows: 60_000, cohort },
+      double: { type: "request-receipts", rows: 120_000, cohort },
+    })),
   },
   "caseLaw.reportFreshness.fiveMinute": {
     type: "corpus",
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
-    scenarios: Object.values(CASE_LAW_SCENARIOS),
+    scenarios: Object.values(CASE_LAW_SCENARIOS).map((scenario) => ({
+      size: { type: "case-law", served: scenario.size },
+      ...("double" in scenario
+        ? { double: { type: "case-law" as const, served: scenario.double } }
+        : {}),
+    })),
   },
 };
 
@@ -157,6 +180,7 @@ export const READ_BUDGET_PROFILES = {
   "scheduled.usage.eraseHostedCustomers": "corpus",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
+  "scheduled.requests.sweepReceipts": "corpus",
   "statement.caseLaw.coverageSources": "coverage",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
