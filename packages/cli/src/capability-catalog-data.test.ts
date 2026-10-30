@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
+import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import {
   checkCapabilityRegistry,
   readCapabilityCatalog,

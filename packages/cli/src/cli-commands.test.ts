@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
+import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";

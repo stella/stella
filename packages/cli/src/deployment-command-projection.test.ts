@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
+import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import { projectFeatureCommands } from "./feature-command-projection.js";

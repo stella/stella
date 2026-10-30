@@ -1455,6 +1455,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/*/src/**",
       "packages/cli/package.json",
       "packages/cli/scripts/codegen.ts",
+      "scripts/repository-capability-catalog.ts",
       "packages/cli/src/capability-catalog-data.ts",
       "packages/cli/src/write-generated-file.ts",
       "packages/cli/src/capability-catalog-load.ts",

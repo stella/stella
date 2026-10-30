@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
+import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 
 const repositoryCapabilityCatalog = await buildCapabilityCatalog();

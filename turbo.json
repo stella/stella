@@ -774,6 +774,7 @@
         "$TURBO_ROOT$/apps/api/scripts/**",
         "$TURBO_ROOT$/packages/**/src/**",
         "scripts/codegen.ts",
+        "$TURBO_ROOT$/scripts/repository-capability-catalog.ts",
         "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",

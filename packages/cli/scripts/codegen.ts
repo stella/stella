@@ -12,7 +12,7 @@ import { panic, Result } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
-import { buildCapabilityCatalog } from "../../../apps/api/scripts/export-capability-catalog.js";
+import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import { checkCapabilityRegistry } from "../src/capability-catalog-data.js";
 import { parseCapabilityCatalog } from "../src/capability-catalog-load.js";
 import {

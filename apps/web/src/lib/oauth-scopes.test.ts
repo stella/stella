@@ -18,7 +18,7 @@ import {
   translateOAuthScopeSummary,
 } from "@/lib/oauth-scopes";
 
-import { buildCapabilityCatalog } from "../../../api/scripts/export-capability-catalog";
+import { buildCapabilityCatalog } from "../../../../scripts/repository-capability-catalog";
 
 describe("OAuth scope display groups", () => {
   test("discloses every scope in each resource grant using translated consent copy", () => {
