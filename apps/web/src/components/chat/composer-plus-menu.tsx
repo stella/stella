@@ -25,6 +25,7 @@ import {
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuCheckboxItem,
   MenuGroup,
   MenuGroupLabel,
@@ -912,7 +913,7 @@ export const ComposerSkillsMenu = ({
 };
 
 // The trigger-less Menu a shortcut opens at the caret, following the
-// sr-only-trigger shape of the shell's anchored menus (`useAnchoredMenu`).
+// nonfocusable-anchor shape of the shell's anchored menus (`useAnchoredMenu`).
 const ComposerShortcutPopup = ({
   anchor,
   children,
@@ -931,7 +932,7 @@ const ComposerShortcutPopup = ({
   side: ShortcutPopupSide;
 }) => (
   <Menu onOpenChange={onOpenChange} open={open}>
-    <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+    <MenuAnchor />
     <MenuPopup
       align="start"
       anchor={anchor}
