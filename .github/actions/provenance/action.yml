@@ -29,6 +29,20 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate provenance subject
+      shell: bash
+      env:
+        SUBJECT_PATH: ${{ inputs.subject-path }}
+        SUBJECT_NAME: ${{ inputs.subject-name }}
+        SUBJECT_DIGEST: ${{ inputs.subject-digest }}
+      run: |
+        if [[ -n "$SUBJECT_PATH" && -z "$SUBJECT_NAME" && -z "$SUBJECT_DIGEST" ]] ||
+           [[ -z "$SUBJECT_PATH" && -n "$SUBJECT_NAME" && -n "$SUBJECT_DIGEST" ]]; then
+          exit 0
+        fi
+        echo "::error::Set exactly one provenance subject: subject-path alone, or subject-name and subject-digest together." >&2
+        exit 1
+
     - name: Bind staging source checkout
       if: inputs.source-sha != '' || inputs.main-sha != ''
       id: source

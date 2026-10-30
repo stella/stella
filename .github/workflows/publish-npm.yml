@@ -941,15 +941,15 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
+            scripts/download-run-artifact.sh
             .github/actions/provenance
           sparse-checkout-cone-mode: false
 
       - name: Download standalone CLI binaries
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: cli-native-release-*
-          path: native-cli
-          merge-multiple: true
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/download-run-artifact.sh --pattern 'cli-native-release-*' --merge --path native-cli
 
       - name: Hash final release binaries
         timeout-minutes: 5
