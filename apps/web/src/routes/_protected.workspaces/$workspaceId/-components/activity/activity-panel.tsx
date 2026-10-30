@@ -43,6 +43,7 @@ import {
   UsersIcon,
   WorkflowIcon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
@@ -72,6 +73,15 @@ import {
   SheetTitle,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
@@ -383,12 +393,9 @@ const ActivityAdvancedFilters = ({
       </PopoverTrigger>
       <PopoverPanel align="end" className="w-80">
         <div className="space-y-1.5">
-          <label
-            className="text-muted-foreground text-xs font-medium"
-            htmlFor="matter-activity-action"
-          >
+          <Label htmlFor="matter-activity-action" variant="muted">
             {t("common.actions")}
-          </label>
+          </Label>
           <Select<MatterActivityAction>
             onValueChange={(action) => {
               if (action) {
@@ -414,12 +421,9 @@ const ActivityAdvancedFilters = ({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <label
-            className="text-muted-foreground text-xs font-medium"
-            htmlFor="matter-activity-actor"
-          >
+          <Label htmlFor="matter-activity-actor" variant="muted">
             {t("workspaces.overview.activity.list.actor")}
-          </label>
+          </Label>
           <Combobox<MatterActivityActor>
             filter={null}
             items={actors}
@@ -1009,13 +1013,15 @@ const HorizontalActivityMilestone = ({
   if (group.type !== "automation_run") {
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
-        <button
-          className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start"
+        <Button
+          className="-ms-2 block w-[calc(100%+0.5rem)]"
           onClick={() => onSelectGroup(group)}
-          type="button"
+          variant="plain"
         >
-          <ActivityTriplet detail="provenance" group={group} size="compact" />
-        </button>
+          <span className="hover:bg-muted/40 flex min-h-11 w-full items-start rounded-md px-2 py-1">
+            <ActivityTriplet detail="provenance" group={group} size="compact" />
+          </span>
+        </Button>
       </HorizontalMilestoneFrame>
     );
   }
@@ -1106,13 +1112,15 @@ const HorizontalRunActivityItem = ({
   item: MatterActivityItem;
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
-  <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
+  <Button
+    className="-ms-2 block w-[calc(100%+0.5rem)]"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
-    type="button"
+    variant="plain"
   >
-    <ActivityTriplet group={toSingleActivityGroup(item)} size="compact" />
-  </button>
+    <span className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md px-2">
+      <ActivityTriplet group={toSingleActivityGroup(item)} size="compact" />
+    </span>
+  </Button>
 );
 
 const ActivityRunRow = ({
@@ -1241,13 +1249,15 @@ const RunActivityItem = ({
   item: MatterActivityItem;
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
-  <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
+  <Button
+    className="-ms-2 block w-[calc(100%+0.5rem)]"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
-    type="button"
+    variant="plain"
   >
-    <ActivityTriplet group={toSingleActivityGroup(item)} size="default" />
-  </button>
+    <span className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md px-2">
+      <ActivityTriplet group={toSingleActivityGroup(item)} size="default" />
+    </span>
+  </Button>
 );
 
 const RunCount = ({ count }: { count: number }) => {
@@ -1267,13 +1277,15 @@ const ActivityItemRow = ({
 
   return (
     <TimelineEntry activityAt={item.activityAt} marker={icon}>
-      <button
-        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start"
+      <Button
+        className="block w-full"
         onClick={() => onSelectGroup(group)}
-        type="button"
+        variant="plain"
       >
-        <ActivityTriplet detail="provenance" group={group} size="default" />
-      </button>
+        <span className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4">
+          <ActivityTriplet detail="provenance" group={group} size="default" />
+        </span>
+      </Button>
     </TimelineEntry>
   );
 };
@@ -1290,81 +1302,104 @@ const ActivityList = ({
   const listGroups = expandActivityGroupsForList(groups);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-start">
-        <caption className="sr-only">
+      <Table inset="card" scroll="parent">
+        <TableCaption className="sr-only">
           {t("workspaces.overview.activity.title")}
-        </caption>
-        <thead className="sr-only md:not-sr-only">
-          <tr className="text-muted-foreground text-2xs border-b font-medium">
-            <th className="w-40 px-4 py-2 text-start font-medium" scope="col">
+        </TableCaption>
+        <TableHeader className="sr-only md:not-sr-only">
+          <TableRow>
+            <TableHead className="w-40" scope="col">
               {t("workspaces.overview.activity.list.dateTime")}
-            </th>
-            <th className="w-48 px-4 py-2 text-start font-medium" scope="col">
+            </TableHead>
+            <TableHead className="w-48" scope="col">
               {t("workspaces.overview.activity.list.actor")}
-            </th>
-            <th className="px-4 py-2 text-start font-medium" scope="col">
+            </TableHead>
+            <TableHead scope="col">
               {t("common.itemTypeValues.event")}
-            </th>
-            <th className="w-56 px-4 py-2 text-start font-medium" scope="col">
+            </TableHead>
+            <TableHead className="w-56" scope="col">
               {t("workspaces.overview.activity.list.provenance")}
-            </th>
-          </tr>
-        </thead>
-        <tbody className="block md:table-row-group">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="block md:table-row-group">
           {listGroups.map((group) => {
             const item = group.items[0];
             const showProvenance =
               resolveVisibleActivityTriggerType(item.trigger.type) !== null;
             return (
-              <tr
-                className="group grid grid-cols-2 border-b last:border-b-0 md:table-row"
+              <TableRow
+                className="group grid grid-cols-2 md:table-row"
                 key={group.id}
               >
-                <td className="px-4 pt-3 align-middle md:table-cell md:py-2.5">
-                  <time
-                    className="text-muted-foreground text-xs tabular-nums"
-                    dateTime={item.activityAt}
-                  >
-                    {format.dateTime(
-                      Temporal.Instant.from(item.activityAt).epochMilliseconds,
-                      MEDIUM_DATE_SHORT_TIME_FORMAT,
-                    )}
-                  </time>
-                </td>
-                <td className="min-w-0 px-4 pt-3 text-end align-middle text-sm md:table-cell md:py-2.5 md:text-start">
-                  <Performer item={item} />
-                </td>
-                <td className="col-span-2 min-w-0 p-0 align-middle text-sm leading-5 md:table-cell">
-                  <button
-                    className="hover:bg-muted/40 focus-visible:bg-muted/40 min-h-14 w-full px-4 py-2.5 text-start"
+                {/* Below md the row is a two-column card: the date and the
+                    performer open it and the provenance closes it, so their
+                    padding differs by breakpoint and lives inside the cell. */}
+                <TableCell className="md:table-cell" flush>
+                  <div className="px-4 pt-3 md:py-2.5">
+                    <time
+                      className="text-muted-foreground text-xs tabular-nums"
+                      dateTime={item.activityAt}
+                    >
+                      {format.dateTime(
+                        Temporal.Instant.from(item.activityAt)
+                          .epochMilliseconds,
+                        MEDIUM_DATE_SHORT_TIME_FORMAT,
+                      )}
+                    </time>
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="min-w-0 text-end whitespace-normal md:table-cell md:text-start"
+                  flush
+                >
+                  <div className="px-4 pt-3 md:py-2.5">
+                    <Performer item={item} />
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="col-span-2 min-w-0 whitespace-normal md:table-cell"
+                  flush
+                >
+                  <Button
+                    className="block w-full"
+                    focusRing="inside"
                     onClick={() => onSelectGroup(group)}
-                    type="button"
+                    variant="plain"
                   >
-                    <span className="block">
-                      <ActivityAction group={group} />
-                    </span>
-                    <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
-                      <span className="flex size-5 items-center justify-center">
-                        {activityGroupTargetIcon(group)}
+                    <span className="hover:bg-muted/40 in-focus-visible:bg-muted/40 block min-h-14 w-full px-4 py-2.5 text-sm leading-5">
+                      <span className="block">
+                        <ActivityAction group={group} />
                       </span>
-                      <BidiText as="span">
-                        <ActivityGroupTargetName group={group} />
-                      </BidiText>
-                      <ActivityTargetThumbnail
-                        className="col-start-2 mt-1.5 size-10"
-                        group={group}
-                      />
+                      <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
+                        <span className="flex size-5 items-center justify-center">
+                          {activityGroupTargetIcon(group)}
+                        </span>
+                        <BidiText as="span">
+                          <ActivityGroupTargetName group={group} />
+                        </BidiText>
+                        <ActivityTargetThumbnail
+                          className="col-start-2 mt-1.5 size-10"
+                          group={group}
+                        />
+                      </span>
                     </span>
-                  </button>
-                </td>
-                <td className="text-muted-foreground col-span-2 min-w-0 px-4 pb-3 align-middle text-xs leading-4 md:table-cell md:py-2.5">
-                  {showProvenance ? <TriggerDetail item={item} /> : null}
-                </td>
-              </tr>
+                  </Button>
+                </TableCell>
+                <TableCell
+                  className="col-span-2 min-w-0 whitespace-normal md:table-cell"
+                  flush
+                  tone="muted"
+                >
+                  <div className="px-4 pb-3 text-xs leading-4 md:py-2.5">
+                    {showProvenance ? <TriggerDetail item={item} /> : null}
+                  </div>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 };
@@ -1457,17 +1492,19 @@ export const ActivityDetailsSheet = ({
                     );
                   }
                   return (
-                    <button
-                      className="hover:bg-muted -ms-2 grid min-h-11 w-[calc(100%+0.5rem)] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1 text-start"
+                    <Button
+                      className="-ms-2 block w-[calc(100%+0.5rem)]"
                       key={batchItem.id}
                       onClick={() => {
                         onOpenChange(false);
                         batchOpenTarget();
                       }}
-                      type="button"
+                      variant="plain"
                     >
-                      {content}
-                    </button>
+                      <span className="hover:bg-muted grid min-h-11 w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1">
+                        {content}
+                      </span>
+                    </Button>
                   );
                 })}
               </div>
