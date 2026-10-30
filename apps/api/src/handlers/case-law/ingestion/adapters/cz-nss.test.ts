@@ -442,8 +442,9 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(pageDeadlines).toEqual([90_000]);
+    // The page's own budget first, then one deadline per listing request.
     expect(failedStub.timeouts).toEqual([60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...failedStub.timeouts]);
     pageDeadlines.length = 0;
 
     const pageStub = installStub({
@@ -460,8 +461,8 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(pageDeadlines).toEqual([90_000]);
     expect(pageStub.timeouts.slice(0, 3)).toEqual([60_000, 60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...pageStub.timeouts]);
   } finally {
     timeoutSpy.mockRestore();
   }
