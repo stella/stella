@@ -36,6 +36,7 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -230,6 +231,7 @@ export type ImportReview = {
 export const useImportReview = ({
   onImported,
 }: UseImportReviewOptions = {}): ImportReview => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const scope = protectedRouteApi.useRouteContext({
     select: ({ user }) => ({
@@ -375,6 +377,7 @@ export const useImportReview = ({
   };
 
   const reset = () => {
+    submit.reset();
     validationGeneration.current += 1;
     scheduleValidation.cancel();
     setRows([]);
@@ -403,9 +406,13 @@ export const useImportReview = ({
 
     const outcome = await Result.tryPromise(async () => {
       const request = await resolveContactImportRequest({ payload, scope });
-      const response = await api.contacts.import.put({
-        importRequestId: request.id,
-        ...payload,
+      const response = await submit.run({
+        operation: "contact-import",
+        send: async (body) => api.contacts.import.put(body),
+        body: {
+          importRequestId: request.id,
+          ...payload,
+        },
       });
       return { data: unwrapApiResponse(response), request };
     });

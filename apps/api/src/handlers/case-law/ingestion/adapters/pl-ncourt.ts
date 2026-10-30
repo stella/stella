@@ -1025,6 +1025,7 @@ const documentMetadataOf = (
     ? {}
     : {
         legalReferences: orUndefined(content.legalReferences),
+        rejectedLegalReferences: orUndefined(content.rejectedLegalReferences),
         documentTitle: content.title,
         document:
           Object.keys(content.attributes).length === 0

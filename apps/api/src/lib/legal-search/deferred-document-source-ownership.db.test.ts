@@ -21,6 +21,7 @@ import type { BackfilledDocument } from "@/api/lib/legal-search/sk-document-back
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
+import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -141,6 +142,7 @@ if (!databaseUrl || !enabled) {
       let remoteEffects = 0;
       const first = fetchDecisionDocument({
         checkRetention: () => undefined,
+        rawStorage: memorySkDocumentRawStorage().storage,
         decisionId,
         scopedDb,
         signal: new AbortController().signal,
@@ -156,6 +158,7 @@ if (!databaseUrl || !enabled) {
         expect(
           await fetchDecisionDocument({
             checkRetention: () => undefined,
+            rawStorage: memorySkDocumentRawStorage().storage,
             decisionId,
             scopedDb,
             signal: new AbortController().signal,
@@ -188,6 +191,7 @@ if (!databaseUrl || !enabled) {
         expect(
           await fetchDecisionDocument({
             checkRetention: () => undefined,
+            rawStorage: memorySkDocumentRawStorage().storage,
             decisionId,
             scopedDb,
             signal: new AbortController().signal,
@@ -219,6 +223,7 @@ if (!databaseUrl || !enabled) {
         expect(
           await fetchDecisionDocument({
             checkRetention: () => undefined,
+            rawStorage: memorySkDocumentRawStorage().storage,
             decisionId,
             scopedDb,
             signal: new AbortController().signal,
@@ -241,6 +246,7 @@ if (!databaseUrl || !enabled) {
       try {
         const outcome = await fetchDecisionDocument({
           checkRetention: () => undefined,
+          rawStorage: memorySkDocumentRawStorage().storage,
           decisionId,
           scopedDb,
           signal: new AbortController().signal,
