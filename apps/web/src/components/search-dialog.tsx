@@ -1871,6 +1871,13 @@ export const SearchDialog = ({
                 }
                 const highlightedHit = commandHits.at(eventDetails.index);
                 if (highlightedHit?.type === "legal-citation") {
+                  if (eventDetails.reason !== "none") {
+                    setSupplementalPreview((preview) =>
+                      preview.type === "internal"
+                        ? preview
+                        : { type: "internal" },
+                    );
+                  }
                   debouncedSetHighlightedHitId.cancel();
                   setHighlightedHitId(highlightedHit.id);
                   if (eventDetails.reason === "keyboard" && resultsElement) {

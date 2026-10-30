@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
@@ -27,7 +28,10 @@ export const citationCommandHits = (
       return result.items.map((decision) => ({
         type: "legal-citation" as const,
         id: `citation-decision:${decision.id}`,
-        title: decision.caseNumber,
+        title:
+          decision.identifiers?.find(
+            ({ type }) => type === DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          )?.value ?? decision.caseNumber,
         match: {
           type: "decision" as const,
           decision,
