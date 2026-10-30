@@ -104,10 +104,9 @@ test("a removed re-export still fails after committing the regenerated report", 
   await write(root);
   git(root, ["add", "."]);
   git(root, ["commit", "-qm", "remove export"]);
-  expect((await run(root)).join("\n")).toContain(".#convert: removed export");
-  expect((await run(root)).join("\n")).toContain(
-    "consumers outside this repository",
-  );
+  const errors = (await run(root)).join("\n");
+  expect(errors).toContain(".#convert: removed export");
+  expect(errors).toContain("consumers outside this repository");
 });
 
 test("additions require regeneration and then pass without a major changeset", async () => {
@@ -212,10 +211,9 @@ test("entrypoint removals, overload removals and asset removals are visible", as
     }),
   );
   await write(root);
-  expect((await run(root)).join("\n")).toContain("./model: removed entrypoint");
-  expect((await run(root)).join("\n")).toContain(
-    "./theme.css: removed entrypoint",
-  );
+  const removals = (await run(root)).join("\n");
+  expect(removals).toContain("./model: removed entrypoint");
+  expect(removals).toContain("./theme.css: removed entrypoint");
 });
 
 test("runtime exports cannot silently become type-only, including export stars", async () => {

@@ -66,6 +66,35 @@ const compilerOptions: ts.CompilerOptions = {
   types: ["bun-types"],
 };
 
+/**
+ * Installed declarations parsed once per process. Every report and declaration
+ * program reads the same TypeScript libraries and dependency types, which do
+ * not change while a check runs, under the one `compilerOptions`; package
+ * sources outside `node_modules` are always read fresh.
+ */
+const installedSourceFiles = new Map<string, ts.SourceFile>();
+const INSTALLED_PATH = `${path.sep}node_modules${path.sep}`;
+
+const compilerHost = (): ts.CompilerHost => {
+  const host = ts.createCompilerHost(compilerOptions);
+  const parse = host.getSourceFile.bind(host);
+  host.getSourceFile = (fileName, languageVersion, onError, shouldCreate) => {
+    if (!fileName.includes(INSTALLED_PATH)) {
+      return parse(fileName, languageVersion, onError, shouldCreate);
+    }
+    const cached = installedSourceFiles.get(fileName);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const parsed = parse(fileName, languageVersion, onError, shouldCreate);
+    if (parsed !== undefined) {
+      installedSourceFiles.set(fileName, parsed);
+    }
+    return parsed;
+  };
+  return host;
+};
+
 const hasSymbolFlag = (symbol: ts.Symbol, flag: ts.SymbolFlags): boolean =>
   // oxlint-disable-next-line no-bitwise -- TypeScript exposes symbol categories as a bitmask.
   (symbol.flags & flag) !== 0;
@@ -93,7 +122,7 @@ const declarationProgram = (
   files: Map<string, string>,
   rootNames: string[],
 ): ts.Program => {
-  const host = ts.createCompilerHost(compilerOptions);
+  const host = compilerHost();
   const originalRead = host.readFile.bind(host);
   const originalExists = host.fileExists.bind(host);
   const originalDirectoryExists = host.directoryExists?.bind(host);
@@ -235,6 +264,7 @@ export const generateApiReport = (packageDir: string): ApiReport => {
       path.resolve(packageDir, target),
     ),
     options: compilerOptions,
+    host: compilerHost(),
   });
   const checker = program.getTypeChecker();
   const entrypoints = new Map<string, ApiEntrypoint>();
