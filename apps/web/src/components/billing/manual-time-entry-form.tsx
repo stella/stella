@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import { DialogFormState } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import { Label } from "@stll/ui/label";
 
 import { DurationInput } from "@/components/billing/duration-input";
@@ -95,29 +95,26 @@ export const ManualTimeEntryForm = ({
   };
 
   return (
-    <form
-      className="flex flex-col gap-4"
+    <Form
+      dirty={
+        dateWorked !== defaultValues.dateWorked ||
+        durationMinutes !== defaultValues.durationMinutes ||
+        narrative !== defaultValues.narrative ||
+        narrativeLanguage !== defaultValues.narrativeLanguage ||
+        billable !== defaultValues.billable
+      }
+      onDiscard={() => {
+        setDateWorked(defaultValues.dateWorked);
+        setDurationMinutes(defaultValues.durationMinutes);
+        setNarrative(defaultValues.narrative);
+        setNarrativeLanguage(defaultValues.narrativeLanguage);
+        setBillable(defaultValues.billable);
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         submit(onSubmit);
       }}
     >
-      <DialogFormState
-        dirty={
-          dateWorked !== defaultValues.dateWorked ||
-          durationMinutes !== defaultValues.durationMinutes ||
-          narrative !== defaultValues.narrative ||
-          narrativeLanguage !== defaultValues.narrativeLanguage ||
-          billable !== defaultValues.billable
-        }
-        onDiscard={() => {
-          setDateWorked(defaultValues.dateWorked);
-          setDurationMinutes(defaultValues.durationMinutes);
-          setNarrative(defaultValues.narrative);
-          setNarrativeLanguage(defaultValues.narrativeLanguage);
-          setBillable(defaultValues.billable);
-        }}
-      />
       <fieldset className="flex min-w-0 flex-col gap-4" disabled={pending}>
         {leading}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -217,6 +214,6 @@ export const ManualTimeEntryForm = ({
           {tCommon("save")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

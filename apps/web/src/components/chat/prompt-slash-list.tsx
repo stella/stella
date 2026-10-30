@@ -4,9 +4,9 @@ import type { Ref } from "react";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { CommandIcon, SkillIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
-import { cn } from "@stll/ui/utils";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import {
@@ -189,13 +189,8 @@ export const PromptSlashList = ({
                 const index = runningIndex++;
                 const active = index === safeIndex;
                 return (
-                  <button
-                    className={cn(
-                      "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-start",
-                      active
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-accent/50",
-                    )}
+                  <Button
+                    className="items-start whitespace-normal"
                     data-index={index}
                     key={getItemKey(item)}
                     onClick={() => select(index)}
@@ -205,18 +200,20 @@ export const PromptSlashList = ({
                       event.preventDefault();
                     }}
                     onMouseEnter={() => setSelectedIndex(index)}
-                    type="button"
+                    selected={active}
+                    size="row"
+                    variant="ghost"
                   >
                     <SlashItemIcon item={item} />
                     <span className="min-w-0 flex-1">
                       <span className="text-foreground block text-xs font-medium">
                         {getItemName(item)}
                       </span>
-                      <span className="text-muted-foreground text-2xs line-clamp-2 leading-snug">
+                      <span className="text-muted-foreground text-2xs line-clamp-2 leading-snug font-normal">
                         {getItemSecondary(item)}
                       </span>
                     </span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>

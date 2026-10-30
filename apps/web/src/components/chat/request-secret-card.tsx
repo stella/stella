@@ -9,9 +9,11 @@ import type {
   RequestSecretOutput,
 } from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Field, FieldLabel } from "@stll/ui/field";
 import { CheckIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
-import { cn } from "@stll/ui/utils";
 
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import type {
@@ -20,6 +22,7 @@ import type {
   SecretTargetResolution,
 } from "@/components/chat/chat-approval-context";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
+import { SecretInput } from "@/components/secret-input";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
@@ -68,46 +71,40 @@ const RequestSecretCredentialFields = ({
   const t = useTranslations();
   return (
     <>
-      <label className="block space-y-1 text-sm">
-        <span>{t("chat.requestSecret.valueLabel")}</span>
-        <input
+      <Field className="items-stretch">
+        <FieldLabel>{t("chat.requestSecret.valueLabel")}</FieldLabel>
+        <SecretInput
           autoComplete="off"
-          className={cn(
-            "border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-11 w-full rounded-md border px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-2 md:text-sm",
-          )}
           disabled={disabled}
           onChange={(event) => onValueChange(event.currentTarget.value)}
-          type="password"
           value={value}
         />
-      </label>
-      <label className="flex min-h-11 items-center gap-2 text-sm">
-        <input
+      </Field>
+      <Label className="flex min-h-11">
+        <Checkbox
           checked={saveForFuture}
           disabled={disabled}
-          onChange={(event) =>
-            onSaveForFutureChange(event.currentTarget.checked)
-          }
-          type="checkbox"
+          onCheckedChange={(checked) => onSaveForFutureChange(checked)}
         />
-        <span>{t("chat.requestSecret.saveForFuture")}</span>
-      </label>
+        <span className="font-normal">
+          {t("chat.requestSecret.saveForFuture")}
+        </span>
+      </Label>
       {saveForFuture && responseDisposition === "normal" ? (
-        <label className="flex min-h-11 items-center gap-2 text-sm">
-          <input
+        <Label className="flex min-h-11">
+          <Checkbox
             checked={normalConnectionAction === "replace-with-receipt-only"}
             disabled={disabled}
-            onChange={(event) =>
+            onCheckedChange={(checked) =>
               onNormalConnectionActionChange(
-                event.currentTarget.checked
-                  ? "replace-with-receipt-only"
-                  : "preserve",
+                checked ? "replace-with-receipt-only" : "preserve",
               )
             }
-            type="checkbox"
           />
-          <span>{t("chat.requestSecret.replaceOrdinaryConnection")}</span>
-        </label>
+          <span className="font-normal">
+            {t("chat.requestSecret.replaceOrdinaryConnection")}
+          </span>
+        </Label>
       ) : null}
     </>
   );
