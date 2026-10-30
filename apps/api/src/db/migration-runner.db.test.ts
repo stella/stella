@@ -2328,6 +2328,58 @@ if (!runPostgresTests || databaseUrl === undefined) {
         );
       });
 
+      test("an operator pause that replaces the step's pause during the wait is restored, still active", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            // job.reader keeps the run waiting; job.other starts unpaused.
+            await leaseJob(observer, "job.reader");
+            let elapsedMs = 0;
+            let replaced = false;
+            const runtime: SchedulerDrainRuntime = {
+              now: () => elapsedMs,
+              sleep: async (ms) => {
+                elapsedMs += ms;
+                if (!replaced) {
+                  replaced = true;
+                  await waitForPauseBy(observer, "job.other", "migrate");
+                  await operatorPause({
+                    observer,
+                    id: "job.other",
+                    by: "operator",
+                    reason: "Replaced during wait",
+                    interval: "10 minutes",
+                  });
+                  return;
+                }
+                await releaseLease(observer, "job.reader");
+              },
+              deadlineMs: SCHEDULER_DRAIN_DEADLINE_MS,
+              pollMs: 1000,
+            };
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: runtime,
+            });
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+              { outcome: "resumed", resumedCount: 2, restoredCount: 1 },
+            ]);
+            const after = rowOf(await schedulerRows(observer), "job.other");
+            expect(after).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Replaced during wait",
+            });
+            expect((after?.paused_until?.getTime() ?? 0) > Date.now()).toBe(
+              true,
+            );
+          },
+        );
+      });
+
       test("no pending schema migration pauses nothing", async () => {
         await withSchedulerBundle(
           ALTER_AFTER_DRAIN,

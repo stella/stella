@@ -145,20 +145,38 @@ const hasPauseColumns = async (connection: ReservedSQL): Promise<boolean> => {
   return row?.present === REQUIRED_COLUMNS.length;
 };
 
-/** Another actor's pause that ends within the pause floor, as it was before the takeover. */
-type TakenOverPause = {
-  id: string;
-  pausedBy: string;
-  pauseReason: string;
-  /** Rendered by PostgreSQL, so microseconds and offset survive the round trip. */
-  pausedUntil: string;
-};
+/**
+ * What a resume does to one job. The latest transition wins: a job paused from
+ * unpaused whose pause another actor then replaces, and a later pass takes
+ * over, becomes a restore; an adoption stays a clear.
+ */
+type Restoration =
+  | { kind: "clear" }
+  | {
+      kind: "restore";
+      /** Another actor's pause as it was before the takeover. */
+      pausedBy: string;
+      pauseReason: string;
+      /** Rendered by PostgreSQL, so microseconds and offset survive the round trip. */
+      pausedUntil: string;
+    };
 
-type PauseOutcome = {
-  /** Jobs unpaused or paused by this step: cleared on resume. */
-  pausedIds: string[];
-  /** Other actors' pauses that would have ended during the schema phase; restored on resume. */
-  takenOver: TakenOverPause[];
+/** One restoration per job id this step has written. */
+type PauseOutcome = Map<string, Restoration>;
+
+const countRestorations = (
+  outcome: PauseOutcome,
+): { pausedCount: number; takenOverCount: number } => {
+  let takenOverCount = 0;
+  for (const restoration of outcome.values()) {
+    if (restoration.kind === "restore") {
+      takenOverCount += 1;
+    }
+  }
+  return {
+    pausedCount: outcome.size - takenOverCount,
+    takenOverCount,
+  };
 };
 
 /**
@@ -235,7 +253,7 @@ const pauseOnce = async (
       UNPAUSABLE_SCHEDULER_JOB_ID,
     ],
   );
-  const outcome: PauseOutcome = { pausedIds: [], takenOver: [] };
+  const outcome: PauseOutcome = new Map();
   for (const row of rows) {
     if (
       row.taken_over &&
@@ -243,15 +261,15 @@ const pauseOnce = async (
       row.pause_reason !== null &&
       row.paused_until_text !== null
     ) {
-      outcome.takenOver.push({
-        id: row.id,
+      outcome.set(row.id, {
+        kind: "restore",
         pausedBy: row.paused_by,
         pauseReason: row.pause_reason,
         pausedUntil: row.paused_until_text,
       });
       continue;
     }
-    outcome.pausedIds.push(row.id);
+    outcome.set(row.id, { kind: "clear" });
   }
   return outcome;
 };
@@ -282,9 +300,10 @@ const pauseJobs = async (
       );
     }
     const outcome = await pauseOnce(connection, floorMs);
-    total.pausedIds.push(...outcome.pausedIds);
-    total.takenOver.push(...outcome.takenOver);
-    written += outcome.pausedIds.length + outcome.takenOver.length;
+    for (const [id, restoration] of outcome) {
+      total.set(id, restoration);
+    }
+    written += outcome.size;
   }
 };
 
@@ -320,8 +339,28 @@ const readLeased = async (
  */
 const resumeJobs = async (
   connection: ReservedSQL,
-  { pausedIds, takenOver }: PauseOutcome,
+  paused: PauseOutcome,
 ): Promise<{ resumedCount: number; restoredCount: number }> => {
+  const pausedIds: string[] = [];
+  const takenOver: {
+    id: string;
+    pausedBy: string;
+    pauseReason: string;
+    pausedUntil: string;
+  }[] = [];
+  for (const [id, restoration] of paused) {
+    switch (restoration.kind) {
+      case "clear":
+        pausedIds.push(id);
+        break;
+      case "restore":
+        takenOver.push({ id, ...restoration });
+        break;
+      default:
+        restoration satisfies never;
+        return panic("Unknown scheduler drain restoration");
+    }
+  }
   const cleared = await connection.unsafe<{ id: string }[]>(
     `UPDATE scheduler_jobs
      SET paused_until = NULL,
@@ -382,8 +421,7 @@ const resumeAndReport = async (
       ? {
           event: "migrate.scheduler_resume",
           outcome: "resumed",
-          pausedCount: paused.pausedIds.length,
-          takenOverCount: paused.takenOver.length,
+          ...countRestorations(paused),
           resumedCount: resumed.value.resumedCount,
           restoredCount: resumed.value.restoredCount,
           durationMs: durationMs(),
@@ -391,8 +429,7 @@ const resumeAndReport = async (
       : {
           event: "migrate.scheduler_resume",
           outcome: "failed",
-          pausedCount: paused.pausedIds.length,
-          takenOverCount: paused.takenOver.length,
+          ...countRestorations(paused),
           resumedCount: 0,
           restoredCount: 0,
           durationMs: durationMs(),
@@ -418,7 +455,7 @@ export const withDrainedScheduler = async <T>(
   }
   const startedAt = runtime.now();
   const waitedMs = () => Math.max(0, Math.round(runtime.now() - startedAt));
-  const paused: PauseOutcome = { pausedIds: [], takenOver: [] };
+  const paused: PauseOutcome = new Map();
 
   try {
     // The first pass must outlast the wait; later passes need only the work
@@ -439,8 +476,7 @@ export const withDrainedScheduler = async <T>(
         timing.emit({
           event: "migrate.scheduler_drain",
           outcome: "timed_out",
-          pausedCount: paused.pausedIds.length,
-          takenOverCount: paused.takenOver.length,
+          ...countRestorations(paused),
           leasedCount: leased.length,
           drainWaitMs: waitedMs(),
         });
@@ -474,14 +510,13 @@ export const withDrainedScheduler = async <T>(
     timing.emit({
       event: "migrate.scheduler_drain",
       outcome: "drained",
-      pausedCount: paused.pausedIds.length,
-      takenOverCount: paused.takenOver.length,
+      ...countRestorations(paused),
       leasedCount: 0,
       drainWaitMs: waitedMs(),
     });
     return await work();
   } finally {
-    if (paused.pausedIds.length + paused.takenOver.length > 0) {
+    if (paused.size > 0) {
       await resumeAndReport(options, paused);
     }
   }
