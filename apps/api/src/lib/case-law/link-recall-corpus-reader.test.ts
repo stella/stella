@@ -63,28 +63,28 @@ test("audit reads wrap unknown read and decode failures with their cause", async
   });
 });
 
-test("audit reads return malformed locations without reading an object", async () => {
+test("audit reads panic on corrupt corpus locations before reading an object", async () => {
   const requests: unknown[] = [];
-  for (const location of [
-    "pack:malformed",
-    `pack:pack.stlpack@${Number.MAX_SAFE_INTEGER}0+1#${"a".repeat(64)}`,
-  ]) {
-    const result = await readLinkRecallPayload({
-      location,
-      readObject: async (request) => {
-        requests.push(request);
-        return new Uint8Array();
-      },
-      ...budgets,
-    });
-    expect(result.isErr()).toBe(true);
-    if (result.isOk()) {
-      panic("Expected audit location failure");
-    }
-    expect(result.error).toBeInstanceOf(LinkRecallPayloadError);
-    expect(result.error).toMatchObject({
-      message: "Audit corpus location could not be parsed",
-      cause: expect.any(Error),
+  for (const [location, message] of [
+    ["pack:malformed", "Malformed packed corpus address"],
+    [
+      `pack:pack.stlpack@${Number.MAX_SAFE_INTEGER}0+1#${"a".repeat(64)}`,
+      "unrepresentable integer",
+    ],
+  ] as const) {
+    const failure = await rejectionOf(
+      readLinkRecallPayload({
+        location,
+        readObject: async (request) => {
+          requests.push(request);
+          return new Uint8Array();
+        },
+        ...budgets,
+      }),
+    );
+    expect(failure).toBeInstanceOf(Panic);
+    expect(failure).toMatchObject({
+      message: expect.stringContaining(message),
     });
   }
   expect(requests).toEqual([]);

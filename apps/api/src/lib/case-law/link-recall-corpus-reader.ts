@@ -47,15 +47,8 @@ export const readLinkRecallPayload = async ({
   ) {
     return panic("Link recall payload budgets must be positive safe integers");
   }
+  const parsed = parseCorpusLocation(location);
   return await Result.gen(async function* () {
-    const parsed = yield* Result.try({
-      try: () => parseCorpusLocation(location),
-      catch: (cause) =>
-        new LinkRecallPayloadError({
-          message: "Audit corpus location could not be parsed",
-          cause,
-        }),
-    });
     let request: LinkRecallObjectRequest;
     switch (parsed.type) {
       case "object":
