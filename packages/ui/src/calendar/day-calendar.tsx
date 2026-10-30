@@ -8,6 +8,7 @@ import type {
 } from "react";
 
 import { panic } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
@@ -17,6 +18,7 @@ import {
   extendRange,
   getDayBounds,
   getHourTicks,
+  isRepeatedWallTime,
   layoutOverlaps,
   moveRange,
   offsetToTime,
@@ -99,15 +101,104 @@ type DayCalendarProps = {
   timeZone: string;
 };
 
+/** The props a draft's range was computed against. */
+type DraftView = {
+  date: string;
+  endHour: number;
+  granularity: DayCalendarGranularity;
+  startHour: number;
+  timeZone: string;
+};
+
 type DraftSelection = {
   columnId: string;
   range: DayCalendarRange;
+  view: DraftView;
 } & (
   | { anchorMs: number; pointerId: number; type: "pointer" }
   | { type: "keyboard" }
 );
 
+const isSameDraftView = (left: DraftView, right: DraftView): boolean =>
+  left.date === right.date &&
+  left.endHour === right.endHour &&
+  left.granularity === right.granularity &&
+  left.startHour === right.startHour &&
+  left.timeZone === right.timeZone;
+
+/**
+ * A draft's range belongs to the day and grid it was made on; once they
+ * change, committing it would select a stale range, so it is discarded.
+ */
+const useDraftSelection = (view: DraftView) => {
+  const [stored, setDraft] = useState<DraftSelection | null>(null);
+  const draft =
+    stored !== null && isSameDraftView(stored.view, view) ? stored : null;
+  if (stored !== null && draft === null) {
+    setDraft(null);
+  }
+  return [draft, setDraft] as const;
+};
+
 const GUTTER_WIDTH = "4rem";
+
+/**
+ * Two instants on different days. They differ in a field a time-only format
+ * lacks, so formatting them as a range falls back to the locale's generic
+ * interval pattern ("{0} – {1}", "{0}～{1}"), whose only shared part is the
+ * separator.
+ */
+const SEPARATOR_PROBE = {
+  endMs: Temporal.Instant.from("2000-01-03T00:00:00Z").epochMilliseconds,
+  startMs: Temporal.Instant.from("2000-01-01T00:00:00Z").epochMilliseconds,
+} as const;
+
+type TimeLabels = {
+  formatRange: (range: DayCalendarRange) => string;
+  formatTime: Intl.DateTimeFormat;
+  timeFormatFor: (range: DayCalendarRange) => Intl.DateTimeFormat;
+};
+
+/**
+ * A range touching a fall-back day's repeated hour labels its ends with
+ * their UTC offsets, or the two runs of that hour read the same. Interval
+ * formats drop the zone name, so each end is formatted on its own.
+ */
+const createTimeLabels = ({
+  locale,
+  timeZone,
+}: {
+  locale: string;
+  timeZone: string;
+}): TimeLabels => {
+  const options = { hour: "numeric", minute: "2-digit", timeZone } as const;
+  const formatTime = new Intl.DateTimeFormat(locale, options);
+  const formatOffsetTime = new Intl.DateTimeFormat(locale, {
+    ...options,
+    timeZoneName: "shortOffset",
+  });
+  const touchesRepeatedHour = (range: DayCalendarRange) =>
+    isRepeatedWallTime(range.startMs, timeZone) ||
+    isRepeatedWallTime(range.endMs, timeZone);
+  const rangeSeparator = () =>
+    formatTime
+      .formatRangeToParts(SEPARATOR_PROBE.startMs, SEPARATOR_PROBE.endMs)
+      .filter(({ source }) => source === "shared")
+      .map(({ value }) => value)
+      .join("");
+  return {
+    formatRange: (range) =>
+      touchesRepeatedHour(range)
+        ? [
+            formatOffsetTime.format(range.startMs),
+            formatOffsetTime.format(range.endMs),
+          ].join(rangeSeparator())
+        : formatTime.formatRange(range.startMs, range.endMs),
+    formatTime,
+    timeFormatFor: (range) =>
+      touchesRepeatedHour(range) ? formatOffsetTime : formatTime,
+  };
+};
 
 export const DayCalendar = ({
   ariaLabel,
@@ -122,18 +213,22 @@ export const DayCalendar = ({
   timeZone,
 }: DayCalendarProps): ReactElement => {
   assertDayCalendarContract(columns);
-  const [draft, setDraft] = useState<DraftSelection | null>(null);
+  const view = {
+    date,
+    endHour: hours.endHour,
+    granularity,
+    startHour: hours.startHour,
+    timeZone,
+  } satisfies DraftView;
+  const [draft, setDraft] = useDraftSelection(view);
 
   const bounds = getDayBounds({ date, ...hours, timeZone });
   const grid = { granularity, bounds };
   const height = boundsHeight(grid);
-  const formatTime = new Intl.DateTimeFormat(locale, {
-    hour: "numeric",
-    minute: "2-digit",
+  const { formatRange, formatTime, timeFormatFor } = createTimeLabels({
+    locale,
     timeZone,
   });
-  const formatRange = (range: DayCalendarRange) =>
-    formatTime.formatRange(range.startMs, range.endMs);
   const minutesFromStart = (ms: number) =>
     Math.round((ms - bounds.startMs) / 60_000);
   const nowVisible = nowMs >= bounds.startMs && nowMs < bounds.endMs;
@@ -159,6 +254,7 @@ export const DayCalendar = ({
       pointerId: event.pointerId,
       range: rangeFromDrag({ anchorMs, pointerMs: anchorMs }, grid),
       type: "pointer",
+      view,
     });
   };
 
@@ -175,6 +271,7 @@ export const DayCalendar = ({
         grid,
       ),
       type: "pointer",
+      view,
     });
   };
 
@@ -218,6 +315,7 @@ export const DayCalendar = ({
             columnId,
             range: initialKeyboardRange(columnId),
             type: "keyboard",
+            view,
           });
           return;
         }
@@ -227,6 +325,7 @@ export const DayCalendar = ({
             ? extendRange(current.range, slots, grid)
             : moveRange(current.range, slots, grid),
           type: "keyboard",
+          view,
         });
         return;
       }
@@ -365,8 +464,8 @@ export const DayCalendar = ({
                 <RangeOutline
                   committed={columnSelection}
                   draft={columnDraft}
-                  formatTime={formatTime}
                   grid={grid}
+                  timeFormatFor={timeFormatFor}
                 />
               </div>
             ) : null}
@@ -381,8 +480,8 @@ export const DayCalendar = ({
                 <RangeOutline
                   committed={columnSelection}
                   draft={null}
-                  formatTime={formatTime}
                   grid={grid}
+                  timeFormatFor={timeFormatFor}
                 />
               </div>
             ) : null}
@@ -451,6 +550,9 @@ const ColumnBlocks = ({
 /** Below this height a block puts its title and detail on one line. */
 const TWO_LINE_BLOCK_MIN_PX = 40;
 
+/** A brief block paints at least this tall, unless the grid ends sooner. */
+const BLOCK_MIN_PX = 6;
+
 const BLOCK_KIND_CLASSES = {
   entry: "font-medium",
   mixed: "text-muted-foreground",
@@ -474,7 +576,10 @@ const DayCalendarBlockView = ({
   range: DayCalendarRange;
 }) => {
   const top = timeToOffset(range.startMs, grid);
-  const blockSize = Math.max(timeToOffset(range.endMs, grid) - top, 6);
+  const blockSize = Math.min(
+    Math.max(timeToOffset(range.endMs, grid) - top, BLOCK_MIN_PX),
+    boundsHeight(grid) - top,
+  );
   const placement = {
     blockSize,
     inlineSize: `${String(100 / lane.laneCount)}%`,
@@ -544,18 +649,19 @@ function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
 const RangeOutline = ({
   committed,
   draft,
-  formatTime,
   grid,
+  timeFormatFor,
 }: {
   committed: DayCalendarRange | null;
   draft: DayCalendarRange | null;
-  formatTime: Intl.DateTimeFormat;
   grid: GridOptions;
+  timeFormatFor: (range: DayCalendarRange) => Intl.DateTimeFormat;
 }) => {
   const range = draft ?? committed;
   if (range === null) {
     return null;
   }
+  const formatTime = timeFormatFor(range);
   const top = timeToOffset(range.startMs, grid);
 
   return (

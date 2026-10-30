@@ -249,6 +249,120 @@ describe("DayCalendar", () => {
     await cleanup();
   });
 
+  test("a keyboard draft is dropped when the day, grid or hours change", async () => {
+    const { cleanup, container, rerender, selected } = await renderCalendar();
+    const surface = surfaceOf(container, "activity");
+    const outline = () =>
+      container.querySelector('[data-slot="day-calendar-selection"]');
+
+    for (const change of [
+      { date: "2026-10-29" },
+      { granularity: 60 },
+      { hours: { endHour: 20, startHour: 6 } },
+    ] as const satisfies Partial<CalendarProps>[]) {
+      await key(surface, "ArrowDown");
+      expect(outline()).not.toBeNull();
+
+      await rerender(change);
+      expect(outline()).toBeNull();
+      await key(surface, "Enter");
+      // Returning to the original view does not revive the old draft.
+      await rerender({});
+      expect(outline()).toBeNull();
+      await key(surface, "Enter");
+    }
+
+    expect(selected).toEqual([]);
+    await cleanup();
+  });
+
+  test("labels ranges in a fall-back day's repeated hour with their offset", async () => {
+    const hours = { endHour: 6, startHour: 0 };
+    // On 2026-10-25 Prague's 02:00 occurs twice: at 00:00Z (CEST, GMT+2) and
+    // at 01:00Z (CET, GMT+1).
+    const repeatedTwo = Date.UTC(2026, 9, 25, 0);
+    const secondTwo = Date.UTC(2026, 9, 25, 1);
+    const three = Date.UTC(2026, 9, 25, 2);
+    const { cleanup, container, rerender } = await renderCalendar({
+      date: "2026-10-25",
+      granularity: 60,
+      hours,
+    });
+    const surface = surfaceOf(container, "activity");
+    const labelsFor = async (range: DayCalendarRange) => {
+      await rerender({
+        date: "2026-10-25",
+        granularity: 60,
+        hours,
+        selection: { columnId: "activity", range },
+      });
+      return {
+        outline: container.querySelector('[data-slot="day-calendar-selection"]')
+          ?.textContent,
+        valueText: surface.getAttribute("aria-valuetext"),
+      };
+    };
+
+    const first = await labelsFor({ endMs: secondTwo, startMs: repeatedTwo });
+    const second = await labelsFor({ endMs: three, startMs: secondTwo });
+    const after = await labelsFor({
+      endMs: three + 60 * MINUTE_MS,
+      startMs: three,
+    });
+
+    // ICU versions differ in the spacing around the range dash.
+    expect(first.valueText).toMatch(/^02:00 GMT\+2\s*–\s*02:00 GMT\+1$/u);
+    expect(second.valueText).toMatch(/^02:00 GMT\+1\s*–\s*03:00 GMT\+1$/u);
+    expect(first.outline).toBe("02:00 GMT+202:00 GMT+1");
+    expect(second.outline).toBe("02:00 GMT+103:00 GMT+1");
+    // Outside the repeated hour, labels carry no offset.
+    expect(after.valueText).not.toContain("GMT");
+    expect(after.outline).not.toContain("GMT");
+    await cleanup();
+  });
+
+  test("a short block at the day's end stays inside the grid", async () => {
+    const shortBlock = (id: string, startMs: number) =>
+      ({
+        accessibleLabel: id,
+        endMs: startMs + MINUTE_MS,
+        id,
+        kind: "segment",
+        startMs,
+        title: id,
+        tone: { type: "neutral" },
+      }) as const;
+    const { cleanup, container } = await renderCalendar({
+      columns: [
+        {
+          ...activityColumn,
+          blocks: [
+            shortBlock("midday", at(12)),
+            shortBlock("last", at(17, 59)),
+          ],
+        },
+      ],
+    });
+    const wrapperOf = (label: string) => {
+      const wrapper = container.querySelector<HTMLElement>(
+        `[aria-label="${label}"]`,
+      )?.parentElement;
+      return {
+        bottom:
+          Number.parseFloat(wrapper?.style.insetBlockStart ?? "") +
+          Number.parseFloat(wrapper?.style.blockSize ?? ""),
+        size: Number.parseFloat(wrapper?.style.blockSize ?? ""),
+      };
+    };
+    const gridHeight = pixelsAt((HOURS.endHour - HOURS.startHour) * 60, 15);
+
+    // Mid-day, a one-minute block keeps its visible minimum height.
+    expect(wrapperOf("midday").size).toBe(6);
+    expect(wrapperOf("last").bottom).toBeCloseTo(gridHeight, 6);
+    expect(wrapperOf("last").size).toBeLessThan(6);
+    await cleanup();
+  });
+
   test("a column without range selection takes no focus and ignores drags", async () => {
     const { cleanup, container, selected } = await renderCalendar();
     const surface = surfaceOf(container, "entries");

@@ -9,6 +9,7 @@ import {
   getDayBounds,
   getHourTicks,
   granularityMs,
+  isRepeatedWallTime,
   layoutOverlaps,
   mergeShortSegments,
   moveRange,
@@ -111,6 +112,18 @@ describe("day calendar bounds", () => {
         }
       }
     }
+  });
+
+  test("marks only the repeated hour of a fall-back day as repeated", () => {
+    // Prague repeats 02:00-02:59 on 2026-10-25: first at GMT+2, then GMT+1.
+    const utc = (hour: number, minute = 0) =>
+      Date.UTC(2026, 9, 25, hour, minute);
+
+    expect(isRepeatedWallTime(utc(-1, 59), TIME_ZONE)).toBe(false);
+    expect(isRepeatedWallTime(utc(0), TIME_ZONE)).toBe(true);
+    expect(isRepeatedWallTime(utc(1, 59), TIME_ZONE)).toBe(true);
+    expect(isRepeatedWallTime(utc(2), TIME_ZONE)).toBe(false);
+    expect(isRepeatedWallTime(Date.UTC(2026, 2, 29, 1), TIME_ZONE)).toBe(false);
   });
 
   test("rejects hours outside a day", () => {

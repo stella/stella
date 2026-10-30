@@ -74,6 +74,24 @@ export const getDayBounds = ({
   return { endMs: endMs > startMs ? endMs : startMs + HOUR_MS, startMs };
 };
 
+/**
+ * Whether the wall-clock time at `ms` occurs twice in `timeZone`, as in the
+ * repeated hour of a fall-back day; only its UTC offset tells it apart from
+ * its twin. A wall time read from an instant is never in a gap, so the two
+ * resolutions differ only for a repeated one.
+ */
+export const isRepeatedWallTime = (ms: number, timeZone: string): boolean => {
+  const wallTime = Temporal.Instant.fromEpochMilliseconds(ms)
+    .toZonedDateTimeISO(timeZone)
+    .toPlainDateTime();
+  return (
+    wallTime.toZonedDateTime(timeZone, { disambiguation: "earlier" })
+      .epochMilliseconds !==
+    wallTime.toZonedDateTime(timeZone, { disambiguation: "later" })
+      .epochMilliseconds
+  );
+};
+
 /** One instant per elapsed hour from the day's start, for hour labels. */
 export const getHourTicks = (bounds: DayCalendarRange): number[] => {
   const ticks: number[] = [];
