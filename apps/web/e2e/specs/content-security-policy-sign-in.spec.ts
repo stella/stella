@@ -52,7 +52,10 @@ for (const provider of PROVIDERS) {
       expect(route.request().isNavigationRequest()).toBe(true);
       expect(route.request().frame()).toBe(page.mainFrame());
       const target = route.request().url();
-      await route.abort();
+      await route.fulfill({
+        contentType: "text/html",
+        body: "<html><body>Provider navigation received</body></html>",
+      });
       navigationTarget = target;
     });
     await page.goto("/auth", { waitUntil: "domcontentloaded" });
@@ -64,7 +67,8 @@ for (const provider of PROVIDERS) {
     await csp.assertClean();
     await button.click();
     await expect.poll(() => navigationTarget).toBe(provider.url);
+    await page.waitForURL(provider.url, { waitUntil: "load" });
     // The click and the navigation it started report into the collector.
-    csp.assertNoViolations();
+    await csp.assertNoViolations();
   });
 }

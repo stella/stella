@@ -17,6 +17,7 @@ type ContentSecurityPolicyViolation = {
 declare global {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- global Window augmentation requires interface declaration merging
   interface Window {
+    __pendingContentSecurityPolicyViolations: Promise<void>[];
     __recordContentSecurityPolicyViolation: (
       violation: ContentSecurityPolicyViolation,
     ) => Promise<void>;
@@ -109,8 +110,9 @@ export const installContentSecurityPolicyCollector = async (page: Page) => {
     },
   );
   await page.addInitScript(() => {
+    window.__pendingContentSecurityPolicyViolations = [];
     document.addEventListener("securitypolicyviolation", (event) => {
-      void window.__recordContentSecurityPolicyViolation({
+      const delivery = window.__recordContentSecurityPolicyViolation({
         blockedURI: event.blockedURI,
         effectiveDirective: event.effectiveDirective,
         documentURI: event.documentURI,
@@ -118,6 +120,7 @@ export const installContentSecurityPolicyCollector = async (page: Page) => {
         lineNumber: event.lineNumber,
         columnNumber: event.columnNumber,
       });
+      window.__pendingContentSecurityPolicyViolations.push(delivery);
     });
   });
   page.on("response", (response) => {
@@ -136,8 +139,13 @@ export const installContentSecurityPolicyCollector = async (page: Page) => {
       latestDocument = body;
     }
   });
+  const flushViolations = () =>
+    page.evaluate(async () => {
+      await Promise.all(window.__pendingContentSecurityPolicyViolations);
+    });
   return {
     assertClean: async () => {
+      await flushViolations();
       const html = await latestDocument;
       if (html === undefined) {
         throw new TypeError("No enforced document response was captured");
@@ -149,10 +157,9 @@ export const installContentSecurityPolicyCollector = async (page: Page) => {
         scriptNonces,
       });
     },
-    // Reads only what the test process already holds, so it is safe while
-    // the page is leaving its document (a held navigation request), where a
-    // page evaluation can wait for a context that never settles.
-    assertNoViolations: () => {
+    // Call after navigation settles, so the document can acknowledge delivery.
+    assertNoViolations: async () => {
+      await flushViolations();
       expect(violations, "content security policy violations").toEqual([]);
     },
   };

@@ -95,3 +95,48 @@ test("PDF viewer paints its first page without policy violations", async ({
     });
   }
 });
+
+test("CSP assertions await violation delivery from the document", async ({
+  page,
+}) => {
+  const policy = await installContentSecurityPolicyCollector(page);
+  await page.route("**/__csp-collector", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      headers: { "content-security-policy": "script-src 'nonce-collector'" },
+      body: '<script nonce="collector">window.collectorReady = true;</script>',
+    }),
+  );
+  await page.goto("/__csp-collector");
+  await policy.assertClean();
+  await page.evaluate(() => {
+    const report = window.__recordContentSecurityPolicyViolation;
+    window.__recordContentSecurityPolicyViolation = async (violation) => {
+      await new Promise<void>((resolve) => {
+        document.addEventListener("release-csp-delivery", () => resolve(), {
+          once: true,
+        });
+      });
+      await report(violation);
+    };
+    document.dispatchEvent(
+      new SecurityPolicyViolationEvent("securitypolicyviolation", {
+        effectiveDirective: "img-src",
+        blockedURI: "https://image.example.test",
+      }),
+    );
+  });
+  const result = policy.assertClean().then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  // A browser round trip lets the assertion reach its delivery barrier.
+  await page.evaluate(() => true);
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("release-csp-delivery")),
+  );
+  expect(await result).toHaveProperty(
+    "message",
+    expect.stringContaining("content security policy violations"),
+  );
+});

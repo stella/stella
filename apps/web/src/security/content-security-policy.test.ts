@@ -63,6 +63,15 @@ describe("document content security policy", () => {
     }
   });
 
+  test("admits thumbnail requests and their configured storage redirects", () => {
+    const imageDirective = buildContentSecurityPolicy("nonce", environment)
+      .split("; ")
+      .find((directive) => directive.startsWith("img-src "));
+    expect(imageDirective).toBe(
+      "img-src 'self' data: blob: https://lh3.googleusercontent.com https://app.example.test https://documents.s3.eu-west-1.amazonaws.com",
+    );
+  });
+
   test("uses the endpoint origin for path-style self-hosted buckets", () => {
     expect(
       documentsBucketOrigin("https://objects.example.test/storage", "docs"),
