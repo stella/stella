@@ -112,6 +112,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
   "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
   "$TURBO_ROOT$/scripts/guard-rollouts/*.ts",
+  "$TURBO_ROOT$/scripts/guard-rollouts.gen.ts",
   "$TURBO_ROOT$/scripts/guard-rollouts.ts",
   "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",

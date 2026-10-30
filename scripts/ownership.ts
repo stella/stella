@@ -20,7 +20,7 @@ import {
   formattedArtifactsLikeRepository,
   formattedLikeRepository,
 } from "./generated-artifacts.ts";
-import { loadDeclarationDirectory } from "./ownership-loader.ts";
+import { loadOwnershipDeclarations } from "./ownership-loader.ts";
 import type {
   AllowedFile,
   OwnershipEnforcement,
@@ -118,9 +118,8 @@ export const withSchemaIntrospection = (
   };
 };
 
-export const OWNERSHIP = loadDeclarationDirectory<OwnershipEntry>(
+export const OWNERSHIP = loadOwnershipDeclarations(
   new URL("ownership/", import.meta.url),
-  "ownership",
 ).map(withSchemaIntrospection);
 
 export const ROOT_CONNECTION_DOORS = OWNERSHIP.filter(

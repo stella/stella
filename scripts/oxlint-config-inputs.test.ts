@@ -50,19 +50,6 @@ test("every discovered ownership declaration invalidates lint caches", () => {
   ).toBe(true);
 });
 
-test("every discovered guard rollout invalidates lint caches", () => {
-  const sources = readdirSync(path.join(REPO_ROOT, "scripts/guard-rollouts"))
-    .filter((file) => file.endsWith(".ts"))
-    .map((file) => `scripts/guard-rollouts/${file}`);
-  expect(sources.length).toBeGreaterThan(0);
-  expect(
-    [...sources, "scripts/guard-rollouts/new-guard.ts"].filter(
-      (file) =>
-        !OXLINT_CONFIGURATION_CACHE_INPUTS.some((input) => covers(input, file)),
-    ),
-  ).toEqual([]);
-});
-
 const closure = lintModuleClosure(REPO_ROOT);
 
 // A module the lint configs or their plugins load is rule configuration:
