@@ -459,6 +459,16 @@ export const seedSitemapReadBudget = async ({
         'Fixture court', 'xx', i::text, NULL, DATE '2024-01-01'
       FROM generate_series(${first}, ${last}) i`);
   }
+  // A source carries court facet counts, as every served source does; the
+  // coverage read without them is measured in its own profile (coverage.test.ts).
+  await database.execute(
+    sql`DELETE FROM case_law_browse_facet_counts WHERE source_id = ${sourceId}::uuid`,
+  );
+  await database.execute(sql`INSERT INTO case_law_browse_facet_counts
+    (kind, country, source_id, value, total)
+    SELECT 'court', country, source_id, court, count(*)::integer
+    FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
+    GROUP BY country, source_id, court`);
   // Existing shards represent the unrelated, previously refreshed months.
   await database.execute(sql`DELETE FROM case_law_sitemap_shards`);
   await database.execute(sql`INSERT INTO case_law_sitemap_shards
@@ -475,6 +485,7 @@ export const seedSitemapReadBudget = async ({
     SELECT 'XQN', '2024', '01', (2000000 + i)::text::xid8
     FROM generate_series(1, ${scenario.rows}) i`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_shards`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
   const acquired = Promise.withResolvers<undefined>();
