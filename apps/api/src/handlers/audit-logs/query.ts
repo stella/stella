@@ -1,18 +1,19 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, lte, not, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
   API_STORABLE_INSTANT_CHECK,
   apiDateTimeSchema,
 } from "@stll/api-contract/api-date";
+import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
 import { workspaceCheck } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs } from "@/api/db/schema";
+import { auditLogs, auditPeoplePerformerSql } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -73,6 +74,14 @@ export const readAuditLogsQuerySchema = v.object({
   ),
   userId: v.exactOptional(
     withDescription(userIdSchema, "Only entries whose actor is this user"),
+  ),
+  performer: v.exactOptional(
+    v.pipe(
+      v.picklist(Object.values(AUDIT_PERFORMER_FILTER)),
+      v.description(
+        "Only entries performed by people (members and their agents), or only by automations (background services)",
+      ),
+    ),
   ),
   from: v.exactOptional(
     v.pipe(
@@ -141,6 +150,19 @@ export const toAuditLogConditions = ({
   }
   if (filter.userId) {
     conditions.push(eq(auditLogs.userId, filter.userId));
+  }
+  switch (filter.performer) {
+    case undefined:
+      break;
+    case AUDIT_PERFORMER_FILTER.people:
+      conditions.push(auditPeoplePerformerSql(auditLogs.performerType));
+      break;
+    case AUDIT_PERFORMER_FILTER.automations:
+      conditions.push(not(auditPeoplePerformerSql(auditLogs.performerType)));
+      break;
+    default:
+      filter.performer satisfies never;
+      return panic("Unhandled audit performer filter");
   }
   if (filter.from) {
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
@@ -212,6 +234,21 @@ export const validateAuditLogFilter = (
   return null;
 };
 
+/**
+ * The name a reader recognises: the member's name, or the name a background
+ * service declared, before the stored actor id.
+ */
+const auditActorName = (
+  row: Pick<
+    typeof auditLogs.$inferSelect,
+    "userId" | "performerType" | "performerName"
+  >,
+  members: ReadonlyMap<string, string>,
+) =>
+  (row.performerType === "service" ? row.performerName : null) ??
+  members.get(row.userId) ??
+  row.userId;
+
 // Runs the validated compliance-read query. Callers must invoke
 // `validateAuditLogFilter` first; this only builds the org-scoped conditions,
 // applies the keyset order, and pages the result. Kept transport-agnostic so
@@ -244,6 +281,8 @@ export const queryAuditLogPage = async function* ({
           id: auditLogs.id,
           createdAt: auditLogs.createdAt,
           userId: auditLogs.userId,
+          performerType: auditLogs.performerType,
+          performerName: auditLogs.performerName,
           action: auditLogs.action,
           resourceType: auditLogs.resourceType,
           resourceId: auditLogs.resourceId,
@@ -303,7 +342,8 @@ export const queryAuditLogPage = async function* ({
           }),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
-          actor: userMap.get(row.userId) ?? row.userId,
+          performerType: row.performerType,
+          actor: auditActorName(row, userMap),
         });
       }
       return rowsWithActors;

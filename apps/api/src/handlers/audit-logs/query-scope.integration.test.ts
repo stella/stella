@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, workspaces } from "@/api/db/schema";
@@ -21,6 +23,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -278,6 +281,64 @@ describe("audit log compliance filter", () => {
     for (const item of page.items) {
       expect(item.actor).not.toContain("User B1");
       expect(item.actor).not.toContain(`${ids.userB1}@test.local`);
+    }
+  });
+
+  test("the performer filter separates people from background services, and services read by name", async () => {
+    const actor = TENANT_SYSTEM_ACTOR.sanctionsMonitoringBackfill;
+    const resourceId = Bun.randomUUIDv7();
+    await createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: null,
+      userId: actor,
+      execution: {
+        performer: {
+          type: "service",
+          id: actor,
+          name: "Sanctions monitoring backfill",
+        },
+        trigger: { type: "system", source: actor },
+      },
+    })(asTestRaw<Transaction>(testDb), {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
+      resourceId,
+      changes: { status: { old: "completed", new: "pending" } },
+    });
+    const [serviceRow] = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, resourceId));
+    const serviceRowId =
+      serviceRow?.id ?? panic("service fixture wrote no row");
+
+    try {
+      const ofInterest = (items: readonly { id: SafeId<"auditLog"> }[]) =>
+        items
+          .map((item) => item.id)
+          .filter((id) => id === serviceRowId || id === rowOrganizationLevel);
+
+      const people = await readPage({
+        performer: AUDIT_PERFORMER_FILTER.people,
+      });
+      expect(ofInterest(people.items)).toEqual([rowOrganizationLevel]);
+
+      const automations = await readPage({
+        performer: AUDIT_PERFORMER_FILTER.automations,
+      });
+      expect(ofInterest(automations.items)).toEqual([serviceRowId]);
+      const service = automations.items.find(
+        (item) => item.id === serviceRowId,
+      );
+      expect(service?.actor).toBe("Sanctions monitoring backfill");
+      expect(service?.performerType).toBe("service");
+
+      const everyone = await readPage({});
+      expect(ofInterest(everyone.items).toSorted()).toEqual(
+        [serviceRowId, rowOrganizationLevel].toSorted(),
+      );
+    } finally {
+      await testDb.delete(auditLogs).where(eq(auditLogs.id, serviceRowId));
     }
   });
 });

@@ -775,6 +775,16 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "search_history_entries_owner_country_recent_idx",
     tableName: "search_history_entries",
   },
+  {
+    introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
+    createSql:
+      'CREATE INDEX CONCURRENTLY "audit_logs_org_people_created_id_idx" ON public."audit_logs" USING btree ("organization_id", "created_at", "id") WHERE "performer_type" <> \'service\'',
+    definitionBody:
+      "ON public.audit_logs USING btree (organization_id, created_at, id) WHERE (performer_type <> 'service'::text)",
+    isUnique: false,
+    name: "audit_logs_org_people_created_id_idx",
+    tableName: "audit_logs",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 

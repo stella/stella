@@ -62,6 +62,8 @@ const exportAuditLogs = createSafeRootHandler(
             .select({
               createdAt: auditLogs.createdAt,
               userId: auditLogs.userId,
+              performerType: auditLogs.performerType,
+              performerName: auditLogs.performerName,
               action: auditLogs.action,
               resourceType: auditLogs.resourceType,
               resourceId: auditLogs.resourceId,
@@ -146,7 +148,10 @@ const exportAuditLogs = createSafeRootHandler(
 
     for (const row of exportResult.rows) {
       const u = row.userId ? userMap.get(row.userId) : undefined;
-      const userName = u?.name ?? "";
+      const userName =
+        (row.performerType === "service" ? row.performerName : null) ??
+        u?.name ??
+        "";
       const userEmail = u?.email ?? "";
       const details = projectAuditReadChanges({
         resourceType: row.resourceType,

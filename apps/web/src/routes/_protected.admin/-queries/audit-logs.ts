@@ -1,5 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import type { AuditPerformerFilter } from "@stll/api-contract/audit-log";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
@@ -10,6 +12,7 @@ export type AuditLogsPageKey = {
   resourceType?: string | undefined;
   resourceId?: string | undefined;
   userId?: string | undefined;
+  performer?: AuditPerformerFilter | undefined;
   from?: string | undefined;
   to?: string | undefined;
   toExclusive?: string | undefined;
@@ -37,6 +40,7 @@ const auditLogKeys = {
         resourceType: key.resourceType,
         resourceId: key.resourceId,
         userId: key.userId,
+        performer: key.performer,
         from: key.from,
         to: key.to,
         toExclusive: key.toExclusive,
@@ -73,6 +77,9 @@ export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
   }
   if (query.userId !== undefined) {
     cleanedQuery.userId = query.userId;
+  }
+  if (query.performer !== undefined) {
+    cleanedQuery.performer = query.performer;
   }
   if (query.from !== undefined) {
     cleanedQuery.from = query.from;
