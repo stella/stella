@@ -2968,7 +2968,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Matter reference (file number). Only valid when updating."
+          "description": "Matter reference (file number)"
         },
         "billing_reference": {
           "anyOf": [
@@ -2980,7 +2980,7 @@
               "type": "null"
             }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating."
+          "description": "Billing reference; pass null to clear"
         },
         "status": {
           "enum": ["active", "archived"],
@@ -3088,6 +3088,451 @@
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "middle_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "emails": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": ["work", "personal", "other"],
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "isPrimary": {
+                    "type": "boolean"
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                },
+                "required": ["type", "address", "isPrimary"]
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phones": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": ["mobile", "office", "home", "fax", "other"],
+                    "type": "string"
+                  },
+                  "number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "isPrimary": {
+                    "type": "boolean"
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                },
+                "required": ["type", "number", "isPrimary"]
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "addresses": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "office",
+                      "mailing",
+                      "billing",
+                      "service",
+                      "home",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "line1": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "line2": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "state": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "postalCode": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "country": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "isPrimary": {
+                    "type": "boolean"
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                },
+                "required": ["type", "line1", "isPrimary"]
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "dataBoxes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9]{7}$"
+                      },
+                      "isPrimary": {
+                        "type": "boolean"
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 128
+                      }
+                    },
+                    "required": ["id", "isPrimary"]
+                  },
+                  "maxItems": 20
+                },
+                "customFields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": ["id", "label", "value"]
+                  },
+                  "maxItems": 50
+                }
+              },
+              "required": []
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registration_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tax_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vat_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vat_payer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bank_accounts": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iban": {
+                    "type": "string",
+                    "maxLength": 34
+                  },
+                  "bic": {
+                    "type": "string",
+                    "maxLength": 11
+                  },
+                  "accountNumber": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "bankName": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "pattern": "^[A-Za-z]{3}$"
+                  }
+                },
+                "required": []
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "billing_address": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "line1": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "line2": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "city": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "postalCode": {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                "country": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              },
+              "required": []
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default_hourly_rate": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "payment_term_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 365
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invoice_language": {
+          "anyOf": [
+            {
+              "enum": [
+                "ar",
+                "cs",
+                "de",
+                "en",
+                "es",
+                "et",
+                "fr",
+                "hu",
+                "lt",
+                "lv",
+                "pl",
+                "pt-BR",
+                "sk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "originating_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responsible_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "contact_id": {
           "type": "string",
           "format": "uuid",
@@ -3690,7 +4135,7 @@
       "scope": "matters_write"
     },
     "name": "save_task",
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (assignee / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -3737,7 +4182,7 @@
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -3747,7 +4192,7 @@
               "type": "null"
             }
           ],
-          "description": "List item description; pass null to clear"
+          "description": "Task description; pass null to clear"
         },
         "due_date": {
           "anyOf": [
@@ -3768,10 +4213,11 @@
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
-          "description": "User ID to assign to the task (must be a matter member)"
+          "maxLength": 320,
+          "description": "Organization member user ID or email to assign"
         },
         "remove_assignee_user_id": {
           "type": "string",

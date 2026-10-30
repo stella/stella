@@ -61,6 +61,10 @@ const createWorkspaceBodySchema = v.object({
   ),
   name: withDescription(defaultVarcharSchema, "Matter name"),
   filePropertyName: defaultVarcharSchema,
+  reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
+  billingReference: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(128))),
+  ),
 });
 
 const config = {
@@ -221,7 +225,7 @@ export const createWorkspaceHandler = async function* ({
       if (Result.isError(referenceResult)) {
         return Result.err(referenceResult.error);
       }
-      const reference = referenceResult.value;
+      const reference = body.reference ?? referenceResult.value;
 
       // The database creates the matter in this transaction's organization
       // and, when the creator would not reach it otherwise, assigns them, so
@@ -231,6 +235,9 @@ export const createWorkspaceHandler = async function* ({
         clientId: body.clientId ?? null,
         name: newName,
         reference,
+        ...(body.billingReference === undefined
+          ? {}
+          : { billingReference: body.billingReference }),
       });
 
       const workspaceId = body.id;

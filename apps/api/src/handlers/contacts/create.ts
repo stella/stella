@@ -2,40 +2,24 @@ import { panic, Result } from "better-result";
 import { count, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+import { contactCreateFieldsSchema } from "@stll/api-contract/contact-write";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
-import {
-  bankAccountSchema,
-  billingAddressSchema,
-  contactAddressSchema,
-  contactEmailSchema,
-  contactMetadataSchema,
-  contactPhoneSchema,
-} from "@/api/db/schema-validators";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthToColumns,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
-import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
 import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
-import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
-import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import {
-  invoiceLanguageSchema,
-  minorUnitAmountSchema,
-  resourceIdSchema,
-  userIdSchema,
-} from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -47,43 +31,7 @@ import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 export const createContactBodySchema = v.object({
   id: resourceIdSchema("contact"),
-  type: createContactTypeSchema,
-  prefix: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  firstName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  middleName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  lastName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  suffix: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  dateOfBirth: v.optional(dateOfBirthSchema),
-  nationalityCodes: v.optional(nationalityCodesSchema),
-  organizationName: v.optional(v.pipe(v.string(), v.maxLength(512))),
-  displayName: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
-  notes: v.optional(v.string()),
-  emails: v.optional(v.pipe(v.array(contactEmailSchema), v.maxLength(20))),
-  phones: v.optional(v.pipe(v.array(contactPhoneSchema), v.maxLength(20))),
-  addresses: v.optional(v.pipe(v.array(contactAddressSchema), v.maxLength(10))),
-  metadata: v.optional(contactMetadataSchema),
-  tags: v.optional(v.pipe(v.array(v.string()), v.maxLength(50))),
-  color: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  registrationNumber: v.optional(
-    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
-  ),
-  taxId: v.optional(
-    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
-  ),
-  vatId: v.optional(
-    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
-  ),
-  vatPayer: v.optional(v.nullable(v.boolean())),
-  bankAccounts: v.optional(v.pipe(v.array(bankAccountSchema), v.maxLength(10))),
-  billingAddress: v.optional(billingAddressSchema),
-  defaultHourlyRate: v.optional(minorUnitAmountSchema(0)),
-  currency: v.optional(v.pipe(v.string(), v.minLength(3), v.maxLength(3))),
-  paymentTermDays: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(365)),
-  ),
-  invoiceLanguage: v.optional(v.nullable(invoiceLanguageSchema)),
-  originatingAttorneyId: v.optional(userIdSchema),
-  responsibleAttorneyId: v.optional(userIdSchema),
+  ...contactCreateFieldsSchema.entries,
 });
 
 export type CreateContactBody = v.InferOutput<typeof createContactBodySchema>;

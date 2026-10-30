@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { and, eq, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
@@ -11,8 +12,14 @@ import {
 } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
+import { updateContactBodySchema } from "@stll/api-contract/contact-write";
+import {
+  organizationMemberSelectorSchema,
+  taskDescriptionSchema,
+} from "@stll/api-contract/task-write";
 import { isCountryCode } from "@stll/country-codes";
 
+import { member, user } from "@/api/db/auth-schema";
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
@@ -23,7 +30,6 @@ import {
 import { validatePersonDetails } from "@/api/handlers/contacts/person-details";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
-import { addAssigneeHandler } from "@/api/handlers/tasks/assignees/add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees/remove";
 import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links/create";
 import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links/delete";
@@ -298,17 +304,13 @@ const saveMatterArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(64),
-          v.description(
-            "Matter reference (file number). Only valid when updating.",
-          ),
+          v.description("Matter reference (file number)"),
         ),
       ),
       billing_reference: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(128))),
-          v.description(
-            "Billing reference; pass null to clear. Only valid when updating.",
-          ),
+          v.description("Billing reference; pass null to clear"),
         ),
       ),
       status: v.optional(
@@ -329,15 +331,12 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       ["name"],
     ),
-    // reference, billing_reference and status apply to an existing matter.
+    // status applies to an existing matter.
     v.partialCheck(
-      [["matter_id"], ["reference"], ["billing_reference"], ["status"]],
-      ({ matter_id, reference, billing_reference, status }) =>
-        matter_id !== undefined ||
-        (reference === undefined &&
-          billing_reference === undefined &&
-          status === undefined),
-      "reference, billing_reference, and status apply to an existing matter; pass matter_id",
+      [["matter_id"], ["status"]],
+      ({ matter_id, status }) =>
+        matter_id !== undefined || status === undefined,
+      "status applies to an existing matter; pass matter_id",
     ),
     // An update must request at least one change.
     v.partialCheck(
@@ -409,6 +408,12 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.client_id === undefined
             ? {}
             : { clientId: brandPersistedContactId(input.client_id) }),
+          ...(input.reference === undefined
+            ? {}
+            : { reference: input.reference }),
+          ...(input.billing_reference === undefined
+            ? {}
+            : { billingReference: input.billing_reference }),
         },
       }),
     );
@@ -674,6 +679,32 @@ const handleListContactsTool: TypedMcpToolHandler<
  */
 const dateOfBirthInputSchema = contactBirthDateSchema;
 
+const CONTACT_SAVE_FIELD_SCHEMAS = {
+  prefix: updateContactBodySchema.entries.prefix,
+  middle_name: updateContactBodySchema.entries.middleName,
+  suffix: updateContactBodySchema.entries.suffix,
+  emails: updateContactBodySchema.entries.emails,
+  phones: updateContactBodySchema.entries.phones,
+  addresses: updateContactBodySchema.entries.addresses,
+  metadata: updateContactBodySchema.entries.metadata,
+  tags: updateContactBodySchema.entries.tags,
+  color: updateContactBodySchema.entries.color,
+  registration_number: updateContactBodySchema.entries.registrationNumber,
+  tax_id: updateContactBodySchema.entries.taxId,
+  vat_id: updateContactBodySchema.entries.vatId,
+  vat_payer: updateContactBodySchema.entries.vatPayer,
+  bank_accounts: updateContactBodySchema.entries.bankAccounts,
+  billing_address: updateContactBodySchema.entries.billingAddress,
+  default_hourly_rate: updateContactBodySchema.entries.defaultHourlyRate,
+  currency: updateContactBodySchema.entries.currency,
+  payment_term_days: updateContactBodySchema.entries.paymentTermDays,
+  invoice_language: updateContactBodySchema.entries.invoiceLanguage,
+  originating_attorney_id:
+    updateContactBodySchema.entries.originatingAttorneyId,
+  responsible_attorney_id:
+    updateContactBodySchema.entries.responsibleAttorneyId,
+} as const;
+
 type ContactNameParts = {
   display_name?: string | undefined;
   first_name?: string | null | undefined;
@@ -714,6 +745,7 @@ export const deriveContactDisplayName = ({
 const saveContactArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
+      ...CONTACT_SAVE_FIELD_SCHEMAS,
       contact_id: v.optional(
         uuidInputSchema("Contact ID to update; omit to create"),
       ),
@@ -802,33 +834,160 @@ const saveContactArgsSchema = nullAsAbsent(
       ),
       ["display_name"],
     ),
-    // An update must request at least one change.
-    v.partialCheck(
-      [
-        ["contact_id"],
-        ["type"],
-        ["display_name"],
-        ["first_name"],
-        ["last_name"],
-        ["organization_name"],
-        ["notes"],
-        ["date_of_birth"],
-        ["nationality_codes"],
-      ],
-      (i) =>
-        i.contact_id === undefined ||
-        i.type !== undefined ||
-        i.display_name !== undefined ||
-        i.first_name !== undefined ||
-        i.last_name !== undefined ||
-        i.organization_name !== undefined ||
-        i.notes !== undefined ||
-        i.date_of_birth !== undefined ||
-        i.nationality_codes !== undefined,
-      "Provide at least one field to change",
-    ),
   ),
 );
+
+type SaveContactInput = v.InferOutput<typeof saveContactArgsSchema>;
+
+const projectBillingContactCreateFields = (input: SaveContactInput) => ({
+  ...(input.vat_payer === undefined ? {} : { vatPayer: input.vat_payer }),
+  ...(input.bank_accounts === undefined || input.bank_accounts === null
+    ? {}
+    : { bankAccounts: input.bank_accounts }),
+  ...(input.billing_address === undefined || input.billing_address === null
+    ? {}
+    : { billingAddress: input.billing_address }),
+  ...(input.default_hourly_rate === undefined ||
+  input.default_hourly_rate === null
+    ? {}
+    : { defaultHourlyRate: input.default_hourly_rate }),
+  ...(input.currency === undefined || input.currency === null
+    ? {}
+    : { currency: input.currency }),
+  ...(input.payment_term_days === undefined || input.payment_term_days === null
+    ? {}
+    : { paymentTermDays: input.payment_term_days }),
+  ...(input.invoice_language === undefined
+    ? {}
+    : { invoiceLanguage: input.invoice_language }),
+  ...(input.originating_attorney_id === undefined ||
+  input.originating_attorney_id === null
+    ? {}
+    : { originatingAttorneyId: input.originating_attorney_id }),
+  ...(input.responsible_attorney_id === undefined ||
+  input.responsible_attorney_id === null
+    ? {}
+    : { responsibleAttorneyId: input.responsible_attorney_id }),
+});
+
+const projectAdditionalContactCreateFields = (input: SaveContactInput) => ({
+  ...(input.prefix === undefined || input.prefix === null
+    ? {}
+    : { prefix: input.prefix }),
+  ...(input.middle_name === undefined || input.middle_name === null
+    ? {}
+    : { middleName: input.middle_name }),
+  ...(input.suffix === undefined || input.suffix === null
+    ? {}
+    : { suffix: input.suffix }),
+  ...(input.emails === undefined || input.emails === null
+    ? {}
+    : { emails: input.emails }),
+  ...(input.phones === undefined || input.phones === null
+    ? {}
+    : { phones: input.phones }),
+  ...(input.addresses === undefined || input.addresses === null
+    ? {}
+    : { addresses: input.addresses }),
+  ...(input.metadata === undefined || input.metadata === null
+    ? {}
+    : { metadata: input.metadata }),
+  ...(input.tags === undefined || input.tags === null
+    ? {}
+    : { tags: input.tags }),
+  ...(input.color === undefined || input.color === null
+    ? {}
+    : { color: input.color }),
+  ...(input.registration_number === undefined ||
+  input.registration_number === null
+    ? {}
+    : { registrationNumber: input.registration_number }),
+  ...(input.tax_id === undefined || input.tax_id === null
+    ? {}
+    : { taxId: input.tax_id }),
+  ...(input.vat_id === undefined || input.vat_id === null
+    ? {}
+    : { vatId: input.vat_id }),
+  ...projectBillingContactCreateFields(input),
+});
+
+const projectContactCreateFields = (input: SaveContactInput) => ({
+  ...(input.first_name === undefined || input.first_name === null
+    ? {}
+    : { firstName: input.first_name }),
+  ...(input.last_name === undefined || input.last_name === null
+    ? {}
+    : { lastName: input.last_name }),
+  ...(input.organization_name === undefined || input.organization_name === null
+    ? {}
+    : { organizationName: input.organization_name }),
+  ...(input.notes === undefined || input.notes === null
+    ? {}
+    : { notes: input.notes }),
+  ...(input.date_of_birth === null || input.date_of_birth === undefined
+    ? {}
+    : { dateOfBirth: input.date_of_birth }),
+  ...(input.nationality_codes === undefined
+    ? {}
+    : { nationalityCodes: input.nationality_codes }),
+  ...projectAdditionalContactCreateFields(input),
+});
+
+const projectContactUpdateFields = (input: SaveContactInput) => ({
+  ...(input.type === undefined ? {} : { type: input.type }),
+  ...(input.display_name === undefined
+    ? {}
+    : { displayName: input.display_name }),
+  ...(input.first_name === undefined ? {} : { firstName: input.first_name }),
+  ...(input.last_name === undefined ? {} : { lastName: input.last_name }),
+  ...(input.organization_name === undefined
+    ? {}
+    : { organizationName: input.organization_name }),
+  ...(input.notes === undefined ? {} : { notes: input.notes }),
+  ...(input.date_of_birth === undefined
+    ? {}
+    : { dateOfBirth: input.date_of_birth }),
+  ...(input.nationality_codes === undefined
+    ? {}
+    : { nationalityCodes: input.nationality_codes }),
+  ...(input.prefix === undefined ? {} : { prefix: input.prefix }),
+  ...(input.middle_name === undefined ? {} : { middleName: input.middle_name }),
+  ...(input.suffix === undefined ? {} : { suffix: input.suffix }),
+  ...(input.emails === undefined ? {} : { emails: input.emails }),
+  ...(input.phones === undefined ? {} : { phones: input.phones }),
+  ...(input.addresses === undefined ? {} : { addresses: input.addresses }),
+  ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
+  ...(input.tags === undefined ? {} : { tags: input.tags }),
+  ...(input.color === undefined ? {} : { color: input.color }),
+  ...(input.registration_number === undefined
+    ? {}
+    : { registrationNumber: input.registration_number }),
+  ...(input.tax_id === undefined ? {} : { taxId: input.tax_id }),
+  ...(input.vat_id === undefined ? {} : { vatId: input.vat_id }),
+  ...(input.vat_payer === undefined ? {} : { vatPayer: input.vat_payer }),
+  ...(input.bank_accounts === undefined
+    ? {}
+    : { bankAccounts: input.bank_accounts }),
+  ...(input.billing_address === undefined
+    ? {}
+    : { billingAddress: input.billing_address }),
+  ...(input.default_hourly_rate === undefined
+    ? {}
+    : { defaultHourlyRate: input.default_hourly_rate }),
+  ...(input.currency === undefined ? {} : { currency: input.currency }),
+  ...(input.payment_term_days === undefined
+    ? {}
+    : { paymentTermDays: input.payment_term_days }),
+  ...(input.invoice_language === undefined
+    ? {}
+    : { invoiceLanguage: input.invoice_language }),
+  ...(input.originating_attorney_id === undefined
+    ? {}
+    : { originatingAttorneyId: input.originating_attorney_id }),
+  ...(input.responsible_attorney_id === undefined
+    ? {}
+    : { responsibleAttorneyId: input.responsible_attorney_id }),
+});
 
 const handleSaveContactTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_CONTACT_PROJECTION>
@@ -872,25 +1031,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
           id: createSafeId<"contact">(),
           type,
           displayName,
-          ...(input.first_name === undefined || input.first_name === null
-            ? {}
-            : { firstName: input.first_name }),
-          ...(input.last_name === undefined || input.last_name === null
-            ? {}
-            : { lastName: input.last_name }),
-          ...(input.organization_name === undefined ||
-          input.organization_name === null
-            ? {}
-            : { organizationName: input.organization_name }),
-          ...(input.notes === undefined || input.notes === null
-            ? {}
-            : { notes: input.notes }),
-          ...(input.date_of_birth === null || input.date_of_birth === undefined
-            ? {}
-            : { dateOfBirth: input.date_of_birth }),
-          ...(input.nationality_codes === undefined
-            ? {}
-            : { nationalityCodes: input.nationality_codes }),
+          ...projectContactCreateFields(input),
         },
       }),
     );
@@ -919,24 +1060,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
       contactId,
       recordAuditEvent: context.recordAuditEvent,
       body: {
-        ...(input.type === undefined ? {} : { type: input.type }),
-        ...(input.display_name === undefined
-          ? {}
-          : { displayName: input.display_name }),
-        ...(input.first_name === undefined
-          ? {}
-          : { firstName: input.first_name }),
-        ...(input.last_name === undefined ? {} : { lastName: input.last_name }),
-        ...(input.organization_name === undefined
-          ? {}
-          : { organizationName: input.organization_name }),
-        ...(input.notes === undefined ? {} : { notes: input.notes }),
-        ...(input.date_of_birth === undefined
-          ? {}
-          : { dateOfBirth: input.date_of_birth }),
-        ...(input.nationality_codes === undefined
-          ? {}
-          : { nationalityCodes: input.nationality_codes }),
+        ...projectContactUpdateFields(input),
       },
     }),
   );
@@ -1676,10 +1800,10 @@ const saveTaskArgsSchema = nullAsAbsent(
           "Section of list_id to create the item under (creating only)",
         ),
       ),
-      list_description: v.optional(
+      description: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
-          v.description("List item description; pass null to clear"),
+          taskDescriptionSchema,
+          v.description("Task description; pass null to clear"),
         ),
       ),
       due_date: v.optional(
@@ -1697,13 +1821,10 @@ const saveTaskArgsSchema = nullAsAbsent(
           v.description("Reason for a governed status or deadline change"),
         ),
       ),
-      add_assignee_user_id: v.optional(
+      assignee: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description(
-            "User ID to assign to the task (must be a matter member)",
-          ),
+          organizationMemberSelectorSchema,
+          v.description("Organization member user ID or email to assign"),
         ),
       ),
       remove_assignee_user_id: v.optional(
@@ -1738,11 +1859,17 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       ["name"],
     ),
+    v.partialCheck(
+      [["task_id"], ["description"]],
+      ({ task_id, description }) =>
+        task_id === undefined || description === undefined,
+      "description applies when creating",
+    ),
     // Assignee/link operations and matter_id only apply to an existing task.
     v.partialCheck(
       [
         ["task_id"],
-        ["add_assignee_user_id"],
+        ["assignee"],
         ["remove_assignee_user_id"],
         ["link_entity_id"],
         ["unlink_link_id"],
@@ -1750,8 +1877,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ],
       (i) =>
         i.task_id !== undefined ||
-        (i.add_assignee_user_id === undefined &&
-          i.remove_assignee_user_id === undefined &&
+        (i.remove_assignee_user_id === undefined &&
           i.link_entity_id === undefined &&
           i.unlink_link_id === undefined),
       "assignee and link changes require task_id (they apply to an existing task)",
@@ -1774,7 +1900,7 @@ const saveTaskArgsSchema = nullAsAbsent(
         ["item_type"],
         ["due_date"],
         ["workflow_reason"],
-        ["add_assignee_user_id"],
+        ["assignee"],
         ["remove_assignee_user_id"],
         ["link_entity_id"],
         ["unlink_link_id"],
@@ -1786,7 +1912,7 @@ const saveTaskArgsSchema = nullAsAbsent(
         i.priority !== undefined ||
         i.item_type !== undefined ||
         i.due_date !== undefined ||
-        i.add_assignee_user_id !== undefined ||
+        i.assignee !== undefined ||
         i.remove_assignee_user_id !== undefined ||
         i.link_entity_id !== undefined ||
         i.unlink_link_id !== undefined,
@@ -1794,6 +1920,26 @@ const saveTaskArgsSchema = nullAsAbsent(
     ),
   ),
 );
+
+const resolveOrganizationMember = async (
+  context: McpRequestResources,
+  selector: string,
+): Promise<string | null> => {
+  const row = await context.scopedDb((tx) =>
+    tx
+      .select({ userId: member.userId })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(
+        and(
+          eq(member.organizationId, context.organizationId),
+          or(eq(member.userId, selector), eq(user.email, selector)),
+        ),
+      )
+      .limit(1),
+  );
+  return row.at(0)?.userId ?? null;
+};
 
 /**
  * Validate a save_task link_entity_id target: not the task itself, exists in
@@ -1936,7 +2082,6 @@ const validateSaveTaskTargets = async ({
   // are validated atomically inside updateTaskHandler itself, so they do not
   // need a duplicate check here.
   if (
-    input.add_assignee_user_id !== undefined ||
     input.remove_assignee_user_id !== undefined ||
     input.link_entity_id !== undefined ||
     input.unlink_link_id !== undefined
@@ -1961,19 +2106,6 @@ const validateSaveTaskTargets = async ({
     });
     if (linkError) {
       return linkError;
-    }
-  }
-
-  if (input.add_assignee_user_id !== undefined) {
-    const userId = brandPersistedUserId(input.add_assignee_user_id);
-    const member = await context.scopedDb((tx) =>
-      tx.query.workspaceMembers.findFirst({
-        where: { workspaceId: { eq: workspaceId }, userId: { eq: userId } },
-        columns: { id: true },
-      }),
-    );
-    if (!member) {
-      return errorResult("add_assignee_user_id is not a member of this matter");
     }
   }
 
@@ -2015,6 +2147,13 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     if (typeof workspaceId !== "string") {
       return workspaceId;
     }
+    const assigneeUserId =
+      input.assignee === undefined
+        ? null
+        : await resolveOrganizationMember(context, input.assignee);
+    if (input.assignee !== undefined && assigneeUserId === null) {
+      return notFoundResult("Organization member not found for assignee");
+    }
     const created = await Result.gen(() =>
       createTaskEntityHandler({
         safeDb: context.safeDb,
@@ -2039,9 +2178,12 @@ const handleSaveTaskTool: TypedMcpToolHandler<
                   input.list_section_id,
                 ),
               }),
-          ...(input.list_description === undefined
+          ...(input.description === undefined
             ? {}
-            : { listDescription: input.list_description }),
+            : { listDescription: input.description }),
+          ...(assigneeUserId === null
+            ? {}
+            : { assigneeIds: [brandPersistedUserId(assigneeUserId)] }),
         },
       }),
     );
@@ -2119,24 +2261,6 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       return internalFailureResult(
         updated.error,
         "mcp.handleSaveTaskTool.updated_error",
-      );
-    }
-  }
-
-  if (input.add_assignee_user_id !== undefined) {
-    const userId = brandPersistedUserId(input.add_assignee_user_id);
-    const added = await Result.gen(() =>
-      addAssigneeHandler({
-        safeDb: context.safeDb,
-        workspaceId,
-        recordAuditEvent,
-        body: { taskId, userId },
-      }),
-    );
-    if (Result.isError(added)) {
-      return internalFailureResult(
-        added.error,
-        "mcp.handleSaveTaskTool.added_error",
       );
     }
   }
@@ -2700,7 +2824,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "Omit task_id to create a task (matter_id and name required). Pass " +
       "task_id to update: set name, item_type, status, priority, or due_date (ISO " +
       "YYYY-MM-DD, null to clear); add or remove one assignee " +
-      "(add_assignee_user_id / remove_assignee_user_id); link the task to " +
+      "(assignee / remove_assignee_user_id); link the task to " +
       "another entity (link_entity_id) or remove a link (unlink_link_id). " +
       "Returns the task ID.",
     featureInput: {

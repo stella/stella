@@ -473,9 +473,9 @@
       "name": "save_contact",
       "nameChars": 12,
       "descriptionChars": 303,
-      "inputSchemaChars": 2200,
-      "totalChars": 2515,
-      "estimatedTokens": 1022
+      "inputSchemaChars": 6091,
+      "totalChars": 6406,
+      "estimatedTokens": 2643
     },
     {
       "name": "save_document",
@@ -497,9 +497,9 @@
       "name": "save_matter",
       "nameChars": 11,
       "descriptionChars": 328,
-      "inputSchemaChars": 962,
-      "totalChars": 1301,
-      "estimatedTokens": 514
+      "inputSchemaChars": 908,
+      "totalChars": 1247,
+      "estimatedTokens": 492
     },
     {
       "name": "save_playbook",
@@ -512,10 +512,10 @@
     {
       "name": "save_task",
       "nameChars": 9,
-      "descriptionChars": 418,
-      "inputSchemaChars": 1867,
-      "totalChars": 2294,
-      "estimatedTokens": 921
+      "descriptionChars": 406,
+      "inputSchemaChars": 1852,
+      "totalChars": 2267,
+      "estimatedTokens": 911
     },
     {
       "name": "save_time_entry",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127396,
-    "estimatedTokens": 50508
+    "characters": 131206,
+    "estimatedTokens": 52097
   }
 }
