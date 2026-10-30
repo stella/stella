@@ -45,6 +45,7 @@ import {
   invoices,
   organizationSettings,
   pdfSigningSessions,
+  requestIdempotencyReceipts,
   timeEntries,
   workspaceMembers,
   workspaces,
@@ -65,6 +66,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
+  requestReceipt: { rank: -10, kind: "row" },
   account: { rank: -20, kind: "row" },
   accountExport: { rank: -10, kind: "row" },
   accountDeletionRequest: { rank: -10, kind: "row" },
@@ -165,6 +167,7 @@ export const lockInvoiceRepairBatch = async ({
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
+  requestReceipt: ["requestReceipt", "organization", "workspace", "entity"],
   existing: [
     "organization",
     "workspace",
@@ -294,6 +297,11 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  requestReceipt: {
+    id: SafeId<"requestIdempotencyReceipt">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   legislationAmendmentWork: {
     sourceId: SafeId<"legislationSource">;
     eli: string;
@@ -689,13 +697,42 @@ const retainLock = (history: LockHistory, lock: HeldLock): void => {
   );
 };
 
+const AGGREGATE_SAVEPOINT_PARENT: unique symbol = Symbol(
+  "stella.aggregateSavepointParent",
+);
+const aggregateSavepointDatabases = new WeakSet<object>();
+
+type AggregateDatabase<Tx extends object> = {
+  transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+  readonly [AGGREGATE_SAVEPOINT_PARENT]?: {
+    transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+  };
+};
+
+/** Lend transaction-owning operations a tracked savepoint of an existing transaction. */
+export const createAggregateSavepointDatabase = <Tx extends object>(parent: {
+  transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+}) => {
+  const database = {
+    [AGGREGATE_SAVEPOINT_PARENT]: parent,
+    transaction: async <Value>(run: (tx: Tx) => Promise<Value>) =>
+      await withAggregateSavepoint(parent, run),
+  };
+  aggregateSavepointDatabases.add(database);
+  return database;
+};
+
 /** A fresh physical transaction owns a fresh history, including failure/commit cleanup. */
 export const withAggregateTransaction = async <Tx extends object, T>(
-  database: {
-    transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
-  },
+  database: AggregateDatabase<Tx>,
   run: (tx: Tx) => Promise<T>,
 ): Promise<T> => {
+  if (aggregateSavepointDatabases.has(database)) {
+    const parent =
+      database[AGGREGATE_SAVEPOINT_PARENT] ??
+      panic("Owned savepoint database requires its parent");
+    return await withAggregateSavepoint(parent, run);
+  }
   if (histories.has(database) || "rollback" in database) {
     panic("Use the aggregate savepoint owner for nested transactions");
   }
@@ -717,19 +754,21 @@ type SkipLockedBatchOptions<Tx extends object, Row, T> = {
     transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
   };
   limit: number;
+  prepare?: (tx: Tx) => Promise<void>;
   select: (tx: Tx) => {
     toSQL: () => { sql: string };
     limit: (limit: number) => {
       for: (mode: RowLockMode, config: LockConfig) => PromiseLike<Row[]>;
     };
   };
-  run: (tx: Tx, rows: Row[]) => Promise<T>;
+  run: (tx: Tx, rows: Row[]) => T | Promise<T>;
 };
 
 /** Nonblocking batches own a fresh transaction and forbid later aggregate acquisitions. */
 export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   database,
   limit,
+  prepare,
   select,
   run,
 }: SkipLockedBatchOptions<Tx, Row, T>): Promise<T> => {
@@ -738,6 +777,7 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   }
   return await withAggregateTransaction(database, async (tx) => {
     const history = lockHistory(tx);
+    await prepare?.(tx);
     const query = select(tx);
     const target = aggregateSelectTarget(query.toSQL().sql);
     if (target.joined || !target.filtered) {
@@ -914,6 +954,18 @@ const byIdWithin = (
   scopeColumns: [scopeColumn],
   scopeValues: [scopeValue],
 });
+// A root row found by its own key, with no owning scope to check.
+const byUnscopedKey = (
+  table: string,
+  column: string,
+  value: string | number,
+): RowResource => ({
+  table,
+  columns: [column],
+  values: [value],
+  scopeColumns: [],
+  scopeValues: [],
+});
 const memberCleanupRowResource = (
   id: AggregateIdentities["memberCleanup"],
 ): RowResource => {
@@ -986,15 +1038,21 @@ const auxiliaryRowResource = (
 
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "requestReceipt":
+      return {
+        table: "request_idempotency_receipts",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "account":
     case "organization":
-      return {
-        table: options.aggregate === "account" ? "user" : "organization",
-        columns: ["id"],
-        values: [options.id],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return byUnscopedKey(
+        options.aggregate === "account" ? "user" : "organization",
+        "id",
+        options.id,
+      );
     case "accountExport":
       return byIdWithin(
         "account_exports",
@@ -1096,13 +1154,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.organizationId,
       );
     case "schedulerClaim":
-      return {
-        table: "scheduler_jobs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return byUnscopedKey("scheduler_jobs", "id", options.id.id);
     case "definition":
       return byIdWithin(
         "flow_definitions",
@@ -1918,6 +1970,66 @@ type AggregateRowQueryOptions<Row> = AggregateQueryIdentity & {
 type AggregateRowsResult<Row> =
   | { status: "locked" | "missing"; rows: Row[] }
   | { status: "busy"; error: AggregateLockBusy };
+
+type RequestReceiptPrincipalRowsOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+/** Membership cleanup may hold later-ranked matter locks, so this entire set must be nonblocking. */
+export const lockRequestReceiptPrincipalRows = async ({
+  tx,
+  organizationId,
+  userId,
+}: RequestReceiptPrincipalRowsOptions): Promise<
+  AggregateRowsResult<{ id: SafeId<"requestIdempotencyReceipt"> }>
+> => {
+  const result = await Result.tryPromise(
+    async () =>
+      await withAggregateSavepoint(tx, async (child) => {
+        const history = lockHistory(child);
+        assertAggregateLevelAvailable(history);
+        history.status = "acquiring";
+        const rows = await child
+          .select({ id: requestIdempotencyReceipts.id })
+          .from(requestIdempotencyReceipts)
+          .where(
+            and(
+              eq(requestIdempotencyReceipts.organizationId, organizationId),
+              eq(requestIdempotencyReceipts.userId, userId),
+            ),
+          )
+          .for("update", { noWait: true });
+        for (const { id } of rows) {
+          const requested = rowLock(
+            { aggregate: "requestReceipt", id: { id, organizationId, userId } },
+            "update",
+          );
+          assertLockOrder(history, requested, "nowait");
+          retainLock(history, requested);
+        }
+        completeAcquisition(history);
+        return rows;
+      }),
+  );
+  if (result.isOk()) {
+    return {
+      status: result.value.length === 0 ? "missing" : "locked",
+      rows: result.value,
+    };
+  }
+  if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+    return {
+      status: "busy",
+      error: new AggregateLockBusy({
+        aggregate: "requestReceipt",
+        message: "The requested receipt principal is busy",
+      }),
+    };
+  }
+  return abortTransaction(result.error.cause);
+};
 
 type SelectToken = {
   kind: "word" | "identifier" | "symbol";

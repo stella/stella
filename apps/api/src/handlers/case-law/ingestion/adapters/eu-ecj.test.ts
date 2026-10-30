@@ -871,6 +871,119 @@ describe("language variant completion", () => {
   );
 });
 
+describe("translations published as the Court's HTML", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const HTML_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0011.01";
+  const typed = <T extends object>(binding: T, type: string) => ({
+    ...binding,
+    manifestationType: { type: "literal", value: type },
+  });
+
+  test("the listing asks for every document manifestation type", () => {
+    // The Office publishes a translation as the Court's HTML first and
+    // converts it to XHTML later, if ever; a listing limited to XHTML holds a
+    // decision in the few languages already converted and no others.
+    const listing = buildListingQuery({
+      dateFrom: "2026-10-06",
+      dateTo: "2026-10-06",
+    });
+    expect(ECJ_DECISION_PATTERN).toContain('IN ("xhtml", "html")');
+    expect(listing).toContain("?manifestationType\nWHERE");
+    expect(ECJ_TOTAL_COUNT_QUERY).toContain(ECJ_DECISION_PATTERN);
+  });
+
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s stores a variant listed only as HTML",
+    async (walk) => {
+      const { documentFetches } = installSparqlMock({
+        bindings: [
+          typed(
+            withManifestation(firstFixtureBinding, {
+              cellarLanguage: "ENG",
+              manifestationId: HTML_MANIFESTATION_ID,
+            }),
+            "html",
+          ),
+        ],
+        served: [HTML_MANIFESTATION_ID],
+      });
+      const decisions = await variantDecisions(walk);
+
+      expect(
+        decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
+      ).toEqual(["accepted"]);
+      expect(decisions.map(({ sourceDocumentId }) => sourceDocumentId)).toEqual(
+        [`${enBinding.celex.value}:en`],
+      );
+      expect(decisions.at(0)?.metadata).toMatchObject({
+        manifestationType: "html",
+      });
+      expect(documentFetches.at(0)).toContain(HTML_MANIFESTATION_ID);
+    },
+  );
+
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s reads a variant listed in both types from its XHTML",
+    async (walk) => {
+      // Listed HTML first, as the endpoint may order them: the preference,
+      // not the listing order, decides which manifestation is read.
+      const { documentFetches } = installSparqlMock({
+        bindings: [
+          typed(
+            withManifestation(firstFixtureBinding, {
+              cellarLanguage: "ENG",
+              manifestationId: HTML_MANIFESTATION_ID,
+            }),
+            "html",
+          ),
+          typed(enBinding, "xhtml"),
+        ],
+        served: [HTML_MANIFESTATION_ID, EN_MANIFESTATION_ID],
+      });
+      const decisions = await variantDecisions(walk);
+
+      expect(decisions).toHaveLength(1);
+      expect(decisions.at(0)?.documentUrl).toContain(EN_MANIFESTATION_ID);
+      expect(decisions.at(0)?.metadata).toMatchObject({
+        manifestationType: "xhtml",
+      });
+      expect(documentFetches).toEqual([
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+      ]);
+    },
+  );
+
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s falls back to the HTML when the XHTML is not served",
+    async (walk) => {
+      const { documentFetches } = installSparqlMock({
+        bindings: [
+          typed(enBinding, "xhtml"),
+          typed(
+            withManifestation(firstFixtureBinding, {
+              cellarLanguage: "ENG",
+              manifestationId: HTML_MANIFESTATION_ID,
+            }),
+            "html",
+          ),
+        ],
+        served: [HTML_MANIFESTATION_ID],
+      });
+      const decisions = await variantDecisions(walk);
+
+      expect(
+        decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
+      ).toEqual(["accepted"]);
+      expect(decisions.at(0)?.documentUrl).toContain(HTML_MANIFESTATION_ID);
+      expect(documentFetches.at(0)).toContain(EN_MANIFESTATION_ID);
+    },
+  );
+});
+
 /**
  * Serve one listed variant whose document response carries the given body and
  * `Content-Type`, so a test can state what the publisher answered with.

@@ -53,12 +53,11 @@ export const installWarningBudgetMs = (
   return budget;
 };
 const CONSOLE_TAIL_BYTES = 4096;
-// Retained logs buffer installer output: the longest observed console gap was
-// 120.039 s, censored by the old killer. Five times that upper-bound observation
-// rounds up to 610 s; this is conservative until timestamped progress is retained.
-// Retained timestamped output showed a longest progressing gap of 120.039 s.
-// A 180 s window adds roughly 50% headroom while bounding a genuine stall.
-export const INSTALL_STALL_MS = 180_000;
+// Across 40 healthy timestamped CI installs (26 store hits and 14 cold), the
+// largest progress gap was 632 ms and the slowest cold install took 18.2 s.
+// A 60 s no-progress window therefore leaves ample headroom without relying on
+// buffered console gaps; the single retry remains the recovery boundary.
+export const INSTALL_STALL_MS = 60_000;
 
 export type InstallRestoreOutcome = "hit" | "cold" | "partial" | "uncached";
 
@@ -186,8 +185,10 @@ type LoggedInstallOptions = {
   now?: () => number;
   record?: (descriptor: number, chunk: Uint8Array) => void;
   sampleStore?: typeof installStoreProgress;
+  inspectProcess?: (pid: number, storeDirectory: string) => Promise<string>;
   scheduleInterval?: (callback: () => void, milliseconds: number) => () => void;
   spawn?: (command: readonly string[]) => {
+    pid: number;
     stdout: ReadableStream<Uint8Array>;
     stderr: ReadableStream<Uint8Array>;
     exited: Promise<number>;
@@ -197,22 +198,113 @@ type LoggedInstallOptions = {
   };
 };
 
+const STALL_INSPECTION_TIMEOUT_MS = 1000;
+
+const inspectStalledProcess = async (pid: number, storeDirectory: string) => {
+  const script = String.raw`
+pid="$1"
+store="$2"
+pids="$pid"
+pending="$pid"
+while [[ -n "$pending" ]]; do
+  next=""
+  for parent in $pending; do
+    children=$(pgrep -P "$parent" 2>/dev/null || true)
+    [[ -z "$children" ]] || pids="$pids $children"
+    next="$next $children"
+  done
+  pending="$next"
+done
+echo "Process state (pid ppid stat wchan command):"
+ps -o pid=,ppid=,stat=,wchan:32=,command= -p "$(tr ' ' ',' <<<"$pids")" 2>&1 || true
+echo "Open file descriptor counts:"
+for process in $pids; do
+  if [[ -d "/proc/$process/fd" ]]; then
+    printf '%s ' "$process"
+    find "/proc/$process/fd" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l
+  else
+    echo "$process unavailable"
+  fi
+done
+echo "Newest install-store paths (at most 20):"
+if [[ -d "$store" ]]; then
+  find "$store" -mindepth 1 -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -20 || true
+else
+  echo "$store unavailable"
+fi
+`;
+  const inspection = Bun.spawn({
+    cmd: [
+      "bash",
+      "-c",
+      script,
+      "stall-inspection",
+      String(pid),
+      storeDirectory,
+    ],
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const completed = Promise.all([
+    new Response(inspection.stdout).text(),
+    new Response(inspection.stderr).text(),
+    inspection.exited,
+  ]).then(([stdout, stderr]) => `${stdout}${stderr}`);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      completed,
+      new Promise<string>((resolve) => {
+        timeout = setTimeout(() => {
+          inspection.kill("SIGKILL");
+          resolve(
+            `Process inspection timed out after ${STALL_INSPECTION_TIMEOUT_MS} ms.\n`,
+          );
+        }, STALL_INSPECTION_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+    void completed.catch(() => undefined);
+  }
+};
+
 const spawnInstallAttempt = (
   command: readonly string[],
   spawn: NonNullable<LoggedInstallOptions["spawn"]>,
 ) => {
   const child = spawn(command);
   const completion = new AbortController();
+  let stallTermination: "none" | "requested" = "none";
   let cancelTimer: (() => void) | undefined;
   let sampling: Promise<void> | undefined;
+  let inspection:
+    | Promise<{ status: "completed" } | { status: "failed"; error: unknown }>
+    | undefined;
   return {
     child,
     completion,
+    terminateStalledChild: () => {
+      if (child.exitCode !== null) {
+        return;
+      }
+      stallTermination = "requested";
+      child.kill("SIGKILL");
+    },
+    wasTerminatedForStall: () => stallTermination === "requested",
     get sampling() {
       return sampling;
     },
     setSampling: (probe: Promise<void> | undefined) => {
       sampling = probe;
+    },
+    setInspection: (capture: Promise<void>) => {
+      inspection = capture.then(
+        () => ({ status: "completed" }) as const,
+        (error: unknown) => ({ status: "failed", error }) as const,
+      );
     },
     setCancelTimer: (cancel: () => void) => {
       cancelTimer = cancel;
@@ -220,10 +312,17 @@ const spawnInstallAttempt = (
     dispose: async () => {
       completion.abort();
       cancelTimer?.();
-      await sampling;
-      if (child.exitCode === null) {
-        child.kill("SIGKILL");
-        await child.exited;
+      try {
+        await sampling;
+        const outcome = await inspection;
+        if (outcome?.status === "failed") {
+          throw outcome.error;
+        }
+      } finally {
+        if (child.exitCode === null) {
+          child.kill("SIGKILL");
+          await child.exited;
+        }
       }
     },
   };
@@ -249,6 +348,7 @@ export const runLoggedInstall = async ({
     writeSync(descriptor, chunk);
   },
   sampleStore = installStoreProgress,
+  inspectProcess = inspectStalledProcess,
   scheduleInterval = (callback, milliseconds) => {
     const timer = setInterval(callback, milliseconds);
     return () => {
@@ -290,7 +390,25 @@ export const runLoggedInstall = async ({
               `::warning title=install-budget::kind=infra class=${restoreOutcome === "cold" ? "install-cold-budget" : "install-budget"} ${telemetry()}\n`,
             ),
           kill: () => {
-            child.kill("SIGKILL");
+            const inspection = (async () => {
+              let evidence: string;
+              try {
+                evidence = await inspectProcess(
+                  child.pid,
+                  progressRoots[0] ?? "",
+                );
+              } catch (error) {
+                evidence = `Process inspection failed: ${String(error)}\n`;
+              }
+              try {
+                summary(
+                  `::group::Stalled install process evidence\n${evidence}::endgroup::\n`,
+                );
+              } finally {
+                attemptScope.terminateStalledChild();
+              }
+            })();
+            attemptScope.setInspection(inspection);
           },
         });
         const telemetry = () =>
@@ -377,7 +495,8 @@ export const runLoggedInstall = async ({
           report(`Installer log tail:\n${tail.toString()}\n`);
         }
         const signal = installTerminationSignal(child.signalCode);
-        if (signal !== undefined && !watchdog.wasStalled()) {
+        const stalled = attemptScope.wasTerminatedForStall() && exitCode !== 0;
+        if (signal !== undefined && !stalled) {
           summary(
             `::error title=install-signal::kind=infra class=install-signal ${telemetry()} signal=${signal}\n`,
           );
@@ -385,7 +504,7 @@ export const runLoggedInstall = async ({
         summary(
           `Install finished; exit ${exitCode}; signal ${signal ?? "none"}; ${telemetry()}\n`,
         );
-        return { exitCode, stalled: watchdog.wasStalled() };
+        return { exitCode, stalled };
       } finally {
         await attemptScope.dispose();
       }

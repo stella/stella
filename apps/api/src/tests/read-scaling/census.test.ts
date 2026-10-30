@@ -12,9 +12,11 @@ import {
   ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
@@ -47,6 +49,8 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionFilterValidationScalingScenario,
+  accountExportDownloadScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   suggestionRangeScalingScenario,

@@ -27,6 +27,7 @@ import {
   ROOT_CONNECTION_DOORS,
   SCHEMA_INTROSPECTION,
   validateOwnership,
+  withSchemaIntrospection,
 } from "./ownership";
 import { loadOwnershipDeclarations } from "./ownership-loader.ts";
 
@@ -67,6 +68,31 @@ const run = (root: string, command: string[]) => {
 };
 
 describe("ownership file loading", () => {
+  test("imports the receipt ownership declaration without handler files", () => {
+    withDirectory((root) => {
+      const directory = path.join(root, "scripts/ownership");
+      mkdirSync(directory, { recursive: true });
+      copyFileSync(
+        path.join(
+          repoRoot,
+          "scripts/ownership/request-idempotency-receipts.ts",
+        ),
+        path.join(directory, "request-idempotency-receipts.ts"),
+      );
+      symlinkSync(
+        path.join(repoRoot, "node_modules"),
+        path.join(root, "node_modules"),
+        "dir",
+      );
+      const output = run(root, [
+        process.execPath,
+        "-e",
+        'const {default: entry} = await import("./scripts/ownership/request-idempotency-receipts.ts"); console.log(entry.id);',
+      ]);
+      expect(output.trim()).toBe("request-idempotency-receipts");
+    });
+  });
+
   test("loads every row in filename order and ignores documentation", () => {
     withDirectory((root) => {
       for (const id of ["z-last", "a-first"]) {
@@ -103,9 +129,12 @@ describe("ownership file loading", () => {
       process.execPath,
       "--input-type=module",
       "-e",
-      'const { OWNERSHIP } = await import("./scripts/ownership.ts"); console.log(JSON.stringify(OWNERSHIP));',
+      'const { OWNERSHIP, renderOwnershipDocument } = await import("./scripts/ownership.ts"); console.log(JSON.stringify({entries: OWNERSHIP.map(({summary, ...entry}) => entry), document: renderOwnershipDocument(OWNERSHIP)}));',
     ]);
-    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual(OWNERSHIP);
+    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual({
+      entries: OWNERSHIP.map(({ summary, ...declaration }) => declaration),
+      document: renderOwnershipDocument(OWNERSHIP),
+    });
   });
 });
 
@@ -237,6 +266,28 @@ describe("renderOwnershipDocument", () => {
         ).toBe(true);
       }
     }
+  });
+
+  test("evaluates dynamic scope only when rendering its document", () => {
+    let calls = 0;
+    const declaration = withSchemaIntrospection(
+      entry({
+        summary: () => {
+          calls += 1;
+          return "Declared create scope";
+        },
+        enforcement: {
+          kind: "import",
+          specifiers: ["@/api/db/schema"],
+          allowed: [],
+        },
+      }),
+    );
+    expect(calls).toBe(0);
+    expect(renderOwnershipDocument([declaration])).toContain(
+      "Declared create scope",
+    );
+    expect(calls).toBe(1);
   });
 
   test("renders the same bytes for the same table", () => {

@@ -82,6 +82,7 @@
     "scripts/check-mcp-generated-tracking.ts",
     "scripts/check-migration-order.test.ts",
     "scripts/check-migration-order.ts",
+    "scripts/check-online-index-dependencies.ts",
     "scripts/check-oxlint-effective-config.ts",
     "scripts/check-oxlint-rule-coverage.test.ts",
     "scripts/check-oxlint-rule-coverage.ts",
@@ -181,6 +182,7 @@
     "scripts/docker-source-closure.test.ts",
     "scripts/document-identity-guard.test.ts",
     "scripts/document-identity-guard.ts",
+    "scripts/download-run-artifact.sh",
     "scripts/draft-release-reads.test.ts",
     "scripts/e2e-geometry-shards.test.ts",
     "scripts/e2e-shard-budget.test.ts",
@@ -195,6 +197,7 @@
     "scripts/generated-artifacts.test.ts",
     "scripts/generated-files-guard.ts",
     "scripts/gh-retry.test.ts",
+    "scripts/guard-rollouts.test.ts",
     "scripts/install-actionlint.sh",
     "scripts/install-free-ci.test.ts",
     "scripts/knip-exports-ratchet.test.ts",
@@ -300,6 +303,10 @@
     {
       "path": "scripts/check-publish-reproducibility.sh",
       "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
+    },
+    {
+      "path": "scripts/generate-main-heavy-infrastructure-steps.ts",
+      "reason": "Runs from the generated files manifest guard; ci.yml and the generator's declared inputs select that scope."
     },
     {
       "path": "scripts/generate-npm-release-jobs.ts",
