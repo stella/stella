@@ -16,7 +16,7 @@ import { leadSectionContent } from "@/components/workspaces/lead-section.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
@@ -28,10 +28,8 @@ type LeadSectionProps = {
 export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
   const t = useTranslations();
   const canUpdate = usePermissions({ workspace: ["update"] });
-  const workspaceView = useQueryView(useQuery(workspaceOptions(workspaceId)));
-  const membersView = useQueryView(
-    useQuery(workspaceMembersOptions(workspaceId)),
-  );
+  const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
+  const membersView = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const content = leadSectionContent({
     workspace: workspaceView,
     members: membersView,

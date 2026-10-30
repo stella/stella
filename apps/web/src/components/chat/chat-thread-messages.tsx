@@ -98,6 +98,7 @@ import {
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
+  isUserInputChatToolName,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -105,6 +106,7 @@ import {
   canRetryAssistantMessage,
   canRetryChatRequest,
 } from "@/components/chat/chat-user-actions";
+import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
@@ -1665,6 +1667,16 @@ const isRequestSecretToolCallPart = (
 ): part is RequestSecretToolCallPart =>
   part.type === "tool-call" && part.name === "request_secret";
 
+type ConnectConnectorToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "connect_connector" }
+>;
+
+const isConnectConnectorToolCallPart = (
+  part: ChatPart,
+): part is ConnectConnectorToolCallPart =>
+  part.type === "tool-call" && part.name === "connect_connector";
+
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
     return `ui-resource:${part.toolCallId}`;
@@ -1727,7 +1739,7 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   }
   return (
     part.type === "tool-call" &&
-    part.name !== "ask-user" &&
+    !isUserInputChatToolName(part.name) &&
     part.name !== "create-document" &&
     part.name !== "spawn_subagents" &&
     !isApprovalPart(part) &&
@@ -1735,9 +1747,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   );
 };
 
-// Mirrors `renderEntry`'s null branches for process parts, so a run whose
-// steps all render nothing (skill-lookup misses, completed searches that
-// fold into the sources row) does not produce an empty disclosure.
+// Share visibility with the renderer so hidden skill misses and searches
+// folded into the sources row cannot produce an empty process disclosure.
 const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type !== "standard") {
     return true;
@@ -1980,6 +1991,16 @@ const AssistantMessageParts = ({
       );
     }
 
+    if (isConnectConnectorToolCallPart(part)) {
+      return (
+        <ConnectConnectorCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
+        />
+      );
+    }
+
     if (part.type === "tool-call" && part.name === "create-document") {
       return (
         <NeedsMatterCard
@@ -1992,26 +2013,7 @@ const AssistantMessageParts = ({
       );
     }
 
-    if (
-      part.type === "tool-call" &&
-      part.state === "error" &&
-      (part.name === "load-skill" || part.name === "read-skill-resource")
-    ) {
-      // Skill lookup is internal routing. Once the agent has the error and
-      // can recover, showing the miss as a prominent transcript event adds
-      // implementation noise without giving the user an action to take.
-      return null;
-    }
-
-    if (
-      part.type === "tool-call" &&
-      (part.name === "web_search" || part.name === "fetch_url") &&
-      part.state === "complete"
-    ) {
-      // Completed searches are rendered as a single dedup'd row by
-      // <WebSearchSources> below; skipping here avoids the duplicate.
-      // Other states (approval-requested, input-*) still need to fall
-      // through to the approval/tool-call cards.
+    if (part.type === "tool-call" && !isVisibleProcessEntry(entry)) {
       return null;
     }
 

@@ -6,6 +6,7 @@ import {
   inArray,
   isNull,
   lte,
+  notInArray,
   or,
   type SQL,
   sql,
@@ -36,7 +37,11 @@ import type {
 
 const DEFAULT_POLL_INTERVAL_MS = 60_000;
 const DEFAULT_LEASE_MS = 30 * 60_000;
-const DEFAULT_JOB_LIMIT = 10;
+// A sweep runs every job that is due, once; this caps only the extra runs of
+// jobs that asked for an immediate continuation within the same sweep. Nine
+// keeps a single continuing job at the ten runs per sweep it always had, so
+// batch work (retention deletes, backfills) is paced exactly as before.
+const DEFAULT_RERUN_LIMIT = 9;
 const DEFAULT_SWEEP_DURATION_MS = 55_000;
 const MIN_LEASE_MS = 3 * DEFAULT_POLL_INTERVAL_MS;
 
@@ -58,7 +63,8 @@ type RunSchedulerOnceOptions = {
   db?: SchedulerDb;
   heartbeatIntervalMs?: number;
   runnerId?: string;
-  limit?: number;
+  /** Runs of jobs this sweep already ran; see `DEFAULT_RERUN_LIMIT`. */
+  rerunLimit?: number;
   leaseMs?: number;
   maxRuntimeMs?: number;
   maxSweepDurationMs?: number;
@@ -88,21 +94,35 @@ type SchedulerLoop = {
   stop: () => void;
 };
 
+/** A drained sweep that hit its rerun cap may have withheld a due continuation. */
+const withheldContinuation = ({
+  rerunLimit,
+  reruns,
+  stoppedBecause,
+}: {
+  rerunLimit: number;
+  reruns: number;
+  stoppedBecause: RunSchedulerOnceResult["stoppedBecause"];
+}): RunSchedulerOnceResult["stoppedBecause"] =>
+  stoppedBecause === "drained" && rerunLimit > 0 && reruns >= rerunLimit
+    ? "limitReached"
+    : stoppedBecause;
+
 export const runSchedulerOnce = async ({
   db = rootDb,
   eligibilityNow,
   heartbeatIntervalMs,
   leaseMs = DEFAULT_LEASE_MS,
-  limit = DEFAULT_JOB_LIMIT,
   maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
   maxSweepDurationMs = DEFAULT_SWEEP_DURATION_MS,
   now,
   registry,
+  rerunLimit = DEFAULT_RERUN_LIMIT,
   runnerId = defaultRunnerId(),
   signal,
 }: RunSchedulerOnceOptions): Promise<RunSchedulerOnceResult> => {
-  if (!Number.isInteger(limit) || limit < 1) {
-    return panic("Scheduler job limit must be a positive integer");
+  if (!Number.isInteger(rerunLimit) || rerunLimit < 0) {
+    return panic("Scheduler rerun limit must be a non-negative integer");
   }
 
   if (!Number.isInteger(maxRuntimeMs) || maxRuntimeMs < 1) {
@@ -129,7 +149,13 @@ export const runSchedulerOnce = async ({
     succeeded: 0,
   };
 
-  while (result.acquired < limit) {
+  // A count cap over every claim would bound the jobs a sweep reaches, and a
+  // runner whose declared jobs outnumber it falls behind all of them at once:
+  // each waits for the jobs due before it, so every job runs late by the same
+  // growing lag. Only the reruns are capped; the deadline bounds the rest.
+  const ranThisSweep = new Set<string>();
+  let reruns = 0;
+  while (true) {
     if (signal?.aborted) {
       result.stoppedBecause = "aborted";
       break;
@@ -147,6 +173,7 @@ export const runSchedulerOnce = async ({
       db,
       leaseMs,
       ...(eligibilityNow && { now: eligibilityNow }),
+      excludeJobIds: reruns < rerunLimit ? [] : [...ranThisSweep],
       registry,
       runnerId,
     });
@@ -154,6 +181,11 @@ export const runSchedulerOnce = async ({
       break;
     }
     result.acquired += 1;
+    if (ranThisSweep.has(job.id)) {
+      reruns += 1;
+    } else {
+      ranThisSweep.add(job.id);
+    }
 
     // db-await-in-loop: executes the job just leased; the next claim depends on this run finishing
     const status = await runJob({
@@ -180,9 +212,11 @@ export const runSchedulerOnce = async ({
     result.failed += 1;
   }
 
-  if (result.acquired >= limit) {
-    result.stoppedBecause = "limitReached";
-  }
+  result.stoppedBecause = withheldContinuation({
+    rerunLimit,
+    reruns,
+    stoppedBecause: result.stoppedBecause,
+  });
 
   return result;
 };
@@ -278,6 +312,8 @@ export const startSchedulerLoop = ({
 
 type AcquireNextDueJobOptions = {
   db: SchedulerDb;
+  /** Jobs the caller will not run again in this pass. */
+  excludeJobIds?: readonly string[];
   runnerId: string;
   leaseMs: number;
   registry: SchedulerTaskRegistry;
@@ -286,6 +322,7 @@ type AcquireNextDueJobOptions = {
 
 export const acquireNextDueJob = async ({
   db,
+  excludeJobIds = [],
   now,
   leaseMs,
   registry,
@@ -309,7 +346,14 @@ export const acquireNextDueJob = async ({
     const [candidate] = await tx
       .select()
       .from(schedulerJobs)
-      .where(dueJobPredicate(runnableTasks, eligibilityTime))
+      .where(
+        and(
+          dueJobPredicate(runnableTasks, eligibilityTime),
+          excludeJobIds.length > 0
+            ? notInArray(schedulerJobs.id, [...excludeJobIds])
+            : undefined,
+        ),
+      )
       .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
       .limit(1)
       .for("update", { skipLocked: true });

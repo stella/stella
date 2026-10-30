@@ -15,7 +15,6 @@ describe("automatic tool approval", () => {
         alwaysApprovedTools: noGrants,
         canAlwaysAllow: true,
         conversationApprovedTools: new Set(["mcp__connector__read"]),
-        isPublicOfficialApproval: false,
         name: "mcp__connector__read",
       }),
     ).toBe(true);
@@ -46,7 +45,6 @@ describe("automatic tool approval", () => {
           hasAutomaticApproval({
             ...grants,
             canAlwaysAllow: true,
-            isPublicOfficialApproval: false,
             name,
           }),
         ).toBe(false);

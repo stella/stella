@@ -45,7 +45,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import { isPublicLawMissError } from "@/lib/public-law-api";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /** Where the citing text names the decision, when a passage can be quoted. */
 type CitedDecisionPassage =
@@ -96,6 +96,8 @@ type CitedDecisionChipProps = CitedDecisionPreviewProps & {
   label?: ReactNode;
   /** The citing text's own words, opened together with the court badge. */
   citingText?: ReactNode;
+  /** Whether this rendered citation segment owns the range's court badge. */
+  showBadge?: boolean | undefined;
 };
 
 type CitedDecisionLinkProps = Omit<
@@ -104,6 +106,8 @@ type CitedDecisionLinkProps = Omit<
 > & {
   children: ReactNode;
   className?: string | undefined;
+  /** Split citation ranges override this for every continuation segment. */
+  showBadge?: boolean | undefined;
 };
 
 /**
@@ -174,12 +178,14 @@ const CitingPassage = ({
 export const CitedDecisionLink = ({
   children,
   className,
+  showBadge = true,
   ...chip
 }: CitedDecisionLinkProps) => (
   <CitedDecisionChip
     {...chip}
     citingText={<span className={className}>{children}</span>}
     label={undefined}
+    showBadge={showBadge}
   />
 );
 
@@ -195,6 +201,7 @@ export const CitedDecisionChip = ({
   treatment,
   presentation,
   occurrences,
+  showBadge = true,
 }: CitedDecisionChipProps) => {
   const isMobile = useIsMobile();
   const inspector = useInspectorView();
@@ -268,6 +275,7 @@ export const CitedDecisionChip = ({
         ) : undefined
       }
       presentation={presentation}
+      showBadge={showBadge}
     />
   );
 };
@@ -282,7 +290,7 @@ export const CitedDecisionCard = ({
   const t = useTranslations();
   const format = useFormatter();
   const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
-  const view = useQueryView(read);
+  const view = queryView(read);
 
   if (view.type === "pending") {
     return (

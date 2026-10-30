@@ -61,8 +61,8 @@ pub async fn get_state(
   state: State<'_, AppState>,
   account: State<'_, crate::account::AccountState>,
 ) -> Result<AppSnapshot, String> {
-  let mut mgr = state.lock().await;
   let current = crate::account::current(&account).await?;
+  let mut mgr = state.lock().await;
   mgr
     .set_account_owner(
       current
@@ -70,15 +70,9 @@ pub async fn get_state(
         .map(crate::document_sessions::AccountOwner::for_account),
     )
     .await?;
-  let ids = mgr.session_ids_needing_watchers();
   drop(mgr);
-  for id in &ids {
-    SessionManager::attach_watcher(state.inner(), id).await;
-  }
-  let mut mgr = state.lock().await;
-  for id in &ids {
-    mgr.ensure_sse_listener(state.inner(), id);
-  }
+  SessionManager::attach_pending_listeners(state.inner()).await;
+  let mgr = state.lock().await;
   Ok(mgr.get_snapshot())
 }
 
@@ -92,8 +86,8 @@ pub async fn open_recovery_folder(
   if window.label() != "main" {
     return Err("document recovery is unavailable in this window".into());
   }
-  let mut manager = state.lock().await;
   let current = crate::account::current(&account).await?;
+  let mut manager = state.lock().await;
   manager
     .set_account_owner(
       current
@@ -101,7 +95,9 @@ pub async fn open_recovery_folder(
         .map(crate::document_sessions::AccountOwner::for_account),
     )
     .await?;
-  manager.open_recovery_folder(target)
+  drop(manager);
+  SessionManager::attach_pending_listeners(state.inner()).await;
+  state.lock().await.open_recovery_folder(target)
 }
 
 #[tauri::command]

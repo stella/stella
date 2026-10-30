@@ -207,3 +207,35 @@ test("an identity column is generated and never null; a computed one may be", ()
     { flags: ["generated", "null"], key: "total" },
   ]);
 });
+
+test("named table constraints retain every local foreign-key column", () => {
+  const indexed = indexSchemaSource({
+    fileName: "links.ts",
+    source: `
+export const links = p.pgTable("links", {
+  sourceId: p.uuid("source_id").notNull(),
+  decisionId: p.uuid("decision_id").notNull(),
+  organizationId: p.uuid("organization_id"),
+  title: p.text(),
+}, (table) => [
+  p.foreignKey({
+    name: "links_source_fk",
+    columns: [table.sourceId],
+    foreignColumns: [sources.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "links_decision_organization_fk",
+    columns: [table.decisionId, table.organizationId],
+    foreignColumns: [decisions.id, decisions.organizationId],
+  }),
+]);`,
+  });
+  expect(
+    indexed.at(0)?.columns.map(({ key, flags }) => ({ key, flags })),
+  ).toEqual([
+    { key: "sourceId", flags: ["fk", "not null"] },
+    { key: "decisionId", flags: ["fk", "not null"] },
+    { key: "organizationId", flags: ["fk", "null"] },
+    { key: "title", flags: ["null"] },
+  ]);
+});

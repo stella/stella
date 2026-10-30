@@ -185,20 +185,25 @@ export type SseStreamBinding =
 type SseSessionBinding = Extract<SseStreamBinding, { kind: "session" }>;
 
 /**
- * The binding for a member handler's stream: the browser session that asked.
- * Stream handlers are MCP-internal, so a caller without a session (MCP) never
- * reaches one; arriving here without one is a wiring error.
+ * The binding for a member handler's stream: the browser session that asked,
+ * or the credential an app's access token carries in its place. Stream
+ * handlers are MCP-internal, so a caller without either (MCP) never reaches
+ * one; arriving here without one is a wiring error.
  */
 export const memberSessionStreamBinding = ({
   session,
   user,
 }: {
-  session: { readonly id: string | null };
+  session: { readonly id: string | null; readonly stream?: SseStreamBinding };
   user: { readonly id: SafeId<"user"> };
-}): SseSessionBinding =>
-  session.id === null
+}): SseStreamBinding => {
+  if (session.stream !== undefined) {
+    return session.stream;
+  }
+  return session.id === null
     ? panic("An event stream opened for a caller without a browser session")
     : { kind: "session", sessionId: session.id, userId: user.id };
+};
 
 /** The ids among `sessions` whose session exists, belongs to that user and
  *  has not expired. */

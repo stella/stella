@@ -5,6 +5,8 @@ import type {
   ParagraphBlock,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
 import { renderReaderFixture } from "./decision-text.test";
 import {
@@ -73,18 +75,25 @@ describe("running text alignment", () => {
     );
   });
 
+  /** Each reader, with the list scheme a statute reader draws its lists by. */
+  const READER_CORPORA = {
+    "case-law": { variant: "case-law" },
+    statute: { statuteLists: E_SBIRKA_LIST_SCHEME, variant: "statute" },
+  } as const;
+
   test("every paragraph takes its alignment from exactly one source", () => {
     // The prose class is unlayered CSS, so it would override a Tailwind
     // alignment utility on the same element rather than defer to it.
     const roles = [undefined, ...PARAGRAPH_ROLES];
-    for (const variant of ["case-law", "statute"] as const) {
+    for (const corpus of Object.values(READER_CORPORA)) {
+      const { variant } = corpus;
       for (const role of roles) {
         const markup = renderReaderFixture(
           <BlockRenderer
             activeMatchIndex={-1}
             block={paragraph(role)}
             rangesByPieceId={{}}
-            variant={variant}
+            {...corpus}
           />,
         );
         const [classes] = paragraphClasses(markup);
@@ -97,6 +106,11 @@ describe("running text alignment", () => {
           sources: 1,
         });
         expect(classes).not.toContain("text-justify");
+        expect(classes).toContain("hyphens-manual");
+        expect(classes).toContain("wrap-anywhere");
+        for (const token of LEGAL_TEXT_CLASS_NAME.split(" ")) {
+          expect(classes).toContain(token);
+        }
       }
     }
   });
@@ -122,6 +136,8 @@ describe("running text alignment", () => {
       ...paragraphClasses(fulltext),
     ]) {
       expect(classes).toContain(READER_PROSE_CLASS);
+      expect(classes).toContain("hyphens-manual");
+      expect(classes).toContain("wrap-anywhere");
     }
     expect(paragraphClasses(fulltext)).toHaveLength(2);
   });

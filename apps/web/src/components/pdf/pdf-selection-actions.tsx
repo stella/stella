@@ -32,7 +32,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 
 type PdfSelectionActionsProps = {
@@ -113,7 +113,7 @@ export const PdfSelectionActions = ({
   const barRef = useRef<HTMLDivElement | null>(null);
   const markBarRef = useRef<HTMLDivElement | null>(null);
   const showMatterNumber = useMatterNumberingEnabled();
-  const workspaceView = useQueryView(useQuery(workspaceOptions(workspaceId)));
+  const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
   const reference =
     showMatterNumber && workspaceView.type === "items"
       ? workspaceView.items.reference

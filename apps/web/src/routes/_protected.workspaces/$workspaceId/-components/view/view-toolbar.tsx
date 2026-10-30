@@ -79,6 +79,7 @@ import {
   playbooksOptions,
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -86,7 +87,6 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
@@ -123,7 +123,7 @@ export const ViewToolbar = ({
   workspaceId,
 }: ViewToolbarProps) => {
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(propertiesQuery);
+  const propertiesView = queryView(propertiesQuery);
   const properties =
     propertiesView.type === "items" ? propertiesView.items : [];
   const updateView = useUpdateView(workspaceId);
@@ -908,12 +908,12 @@ const FilesystemOrganizerAction = ({
   // useSuspenseQuery) keeps a cache miss from suspending the toolbar
   // chrome — the action button just stays disabled until the data resolves.
   const foldersDataQuery = useQuery(workspaceFoldersOptions(workspaceId));
-  const foldersDataView = useQueryView(foldersDataQuery);
+  const foldersDataView = queryView(foldersDataQuery);
   const foldersData =
     foldersDataView.type === "items" ? foldersDataView.items : undefined;
   const allFolders = normalizeOptionalArray(foldersData);
   const filesDataQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesDataView = useQueryView(filesDataQuery);
+  const filesDataView = queryView(filesDataQuery);
   const filesData =
     filesDataView.type === "items" ? filesDataView.items : undefined;
   const allFiles = normalizeOptionalArray(filesData);

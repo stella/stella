@@ -1,6 +1,6 @@
 use tauri::{
   AppHandle, Manager, Wry,
-  menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+  menu::{Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder},
 };
 
 use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
@@ -225,6 +225,55 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   }
 }
 
+/// The status icon and its owning screen in one logical coordinate space;
+/// `None` when there is no icon or the OS cannot place it (an icon in
+/// Windows' hidden overflow area). The handle is read and dropped on the
+/// main thread, like every other tray handle.
+#[cfg(target_os = "macos")]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let handle = app.clone();
+  crate::window_placement::on_main_thread(app, None, move || {
+    let main_thread = TrayMainThread::new()?;
+    status_icon_placement_on_main_thread(&handle, &main_thread)
+  })
+}
+
+/// The status icon and its owning screen; see the macOS twin.
+#[cfg(not(target_os = "macos"))]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  status_icon_placement_on_main_thread(app, &TrayMainThread)
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn status_icon_placement_on_main_thread(
+  app: &AppHandle,
+  _main_thread: &TrayMainThread,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let tray = app.tray_by_id("main")?;
+  #[cfg(target_os = "macos")]
+  {
+    tray
+      .with_inner_tray_icon(|inner| {
+        let main_thread = TrayMainThread::new()?;
+        let window = inner.ns_status_item()?.button(main_thread)?.window()?;
+        crate::window_placement::native_window_placement(&window, main_thread)
+      })
+      .ok()
+      .flatten()
+  }
+  #[cfg(not(target_os = "macos"))]
+  {
+    crate::window_placement::physical_rect_placement(app, tray.rect().ok().flatten()?)
+  }
+}
+
 #[allow(
   clippy::disallowed_methods,
   reason = "the tray owner: the main-thread proof keeps every native handle local"
@@ -291,38 +340,22 @@ fn build_tray_menu_with_activity(
     builder = builder.separator();
   }
 
-  if !crate::managed_policy::current().clipboard_disabled {
+  let clipboard_enabled = !crate::managed_policy::current().clipboard_disabled;
+  if clipboard_enabled {
     builder = builder.item(
       &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard"))
         .build(app)?,
     );
   }
-  if let Some(activity) = activity {
-    builder = builder.item(
-      &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
-        .enabled(false)
-        .build(app)?,
-    );
-    if activity.status == ActivityRecordingStatus::Recording
-      && let Some(name) = &activity.now
-    {
-      builder = builder.item(
-        &MenuItemBuilder::with_id(
-          ACTIVITY_NOW_ITEM,
-          t_fmt("tray.activityNow", &[("name", name)]),
-        )
-        .enabled(false)
-        .build(app)?,
-      );
+  let activity_enabled = crate::activity::is_enabled(app);
+  if activity_enabled {
+    if clipboard_enabled {
+      builder = builder.separator();
     }
-    if let Some((action, label)) = activity_action(activity.status) {
-      builder = builder.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
-    }
+    builder = builder.item(&build_activity_menu(app, activity)?);
   }
-  if crate::activity::is_enabled(app) {
-    builder = builder.item(
-      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.activity")).build(app)?,
-    );
+  if clipboard_enabled || activity_enabled {
+    builder = builder.separator();
   }
 
   // Settings
@@ -442,6 +475,42 @@ fn build_tray_menu_with_activity(
   );
 
   builder.build()
+}
+
+fn build_activity_menu(
+  app: &AppHandle,
+  activity: Option<&TrayActivitySnapshot>,
+) -> tauri::Result<Submenu<Wry>> {
+  let mut menu = SubmenuBuilder::new(app, t("tray.activity"));
+  if let Some(activity) = activity {
+    menu = menu.item(
+      &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
+        .enabled(false)
+        .build(app)?,
+    );
+    if activity.status == ActivityRecordingStatus::Recording
+      && let Some(name) = &activity.now
+    {
+      menu = menu.item(
+        &MenuItemBuilder::with_id(
+          ACTIVITY_NOW_ITEM,
+          t_fmt("tray.activityNow", &[("name", name)]),
+        )
+        .enabled(false)
+        .build(app)?,
+      );
+    }
+    menu = menu.separator();
+    if let Some((action, label)) = activity_action(activity.status) {
+      menu = menu.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+    }
+  }
+  menu
+    .item(
+      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.openActivity"))
+        .build(app)?,
+    )
+    .build()
 }
 
 pub fn get_session_id_from_action<'a>(

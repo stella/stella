@@ -14,14 +14,17 @@ const INVOICE_STATUS_STYLES = {
 
 type InvoiceStatusBadgeProps = {
   status: InvoiceStatus;
+  /** A sent invoice with some payments recorded but not yet settled. */
+  partiallyPaid?: boolean;
   className?: string;
 };
 
 export const InvoiceStatusBadge = ({
   status,
+  partiallyPaid = false,
   className,
 }: InvoiceStatusBadgeProps) => {
-  const t = useTranslations("billing.invoices.statuses");
+  const t = useTranslations("billing.invoices");
 
   return (
     <span
@@ -31,7 +34,7 @@ export const InvoiceStatusBadge = ({
         className,
       )}
     >
-      {t(status)}
+      {partiallyPaid ? t("payments.partiallyPaid") : t(`statuses.${status}`)}
     </span>
   );
 };

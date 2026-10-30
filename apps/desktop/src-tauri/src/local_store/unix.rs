@@ -99,6 +99,35 @@ fn roots() -> Vec<(PathBuf, bool)> {
   roots
 }
 
+// Platform-selected ancestors may be system aliases. Resolve those before
+// pinning the application root; the root and its descendants remain no-follow.
+fn physical_platform_parent(path: &Path) -> io::Result<PathBuf> {
+  let mut ancestor = path;
+  let mut missing = Vec::new();
+  loop {
+    match ancestor.canonicalize() {
+      Ok(mut physical) => {
+        for name in missing.into_iter().rev() {
+          physical.push(name);
+        }
+        return Ok(physical);
+      }
+      Err(error) if error.kind() == io::ErrorKind::NotFound => {
+        missing.push(ancestor.file_name().ok_or_else(invalid_path)?);
+        ancestor = ancestor.parent().ok_or_else(invalid_path)?;
+      }
+      Err(error) => return Err(error),
+    }
+  }
+}
+
+fn physical_application_root(path: &Path) -> io::Result<PathBuf> {
+  Ok(
+    physical_platform_parent(path.parent().ok_or_else(invalid_path)?)?
+      .join(path.file_name().ok_or_else(invalid_path)?),
+  )
+}
+
 fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   let (root_path, restrict) = roots()
     .into_iter()
@@ -134,16 +163,16 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     }
     return Ok((Arc::clone(directory), relative));
   }
-  // Only the platform-supplied temporary anchor may contain a system alias.
-  // All descendants, including test fixtures, still use no-follow traversal.
+  // The temporary anchor itself is platform supplied; application roots
+  // retain no-follow traversal after resolving only their platform parent.
   #[cfg(test)]
   let physical_root = if root_path == std::env::temp_dir() {
     root_path.canonicalize()?
   } else {
-    root_path.clone()
+    physical_application_root(&root_path)?
   };
   #[cfg(not(test))]
-  let physical_root = root_path.clone();
+  let physical_root = physical_application_root(&root_path)?;
   let directory = absolute_directory(&physical_root)?;
   if !temporary_anchor {
     check_owner(&directory)?;
@@ -235,6 +264,14 @@ impl Parent {
   }
 
   pub(super) fn rename_to(&self, destination: &Self) -> io::Result<()> {
+    self.rename_to_with(destination, &File::sync_all)
+  }
+
+  pub(super) fn rename_to_with(
+    &self,
+    destination: &Self,
+    sync: &impl Fn(&File) -> io::Result<()>,
+  ) -> io::Result<()> {
     let source = self.open(OpenMode::Read)?;
     fs::fchmod(&source, FILE_MODE)?;
     destination.check_entry()?;
@@ -244,13 +281,13 @@ impl Parent {
       &destination.directory,
       &destination.name,
     )?;
-    fs::fsync(&destination.directory)?;
+    sync(&destination.directory)?;
     let source_metadata = self.directory.metadata()?;
     let destination_metadata = destination.directory.metadata()?;
     if source_metadata.dev() != destination_metadata.dev()
       || source_metadata.ino() != destination_metadata.ino()
     {
-      fs::fsync(&self.directory)?;
+      sync(&self.directory)?;
     }
     Ok(())
   }
@@ -291,5 +328,34 @@ impl Parent {
     fs::unlinkat(&self.directory, &self.name, AtFlags::empty())?;
     fs::fsync(&self.directory)?;
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn platform_aliases_keep_application_roots_no_follow() {
+    use std::os::unix::fs::symlink;
+    let root =
+      std::env::temp_dir().join(format!("stella-platform-{}", uuid::Uuid::new_v4()));
+    let physical = root.join("physical");
+    std::fs::create_dir_all(&physical).unwrap();
+    let alias = root.join("platform");
+    symlink(&physical, &alias).unwrap();
+    let application = alias.join("missing/stella");
+    let resolved = physical_application_root(&application).unwrap();
+    let handle = absolute_directory(&resolved).unwrap();
+    assert_eq!(
+      handle.metadata().unwrap().ino(),
+      std::fs::metadata(&application).unwrap().ino()
+    );
+    std::fs::remove_dir(&application).unwrap();
+    symlink(&physical, &application).unwrap();
+    assert!(
+      absolute_directory(&physical_application_root(&application).unwrap()).is_err()
+    );
+    std::fs::remove_dir_all(root).unwrap();
   }
 }

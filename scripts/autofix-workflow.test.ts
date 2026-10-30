@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
+import { SAFE_AUTOFIX_RULES, safeAutofixRuleArgs } from "./autofix-safe-rules";
 import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
   CI_GENERATION_COMMANDS,
@@ -539,6 +540,16 @@ describe("changed-file autofix boundary", () => {
     }
   });
 
+  test("bounds the merged lockfile network refresh", async () => {
+    const workflow: unknown = Bun.YAML.parse(
+      await Bun.file(WORKFLOW_URL).text(),
+    );
+    const refresh = namedCiStep(workflow, "Refresh merged lockfile");
+
+    expect(refresh["timeout-minutes"]).toBe(5);
+    expect(refresh["run"]).toContain("refresh-lock --repo");
+  });
+
   test("each named CI guard runs its generator command or check form", async () => {
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -622,7 +633,7 @@ describe("changed-file autofix boundary", () => {
       'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(fix).toContain(
-      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${lint_paths[@]}"`,
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${safe_rule_args[@]}" "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
     // The Astro project has no native-compiler type graph to fix against.
@@ -768,5 +779,107 @@ test("type-aware autofix fixtures require a successful dependency install", asyn
   expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
   expect(invariants).not.toContain(
     "apps/api/scripts/refresh-test-durations.test.ts",
+  );
+});
+
+test("source fixes use only the documented safe-rule allowlist and never save PR caches", () => {
+  const workflow = readFileSync(WORKFLOW_URL, "utf-8");
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(workflow),
+    "regenerate-derived-files",
+  );
+  const fix = workflowStepByName(steps, "Fix changed files")["run"];
+  expect(fix).toContain("bun scripts/autofix-safe-rules.ts");
+  expect(fix).toContain(`"\${safe_rule_args[@]}" "\${lint_paths[@]}"`);
+  expect(safeAutofixRuleArgs()).toEqual([
+    "--allow",
+    "all",
+    ...Object.keys(SAFE_AUTOFIX_RULES).flatMap((rule) => ["--deny", rule]),
+  ]);
+  for (const reason of Object.values(SAFE_AUTOFIX_RULES)) {
+    expect(reason.length).toBeGreaterThan(20);
+  }
+  expect(workflow).not.toContain("save: true");
+  expect(workflow).not.toContain("--fix-dangerously");
+  const refresh = steps.indexOf(
+    workflowStepByName(steps, "Refresh merged lockfile"),
+  );
+  expect(refresh).toBeLessThan(
+    steps.indexOf(workflowStepByName(steps, "Install dependencies")),
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    'refresh-lock --repo "$GITHUB_WORKSPACE"',
+  );
+});
+
+test("runs lockfile tooling from the workflow revision, not the pull request", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  const checkout = workflowStepByName(steps, "Checkout lockfile tooling");
+  const checkoutInputs = checkout["with"];
+  if (!isRecord(checkoutInputs)) {
+    throw new TypeError("Lockfile tooling checkout inputs must be a mapping");
+  }
+  expect(checkoutInputs).toMatchObject({
+    repository: `\${{ github.repository }}`,
+    ref: `\${{ github.workflow_sha }}`,
+    path: ".workflow-tooling",
+    "persist-credentials": false,
+    "sparse-checkout-cone-mode": false,
+  });
+  const sparseCheckout = String(checkoutInputs["sparse-checkout"]);
+  for (const source of [
+    "packages/scripts/src/generated-files.ts",
+    "scripts/autofix-protected-paths.ts",
+    "scripts/baseline-paths.ts",
+    "scripts/bun-lock-text.ts",
+    "scripts/generated-conflicts.ts",
+    "scripts/generated-files.ts",
+  ]) {
+    expect(sparseCheckout.split("\n")).toContain(source);
+  }
+  expect(
+    workflowStepByName(
+      steps,
+      "Preserve lockfile tooling across source checkout",
+    )["run"],
+  ).toContain('rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"');
+
+  for (const name of ["Refresh merged lockfile", "Restrict autofix changes"]) {
+    const run = String(workflowStepByName(steps, name)["run"]);
+    expect(run).toContain(
+      '"$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts"',
+    );
+    expect(run).not.toMatch(
+      /(?:^|[;&|]\s*)bun(?:\s+--[\w-]+)*\s+scripts\/generated-conflicts\.ts\b/mu,
+    );
+  }
+});
+
+test("rechecks refresh-approved lockfile pins at the final collection boundary", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    'cp -- bun.lock "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  const restriction: unknown = workflowStepByName(
+    steps,
+    "Restrict autofix changes",
+  )["run"];
+  if (typeof restriction !== "string") {
+    throw new TypeError("Restrict autofix changes must be a shell step");
+  }
+  expect(restriction).toContain(
+    'assert-frozen-lock --repo "$GITHUB_WORKSPACE"',
+  );
+  expect(restriction).toContain(
+    '--frozen "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  expect(restriction.indexOf("assert-frozen-lock")).toBeLessThan(
+    restriction.indexOf('excludes+=(":(exclude,literal)bun.lock")'),
   );
 });

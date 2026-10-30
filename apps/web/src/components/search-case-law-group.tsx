@@ -160,6 +160,7 @@ const SearchCaseLawResults = ({
             aria-label={t("common.open")}
             className="min-h-11 min-w-11 shrink-0"
             onClick={() => onOpen(hit)}
+            tooltip={t("common.open")}
             variant="ghost"
           >
             <DirectionalIcon className="size-4" icon={ChevronRightIcon} />

@@ -339,7 +339,17 @@ finally:
 /// Replaces `path` with `bytes` through a uniquely named sibling, so a reader
 /// sees the old or the new file and never a partial one. The file is
 /// readable by the owner only; a failed write leaves no temporary behind.
+/// The new contents reach the disk before the rename, and the rename itself
+/// before this returns, so a crash keeps the old file or the new one whole.
 pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+  write_private_atomic_with(path, bytes, fs::File::sync_all)
+}
+
+fn write_private_atomic_with(
+  path: &Path,
+  bytes: &[u8],
+  sync: impl Fn(&fs::File) -> std::io::Result<()>,
+) -> Result<(), String> {
   let destination = platform::Parent::at(path).map_err(|error| error.to_string())?;
   let temporary_name = path.with_extension(format!(
     "{}.{}.tmp",
@@ -357,9 +367,9 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
   let mut file = temporary
     .open(OpenMode::CreateNew)
     .map_err(|error| error.to_string())?;
-  let written = file.write_all(bytes).and_then(|()| file.sync_all());
+  let written = file.write_all(bytes).and_then(|()| sync(&file));
   drop(file);
-  let replaced = written.and_then(|()| temporary.rename_to(&destination));
+  let replaced = written.and_then(|()| temporary.rename_to_with(&destination, &sync));
   if let Err(error) = replaced {
     return match temporary.remove() {
       Ok(()) => Err(format!("replace failed: {error}")),
@@ -791,6 +801,98 @@ mod tests {
       0o600
     );
     fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn atomic_writes_reach_the_disk_before_they_replace_the_file() {
+    let path = unique_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"old").unwrap();
+    let synced = std::cell::RefCell::new(Vec::new());
+    write_private_atomic_with(&path, b"new", |file| {
+      // The temporary is synced holding the new bytes while the old file is
+      // still in place; then the directory holding the rename.
+      let metadata = file.metadata()?;
+      let size = if metadata.is_dir() { 0 } else { metadata.len() };
+      synced
+        .borrow_mut()
+        .push((metadata.is_dir(), size, fs::read_to_string(&path)?));
+      Ok(())
+    })
+    .unwrap();
+    let mut expected = vec![(false, 3, "old".to_owned())];
+    if cfg!(unix) {
+      expected.push((true, 0, "new".to_owned()));
+    }
+    assert_eq!(synced.into_inner(), expected);
+    remove_store(&path);
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn atomic_writes_sync_the_pinned_directory_after_a_platform_path_change() {
+    use std::os::unix::fs::{MetadataExt, symlink};
+    let root = unique_path().parent().unwrap().to_path_buf();
+    let original = root.join("original");
+    let moved = root.join("moved");
+    let outside = root.join("outside");
+    create_private_dir(&original).unwrap();
+    create_private_dir(&outside).unwrap();
+    let path = original.join("store.json");
+    write_private_atomic(&path, b"old").unwrap();
+    let pinned_inode = fs::metadata(&original).unwrap().ino();
+    let directory_synced = std::cell::Cell::new(false);
+    write_private_atomic_with(&path, b"new", |file| {
+      if file.metadata()?.is_dir() {
+        assert_eq!(file.metadata()?.ino(), pinned_inode);
+        assert_eq!(fs::read(moved.join("store.json"))?, b"new");
+        directory_synced.set(true);
+      } else {
+        assert_eq!(fs::read(&path)?, b"old");
+        fs::rename(&original, &moved)?;
+        symlink(&outside, &original)?;
+      }
+      file.sync_all()
+    })
+    .unwrap();
+    assert!(directory_synced.get());
+    assert_eq!(fs::read(moved.join("store.json")).unwrap(), b"new");
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&moved).unwrap().count(), 1);
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn a_failed_directory_sync_is_reported_after_replacement() {
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"old").unwrap();
+    let result = write_private_atomic_with(&path, b"new", |file| {
+      if file.metadata()?.is_dir() {
+        return Err(std::io::Error::other("directory sync unavailable"));
+      }
+      file.sync_all()
+    });
+    assert!(result.unwrap_err().contains("directory sync unavailable"));
+    assert_eq!(fs::read(&path).unwrap(), b"new");
+    assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    remove_store(&path);
+  }
+
+  #[test]
+  fn a_failed_sync_keeps_the_old_file_and_no_temporary() {
+    let path = unique_path();
+    let directory = path.parent().unwrap().to_owned();
+    fs::create_dir_all(&directory).unwrap();
+    write_private_atomic(&path, b"old").unwrap();
+    let failed = write_private_atomic_with(&path, b"new", |_| {
+      Err(std::io::Error::other("disk full"))
+    });
+    assert!(failed.is_err());
+    assert_eq!(fs::read_to_string(&path).unwrap(), "old");
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+    remove_store(&path);
   }
 
   #[test]

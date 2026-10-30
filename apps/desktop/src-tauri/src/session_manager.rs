@@ -253,6 +253,7 @@ pub struct OpenDocument<'a> {
 enum SessionStoreAccess {
   Pending,
   Ready,
+  Unavailable,
 }
 
 #[derive(PartialEq, Eq)]
@@ -607,7 +608,7 @@ async fn observe_editor(original: &Path, current: &Path) -> EditorState {
       Command::new("lsof")
         .kill_on_drop(true)
         .arg("-t")
-        .arg("+w")
+        .arg("-w")
         .arg("--")
         .arg(current)
         .output(),
@@ -649,14 +650,18 @@ async fn observe_editor(original: &Path, current: &Path) -> EditorState {
 }
 
 impl SessionManager {
-  pub fn new() -> Self {
-    let data_dir = dirs::data_dir()
-      .unwrap_or_else(|| PathBuf::from("."))
+  pub fn new() -> Result<Self, String> {
+    Self::with_data_dir(dirs::data_dir())
+  }
+
+  fn with_data_dir(data_dir: Option<PathBuf>) -> Result<Self, String> {
+    let data_dir = data_dir
+      .ok_or("desktop data directory is unavailable")?
       .join(config::APP_DATA_DIR_NAME);
 
     let bridge_port = config::resolve_bridge_port();
 
-    Self {
+    Ok(Self {
       store_access: SessionStoreAccess::Pending,
       account_owner: None,
       retired_sessions: Vec::new(),
@@ -682,7 +687,7 @@ impl SessionManager {
       http_client: DesktopHttpClient::new(Default::default())
         .expect("desktop HTTP client initialization failed"),
       app_handle: None,
-    }
+    })
   }
 
   pub fn set_app_handle(&mut self, handle: AppHandle) {
@@ -705,8 +710,20 @@ impl SessionManager {
     &mut self,
     owner: Option<AccountOwner>,
   ) -> Result<(), String> {
-    if self.store_access == SessionStoreAccess::Pending {
-      return self.initialize(owner).await;
+    match self.store_access {
+      SessionStoreAccess::Pending => {
+        if let Err(error) = self.initialize(owner).await {
+          if self.store_access != SessionStoreAccess::Unavailable {
+            return Err(error);
+          }
+        }
+        return Ok(());
+      }
+      SessionStoreAccess::Unavailable => {
+        self.account_owner = owner;
+        return Ok(());
+      }
+      SessionStoreAccess::Ready => {}
     }
     if self.account_owner == owner {
       return self.retry_retired_sessions(RetirementPass::Pending).await;
@@ -959,6 +976,7 @@ impl SessionManager {
     self.store_load_issue = store.load_issue;
 
     if self.store_load_issue.is_some() {
+      self.store_access = SessionStoreAccess::Unavailable;
       self.show_notification(
         NotifType::SyncIssues,
         crate::i18n::t("settings.stellaDesktop"),
@@ -2297,6 +2315,17 @@ impl SessionManager {
 
   // --- File watcher ---
 
+  pub async fn attach_pending_listeners(manager: &Arc<Mutex<Self>>) {
+    let ids = manager.lock().await.session_ids_needing_watchers();
+    for id in &ids {
+      Self::attach_watcher(manager, id).await;
+    }
+    let mut state = manager.lock().await;
+    for id in &ids {
+      state.ensure_sse_listener(manager, id);
+    }
+  }
+
   pub async fn attach_watcher(manager: &Arc<Mutex<Self>>, session_id: &str) {
     let (watch_dir, file_name, sid) = {
       let mgr = manager.lock().await;
@@ -3251,7 +3280,7 @@ mod tests {
   use zip::write::SimpleFileOptions;
 
   fn test_manager() -> SessionManager {
-    let mut manager = SessionManager::new();
+    let mut manager = SessionManager::new().expect("test data directory");
     manager.store_access = SessionStoreAccess::Ready;
     manager.account_owner = Some(AccountOwner::fixture("account"));
     manager
@@ -3604,6 +3633,14 @@ mod tests {
     std::fs::remove_dir_all(sandbox).unwrap();
   }
 
+  #[test]
+  fn a_missing_data_directory_is_a_construction_error() {
+    assert!(matches!(
+      SessionManager::with_data_dir(None),
+      Err(error) if error == "desktop data directory is unavailable"
+    ));
+  }
+
   #[tokio::test]
   async fn account_recovery_keeps_an_unreadable_store_intact() {
     let sandbox =
@@ -3620,7 +3657,14 @@ mod tests {
         .is_err()
     );
     assert!(manager.persist_sessions_result().await.is_err());
-    assert_eq!(std::fs::read(&manager.store_path).unwrap(), bytes);
+    for owner in [None, Some(AccountOwner::fixture("other"))] {
+      manager.set_account_owner(owner.clone()).await.unwrap();
+      assert!(manager.is_account_owner(owner.as_ref()));
+      assert!(manager.persist_sessions_result().await.is_err());
+      assert_eq!(std::fs::read(&manager.store_path).unwrap(), bytes);
+    }
+    assert!(manager.sessions.is_empty());
+    assert!(manager.retired_sessions.is_empty());
     std::fs::remove_dir_all(sandbox).unwrap();
   }
 
@@ -3884,7 +3928,7 @@ mod tests {
     Arc<SessionCosts>,
   ) {
     crate::i18n::init_en();
-    let mut manager = SessionManager::new();
+    let mut manager = SessionManager::new().expect("test data directory");
     let fs = Arc::new(CountingFileSystem::default());
     manager.file_system = fs.clone();
     manager.store_access = SessionStoreAccess::Ready;

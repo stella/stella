@@ -72,6 +72,14 @@ impl Parent {
     fs::rename(&self.path, &destination.path)
   }
 
+  pub(super) fn rename_to_with(
+    &self,
+    destination: &Self,
+    _sync: &impl Fn(&fs::File) -> io::Result<()>,
+  ) -> io::Result<()> {
+    self.rename_to(destination)
+  }
+
   pub(super) fn move_to(&self, destination: &Self) -> io::Result<()> {
     let source = self.path.to_str().ok_or_else(|| {
       io::Error::new(io::ErrorKind::InvalidInput, "invalid local file path")

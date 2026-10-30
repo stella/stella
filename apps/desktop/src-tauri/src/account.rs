@@ -918,6 +918,7 @@ pub async fn link(
   };
   manager.set_account_owner(owner).await?;
   drop(manager);
+  crate::session_manager::SessionManager::attach_pending_listeners(sessions).await;
   Ok(outcome)
 }
 
@@ -1015,7 +1016,6 @@ pub fn notify(app: &tauri::AppHandle) {
     let sessions = Arc::clone(&sessions);
     let account = Arc::clone(&account);
     tauri::async_runtime::spawn(async move {
-      let mut manager = sessions.lock().await;
       let owner = match current(&account).await {
         Ok(account) => account
           .as_ref()
@@ -1025,9 +1025,13 @@ pub fn notify(app: &tauri::AppHandle) {
           return;
         }
       };
+      let mut manager = sessions.lock().await;
       if let Err(error) = manager.set_account_owner(owner).await {
         tracing::warn!(error = %error, "document account transition remains pending");
+        return;
       }
+      drop(manager);
+      crate::session_manager::SessionManager::attach_pending_listeners(&sessions).await;
     });
   }
   crate::feature_access::account_changed(app, crate::activity::unload_account);
@@ -1053,9 +1057,9 @@ pub async fn account_get_state(
   require_account_window(&window)?;
   // Name the server a new connection would really open, never a default the
   // selected self-hosted server overrides.
+  let current = current(&state).await;
   let mut manager = sessions.lock().await;
   let server = crate::commands::browser_connect_server(&manager);
-  let current = current(&state).await;
   if let Ok(current) = &current {
     manager
       .set_account_owner(
@@ -1066,6 +1070,8 @@ pub async fn account_get_state(
       .await?;
   }
   drop(manager);
+  crate::session_manager::SessionManager::attach_pending_listeners(sessions.inner())
+    .await;
   set_reconnect_needed(
     &app,
     matches!(&current, Err(error) if error == crate::device_proof::RECONNECT),

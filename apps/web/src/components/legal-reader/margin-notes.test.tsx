@@ -131,7 +131,7 @@ describe("notes drawn in the text's own flow", () => {
 
 const provision = {
   document: {
-    country: "CZ",
+    country: "CZE",
     eli: "/eli/cz/sb/2012/89",
     id: "act-1",
     slug: "civil-code",

@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "AT_FINDOK",
+  "key": "at-findok",
+  "parserVersion": 11,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."
+  }
+}

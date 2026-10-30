@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The widened diagnostic CHECK is added NOT VALID without scanning existing messages, under 1s lock_timeout and 5s statement_timeout; its later validation runs only after releasing the schema lock."
+}

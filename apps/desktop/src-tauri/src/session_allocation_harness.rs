@@ -51,7 +51,7 @@ impl Fixture {
       bytes: vec![b'x'; size],
       reads: AtomicUsize::new(0),
     });
-    let mut manager = SessionManager::new();
+    let mut manager = SessionManager::new().expect("test data directory");
     let root =
       std::env::temp_dir().join(format!("stella-alloc-{}", uuid::Uuid::new_v4()));
     manager.store_path = root.join("sessions.json");
