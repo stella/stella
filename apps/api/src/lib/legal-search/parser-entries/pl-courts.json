@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_COURTS",
   "key": "pl-courts",
-  "parserVersion": 19,
+  "parserVersion": 20,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage. Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage."
   }
 }
