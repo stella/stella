@@ -1112,10 +1112,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/case-law/case-law-index-search.logic.ts::CASE_LAW_FILTER_KEYS::domain:[\"court\",\"lang\",\"sourceId\",\"type\"]::1",
-    "reason": "Existing CASE_LAW_FILTER_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/features/case-law/citation-format.ts::INDIGOBOOK_MONTHS::domain:[\"Jan.\",\"Feb.\",\"Mar.\",\"Apr.\",\"May\",\"June\",\"July\",\"Aug.\",\"Sept.\",\"Oct.\",\"Nov.\",\"Dec.\"]::1",
     "reason": "Existing INDIGOBOOK_MONTHS domain; contract ownership pending migration."
   },
@@ -1362,10 +1358,6 @@
   {
     "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::sideDiff::maxLength:6::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-filters.logic.ts::STATUTE_FILTER_KEYS::domain:[\"type\",\"validity\"]::1",
-    "reason": "Existing STATUTE_FILTER_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::FontField::maxLength:128::1",
@@ -1745,10 +1737,6 @@
   },
   {
     "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:2::1",
-    "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:2::2",
     "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
   },
   {
