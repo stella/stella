@@ -1,6 +1,7 @@
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   getPropertyName,
   isAstNode,
   isIdentifierReference,
@@ -67,7 +68,7 @@ const isNode = (
 
 type FetchRestorationOptions = {
   context: ScopeContext;
-  replacement: ESTree.Node;
+  replacement: AstNode;
   before: number;
 };
 
