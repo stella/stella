@@ -20,7 +20,9 @@ const hasSafeSearchPath = (routine: DefinerFunction) => {
     return false;
   }
   const value = setting.slice("search_path=".length).trim();
-  return /^(?:[a-z_][a-z0-9_]*\s*,\s*)*pg_temp$/u.test(value);
+  // PostgreSQL keeps a repeated schema at its first position, so pg_temp
+  // anywhere before the end still searches temporary relations first.
+  return /^(?:(?!pg_temp)[a-z_][a-z0-9_]*\s*,\s*)*pg_temp$/u.test(value);
 };
 
 const describeViolation = (routine: DefinerFunction) =>
@@ -58,6 +60,12 @@ describe.skipIf(!enabled)("security-definer search paths (postgres)", () => {
           AS 'SELECT 1'
         `);
         await db.execute(sql`
+          CREATE FUNCTION ${schema}.unsafe_repeated_fixture() RETURNS integer
+          LANGUAGE sql SECURITY DEFINER
+          SET search_path = pg_temp, public, pg_temp
+          AS 'SELECT 1'
+        `);
+        await db.execute(sql`
           CREATE FUNCTION ${schema}.safe_fixture() RETURNS integer
           LANGUAGE sql SECURITY DEFINER
           SET search_path = pg_catalog, public, pg_temp
@@ -89,6 +97,7 @@ describe.skipIf(!enabled)("security-definer search paths (postgres)", () => {
         expect(fixtureViolations).toEqual([
           `${fixtureSchema}.unsafe_fixture(): pg_catalog, public`,
           `${fixtureSchema}.unsafe_quoted_fixture(): pg_catalog, "PG_TEMP"`,
+          `${fixtureSchema}.unsafe_repeated_fixture(): pg_temp, public, pg_temp`,
         ]);
 
         const violations = routines

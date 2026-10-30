@@ -906,7 +906,7 @@ type SearchPathSetting =
   | { type: "reset" };
 
 const CANONICAL_SEARCH_PATH_PATTERN =
-  /^\s*(?:=|TO)\s*(?:[a-z_][a-z0-9_]*\s*,\s*)*pg_temp\s*$/u;
+  /^\s*(?:=|TO)\s*(?:(?!pg_temp)[a-z_][a-z0-9_]*\s*,\s*)*pg_temp\s*$/u;
 
 const readSecurityDefinerSearchPath = (
   statement: Statement,

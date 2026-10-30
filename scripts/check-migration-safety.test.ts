@@ -177,6 +177,8 @@ describe("check-migration-safety", () => {
       'SET search_path = pg_catalog, "PG_TEMP"',
       "SET search_path = 'pg_catalog, public, pg_temp'",
       "SET search_path = pg_catalog, pg_temp, 'public'",
+      "SET search_path = pg_temp, public, pg_temp",
+      "SET search_path = pg_temp_3, public, pg_temp",
     ])("rejects non-canonical search path %s", (options) => {
       expectFinding(
         runChecker(reviewedDefiner(options)),
