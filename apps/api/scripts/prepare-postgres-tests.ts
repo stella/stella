@@ -20,8 +20,6 @@ export const preparePostgresTests = async (): Promise<void> => {
     cwd: apiRoot,
     env: {
       ...process.env,
-      MIGRATE_MANUAL_DRAIN_CONFIRMED:
-        "Isolated PostgreSQL service test database has no scheduler workers",
       // Postgres test databases are disposable and have no RDS load signal.
       DB_LOAD_GATE_EBS_SIGNAL:
         process.env["DB_LOAD_GATE_EBS_SIGNAL"] ?? "disabled",

@@ -12,41 +12,65 @@ import type { MigrationCutoverEvent } from "./migration-cutover";
 
 const automatic = { type: "automatic" } as const;
 
-test("locking migrations refuse without recent lease-aware admission", async () => {
-  expect(
-    await rejectionOf(
-      assertMigrationCutover({
-        connection: { query: async () => [{ exists: false }] },
-        tables: ["scheduler_jobs"],
-        confirmation: automatic,
-      }),
-    ),
-  ).toBeInstanceOf(MigrationSchedulerDrainRequired);
-});
-
-test.each([true, false])(
-  "recent lease-aware claim admission is %s",
-  async (recent) => {
-    const responses = [[{ exists: true }], [{ recent }]];
-    let reads = 0;
-    const admission = assertMigrationCutover({
-      connection: {
-        query: async () =>
-          responses.at(reads++) ?? panic("Unexpected admission read"),
-      },
-      tables: ["scheduler_jobs"],
-      confirmation: automatic,
-    });
-    if (recent) {
-      await admission;
-    } else {
-      expect(await rejectionOf(admission)).toBeInstanceOf(
-        MigrationSchedulerDrainRequired,
-      );
-    }
-    expect(reads).toBe(2);
+test.each([
+  {
+    name: "fresh database without scheduler tables",
+    responses: [[{ jobsExist: false, activityExists: false }]],
+    outcome: "admitted",
   },
-);
+  {
+    name: "scheduler tables without recent work",
+    responses: [
+      [{ jobsExist: true, activityExists: false }],
+      [{ active: false }],
+    ],
+    outcome: "admitted",
+  },
+  {
+    name: "recent work without table leases",
+    responses: [
+      [{ jobsExist: true, activityExists: false }],
+      [{ active: true }],
+    ],
+    outcome: "refused",
+  },
+  {
+    name: "recent work with an expired lease watermark",
+    responses: [
+      [{ jobsExist: true, activityExists: true }],
+      [{ active: true }],
+      [{ recent: false }],
+    ],
+    outcome: "refused",
+  },
+  {
+    name: "recent work with recent table leases",
+    responses: [
+      [{ jobsExist: true, activityExists: true }],
+      [{ active: true }],
+      [{ recent: true }],
+    ],
+    outcome: "admitted",
+  },
+])("$name", async ({ responses, outcome }) => {
+  let reads = 0;
+  const admission = assertMigrationCutover({
+    connection: {
+      query: async () =>
+        responses.at(reads++) ?? panic("Unexpected admission read"),
+    },
+    tables: ["scheduler_jobs"],
+    confirmation: automatic,
+  });
+  if (outcome === "refused") {
+    expect(await rejectionOf(admission)).toBeInstanceOf(
+      MigrationSchedulerDrainRequired,
+    );
+  } else {
+    await admission;
+  }
+  expect(reads).toBe(responses.length);
+});
 
 test("manual admission requires the typed reason and records only that check's confirmation", async () => {
   const events: MigrationCutoverEvent[] = [];

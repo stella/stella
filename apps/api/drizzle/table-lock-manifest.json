@@ -14790,6 +14790,19 @@
         }
       ]
     },
+    "20261030161200_sitemap_language_changes": {
+      "hash": "939cf3b0900b90fbacc757e18de4564570c8836905e210de83a61d25fa7fba17",
+      "locks": [
+        {
+          "relation": "case_law_decisions",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "case_law_decisions",
+          "mode": "SHARE ROW EXCLUSIVE"
+        }
+      ]
+    },
     "20261030213017_scheduler_table_leases": {
       "hash": "1292d7367d2f3d7e108be5d450312f38a44f32dc1239043ad6d72cad3a862bb4",
       "locks": [

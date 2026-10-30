@@ -133,7 +133,6 @@ runs:
       # as `existing()` and then fails when later policy creates target it.
       shell: bash
       env:
-        MIGRATE_MANUAL_DRAIN_CONFIRMED: E2E fixture database is migrated before API and scheduler startup
         NODE_ENV: development
         STELLA_LOCAL_DEV: "1"
       run: bun --filter @stll/api db:migrate

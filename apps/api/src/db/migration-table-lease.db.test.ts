@@ -21,7 +21,6 @@ import {
   type GatedTestClientScope,
   withGatedTestClients,
 } from "../tests/gated-test-database";
-import { ISOLATED_MIGRATION_DRAIN } from "../tests/helpers/migration-drain-confirmation";
 import {
   MIGRATION_LOCK_MANIFEST_FILE,
   pendingMigrationLockTables,
@@ -132,7 +131,6 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
           expect(originalColumns.length).toBeGreaterThan(0);
           const error = await rejectionOf(
             runMigrations({
-              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               databaseUrl,
               migrationsFolder,
@@ -196,7 +194,6 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
         try {
           const error = await rejectionOf(
             runMigrations({
-              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               databaseUrl,
               migrationsFolder,
@@ -246,7 +243,6 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
             ),
           ).toBe(true);
           const result = await runMigrations({
-            manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
             connection,
             databaseUrl,
             migrationsFolder,

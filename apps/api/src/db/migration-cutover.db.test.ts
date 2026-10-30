@@ -16,9 +16,9 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { readMigrationLockSources } from "../../../../scripts/check-migration-locks";
 import { generateMigrationLockManifest } from "../../../../scripts/generate-migration-lock-manifest";
 import type { MigrationDrainConfirmation } from "../env-migration";
+import { parseMigrationDrainConfirmation } from "../env-migration";
 import { DEFAULT_LEASE_MS } from "../lib/scheduler/lease-timing";
 import { withGatedTestClients } from "../tests/gated-test-database";
-import { ISOLATED_MIGRATION_DRAIN } from "../tests/helpers/migration-drain-confirmation";
 import { MigrationSchedulerDrainRequired } from "./migration-cutover";
 import type { MigrationCutoverEvent } from "./migration-cutover";
 import {
@@ -52,6 +52,7 @@ const withCutoverFixture = async (
     run: (options?: CutoverRunOptions) => ReturnType<typeof runMigrations>;
     query: (query: string) => PromiseLike<unknown[]>;
     seedRecentAdmission: () => Promise<void>;
+    seedScheduler: () => Promise<void>;
   }) => Promise<void>,
 ) => {
   const databaseUrl =
@@ -112,6 +113,23 @@ const withCutoverFixture = async (
                     manualDrainConfirmation: confirmation,
                     cutoverEmit: emit,
                   }),
+                seedScheduler: async () => {
+                  // Use the committed scheduler DDL, without mirroring its columns.
+                  const statements = readFileSync(
+                    path.join(
+                      corpusFolder,
+                      "20260430131000_agenda_scheduler_infosoud/migration.sql",
+                    ),
+                    "utf-8",
+                  ).split("--> statement-breakpoint");
+                  for (const statement of statements.slice(0, 2)) {
+                    await client.unsafe(statement);
+                  }
+                  await client.unsafe(`INSERT INTO scheduler_jobs
+                    (id, task, schedule, next_run_at)
+                    VALUES ('cutover-fixture', 'cutover.fixture',
+                      '{"type":"interval","everyMs":60000}'::jsonb, clock_timestamp())`);
+                },
                 seedRecentAdmission: async () => {
                   await ensureTableLeaseQueue({ connection: adapter });
                   const holderId = `recent-claim:${Bun.randomUUIDv7()}`;
@@ -152,10 +170,24 @@ const withCutoverFixture = async (
 describe.skipIf(!enabled)(
   "migration cutover admission against real PostgreSQL",
   () => {
-    test("no recent claim refuses before role, ledger, or coordination DDL", async () => {
+    test("a fresh database proceeds without an attestation", async () => {
+      await withCutoverFixture(TABLE_LEASE_MIGRATION, async ({ run }) => {
+        expect(await run()).toMatchObject({
+          status: "applied",
+          insertedNames: [TABLE_LEASE_MIGRATION],
+        });
+      });
+    });
+
+    test.each([
+      "last_run_at = clock_timestamp()",
+      "locked_by = 'older-worker', locked_until = clock_timestamp() + interval '1 minute'",
+    ])("active older workers refuse before DDL: %s", async (activity) => {
       await withCutoverFixture(
         TABLE_LEASE_MIGRATION,
-        async ({ run, query }) => {
+        async ({ run, query, seedScheduler }) => {
+          await seedScheduler();
+          await query(`UPDATE scheduler_jobs SET ${activity}`);
           expect(await rejectionOf(run())).toBeInstanceOf(
             MigrationSchedulerDrainRequired,
           );
@@ -173,10 +205,35 @@ describe.skipIf(!enabled)(
       );
     });
 
+    test.each([
+      "last_run_at = clock_timestamp() - interval '11 minutes'",
+      "locked_by = 'expired-worker', locked_until = clock_timestamp() - interval '1 minute'",
+      "locked_until = clock_timestamp() + interval '1 minute'",
+    ])(
+      "inactive scheduler evidence proceeds without an attestation: %s",
+      async (activity) => {
+        await withCutoverFixture(
+          TABLE_LEASE_MIGRATION,
+          async ({ run, query, seedScheduler }) => {
+            await seedScheduler();
+            await query(`UPDATE scheduler_jobs SET ${activity}`);
+            expect(await run()).toMatchObject({
+              status: "applied",
+              insertedNames: [TABLE_LEASE_MIGRATION],
+            });
+          },
+        );
+      },
+    );
+
     test("a recent lease-aware claim remains evidence after its leases are released", async () => {
       await withCutoverFixture(
         TABLE_LEASE_MIGRATION,
-        async ({ run, seedRecentAdmission }) => {
+        async ({ run, seedRecentAdmission, seedScheduler, query }) => {
+          await seedScheduler();
+          await query(
+            "UPDATE scheduler_jobs SET last_run_at = clock_timestamp()",
+          );
           await seedRecentAdmission();
           expect(await run()).toMatchObject({
             status: "applied",
@@ -189,7 +246,11 @@ describe.skipIf(!enabled)(
     test("an expired admission watermark refuses the pending locking set", async () => {
       await withCutoverFixture(
         TABLE_LEASE_MIGRATION,
-        async ({ run, seedRecentAdmission, query }) => {
+        async ({ run, seedRecentAdmission, seedScheduler, query }) => {
+          await seedScheduler();
+          await query(
+            "UPDATE scheduler_jobs SET last_run_at = clock_timestamp()",
+          );
           await seedRecentAdmission();
           await query(
             "UPDATE scheduler_table_lease_activity SET last_claimed_at = clock_timestamp() - interval '11 minutes'",
@@ -207,39 +268,55 @@ describe.skipIf(!enabled)(
     });
 
     test("typed manual confirmation admits only the readiness check and emits its reason", async () => {
-      await withCutoverFixture(TABLE_LEASE_MIGRATION, async ({ run }) => {
-        const events: MigrationCutoverEvent[] = [];
-        expect(
-          await run({
-            confirmation: ISOLATED_MIGRATION_DRAIN,
-            emit: (event) => events.push(event),
-          }),
-        ).toMatchObject({
-          status: "applied",
-          insertedNames: [TABLE_LEASE_MIGRATION],
-        });
-        expect(events).toEqual([
-          {
-            event: "migrate.manual_drain_confirmed",
-            reason: "Isolated migration test database has no scheduler workers",
-            tableCount: expect.any(Number),
-          },
-        ]);
-      });
+      await withCutoverFixture(
+        TABLE_LEASE_MIGRATION,
+        async ({ run, seedScheduler, query }) => {
+          await seedScheduler();
+          await query(
+            "UPDATE scheduler_jobs SET last_run_at = clock_timestamp()",
+          );
+          const events: MigrationCutoverEvent[] = [];
+          expect(
+            await run({
+              confirmation: parseMigrationDrainConfirmation(
+                "Scheduler workers drained for isolated maintenance",
+              ).unwrap(),
+              emit: (event) => events.push(event),
+            }),
+          ).toMatchObject({
+            status: "applied",
+            insertedNames: [TABLE_LEASE_MIGRATION],
+          });
+          expect(events).toEqual([
+            {
+              event: "migrate.manual_drain_confirmed",
+              reason: "Scheduler workers drained for isolated maintenance",
+              tableCount: expect.any(Number),
+            },
+          ]);
+        },
+      );
     });
 
     test("a pending migration with no relation lock needs no recent activity", async () => {
-      await withCutoverFixture(NO_LOCK_MIGRATION, async ({ run, query }) => {
-        expect(await run()).toMatchObject({
-          status: "applied",
-          insertedNames: [NO_LOCK_MIGRATION],
-        });
-        expect(
+      await withCutoverFixture(
+        NO_LOCK_MIGRATION,
+        async ({ run, query, seedScheduler }) => {
+          await seedScheduler();
           await query(
-            "SELECT relname FROM pg_class WHERE relname = 'scheduler_table_lease_activity'",
-          ),
-        ).toHaveLength(0);
-      });
+            "UPDATE scheduler_jobs SET last_run_at = clock_timestamp()",
+          );
+          expect(await run()).toMatchObject({
+            status: "applied",
+            insertedNames: [NO_LOCK_MIGRATION],
+          });
+          expect(
+            await query(
+              "SELECT relname FROM pg_class WHERE relname = 'scheduler_table_lease_activity'",
+            ),
+          ).toHaveLength(0);
+        },
+      );
     });
   },
 );

@@ -49,13 +49,31 @@ export const assertMigrationCutover = async ({
       confirmation satisfies never;
       return panic("Unknown migration drain confirmation");
   }
-  const [{ exists }] = v.parse(
-    v.tuple([v.object({ exists: v.boolean() })]),
+  const [{ jobsExist, activityExists }] = v.parse(
+    v.tuple([
+      v.object({ jobsExist: v.boolean(), activityExists: v.boolean() }),
+    ]),
     await connection.query(
-      "SELECT to_regclass('public.scheduler_table_lease_activity') IS NOT NULL AS exists",
+      `SELECT to_regclass('public.scheduler_jobs') IS NOT NULL AS "jobsExist",
+       to_regclass('public.scheduler_table_lease_activity') IS NOT NULL AS "activityExists"`,
     ),
   );
-  if (exists) {
+  if (!jobsExist) {
+    return;
+  }
+  const [{ active }] = v.parse(
+    v.tuple([v.object({ active: v.boolean() })]),
+    await connection.query(
+      `SELECT EXISTS (SELECT 1 FROM public.scheduler_jobs
+       WHERE (locked_by IS NOT NULL AND locked_until > clock_timestamp())
+          OR last_run_at > clock_timestamp() - $1::integer * interval '1 millisecond') AS active`,
+      [RECENT_SCHEDULER_LEASE_WINDOW_MS],
+    ),
+  );
+  if (!active) {
+    return;
+  }
+  if (activityExists) {
     const [{ recent }] = v.parse(
       v.tuple([v.object({ recent: v.boolean() })]),
       await connection.query(
@@ -70,6 +88,6 @@ export const assertMigrationCutover = async ({
   }
   throw new MigrationSchedulerDrainRequired({
     message:
-      "No lease-aware scheduler claim was recorded in the last 10 minutes; run the manual scheduler drain, then re-run migrate with MIGRATE_MANUAL_DRAIN_CONFIRMED=<reason>",
+      "Active or recently running scheduler workers have no lease-aware claim in the last 10 minutes; run the manual scheduler drain, then re-run migrate with MIGRATE_MANUAL_DRAIN_CONFIRMED=<reason>",
   });
 };

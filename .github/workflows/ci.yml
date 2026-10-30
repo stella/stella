@@ -4001,14 +4001,12 @@ jobs:
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' || needs.ci-plan.outputs.corpus_suites_required == 'true'
         working-directory: apps/api
         env:
-          MIGRATE_MANUAL_DRAIN_CONFIRMED: Fresh isolated CI database is migrated before scheduler workers start
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
 
       - name: Prepare the dev seed database
         if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
         env:
-          MIGRATE_MANUAL_DRAIN_CONFIRMED: Fresh isolated CI database is migrated before scheduler workers start
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
           RUSTFS_ACCESS_KEY: stella-rustfs-dev
           RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
@@ -4167,7 +4165,6 @@ jobs:
         if: needs.ci-plan.outputs.corpus_suites_required == 'true'
         working-directory: apps/api
         env:
-          MIGRATE_MANUAL_DRAIN_CONFIRMED: Fresh isolated CI database is migrated before scheduler workers start
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
 
@@ -4372,7 +4369,6 @@ jobs:
       - name: Apply all migrations to fresh Postgres
         working-directory: apps/api
         env:
-          MIGRATE_MANUAL_DRAIN_CONFIRMED: Fresh isolated CI database is migrated before scheduler workers start
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # Exercises the shipped migrate path (Bun SQL + drizzle migrator),
         # the same entrypoint the deploy runs, not the drizzle-kit CLI.
@@ -4407,7 +4403,6 @@ jobs:
 
       - name: Rehearse interrupted Better Auth constraints migration
         env:
-          MIGRATE_MANUAL_DRAIN_CONFIRMED: Isolated CI database has no scheduler processes; rehearsal writers are controlled SQL sessions
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: >-
           bash scripts/rehearse-better-auth-constraint-retry.sh
@@ -4415,7 +4410,6 @@ jobs:
 
       - name: Reject inconsistent migration history
         env:
-          MIGRATE_MANUAL_DRAIN_CONFIRMED: Isolated CI database has no scheduler processes; rehearsal writers are controlled SQL sessions
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           PGPASSWORD: stella
         run: |
@@ -4643,7 +4637,6 @@ jobs:
       - name: Rehearse the upgrade from the promoted release at scale
         timeout-minutes: 38
         env:
-          MIGRATE_MANUAL_DRAIN_CONFIRMED: Isolated CI database has no scheduler processes; rehearsal writers are controlled SQL sessions
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
           REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}

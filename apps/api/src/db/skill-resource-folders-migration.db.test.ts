@@ -21,7 +21,6 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";
 
 import { generateMigrationLockManifest } from "../../../../scripts/generate-migration-lock-manifest";
-import { ISOLATED_MIGRATION_DRAIN } from "../tests/helpers/migration-drain-confirmation";
 import { MIGRATION_LOCK_MANIFEST_FILE } from "./migration-lock-manifest";
 import { runMigrations } from "./migration-runner";
 
@@ -217,7 +216,6 @@ const withPreCutoverDatabase = async (
             const connection = await openScratch().sql.reserve();
             try {
               const result = await runMigrations({
-                manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                 connection,
                 databaseUrl: scratchUrl,
                 migrationsFolder: bundle,
