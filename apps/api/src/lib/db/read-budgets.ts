@@ -41,6 +41,12 @@ export const READ_BUDGETS = {
     reason:
       "One 25-row batch includes the eligible-index claim, lease, mixed success/failure transitions and both audit writes. Rolled-back owner-role replays measured 685 and 732 shared buffers with 1,000 and 10,000 terminal rows; the 1,000-page cap allows 268 further pages for deeper primary/audit indexes while the partial due index excludes terminal history.",
   },
+  "statement.caseLaw.globalSearchHits": {
+    surface: "statement",
+    pages: 6000,
+    reason:
+      "Fixed 200 full-text matches: up to 12 pages each for eligibility and ranking, then 11 returned rows at up to 256 pages each for decision/search-document/identifier lookups and wide TOAST-backed section bodies, with 784 pages for the full-text probe and index depth. Body reads must depend on the returned page, not all matches.",
+  },
   "scheduled.requests.sweepReceipts": {
     surface: "scheduled-job",
     pages: 20_000,

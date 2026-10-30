@@ -6,6 +6,7 @@ import { CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS } from "@/api/lib/schedu
 /** The deadline each measured runtime owner applies, or no owner deadline. */
 export const QUERY_PERF_OWNER_DEADLINES = {
   "scheduled.usage.eraseHostedCustomers": undefined,
+  "statement.caseLaw.globalSearchHits": undefined,
   "scheduled.caseLaw.reportFreshness": undefined,
   "scheduled.requests.sweepReceipts":
     REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS,
