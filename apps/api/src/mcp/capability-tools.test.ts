@@ -1658,17 +1658,22 @@ describe("list_capabilities", () => {
     ).items.map(({ id }) => id);
     expect(all.length).toBeGreaterThan(3);
 
+    type CapabilityPage = {
+      items: { id: string }[];
+      nextCursor: string | null;
+    };
     const paged: string[] = [];
     let cursor: string | null = null;
     do {
-      const page: { items: { id: string }[]; nextCursor: string | null } =
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
         parseToolPayload(
           await call("list_capabilities", {
             query: "time entries",
             limit: 2,
             ...(cursor === null ? {} : { cursor }),
           }),
-        );
+        ),
+      );
       paged.push(...page.items.map(({ id }) => id));
       cursor = page.nextCursor;
     } while (cursor !== null);
@@ -1684,10 +1689,14 @@ describe("list_capabilities", () => {
   });
 
   test("a cursor resumes only the query that issued it", async () => {
-    const first: { items: { id: string }[]; nextCursor: string | null } =
+    const first = asTestRaw<{
+      items: { id: string }[];
+      nextCursor: string | null;
+    }>(
       parseToolPayload(
         await call("list_capabilities", { query: "time entries", limit: 1 }),
-      );
+      ),
+    );
     const issued = first.nextCursor ?? expect.unreachable("Need a second page");
     const sameId = first.items[0]?.id ?? expect.unreachable("Need an item");
 
@@ -3788,11 +3797,13 @@ describe("capability executor deployment feature gate", () => {
     };
     let cursor: string | null = null;
     do {
-      const page: CapabilityPage = parseToolPayload(
-        await call("list_capabilities", {
-          limit: 50,
-          ...(cursor === null ? {} : { cursor }),
-        }),
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
+        parseToolPayload(
+          await call("list_capabilities", {
+            limit: 50,
+            ...(cursor === null ? {} : { cursor }),
+          }),
+        ),
       );
       for (const item of page.items) {
         listed.add(item.id);
