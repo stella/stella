@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import { projectFeatureCommands } from "./feature-command-projection.js";
@@ -26,7 +26,7 @@ import {
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RegistryToolListing, RouteNode } from "./route-types.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {

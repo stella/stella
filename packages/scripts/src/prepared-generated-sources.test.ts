@@ -138,7 +138,7 @@ test("every prepared output has required identity and byte coverage", () => {
   }
 }, 30_000);
 
-test("CLI runtime preparation consumes a verified artifact without invoking generation", () => {
+test("CLI runtime preparation preserves verified modules and generates npm catalog shards", () => {
   const { root, manifest, write } = fixture();
   try {
     for (const file of [
@@ -182,6 +182,10 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       );
     }
     write(
+      "apps/api/scripts/export-capability-catalog.ts",
+      'import { mkdirSync, writeFileSync } from "node:fs"; mkdirSync("packages/cli/capabilities", { recursive: true }); writeFileSync("packages/cli/capabilities/widgets.list.json", JSON.stringify({ id: "widgets.list" })); process.stderr.write("fixture catalog generated\\n");',
+    );
+    write(
       "packages/cli/scripts/codegen.ts",
       'process.stderr.write("fixture generator invoked"); process.exit(81);',
     );
@@ -198,6 +202,15 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       { cwd: root, env },
     );
     expect(prepared.exitCode, prepared.stderr.toString()).toBe(0);
+    expect(prepared.stderr.toString()).toContain("fixture catalog generated");
+    expect(
+      JSON.parse(
+        readFileSync(
+          path.join(root, "packages/cli/capabilities/widgets.list.json"),
+          "utf-8",
+        ),
+      ),
+    ).toEqual({ id: "widgets.list" });
     expect(prepared.stderr.toString()).not.toContain(
       "fixture producer invoked",
     );

@@ -4,13 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import {
   checkCapabilityRegistry,
   readCapabilityCatalog,
 } from "./capability-catalog-data.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const withShards = (
   shards: Record<string, string>,

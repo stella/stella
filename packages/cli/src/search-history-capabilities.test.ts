@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   capabilityCommandPath,
   deriveCapabilityLeaf,
 } from "./generate-capability-tree.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null) {

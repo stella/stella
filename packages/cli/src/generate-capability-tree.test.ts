@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
@@ -22,7 +22,7 @@ import type {
   RouteNode,
 } from "./route-types.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const objectSchema = (
   properties: Record<string, unknown>,

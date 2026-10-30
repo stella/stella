@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   CAPABILITY_NAMESPACE,
@@ -17,7 +17,7 @@ import {
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import type { RegistryToolListing } from "./route-types.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const snapshotUrl = new URL(
   "generated/registry-snapshot.json",

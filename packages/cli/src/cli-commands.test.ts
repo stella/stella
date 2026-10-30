@@ -8,14 +8,14 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 const FETCH_PRELOAD = path.join(

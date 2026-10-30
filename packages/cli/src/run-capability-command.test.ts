@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import type { Context } from "./context.js";
 import {
@@ -14,7 +14,7 @@ import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityFlagSpec, CapabilityLeafSpec } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 type RecordedCall = { name: string; args: Record<string, unknown> };
 

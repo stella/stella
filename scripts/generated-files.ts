@@ -1434,6 +1434,7 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "packages/cli/src/**",
       "packages/cli/package.json",
+      "packages/cli/capabilities/**",
     ],
     checkInputs: [
       "apps/api/src/lib/write-contract/write-contract.ts",
@@ -1453,9 +1454,9 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/**",
       "apps/api/scripts/**",
       "packages/*/src/**",
+      "packages/cli/capabilities/**",
       "packages/cli/package.json",
       "packages/cli/scripts/codegen.ts",
-      "scripts/repository-capability-catalog.ts",
       "packages/cli/src/capability-catalog-data.ts",
       "packages/cli/src/write-generated-file.ts",
       "packages/cli/src/capability-catalog-load.ts",

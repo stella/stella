@@ -36,7 +36,7 @@ const catalogBytes = async (directory: string) => {
 // timeout: installs with lifecycle scripts, prepares sources and builds the API,
 // then exercises the release packer's two full CLI builds.
 test(
-  "a clean checkout installs, prepares and builds without capability shards and packs a fresh catalog",
+  "a clean checkout installs and builds the API without capability shards, prepares CLI shards and packs a fresh catalog",
   async () => {
     const temporary = mkdtempSync(path.join(tmpdir(), "stella-cli-build-"));
     const checkout = path.join(temporary, "checkout");
@@ -69,6 +69,24 @@ test(
         },
       );
       expect(copy.exitCode, copy.stderr.toString()).toBe(0);
+      run(["git", "init", "-q"], checkout);
+      run(["git", "add", "-A"], checkout);
+      run(
+        [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.com",
+          "-c",
+          "commit.gpgsign=false",
+          "commit",
+          "-q",
+          "-m",
+          "fixture",
+        ],
+        checkout,
+      );
       const catalog = path.join(checkout, "packages/cli/capabilities");
       expect(existsSync(catalog)).toBe(false);
       for (const command of [
@@ -76,8 +94,16 @@ test(
         ["bun", "scripts/ci-generated-sources.ts", "prepare"],
         ["bun", "--cwd=apps/api", "run", "build"],
       ]) {
+        // Preparation invokes CLI codegen, which owns npm shards. The API
+        // build must also succeed after those shards have been removed.
+        await rm(catalog, { recursive: true, force: true });
         run(command, checkout);
-        expect(existsSync(catalog), command.join(" ")).toBe(false);
+        if (command.includes("prepare")) {
+          expect(existsSync(catalog), command.join(" ")).toBe(true);
+        }
+        if (command.includes("build")) {
+          expect(existsSync(catalog), command.join(" ")).toBe(false);
+        }
       }
       const destination = path.join(temporary, "packed");
       run(

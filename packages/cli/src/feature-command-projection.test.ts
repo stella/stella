@@ -5,8 +5,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildCapabilityCatalog } from "../../../scripts/repository-capability-catalog";
 import { buildApp } from "./build-cli-tree.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   hasFeatureCommands,
@@ -30,7 +30,7 @@ import {
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RouteNode } from "./route-types.js";
 
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const ORIGIN = "https://feature-projection.example";
 const FEATURE = "list-verification";

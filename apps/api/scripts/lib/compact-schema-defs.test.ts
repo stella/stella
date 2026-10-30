@@ -126,7 +126,7 @@ describe("compact/expand round trip over every catalog entry", () => {
       };
       if (
         serializeCapabilityShard(recompactedEntry) !==
-        serializeCapabilityShard(entry)
+        serializeCapabilityShard({ ...entry, id })
       ) {
         mismatches.push(`${id}: recompaction did not reproduce the artifact`);
         continue;
