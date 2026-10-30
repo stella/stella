@@ -88,6 +88,9 @@ const runDeniedTitle = async ({
       },
     },
     select: (fields: Record<string, unknown>) => {
+      if ("subjectDecisionId" in fields) {
+        return createSelectQueryMock([]);
+      }
       // The message window reads the thread's send mode after its messages.
       if ("usedAnonymization" in fields) {
         sendModeReads += 1;
@@ -115,6 +118,7 @@ const runDeniedTitle = async ({
           if (storeState === "offline") {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Coordination unavailable",
             });
           }

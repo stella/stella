@@ -90,7 +90,7 @@ import {
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -98,11 +98,14 @@ import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { FillClausesSection } from "./fill-clauses-section";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
@@ -687,7 +690,7 @@ const FieldRenderer = ({
    *  fields, never for array sub-item rows. */
   onEditField?: ((path: string) => void) | undefined;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const inputType =
     field.inputType ?? (field.kind === "boolean" ? "boolean" : "text");
   const label = field.label ?? field.path;
@@ -1315,13 +1318,13 @@ const RegistryAutofillControl = ({
     }
 
     if (data instanceof Response || data.type !== "lookup" || !data.hit) {
-      notifyUserError(error, t("templates.registryNotFound"));
+      notifyUserProblem(t("templates.registryNotFound"));
       return;
     }
 
     const updates = buildAutofillUpdates(groupFields, data.hit);
     if (updates.length === 0) {
-      notifyUserError(undefined, t("templates.registryNotFound"));
+      notifyUserProblem(t("templates.registryNotFound"));
       return;
     }
     onApply(updates);
@@ -1397,6 +1400,7 @@ export const TemplateForm = ({
   prefill,
   initialValues,
 }: TemplateFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   // Formula fields are derived server-side at fill time, never user-entered:
@@ -1878,7 +1882,7 @@ export const TemplateForm = ({
             break;
           }
         }
-        notifyUserError(undefined, t("templates.validationErrors"));
+        notifyUserProblem(t("templates.validationErrors"));
         return;
       }
 
@@ -2060,7 +2064,7 @@ export const TemplateForm = ({
       return;
     }
     if (!validateAll(values)) {
-      notifyUserError(undefined, t("templates.validationErrors"));
+      notifyUserProblem(t("templates.validationErrors"));
       return;
     }
 
@@ -2072,16 +2076,16 @@ export const TemplateForm = ({
         conditionFields: aiConditionFields,
         conditions,
       });
-      const response = await api
-        .templates({ templateId })
-        ["fill-to"]({ workspaceId })
-        .post({
+      const response = await idempotentSubmit.run({
+        operation: `templates.${templateId}.fill-to.${workspaceId}`,
+        body: {
           values: submitValues,
           clauseOverrides,
-          ...(parentId !== null && {
-            parentId: toSafeId<"entity">(parentId),
-          }),
-        });
+          ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
+        },
+        send: async (body) =>
+          api.templates({ templateId })["fill-to"]({ workspaceId }).post(body),
+      });
 
       if (response.error) {
         notifyUserError(toAPIError(response.error), t("templates.fillFailed"));
@@ -2230,7 +2234,7 @@ export const TemplateForm = ({
    *  submittable form. */
   const handleChooseMatter = () => {
     if (!validateAll(values)) {
-      notifyUserError(undefined, t("templates.validationErrors"));
+      notifyUserProblem(t("templates.validationErrors"));
       return;
     }
     if (!confirmEmptyFields("moveToMatter", values)) {
@@ -2683,6 +2687,7 @@ export const useFillToMatterSaveTarget = (
 ): Extract<SaveTarget, { kind: "chooseMatter" }> => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const currentView = useCurrentWorkspaceView();
   return {
     kind: "chooseMatter",
     onCreated: (created) => {
@@ -2699,7 +2704,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId/document",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
               search: { entity: entityId, field: created.fieldId },
             }),
             "template-form.navigate",
@@ -2709,7 +2714,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
             }),
             "template-form.navigate",
           );

@@ -20,6 +20,7 @@ import {
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
+  authorizeUploadConsent,
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
@@ -154,6 +155,13 @@ const presignUpload = createSafeHandler(
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
+    }
+    const consent = authorizeUploadConsent({
+      grantedScopes: session.grantedScopes,
+      purpose: purposeBody.purpose,
+    });
+    if (Result.isError(consent)) {
+      return Result.err(consent.error);
     }
 
     if (purposeBody.purpose === "entity_create") {

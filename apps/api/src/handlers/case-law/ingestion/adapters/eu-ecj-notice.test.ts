@@ -1036,6 +1036,52 @@ describe("what the notice adds to a stored row", () => {
     expect(decision.court === "Court of Justice").toBe(true);
   });
 
+  test("files a Civil Service Tribunal decision under that court", async () => {
+    // `ECLI:EU:F` is the Tribunal's own court code; a row filed before the
+    // ECLI was read says "Court of Justice", and the record wins.
+    const outcome = await reparse(
+      storedFrom(storedEnvelope(undefined), {
+        ecli: "ECLI:EU:F:2006:112",
+        court: "Court of Justice",
+      }),
+    );
+    if (outcome.type !== "parsed") {
+      throw new TypeError(`Expected parsed, got ${outcome.type}`);
+    }
+    expect(outcome.result.court === "Civil Service Tribunal").toBe(true);
+  });
+
+  test("states the docket as the publisher does, without a letter it never had", async () => {
+    // Cases lodged before 1989 carry no `C-`; the notice's wording is the
+    // statement the CELEX alone cannot make.
+    const stated = noticeEn.replace(
+      "<VALUE>Case C-128/22</VALUE>",
+      "<VALUE>Case 128/22.</VALUE>",
+    );
+    expect(stated).not.toBe(noticeEn);
+    const outcome = await reparse(
+      storedFrom(
+        encodeSourceRawEnvelope(
+          ecjRawParts({
+            binding: { ...binding },
+            html: documentEn,
+            notice: stated,
+            formex: undefined,
+          }),
+        ),
+      ),
+    );
+    if (outcome.type !== "parsed") {
+      throw new TypeError(`Expected parsed, got ${outcome.type}`);
+    }
+    expect(outcome.result.caseNumber === "128/22").toBe(true);
+    // A row an earlier release stored under the CELEX reading is still found.
+    expect(outcome.result.legacyCaseNumber === "C-128/22").toBe(true);
+    const lettered = await decisionFrom(noticeEn);
+    expect(lettered.caseNumber === "C-128/22").toBe(true);
+    expect(lettered.legacyCaseNumber).toBeUndefined();
+  });
+
   test("emits the rapporteur and the Advocate General as the bench", async () => {
     const decision = await decisionFrom(noticeEn);
 

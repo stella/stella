@@ -34,3 +34,52 @@ export const newBillingCapCrossings = ({
   }
   return crossings;
 };
+
+type EvaluateBillingArrangementCapsOptions = {
+  totalAmount: bigint;
+  totalMinutes: bigint;
+  capAmount: number | null;
+  capMinutes: number | null;
+  alertThresholdBps: number;
+};
+
+export const evaluateBillingArrangementCaps = ({
+  totalAmount,
+  totalMinutes,
+  capAmount,
+  capMinutes,
+  alertThresholdBps,
+}: EvaluateBillingArrangementCapsOptions) => ({
+  amount:
+    capAmount === null
+      ? ({ thresholdState: "below", capState: "below" } as const)
+      : evaluateBillingCap({
+          totalAmount,
+          capAmount: BigInt(capAmount),
+          alertThresholdBps,
+        }),
+  minutes:
+    capMinutes === null
+      ? ({ thresholdState: "below", capState: "below" } as const)
+      : evaluateBillingCap({
+          totalAmount: totalMinutes,
+          capAmount: BigInt(capMinutes),
+          alertThresholdBps,
+        }),
+});
+
+type ExceedsBillingCapsOptions = {
+  totalAmount: bigint;
+  totalMinutes: bigint;
+  capAmount: number | null;
+  capMinutes: number | null;
+};
+
+export const exceedsBillingCaps = ({
+  totalAmount,
+  totalMinutes,
+  capAmount,
+  capMinutes,
+}: ExceedsBillingCapsOptions) =>
+  (capAmount !== null && totalAmount > BigInt(capAmount)) ||
+  (capMinutes !== null && totalMinutes > BigInt(capMinutes));

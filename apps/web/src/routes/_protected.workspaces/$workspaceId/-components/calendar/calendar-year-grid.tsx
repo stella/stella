@@ -1,6 +1,6 @@
 import { cn } from "@stll/ui/utils";
 
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { appToday } from "@/lib/local-iso-date";
 
@@ -36,7 +36,7 @@ export const CalendarYearGrid = ({
   dots,
   onMonthClick,
 }: CalendarYearGridProps) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const weekend = getWeekendDays(locale);
 

@@ -126,4 +126,36 @@ describe("response-order property", () => {
     );
     expect(String(details.errorInstance)).toContain("still held");
   });
+
+  test("rejects released responses whose delivery is still pending", async () => {
+    const delivery = Promise.withResolvers<undefined>();
+    let response: Promise<void> | undefined;
+    try {
+      const details = await fc.check(
+        responseOrderProperty({
+          scenario: fc.constant(null),
+          run: async (order) => {
+            response = Promise.all([
+              order.hold(
+                "pending delivery",
+                async () => await delivery.promise,
+              ),
+              order.hold("other reply", () => undefined),
+            ]).then(() => undefined);
+            await order.settle();
+          },
+        }),
+        propertyConfig({ numRuns: 1, endOnFailure: true }),
+      );
+      expect(details.errorInstance).toBeInstanceOf(Panic);
+      expect(details.errorInstance).toHaveProperty(
+        "cause",
+        expect.any(PropertyTestConfigError),
+      );
+      expect(String(details.errorInstance)).toContain("still delivering");
+    } finally {
+      delivery.resolve(undefined);
+      await response;
+    }
+  });
 });

@@ -108,7 +108,7 @@ function DialogTrigger({
   ...props
 }: DialogPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />,
   });
 }
@@ -118,7 +118,7 @@ function DialogClose({
   ...props
 }: DialogPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <DialogPrimitive.Close data-slot="dialog-close" {...props} />,
   });
 }
@@ -156,19 +156,46 @@ const DialogViewport = ({
   />
 );
 
+/** How the popup sits below `sm`; from `sm` up it is always centred. */
+const DIALOG_MOBILE_LAYOUT = {
+  /** Pinned to the bottom edge, leaving the page visible above it. */
+  bottomSheet: "bottom-sheet",
+  /** Centred like the wide layout. */
+  centered: "centered",
+  /** The whole viewport, inset by the safe areas; for search-like surfaces
+   * that need the height and have no backdrop left to tap. */
+  fullscreen: "fullscreen",
+} as const;
+type DialogMobileLayout =
+  (typeof DIALOG_MOBILE_LAYOUT)[keyof typeof DIALOG_MOBILE_LAYOUT];
+
+const DIALOG_MOBILE_VIEWPORT_CLASS_NAMES = {
+  "bottom-sheet": "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
+  centered: undefined,
+  fullscreen: "max-sm:grid-rows-[0_1fr_0] max-sm:p-0",
+} as const satisfies Record<DialogMobileLayout, string | undefined>;
+
+const DIALOG_MOBILE_POPUP_CLASS_NAMES = {
+  "bottom-sheet":
+    "max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-t max-sm:border-b-0 max-sm:pb-(--safe-area-bottom) max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden max-sm:before:rounded-none max-sm:data-ending-style:translate-y-4 max-sm:data-starting-style:translate-y-4",
+  centered: undefined,
+  fullscreen:
+    "max-sm:h-full max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:ps-(--safe-area-inline-start) max-sm:pe-(--safe-area-inline-end) max-sm:pt-(--safe-area-top) max-sm:pb-(--safe-area-bottom) max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden",
+} as const satisfies Record<DialogMobileLayout, string | undefined>;
+
 const DialogPopup = ({
   backdropClassName,
   className,
   children,
   showCloseButton = true,
-  bottomStickOnMobile = true,
+  mobileLayout = DIALOG_MOBILE_LAYOUT.bottomSheet,
   layer = "default",
   viewportClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
   backdropClassName?: string;
   showCloseButton?: boolean;
-  bottomStickOnMobile?: boolean;
+  mobileLayout?: DialogMobileLayout;
   layer?: OverlayLayer;
   viewportClassName?: string;
 }) => {
@@ -179,8 +206,7 @@ const DialogPopup = ({
       <DialogBackdrop className={backdropClassName} layer={layer} />
       <DialogViewport
         className={cn(
-          bottomStickOnMobile &&
-            "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
+          DIALOG_MOBILE_VIEWPORT_CLASS_NAMES[mobileLayout],
           viewportClassName,
         )}
         layer={layer}
@@ -188,8 +214,7 @@ const DialogPopup = ({
         <DialogPrimitive.Popup
           className={cn(
             "bg-popover text-popover-foreground relative row-start-2 flex max-h-full min-h-0 w-full max-w-lg min-w-0 -translate-y-[calc(1.25rem*var(--nested-dialogs))] scale-[calc(1-0.1*var(--nested-dialogs))] flex-col rounded-2xl border opacity-[calc(1-0.1*var(--nested-dialogs))] shadow-lg/5 transition-[scale,opacity,translate] duration-200 ease-out will-change-transform not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-ending-style:duration-150 data-nested:data-ending-style:translate-y-8 data-nested-dialog-open:origin-top data-starting-style:scale-98 data-starting-style:opacity-0 data-nested:data-starting-style:translate-y-8 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-            bottomStickOnMobile &&
-              "max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-t max-sm:border-b-0 max-sm:pb-(--safe-area-bottom) max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden max-sm:before:rounded-none max-sm:data-ending-style:translate-y-4 max-sm:data-starting-style:translate-y-4",
+            DIALOG_MOBILE_POPUP_CLASS_NAMES[mobileLayout],
             className,
           )}
           data-slot="dialog-popup"
@@ -288,7 +313,9 @@ const DialogPanel = ({
   </ScrollArea>
 );
 
+export type { DialogMobileLayout };
 export {
+  DIALOG_MOBILE_LAYOUT,
   DialogCreateHandle,
   DialogProvider,
   Dialog,

@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { SEARCH_SORTS } from "@stll/api-contract/search";
+import { DECISION_SORTS } from "@stll/api-contract/search";
 
 import {
   publicLawPageSearchSchemaUpTo,
@@ -79,7 +79,7 @@ export const searchSchema = routeSearchSchema({
   ),
   rewrite: v.fallback(v.optional(v.picklist(["off"])), undefined),
   rewrittenFrom: optionalLawSearchQuerySchema,
-  sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
+  sort: v.fallback(v.optional(v.picklist(DECISION_SORTS)), undefined),
   sourceId: optionalUuidSearchSchema,
   strict: optionalStrictSchema,
   to: optionalDateSchema,

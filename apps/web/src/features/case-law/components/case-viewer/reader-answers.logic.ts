@@ -277,7 +277,10 @@ const READER_ANSWER_ERROR_KINDS = {
   [ACTION_ADMISSION_CODES.periodExhausted]: "budget",
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "network",
   [ACTION_ADMISSION_CODES.notEnabled]: "network",
-  [ACTION_ADMISSION_CODES.admissionUnavailable]: "network",
+  [ACTION_ADMISSION_CODES.storeUnavailable]: "network",
+  [ACTION_ADMISSION_CODES.configurationIncomplete]: "network",
+  [ACTION_ADMISSION_CODES.organizationStateUnreadable]: "network",
+  [ACTION_ADMISSION_CODES.leaseLost]: "network",
   [ACTION_ADMISSION_CODES.featureDisabled]: "network",
 } as const satisfies Record<ReaderAnswerErrorCode, string>;
 

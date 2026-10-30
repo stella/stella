@@ -169,12 +169,29 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -303,7 +320,7 @@
         "sort": {
           "enum": ["relevance", "newest"],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -1310,7 +1327,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "resolve_case_law_decision",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "inputSchema": {
       "type": "object",
       "required": ["country", "identifier"],
@@ -1332,7 +1349,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+          "description": "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions."
         }
       }
     },
@@ -2986,7 +3003,7 @@
       "scope": "matters_write"
     },
     "name": "delete_matter",
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter with its documents, tasks, fields and chat history; irreversible. Refused (409) when it has time, expenses or invoices: archive it instead.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
@@ -3147,8 +3164,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     }
                   },
                   "required": ["precision", "year"],
@@ -3163,8 +3179,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3184,8 +3199,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3481,8 +3495,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         }
                       },
                       "required": ["precision", "year"],
@@ -3497,8 +3510,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -3518,8 +3530,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -4889,7 +4900,7 @@
           }
         },
         "status": {
-          "enum": ["draft", "approved", "billed", "written_off"],
+          "enum": ["draft", "submitted", "approved", "billed", "written_off"],
           "type": "string",
           "description": "List only entries with this status"
         },
@@ -5086,7 +5097,7 @@
       "featureId": "time-billing"
     },
     "name": "resolve_rate",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id", "date"],
@@ -5096,6 +5107,11 @@
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",
@@ -5127,7 +5143,7 @@
       "featureId": "time-billing"
     },
     "name": "list_invoices",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "inputSchema": {
       "type": "object",
       "required": [],

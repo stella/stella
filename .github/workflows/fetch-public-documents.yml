@@ -19,7 +19,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 110
     steps:
+      - name: Checkout network retry helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .network-retry
+          persist-credentials: false
+          sparse-checkout: scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Stage network retry helper
+        run: |
+          cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout fetch script
+        timeout-minutes: 5
         env:
           SOURCE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}
           SOURCE_REVISION: ${{ github.sha }}
@@ -27,7 +43,7 @@ jobs:
           git init .
           git remote add origin "$SOURCE_REPOSITORY"
           git sparse-checkout set --no-cone /package.json /scripts/fetch-public-documents.ts /packages/sha256/src/node.ts /packages/sha256/src/types.ts
-          git -c credential.helper= fetch --depth=1 --filter=blob:none origin "$SOURCE_REVISION"
+          bash "$NETWORK_RETRY_SCRIPT" git -c credential.helper= fetch --depth=1 --filter=blob:none origin "$SOURCE_REVISION"
           git checkout --detach FETCH_HEAD
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2

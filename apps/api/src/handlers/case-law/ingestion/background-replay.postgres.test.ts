@@ -8,6 +8,7 @@ import {
   createHeavyWorkSlot,
   type HeavyWorkKind,
 } from "@stll/db-load-gate/slot";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import {
   CORPUS_SCHEMA_LANE_LOCK_SQL,
@@ -127,17 +128,15 @@ const applied = (batch: BackgroundReplayBatch): ReplayRunReport => ({
 /** How long the deadline test waits for a server-side state to appear. */
 const BLOCKED_QUERY_DEADLINE_MS = 10_000;
 
-/** Polls `probe` until it holds or the deadline passes; true when it held. */
-const waitForState = async (probe: () => Promise<boolean>) => {
-  const deadline = Date.now() + BLOCKED_QUERY_DEADLINE_MS;
-  while (Date.now() < deadline) {
-    if (await probe()) {
-      return true;
-    }
-    await Bun.sleep(20);
-  }
-  return false;
-};
+/** Reads `probe` until it holds or the deadline passes; true when it held. */
+const waitForState = async (probe: () => Promise<boolean>) =>
+  await waitForExternalState({
+    description: "the backend state",
+    intervalMs: 20,
+    timeoutMs: BLOCKED_QUERY_DEADLINE_MS,
+    read: probe,
+    onTimeout: () => false,
+  });
 
 if (!databaseUrl || !enabled) {
   describe.skip("background replay ownership and durable batch boundaries", () => {

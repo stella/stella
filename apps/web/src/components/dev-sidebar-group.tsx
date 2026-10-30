@@ -27,7 +27,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 const SEED_STATUS_POLL_INTERVAL_MS = 1000;
 const SEED_STATUS_MAX_POLLS = 180;
@@ -124,7 +124,7 @@ export const DevSidebarGroup = () => {
       },
       onFailed: (message) => {
         setSeeding(false);
-        notifyUserError(undefined, "Seed failed", {
+        notifyUserProblem("Seed failed", {
           ...(message === undefined ? {} : { description: message }),
         });
       },
@@ -156,7 +156,7 @@ export const DevSidebarGroup = () => {
 
     if (start.data instanceof Response) {
       setSeedingFirmKnowledge(false);
-      notifyUserError(undefined, "Firm-knowledge seed failed");
+      notifyUserProblem("Firm-knowledge seed failed");
       return;
     }
     const jobId = start.data.jobId;
@@ -174,7 +174,7 @@ export const DevSidebarGroup = () => {
       },
       onFailed: (message) => {
         setSeedingFirmKnowledge(false);
-        notifyUserError(undefined, "Firm-knowledge seed failed", {
+        notifyUserProblem("Firm-knowledge seed failed", {
           ...(message === undefined ? {} : { description: message }),
         });
       },

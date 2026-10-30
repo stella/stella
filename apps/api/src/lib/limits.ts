@@ -24,6 +24,7 @@ import {
   SEARCH_HISTORY_IMPORT_MAX,
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
+  TIME_ENTRIES_APPROVAL_BATCH_MAX,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -327,7 +328,9 @@ export const LIMITS = {
   internalTimeEntriesPerUser: 50_000,
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
-  timeEntriesApprovalBatchMax: 200,
+  timeEntriesApprovalBatchMax: TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  /** Ceiling of the approval queue's pending count; the badge shows more as "999+". */
+  timeApprovalPendingCountMax: 1000,
   timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,
@@ -351,11 +354,17 @@ export const LIMITS = {
   timeSuggestionTailMinutes: 5,
   /** Per-source cap on activity rows read for one day of suggestions. */
   timeSuggestionSignalsPerSourceMax: 1000,
+  /** Longest span of work dates one personal time read covers: a week. */
+  timeRangeDaysMax: 7,
   invoicesPerWorkspace: 10_000,
+  clientInvoiceMatters: 50,
+  invoiceSourceItemsPerKind: 500,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.
   invoiceLinesPerInvoice: 1000,
+  // An invoice read returns every payment, voided ones included.
+  invoicePaymentsPerInvoice: 200,
   exportRowLimit: 10_000,
   /** One reader's highlights and comments on one decision or statute
    *  version, read whole when the reader opens the document. */
@@ -425,6 +434,11 @@ export const LIMITS = {
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */
   searchChatPreviewMessageLimit: 6,
+  searchChatCandidateThreadsMax: 100,
+  searchChatCandidateBatchesMax: 16,
+  searchChatCandidateSourceMessagesMax: 500,
+  searchChatCandidateSourceBytesMax: 256 * 1024,
+  searchChatCandidateBytesMax: 8 * 1024 * 1024,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
@@ -523,6 +537,9 @@ export const LIMITS = {
    *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s
    *  budget for the same class of work (one document-sized file). */
   docxMarkdownConversionTimeoutMs: 30_000,
+  /** Bounded process-local Markdown and session-redacted window sources. */
+  mcpWindowTextCacheMaxBytes: 64 * 1024 * 1024,
+  mcpWindowAnonymizationCacheMaxBytes: 64 * 1024 * 1024,
   /** Wall-clock ceiling for writing one generated chat export to object storage. */
   chatExportObjectIoTimeoutMs: 30_000,
   clauseExportLimit: 500,
@@ -564,6 +581,8 @@ export const LIMITS = {
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
+  /** Documents in a case file, after language-version deduplication. */
+  caseLawCaseFilePageSize: 50,
   /**
    * Judges one decision may name. A bench and its dissenters are a handful of
    * people; a decision listing more of them is a parser defect, and the read
@@ -614,6 +633,7 @@ export const LIMITS = {
    * caller should search instead of choosing.
    */
   caseLawLookupCandidatesMax: 5,
+  caseLawLookupSubjectMaxChars: 400,
   /**
    * Publisher document fetches one batch read may trigger. A decision whose
    * document nobody has fetched yet costs a crawl, so a batch reads the
@@ -724,6 +744,9 @@ export const LIMITS = {
    * rather than one request per item.
    */
   legislationProvisionReadConcurrency: 6,
+  /** Estimated heap retained for parsed decisions and compact section references. */
+  caseLawDecisionAstCacheMaxHeapBytes: 96 * 1024 * 1024,
+  caseLawDecisionSectionCacheMaxHeapBytes: 16 * 1024 * 1024,
   /**
    * Estimated heap the process keeps for parsed consolidation ASTs between
    * requests. A large code's consolidation parses to roughly 10 MiB, so this

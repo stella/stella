@@ -1133,9 +1133,12 @@ const VERSION_READERS: Record<string, string> = {
     "VERSION changed in the commit, and the image build label",
   ".github/workflows/publish-npm.yml":
     "VERSION equals the release tag being published",
-  ".github/workflows/release.yml": "VERSION equals the tag being built",
+  ".github/workflows/release.yml":
+    "VERSION equals the stable portion of the RC or final tag",
   "scripts/check-cli-release-coupling.ts":
     "VERSION changed against the merge base; compared with npm, not with tags",
+  "scripts/check-npm-publish-lag.ts":
+    "VERSION bounds the newest strictly lower final tag across all release branches",
   "scripts/check-railway-template-shape.ts": "watch pattern",
   "scripts/check-release-candidate.sh":
     "the pending version commit; its tag is the one to create",
@@ -1144,10 +1147,12 @@ const VERSION_READERS: Record<string, string> = {
   "scripts/ci-package-scope.ts": "changed-path scope",
   "scripts/ci-plan-scope.ts": "changed-path scope",
   "scripts/ci-root-check-inputs.json": "changed-path scope",
+  "scripts/finalize-release.sh":
+    "VERSION names the final tag after exact-SHA RC proof; never the previous release",
   "scripts/prepare-maintenance-release.ts":
-    "readPreviousRelease answers superseded for an untagged VERSION",
+    "new version derives from the newest final tag; VERSION identifies untagged notes to fold",
   "scripts/verify-release-candidate-tree.mjs":
-    "VERSION changed against main and is a supported release version",
+    "VERSION changed against the release merge base and is a supported stable version",
   "scripts/verify-release-tree-proof.sh": "VERSION modified in the PR",
 };
 const NOT_VERSION_READERS = new Set([
@@ -1156,7 +1161,7 @@ const NOT_VERSION_READERS = new Set([
   "scripts/env-catalog.ts",
 ]);
 const VERSION_FILE_READ =
-  /git show [^\n]*:VERSION\b|<\s*VERSION\b|"VERSION"|-- VERSION\b|cat VERSION\b|-f VERSION\b|\/VERSION"/u;
+  /:VERSION\b|<\s*VERSION\b|"VERSION"|-- VERSION\b|cat VERSION\b|-f VERSION\b|\/VERSION"/u;
 
 describe("VERSION reader census", () => {
   test("classifies every reader of the VERSION file", () => {
@@ -1167,7 +1172,7 @@ describe("VERSION reader census", () => {
       ".github",
     ])
       .split("\n")
-      .filter((file) => !/\.test\.|\/fixtures?\//u.test(file));
+      .filter((file) => !/\.(?:test|fixture)\.|\/fixtures?\//u.test(file));
     const readers = files
       .filter((file) => !NOT_VERSION_READERS.has(file))
       .filter((file) =>

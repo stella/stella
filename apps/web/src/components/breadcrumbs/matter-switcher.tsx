@@ -29,7 +29,8 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { useConfigStore } from "@/stores/config-store";
 
@@ -58,7 +59,7 @@ export const MatterSwitcher = ({ matter }: MatterSwitcherProps) => {
     ...workspacesRouteOptions(activeOrganizationId),
     enabled: open,
   });
-  const mattersView = useQueryView(mattersQuery);
+  const mattersView = queryView(mattersQuery);
   useQueryViewError(mattersView, "MatterSwitcher:query");
 
   const { client } = matter;

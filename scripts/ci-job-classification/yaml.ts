@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { sha256 } from "./classification-values";
+import { requestsRepositoryWrite, shapeWritesRepository } from "./review";
 
 export class AdmissionError extends TaggedError("AdmissionError")<{
   message: string;
@@ -16,10 +17,14 @@ export const CLASSIFICATION_EXCLUSIONS = {
 const DOCUMENT = v.strictObject({
   digest: v.string(),
   privileged: v.boolean(),
+  // Composite-action steps are not kept in the shape, so callers read this.
+  writesRepository: v.boolean(),
   jobs: v.record(
     v.string(),
     v.strictObject({
       digest: v.string(),
+      privilegedDigest: v.string(),
+      privileged: v.boolean(),
       shape: v.strictObject({
         document: v.record(v.string(), v.unknown()),
         job: v.record(v.string(), v.unknown()),
@@ -143,6 +148,261 @@ const secretRefs = (value: unknown): string[] => {
     children = Object.values(value);
   }
   return [...new Set(children.flatMap(secretRefs))].toSorted();
+};
+
+const containsCredential = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return (
+      /secrets(?:\.|\[)(?!github_token\b)/iu.test(value) ||
+      /actions\/(?:create-github-app-token|github-app-token)@|steps\.[^.]+\.outputs\.token/iu.test(
+        value,
+      )
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.some(containsCredential);
+  }
+  return isRecord(value) && Object.values(value).some(containsCredential);
+};
+
+const hasWritePermission = (value: unknown) =>
+  value === "write-all" ||
+  (isRecord(value) &&
+    Object.values(value).some((permission) => permission === "write"));
+
+const hasEffectiveWritePermission = (
+  jobPermissions: unknown,
+  workflowPermissions: unknown,
+) => {
+  const effective = jobPermissions ?? workflowPermissions;
+  const REPOSITORY_DEFAULT_TOKEN_PERMISSIONS = "read";
+  return hasWritePermission(effective ?? REPOSITORY_DEFAULT_TOKEN_PERMISSIONS);
+};
+
+const PRIVILEGED_EVENTS = new Set([
+  "pull_request_target",
+  "workflow_run",
+  "issue_comment",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "discussion_comment",
+]);
+
+const workflowHasPrivilegedEvent = (trigger: unknown) => {
+  if (typeof trigger === "string") {
+    return PRIVILEGED_EVENTS.has(trigger);
+  }
+  if (Array.isArray(trigger)) {
+    return trigger.some(workflowHasPrivilegedEvent);
+  }
+  return (
+    isRecord(trigger) &&
+    Object.keys(trigger).some((event) => PRIVILEGED_EVENTS.has(event))
+  );
+};
+
+const isGithubHostedLabel = (label: string) =>
+  /^(?:ubuntu-(?:latest|\d+(?:\.\d+)?|\d+(?:\.\d+)?-arm)|windows-(?:latest|\d+)|macos-(?:latest|\d+(?:-large|-xlarge)?))$/u.test(
+    label,
+  );
+
+const literalMatrixValues = (
+  job: JsonRecord,
+  expression: string,
+): unknown[] => {
+  const match = /^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/u.exec(
+    expression,
+  );
+  const strategy = job["strategy"];
+  const matrix = isRecord(strategy) ? strategy["matrix"] : undefined;
+  const matrixKey = match?.at(1);
+  if (matrixKey === undefined || !isRecord(matrix)) {
+    return [expression];
+  }
+  const values = matrix[matrixKey];
+  return Array.isArray(values) ? values : [expression];
+};
+
+const runnerIsSelfHosted = (job: JsonRecord): boolean => {
+  const inspect = (value: unknown): boolean => {
+    if (typeof value === "string") {
+      return literalMatrixValues(job, value).some(
+        (label) =>
+          typeof label !== "string" ||
+          label === "self-hosted" ||
+          !isGithubHostedLabel(label),
+      );
+    }
+    if (Array.isArray(value)) {
+      return value.some(inspect);
+    }
+    if (!isRecord(value)) {
+      return false;
+    }
+    return "group" in value || inspect(value["labels"]);
+  };
+  return inspect(job["runs-on"]);
+};
+
+const UNTRUSTED_REF =
+  /github\.(?:head_ref|event\.(?:pull_request\.head\.|workflow_run\.head_|issue\.|issue_comment\.|comment\.))/iu;
+const checksOutUntrustedRef = (job: JsonRecord): boolean => {
+  const steps = job["steps"];
+  if (!Array.isArray(steps)) {
+    return false;
+  }
+  return steps.some((candidate) => {
+    if (!isRecord(candidate)) {
+      return false;
+    }
+    if ("parallel" in candidate) {
+      return checksOutUntrustedRef({ steps: candidate["parallel"] });
+    }
+    const uses = candidate["uses"];
+    const inputs = candidate["with"];
+    if (
+      typeof uses === "string" &&
+      uses.startsWith("actions/checkout@") &&
+      isRecord(inputs)
+    ) {
+      const ref = inputs["ref"];
+      const repository = inputs["repository"];
+      return [ref, repository].some(
+        (value) => typeof value === "string" && UNTRUSTED_REF.test(value),
+      );
+    }
+    const run = candidate["run"];
+    return (
+      typeof run === "string" &&
+      /\bgit\s+(?:fetch|checkout)\b/iu.test(run) &&
+      UNTRUSTED_REF.test(run)
+    );
+  });
+};
+
+/**
+ * Owns the complete job privilege decision.
+ *
+ * | Source | A job is privileged when |
+ * | --- | --- |
+ * | Token permissions | Its effective permissions contain `write` or are `write-all` (including `id-token: write`); an unset permission uses the read-only repository default. |
+ * | Credentials | It receives a non-default `secrets.*`, `secrets: inherit`, or an app-token action output; `secrets.GITHUB_TOKEN` and `github.token` count only with write permissions. |
+ * | Environment | It declares `environment`. |
+ * | Trigger | The workflow uses a base-branch privileged event; reusable callees inherit this through closure classification. |
+ * | Runner | Parsed `runs-on` selects `self-hosted`, a group, or a non-GitHub-hosted label, including literal matrix values. |
+ * | Untrusted checkout | A checkout or fetch consumes an untrusted event ref. |
+ */
+const jobIsPrivileged = (job: JsonRecord, workflow: JsonRecord) => {
+  const writes = hasEffectiveWritePermission(
+    job["permissions"],
+    workflow["permissions"],
+  );
+  const tokenCredential = /(?:secrets\.github_token|github\.token)/iu.test(
+    JSON.stringify(job),
+  );
+  const credential =
+    containsCredential(workflow["env"]) ||
+    containsCredential(workflow["defaults"]) ||
+    containsCredential(job) ||
+    job["secrets"] === "inherit" ||
+    (tokenCredential ? writes : false);
+  return (
+    writes ||
+    credential ||
+    "environment" in job ||
+    workflowHasPrivilegedEvent(workflow["on"]) ||
+    runnerIsSelfHosted(job) ||
+    checksOutUntrustedRef(job)
+  );
+};
+
+const privilegedStepSurface = (
+  candidate: unknown,
+  includeAll: boolean,
+): JsonRecord | undefined => {
+  const step = requireRecord(candidate, "step must be mapping");
+  if ("parallel" in step) {
+    if (!Array.isArray(step["parallel"])) {
+      throw new AdmissionError({ message: "parallel must be array" });
+    }
+    const parallel = step["parallel"].flatMap((child) => {
+      const surface = privilegedStepSurface(child, includeAll);
+      return surface ? [surface] : [];
+    });
+    return parallel.length ? { parallel } : undefined;
+  }
+  if (includeAll) {
+    return Object.fromEntries(
+      Object.entries(step).filter(
+        ([key]) => !["name", "timeout-minutes"].includes(key),
+      ),
+    );
+  }
+  const surface: JsonRecord = {};
+  const uses = step["uses"];
+  if (typeof uses === "string") {
+    surface["uses"] = uses;
+  }
+  for (const key of ["env", "with", "run"] as const) {
+    const value = step[key];
+    if (containsCredential(value)) {
+      surface[key] = value;
+    }
+  }
+  return Object.keys(surface).length ? surface : undefined;
+};
+
+const privilegedJobSurface = (
+  job: JsonRecord,
+  workflow: JsonRecord,
+  forcePrivileged = false,
+) => {
+  const inherited = Object.fromEntries(
+    ["permissions", "env", "defaults"].flatMap((key) =>
+      key in workflow ? [[key, workflow[key]]] : [],
+    ),
+  );
+  const includeAllSteps = forcePrivileged || jobIsPrivileged(job, workflow);
+  const surface: JsonRecord = {};
+  if (includeAllSteps) {
+    Object.assign(surface, inherited);
+  }
+  for (const key of ["permissions", "secrets", "uses"] as const) {
+    if (key in job) {
+      surface[key] = job[key];
+    }
+  }
+  for (const key of ["env", "with"] as const) {
+    if (containsCredential(job[key])) {
+      surface[key] = job[key];
+    }
+  }
+  if (includeAllSteps) {
+    for (const key of [
+      "env",
+      "with",
+      "if",
+      "environment",
+      "needs",
+      "runs-on",
+      "concurrency",
+      "container",
+      "services",
+      "defaults",
+      "strategy",
+    ] as const) {
+      if (key in job) {
+        surface[key] = job[key];
+      }
+    }
+  }
+  if (Array.isArray(job["steps"])) {
+    surface["steps"] = job["steps"].flatMap((step) => {
+      const projected = privilegedStepSurface(step, includeAllSteps);
+      return projected ? [projected] : [];
+    });
+  }
+  return surface;
 };
 
 const stepShapes = (value: unknown): JsonRecord[] => {
@@ -291,9 +551,6 @@ const parse = (text: string): ParsedDocument => {
   if (isRecord(runs) && "steps" in runs) {
     shape["runs"] = { ...runs, steps: stepShapes(runs["steps"]) };
   }
-  const context = Object.fromEntries(
-    Object.entries(shape).filter(([key]) => key !== "jobs"),
-  );
   const jobs: ParsedDocument["jobs"] = {};
   const dependencies: Record<string, DependencyKind> = {};
   const relocatedActions: Record<string, RelocatedAction[]> = {};
@@ -323,13 +580,19 @@ const parse = (text: string): ParsedDocument => {
         jobDependencies[job["uses"]] = "reusable-workflow";
       }
       addActionDependencies(jobDependencies, steps, {});
-      const jobShape = project(job, "job");
-      if ("steps" in job) {
-        jobShape["steps"] = stepShapes(job["steps"]);
-      }
-      const jobContext = { document: context, job: jobShape };
+      const isPrivileged = jobIsPrivileged(job, data);
+      const workflowSurface =
+        isPrivileged && "on" in data ? { on: data["on"] } : {};
+      const jobShape = privilegedJobSurface(job, data);
+      const jobContext = { document: workflowSurface, job: jobShape };
+      const privilegedJobContext = {
+        document: "on" in data ? { on: data["on"] } : {},
+        job: privilegedJobSurface(job, data, true),
+      };
       jobs[id] = {
         digest: digest(jobContext),
+        privilegedDigest: digest(privilegedJobContext),
+        privileged: isPrivileged,
         shape: jobContext,
         dependencies: jobDependencies,
       };
@@ -354,6 +617,11 @@ const parse = (text: string): ParsedDocument => {
     privileged:
       privileged(shape) ||
       Object.values(jobs).some(({ shape: jobShape }) => privileged(jobShape)),
+    writesRepository:
+      requestsRepositoryWrite(actionSteps) ||
+      Object.values(jobs).some(({ shape: jobShape }) =>
+        shapeWritesRepository(jobShape),
+      ),
     jobs,
     dependencies,
     relocatedActions,

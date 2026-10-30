@@ -49,7 +49,7 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
   // checkout and once from the checkout's own package.json; each version
   // source is set up at most once and every consumer runs after a setup.
   const setups = new Map<string, number>();
-  let consumers = 0;
+  const consumers: string[] = [];
   if (!enabled(candidate.if)) {
     return { setups: 0, consumers };
   }
@@ -66,7 +66,7 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
         step.uses === "$/.github/actions/ci-install" ||
         step.uses === "./.github/actions/ci-install")
     ) {
-      consumers++;
+      consumers.push(step.name);
       expect(
         setups.size,
         `Bun setup count before ${step.name}`,
@@ -77,7 +77,7 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
     }
   }
   expect(
-    consumers > 0 || setups.size === 0,
+    consumers.length > 0 || setups.size === 0,
     "Bun setup count at job completion",
   ).toBe(true);
   return { setups: setups.size, consumers };
@@ -124,7 +124,13 @@ const axes = [
   readonly (string | boolean)[],
 ])[];
 
-let combinations: Context["values"][] = [{}];
+let combinations: Context["values"][] = [
+  {
+    "inputs.pr_depth_only": false,
+    "steps.changed-files.outputs.postgres_suites_required": "false",
+    "vars.CI_POSTGRES_PR_SELECTION": "off",
+  },
+];
 for (const [name, options] of axes) {
   combinations = combinations.flatMap((values) =>
     options.map((value) => ({ ...values, [name]: value })),
@@ -204,7 +210,7 @@ test("ci-plan sets up Bun exactly once before every Bun consumer across event, d
   const consumedArmingStates = { false: 0, true: 0 };
   for (const context of contexts) {
     const { consumers } = assertBunSetupContract(plan, context);
-    if (consumers > 0) {
+    if (consumers.length > 0) {
       consumingPaths++;
       const armed = context.values["steps.completed-depth.outputs.armed"];
       if (armed === "true" || armed === "false") {
@@ -239,11 +245,36 @@ test("Bun setup contract rejects duplicate setup and missing setup fixtures", ()
         values["steps.check.outputs.trusted"] === "true" &&
         values["steps.completed-depth.outputs.run_required"] === "true",
     ) ?? panic("Missing trusted thin-queue fixture");
-  expect(assertBunSetupContract(plan, context).consumers).toBeGreaterThan(0);
+  expect(
+    assertBunSetupContract(plan, context).consumers.length,
+  ).toBeGreaterThan(0);
   expect(() => assertBunSetupContract(duplicate, context)).toThrow(
     "Bun setup count",
   );
   expect(() => assertBunSetupContract(missing, context)).toThrow(
     "Bun setup count",
+  );
+});
+
+test("Postgres planner fixture uses Bun from the checkout after trusted setup", () => {
+  const context =
+    contexts.find(
+      ({ values }) =>
+        values["github.event_name"] === "pull_request" &&
+        values["steps.check.outputs.trusted"] === "true" &&
+        values["steps.completed-depth.outputs.run_required"] === "true",
+    ) ?? panic("Missing trusted pull request fixture");
+  const postgresContext = {
+    ...context,
+    values: {
+      ...context.values,
+      "inputs.pr_depth_only": false,
+      "steps.changed-files.outputs.postgres_suites_required": "true",
+      "vars.CI_POSTGRES_PR_SELECTION": "on",
+    },
+  } satisfies Context;
+
+  expect(assertBunSetupContract(plan, postgresContext).consumers).toContain(
+    "Plan Postgres test shards",
   );
 });

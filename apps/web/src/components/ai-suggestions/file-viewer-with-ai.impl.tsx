@@ -24,6 +24,7 @@ import {
 } from "@stll/folio-react";
 import type { DocxEditorRef } from "@stll/folio-react";
 
+import { ChatEditorScope } from "@/components/chat-editor-provider";
 import {
   type CreateDocumentDraftPersistence,
   getCreateDocumentDraftPersistence,
@@ -319,35 +320,37 @@ export const FileChatOverlayHost = ({
   });
 
   return (
-    // The overlay's composer gates every send on the AI key. Readers mount it
-    // from routes outside the app shell (the public law surface and its
-    // inspector views), so the host brings the gate rather than trusting
-    // every route to have put one above it.
+    // The overlay's composer gates every send on the AI key and registers
+    // with a chat editor manager. Readers mount it from routes outside the
+    // app shell (the public law surface and its inspector views), so the host
+    // brings both rather than trusting every route to have put them above it.
     <AIAvailabilityProvider>
-      {docxEditorRef !== undefined && reviewSessionId !== undefined && (
-        <ReviewFolioDecorationsBridge
+      <ChatEditorScope>
+        {docxEditorRef !== undefined && reviewSessionId !== undefined && (
+          <ReviewFolioDecorationsBridge
+            docxEditorRef={docxEditorRef}
+            docxEditable={docxEditable === true}
+            entityId={reviewSessionId}
+          />
+        )}
+        <FileChatOverlay
+          activeExternal={activeExternal}
+          activeDraft={activeDraft}
+          activeFile={activeFile}
+          activeLegal={activeLegal}
+          chatThreadId={chatThreadId}
+          draftPersistence={draftPersistence}
+          docxComments={docxComments}
+          docxEditable={docxEditable}
+          docxEditSafety={docxEditSafety}
           docxEditorRef={docxEditorRef}
-          docxEditable={docxEditable === true}
-          entityId={reviewSessionId}
+          onDocxCommentsChange={onDocxCommentsChange}
+          onActiveDraftChatBound={onActiveDraftChatBound}
+          onNewThread={handleNewThread}
+          requestDocxEditMode={requestDocxEditMode}
+          workspaceId={workspaceId}
         />
-      )}
-      <FileChatOverlay
-        activeExternal={activeExternal}
-        activeDraft={activeDraft}
-        activeFile={activeFile}
-        activeLegal={activeLegal}
-        chatThreadId={chatThreadId}
-        draftPersistence={draftPersistence}
-        docxComments={docxComments}
-        docxEditable={docxEditable}
-        docxEditSafety={docxEditSafety}
-        docxEditorRef={docxEditorRef}
-        onDocxCommentsChange={onDocxCommentsChange}
-        onActiveDraftChatBound={onActiveDraftChatBound}
-        onNewThread={handleNewThread}
-        requestDocxEditMode={requestDocxEditMode}
-        workspaceId={workspaceId}
-      />
+      </ChatEditorScope>
     </AIAvailabilityProvider>
   );
 };
