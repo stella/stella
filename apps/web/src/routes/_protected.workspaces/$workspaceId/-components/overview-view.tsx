@@ -74,6 +74,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { queryView } from "@/lib/query-view.logic";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
@@ -159,6 +160,7 @@ const formatHours = (hours: number) =>
 // ── Main component ───────────────────────────────────────
 
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
@@ -211,35 +213,41 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   const createTaskOnce = useSingleFlight();
-  const handleCreateTask = async () =>
-    createTaskOnce.run(async () => {
-      const { data: taskData, error: taskError } = await api
-        .tasks({ workspaceId })
-        .put({
-          name: t("tasks.untitled"),
-        });
-      const entityId = taskData?.entityId;
-      if (taskError || !entityId) {
-        notifyUserError(
-          taskError ? toAPIError(taskError) : undefined,
-          t("errors.actionFailed"),
+  const handleCreateTask = useCallback(
+    async () =>
+      await createTaskOnce.run(async () => {
+        const { data: taskData, error: taskError } = await idempotentSubmit.run(
+          {
+            operation: JSON.stringify([
+              "api.tasks({workspaceId})",
+              { workspaceId },
+            ]),
+            body: { name: t("tasks.untitled") },
+            send: async (creationPayload) =>
+              api.tasks({ workspaceId }).put(creationPayload),
+          },
         );
-        return;
-      }
-      stellaToast.add({
-        title: t("success.taskCreated"),
-        type: "success",
-      });
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overview(workspaceId),
-        }),
-        "overview-view.invalidate",
-      );
-      useInspectorTabsStore
-        .getState()
-        .openTask({ taskId: entityId, workspaceId, isNew: true });
-    });
+        const entityId = taskData?.entityId;
+        if (taskError || !entityId) {
+          notifyUserError(
+            taskError ? toAPIError(taskError) : undefined,
+            t("errors.actionFailed"),
+          );
+          return;
+        }
+        stellaToast.add({ title: t("success.taskCreated"), type: "success" });
+        detached(
+          queryClient.invalidateQueries({
+            queryKey: workspacesKeys.overview(workspaceId),
+          }),
+          "overview-view.invalidate",
+        );
+        useInspectorTabsStore
+          .getState()
+          .openTask({ taskId: entityId, workspaceId, isNew: true });
+      }),
+    [workspaceId, t, queryClient, idempotentSubmit, createTaskOnce],
+  );
 
   const updateTaskStatus = useMutation({
     mutationFn: async ({

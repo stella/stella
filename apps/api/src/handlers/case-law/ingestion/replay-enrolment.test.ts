@@ -8,12 +8,13 @@ import {
   validateReplayEnrolment,
 } from "./replay-enrolment";
 
-test("the committed registry previews only the Constitutional Court and the Austrian sources, and enrolment validates its budget and reviewed dry run", () => {
+test("the committed registry previews only the Constitutional Court, the Polish common courts portal and the Austrian sources, and enrolment validates its budget and reviewed dry run", () => {
   expect(
     Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
   ).toEqual(
     [
       ADAPTER_KEYS.CZ_US,
+      ADAPTER_KEYS.PL_NCOURT,
       ADAPTER_KEYS.AT_COURTS,
       ADAPTER_KEYS.AT_VFGH,
       ADAPTER_KEYS.AT_VWGH,
