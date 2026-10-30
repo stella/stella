@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   matchingMigrationGuardedRules,
+  migrationIndexOperations,
   migrationStatementTokens,
   parseMigrationStatements,
   readMigrationRelation,
@@ -358,68 +361,130 @@ const createdRelationKey = (tokens: StatementTokens): string | undefined => {
   return readMigrationRelation(tokens, cursor + 1)?.relation.key;
 };
 
-// The table `CREATE [UNIQUE] INDEX` or `CREATE POLICY` / `CREATE TRIGGER` acts on.
+const relationAfterModifiers = (tokens: StatementTokens, start: number) => {
+  let cursor = start;
+  if (tokens[cursor]?.value === "concurrently") {
+    cursor++;
+  }
+  if (tokens[cursor]?.value === "if") {
+    cursor += tokens[cursor + 1]?.value === "not" ? 3 : 2;
+  }
+  if (tokens[cursor]?.value === "only") {
+    cursor++;
+  }
+  return readMigrationRelation(tokens, cursor);
+};
+
 const onRelationKey = (tokens: StatementTokens): string | undefined => {
-  const kind =
-    tokens.at(1)?.value === "unique"
-      ? tokens.at(2)?.value
-      : tokens.at(1)?.value;
-  if (
-    tokens.at(0)?.value !== "create" ||
-    !/^(?:index|policy|trigger)$/u.test(kind ?? "")
-  ) {
-    return undefined;
-  }
   const on = tokens.findIndex(
-    (token) => token.kind === "word" && token.value === "on",
+    ({ kind, value }) => kind === "word" && value === "on",
   );
-  if (on === -1) {
-    return undefined;
+  return on === -1
+    ? undefined
+    : relationAfterModifiers(tokens, on + 1)?.relation.key;
+};
+
+const ddlObjectKind = (tokens: StatementTokens) => {
+  let cursor = 1;
+  if (
+    tokens[cursor]?.value === "or" &&
+    tokens[cursor + 1]?.value === "replace"
+  ) {
+    cursor += 2;
   }
-  const start = tokens[on + 1]?.value === "only" ? on + 2 : on + 1;
-  return readMigrationRelation(tokens, start)?.relation.key;
+  if (
+    /^(?:constraint|unique|unlogged|temporary|temp)$/u.test(
+      tokens[cursor]?.value ?? "",
+    )
+  ) {
+    cursor++;
+  }
+  return tokens[cursor]?.kind === "word" ? tokens[cursor]?.value : undefined;
 };
 
 const statementRelationKey = (tokens: StatementTokens): string | undefined => {
-  const onTarget = onRelationKey(tokens);
-  if (onTarget !== undefined) {
-    return onTarget;
-  }
+  const verb = tokens.at(0)?.value;
   const words = tokens.map(({ value }) => value);
-  let cursor: number | undefined;
+  const kind = ddlObjectKind(tokens);
   if (
-    words.at(0) === "create" &&
-    words.at(1) === "or" &&
-    words.at(2) === "replace" &&
-    words.at(3) === "view"
+    (verb === "create" || verb === "alter" || verb === "drop") &&
+    /^(?:policy|trigger)$/u.test(kind ?? "")
   ) {
-    cursor = 4;
-  } else if (
-    words.at(0) === "drop" &&
-    /^(?:table|index)$/u.test(words.at(1) ?? "")
-  ) {
-    cursor = words.at(2) === "concurrently" ? 3 : 2;
-  } else if (words.at(0) === "truncate") {
-    cursor = words.at(1) === "table" ? 2 : 1;
-  } else if (words.at(0) === "lock") {
-    cursor = words.at(1) === "table" ? 2 : 1;
-  } else if (words.at(0) === "alter" && words.at(1) === "index") {
-    cursor = 2;
-  } else if (
-    words.at(0) === "reindex" &&
-    /^(?:index|table)$/u.test(words.at(1) ?? "")
-  ) {
-    cursor = words.at(2) === "concurrently" ? 3 : 2;
-  } else if (
-    /^(?:alter|drop)$/u.test(words.at(0) ?? "") &&
-    /^(?:policy|trigger)$/u.test(words.at(1) ?? "")
-  ) {
-    const on = words.indexOf("on");
-    cursor = on === -1 ? undefined : on + 1;
+    return onRelationKey(tokens);
   }
-  return cursor === undefined
-    ? undefined
-    : readMigrationRelation(tokens, cursor)?.relation.key;
+  if (verb === "create" && kind === "index") {
+    return onRelationKey(tokens);
+  }
+  if (verb === "create") {
+    const kindPosition = words.findIndex(
+      (word) => word === "table" || word === "view",
+    );
+    return kindPosition === -1
+      ? undefined
+      : relationAfterModifiers(tokens, kindPosition + 1)?.relation.key;
+  }
+  if (verb === "drop" || verb === "alter" || verb === "reindex") {
+    return relationAfterModifiers(tokens, 2)?.relation.key;
+  }
+  if (verb === "truncate" || verb === "lock") {
+    return relationAfterModifiers(tokens, words.at(1) === "table" ? 2 : 1)
+      ?.relation.key;
+  }
+  if (verb === "analyze") {
+    return relationAfterModifiers(tokens, words.at(1) === "verbose" ? 2 : 1)
+      ?.relation.key;
+  }
+  if (verb === "comment" && words.at(1) === "on") {
+    return relationAfterModifiers(tokens, 3)?.relation.key;
+  }
+  return undefined;
+};
+
+const queryRelationKeys = (tokens: StatementTokens) =>
+  tokens.flatMap(({ kind, value }, index) => {
+    if (kind !== "word" || (value !== "from" && value !== "join")) {
+      return [];
+    }
+    const result: string[] = [];
+    let relation = relationAfterModifiers(tokens, index + 1);
+    while (relation) {
+      result.push(relation.relation.key);
+      let cursor = relation.next;
+      if (tokens[cursor]?.value === "as") {
+        cursor += 2;
+      } else if (
+        tokens[cursor]?.kind === "identifier" ||
+        (tokens[cursor]?.kind === "word" &&
+          !/^(?:where|join|left|right|inner|outer|full|cross|on|group|order|limit|union|having|window|offset|fetch)$/u.test(
+            tokens[cursor]?.value ?? "",
+          ))
+      ) {
+        cursor++;
+      }
+      relation =
+        tokens[cursor]?.value === ","
+          ? relationAfterModifiers(tokens, cursor + 1)
+          : undefined;
+    }
+    return result;
+  });
+
+const listedRelationKeys = (tokens: StatementTokens) => {
+  const verb = tokens.at(0)?.value;
+  if (verb !== "drop" && verb !== "truncate" && verb !== "lock") {
+    return [];
+  }
+  const start = verb === "drop" || tokens.at(1)?.value === "table" ? 2 : 1;
+  const result: string[] = [];
+  let relation = relationAfterModifiers(tokens, start);
+  while (relation) {
+    result.push(relation.relation.key);
+    relation =
+      tokens[relation.next]?.value === ","
+        ? relationAfterModifiers(tokens, relation.next + 1)
+        : undefined;
+  }
+  return result;
 };
 
 const isSelfContainedNewRelationOperation = (form: DdlForm, sql: string) => {
@@ -459,6 +524,12 @@ const relationReferences = (tokens: StatementTokens) => {
   }
   return relations;
 };
+
+const statementAdditionalTargets = (tokens: StatementTokens) => [
+  ...relationReferences(tokens),
+  ...listedRelationKeys(tokens).slice(1),
+  ...(ddlObjectKind(tokens) === "view" ? queryRelationKeys(tokens) : []),
+];
 
 export const isWriterBlockingLock = (lockMode: LockMode) =>
   lockMode === "SHARE" ||
@@ -616,7 +687,7 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
           alter: false,
           statementIndex,
           target: created ?? statementRelationKey(sqlTokens),
-          additionalTargets: relationReferences(sqlTokens),
+          additionalTargets: statementAdditionalTargets(sqlTokens),
           createdNow: created,
         });
         if (
@@ -790,9 +861,278 @@ export const migrationLockPairs = (sources: readonly MigrationSource[]) => {
     );
 };
 
+type TableRelation = NonNullable<
+  ReturnType<typeof readMigrationRelation>
+>["relation"];
+
+type ApplyTableLifecycleOptions = {
+  tables: Map<string, TableRelation>;
+  tokens: StatementTokens;
+  position: number;
+};
+
+type ApplyTableIdentityChangeOptions = Pick<
+  ApplyTableLifecycleOptions,
+  "tables" | "tokens"
+> & {
+  target: NonNullable<ReturnType<typeof readMigrationRelation>>;
+};
+
+const applyTableIdentityChange = ({
+  tables,
+  tokens,
+  target,
+}: ApplyTableIdentityChangeOptions) => {
+  const action = tokens[target.next]?.value;
+  const detail = tokens[target.next + 1]?.value;
+  if (action !== "rename" || detail !== "to") {
+    if (action === "set" && detail === "schema") {
+      const schema =
+        readMigrationRelation(tokens, target.next + 2)?.relation.name ??
+        panic("Migration table schema change has no target");
+      tables.delete(target.relation.key);
+      tables.set(JSON.stringify([schema, target.relation.name]), {
+        ...target.relation,
+        schema,
+        key: JSON.stringify([schema, target.relation.name]),
+      });
+    }
+    return;
+  }
+  const name =
+    readMigrationRelation(tokens, target.next + 2)?.relation.name ??
+    panic("Migration table rename has no target");
+  tables.delete(target.relation.key);
+  tables.set(JSON.stringify([target.relation.schema, name]), {
+    ...target.relation,
+    name,
+    key: JSON.stringify([target.relation.schema, name]),
+  });
+  return;
+};
+
+const applyTableLifecycle = ({
+  tables,
+  tokens,
+  position,
+}: ApplyTableLifecycleOptions) => {
+  const verb = tokens[position]?.value;
+  let cursor = position + 1;
+  if (
+    verb === "create" &&
+    /^(?:temp|temporary)$/u.test(tokens[cursor]?.value ?? "")
+  ) {
+    return;
+  }
+  if (verb === "create" && tokens[cursor]?.value === "unlogged") {
+    cursor++;
+  }
+  if (tokens[cursor]?.value !== "table") {
+    return;
+  }
+  cursor++;
+  if (tokens[cursor]?.value === "if") {
+    cursor += verb === "create" ? 3 : 2;
+  }
+  if (tokens[cursor]?.value === "only") {
+    cursor++;
+  }
+  const target =
+    readMigrationRelation(tokens, cursor) ??
+    panic("Migration table declaration has no relation");
+  switch (verb) {
+    case "create":
+      tables.set(target.relation.key, target.relation);
+      return;
+    case "drop": {
+      let dropped: ReturnType<typeof readMigrationRelation> = target;
+      while (dropped !== undefined) {
+        tables.delete(dropped.relation.key);
+        dropped =
+          tokens[dropped.next]?.value === ","
+            ? readMigrationRelation(tokens, dropped.next + 1)
+            : undefined;
+      }
+      return;
+    }
+    case "alter":
+      applyTableIdentityChange({ tables, tokens, target });
+      return;
+    default:
+      return;
+  }
+};
+
+type RelationCatalog = {
+  tables: Map<string, TableRelation>;
+  tableAliases: Map<string, Set<string>>;
+  indexes: Map<string, Set<string>>;
+  views: Map<string, Set<string>>;
+};
+
+const addRelationEdge = (
+  edges: Map<string, Set<string>>,
+  from: string,
+  to: string,
+) => {
+  const targets = edges.get(from);
+  if (targets) {
+    targets.add(to);
+  } else {
+    edges.set(from, new Set([to]));
+  }
+};
+
+const catalogIndexOperation = (
+  catalog: RelationCatalog,
+  operation: ReturnType<typeof migrationIndexOperations>[number],
+) => {
+  switch (operation.type) {
+    case "create-index":
+      if (operation.index) {
+        addRelationEdge(
+          catalog.indexes,
+          operation.index.key,
+          operation.table.key,
+        );
+      }
+      return;
+    case "rename-table":
+      addRelationEdge(
+        catalog.tableAliases,
+        operation.from.key,
+        operation.to.key,
+      );
+      return;
+    case "rename-index": {
+      const parents = catalog.indexes.get(operation.from.key);
+      if (parents) {
+        for (const parent of parents) {
+          addRelationEdge(catalog.indexes, operation.to.key, parent);
+        }
+      }
+      return;
+    }
+    case "create-table":
+    case "drop-index":
+    case "reindex":
+    case "reindex-scope":
+      return;
+    default:
+      operation satisfies never;
+      return panic("Unknown migration index catalog operation");
+  }
+};
+
+const readRelationCatalog = (sources: readonly MigrationSource[]) => {
+  const catalog: RelationCatalog = {
+    tables: new Map(),
+    tableAliases: new Map(),
+    indexes: new Map(),
+    views: new Map(),
+  };
+  for (const { source } of sources.toSorted((left, right) =>
+    compareCodeUnit(left.file, right.file),
+  )) {
+    for (const statement of parseMigrationStatements(source)) {
+      if (statement.deferred) {
+        continue;
+      }
+      for (const operation of migrationIndexOperations(statement)) {
+        catalogIndexOperation(catalog, operation);
+      }
+      const tokens = migrationStatementTokens(statement);
+      for (const [position, token] of tokens.entries()) {
+        if (
+          token.kind !== "word" ||
+          !/^(?:create|drop|alter)$/u.test(token.value) ||
+          (position !== 0 &&
+            !/^(?:begin|then|else|loop)$/u.test(
+              tokens[position - 1]?.value ?? "",
+            ))
+        ) {
+          continue;
+        }
+        applyTableLifecycle({ tables: catalog.tables, tokens, position });
+        const tail = tokens.slice(position);
+        if (token.value === "create" && ddlObjectKind(tail) === "view") {
+          const view = statementRelationKey(tail);
+          if (view) {
+            for (const target of queryRelationKeys(tail)) {
+              addRelationEdge(catalog.views, view, target);
+            }
+            if (!catalog.views.has(view)) {
+              catalog.views.set(view, new Set());
+            }
+          }
+        }
+      }
+    }
+  }
+  return catalog;
+};
+
+/** Public table identities and lease targets share one history catalog. */
+export const migrationTableNames = (sources: readonly MigrationSource[]) =>
+  [...readRelationCatalog(sources).tables.values()]
+    .filter(({ schema }) => schema === "public")
+    .map(({ name }) => name)
+    .toSorted(compareCodeUnit);
+
+type ResolveCatalogTargetOptions = {
+  catalog: RelationCatalog;
+  target: string | undefined;
+  visited: ReadonlySet<string>;
+};
+
+const resolveCatalogTarget = ({
+  catalog,
+  target,
+  visited,
+}: ResolveCatalogTargetOptions): (string | undefined)[] => {
+  if (target === undefined || visited.has(target)) {
+    return [undefined];
+  }
+  const next = new Set([...visited, target]);
+  const table = catalog.tables.get(target);
+  if (table?.schema === "public") {
+    return [target];
+  }
+  const parents = catalog.indexes.get(target);
+  if (parents) {
+    return [...parents].flatMap((parent) =>
+      resolveCatalogTarget({ catalog, target: parent, visited: next }),
+    );
+  }
+  const renamedTables = catalog.tableAliases.get(target);
+  if (renamedTables) {
+    // Pending renames can encounter leases under the old spelling. A final-name
+    // projection alone would miss those holders because leases are name based.
+    return [
+      undefined,
+      ...[...renamedTables].flatMap((renamed) =>
+        resolveCatalogTarget({ catalog, target: renamed, visited: next }),
+      ),
+    ];
+  }
+  const dependencies = catalog.views.get(target);
+  if (dependencies) {
+    // Views are outside the public-table tuple. Preserve their own lock as a
+    // wildcard while retaining visible table dependencies for diagnostics.
+    return [
+      undefined,
+      ...[...dependencies].flatMap((dependency) =>
+        resolveCatalogTarget({ catalog, target: dependency, visited: next }),
+      ),
+    ];
+  }
+  return [undefined];
+};
+
 /** Relation projection of the same classified forms used by migrationLockPairs. */
-export const migrationRelationLocks = (sources: readonly MigrationSource[]) =>
-  sources.map(({ file, source }) => {
+export const migrationRelationLocks = (sources: readonly MigrationSource[]) => {
+  const catalog = readRelationCatalog(sources);
+  return sources.map(({ file, source }) => {
     const census = censusSql(source);
     if (census.errors.length > 0) {
       return panic(`${file}: ${census.errors.join("; ")}`);
@@ -802,12 +1142,18 @@ export const migrationRelationLocks = (sources: readonly MigrationSource[]) =>
       locks: census.forms.flatMap(({ lockMode, lockTargets }) =>
         lockMode === "NO EXISTING RELATION"
           ? []
-          : (lockTargets.length > 0 ? lockTargets : [undefined]).map(
-              (target) => ({ mode: lockMode, target }),
+          : (lockTargets.length > 0 ? lockTargets : [undefined]).flatMap(
+              (target) =>
+                resolveCatalogTarget({
+                  catalog,
+                  target,
+                  visited: new Set(),
+                }).map((resolved) => ({ mode: lockMode, target: resolved })),
             ),
       ),
     };
   });
+};
 
 type CheckMigrationLocksOptions = {
   sources: readonly MigrationSource[];
