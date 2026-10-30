@@ -678,12 +678,16 @@ const logPath = (directory: string, index: number) =>
  * A check's log. A check that never launched, or whose launch failed before
  * its log was opened, has none; its result's detail is then its only record.
  */
-type CheckLog = { type: "missing" } | { type: "present"; text: string };
+export type CheckLog =
+  { type: "output"; output: string } | { type: "no-output"; output: "" };
 
-const readCheckLog = (file: string): CheckLog =>
-  existsSync(file)
-    ? { type: "present", text: readFileSync(file, "utf-8") }
-    : { type: "missing" };
+/** Read a completed check's log without turning absent output into a pool crash. */
+export const readCheckLog = (directory: string, index: number): CheckLog => {
+  const file = logPath(directory, index);
+  return existsSync(file)
+    ? { type: "output", output: readFileSync(file, "utf-8") }
+    : { type: "no-output", output: "" };
+};
 
 const CANCELLATION_LOG_TAIL_BYTES = 8 * 1024;
 const CANCELLATION_LOG_TAIL_LINES = 40;
@@ -811,11 +815,11 @@ const checkGroupText = (
   result: Pick<CheckResult, "outcome" | "detail">,
 ): string => {
   switch (log.type) {
-    case "present": {
-      const text = checkLogText(log.text, result.outcome);
+    case "output": {
+      const text = checkLogText(log.output, result.outcome);
       return text === "" || text.endsWith("\n") ? text : `${text}\n`;
     }
-    case "missing":
+    case "no-output":
       return result.outcome === "failure" ? `error: ${result.detail}\n` : "";
     default:
       log satisfies never;
@@ -1394,11 +1398,11 @@ const main = async () => {
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
       const log: CheckLog =
         planned[index]?.status === "selected"
-          ? readCheckLog(logPath(directory, index))
-          : { type: "missing" };
+          ? readCheckLog(directory, index)
+          : { type: "no-output", output: "" };
       writeOut(checkGroupText(log, result));
       print("::endgroup::");
-      const output = log.type === "present" ? log.text : "";
+      const { output } = log;
       if (result.outcome === "failure") {
         print(failedCheckAnnotation(result, output));
         print(failedCheckRecord(result.name, failedCheckCause(result, output)));
