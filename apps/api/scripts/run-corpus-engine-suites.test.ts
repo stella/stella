@@ -475,7 +475,7 @@ test("a healthy engine must admit a disposable write before suites start", async
   try {
     await waitForCorpusEngineReadiness({
       apiRoot,
-      endpoint: `http://127.0.0.1:${server.port}`,
+      endpoint: server.url.origin,
       signal: new AbortController().signal,
     });
     expect(ingests).toBe(2);
