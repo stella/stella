@@ -1,5 +1,3 @@
-import type { OrganizationSettings } from "@/queries/organization-settings";
-
 const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 
 const LEGAL_LISTS_FEATURE = {
@@ -42,7 +40,14 @@ export const CALLER_FEATURE = {
   legalLists: LEGAL_LISTS_FEATURE,
 } as const;
 
+/**
+ * Keys of the organization settings `deploymentFeatures` map. This module stays
+ * import-free because a lint plugin reads it; access.logic.ts indexes the
+ * settings map with these keys, so a key the contract lacks fails to compile.
+ */
+type WebDeploymentFeature = "legalLists" | "invoiceLinks";
+
 export type CallerFeature =
   (typeof CALLER_FEATURE)[keyof typeof CALLER_FEATURE] & {
-    deployment?: keyof OrganizationSettings["deploymentFeatures"];
+    deployment?: WebDeploymentFeature;
   };

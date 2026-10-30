@@ -41,14 +41,15 @@ export const WEB_DEPLOYMENT_FEATURES = {
   invoiceLinks: "FEATURE_INVOICE_LINKS",
 } as const satisfies Record<string, DeploymentFeatureFlag>;
 
-// SAFETY: every own registry key is emitted exactly once, with a boolean value.
-const readWebDeploymentFeatures = () =>
-  Object.fromEntries(
-    Object.entries(WEB_DEPLOYMENT_FEATURES).map(([key, flag]) => [
-      key,
-      isDeploymentFeatureEnabled(flag),
-    ]),
-  ) as { [Key in keyof typeof WEB_DEPLOYMENT_FEATURES]: boolean };
+// The annotated return type makes a missing registry key a compile error.
+const readWebDeploymentFeatures = (): {
+  [Key in keyof typeof WEB_DEPLOYMENT_FEATURES]: boolean;
+} => ({
+  legalLists: isDeploymentFeatureEnabled(WEB_DEPLOYMENT_FEATURES.legalLists),
+  invoiceLinks: isDeploymentFeatureEnabled(
+    WEB_DEPLOYMENT_FEATURES.invoiceLinks,
+  ),
+});
 
 const config = {
   contract: "patch",

@@ -15,7 +15,7 @@ const timeEntryContext = entityContextProjection(timeEntries.workItemId);
 const expenseContext = entityContextProjection(expenses.matterId);
 
 /** Invoice document content shared by PDFs, e-invoice output, and exports. */
-export const INVOICE_DOCUMENT_RELATIONS = {
+const INVOICE_DOCUMENT_RELATIONS = {
   lines: {
     columns: INVOICE_LINE_COLUMNS,
     with: { workspace: { columns: { id: true, name: true, color: true } } },

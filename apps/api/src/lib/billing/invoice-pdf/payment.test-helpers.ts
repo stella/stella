@@ -59,10 +59,9 @@ export const assertInvoicePaymentRequest = ({
   if (payload.status !== "payable") {
     panic("Payment fixture must support Czech QR payments");
   }
-  expect(data.payment).toMatchObject({
-    fields: expect.arrayContaining([
-      { label: expect.any(String), value: money(outstandingAmount) },
-    ]),
-    qrSvg: qrSvg(payload.payload, "M"),
-  });
+  const payment = data.payment ?? panic("Payable invoice must carry payment");
+  expect(payment.fields.map(({ value }) => value)).toContain(
+    money(outstandingAmount),
+  );
+  expect(payment.qrSvg).toBe(qrSvg(payload.payload, "M"));
 };

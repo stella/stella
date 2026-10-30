@@ -981,7 +981,7 @@ describe("sending an invoice by link", () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const sent = await send(invoiceId, ["withdrawn-grant@example.test"]);
     if (!("id" in sent)) {
-      return panic("Expected an invoice link before grant removal");
+      panic("Expected an invoice link before grant removal");
     }
     const token = tokenSentTo("withdrawn-grant@example.test");
     expect((await post(server, "view", { token })).status).toBe(200);
@@ -3221,7 +3221,7 @@ describe("invoice payment requests", () => {
         );
         expect(renders).toBe(1);
       } finally {
-        target.stop();
+        await target.stop();
       }
     },
   );

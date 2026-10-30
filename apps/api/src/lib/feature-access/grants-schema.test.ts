@@ -212,8 +212,8 @@ test("invoice organization grants are registered while unknown ids retain count-
 
 test("organization-scoped features reject member grants without exposing their identities", () => {
   const organizationFeatures = Object.entries(FEATURE_REGISTRY).filter(
-    ([, definition]) =>
-      "grantScope" in definition && definition.grantScope === "organization",
+    // "organization" is the only grant scope the registry type allows.
+    ([, definition]) => "grantScope" in definition,
   );
   expect(organizationFeatures.length).toBeGreaterThan(0);
   for (const [featureId] of organizationFeatures) {

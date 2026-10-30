@@ -62,7 +62,10 @@ export const invoiceSendsRoute = routes(
   },
   {
     prefix: "/invoices/:workspaceId",
-    middleware: [featureAccessGate("invoice-links")],
+    middleware: [
+      deploymentFeatureGate("FEATURE_TIME_BILLING"),
+      featureAccessGate("invoice-links"),
+    ],
   },
 );
 

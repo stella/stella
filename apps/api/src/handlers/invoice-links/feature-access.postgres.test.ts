@@ -48,20 +48,25 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const token = createInvoiceLinkToken();
         const sendId = createSafeId<"invoiceSend">();
         try {
-          await db.insert(invoiceSends).values({
-            id: sendId,
-            organizationId: orgA,
-            invoiceId: a.invoiceId,
-            recipients: ["recipient@example.test"],
-            language: "en",
-            replyTo: "sender@example.test",
-            tokenHash: hashInvoiceLinkToken(token),
-            expiresAt: new Date(Date.now() + 86_400_000),
-          });
-          await db
-            .update(invoiceSends)
-            .set({ deliveryStatus: "delivered" })
-            .where(eq(invoiceSends.id, sendId));
+          // Sends are written as the organization's member, like the seed.
+          (
+            await a.context.safeDb(async (tx) => {
+              await tx.insert(invoiceSends).values({
+                id: sendId,
+                organizationId: orgA,
+                invoiceId: a.invoiceId,
+                recipients: ["recipient@example.test"],
+                language: "en",
+                replyTo: "sender@example.test",
+                tokenHash: hashInvoiceLinkToken(token),
+                expiresAt: new Date(Date.now() + 86_400_000),
+              });
+              await tx
+                .update(invoiceSends)
+                .set({ deliveryStatus: "delivered" })
+                .where(eq(invoiceSends.id, sendId));
+            })
+          ).unwrap();
           const tokenDb = {
             tenantless: asTestRaw<TokenScopedDatabase["tenantless"]>(
               createTenantlessDb(db),
