@@ -13,12 +13,12 @@ import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { loadDocx } from "@/api/lib/docx-archive";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 

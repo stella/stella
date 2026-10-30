@@ -499,12 +499,6 @@
       }
     },
     {
-      "id": "nvidia/nemotron-3-super-120b-a12b:free",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
       "reasoning": {
         "default_effort": "high"

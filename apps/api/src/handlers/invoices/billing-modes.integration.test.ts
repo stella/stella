@@ -399,6 +399,48 @@ test("hourly draft reservations consume the cap; refused claims roll back and de
   expect(await draft([second])).toHaveProperty("id");
 });
 
+test.each([40, 41])(
+  "finalizing %i candidate minutes beside 60 reserved minutes enforces a 100-minute cap",
+  async (candidateMinutes) => {
+    const reserved = await seedEntry();
+    invoiceIdFrom(await draft([reserved]));
+    const candidate = await seedEntry();
+    await db
+      .update(timeEntries)
+      .set({
+        durationMinutes: candidateMinutes,
+        billedMinutes: candidateMinutes,
+      })
+      .where(eq(timeEntries.id, candidate));
+    const invoiceId = invoiceIdFrom(await draft([candidate]));
+    await db.insert(billingArrangements).values({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      mode: "hourly",
+      currency: "USD",
+      capMinutes: 100,
+      alertThresholdBps: 8000,
+    });
+
+    const result = await transitionInvoice.handler(
+      context(transitionInvoice.handler, { action: "finalize" }, { invoiceId }),
+    );
+    if (candidateMinutes === 40) {
+      expect(result).toHaveProperty("id", invoiceId);
+    } else {
+      expect(result).toMatchObject({
+        code: 409,
+        response: { code: "billing_cap_exceeded" },
+      });
+    }
+    expect(
+      await db.query.invoices.findFirst({ where: { id: { eq: invoiceId } } }),
+    ).toMatchObject({
+      status: candidateMinutes === 40 ? "finalized" : "draft",
+    });
+  },
+);
+
 test("finalize rechecks a lowered cap atomically and void releases covered markers", async () => {
   const entry = await seedEntry();
   const invoiceId = invoiceIdFrom(await draft([entry]));

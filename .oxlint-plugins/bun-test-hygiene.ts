@@ -44,7 +44,10 @@
 //            from `apps/api/src/db/sql-client.ts`, `drizzle(url)` or
 //            `drizzle({ connection })` from a network drizzle driver,
 //            `postgres` from `postgres`, `Pool` and `Client` from `pg`.
-//   Allowed: `drizzle({ client })`, which wraps a client opened elsewhere.
+//   Also flagged: closing the shared-process client imported from `db/root`,
+//   including stable database, client, and close-method aliases.
+//   Allowed: `drizzle({ client })`, which wraps a client opened elsewhere,
+//   and closing clients owned by a gated-test-database fixture.
 //   The gated suites run in one process, so a client a test leaves open
 //   holds its connections for the rest of the run. Tests open them through
 //   `apps/api/src/tests/gated-test-database.ts`, which closes every client it
@@ -72,6 +75,7 @@ import {
   resolveImport,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
+  stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode, FilenameContext, ScopeContext } from "./utils.ts";
@@ -728,7 +732,7 @@ const SQL_CLIENT_OWNER = "apps/api/src/db/sql-client";
 const SQL_CLIENT_FACTORY = "createSqlClient";
 
 const CLIENT_CONSTRUCTOR_HINT =
-  /\bSQL\b|drizzle|postgres|\bpg\b|createSqlClient/u;
+  /\bSQL\b|drizzle|postgres|\bpg\b|createSqlClient|\brootDb\b|db\/(?:root|sql-close)/u;
 
 // `Bun.SQL`, with `Bun` the runtime global rather than a local binding.
 const isGlobalBunSql = (context: ScopeContext, callee: AstNode): boolean => {
@@ -811,6 +815,147 @@ const constructedClient = (
     return `drizzle from "${binding.source}"`;
   }
   return null;
+};
+
+type SharedDatabaseProvenance = "database" | "client" | "close";
+
+const sharedDatabaseMember = (
+  source: SharedDatabaseProvenance | null,
+  property: string | null,
+): SharedDatabaseProvenance | null => {
+  switch (source) {
+    case "database":
+      return property === "$client" ? "client" : null;
+    case "client":
+      return property === "close" ? "close" : null;
+    case "close":
+    case null:
+      return null;
+    default:
+      source satisfies never;
+      return panic("Unhandled shared database provenance");
+  }
+};
+
+type DestructuredSharedDatabaseOptions = {
+  pattern: unknown;
+  binding: unknown;
+  source: SharedDatabaseProvenance | null;
+};
+
+const destructuredSharedDatabase = ({
+  pattern,
+  binding,
+  source,
+}: DestructuredSharedDatabaseOptions): SharedDatabaseProvenance | null => {
+  if (source === null || !isAstNode(pattern)) {
+    return null;
+  }
+  if (pattern === binding) {
+    return source;
+  }
+  if (pattern.type === "AssignmentPattern") {
+    return destructuredSharedDatabase({
+      pattern: pattern.left,
+      binding,
+      source,
+    });
+  }
+  if (pattern.type !== "ObjectPattern" || !Array.isArray(pattern.properties)) {
+    return null;
+  }
+  for (const property of pattern.properties) {
+    if (
+      !isAstNode(property) ||
+      property.type !== "Property" ||
+      (property.computed === true && !isStringLiteral(property.key))
+    ) {
+      continue;
+    }
+    const selected = destructuredSharedDatabase({
+      pattern: property.value,
+      binding,
+      source: sharedDatabaseMember(source, getPropertyName(property.key)),
+    });
+    if (selected !== null) {
+      return selected;
+    }
+  }
+  return null;
+};
+
+type SharedDatabaseProvenanceOptions = {
+  context: ScopeContext & FilenameContext;
+  node: unknown;
+  seen?: Set<unknown>;
+};
+
+const sharedDatabaseProvenance = ({
+  context,
+  node,
+  seen = new Set<unknown>(),
+}: SharedDatabaseProvenanceOptions): SharedDatabaseProvenance | null => {
+  const expression = unwrapExpression(node);
+  if (expression === null || seen.has(expression)) {
+    return null;
+  }
+  seen.add(expression);
+  const imported = resolveImport(context, expression);
+  if (
+    imported?.moduleId === "apps/api/src/db/root" &&
+    imported.imported === "rootDb"
+  ) {
+    return "database";
+  }
+  if (expression.type === "MemberExpression") {
+    return sharedDatabaseMember(
+      sharedDatabaseProvenance({ context, node: expression.object, seen }),
+      memberPropertyName(expression),
+    );
+  }
+  if (!isIdentifierReference(expression)) {
+    return null;
+  }
+  const variable = resolveVariable(context, expression);
+  if (variable === null) {
+    return null;
+  }
+  const initializer = stableInitializer(variable);
+  if (initializer === null) {
+    return null;
+  }
+  const source = sharedDatabaseProvenance({ context, node: initializer, seen });
+  const definition = variable.defs.at(0);
+  const declaration = definition?.node;
+  return isAstNode(declaration) &&
+    isAstNode(declaration.id) &&
+    declaration.id.type === "ObjectPattern"
+    ? destructuredSharedDatabase({
+        pattern: declaration.id,
+        binding: definition?.name,
+        source,
+      })
+    : source;
+};
+
+const closesSharedDatabaseClient = (
+  context: ScopeContext & FilenameContext,
+  node: unknown,
+) => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
+    return false;
+  }
+  if (sharedDatabaseProvenance({ context, node: node.callee }) === "close") {
+    return true;
+  }
+  const helper = resolveImport(context, node.callee);
+  return (
+    helper?.moduleId === "apps/api/src/db/sql-close" &&
+    helper.imported === "forceClosePool" &&
+    Array.isArray(node.arguments) &&
+    sharedDatabaseProvenance({ context, node: node.arguments.at(0) }) ===
+      "client"
+  );
 };
 
 export default eslintCompatPlugin({
@@ -1219,6 +1364,10 @@ export default eslintCompatPlugin({
             "is bound to close. Open it through `openGatedTestDatabase` or " +
             "`withGatedTestClients` from `@/api/tests/gated-test-database`, " +
             "which close every client they open even when cleanup throws.",
+          sharedClient:
+            "This test closes a shared-process database client. Tests may close " +
+            "only their own clients; use `openGatedTestDatabase` or " +
+            "`withGatedTestClients` for fixture-owned connections.",
         },
       },
       createOnce(context) {
@@ -1241,6 +1390,10 @@ export default eslintCompatPlugin({
             return CLIENT_CONSTRUCTOR_HINT.test(context.sourceCode.text);
           },
           CallExpression(node) {
+            if (closesSharedDatabaseClient(context, node)) {
+              context.report({ node, messageId: "sharedClient" });
+              return;
+            }
             report(node);
           },
           NewExpression(node) {

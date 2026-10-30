@@ -1,14 +1,19 @@
 {
   "tabs": {
     "chat": "Pokalbis",
-    "tasks": "Užduotys",
+    "close": "Uždaryti",
+    "law": "Teismų praktika",
     "matters": "Bylos",
-    "settings": "Nustatymai"
+    "more": "Daugiau",
+    "settings": "Nustatymai",
+    "tasks": "Užduotys"
   },
   "chat": {
-    "description": "Turėkite vykdomą darbą po ranka ir tęskite bet kuriame įrenginyje.",
     "emptyTitle": "Pokalbių dar nėra",
     "emptyDescription": "Čia bus rodomi nauji pokalbiai ir naujausios gijos.",
+    "noMatchesTitle": "Atitinkančių pokalbių nėra",
+    "noMatchesDescription": "Nė vieno pokalbio pavadinime ar byloje nėra „{search}“.",
+    "search": "Ieškoti pokalbių",
     "loadFailed": "Nepavyko įkelti jūsų pokalbių.",
     "retry": "Bandyti dar kartą",
     "untitled": "Pokalbis be pavadinimo",
@@ -32,19 +37,62 @@
     "answerWorking": "Dirbu…",
     "answerStopped": "Sustabdyta.",
     "answerNeedsInput": "Šiam atsakymui reikia jūsų įvesties. Tęskite jį stella žiniatinklio programoje.",
-    "answerFailed": "Atsakymo užbaigti nepavyko."
+    "answerFailed": "Atsakymo užbaigti nepavyko.",
+    "composerMenu": "Atverti priedų ir įrankių meniu",
+    "pickTitle": "Pasirinkite pokalbį",
+    "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +."
   },
   "tasks": {
-    "description": "Matykite, kam reikia dėmesio, neatidarydami visos darbo erdvės.",
     "emptyTitle": "Atvirų užduočių nėra",
-    "emptyDescription": "Čia bus rodomos priskirtos ir artėjančios užduotys."
+    "emptyDescription": "Čia bus rodomos jums priskirtos atviros užduotys.",
+    "loadFailed": "Nepavyko įkelti jūsų užduočių.",
+    "retry": "Bandyti dar kartą",
+    "newTask": "Nauja užduotis",
+    "add": "Pridėti",
+    "name": "Užduoties pavadinimas",
+    "dueTitle": "Terminas",
+    "matterTitle": "Byla",
+    "findMatter": "Rasti bylą",
+    "addFailed": "Nepavyko pridėti užduoties. Bandykite dar kartą.",
+    "mattersFailed": "Nepavyko įkelti jūsų bylų.",
+    "dueOn": "terminas {day}",
+    "dueChoice": {
+      "none": "Be datos",
+      "today": "Šiandien",
+      "tomorrow": "Rytoj",
+      "nextWeek": "Po savaitės"
+    },
+    "due": {
+      "overdue": "Pavėluotos",
+      "today": "Šiandien",
+      "tomorrow": "Rytoj",
+      "week": "Šią savaitę",
+      "later": "Vėliau",
+      "none": "Be termino"
+    },
+    "markDone": "Pažymėti kaip atliktą",
+    "reopen": "Atidaryti iš naujo",
+    "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą.",
+    "pickTitle": "Pasirinkite užduotį",
+    "pickDescription": "Pasirinkite užduotį iš sąrašo, kad ją matytumėte čia.",
+    "openMatter": "Atidaryti bylą"
   },
   "matters": {
-    "description": "Raskite bylą ir greitai susipažinkite su svarbiausiu kontekstu.",
     "emptyTitle": "Bylų dar nėra",
     "emptyDescription": "Čia bus rodomos jūsų naujausios bylos.",
     "loadFailed": "Nepavyko įkelti jūsų bylų.",
-    "retry": "Bandyti dar kartą"
+    "retry": "Bandyti dar kartą",
+    "groupBy": "Grupuoti pagal",
+    "noGrouping": "Negrupuoti",
+    "groupClient": "Klientas",
+    "personal": "Asmeninė",
+    "newMatter": "Nauja byla",
+    "create": "Sukurti",
+    "name": "Bylos pavadinimas",
+    "personalHint": "Ji sukuriama kaip asmeninė byla, matoma tik jums. Klientą ir narius pridėsite žiniatinklyje.",
+    "createFailed": "Nepavyko sukurti bylos. Bandykite dar kartą.",
+    "pickTitle": "Pasirinkite bylą",
+    "pickDescription": "Pasirinkite bylą iš sąrašo, kad matytumėte jos dokumentus ir užduotis."
   },
   "matter": {
     "documents": "Dokumentai",
@@ -68,7 +116,10 @@
       "in_review": "Peržiūrima",
       "done": "Atlikta",
       "cancelled": "Atšaukta"
-    }
+    },
+    "add": "Pridėti",
+    "scanDocument": "Nuskenuoti dokumentą",
+    "newTask": "Nauja užduotis"
   },
   "entity": {
     "type": "Tipas",
@@ -77,11 +128,18 @@
     "loadFailed": "Nepavyko įkelti šio įrašo."
   },
   "signIn": {
-    "title": "Prisijunkite prie stella",
-    "description": "Įveskite savo stella serverio adresą. Prisijungimą patvirtinsite naršyklėje.",
+    "beta": "Beta",
+    "headline": "Aiškumas kiekvienai bylai.",
+    "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su DI pagalba.",
+    "submit": "Prisijungti",
+    "terms": "Tęsdami sutinkate su mūsų <terms>paslaugų teikimo sąlygomis</terms>.",
+    "options": "Prisijungimo parinktys",
+    "serverTitle": "Serveris",
+    "serverDescription": "Programa jungiasi prie stella. Kitą serverį nurodykite tik tada, jei jūsų organizacija turi savo.",
+    "useStella": "Naudoti stella",
+    "done": "Atlikta",
     "serverLabel": "Serverio adresas",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Tęsti",
     "sessionEnded": "Jūsų sesija baigėsi. Prisijunkite dar kartą.",
     "errors": {
       "address": "Įveskite https adresą, pavyzdžiui, stella.example.com.",
@@ -93,6 +151,83 @@
   "settings": {
     "accountTitle": "Paskyra",
     "server": "Serveris",
-    "signOut": "Atsijungti"
+    "signOut": "Atsijungti",
+    "deleteAccount": "Ištrinti paskyrą",
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
+  },
+  "header": {
+    "search": "Ieškoti"
+  },
+  "law": {
+    "title": "Teismų praktika",
+    "newest": "Naujausi sprendimai",
+    "noResults": "Niekas neatitiko žodžių, kurių reikalavo ši paieška.",
+    "noResultsHint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
+    "unavailable": "Paieška laikinai nepasiekiama",
+    "retry": "Bandyti dar kartą",
+    "headnote": "Santrauka",
+    "textUnavailable": "Šiam sprendimui teksto nėra",
+    "openSource": "Atverti pirminį šaltinį",
+    "loadFailed": "Nepavyko įkelti teismų praktikos.",
+    "share": "Bendrinti"
+  },
+  "more": {
+    "soon": "Netrukus",
+    "timers": "Laikmačiai",
+    "voiceInput": "Balso įvestis"
+  },
+  "writes": {
+    "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
+    "signInAgain": "Prisijungti iš naujo"
+  },
+  "timers": {
+    "title": "Laikmačiai",
+    "start": "Paleisti",
+    "startTimer": "Paleisti laikmatį",
+    "newTimer": "Naujas laikmatis",
+    "description": "Prie ko dirbate?",
+    "matterTitle": "Byla",
+    "noMatter": "Be bylos",
+    "noDescription": "Be aprašymo",
+    "running": "Veikia",
+    "paused": "Pristabdytas",
+    "pause": "Pristabdyti",
+    "resume": "Tęsti",
+    "save": "Išsaugoti",
+    "discard": "Atmesti",
+    "emptyTitle": "Laikmačių nėra",
+    "emptyDescription": "Paleiskite laikmatį mygtuku + ir baigę išsaugokite jį kaip laiko įrašą.",
+    "loadFailed": "Nepavyko įkelti jūsų laikmačių.",
+    "retry": "Bandyti dar kartą",
+    "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
+    "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
+    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą.",
+    "more": "{count, plural, one {dar # laikmatis} few {dar # laikmačiai} other {dar # laikmačių}}"
+  },
+  "scan": {
+    "title": "Nuskenuoti dokumentą",
+    "upload": "Įkelti",
+    "name": "Dokumento pavadinimas",
+    "defaultName": "Skenavimas {day}",
+    "pages": "{count, plural, one {# puslapis} few {# puslapiai} other {# puslapių}}",
+    "matterTitle": "Byla",
+    "uploadFailed": "Nepavyko įkelti skenavimo. Bandykite dar kartą.",
+    "failedTitle": "Skenuoti nepavyko",
+    "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą."
+  },
+  "shortcuts": {
+    "search": "Ieškoti",
+    "palette": "Komandų paletė",
+    "next": "Kitas rezultatas",
+    "previous": "Ankstesnis rezultatas",
+    "toggleList": "Rodyti arba slėpti sąrašą"
+  },
+  "palette": {
+    "placeholder": "Ieškokite bylų ir pokalbių arba paleiskite komandą",
+    "noResults": "Niekas neatitinka „{query}“"
+  },
+  "pane": {
+    "showList": "Rodyti sąrašą",
+    "hideList": "Slėpti sąrašą"
   }
 }

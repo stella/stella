@@ -1,22 +1,13 @@
 import { use, useState } from "react";
 
 import { Result } from "better-result";
-import {
-  RefreshControl,
-  SectionList,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { ChatThreadRow } from "@/components/chat-thread-row";
-import {
-  EmptyCard,
-  ScreenHeading,
-  screenStyles,
-} from "@/components/empty-state-screen";
-import { NewChatButton } from "@/components/new-chat-button";
+import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import type { AccessTokenSource } from "@/connection/session";
@@ -35,11 +26,14 @@ export const LoadedChats = ({
   load,
   onReload,
   refreshing,
+  search,
   source,
 }: {
   load: Promise<Load<ChatThreadsPage>>;
   onReload: () => void;
   refreshing: boolean;
+  /** The text this load's threads match; later pages ask for it too. */
+  search: string;
   source: AccessTokenSource;
 }) => {
   const { loadedAt, result } = use(load);
@@ -57,6 +51,7 @@ export const LoadedChats = ({
       loadedAt={loadedAt}
       onReload={onReload}
       refreshing={refreshing}
+      search={search}
       source={source}
     />
   );
@@ -67,16 +62,17 @@ const ThreadTimeline = ({
   loadedAt,
   onReload,
   refreshing,
+  search,
   source,
 }: {
   firstPage: ChatThreadsPage | undefined;
   loadedAt: number;
   onReload: () => void;
   refreshing: boolean;
+  search: string;
   source: AccessTokenSource;
 }) => {
   const t = useTranslations("chat");
-  const tabs = useTranslations("tabs");
   const colors = useAppColors();
   const { end } = useSession();
   const timeZone = useTimeZone() ?? "UTC";
@@ -89,7 +85,7 @@ const ThreadTimeline = ({
       return;
     }
     setMore("loading");
-    const next = await listChatThreads({ cursor, fetch, source });
+    const next = await listChatThreads({ cursor, fetch, search, source });
     if (Result.isOk(next)) {
       setThreads((loaded) => appendThreadsPage(loaded, next.value.threads));
       setCursor(next.value.nextCursor);
@@ -106,6 +102,10 @@ const ThreadTimeline = ({
   return (
     <SectionList
       contentContainerStyle={screenStyles.content}
+      // The header is the platform's translucent bar; the list scrolls under it.
+      contentInsetAdjustmentBehavior="automatic"
+      // A chat found by a search opens on the first tap, the keyboard up.
+      keyboardShouldPersistTaps="handled"
       keyExtractor={(thread) => thread.id}
       ListEmptyComponent={
         firstPage === undefined ? (
@@ -113,10 +113,7 @@ const ThreadTimeline = ({
             <RetryButton label={t("retry")} onPress={onReload} />
           </EmptyCard>
         ) : (
-          <EmptyCard
-            description={t("emptyDescription")}
-            title={t("emptyTitle")}
-          />
+          <NoThreads search={search.trim()} />
         )
       }
       ListFooterComponent={
@@ -127,12 +124,6 @@ const ThreadTimeline = ({
           }}
           state={more}
         />
-      }
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <ScreenHeading description={t("description")} title={tabs("chat")} />
-          <NewChatButton />
-        </View>
       }
       onEndReached={() => {
         void loadMore();
@@ -149,9 +140,9 @@ const ThreadTimeline = ({
         <ChatThreadRow section={section.key} thread={item} />
       )}
       renderSectionHeader={({ section }) => (
-        <Text style={[styles.sectionHeader, { color: colors.muted }]}>
-          {t(`sections.${section.key}`)}
-        </Text>
+        <View className="pt-4 pb-1">
+          <Text variant="section">{t(`sections.${section.key}`)}</Text>
+        </View>
       )}
       sections={sectionThreads(threads, loadedAt, timeZone)}
       stickySectionHeadersEnabled={false}
@@ -159,15 +150,18 @@ const ThreadTimeline = ({
   );
 };
 
-const styles = StyleSheet.create({
-  header: {
-    gap: 16,
-  },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
-});
+/** Nothing yet, or nothing that matches what was searched for. */
+const NoThreads = ({ search }: { search: string }) => {
+  const t = useTranslations("chat");
+  if (search === "") {
+    return (
+      <EmptyCard description={t("emptyDescription")} title={t("emptyTitle")} />
+    );
+  }
+  return (
+    <EmptyCard
+      description={t("noMatchesDescription", { search })}
+      title={t("noMatchesTitle")}
+    />
+  );
+};

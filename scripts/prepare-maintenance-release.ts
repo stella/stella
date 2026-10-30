@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -315,6 +315,15 @@ export const parseStableVersion = (value: string): StableVersion => {
   };
 };
 
+/**
+ * The previous release is the most recently created final tag, not the
+ * highest version: the version line restarted once (v2.9.0 predates v0.9.x),
+ * so numeric order names a release that is long superseded. Takes tag names
+ * newest first by creation date.
+ */
+export const newestFinalTag = (tagsNewestFirst: readonly string[]) =>
+  tagsNewestFirst.find((tag) => /^v[0-9]+\.[0-9]+\.[0-9]+$/u.test(tag));
+
 export const nextPatchVersion = (current: StableVersion): StableVersion => {
   const patch = current.patch + 1;
   if (!Number.isSafeInteger(patch)) {
@@ -485,11 +494,13 @@ const runChangesetVersion = (rootDir: string) => {
 };
 
 export const prepareMaintenanceReleaseFiles = ({
+  previousFinalVersion,
   previousRelease,
   rootDir,
   versionPackages = runChangesetVersion,
   writeFile = atomicWriteFile,
 }: {
+  previousFinalVersion: string;
   previousRelease: PreviousRelease;
   rootDir: string;
   /** Consumes the pending changesets; the repository's own version script. */
@@ -506,7 +517,7 @@ export const prepareMaintenanceReleaseFiles = ({
   }
 
   const versionPath = nodePath.join(rootDir, "VERSION");
-  const current = parseStableVersion(readFileSync(versionPath, "utf-8").trim());
+  const current = parseStableVersion(previousFinalVersion);
   const next = nextPatchVersion(current);
   const previousTag = `v${current.value}`;
   const previousChangelogPath = `docs/changelog/${previousTag}.md`;
@@ -683,8 +694,6 @@ export const refreshMaintenanceReleaseFiles = ({
     writeFile,
   });
 };
-
-const REFRESH_FLAG = "--refresh";
 
 const run = (command: readonly string[]) => {
   const result = Bun.spawnSync([...command], {
@@ -1285,6 +1294,7 @@ export type CutGateOutcome =
 
 export type CutGateContext = {
   readonly baseSha: string;
+  readonly previousFinalTag: string;
   readonly rootDir: string;
   readonly write: (text: string) => void;
 };
@@ -1296,23 +1306,41 @@ export type CutGateRunner = (
 ) => Promise<CutGateOutcome>;
 
 /**
- * Runs a gate the way release-tag.yml does: the same command on the base
- * tree with the caller's environment, so an explicit waiver
+ * Runs the tag's guards on the base tree. The cut checks npm at its resolved
+ * final tag; the RC checks the preceding final from its candidate. The caller's
+ * environment forwards an explicit waiver
  * (WAIVE_DEPENDENCY_AUDIT=true with WAIVER_REASON) reaches the dependency
  * audit exactly as the tag's waiver inputs do.
  */
 export const runCutGate: CutGateRunner = async (gate, context) => {
-  if (gate.check.kind === "main-statuses") {
-    // Refuses by throwing; the cut reads a thrown gate as a failed one.
-    await assertReleaseCutReady(
-      context.baseSha,
-      false,
-      readGitHubJson,
-      context.write,
-    );
-    return { passed: true };
+  let command: readonly string[];
+  switch (gate.check.kind) {
+    case "main-statuses":
+      // Refuses by throwing; the cut reads a thrown gate as a failed one.
+      await assertReleaseCutReady(
+        context.baseSha,
+        false,
+        readGitHubJson,
+        context.write,
+      );
+      return { passed: true };
+    case "command":
+      command = gate.check.command;
+      break;
+    case "npm-publish-lag":
+      // The cut has no candidate yet: check the final it will increment.
+      command = [
+        "bun",
+        "scripts/check-npm-publish-lag.ts",
+        "--ref",
+        context.previousFinalTag,
+      ];
+      break;
+    default:
+      gate.check satisfies never;
+      return panic("Unhandled maintenance release gate");
   }
-  const result = Bun.spawnSync([...gate.check.command], {
+  const result = Bun.spawnSync([...command], {
     cwd: context.rootDir,
     env: process.env,
     stderr: "pipe",
@@ -1407,6 +1435,9 @@ export type MaintenanceCutEffects = {
   readonly rootDir: string;
   readonly assertCleanWorktree: () => void;
   readonly resolveHeadSha: () => string;
+  readonly latestFinalVersion: () => string;
+  readonly assertNoOpenRelease: () => void;
+  readonly openReleasePullRequest: (version: string) => void;
   readonly runGate: CutGateRunner;
   readonly queueHistoryWarning: (baseSha: string) => string | null;
   readonly readPreviousRelease: (tag: string) => Promise<PreviousRelease>;
@@ -1428,22 +1459,25 @@ export const cutMaintenanceRelease = async (
   const { rootDir } = effects;
   const options = parseMaintenanceReleaseOptions(args);
   effects.assertCleanWorktree();
-  const current = parseStableVersion(
-    readFileSync(nodePath.join(rootDir, "VERSION"), "utf-8").trim(),
-  );
+  effects.assertNoOpenRelease();
+  const current = parseStableVersion(effects.latestFinalVersion());
+  const previousFinalTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
-    context: { baseSha, rootDir, write: effects.write },
+    context: {
+      baseSha,
+      previousFinalTag,
+      rootDir,
+      write: effects.write,
+    },
     runGate: effects.runGate,
   });
   const queueHistoryWarning = effects.queueHistoryWarning(baseSha);
   if (queueHistoryWarning !== null) {
     effects.write(`${queueHistoryWarning}\n`);
   }
-  const previousRelease = await effects.readPreviousRelease(
-    `v${current.value}`,
-  );
+  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
   // checks below run after it, and a failure there must restore the version
@@ -1453,6 +1487,7 @@ export const cutMaintenanceRelease = async (
     operation: () => {
       effects.ensureFreshRecordings(options.recordingReviewReason);
       const release = prepareMaintenanceReleaseFiles({
+        previousFinalVersion: current.value,
         previousRelease,
         rootDir,
         versionPackages: effects.versionPackages,
@@ -1470,6 +1505,7 @@ export const cutMaintenanceRelease = async (
       ...versionRollbackPaths(rootDir, pending),
     ],
   });
+  effects.openReleasePullRequest(prepared.version);
   effects.write(
     [
       `maintenance-release: prepared ${prepared.version}`,
@@ -1486,8 +1522,7 @@ export const cutMaintenanceRelease = async (
         : [
             `  package versions, changelogs and ${String(prepared.changesets.length)} consumed changeset(s): ${prepared.changesets.join(", ")}`,
           ]),
-      "Review the diff, commit it, and open the release PR.",
-      "Once its CI is green, add the release PR to the merge queue.",
+      "The release PR head will be tagged and proved as a release candidate.",
       "",
     ].join("\n"),
   );
@@ -1499,6 +1534,87 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
     assertCleanWorktree(rootDir);
   },
   resolveHeadSha: () => resolveHeadSha(rootDir),
+  latestFinalVersion: () => {
+    run(["git", "fetch", "origin", "main", "--tags"]);
+    const head = resolveHeadSha(rootDir);
+    const main = spawnOutput(["git", "rev-parse", "origin/main"])?.trim();
+    if (head !== main) {
+      throw new MaintenanceReleaseError(
+        "Cut releases from the fetched main commit",
+      );
+    }
+    const tags = spawnOutput([
+      "git",
+      "tag",
+      "--list",
+      "v*",
+      "--sort=-creatordate",
+    ]);
+    const latest = newestFinalTag(tags?.split("\n") ?? []);
+    if (!latest) {
+      throw new MaintenanceReleaseError("No final release tag exists");
+    }
+    return latest.slice(1);
+  },
+  assertNoOpenRelease: () => {
+    const listing = spawnOutput([
+      "gh",
+      "pr",
+      "list",
+      "--repo",
+      "stella/stella",
+      "--state",
+      "open",
+      "--base",
+      "main",
+      "--limit",
+      "500",
+      "--json",
+      "title",
+    ]);
+    if (listing === null) {
+      throw new MaintenanceReleaseError(
+        "Could not read open release pull requests",
+      );
+    }
+    const pulls: unknown = JSON.parse(listing);
+    if (
+      !Array.isArray(pulls) ||
+      pulls.length >= 500 ||
+      pulls.some(
+        (pull: unknown) =>
+          isRecord(pull) &&
+          typeof pull["title"] === "string" &&
+          pull["title"].startsWith("chore: release v"),
+      )
+    ) {
+      throw new MaintenanceReleaseError(
+        "An earlier release pull request is still open, or the listing is incomplete",
+      );
+    }
+  },
+  openReleasePullRequest: (version) => {
+    const branch = `release/v${version}`;
+    run(["git", "switch", "-c", branch]);
+    run(["git", "add", "--all"]);
+    run(["git", "commit", "-S", "-m", `chore: release v${version}`]);
+    run(["git", "push", "--set-upstream", "origin", branch]);
+    run([
+      "gh",
+      "pr",
+      "create",
+      "--repo",
+      "stella/stella",
+      "--base",
+      "main",
+      "--head",
+      branch,
+      "--title",
+      `chore: release v${version}`,
+      "--body",
+      `Release v${version}.`,
+    ]);
+  },
   runGate: runCutGate,
   queueHistoryWarning: (baseSha) =>
     releaseQueueHistoryWarning(() => ({ baseSha })),
@@ -1516,19 +1632,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
 
 const main = async () => {
   const args = process.argv.slice(2);
-  // The release pull request refresh runs in CI on the release branch: it
-  // versions files only, so the cut's gates, recordings and prompts stay out.
-  if (args.length === 1 && args.at(0) === REFRESH_FLAG) {
-    assertCleanWorktree(ROOT_DIR);
-    const refreshed = refreshMaintenanceReleaseFiles({ rootDir: ROOT_DIR });
-    process.stdout.write(`${JSON.stringify({ refreshed })}\n`);
-    return;
-  }
-  if (args.includes(REFRESH_FLAG)) {
-    throw new MaintenanceReleaseError(
-      `${REFRESH_FLAG} takes no other argument`,
-    );
-  }
   await cutMaintenanceRelease(args, productionCutEffects(ROOT_DIR));
 };
 

@@ -46,6 +46,23 @@ export const isObjectLiteralProperty = (
   parent?.type === "ObjectExpression" &&
   parent.properties.some((property) => property === node);
 
+/** Computed identifiers are expressions, while uncomputed identifiers name keys. */
+export const staticPropertyName = ({
+  computed,
+  key,
+}: Pick<ObjectProperty, "computed" | "key">): string | undefined => {
+  if (!computed && key.type === "Identifier") {
+    return key.name;
+  }
+  if (key.type === "Literal" && typeof key.value === "string") {
+    return key.value;
+  }
+  if (key.type === "TemplateLiteral" && key.expressions.length === 0) {
+    return key.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+
 const isNode = (value: unknown): value is Node =>
   typeof value === "object" &&
   value !== null &&
