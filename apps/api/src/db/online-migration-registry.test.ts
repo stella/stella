@@ -42,6 +42,7 @@ const run = ({ cwd, command, args }: RunOptions) => {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf-8",
+    maxBuffer: 32 * 1024 * 1024,
     env: {
       ...process.env,
       GIT_CONFIG_GLOBAL: "/dev/null",
@@ -227,6 +228,7 @@ describe("online migration entry contract", () => {
           {
             cwd: directory,
             encoding: "utf-8",
+            maxBuffer: 32 * 1024 * 1024,
             env: {
               ...process.env,
               GIT_CONFIG_GLOBAL: "/dev/null",
@@ -247,7 +249,7 @@ describe("online migration entry contract", () => {
           const stale = spawnSync(
             process.execPath,
             ["scripts/generate-online-migration-entries.ts", "--check"],
-            { cwd: directory, encoding: "utf-8" },
+            { cwd: directory, encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
           );
           expect(stale.status).toBe(1);
           expect(stale.stderr).toContain(

@@ -1,4 +1,5 @@
 import type { OnlineMigrationEntry } from "../online-migration-entry";
+import { ONLINE_UNIQUE_INDEX_NAMES } from "../online-unique-indexes";
 
 export default {
   id: "replacements-account-issuer-account-id-uidx",
@@ -12,7 +13,9 @@ export default {
     {
       introducedBy: "20260916140000_account_issuer_nullable",
       legacyName: "account_issuer_account_id_uidx",
-      replacementNames: ["account_provider_account_id_uidx"],
+      replacementNames: [
+        ONLINE_UNIQUE_INDEX_NAMES.ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX,
+      ],
     },
   ],
 } satisfies OnlineMigrationEntry;

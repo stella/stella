@@ -21,3 +21,15 @@ the index; never resolve generated exports by hand. Execution order always
 comes from revisions, independently of export order or filesystem enumeration.
 Entry modules must have no side effects; importing them only declares work,
 and the runner owns execution.
+
+Use exported constants for unique-index dependencies in entry modules. For
+example, a replacement entry imports `ONLINE_UNIQUE_INDEX_NAMES` from
+`../online-unique-indexes` and declares its dependency as:
+
+```ts
+replacementNames: [ONLINE_UNIQUE_INDEX_NAMES.ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX];
+```
+
+`bun scripts/check-online-index-dependencies.ts` checks entry modules along
+with other consumers and rejects raw unique-index names. The index generator
+only emits module exports; it never copies or rewrites entry values.
