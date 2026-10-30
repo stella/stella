@@ -4,6 +4,10 @@ import type { SuggestionKind } from "@stll/api-contract/signals";
 
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  INBOX_SIGNAL_VIEW,
+  inboxSignalTabId,
+} from "@/features/inbox/signal-inspector.logic";
 import { api } from "@/lib/api";
 import {
   createChatDraftState,
@@ -12,6 +16,7 @@ import {
 import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -20,14 +25,14 @@ type SignalClient = ReturnType<typeof api.signals>;
 const signalClient = (signalId: string): SignalClient =>
   api.signals({ signalId: toSafeId<"signal">(signalId) });
 
-export type SignalMutationArgs = { signalId: string };
+type SignalMutationArgs = { signalId: string };
 
 export type ClientSignalAcceptanceResult = {
   type: "workspace";
   workspaceId: string;
 };
 
-export const snoozeSignal = async ({
+const snoozeSignal = async ({
   signalId,
   until,
 }: SignalMutationArgs & { until: Date }) =>
@@ -37,7 +42,7 @@ export const snoozeSignal = async ({
     );
   });
 
-export const dismissSignal = async ({
+const dismissSignal = async ({
   signalId,
   reason,
 }: SignalMutationArgs & { reason: string | null }) =>
@@ -45,7 +50,7 @@ export const dismissSignal = async ({
     unwrapApiResponse(await signalClient(signalId).dismissals.post({ reason }));
   });
 
-export const assignSignal = async ({
+const assignSignal = async ({
   signalId,
   assigneeUserId,
 }: SignalMutationArgs & { assigneeUserId: string | null }) =>
@@ -58,7 +63,7 @@ export const assignSignal = async ({
     );
   });
 
-export const acceptSignal = async ({
+const acceptSignal = async ({
   signalId,
   suggestionKind,
   result,
@@ -82,6 +87,36 @@ export const acceptSignal = async ({
     );
     return accepted;
   });
+
+export const useIdempotentSignalActions = () => {
+  const submit = useIdempotentSubmit();
+  return {
+    snoozeSignal: async (body: Parameters<typeof snoozeSignal>[0]) =>
+      await submit.run({
+        operation: `signal-snooze:${body.signalId}`,
+        body,
+        send: snoozeSignal,
+      }),
+    dismissSignal: async (body: Parameters<typeof dismissSignal>[0]) =>
+      await submit.run({
+        operation: `signal-dismiss:${body.signalId}`,
+        body,
+        send: dismissSignal,
+      }),
+    assignSignal: async (body: Parameters<typeof assignSignal>[0]) =>
+      await submit.run({
+        operation: `signal-assign:${body.signalId}`,
+        body,
+        send: assignSignal,
+      }),
+    acceptSignal: async (body: Parameters<typeof acceptSignal>[0]) =>
+      await submit.run({
+        operation: `signal-accept:${body.signalId}`,
+        body,
+        send: acceptSignal,
+      }),
+  };
+};
 
 /**
  * Opens an inspector chat with the signal already in the composer. The
@@ -107,5 +142,14 @@ export const openSignalChat = (signal: InboxSignal, prompt: string): void => {
           contextMatterIds: [signal.workspaceId],
         }
       : {}),
+  });
+};
+
+export const openSignalEvidence = ({ id, title }: InboxSignal) => {
+  useInspectorTabsStore.getState().openView({
+    type: INBOX_SIGNAL_VIEW,
+    id: inboxSignalTabId(id),
+    label: title,
+    payload: { signalId: id },
   });
 };
