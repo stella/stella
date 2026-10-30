@@ -12,7 +12,11 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import {
+  assertProperty,
+  propertyConfig,
+  propertySeed,
+} from "@stll/property-testing";
 
 import type { ReporterCitationIdentifier } from "./decision-identifier.js";
 import {
@@ -28,7 +32,11 @@ import type {
   HeadingLevel,
   TableCell,
 } from "./document-ast.js";
-import { hasInlineChildren, LEGISLATION_SERIES } from "./inline.js";
+import {
+  flattenInlineText,
+  hasInlineChildren,
+  LEGISLATION_SERIES,
+} from "./inline.js";
 import type {
   Inline,
   InlineCitationPin,
@@ -50,10 +58,13 @@ const NBSP = "\u00a0";
 
 /** Letters mixed with every whitespace encoding a court document uses. */
 const textContent = fc
-  .array(fc.constantFrom("a", "b", "č", " ", "  ", "\n", "\t", NBSP), {
-    minLength: 1,
-    maxLength: 5,
-  })
+  .array(
+    fc.constantFrom("a", "b", "č", "0", "1", "⁹", " ", "  ", "\n", "\t", NBSP),
+    {
+      minLength: 1,
+      maxLength: 5,
+    },
+  )
   .map((parts) => parts.join(""));
 
 /**
@@ -243,14 +254,15 @@ describe("projectPlainText (properties)", () => {
   });
 
   /**
-   * Never longer than the raw text: the projection only folds no-break
-   * spaces, drops spaces before a line break, trims and collapses.
+   * Whitespace normalization cannot grow the canonical inline text.
+   * Index delimiters are already present on that search axis.
    */
-  test("never grows the raw text", () => {
-    fc.assert(
+  test("search projection never grows canonical inline text", () => {
+    assertProperty(
+      "search projection never grows canonical inline text",
       fc.property(inlines, (tree) => {
         expect(projectPlainText(tree).length).toBeLessThanOrEqual(
-          plainTextOf(tree).length,
+          flattenInlineText(tree).length,
         );
       }),
       config(400),

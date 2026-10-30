@@ -9636,7 +9636,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 166128,
+        "astLength": 166133,
         "retainedPct": 100,
         "blockCount": 263,
         "missingWords": [],
@@ -9667,7 +9667,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 165381,
+        "astLength": 165386,
         "retainedPct": 100,
         "blockCount": 262,
         "missingWords": [],
@@ -9704,7 +9704,7 @@
       ],
       "stats": {
         "originalLength": 0,
-        "astLength": 166875,
+        "astLength": 166880,
         "retainedPct": 100,
         "blockCount": 264,
         "missingWords": [],
@@ -9735,7 +9735,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 166127,
+        "astLength": 166132,
         "retainedPct": 100,
         "blockCount": 263,
         "missingWords": [],
@@ -9766,7 +9766,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 166128,
+        "astLength": 166133,
         "retainedPct": 100,
         "blockCount": 263,
         "missingWords": [],
@@ -9797,7 +9797,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 166079,
+        "astLength": 166084,
         "retainedPct": 100,
         "blockCount": 262,
         "missingWords": [],
@@ -10176,7 +10176,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 20671,
+        "astLength": 20672,
         "retainedPct": 100,
         "blockCount": 47,
         "missingWords": [],
@@ -10206,7 +10206,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 20544,
+        "astLength": 20545,
         "retainedPct": 100,
         "blockCount": 46,
         "missingWords": [],
@@ -10242,7 +10242,7 @@
       ],
       "stats": {
         "originalLength": 0,
-        "astLength": 20798,
+        "astLength": 20799,
         "retainedPct": 100,
         "blockCount": 48,
         "missingWords": [],
@@ -10272,7 +10272,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 20670,
+        "astLength": 20671,
         "retainedPct": 100,
         "blockCount": 47,
         "missingWords": [],
@@ -10302,7 +10302,7 @@
       "issues": [],
       "stats": {
         "originalLength": 0,
-        "astLength": 20671,
+        "astLength": 20672,
         "retainedPct": 100,
         "blockCount": 47,
         "missingWords": [],
@@ -11141,7 +11141,7 @@
       ],
       "stats": {
         "originalLength": 134076,
-        "astLength": 135556,
+        "astLength": 135557,
         "retainedPct": 101.1,
         "blockCount": 251,
         "missingWords": [],
@@ -11181,7 +11181,7 @@
       ],
       "stats": {
         "originalLength": 134076,
-        "astLength": 135278,
+        "astLength": 135279,
         "retainedPct": 100.9,
         "blockCount": 250,
         "missingWords": ["europejskich", "sporu", "inicjowanych"],
@@ -11226,7 +11226,7 @@
       ],
       "stats": {
         "originalLength": 134076,
-        "astLength": 135834,
+        "astLength": 135835,
         "retainedPct": 101.3,
         "blockCount": 252,
         "missingWords": [],
@@ -11266,7 +11266,7 @@
       ],
       "stats": {
         "originalLength": 134076,
-        "astLength": 135555,
+        "astLength": 135556,
         "retainedPct": 101.1,
         "blockCount": 251,
         "missingWords": [],
@@ -11306,7 +11306,7 @@
       ],
       "stats": {
         "originalLength": 134076,
-        "astLength": 135556,
+        "astLength": 135557,
         "retainedPct": 101.1,
         "blockCount": 251,
         "missingWords": [],
