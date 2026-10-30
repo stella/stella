@@ -16,6 +16,7 @@ import { createBoundedDnsResolver } from "@/api/lib/safe-outbound-fetch";
 const CRAWLER_DOMAINS = ["googlebot.com", "search.msn.com"] as const;
 const MAX_CACHE_ENTRIES = 512;
 const MAX_DNS_CHECKS = 8;
+const DNS_CAPACITY_REFUSED = "capacity_refused";
 const CACHE_TTL_MS = 60_000;
 const VERIFICATION_TIMEOUT_MS = 2000;
 const MAX_DNS_RECORDS = 64;
@@ -39,10 +40,11 @@ export const createSearchCrawlerVerifier = ({
   now = () => Temporal.Now.instant().epochMilliseconds,
   scheduleTimeout,
 }: CrawlerVerificationOptions = {}) => {
-  const cache = createTtlFlightCache<boolean>({
+  const cache = createTtlFlightCache<boolean | typeof DNS_CAPACITY_REFUSED>({
     ttlMs: CACHE_TTL_MS,
     maxEntries: MAX_CACHE_ENTRIES,
     now,
+    keep: (answer) => answer !== DNS_CAPACITY_REFUSED,
   });
   let activeChecks = 0;
 
@@ -51,9 +53,9 @@ export const createSearchCrawlerVerifier = ({
     if (family === 0) {
       return false;
     }
-    return await cache.read(address, async () => {
+    const answer = await cache.read(address, async () => {
       if (activeChecks >= MAX_DNS_CHECKS) {
-        return false;
+        return DNS_CAPACITY_REFUSED;
       }
       activeChecks += 1;
       try {
@@ -111,6 +113,7 @@ export const createSearchCrawlerVerifier = ({
         activeChecks -= 1;
       }
     });
+    return answer === true;
   };
 };
 

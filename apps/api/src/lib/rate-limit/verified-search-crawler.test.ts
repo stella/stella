@@ -175,7 +175,7 @@ for (const phase of ["reverse", "forward"] as const) {
   });
 }
 
-test("DNS concurrency stays bounded while requests for the same address share a flight", async () => {
+test("DNS concurrency stays bounded and capacity refusals do not poison identities", async () => {
   const entered = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
   let created = 0;
@@ -216,6 +216,11 @@ test("DNS concurrency stays bounded while requests for the same address share a 
     Array.from({ length: 8 }, () => true),
   );
   expect(await duplicate).toBe(true);
+  expect(await verify("192.0.2.9")).toBe(true);
+  expect(created).toBe(9);
+  expect(reverseCalls).toBe(9);
+  expect(await verify("192.0.2.9")).toBe(true);
+  expect(created).toBe(9);
 });
 
 test("a bounded cache evicts old DNS answers and invalid addresses never start lookups", async () => {
