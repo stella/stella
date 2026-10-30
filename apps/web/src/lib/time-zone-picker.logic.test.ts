@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { matchesTimeZone, timeZoneOptions } from "@/lib/time-zone-picker.logic";
+import { jurisdictionTimeZones } from "@/lib/timezones";
 
 const REFERENCE_INSTANT = new Date("2026-01-15T12:00:00.000Z");
 
@@ -63,5 +64,26 @@ describe("time zone options", () => {
     expect(summer.find(({ value }) => value === "Asia/Kathmandu")?.offset).toBe(
       "UTC+05:45",
     );
+  });
+});
+
+describe("jurisdiction time zones", () => {
+  test("returns no pins when the runtime lacks Intl.Locale#getTimeZones", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      Intl.Locale.prototype,
+      "getTimeZones",
+    );
+    Reflect.deleteProperty(Intl.Locale.prototype, "getTimeZones");
+    try {
+      expect(jurisdictionTimeZones("CZ")).toEqual([]);
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(
+          Intl.Locale.prototype,
+          "getTimeZones",
+          descriptor,
+        );
+      }
+    }
   });
 });

@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 /**
  * Subset of IANA timezones covering major population centers.
  * Used for automatic zone detection during sign-in. The searchable
@@ -47,7 +45,17 @@ export const COMMON_TIMEZONES = [
   "Pacific/Auckland",
 ] as const;
 
-/** CLDR's country-zone list, supplied by the runtime rather than a second map. */
-export const jurisdictionTimeZones = (countryCode: string): string[] =>
-  new Intl.Locale(`und-${countryCode}`).getTimeZones() ??
-  panic(`Missing time zones for country ${countryCode}`);
+/**
+ * CLDR's country-zone list, supplied by the runtime rather than a second map.
+ * Some browsers (Firefox) do not implement `Intl.Locale#getTimeZones`; the
+ * jurisdiction zones are only pinned shortcuts, so without it the picker
+ * simply shows no jurisdiction pins.
+ */
+export const jurisdictionTimeZones = (countryCode: string): string[] => {
+  const locale = new Intl.Locale(`und-${countryCode}`);
+  const getTimeZones: unknown = Reflect.get(locale, "getTimeZones");
+  if (typeof getTimeZones !== "function") {
+    return [];
+  }
+  return locale.getTimeZones() ?? [];
+};
