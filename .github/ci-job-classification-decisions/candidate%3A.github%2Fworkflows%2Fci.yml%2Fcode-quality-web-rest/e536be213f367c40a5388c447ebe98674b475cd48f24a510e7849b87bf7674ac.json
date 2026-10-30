@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
+  "reviewedDigest": "e536be213f367c40a5388c447ebe98674b475cd48f24a510e7849b87bf7674ac"
+}

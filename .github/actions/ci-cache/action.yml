@@ -17,19 +17,52 @@ inputs:
 outputs:
   cache-hit:
     description: Whether the exact key was restored.
-    value: ${{ steps.cache.outputs.cache-hit }}
+    value: ${{ steps.restore.outcome == 'success' && steps.restore.outputs.cache-hit || 'false' }}
   cache-matched-key:
     description: Key matched by the restore.
-    value: ${{ steps.cache.outputs.cache-matched-key }}
+    value: ${{ steps.restore.outcome == 'success' && steps.restore.outputs.cache-matched-key || '' }}
 runs:
   using: composite
   steps:
-    - name: Run supervised cache operation
-      id: cache
+    - name: Restore cache
+      id: restore
+      if: inputs.operation == 'restore'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      continue-on-error: true
+      timeout-minutes: 6
+      env:
+        SEGMENT_DOWNLOAD_TIMEOUT_MINS: "5"
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs.restore-keys }}
+
+    - name: Discard failed cache restore
+      if: inputs.operation == 'restore' && steps.restore.outcome == 'failure'
       shell: bash
       env:
-        INPUT_OPERATION: ${{ inputs.operation }}
-        INPUT_PATH: ${{ inputs.path }}
-        INPUT_KEY: ${{ inputs.key }}
-        INPUT_RESTORE-KEYS: ${{ inputs.restore-keys }}
-      run: bun scripts/ci-cache.ts
+        CACHE_PATHS: ${{ inputs.path }}
+      run: |
+        echo "::warning title=cache-restore-skipped::kind=infra class=cache-restore outcome=skipped reason=failure"
+        while IFS= read -r cache_path; do
+          [[ -n "$cache_path" ]] || continue
+          if [[ "$cache_path" == '~/'* ]]; then
+            cache_path="$HOME/${cache_path#\~/}"
+          fi
+          rm -rf -- "$cache_path"
+        done <<< "$CACHE_PATHS"
+
+    - name: Save cache
+      id: save
+      if: inputs.operation == 'save'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      continue-on-error: true
+      timeout-minutes: 6
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+
+    - name: Report skipped cache save
+      if: inputs.operation == 'save' && steps.save.outcome == 'failure'
+      shell: bash
+      run: echo "::warning title=cache-save-skipped::kind=infra class=cache-save outcome=skipped reason=failure"

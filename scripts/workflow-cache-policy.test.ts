@@ -18,6 +18,58 @@ const cached = {
   with: { save: MAIN_ONLY_BUN_CACHE_SAVE },
 };
 
+const cachePolicyFiles = (root: string) => [
+  ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({ cwd: root }),
+  ...new Bun.Glob(".github/actions/**/action.{yml,yaml}").scanSync({
+    cwd: root,
+  }),
+];
+
+type CacheUse = { file: string; step: Record<string, unknown> };
+
+const recordOf = (value: unknown) =>
+  typeof value === "object" && value !== null
+    ? Object.fromEntries(Object.entries(value))
+    : {};
+
+const collectCacheUses = (value: unknown, file: string, uses: CacheUse[]) => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectCacheUses(item, file, uses);
+    }
+    return;
+  }
+  if (typeof value !== "object" || value === null) {
+    return;
+  }
+  const record = Object.fromEntries(Object.entries(value));
+  const action = record["uses"];
+  if (
+    typeof action === "string" &&
+    (action.startsWith("actions/cache/restore@") ||
+      action.startsWith("actions/cache/save@") ||
+      action === "./.github/actions/ci-cache")
+  ) {
+    uses.push({ file, step: record });
+  }
+  for (const child of Object.values(record)) {
+    collectCacheUses(child, file, uses);
+  }
+};
+
+const committedCacheUses = () => {
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  const uses: CacheUse[] = [];
+  for (const file of cachePolicyFiles(root)) {
+    collectCacheUses(
+      Bun.YAML.parse(readFileSync(`${root}/${file}`, "utf-8")),
+      file,
+      uses,
+    );
+  }
+  return uses;
+};
+
 test("parallel groups cannot hide cache writers from protected jobs", () => {
   const cache = { uses: "actions/cache@fixture", with: { path: "dist" } };
   const workflow = {
@@ -183,6 +235,101 @@ test("all committed workflows and composite actions obey the shared cache policy
     );
   }
   expect(problems).toEqual([]);
+});
+
+test("every cache restore and save is non-fatal through the repository cache owner", () => {
+  const uses = committedCacheUses();
+  const direct = uses.filter(({ step }) =>
+    String(step["uses"]).startsWith("actions/cache/"),
+  );
+  const callers = uses.filter(
+    ({ step }) => step["uses"] === "./.github/actions/ci-cache",
+  );
+  expect(callers.length).toBeGreaterThan(0);
+  expect(
+    callers.map(({ file, step }) => ({
+      file,
+      operation:
+        typeof step["with"] === "object" && step["with"] !== null
+          ? Reflect.get(step["with"], "operation")
+          : undefined,
+    })),
+  ).toEqual(
+    callers.map(({ file, step }) => ({
+      file,
+      operation:
+        typeof step["with"] === "object" &&
+        step["with"] !== null &&
+        ["restore", "save"].includes(
+          String(Reflect.get(step["with"], "operation")),
+        )
+          ? Reflect.get(step["with"], "operation")
+          : "invalid",
+    })),
+  );
+  expect(
+    direct.map(({ file, step }) => ({
+      file,
+      uses: step["uses"],
+      continueOnError: step["continue-on-error"],
+      timeout: step["timeout-minutes"],
+    })),
+  ).toEqual([
+    {
+      file: ".github/actions/ci-cache/action.yml",
+      uses: "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      continueOnError: true,
+      timeout: 6,
+    },
+    {
+      file: ".github/actions/ci-cache/action.yml",
+      uses: "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      continueOnError: true,
+      timeout: 6,
+    },
+  ]);
+
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  const owner = Bun.YAML.parse(
+    readFileSync(`${root}/.github/actions/ci-cache/action.yml`, "utf-8"),
+  );
+  const runs = recordOf(recordOf(owner)["runs"]);
+  const steps: unknown = runs["steps"];
+  expect(Array.isArray(steps)).toBe(true);
+  const restore = recordOf(Array.isArray(steps) ? steps.at(0) : undefined);
+  const restoreFailure = recordOf(
+    Array.isArray(steps) ? steps.at(1) : undefined,
+  );
+  const saveFailure = recordOf(Array.isArray(steps) ? steps.at(3) : undefined);
+  expect(recordOf(restore["env"])["SEGMENT_DOWNLOAD_TIMEOUT_MINS"]).toBe("5");
+  expect(Reflect.get(restoreFailure, "if")).toContain(
+    "steps.restore.outcome == 'failure'",
+  );
+  expect(Reflect.get(restoreFailure, "run")).toContain(
+    "kind=infra class=cache-restore outcome=skipped reason=failure",
+  );
+  expect(Reflect.get(saveFailure, "if")).toContain(
+    "steps.save.outcome == 'failure'",
+  );
+  expect(Reflect.get(saveFailure, "run")).toContain(
+    "kind=infra class=cache-save outcome=skipped reason=failure",
+  );
+});
+
+test("failed cache restores delete every requested path before consumers continue", () => {
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  const owner = Bun.YAML.parse(
+    readFileSync(`${root}/.github/actions/ci-cache/action.yml`, "utf-8"),
+  );
+  const runs = recordOf(recordOf(owner)["runs"]);
+  const steps: unknown = runs["steps"];
+  expect(Array.isArray(steps)).toBe(true);
+  const cleanup = recordOf(Array.isArray(steps) ? steps.at(1) : undefined);
+  expect(recordOf(cleanup["env"])["CACHE_PATHS"]).toBe(`\${{ inputs.path }}`);
+  expect(Reflect.get(cleanup, "run")).toContain(
+    "while IFS= read -r cache_path",
+  );
+  expect(Reflect.get(cleanup, "run")).toContain('rm -rf -- "$cache_path"');
 });
 
 test("Bun install cache restore remains available but saves require the exact main boundary", () => {
