@@ -9,7 +9,11 @@
 import { Result } from "better-result";
 
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
-import { createQuarantineCollisionRetention } from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
+import {
+  createQuarantineCollisionRetention,
+  type FlushedListingPage,
+  requestNextRetainedPage,
+} from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
   ListingIdentity,
@@ -21,7 +25,6 @@ import {
   isQuarantineListingIdentity,
   type ListingObservation,
   quarantineCollisionEvidence,
-  type QuarantineCollisionObservation,
   quarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
@@ -92,11 +95,13 @@ class VerifiedReconciliationScope {
 
 export type CompleteReconciliationScope = VerifiedReconciliationScope;
 
-export type ListedSlice = SliceListing & {
+type RetainedSliceListing = SliceListing & { pageReceipt: FlushedListingPage };
+
+export type ListedSlice = RetainedSliceListing & {
   recoveryProof: CompleteReconciliationScope;
 };
 
-const completeListedSlice = (listing: SliceListing): ListedSlice => ({
+const completeListedSlice = (listing: RetainedSliceListing): ListedSlice => ({
   ...listing,
   recoveryProof: new VerifiedReconciliationScope(
     [...listing.keyed.values()].map(({ identity }) => identity),
@@ -142,8 +147,8 @@ type ListReconciliationSliceOptions = {
   listSlicePage: SourceReconciliation["listSlicePage"];
   revisionOf: SourceReconciliation["revisionOf"];
   /** Durable evidence must finish before another page or a verification verdict. */
-  persistCollisionEvidence: (
-    observations: readonly QuarantineCollisionObservation[],
+  persistEvidence: (
+    observations: readonly ListingObservation[],
   ) => Promise<void>;
   slice: string;
   /** Pause before every page after the first. */
@@ -167,7 +172,7 @@ const listSlicePass = async (
     signal,
   }: ListReconciliationSliceOptions,
   collisionEvidence: ReturnType<typeof createQuarantineCollisionRetention>,
-): Promise<Result<SliceListing, AdapterFetchError>> => {
+): Promise<Result<RetainedSliceListing, AdapterFetchError>> => {
   const listing: SliceListing = {
     keyed: new Map(),
     observations: new Map(),
@@ -187,7 +192,7 @@ const listSlicePass = async (
     revision: string;
   }[] = [];
   let repeats = 0;
-  const finish = (): SliceListing => {
+  const finish = (pageReceipt: FlushedListingPage): RetainedSliceListing => {
     const evidence = quarantineCollisionEvidence(quarantineObservations);
     listing.quarantineCollisions = evidence.collisions;
     listing.quarantineRevisions = evidence.revisions;
@@ -199,16 +204,16 @@ const listSlicePass = async (
         quarantinePeers,
       })),
     );
-    return listing;
+    return { ...listing, pageReceipt };
   };
-  for (let page = 0; ; page += 1) {
+  const requestPage = async (page: number) => {
     signal?.throwIfAborted();
     if (page > 0) {
       await abortableSleep(sleep, pageDelayMs, signal);
       signal?.throwIfAborted();
     }
     const timeoutSignal = AbortSignal.timeout(pageTimeoutMs);
-    const listed = await listSlicePage({
+    return await listSlicePage({
       slice,
       page,
       signal:
@@ -216,6 +221,10 @@ const listSlicePass = async (
           ? timeoutSignal
           : AbortSignal.any([signal, timeoutSignal]),
     });
+  };
+  let listed = await requestPage(0);
+  for (;;) {
+    const receipt = await collisionEvidence.retainPage(listed, listing.pages);
     listing.pages += 1;
     listing.listed +=
       listed.items.length +
@@ -243,10 +252,6 @@ const listSlicePass = async (
           sourceDocumentId: item.identity.sourceDocumentId,
           revision,
         });
-        collisionEvidence.observe({
-          sourceDocumentId: item.identity.sourceDocumentId,
-          payload: item.payload,
-        });
       }
       if (listing.keyed.has(identityKey)) {
         // A publisher lists a document once per docket it settles; the same
@@ -257,12 +262,10 @@ const listSlicePass = async (
       }
       listing.keyed.set(identityKey, item);
     }
-    // A failed evidence write holds this page and prevents any later progress.
-    await collisionEvidence.flush();
-    if (page + 1 >= listed.totalPages) {
-      return Result.ok(finish());
+    if (receipt.nextPage >= receipt.page.totalPages) {
+      return Result.ok(finish(receipt));
     }
-    if (page + 1 >= MAX_SLICE_PAGES) {
+    if (receipt.nextPage >= MAX_SLICE_PAGES) {
       return Result.err(
         new AdapterFetchError({
           message: `Slice listing exceeded ${MAX_SLICE_PAGES} pages`,
@@ -274,6 +277,7 @@ const listSlicePass = async (
     // No clock here on purpose: a listing has nowhere to resume from, so
     // cutting one off on time would make a slowly-listing slice unlistable
     // rather than merely slow.
+    listed = await requestNextRetainedPage(receipt, requestPage);
   }
 };
 
@@ -324,7 +328,10 @@ const sameQuarantineRevisions = (
     );
   });
 
-const sameIdentities = (first: SliceListing, second: SliceListing): boolean =>
+const sameIdentities = (
+  first: RetainedSliceListing,
+  second: RetainedSliceListing,
+): boolean =>
   first.keyed.size === second.keyed.size &&
   [...first.keyed.keys()].every((identityKey) =>
     second.keyed.has(identityKey),

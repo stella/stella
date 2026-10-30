@@ -11,10 +11,12 @@ import type {
   IngestionResult,
   ReconciliationBuildOutcome,
   ReconciliationListingItem,
+  ReconciliationSlicePage,
 } from "@/api/lib/legal-search/ingestion-types";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import {
   isQuarantineListingIdentity,
+  type ListingObservation,
   type QuarantineCollisionObservation,
   quarantineCollisionObservation,
 } from "@/api/lib/legal-search/quarantine-identity";
@@ -107,7 +109,7 @@ export const retainListedQuarantineDecisions = async ({
   const { id: sourceId, adapterKey } = sourceLease.source;
   const retention = createQuarantineCollisionRetention({
     adapterKey,
-    persistCollisionEvidence: async (observations) => {
+    persistEvidence: async (observations) => {
       await sourceLease.beforeDatabaseMark();
       await storeListingObservations(scopedDb, {
         sourceId,
@@ -143,6 +145,32 @@ class RetainedQuarantineDecisions {
 
 export type CollisionRetainedDecisions = RetainedQuarantineDecisions;
 
+/** A page can authorize progress only after every captured observation is durable. */
+class RetainedListingPage {
+  readonly #page: ReconciliationSlicePage;
+  readonly #index: number;
+
+  constructor(page: ReconciliationSlicePage, index: number) {
+    this.#page = page;
+    this.#index = index;
+  }
+
+  get page(): ReconciliationSlicePage {
+    return this.#page;
+  }
+
+  get nextPage(): number {
+    return this.#index + 1;
+  }
+}
+
+export type FlushedListingPage = RetainedListingPage;
+
+export const requestNextRetainedPage = async <T>(
+  receipt: FlushedListingPage,
+  request: (page: number) => Promise<T>,
+): Promise<T> => await request(receipt.nextPage);
+
 type ObserveCollisionEvidenceOptions = {
   sourceDocumentId: string;
   payload: unknown;
@@ -159,24 +187,36 @@ type RetainDecisionsOptions = {
   decisions: readonly IngestionResult[];
   proof: CollisionFilterProof;
 } & (
-  | { type: "crawl" }
+  | { type: "crawl"; observations: readonly ListingObservation[] }
   | { type: "reconciliation"; listing: ReconciliationListingItem }
 );
 
 type CreateQuarantineCollisionRetentionOptions = {
   adapterKey: string;
-  persistCollisionEvidence: (
-    observations: readonly QuarantineCollisionObservation[],
+  persistEvidence: (
+    observations: readonly ListingObservation[],
   ) => Promise<void>;
 };
 
 /** One accumulator spans a crawl cycle or both passes of a reconciliation scope. */
 export const createQuarantineCollisionRetention = ({
   adapterKey,
-  persistCollisionEvidence,
+  persistEvidence,
 }: CreateQuarantineCollisionRetentionOptions) => {
   const groups = new Map<string, CollisionEvidenceGroup>();
-  const pending = new Map<string, QuarantineCollisionObservation>();
+  const pending = new Map<string, ListingObservation>();
+  const observed = new Set<string>();
+  const observeListings = (
+    observations: readonly ListingObservation[],
+  ): void => {
+    for (const observation of observations) {
+      const key = observation.identity.fingerprint;
+      if (!observed.has(key)) {
+        observed.add(key);
+        pending.set(key, observation);
+      }
+    }
+  };
   const markCollision = (sourceDocumentId: string): void => {
     const group = groups.get(sourceDocumentId);
     if (group?.type !== "single-revision") {
@@ -233,18 +273,35 @@ export const createQuarantineCollisionRetention = ({
     if (pending.size === 0) {
       return;
     }
-    await persistCollisionEvidence([...pending.values()]);
+    await persistEvidence([...pending.values()]);
     pending.clear();
   };
   return {
     observe,
     flush,
+    retainPage: async (
+      page: ReconciliationSlicePage,
+      index: number,
+    ): Promise<FlushedListingPage> => {
+      observeListings(page.observations);
+      for (const item of page.items) {
+        if (item.identity.type === "document") {
+          observe({
+            sourceDocumentId: item.identity.sourceDocumentId,
+            payload: item.payload,
+          });
+        }
+      }
+      await flush();
+      return new RetainedListingPage(page, index);
+    },
     retainDecisions: async (
       options: RetainDecisionsOptions,
     ): Promise<CollisionRetainedDecisions> => {
       const { decisions, proof } = options;
       switch (options.type) {
         case "crawl": {
+          observeListings(options.observations);
           const pageIdentities = new Set<string>();
           for (const decision of decisions) {
             if (

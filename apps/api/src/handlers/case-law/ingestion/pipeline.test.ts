@@ -170,7 +170,10 @@ const cursorOnlyDb =
       insert: (table: unknown) => ({
         values: (values: unknown) => {
           options.onInsert?.({ table, values });
-          return insertedValues();
+          return {
+            onConflictDoUpdate: async () => undefined,
+            onConflictDoNothing: async () => undefined,
+          };
         },
       }),
       query: {
@@ -1003,19 +1006,26 @@ describe("runIngestionPipeline — failure records", () => {
               }),
           }),
         }),
-        insert: (table: unknown) => ({
-          values: async (rows: FailureRow[]) => {
-            if (table === caseLawDecisions) {
-              state.decisionWrites++;
-              throw new Error("unexpected decision write");
-            }
-            if (insertError !== null) {
-              throw insertError;
-            }
-            state.insertedRows.push(...rows);
-            return await Promise.resolve([]);
-          },
-        }),
+        insert: (table: unknown) => {
+          if (table === caseLawListingObservations) {
+            return {
+              values: () => ({ onConflictDoNothing: async () => undefined }),
+            };
+          }
+          return {
+            values: async (rows: FailureRow[]) => {
+              if (table === caseLawDecisions) {
+                state.decisionWrites++;
+                throw new Error("unexpected decision write");
+              }
+              if (insertError !== null) {
+                throw insertError;
+              }
+              state.insertedRows.push(...rows);
+              return await Promise.resolve([]);
+            },
+          };
+        },
         execute: async () => await Promise.resolve([]),
         update: (table: unknown) => ({
           set: (values: { syncCursor?: string | null }) => {
@@ -2497,7 +2507,7 @@ test("a no-id observation is durable before the cursor and never enters canonica
       });
     const scopedDb = cursorOnlyDb(
       (cursor) => {
-        events.push(`cursor:${cursor}`);
+        events.push(`cursor:${String(cursor)}`);
       },
       {
         onInsert: ({ table, values }) => {

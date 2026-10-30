@@ -446,7 +446,7 @@ const countSlice = async ({
         proof: SLICE_LISTING_PROOF.COUNT,
         listSlicePage: adapter.reconciliation.listSlicePage,
         revisionOf: adapter.reconciliation.revisionOf,
-        persistCollisionEvidence: async (observations) => {
+        persistEvidence: async (observations) => {
           await storeListingObservations(scopedDb, {
             sourceId,
             adapterKey: adapter.key,
@@ -475,11 +475,6 @@ const countSlice = async ({
   if (Result.isError(counted)) {
     return counted;
   }
-  await storeListingObservations(scopedDb, {
-    sourceId,
-    adapterKey: adapter.key,
-    observations: [...counted.value.observations.values()],
-  });
   return Result.ok(
     counted.value.keyed.size +
       counted.value.observations.size +

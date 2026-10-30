@@ -47,8 +47,20 @@ test("raw collision variants remain evidence without changing projected record c
       adapterKey: "cz-regional",
       proof: SLICE_LISTING_PROOF.COUNT,
       revisionOf: () => "same canonical projection",
-      persistCollisionEvidence: async (observations) => {
-        saved.push(...observations);
+      persistEvidence: async (observations) => {
+        saved.push(
+          ...observations.map((observation) => {
+            if (
+              observation.reason !==
+              LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION
+            ) {
+              expect.unreachable(
+                "Only collision evidence is expected in this case",
+              );
+            }
+            return observation;
+          }),
+        );
       },
       listSlicePage: async () => ({
         observations: [],
@@ -87,10 +99,22 @@ test("collision payloads are flushed before the next page and the last slice ver
     adapterKey: "cz-regional",
     proof: SLICE_LISTING_PROOF.COUNT,
     revisionOf: payloadRevision,
-    persistCollisionEvidence: async (observations) => {
+    persistEvidence: async (observations) => {
       await Promise.resolve();
       events.push(["persist", observations.length]);
-      saved.push(...observations);
+      saved.push(
+        ...observations.map((observation) => {
+          if (
+            observation.reason !==
+            LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION
+          ) {
+            expect.unreachable(
+              "Only collision evidence is expected in this case",
+            );
+          }
+          return observation;
+        }),
+      );
     },
     listSlicePage: async ({ page }) => {
       events.push(["page", page]);
@@ -152,7 +176,7 @@ test("an evidence write failure stops listing before another page", async () => 
       adapterKey: "cz-regional",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
-      persistCollisionEvidence: async () => {
+      persistEvidence: async () => {
         throw failure;
       },
       listSlicePage: async ({ page }) => {
@@ -188,8 +212,20 @@ test("verification retains colliding payloads before rejecting a changed listing
     adapterKey: "cz-regional",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     revisionOf: payloadRevision,
-    persistCollisionEvidence: async (observations) => {
-      saved.push(...observations);
+    persistEvidence: async (observations) => {
+      saved.push(
+        ...observations.map((observation) => {
+          if (
+            observation.reason !==
+            LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION
+          ) {
+            expect.unreachable(
+              "Only collision evidence is expected in this case",
+            );
+          }
+          return observation;
+        }),
+      );
     },
     listSlicePage: async () => {
       pass += 1;
@@ -240,7 +276,7 @@ test("keys each identity once and counts its repeats", async () => {
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
-      persistCollisionEvidence: async () => undefined,
+      persistEvidence: async () => undefined,
       listSlicePage: pagedListing([
         [documentItem("a"), documentItem("b")],
         [documentItem("a"), documentItem("c")],
@@ -290,7 +326,7 @@ test("completed page delays remove their aborted-signal listeners", async () => 
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
-      persistCollisionEvidence: async () => undefined,
+      persistEvidence: async () => undefined,
       listSlicePage: pagedListing([[], [], [], []]),
       pageDelayMs: 0,
       pageTimeoutMs: 5000,
@@ -315,7 +351,7 @@ test("an empty slice lists nothing after one request", async () => {
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
-      persistCollisionEvidence: async () => undefined,
+      persistEvidence: async () => undefined,
       listSlicePage: async () => {
         requests += 1;
         return await Promise.resolve({
@@ -342,7 +378,7 @@ test("a listing past the page ceiling is refused, not truncated", async () => {
     adapterKey: "fake",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     revisionOf: payloadRevision,
-    persistCollisionEvidence: async () => undefined,
+    persistEvidence: async () => undefined,
     listSlicePage: async ({ page }) => {
       requests += 1;
       return await Promise.resolve({
@@ -394,7 +430,7 @@ const listWith = async (listSlicePage: ReconciliationListSlicePage) =>
     adapterKey: "fake",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     revisionOf: payloadRevision,
-    persistCollisionEvidence: async () => undefined,
+    persistEvidence: async () => undefined,
     listSlicePage,
     pageDelayMs: 0,
     pageTimeoutMs: 5000,
@@ -466,7 +502,7 @@ test("a count needs no second walk, even of a changed slice", async () => {
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.COUNT,
       revisionOf: payloadRevision,
-      persistCollisionEvidence: async () => undefined,
+      persistEvidence: async () => undefined,
       listSlicePage,
       pageDelayMs: 0,
       pageTimeoutMs: 5000,
@@ -521,7 +557,7 @@ test("a quarantine id listed for two different records is a counted collision, n
         adapterKey: "fake",
         proof: SLICE_LISTING_PROOF.IDENTITIES,
         revisionOf: payloadRevision,
-        persistCollisionEvidence: async () => undefined,
+        persistEvidence: async () => undefined,
         listSlicePage: async () =>
           await Promise.resolve({
             observations: [],
@@ -596,7 +632,7 @@ test("a keyed record whose quarantine peer is also listed quarantined is a repor
         adapterKey: "fake",
         proof: SLICE_LISTING_PROOF.COUNT,
         revisionOf: payloadRevision,
-        persistCollisionEvidence: async () => undefined,
+        persistEvidence: async () => undefined,
         listSlicePage: async () =>
           await Promise.resolve({
             observations: [],
@@ -652,7 +688,7 @@ test("identity proofs retain noncanonical observations and count only exact repe
       adapterKey: "sk-us",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
-      persistCollisionEvidence: async () => undefined,
+      persistEvidence: async () => undefined,
       listSlicePage: async () => ({
         items: [],
         observations: [a, b, a],
@@ -677,7 +713,7 @@ test("a changed noncanonical observation invalidates a two-pass identity proof",
     adapterKey: "sk-us",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     revisionOf: payloadRevision,
-    persistCollisionEvidence: async () => undefined,
+    persistEvidence: async () => undefined,
     listSlicePage: async () => ({
       items: [],
       observations: [

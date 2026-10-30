@@ -23,10 +23,14 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
-import {
-  LISTING_OBSERVATION_REASON,
-  type ListingObservationReason,
-} from "@/api/lib/legal-search/listing-observation-reasons";
+import { LISTING_OBSERVATION_REASON } from "@/api/lib/legal-search/listing-observation-reasons";
+import type {
+  ListingObservationIdentity,
+  NonCollisionListingObservationReason,
+  QuarantineCollisionObservation,
+  RepairAlias,
+  UnidentifiedListingObservation,
+} from "@/api/lib/legal-search/quarantine-observation-types";
 import {
   LEGACY_QUARANTINE_PREFIXES,
   PL_NCOURT_POSITION_QUARANTINE_PREFIX,
@@ -37,6 +41,11 @@ import {
 } from "@/api/lib/legal-search/reconciliation-payload";
 
 export { LISTING_OBSERVATION_REASON } from "@/api/lib/legal-search/listing-observation-reasons";
+export type {
+  ListingObservation,
+  QuarantineCollisionObservation,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-observation-types";
 
 /**
  * Quarantine namespaces, one per adapter that builds the identity. The
@@ -77,9 +86,6 @@ export type QuarantineStableFields = Readonly<
 >;
 
 const repairAliasSchema = v.pipe(v.string(), v.brand("RepairAlias"));
-
-/** An adoption candidate, distinct from a stored quarantine identity. */
-export type RepairAlias = v.InferOutput<typeof repairAliasSchema>;
 
 export const LEGACY_REPAIR_NAMESPACE = {
   AT_COURTS: "ris",
@@ -393,22 +399,6 @@ const listingObservationIdentitySchema = v.pipe(
   v.brand("ListingObservationIdentity"),
 );
 
-type ListingObservationIdentity = v.InferOutput<
-  typeof listingObservationIdentitySchema
->;
-
-type NonCollisionListingObservationReason = Exclude<
-  ListingObservationReason,
-  typeof LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION
->;
-
-type UnidentifiedListingObservation = {
-  readonly identity: ListingObservationIdentity;
-  readonly reason: NonCollisionListingObservationReason;
-  /** The record exactly as the listing exposed it, including malformed fields. */
-  readonly payload: unknown;
-};
-
 type QuarantinedListingObservationOptions = {
   source: ListingObservationIdentity["source"];
   payload: unknown;
@@ -442,22 +432,6 @@ const quarantineCollisionObservationIdentitySchema = v.pipe(
   }),
   v.brand("QuarantineCollisionObservationIdentity"),
 );
-
-/** A payload revision is evidence, never a replacement canonical identity. */
-export type QuarantineCollisionObservation = {
-  readonly identity: v.InferOutput<
-    typeof quarantineCollisionObservationIdentitySchema
-  >;
-  readonly reason: typeof LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION;
-  readonly payload: {
-    readonly quarantineId: string;
-    readonly revision: string;
-    readonly record: unknown;
-  };
-};
-
-export type ListingObservation =
-  UnidentifiedListingObservation | QuarantineCollisionObservation;
 
 type QuarantineCollisionObservationOptions = {
   source: string;

@@ -67,7 +67,7 @@ import type { ObservationDetail } from "@/api/lib/legal-search/partial-observati
 import type {
   ListingObservation,
   RepairAlias,
-} from "@/api/lib/legal-search/quarantine-identity";
+} from "@/api/lib/legal-search/quarantine-observation-types";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import {
   decodeSourceRawEnvelope,

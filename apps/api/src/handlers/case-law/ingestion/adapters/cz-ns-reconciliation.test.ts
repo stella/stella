@@ -883,7 +883,7 @@ describe("cz-ns buildDecision", () => {
       proof: SLICE_LISTING_PROOF.COUNT,
       listSlicePage: reconciliation.listSlicePage,
       revisionOf: reconciliation.revisionOf,
-      persistCollisionEvidence: async () => undefined,
+      persistEvidence: async () => undefined,
       slice: "2026-07-01",
       pageDelayMs: 0,
       pageTimeoutMs: 5000,

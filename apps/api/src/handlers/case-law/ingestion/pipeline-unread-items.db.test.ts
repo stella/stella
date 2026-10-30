@@ -10,6 +10,8 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -469,18 +471,22 @@ test("a quarantined record followed by its keyed peer survives as two database r
     })
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.sourceId, sourceId));
-  expect(rows.map((row) => row.sourceDocumentId).toSorted()).toEqual(
+  expect(
+    rows
+      .map((row) => row.sourceDocumentId)
+      .toSorted((a, b) => compareCodeUnit(String(a), String(b))),
+  ).toEqual(
     [quarantine.sourceDocumentId, keyed.sourceDocumentId]
       .map(String)
-      .toSorted(),
+      .toSorted(compareCodeUnit),
   );
   expect(new Set(rows.map((row) => row.id)).size).toBe(2);
-  expect(rows.map((row) => row.caseNumber).toSorted()).toEqual(
-    [quarantined.caseNumber, keyed.caseNumber].toSorted(),
+  expect(rows.map((row) => row.caseNumber).toSorted(compareCodeUnit)).toEqual(
+    [quarantined.caseNumber, keyed.caseNumber].toSorted(compareCodeUnit),
   );
   expect(run.haltReason).toBeNull();
   expect((await sourceState(sourceId)).cursor).toBe("page-2");
-  expect(keyed.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+  expect(keyed.sourceDocumentIdRepairAliases.map(String)).toEqual([
     quarantine.sourceDocumentId,
   ]);
 });
@@ -561,7 +567,7 @@ test("a keyed peer on page one stays separate when its quarantined peer appears 
       expect.objectContaining({ sourceDocumentId: keyed.sourceDocumentId }),
     ]),
   );
-  expect(keyed.sourceDocumentIdRepairAliases?.map(String)).toEqual([
+  expect(keyed.sourceDocumentIdRepairAliases.map(String)).toEqual([
     quarantine.sourceDocumentId,
   ]);
 });
@@ -572,15 +578,17 @@ test("a crawl retains colliding publisher revisions before applying decisions or
     namespace: QUARANTINE_NAMESPACE.CZ_NS,
     stableFields: { docket: "21 Cdo 501/2024" },
   });
-  const records = ["first", "second"].map((record) => ({
-    ...fullDecision("501"),
-    fulltext: undefined,
-    isListingOnly: true,
-    sourceDocumentId: quarantine.sourceDocumentId,
-    sourceRaw: JSON.stringify({ record, caseNumber: "21 Cdo 501/2024" }),
-    rawHash: `source-${record}`,
-    metadata: { publisherRecord: record },
-  }));
+  const records = ["first", "second"].map((record) =>
+    plainTextIngestionResult({
+      ...fullDecision("501"),
+      fulltext: undefined,
+      isListingOnly: true,
+      sourceDocumentId: quarantine.sourceDocumentId,
+      sourceRaw: JSON.stringify({ record, caseNumber: "21 Cdo 501/2024" }),
+      rawHash: `source-${record}`,
+      metadata: { publisherRecord: record },
+    }),
+  );
   const evidenceBeforeWrites: number[] = [];
   const guardedDb: ScopedDb = async (operation) =>
     await scopedDb(async (tx) => {

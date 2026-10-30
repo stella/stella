@@ -1548,7 +1548,7 @@ const walkSlice = async ({
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     listSlicePage: reconciliation.listSlicePage,
     revisionOf: reconciliation.revisionOf,
-    persistCollisionEvidence: async (observations) => {
+    persistEvidence: async (observations) => {
       await lease.beforeDatabaseMark();
       await storeListingObservations(scopedDb, {
         sourceId,
@@ -1583,11 +1583,6 @@ const walkSlice = async ({
   summary.keyable = items.length;
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   await lease.beforeDatabaseMark();
-  await storeListingObservations(scopedDb, {
-    sourceId,
-    adapterKey,
-    observations: [...listing.value.observations.values()],
-  });
   const refresh = await refreshTrackedReconciliationItems(scopedDb, {
     revisionOf: reconciliation.revisionOf,
     sourceId,

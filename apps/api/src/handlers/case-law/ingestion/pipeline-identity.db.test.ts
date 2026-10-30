@@ -1203,13 +1203,15 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           )
           .limit(1);
-        if (before === undefined || before.sourceRawS3Key === null) {
-          return panic(
-            "The initial listing must retain its raw source pointer",
-          );
+        if (
+          before?.sourceRawS3Key === undefined ||
+          before.sourceRawS3Key === null
+        ) {
+          panic("The initial listing must retain its raw source pointer");
         }
+        const sourceRawS3Key = before.sourceRawS3Key;
         const rawBefore = [...fake.objects].find(([key]) =>
-          key.endsWith(`/${before.sourceRawS3Key}`),
+          key.endsWith(`/${sourceRawS3Key}`),
         )?.[1];
         expect(rawBefore).toBeDefined();
         expect(new TextDecoder().decode(rawBefore?.bytes)).toBe(
@@ -1246,7 +1248,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         expect(
           [...fake.objects].find(([key]) =>
-            key.endsWith(`/${before.sourceRawS3Key}`),
+            key.endsWith(`/${sourceRawS3Key}`),
           )?.[1],
         ).toEqual(rawBefore);
         const keyed = rows.find(

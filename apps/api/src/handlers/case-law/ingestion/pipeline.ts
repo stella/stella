@@ -275,7 +275,7 @@ const runScopedIngestionPipeline = async ({
 
   const collisionRetention = createQuarantineCollisionRetention({
     adapterKey: adapter.key,
-    persistCollisionEvidence: async (observations) => {
+    persistEvidence: async (observations) => {
       await sourceLease.beforeDatabaseMark();
       await storeListingObservations(scopedDb, {
         sourceId: source.id,
@@ -692,7 +692,11 @@ const runScopedIngestionPipeline = async ({
     if (plan.terminal.length > 0) {
       const s3FailuresBefore = s3UploadFailures;
       const halted = await applyPageDecisions({
-        decisions: await retainPageQuarantineCollisions(plan.terminal, proof),
+        decisions: await retainPageQuarantineCollisions({
+          decisions: plan.terminal,
+          observations: [],
+          proof,
+        }),
         observation,
       });
       if (halted !== null) {
@@ -738,13 +742,19 @@ const runScopedIngestionPipeline = async ({
    * hold. Retain both raw revisions before either can replace its canonical row.
    * Peer repair candidates are removed before any decision reaches identity resolution.
    */
-  const retainPageQuarantineCollisions = async (
-    decisions: SyncPage["decisions"],
-    proof: CollisionFilterProof,
-  ): Promise<CollisionRetainedDecisions> => {
+  const retainPageQuarantineCollisions = async ({
+    decisions,
+    observations,
+    proof,
+  }: {
+    decisions: SyncPage["decisions"];
+    observations: SyncPage["observations"];
+    proof: CollisionFilterProof;
+  }): Promise<CollisionRetainedDecisions> => {
     const filtered = await collisionRetention.retainDecisions({
       type: "crawl",
       decisions,
+      observations,
       proof,
     });
     const collisions = countQuarantineCollisions(
@@ -787,23 +797,16 @@ const runScopedIngestionPipeline = async ({
     page: SyncPage;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
-    if (page.observations.length > 0) {
-      await sourceLease.beforeDatabaseMark();
-      await storeListingObservations(scopedDb, {
-        sourceId: source.id,
-        adapterKey: adapter.key,
-        observations: page.observations,
-      });
-    }
     // A crawl page cannot establish whether a matching record remains on a later page.
     const proof = {
       type: "no-listing-proof",
     } as const satisfies CollisionFilterProof;
     const s3FailuresBefore = s3UploadFailures;
-    const decisions = await retainPageQuarantineCollisions(
-      page.decisions,
+    const decisions = await retainPageQuarantineCollisions({
+      decisions: page.decisions,
+      observations: page.observations,
       proof,
-    );
+    });
     const halted = await applyPageDecisions({
       decisions,
       observation,

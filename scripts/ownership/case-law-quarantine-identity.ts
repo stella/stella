@@ -6,6 +6,7 @@ export default {
     "The identity of a listed case-law record that states no usable publisher id",
   owner: [
     "apps/api/src/lib/legal-search/quarantine-identity.ts",
+    "apps/api/src/lib/legal-search/quarantine-observation-types.ts",
     "apps/api/src/lib/legal-search/quarantine-prefixes.ts",
     "apps/api/src/handlers/case-law/ingestion/quarantine-collision-filter.ts",
     "apps/api/src/handlers/case-law/ingestion/quarantine-collision-retention.ts",
@@ -24,6 +25,8 @@ export default {
     "quarantine-collision observations retain every raw payload revision under " +
     "its source, quarantine id and content revision. A total ingestion-field map separates " +
     "publisher evidence from derived parser output. Both crawl and slice owners flush " +
-    "evidence before applying records or advancing, without changing canonical record counts.",
+    "evidence before applying records or advancing, without changing canonical record counts. " +
+    "Opaque flushed-page receipts gate pagination and verification for every listing " +
+    "observation kind; the value-free type owner keeps ingestion contracts acyclic.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

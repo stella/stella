@@ -1,7 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -31,6 +33,7 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
@@ -57,6 +60,96 @@ beforeAll(async () => {
   db = connect(client);
 });
 afterAll(async () => await client.close());
+
+test.each(["verification-change", "later-page-failure"] as const)(
+  "every page observation survives %s and replay is a fixed point",
+  async (failureMode) => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const adapterKey = `evidence-${failureMode}`;
+    await db
+      .insert(caseLawSources)
+      .values({ id: sourceId, adapterKey, name: "Page evidence source" });
+    const captures = ["Publisher capture A", "Publisher capture B"].map(
+      (capture) =>
+        quarantinedListingObservation({
+          source: "sk-us",
+          payload: { capture },
+          reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+        }),
+    );
+    const readEvidence = async () =>
+      await db
+        .select()
+        .from(caseLawListingObservations)
+        .where(eq(caseLawListingObservations.sourceId, sourceId))
+        .orderBy(caseLawListingObservations.fingerprint)
+        .limit(10);
+    const failure = new AdapterFetchError({
+      adapterKey,
+      cursor: "all",
+      message: "Later page unavailable",
+    });
+    const run = async () => {
+      let requests = 0;
+      return await listReconciliationSlice({
+        adapterKey: "sk-us",
+        proof: SLICE_LISTING_PROOF.IDENTITIES,
+        revisionOf: (payload) => payload,
+        persistEvidence: async (observations) =>
+          await storeListingObservations(scopedDb, {
+            sourceId,
+            adapterKey: "sk-us",
+            observations,
+          }),
+        listSlicePage: async ({ page }) => {
+          requests += 1;
+          if (failureMode === "later-page-failure" && page === 1) {
+            expect(await readEvidence()).toHaveLength(1);
+            throw failure;
+          }
+          const capture = captures.at(
+            failureMode === "verification-change" ? requests - 1 : 0,
+          );
+          if (capture === undefined) {
+            expect.unreachable("The fixture serves exactly two captures");
+          }
+          return {
+            items: [],
+            observations: [capture],
+            totalPages: failureMode === "later-page-failure" ? 2 : 1,
+          };
+        },
+        slice: "all",
+        pageDelayMs: 0,
+        pageTimeoutMs: 5000,
+        sleep: async () => undefined,
+      });
+    };
+    const expectRejected = async () => {
+      if (failureMode === "later-page-failure") {
+        expect(await rejectionOf(run())).toBe(failure);
+        return;
+      }
+      const result = await run();
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("changed while it was listed");
+      }
+    };
+    await expectRejected();
+    const before = await readEvidence();
+    expect(before.map(({ payload }) => payload)).toEqual(
+      expect.arrayContaining(
+        captures
+          .slice(0, failureMode === "later-page-failure" ? 1 : 2)
+          .map(({ payload }) => ({ listing: payload })),
+      ),
+    );
+    expect(before).toHaveLength(failureMode === "later-page-failure" ? 1 : 2);
+    await expectRejected();
+    expect(await readEvidence()).toEqual(before);
+  },
+);
 
 test.each([undefined, "Publisher source bytes"])(
   "reparsing %s keeps one persisted publisher revision across retention instances",
@@ -115,7 +208,7 @@ test.each([undefined, "Publisher source bytes"])(
     const retain = async () => {
       const retention = createQuarantineCollisionRetention({
         adapterKey,
-        persistCollisionEvidence: async (observations) => {
+        persistEvidence: async (observations) => {
           await storeListingObservations(scopedDb, {
             sourceId,
             adapterKey,
@@ -125,6 +218,7 @@ test.each([undefined, "Publisher source bytes"])(
       });
       await retention.retainDecisions({
         type: "crawl",
+        observations: [],
         decisions: [decision("first"), decision("reparsed-block-id")],
         proof: { type: "no-listing-proof" },
       });
@@ -444,9 +538,7 @@ test("a completed slice retains every colliding payload and replay adds no dupli
   const first = { record: "first", listedField: "publisher value A" };
   const second = { record: "second", listedField: "publisher value B" };
   const third = { record: "third", listedField: "publisher value C" };
-  const persistCollisionEvidence = async (
-    observations: readonly ListingObservation[],
-  ) =>
+  const persistEvidence = async (observations: readonly ListingObservation[]) =>
     await storeListingObservations(scopedDb, {
       sourceId,
       adapterKey: "cz-regional",
@@ -458,7 +550,7 @@ test("a completed slice retains every colliding payload and replay adds no dupli
         adapterKey: "cz-regional",
         proof: SLICE_LISTING_PROOF.IDENTITIES,
         revisionOf: (payload) => payload,
-        persistCollisionEvidence,
+        persistEvidence,
         listSlicePage: async () => ({
           observations: [],
           items: payloads.map((payload) => ({
