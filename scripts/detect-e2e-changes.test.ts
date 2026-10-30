@@ -24,6 +24,7 @@ import {
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -502,6 +503,7 @@ describe("detect-e2e-changes", () => {
     expect(workflow).not.toContain("needs.ci-changes");
   });
 
+  // timeout: evaluates five repository scope plans with real subprocess detectors.
   test("runs Redis collaboration checks for every owning boundary", () => {
     const plan = workflowJob("ci-plan");
     const serviceSuites = workflowJob("service-suites");
@@ -540,7 +542,7 @@ describe("detect-e2e-changes", () => {
     const result = workflowJob("ci-result");
     expect(result).toContain("service-suites,");
     expect(result).toContain('"service-suites": "service_suites_required"');
-  });
+  }, 30_000);
 
   test("keeps production, Vite canary, and landing work parallel", () => {
     const production = workflowJob("e2e-production-shard");
@@ -625,6 +627,7 @@ describe("detect-e2e-changes", () => {
     expect(declaredEnv).toContain("ROUTE_SMOKE_REQUIRED");
     const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
     const output = path.join(root, "outputs");
+    const selectedPlan = path.join(root, "selection.json");
     try {
       for (const event of [
         "pull_request",
@@ -640,14 +643,24 @@ describe("detect-e2e-changes", () => {
               ["false", "false"],
             ] as const) {
               writeFileSync(output, "fixture=preserved\n");
+              if (matrix) {
+                writeFileSync(
+                  selectedPlan,
+                  JSON.stringify({
+                    matrix: JSON.parse(matrix),
+                    specs: JSON.parse(selectedSpecs),
+                  }),
+                );
+              } else {
+                rmSync(selectedPlan, { force: true });
+              }
               const env = {
                 PATH: "/usr/bin:/bin",
                 GITHUB_OUTPUT: output,
                 EVENT_NAME: event,
                 SELECTOR_OUTCOME: outcome,
-                SELECTED_MATRIX: matrix,
                 SELECTED_MODE: "selected",
-                SELECTED_SPECS: selectedSpecs,
+                SELECTED_PLAN_PATH: selectedPlan,
                 E2E_PRODUCTION_REQUIRED: required,
                 ROUTE_SMOKE_REQUIRED: routeSmoke,
                 FULL_MATRIX: fullMatrix,
@@ -1832,7 +1845,11 @@ describe("detect-e2e-changes", () => {
     // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set(["publish-npm.yml#release"]);
+    const forwardingCallers = new Set(
+      ALL_PACKAGE_ORDER.map(
+        (directory) => `publish-npm.yml#${npmReleaseJobId(directory)}`,
+      ),
+    );
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");

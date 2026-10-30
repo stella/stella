@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -23,19 +23,21 @@ import { sleep } from "@stll/concurrency/sleep";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { deleteReaderAnswerHandler } from "@/api/handlers/legal-reader/answers/delete";
 import { listReaderAnswersHandler } from "@/api/handlers/legal-reader/answers/list";
 import { prepareReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import type { ReaderAnswerCommand } from "@/api/handlers/legal-reader/answers/operation";
+import { readerAnswerRequest } from "@/api/handlers/legal-reader/answers/request";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answers/stream";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -69,6 +71,7 @@ beforeAll(async () => {
   await database.insert(user).values({
     id: userId,
     name: "Reader",
+    readerAnswerLanguage: "en",
     email: `${userId}@example.test`,
     emailVerified: true,
     createdAt: new Date(),
@@ -85,6 +88,8 @@ afterAll(releaseTestDb);
 afterEach(() => setSystemTime());
 
 const scope = (activeDatabase = database) => ({
+  readCopies: async () =>
+    new WithdrawnCopyProjection([], "Withdrawn by publisher"),
   organizationId,
   userId,
   recordAuditEvent: async () => undefined,
@@ -104,6 +109,7 @@ const prepare = async (
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
+        language: "cs",
         paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
       }),
   });
@@ -291,6 +297,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs: [{ paragraphId: "p-1", text }],
           }),
       });
@@ -343,6 +350,7 @@ describe("reader answer turn lifecycle", () => {
           decisionId,
           court: "Test court",
           decisionDate: "2026-01-01",
+          language: "cs",
           paragraphs,
         }),
     });
@@ -387,6 +395,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs,
           }),
       });
@@ -515,6 +524,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
           }),
       });
@@ -572,6 +582,7 @@ describe("reader answer turn lifecycle", () => {
           decisionId,
           court: "Test court",
           decisionDate: "2026-01-01",
+          language: "cs",
           paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
         }),
     });
@@ -666,9 +677,18 @@ describe("reader answer turn lifecycle", () => {
     { reason: "busy", code: ACTION_ADMISSION_CODES.concurrencyBusy },
     { reason: "not_enabled", code: ACTION_ADMISSION_CODES.notEnabled },
     {
-      reason: "unavailable",
-      code: ACTION_ADMISSION_CODES.admissionUnavailable,
+      reason: "store_unavailable",
+      code: ACTION_ADMISSION_CODES.storeUnavailable,
     },
+    {
+      reason: "configuration_incomplete",
+      code: ACTION_ADMISSION_CODES.configurationIncomplete,
+    },
+    {
+      reason: "organization_state_unreadable",
+      code: ACTION_ADMISSION_CODES.organizationStateUnreadable,
+    },
+    { reason: "lease_lost", code: ACTION_ADMISSION_CODES.leaseLost },
   ] as const)(
     "admission $reason persists its precise recovery code on stream and reload",
     async ({ reason, code }) => {
@@ -714,6 +734,28 @@ describe("reader answer turn lifecycle", () => {
       });
     },
   );
+
+  test("an unclassified admission failure persists an internal error without claiming a store outage", async () => {
+    const prepared = await create();
+    const { text } = await complete(prepared, {
+      admitModelAction: async () => {
+        throw new HandlerError({
+          status: 500,
+          code: "internal_error",
+          message: "Admission failed",
+        });
+      },
+    });
+    expect(terminalEvents(text).at(0)?.errorCode).toBe("internal");
+    expect(await message(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+    expect(await reload(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+  });
 
   test("model failures settle streaming messages as failed", async () => {
     const prepared = await create();
@@ -1424,5 +1466,58 @@ describe("reader answer turn lifecycle", () => {
       status: "complete",
       model: "requested-model",
     });
+  });
+  test("an omitted request locale uses the saved account preference before the document language", async () => {
+    const prepared = await prepare({
+      type: "create",
+      body: { kind: "explain", decisionId, anchor },
+    });
+    const slovakPrepared = {
+      ...prepared,
+      decision: { ...prepared.decision, language: "sk" },
+    };
+    const reader =
+      (
+        await database
+          .select({
+            readerAnswerLanguage: user.readerAnswerLanguage,
+          })
+          .from(user)
+          .where(eq(user.id, userId))
+          .limit(1)
+      ).at(0) ?? panic("Reader language fixture is missing");
+    expect(reader.readerAnswerLanguage).toBe("en");
+    expect(slovakPrepared.locale).toBeUndefined();
+    expect(slovakPrepared.decision.language).not.toBe(
+      reader.readerAnswerLanguage,
+    );
+    const streams: ReaderAnswerStreamOptions[] = [];
+    const { safeDb, recordAuditEvent } = scope();
+    const request = readerAnswerRequest(
+      {
+        session: { activeOrganizationId: organizationId },
+        user: { id: userId, readerAnswerLanguage: reader.readerAnswerLanguage },
+        safeDb,
+        recordAuditEvent,
+        scopedDb: asTestRaw<ScopedDb>(
+          createScopedDb(markRlsDatabase(database), [], organizationId, userId),
+        ),
+        orgAIConfig: {
+          providers: [{ provider: "openai", apiKey: "fixture-key" }],
+          overrideModels: null,
+          decision: null,
+        },
+        orgAIConfigStatus: "ok",
+        managedAIResidency: "eu",
+        request: new Request("http://localhost/reader-answer"),
+      },
+      (options) => {
+        streams.push(options);
+        return new Response(null);
+      },
+    ).unwrap();
+    request.stream(slovakPrepared);
+    expect(streams).toHaveLength(1);
+    expect(streams.at(0)?.prepared.locale).toBe("en");
   });
 });

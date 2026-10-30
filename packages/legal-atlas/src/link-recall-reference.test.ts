@@ -226,6 +226,26 @@ test("procedural history distinguishes a local annulment from ordinary precedent
   ).toEqual(["decision"]);
 });
 
+test("procedural cues stay in their sentence across citation abbreviation variants", () => {
+  for (const prefix of ["č. j.", "č.j.", "sp. zn.", "sp.zn."]) {
+    for (const separator of [".", "!", "?", ";", "\n"]) {
+      const references = extract(
+        `NSS rozsudkem ${prefix} 6 As 1/2020-40 zrušil rozsudek krajského soudu${separator} Srov. rozsudek ${prefix} 6 As 2/2020-50.`,
+      );
+      expect(
+        references
+          .filter(({ kind }) => kind === "procedural-history")
+          .map(({ key }) => key),
+      ).toEqual(["6AS1/2020"]);
+    }
+    expect(
+      extract(`NSS zrušil rozsudek ${prefix} 6 As 2/2020-50.`).map(
+        ({ kind }) => kind,
+      ),
+    ).toEqual(["decision", "procedural-history"]);
+  }
+});
+
 test("profiles supply independent jurisdiction grammar without changing the engine", () => {
   const profile = {
     country: "XY",

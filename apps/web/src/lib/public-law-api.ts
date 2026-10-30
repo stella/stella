@@ -5,6 +5,7 @@ import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-count
 import { isConnectionFailure } from "@stll/fetch";
 
 import { APIError, toAPIError } from "@/lib/errors/api";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 const PUBLIC_LAW_DISABLED_STATUS = 404;
@@ -61,7 +62,9 @@ export const publicLawFailureDisposition = (
   if (
     CriticalQueryTimeoutError.is(error) ||
     isTimeoutError(error) ||
-    isConnectionFailure(error)
+    isConnectionFailure(error) ||
+    (APIError.is(error) &&
+      (error.transportKind === "network" || error.transportKind === "timeout"))
   ) {
     return "retryable";
   }
@@ -121,10 +124,7 @@ const isPublicLawData = <T>(
 // The gate answers with status 404, so the API client files the marker under
 // `error`; a missing resource on an enabled surface carries a different body,
 // so the marker is unambiguous.
-type PublicLawErrorInput = {
-  status: number;
-  value: unknown;
-};
+type PublicLawErrorInput = ToAPIErrorProps;
 
 type PublicLawApiResponse<T> =
   { data: T; error: null } | { data: null; error: PublicLawErrorInput };
@@ -156,7 +156,7 @@ export const toPublicLawError = (
   }
 
   return toAPIError({
-    status: error.status,
+    ...error,
     value: parseApiErrorValue(error.value),
   });
 };

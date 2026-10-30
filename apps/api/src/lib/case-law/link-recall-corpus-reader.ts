@@ -38,20 +38,16 @@ export const readLinkRecallPayload = async ({
   readObject,
   maxCompressedBytes,
   maxDecompressedBytes,
-}: ReadLinkRecallPayloadOptions): Promise<ReadLinkRecallPayloadResult> =>
-  Result.gen(async function* () {
-    if (
-      !Number.isSafeInteger(maxCompressedBytes) ||
-      maxCompressedBytes <= 0 ||
-      !Number.isSafeInteger(maxDecompressedBytes) ||
-      maxDecompressedBytes <= 0
-    ) {
-      return Result.err(
-        new LinkRecallPayloadError({
-          message: "Link recall payload budgets must be positive safe integers",
-        }),
-      );
-    }
+}: ReadLinkRecallPayloadOptions): Promise<ReadLinkRecallPayloadResult> => {
+  if (
+    !Number.isSafeInteger(maxCompressedBytes) ||
+    maxCompressedBytes <= 0 ||
+    !Number.isSafeInteger(maxDecompressedBytes) ||
+    maxDecompressedBytes <= 0
+  ) {
+    return panic("Link recall payload budgets must be positive safe integers");
+  }
+  return await Result.gen(async function* () {
     const parsed = yield* Result.try({
       try: () => parseCorpusLocation(location),
       catch: (cause) =>
@@ -146,3 +142,4 @@ export const readLinkRecallPayload = async ({
     );
     return Result.ok(text);
   });
+};

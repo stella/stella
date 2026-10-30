@@ -6,6 +6,10 @@ import {
   apexCourtAbbreviations,
   courtAbbreviation,
 } from "@stll/api-contract/case-law-court-abbreviations";
+import {
+  ECLI_COURT_REGISTRY,
+  type RegisteredCourt,
+} from "@stll/api-contract/case-law-courts";
 import { createTtlFlightCache } from "@stll/concurrency/ttl-flight-cache";
 import { Temporal } from "@stll/time";
 
@@ -114,16 +118,94 @@ export const storedCourtIdentities = (
  * of one court are one reading, so they share an entry, its value the first
  * spelling and the others its aliases.
  */
+const registeredCourts: readonly RegisteredCourt[] = Object.values(
+  ECLI_COURT_REGISTRY,
+).flatMap((registry) => Object.values<RegisteredCourt>(registry));
+
 const courtVocabulary = (
   identities: readonly StoredCourtIdentity[],
 ): VocabularyEntry[] =>
   identities.map(({ abbreviation, spellings: [value, ...others] }) => ({
     value,
-    aliases:
-      abbreviation === undefined
-        ? others
-        : [...others, ...apexCourtAliases(abbreviation)],
+    aliases: [
+      ...others,
+      ...registeredCourts.flatMap((court) =>
+        court.name === value && court.citationAliases !== undefined
+          ? court.citationAliases
+          : [],
+      ),
+      ...(abbreviation === undefined ? [] : apexCourtAliases(abbreviation)),
+    ],
   }));
+
+/**
+ * The Czech and Slovak court short codes a citation writes in place of a
+ * court's name (`KS Praha`, `OS Kolín`), upper-cased because citations are
+ * typed in any case (`os Kolín`). `ÚS` is left out: it is also the register
+ * of every Constitutional Court docket, and that court is always recognised
+ * by name.
+ */
+const courtShortCodes: ReadonlySet<string> = new Set(
+  [
+    ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.CZ),
+    ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.SK),
+  ]
+    .map(({ shortCode }) => shortCode.toUpperCase())
+    .filter((shortCode) => shortCode !== "ÚS"),
+);
+
+const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+/**
+ * Adjectival stems that designate a Czech or Slovak court. Court names place
+ * these modifiers immediately before `soud` / `súd`; removing the nominative
+ * ending lets the same registry-derived phrase recognise inflected citations.
+ */
+const courtModifierPatterns = [
+  ...new Set(
+    [
+      ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.CZ),
+      ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.SK),
+    ].flatMap(({ name }) => {
+      const words = name.split(/\s+/u);
+      const nounIndex = words.findIndex((word) =>
+        /^(?:soud|súd)$/iu.test(word),
+      );
+      if (nounIndex < 1) {
+        return [];
+      }
+      return [
+        words
+          .slice(0, nounIndex)
+          .map((word) => `${escapeRegex(word.replace(/[ýí]$/iu, ""))}\\p{L}*`)
+          .join("\\s+"),
+      ];
+    }),
+  ),
+].toSorted((left, right) => right.length - left.length);
+
+const COURT_NOUN_PATTERN = String.raw`(?:soud|súd)(?!n)\p{L}*`;
+const MODIFIED_COURT_DESIGNATION = new RegExp(
+  String.raw`(?:^|[^\p{L}])(?:${courtModifierPatterns.join("|")})\s+${COURT_NOUN_PATTERN}(?=$|[^\p{L}])`,
+  "iu",
+);
+const SEATED_COURT_DESIGNATION = new RegExp(
+  String.raw`(?:^|[^\p{L}])${COURT_NOUN_PATTERN}\s+(?:v|ve|vo)\s+\p{Lu}\p{L}*`,
+  "u",
+);
+
+/**
+ * Whether text names a court at all, recognised or not. A court that the
+ * vocabulary cannot read still has to constrain a citation: without this,
+ * an unknown court reads like no court and the docket resolves anywhere.
+ */
+export const mentionsCourt = (text: string): boolean =>
+  MODIFIED_COURT_DESIGNATION.test(text) ||
+  SEATED_COURT_DESIGNATION.test(text) ||
+  text
+    .split(/[^\p{L}]+/u)
+    .some((word) => courtShortCodes.has(word.toUpperCase()));
 
 /** An apex court's abbreviation, and its English names where it has any. */
 const apexCourtAliases = (abbreviation: string): readonly string[] =>

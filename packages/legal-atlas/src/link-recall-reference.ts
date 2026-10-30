@@ -11,7 +11,7 @@ export const LINK_RECALL_KINDS = [
 
 export type LinkRecallKind = (typeof LINK_RECALL_KINDS)[number];
 
-export type LinkRecallPassage = {
+export type AuditReferencePassage = {
   anchor: string;
   text: string;
 };
@@ -81,7 +81,7 @@ export const auditDecisionKey = (text: string): string => {
 };
 
 type ExtractAuditReferencesOptions = {
-  passages: readonly LinkRecallPassage[];
+  passages: readonly AuditReferencePassage[];
   profile: ReferenceAuditProfile;
   selfIdentifiers: readonly string[];
 };
@@ -159,10 +159,12 @@ export const extractAuditReferences = ({
         `${previousEnd === 0 ? precedingText : ""}\n${before}`.slice(
           -REVIEWED_RADIUS,
         );
+      // Citation prefixes (č. j., sp. zn.) belong to the match, so their
+      // abbreviation periods do not end the preceding cue's sentence.
       const localBefore =
         before
           .slice(-PROCEDURAL_RADIUS)
-          .split(/[;!?\n]/u)
+          .split(/[.;!?\n]/u)
           .at(-1) ?? "";
       const nextStart = decisions.at(index + 1)?.start ?? text.length;
       const localAfter =

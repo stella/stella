@@ -1,5 +1,11 @@
 # @stll/text-normalize
 
+## 0.5.1
+
+### Patch Changes
+
+- [#7103](https://github.com/stella/stella/pull/7103) [`5a279ca`](https://github.com/stella/stella/commit/5a279cac4dcaa80087c6c92f2e621ad124c661d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep every item when the search query folds to an empty key, including items without searchable fields.
+
 ## 0.5.0
 
 ### Minor Changes

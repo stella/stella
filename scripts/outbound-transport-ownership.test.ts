@@ -302,6 +302,48 @@ describe("outbound transport ownership", () => {
     ).toEqual([]);
   });
 
+  test("import trivia does not change transport classification", () => {
+    const forms = [
+      [
+        'import "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ "undici";',
+      ],
+      [
+        'import {} from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ {} from "undici";',
+      ],
+      [
+        'import client from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ client from "undici";',
+      ],
+      [
+        'import * as client from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ * as client from "undici";',
+      ],
+      [
+        'import { request } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ { request } from "undici";',
+      ],
+      [
+        'import { type Dispatcher, request } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ { type Dispatcher, request } from "undici";',
+      ],
+      [
+        'import { type Dispatcher } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ { type Dispatcher } from "undici";',
+      ],
+      [
+        'import type { Dispatcher } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ type { Dispatcher } from "undici";',
+      ],
+    ] as const;
+
+    expect(references(forms[0][0])).toEqual(["module:undici"]);
+    for (const [plain, withTrivia] of forms) {
+      expect(references(withTrivia)).toEqual(references(plain));
+    }
+  });
+
   test("platform utilities retain their local-only classification", () => {
     for (const source of [
       'import { isIP, BlockList } from "node:net";',
