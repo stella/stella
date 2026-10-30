@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_NSS",
+  "key": "cz-nss",
+  "parserVersion": 25,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl."
+  }
+}

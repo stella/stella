@@ -6,6 +6,7 @@
     "activityRecording": "Veikla: Įrašoma · šiandien {hours} val.",
     "activityPaused": "Veikla: Pristabdyta · šiandien {hours} val.",
     "activityOff": "Veikla: Išjungta",
+    "openActivity": "Atverti veiklą",
     "activityNow": "Dabar: {name}",
     "activityPause": "Pristabdyti įrašymą",
     "activityResume": "Tęsti įrašymą",

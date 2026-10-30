@@ -18,6 +18,62 @@ import {
   specVisualNames,
   staticImportClosure,
 } from "./ui-playground-selection";
+import {
+  planUiPlaygroundMatrix,
+  UI_PLAYGROUND_SHARD_COUNT,
+} from "./ui-playground-shards";
+
+const playgroundSpecs = (count: number) =>
+  Array.from(
+    { length: count },
+    (_, index) => `apps/web/e2e/ui-playground/spec-${index}.geometry.spec.ts`,
+  );
+
+test("every-spec fallback yields every merge-group shard with each spec once", () => {
+  const allSpecs = playgroundSpecs(13);
+  const legs = planUiPlaygroundMatrix({
+    selectedSpecs: allSpecs,
+    allSpecs,
+    eventName: "pull_request",
+    desktopRequired: false,
+  });
+
+  expect(legs).toHaveLength(UI_PLAYGROUND_SHARD_COUNT);
+  expect(legs.flatMap(({ specs }) => specs).toSorted()).toEqual(
+    allSpecs.toSorted(),
+  );
+});
+
+test("a two-spec playground selection stays on one leg", () => {
+  const allSpecs = playgroundSpecs(13);
+  const selectedSpecs = allSpecs.slice(0, 2);
+  const legs = planUiPlaygroundMatrix({
+    selectedSpecs,
+    allSpecs,
+    eventName: "pull_request",
+    desktopRequired: false,
+  });
+
+  expect(legs).toEqual([{ suite: "playground-1", specs: selectedSpecs }]);
+});
+
+test("a large playground selection respects the merge-group per-shard budget", () => {
+  const allSpecs = playgroundSpecs(13);
+  const selectedSpecs = allSpecs.slice(0, 10);
+  const legs = planUiPlaygroundMatrix({
+    selectedSpecs,
+    allSpecs,
+    eventName: "pull_request",
+    desktopRequired: false,
+  });
+  const perShardBudget = Math.ceil(allSpecs.length / UI_PLAYGROUND_SHARD_COUNT);
+
+  expect(legs.length).toBeGreaterThan(1);
+  expect(legs.every(({ specs }) => specs.length <= perShardBudget)).toBeTrue();
+  expect(legs.flatMap(({ specs }) => specs).toSorted()).toEqual(
+    selectedSpecs.toSorted(),
+  );
+});
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 

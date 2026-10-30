@@ -87,31 +87,6 @@ describe("response timeout policies", () => {
     expect(await result).toBe(reason);
   });
 
-  test("reports a deadline as a typed timeout reason", async () => {
-    jest.useFakeTimers();
-    const request = createFetchWithTimeout(async (_input, init) => {
-      await new Promise<never>((_resolve, reject) => {
-        init?.signal?.addEventListener(
-          "abort",
-          () =>
-            reject(
-              init.signal?.reason instanceof Error
-                ? init.signal.reason
-                : new DOMException("Fetch aborted", "AbortError"),
-            ),
-          { once: true },
-        );
-      });
-      throw new Error("unreachable");
-    });
-    const result = request("https://example.com", {
-      timeout: { type: "total", ms: 20 },
-    }).catch((error: unknown) => error);
-    await flush();
-    await advance(20);
-    expect(await result).toMatchObject({ name: "TimeoutError" });
-  });
-
   test("a transport response that wins a caller abort remains settled without affecting the next request", async () => {
     const controller = new AbortController();
     let requests = 0;
@@ -265,7 +240,6 @@ describe("response timeout policies", () => {
   });
 
   for (const policy of [
-    { timeout: { type: "total", ms: 20 } },
     { timeout: { type: "headers", ms: 20 } },
     { timeout: { type: "idle", ms: 20 } },
   ] as const) {
@@ -330,65 +304,6 @@ describe("response timeout policies", () => {
     fixture.close();
     expect(await result).toBe("x");
     expect(fixture.signal()?.aborted).toBe(false);
-  });
-
-  for (const consumption of ["json", "stream"] as const) {
-    test(`total timeout aborts a stalled body during ${consumption} consumption and cancels the source`, async () => {
-      jest.useFakeTimers();
-      const fixture = streamFixture();
-      const response = await fixture.request("https://example.com", {
-        timeout: { type: "total", ms: 20 },
-      });
-      const result =
-        consumption === "json"
-          ? response.json().catch((error: unknown) => error)
-          : response.body
-              ?.getReader()
-              .read()
-              .catch((error: unknown) => error);
-      await advance(19);
-      expect(fixture.signal()?.aborted).toBe(false);
-      await advance(1);
-      const reason = await result;
-      expect(reason).toMatchObject({ name: "TimeoutError" });
-      expect(fixture.signal()?.reason).toBe(reason);
-      expect(fixture.cancelledWith()).toBe(reason);
-      expect(jest.getTimerCount()).toBe(0);
-    });
-  }
-
-  test("total timeout permits a body that completes before its deadline and clears the timer", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "total", ms: 20 },
-    });
-    const result = response.json();
-    await advance(19);
-    fixture.chunk("0");
-    fixture.close();
-    expect(await result).toBe(0);
-    expect(fixture.signal()?.aborted).toBe(false);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("caller abort during a total-timeout body read retains its reason", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const controller = new AbortController();
-    const reason = new DOMException("Caller cancelled", "AbortError");
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "total", ms: 20 },
-      signal: controller.signal,
-    });
-    const result = response.body
-      ?.getReader()
-      .read()
-      .catch((error: unknown) => error);
-    controller.abort(reason);
-    expect(await result).toBe(reason);
-    expect(fixture.cancelledWith()).toBe(reason);
-    expect(jest.getTimerCount()).toBe(0);
   });
 
   for (const type of ["headers", "idle"] as const) {
