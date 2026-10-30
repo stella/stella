@@ -165,7 +165,9 @@ test("release landing waits for finalization and uses trusted tooling with a sep
   );
   const landing = workflow.jobs["land-release-pr"];
   expect(landing.needs).toBe("finalize");
-  expect(landing.if).toBe("needs.finalize.outputs.final_tag != ''");
+  expect(landing.if).toBe(
+    "github.event_name == 'workflow_run' && needs.finalize.outputs.final_tag != ''",
+  );
   expect(workflow.jobs.finalize.outputs["final_tag"]).toBe(
     `\${{ steps.finalize.outputs.final_tag }}`,
   );
