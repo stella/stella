@@ -3,6 +3,7 @@ import type { AnchorHTMLAttributes, ReactNode } from "react";
 
 import { GitHubLogoIcon, XLogoIcon } from "@stll/ui/brand-icons";
 import { GlobeIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { normalizeChatLink } from "./link-detection";
 
@@ -73,6 +74,22 @@ type ChatLinkProps = Omit<
   newTabLabel?: string;
 };
 
+/** A tray chip cuts its label short; an inline link runs with the prose. */
+const ChatLinkLabel = ({
+  appearance,
+  children,
+}: {
+  appearance: ChatLinkProps["appearance"];
+  children: ReactNode;
+}) =>
+  appearance === "tray" ? (
+    <TruncatedText className="max-w-[20ch]" render={<bdi />}>
+      {children}
+    </TruncatedText>
+  ) : (
+    <bdi>{children}</bdi>
+  );
+
 export const ChatLink = ({
   appearance = "inline",
   children,
@@ -86,8 +103,6 @@ export const ChatLink = ({
     appearance === "tray"
       ? "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       : CHAT_LINK_CLASS_NAME;
-  const labelClassName =
-    appearance === "tray" ? "max-w-[20ch] truncate" : undefined;
   const target = normalizeChatLink(href);
   if (!target) {
     const parsed = URL.canParse(href) ? new URL(href) : null;
@@ -97,7 +112,9 @@ export const ChatLink = ({
     if ((!safeLocal && !safeMail) || /[\p{Cc}\p{Cf}]/u.test(href)) {
       return appearance === "tray" ? (
         <span className={className}>
-          <bdi className={labelClassName}>{children ?? href}</bdi>
+          <ChatLinkLabel appearance={appearance}>
+            {children ?? href}
+          </ChatLinkLabel>
         </span>
       ) : (
         <span>{children ?? href}</span>
@@ -112,7 +129,9 @@ export const ChatLink = ({
         target={CHAT_LINK_ATTRIBUTES.target}
         rel={CHAT_LINK_ATTRIBUTES.rel}
       >
-        <bdi className={labelClassName}>{children ?? href}</bdi>
+        <ChatLinkLabel appearance={appearance}>
+          {children ?? href}
+        </ChatLinkLabel>
       </a>
     );
   }
@@ -147,7 +166,7 @@ export const ChatLink = ({
       >
         {icon}
       </span>
-      <bdi className={labelClassName}>{label}</bdi>
+      <ChatLinkLabel appearance={appearance}>{label}</ChatLinkLabel>
     </a>
   );
 };
