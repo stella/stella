@@ -117,12 +117,12 @@ const setTransactionBudget = async (
   ) {
     return panic("Sitemap refresh budgets must be integer milliseconds");
   }
-  await setSharedLockTimeout(tx, lockTimeoutMs);
-  await setSharedStatementTimeout(tx, statementTimeoutMs);
   await setScheduledJobTransactionDeadline(
     tx,
     "scheduled.caseLaw.refreshSitemapShards",
   );
+  await setSharedLockTimeout(tx, lockTimeoutMs);
+  await setSharedStatementTimeout(tx, statementTimeoutMs);
 };
 
 const throwIfAborted = (signal: AbortSignal | undefined): void => {

@@ -43,15 +43,27 @@ type ReadBudget =
   | (ReadBudgetFields & { surface: "statement" })
   | (ReadBudgetFields & {
       surface: "scheduled-job";
-      /** Enforced as `transaction_timeout` where the job opens its transactions. */
+      /**
+       * "explicit": the job opens transactions, so it must declare a deadline
+       * and apply it through `setScheduledJobTransactionDeadline`.
+       */
+      transactions: "explicit";
+      /** Enforced as `transaction_timeout`; must stay below the ladder budget. */
       transactionDeadlineMs: number;
+    })
+  | (ReadBudgetFields & {
+      surface: "scheduled-job";
+      /** The job runs autocommit statements only; no transaction deadline applies. */
+      transactions: "none";
+      transactionDeadlineMs?: never;
     });
 
 export const READ_BUDGETS = {
   "scheduled.caseLaw.refreshCoverage": {
     surface: "scheduled-job",
+    transactions: "explicit",
     pages: 150,
-    transactionDeadlineMs: 60_000,
+    transactionDeadlineMs: 90_000,
     reason:
       "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
     overBudget: {
@@ -67,6 +79,7 @@ export const READ_BUDGETS = {
   },
   "scheduled.requests.sweepReceipts": {
     surface: "scheduled-job",
+    transactions: "explicit",
     pages: 20_000,
     transactionDeadlineMs: 60_000,
     reason:
@@ -87,6 +100,7 @@ export const READ_BUDGETS = {
   },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
+    transactions: "explicit",
     pages: 12_500,
     transactionDeadlineMs: 60_000,
     reason:
@@ -94,6 +108,7 @@ export const READ_BUDGETS = {
   },
   "scheduled.caseLaw.refreshSitemapShards": {
     surface: "scheduled-job",
+    transactions: "explicit",
     pages: 18_000,
     statementDeadlineMs: 30_000,
     runBudgetMs: 15 * 60 * 1000,
@@ -120,6 +135,15 @@ export const READ_BUDGETS = {
 } as const satisfies Record<string, ReadBudget>;
 
 export type ReadBudgetId = keyof typeof READ_BUDGETS;
+
+/** The budgets whose job opens transactions, the only ones that have a deadline to apply. */
+export type ExplicitTransactionBudgetId = {
+  [Id in ReadBudgetId]: (typeof READ_BUDGETS)[Id] extends {
+    transactions: "explicit";
+  }
+    ? Id
+    : never;
+}[ReadBudgetId];
 
 export type ScheduledJobReadBudgetId = {
   [

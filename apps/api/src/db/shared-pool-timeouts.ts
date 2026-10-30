@@ -10,7 +10,7 @@ import {
 import { envDbTimeouts } from "@/api/env-db-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
-import type { ScheduledJobReadBudgetId } from "@/api/lib/db/read-budgets";
+import type { ExplicitTransactionBudgetId } from "@/api/lib/db/read-budgets";
 
 /** Request budgets only; background and authenticated reads retain their policy. */
 export const PUBLIC_READ_STATEMENT_TIMEOUT_MS = {
@@ -64,7 +64,11 @@ export const setSharedStatementTimeout = async (
   );
 };
 
-/** Ends with the transaction; the server cancels it once it has run this long. */
+/**
+ * Ends with the transaction. PostgreSQL arms the timer when this runs inside
+ * a transaction, unless one is already armed (assign_transaction_timeout), so
+ * call it first in the transaction: the deadline then runs from its start.
+ */
 export const setTransactionDeadline = async (
   tx: TimeoutTransaction,
   deadlineMs: number,
@@ -81,7 +85,7 @@ export const setTransactionDeadline = async (
  */
 export const setScheduledJobTransactionDeadline = async (
   tx: TimeoutTransaction,
-  budget: ScheduledJobReadBudgetId,
+  budget: ExplicitTransactionBudgetId,
 ): Promise<void> => {
   await setTransactionDeadline(tx, READ_BUDGETS[budget].transactionDeadlineMs);
 };

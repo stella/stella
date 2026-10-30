@@ -1,3 +1,4 @@
+import { setScheduledJobTransactionDeadline } from "@/api/db/shared-pool-timeouts";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   emitCaseLawFreshnessReport,
@@ -9,9 +10,12 @@ export const REPORT_CASE_LAW_FRESHNESS_TASK =
   "caseLaw.reportFreshness" as const;
 
 export const reportCaseLawFreshnessTask: SchedulerTask = async ({ db }) => {
-  const report = await withAggregateTransaction(
-    db,
-    readCaseLawFreshnessReportTx,
-  );
+  const report = await withAggregateTransaction(db, async (tx) => {
+    await setScheduledJobTransactionDeadline(
+      tx,
+      "scheduled.caseLaw.reportFreshness",
+    );
+    return await readCaseLawFreshnessReportTx(tx);
+  });
   emitCaseLawFreshnessReport(report);
 };
