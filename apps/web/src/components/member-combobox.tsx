@@ -11,12 +11,12 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-  useComboboxFilter,
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { UserIdentity, UserIdentityAvatar } from "@/components/user-avatar";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { QueryView } from "@/lib/query-view.logic";
 
@@ -143,7 +143,7 @@ export const MemberCombobox = ({
   onSubmit,
 }: MemberComboboxProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [open, setOpen] = useState(false);
   const unknownUser = t("common.unknownUser");
   const noneLabel =
@@ -193,11 +193,6 @@ export const MemberCombobox = ({
     };
   }, [items, selectedFallback, unknownUser, value]);
 
-  const { contains } = useComboboxFilter({
-    sensitivity: "base",
-    value: selected,
-  });
-
   const selectedMember = selected?.type === "member" ? selected.member : null;
 
   return (
@@ -206,11 +201,11 @@ export const MemberCombobox = ({
       filter={(item: MemberComboboxItem, query) => {
         switch (item.type) {
           case "none":
-            return contains(item, query, itemLabel);
+            return matchesComboboxItem(item, query, itemLabel);
           case "member":
             return (
-              contains(item, query, itemLabel) ||
-              contains(item, query, itemEmail)
+              matchesComboboxItem(item, query, itemLabel) ||
+              matchesComboboxItem(item, query, itemEmail)
             );
           default:
             item satisfies never;

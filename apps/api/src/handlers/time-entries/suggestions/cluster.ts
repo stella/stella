@@ -8,6 +8,11 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 export type ActivitySignal = {
   at: Date;
   key: string;
+  identity: {
+    source: "chat_message" | "audit_log";
+    resourceId: string;
+    timestamp: string;
+  };
   evidence:
     | { type: "chat_thread"; id: string; title: string }
     | {
@@ -40,9 +45,9 @@ const MS_PER_MINUTE = 60_000;
 
 /**
  * Identity of a cluster for its day. Only the earliest signal takes part, so a
- * cluster keeps its fingerprint while later signals extend it, and a decision
- * recorded against it stays attached. Two clusters that merge keep the
- * earlier one's identity; the later one's fingerprint stops being produced.
+ * cluster keeps its fingerprint while later signals extend it. Decisions use
+ * that identity for idempotent writes, while their evidence owns the exact
+ * signals they cover. Two clusters that merge keep the earlier identity.
  */
 export const suggestionFingerprint = (date: string, firstKey: string) =>
   hashSha256Hex(`${date}\n${firstKey}`);
@@ -65,12 +70,13 @@ const aggregateEvidence = (
   signals: readonly ActivitySignal[],
 ): TimeEntrySuggestionEvidence[] => {
   const byKey = new Map<string, TimeEntrySuggestionEvidence>();
-  for (const { evidence } of signals) {
+  for (const { evidence, identity } of signals) {
     const key = evidenceKey(evidence);
     const existing = byKey.get(key);
     if (evidence.type === "chat_thread") {
       if (existing?.type === "chat_thread") {
         existing.messageCount += 1;
+        existing.signals.push(identity);
         continue;
       }
       byKey.set(key, {
@@ -78,6 +84,7 @@ const aggregateEvidence = (
         id: evidence.id,
         title: evidence.title,
         messageCount: 1,
+        signals: [identity],
       });
       continue;
     }
@@ -85,6 +92,7 @@ const aggregateEvidence = (
       if (!existing.actions.includes(evidence.action)) {
         existing.actions.push(evidence.action);
       }
+      existing.signals.push(identity);
       if (existing.name === null && evidence.name !== null) {
         existing.name = evidence.name;
       }
@@ -96,6 +104,7 @@ const aggregateEvidence = (
       resourceType: evidence.resourceType,
       name: evidence.name,
       actions: [evidence.action],
+      signals: [identity],
     });
   }
   return [...byKey.values()];
@@ -123,6 +132,85 @@ const toCluster = (
     signalCount: signals.length,
     evidence: aggregateEvidence(signals),
   };
+};
+
+type RecordedTime = {
+  durationMinutes: number;
+  startedAt: Date | null;
+  endedAt: Date | null;
+};
+
+export type CoveredSuggestionCluster = SuggestionCluster & {
+  alreadyCovered: boolean;
+};
+
+/**
+ * Removes the union of recorded timer/activity windows from each candidate.
+ * Duration-only entries cannot be placed on the clock, so they are exposed as
+ * day-level coverage without being guessed into a particular window: every
+ * remaining candidate counts as covered only when their minutes together fit
+ * in the duration-only total, since nothing says which candidate it was for.
+ */
+export const subtractRecordedTime = (
+  clusters: readonly SuggestionCluster[],
+  entries: readonly RecordedTime[],
+): CoveredSuggestionCluster[] => {
+  let durationOnlyMinutes = 0;
+  for (const entry of entries) {
+    if (entry.startedAt === null || entry.endedAt === null) {
+      durationOnlyMinutes += entry.durationMinutes;
+    }
+  }
+  const windows = entries
+    .filter(
+      (entry): entry is RecordedTime & { startedAt: Date; endedAt: Date } =>
+        entry.startedAt !== null && entry.endedAt !== null,
+    )
+    .toSorted((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+
+  const uncovered: SuggestionCluster[] = [];
+  for (const cluster of clusters) {
+    const start = cluster.startedAt.getTime();
+    const end = start + cluster.durationMinutes * MS_PER_MINUTE;
+    const overlaps: [number, number][] = [];
+    for (const window of windows) {
+      const overlapStart = Math.max(start, window.startedAt.getTime());
+      const overlapEnd = Math.min(end, window.endedAt.getTime());
+      if (overlapEnd > overlapStart) {
+        overlaps.push([overlapStart, overlapEnd]);
+      }
+    }
+    let coveredMs = 0;
+    let current: [number, number] | null = null;
+    for (const overlap of overlaps) {
+      if (current === null) {
+        current = overlap;
+      } else if (overlap[0] <= current[1]) {
+        current[1] = Math.max(current[1], overlap[1]);
+      } else {
+        coveredMs += current[1] - current[0];
+        current = overlap;
+      }
+    }
+    if (current !== null) {
+      coveredMs += current[1] - current[0];
+    }
+    const durationMinutes = Math.max(
+      0,
+      cluster.durationMinutes - Math.ceil(coveredMs / MS_PER_MINUTE),
+    );
+    if (durationMinutes === 0) {
+      continue;
+    }
+    uncovered.push({ ...cluster, durationMinutes });
+  }
+  const uncoveredMinutes = uncovered.reduce(
+    (sum, cluster) => sum + cluster.durationMinutes,
+    0,
+  );
+  const alreadyCovered =
+    uncovered.length > 0 && durationOnlyMinutes >= uncoveredMinutes;
+  return uncovered.map((cluster) => ({ ...cluster, alreadyCovered }));
 };
 
 /**

@@ -1,6 +1,7 @@
 import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
 
 import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic";
+import type { SelectedLayerText } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import {
   punctuateCitation,
   selectionCopyText,
@@ -15,38 +16,58 @@ import { TEXT_LAYER_ATTRIBUTE } from "@/lib/pdf/consts";
 export type PdfPageSpan = { end: number; start: number };
 
 export type PdfSelectionPassage = {
+  /** Each page's share of the selection, in reading order. */
+  layers: SelectedLayerText[];
   pages: PdfPageSpan;
   /** The selected words on one line: a quotation, not the page layout. */
   quote: string;
 };
 
+type LayerSelection = Omit<SelectedLayerText, "pageNumber">;
+
 /**
- * The selected words inside one page's text layer. pdf.js ends each line with
- * a `<br>` rather than a space, so reading the text nodes alone would glue the
- * last word of a line to the first of the next.
+ * The selected words inside one page's text layer, and where in the layer's
+ * text they begin. pdf.js ends each line with a `<br>` rather than a space,
+ * so reading the text nodes alone would glue the last word of a line to the
+ * first of the next.
  */
-const layerSelectionText = (range: Range, layer: Element): string => {
+const layerSelection = (range: Range, layer: Element): LayerSelection => {
   const walker = layer.ownerDocument.createTreeWalker(
     layer,
     NodeFilter.SHOW_ALL,
   );
   const parts: string[] = [];
+  let before = 0;
+  let total = 0;
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if (!range.intersectsNode(node)) {
+    let data: string | null = null;
+    if (node.nodeName === "BR") {
+      data = "\n";
+    } else if (node instanceof Text) {
+      data = node.data;
+    }
+    if (data === null) {
       continue;
     }
-    if (node.nodeName === "BR") {
-      parts.push("\n");
+    total += data.length;
+    if (!range.intersectsNode(node)) {
+      if (range.comparePoint(node, 0) < 0) {
+        before += data.length;
+      }
       continue;
     }
     if (!(node instanceof Text)) {
+      parts.push(data);
       continue;
     }
     const start = node === range.startContainer ? range.startOffset : 0;
     const end = node === range.endContainer ? range.endOffset : node.length;
+    if (parts.length === 0) {
+      before += start;
+    }
     parts.push(node.data.slice(start, end));
   }
-  return parts.join("");
+  return { before, text: parts.join(""), total };
 };
 
 type PdfSelectionPassageOptions = {
@@ -68,7 +89,7 @@ export const pdfSelectionPassage = ({
   range,
   root,
 }: PdfSelectionPassageOptions): PdfSelectionPassage | null => {
-  const lines: string[] = [];
+  const layers: SelectedLayerText[] = [];
   let firstPage: number | null = null;
   let lastPage: number | null = null;
   for (const layer of root.querySelectorAll(`[${TEXT_LAYER_ATTRIBUTE}]`)) {
@@ -77,18 +98,22 @@ export const pdfSelectionPassage = ({
       continue;
     }
     const page = pageNumberOf(pageId);
-    const text = layerSelectionText(range, layer);
-    if (page === null || text.trim() === "") {
+    const selection = layerSelection(range, layer);
+    if (page === null || selection.text.trim() === "") {
       continue;
     }
     firstPage ??= page;
     lastPage = page;
-    lines.push(text);
+    layers.push({ ...selection, pageNumber: page });
   }
-  const quote = lines.join(" ").replaceAll(/\s+/gu, " ").trim();
+  const quote = layers
+    .map((layer) => layer.text)
+    .join(" ")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
   return firstPage === null || lastPage === null || quote === ""
     ? null
-    : { pages: { end: lastPage, start: firstPage }, quote };
+    : { layers, pages: { end: lastPage, start: firstPage }, quote };
 };
 
 /** How the reader's language writes a page locator ("p. 3", "s. 3–4"). */

@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; the source paragraphs it alone read are gone, and the rendered HTML, metadata and AST are unchanged.
 /**
  * The document the common courts' judgments API serves, read.
  *
@@ -18,22 +19,10 @@
  * sentence.
  */
 
-import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
-import type { Block } from "@stll/legal-ast/document-ast";
-
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-import type {
-  ValidationResult,
-  ValidationSubject,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-
+import { judgeLexLink, type LexLinkRejection } from "./pl-ncourt-lexlink";
 import { ANONYMIZED_CLASS } from "./shared-inlines";
 
 /** The statute a `xLexLink` names, as the link states it. */
@@ -50,6 +39,16 @@ type PlNcourtLegalReference = {
   address: string;
 };
 
+/** A statute link the publisher tagged and the anchor did not support. */
+type PlNcourtRejectedReference = {
+  text: string;
+  articles: string;
+  isapId: string;
+  reason: LexLinkRejection;
+  /** `link-dropped`: the words stay plain; `provision-dropped`: the act link stays. */
+  outcome: "link-dropped" | "provision-dropped";
+};
+
 export type PlNcourtContent = {
   /** Every attribute on the root, verbatim, keyed as printed. */
   attributes: Readonly<Record<string, string>>;
@@ -59,16 +58,10 @@ export type PlNcourtContent = {
   html: string;
   /** Every distinct statute link, in document order. */
   legalReferences: PlNcourtLegalReference[];
+  /** Every distinct statute link that was dropped or lost its provisions. */
+  rejectedLegalReferences: PlNcourtRejectedReference[];
   /** Unexpected element names, or #text/#cdata for stray text, each once. */
   unmappedMarkup: string[];
-  /**
-   * The text of every paragraph, title and unit name, read off the XML
-   * itself: what the parsed document is measured against, so a rendering
-   * that loses text cannot also be what vouches for it.
-   */
-  sourceParagraphs: string[];
-  /** XML text with rendered inline breaks, used only by the word comparison. */
-  comparisonParagraphs: string[];
 };
 
 const ISAP_DETAILS_URL = "https://isap.sejm.gov.pl/DetailsServlet?id=";
@@ -96,6 +89,7 @@ const LAYOUT_TAGS = new Set(["xCOLGROUPx", "xCOLx"]);
 
 type RenderState = {
   legalReferences: PlNcourtLegalReference[];
+  rejectedReferences: PlNcourtRejectedReference[];
   seenReferences: Set<string>;
   unmapped: Set<string>;
 };
@@ -108,21 +102,18 @@ const textOf = (node: AnyNode): string => {
   return isTag(node) || isCDATA(node) ? node.children.map(textOf).join("") : "";
 };
 
-const comparisonTextOf = (node: AnyNode): string => {
+/** A link's words with each index as `(n)`, as `xArt` writes it. */
+const anchorTextOf = (node: AnyNode): string => {
   if (isText(node)) {
     return node.data;
   }
-  if (isCDATA(node)) {
-    return node.children.map(comparisonTextOf).join("");
-  }
-  if (!isTag(node)) {
+  if (!isTag(node) && !isCDATA(node)) {
     return "";
   }
-  if (node.name === "xBRx") {
-    return ` ${node.children.map(comparisonTextOf).join("")}`;
-  }
-  const children = node.children.map(comparisonTextOf).join("");
-  return node.name === "xSUPx" ? ` ${children}` : children;
+  const inner = node.children.map(anchorTextOf).join("");
+  return isTag(node) && (node.name === "xSUPx" || node.name === "xSUBx")
+    ? `(${inner.trim()})`
+    : inner;
 };
 
 const attributeOf = (element: Element, name: string): string =>
@@ -155,10 +146,45 @@ const renderInline = (node: AnyNode, state: RenderState): string => {
       title: attributeOf(node, "xTitle"),
       address: attributeOf(node, "xAddress"),
     };
-    const key = JSON.stringify(reference);
-    if (!state.seenReferences.has(key)) {
-      state.seenReferences.add(key);
-      state.legalReferences.push(reference);
+    const anchor = anchorTextOf(node);
+    const verdict = judgeLexLink({
+      anchor,
+      articles: reference.articles,
+      title: reference.title,
+    });
+    const shown = anchor.replaceAll(/\s+/gu, " ").trim();
+    const reject = (
+      reason: LexLinkRejection,
+      outcome: PlNcourtRejectedReference["outcome"],
+    ): void => {
+      const rejected: PlNcourtRejectedReference = {
+        text: shown,
+        articles: reference.articles,
+        isapId: reference.isapId,
+        reason,
+        outcome,
+      };
+      const key = JSON.stringify(["rejected", rejected]);
+      if (!state.seenReferences.has(key)) {
+        state.seenReferences.add(key);
+        state.rejectedReferences.push(rejected);
+      }
+    };
+    if (verdict.type === "rejected") {
+      reject(verdict.reason, "link-dropped");
+      return children();
+    }
+    if (verdict.type === "act" && verdict.dropped !== undefined) {
+      reject(verdict.dropped, "provision-dropped");
+    }
+    // Keyed on what is kept, so the verdict and the resolved provisions
+    // decide whether an occurrence is new, not the publisher's attributes.
+    const kept: PlNcourtLegalReference =
+      verdict.type === "act" ? { ...reference, articles: "" } : reference;
+    const keptKey = JSON.stringify(["kept", kept]);
+    if (!state.seenReferences.has(keptKey)) {
+      state.seenReferences.add(keptKey);
+      state.legalReferences.push(kept);
     }
     const href =
       reference.isapId.length === 0
@@ -167,9 +193,8 @@ const renderInline = (node: AnyNode, state: RenderState): string => {
     return `<a${href}>${children()}</a>`;
   }
   if (name === "xSUPx") {
-    // Set apart as the publisher's own rendering sets it: "art. 353 1", not
-    // "art. 3531", which is another article.
-    return `<sup> ${children()}</sup>`;
+    // An article index ("art. 353¹"), read as a superscript by the parser.
+    return `<sup>${children()}</sup>`;
   }
   if (isInlineTag(name)) {
     const tag = INLINE_TAGS[name];
@@ -389,6 +414,7 @@ export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
   }
   const state: RenderState = {
     legalReferences: [],
+    rejectedReferences: [],
     seenReferences: new Set(),
     unmapped: new Set(),
   };
@@ -403,82 +429,12 @@ export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
     .join("\n");
   const title =
     name === undefined ? undefined : textOf(name).trim() || undefined;
-  const paragraphs = sourceParagraphsOf(root);
   return {
     attributes: { ...root.attribs },
     title,
     html,
     legalReferences: state.legalReferences,
+    rejectedLegalReferences: state.rejectedReferences,
     unmappedMarkup: [...state.unmapped],
-    sourceParagraphs: paragraphs.source,
-    comparisonParagraphs: paragraphs.comparison,
   };
-};
-
-/** Elements whose text is a paragraph of the document as the court wrote it. */
-const TEXT_ELEMENTS = new Set(["xText", "xTitle", "xName"]);
-
-const sourceParagraphsOf = (root: Element) => {
-  const source: string[] = [];
-  const comparison: string[] = [];
-  const push = (node: AnyNode, text: string): void => {
-    if (text.length > 0) {
-      source.push(text);
-      comparison.push(comparisonTextOf(node).replace(/\s+/gu, " ").trim());
-    }
-  };
-  const walk = (node: AnyNode): void => {
-    if (isTag(node)) {
-      if (TEXT_ELEMENTS.has(node.name)) {
-        // Only the root's own name labels the document rather than its text.
-        push(
-          node,
-          node.parent === root && node.name === "xName"
-            ? ""
-            : textOf(node).replace(/\s+/gu, " ").trim(),
-        );
-        return;
-      }
-      for (const child of node.children) {
-        walk(child);
-      }
-      return;
-    }
-    if (isText(node) || isCDATA(node)) {
-      push(node, textOf(node).replace(/\s+/gu, " ").trim());
-    }
-  };
-  walk(root);
-  return { source, comparison };
-};
-
-/**
- * Check a parsed document against the text the XML states, and log what it
- * lost. The parser checks itself against the HTML it was given; that HTML is
- * rendered here, so only the XML can say whether the rendering kept every
- * sentence.
- */
-export const validatePlNcourtDocument = (
-  subject: ValidationSubject,
-  content: PlNcourtContent,
-  blocks: Block[],
-): ValidationResult => {
-  const seen = new Set<string>();
-  const comparisonParts: string[] = [];
-  for (const [index, source] of content.sourceParagraphs.entries()) {
-    if (seen.has(source)) {
-      continue;
-    }
-    seen.add(source);
-    comparisonParts.push(
-      content.comparisonParagraphs[index] ??
-        panic("Missing pl-ncourt comparison paragraph"),
-    );
-  }
-  return validateAndLog(
-    subject,
-    buildValidationHtml(content.sourceParagraphs.map(escapeHtml)),
-    blocks,
-    { wordComparisonText: comparisonParts.join(" ") },
-  );
 };

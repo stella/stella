@@ -9,33 +9,46 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { ReaderBreadcrumb } from "./reader-breadcrumb";
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";
-import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
 import {
   observeReaderBreadcrumb,
   scrollReaderBreadcrumbToHeading,
 } from "./reader-breadcrumb-scroll";
-import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
+import { readerContents } from "./reader-contents.logic";
+import type {
+  ReaderAnalysisOutline,
+  ReaderTrail,
+} from "./reader-contents.logic";
 
 type LegalReaderBreadcrumbProps = {
   blocks: readonly Block[];
   content: HTMLElement | null;
-  fallback?: ReaderBreadcrumbModel | undefined;
+  analysis?: ReaderAnalysisOutline | undefined;
   viewport: HTMLElement | null;
 };
+
+type ReaderPosition = { anchorId: string; trail: ReaderTrail };
+
+// Before the first row, one stable empty trail keeps the bar's measurement
+// from re-running on every render.
+const NO_TRAIL: ReaderTrail = { type: "document", segments: [] };
 
 export const LegalReaderBreadcrumb = ({
   blocks,
   content,
-  fallback,
+  analysis,
   viewport,
 }: LegalReaderBreadcrumbProps) => {
-  const model = useMemo(() => {
-    const source = readerBreadcrumbPaths(blocks);
-    return source.headings.length === 0 && fallback !== undefined
-      ? fallback
-      : source;
-  }, [blocks, fallback]);
-  const [path, setPath] = useState<readonly ReaderBreadcrumbSegment[]>([]);
+  const headings = useMemo(() => readerBreadcrumbPaths(blocks), [blocks]);
+  const contents = useMemo(
+    () =>
+      readerContents({
+        anchorOrder: blocks.map(({ anchorId }) => anchorId),
+        headings,
+        analysis,
+      }),
+    [blocks, headings, analysis],
+  );
+  const [position, setPosition] = useState<ReaderPosition | null>(null);
   useExternalSyncEffect(() => {
     if (content === null || viewport === null) {
       return undefined;
@@ -43,24 +56,33 @@ export const LegalReaderBreadcrumb = ({
     return observeReaderBreadcrumb({
       content,
       viewport,
-      anchors: model.headings.map(({ anchorId }) => anchorId),
+      anchors: contents.rows.map(({ anchorId }) => anchorId),
       onAnchorChange: (anchorId) => {
         if (anchorId === null) {
-          setPath([]);
+          setPosition(null);
           return;
         }
-        const next = model.paths.get(anchorId);
-        if (next === undefined) {
-          panic("Visible heading has no breadcrumb path");
+        const trail = contents.trails.get(anchorId);
+        if (trail === undefined) {
+          panic("Visible contents row has no breadcrumb trail");
         }
-        setPath(next);
+        // Sections streaming in rebuild the rows but keep each heading's
+        // trail, so the bar and its live region stay as they are.
+        setPosition((previous) =>
+          previous?.anchorId === anchorId &&
+          previous.trail.type === trail.type &&
+          previous.trail.segments === trail.segments
+            ? previous
+            : { anchorId, trail },
+        );
       },
     });
-  }, [content, model, viewport]);
+  }, [content, contents, viewport]);
   return (
     <ReaderBreadcrumb
-      path={path}
-      headings={model.headings}
+      activeAnchorId={position?.anchorId ?? null}
+      trail={position?.trail ?? NO_TRAIL}
+      rows={contents.rows}
       onJump={(anchorId) => {
         if (content === null || viewport === null) {
           return;

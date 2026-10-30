@@ -1,14 +1,53 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
+import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
+import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import {
   approveTimeEntries,
-  returnTimeEntry,
-  sendTimeEntryMutation,
+  batchDeleteTimeEntries,
+  batchUpdateTimeEntries,
+  createTimeEntry,
+  decideTimeSuggestion,
+  deleteTimeEntry,
+  returnTimeEntries,
+  splitTimeEntry,
+  updateTimeEntry,
 } from "@/lib/workspaces/time-entries-api";
+
+// A review decision changes the matters' time and what they can invoice, and
+// every approver's queue. A batch the API refused entirely changed nothing.
+const refreshReviewedTime = async (
+  queryClient: QueryClient,
+  workspaceIds: readonly string[],
+  batch: { results: readonly { status: string }[] },
+) => {
+  if (batch.results.every(({ status }) => status === "refused")) {
+    return;
+  }
+  await Promise.all([
+    ...[...new Set(workspaceIds)].flatMap((workspaceId) => [
+      queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      }),
+    ]),
+    queryClient.invalidateQueries({ queryKey: timeApprovalsKeys.root }),
+    // A reviewed entry can be the reviewer's own, shown in their week.
+    queryClient.invalidateQueries({ queryKey: myTimeEntriesKeys.root() }),
+  ]);
+};
 
 /**
  * Approves a selection in one call. The API answers per entry, so a refusal
@@ -22,55 +61,49 @@ export const useApproveTimeEntries = () => {
     mutationFn: async ({
       ids,
     }: {
-      workspaceId: string;
+      /** The matters the entries belong to, whose time and invoices refresh. */
+      workspaceIds: readonly string[];
       ids: readonly string[];
     }) => await approveTimeEntries(ids),
-    onSuccess: async (_result, { workspaceId }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: timeEntriesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: invoicesKeys.all(workspaceId),
-        }),
-      ]);
+    onSuccess: async (batch, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds, batch);
     },
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useApproveTimeEntries:failure",
         scope: { type: "handler", handlerId: "useApproveTimeEntries:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
 
-export const useReturnTimeEntry = () => {
+/**
+ * Returns a selection to draft with one comment in one call. Like approval,
+ * a refusal comes back per entry, not as a failed request.
+ */
+export const useReturnTimeEntries = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      id,
+      ids,
       comment,
     }: {
-      workspaceId: string;
-      id: string;
+      /** The matters the entries belong to, whose time and invoices refresh. */
+      workspaceIds: readonly string[];
+      ids: readonly string[];
       comment: string;
-    }) => await returnTimeEntry({ id, comment }),
-    onSuccess: async (_result, { workspaceId }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: timeEntriesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: invoicesKeys.all(workspaceId),
-        }),
-      ]);
+    }) => await returnTimeEntries({ ids, comment }),
+    onSuccess: async (batch, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds, batch);
     },
     onError: (error) => {
       analytics.captureError(error, {
-        fingerprintKey: "useReturnTimeEntry:failure",
-        scope: { type: "handler", handlerId: "useReturnTimeEntry:failure" },
+        fingerprintKey: "useReturnTimeEntries:failure",
+        scope: { type: "handler", handlerId: "useReturnTimeEntries:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -97,16 +130,9 @@ export const useCreateTimeEntry = () => {
       workItemId,
       ...body
     }: CreateTimeEntryVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "create",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...body,
-            ...(workItemId && { workItemId }),
-          },
-        },
+      await createTimeEntry(workspaceId, {
+        ...body,
+        ...(workItemId && { workItemId }),
       });
     },
     onError: (error) => {
@@ -114,6 +140,7 @@ export const useCreateTimeEntry = () => {
         fingerprintKey: "useCreateTimeEntry:failure",
         scope: { type: "handler", handlerId: "useCreateTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -121,6 +148,8 @@ export const useCreateTimeEntry = () => {
 type UpdateTimeEntryVars = {
   workspaceId: string;
   id: string;
+  /** Another matter a draft moves to; the API re-prices it there. */
+  moveTo?: string;
 } & NonEmptyPatch<{
   dateWorked: string;
   timezoneId: string;
@@ -140,18 +169,12 @@ export const useUpdateTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
-      const { id, workItemId, ...restBody } = body;
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "update",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...restBody,
-            id,
-            ...(workItemId !== undefined && { workItemId }),
-          },
-        },
+      const { id, workItemId, moveTo, ...restBody } = body;
+      await updateTimeEntry(workspaceId, {
+        ...restBody,
+        id,
+        ...(workItemId !== undefined && { workItemId }),
+        ...(moveTo !== undefined && { moveToWorkspaceId: moveTo }),
       });
     },
     onError: (error) => {
@@ -159,6 +182,7 @@ export const useUpdateTimeEntry = () => {
         fingerprintKey: "useUpdateTimeEntry:failure",
         scope: { type: "handler", handlerId: "useUpdateTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -169,7 +193,7 @@ type TimeSuggestionDecision =
       durationMinutes: number;
       narrative: string;
       narrativeLanguage?: string | null;
-      billable: boolean;
+      billable?: boolean;
     }
   | { type: "dismiss" };
 
@@ -187,13 +211,7 @@ export const useDecideTimeSuggestion = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: DecideTimeSuggestionVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "suggestion_decision",
-          body: { queryKey: timeEntriesKeys.all(workspaceId), ...body },
-        },
-      });
+      await decideTimeSuggestion(workspaceId, body);
     },
     onSuccess: async (_result, { workspaceId }) => {
       // Accept creates an entry and both decisions retire a suggestion, so the
@@ -210,6 +228,7 @@ export const useDecideTimeSuggestion = () => {
           handlerId: "useDecideTimeSuggestion:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -224,19 +243,14 @@ export const useDeleteTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteTimeEntryVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "delete",
-          body: { queryKey: timeEntriesKeys.all(workspaceId), id },
-        },
-      });
+      await deleteTimeEntry(workspaceId, id);
     },
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDeleteTimeEntry:failure",
         scope: { type: "handler", handlerId: "useDeleteTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -252,16 +266,7 @@ export const useBatchUpdateTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "batch_update",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...body,
-          },
-        },
-      });
+      await batchUpdateTimeEntries(workspaceId, body);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -271,6 +276,7 @@ export const useBatchUpdateTimeEntries = () => {
           handlerId: "useBatchUpdateTimeEntries:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -285,13 +291,7 @@ export const useBatchDeleteTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "batch_delete",
-          body: { queryKey: timeEntriesKeys.all(workspaceId), ids },
-        },
-      });
+      await batchDeleteTimeEntries(workspaceId, ids);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -301,6 +301,7 @@ export const useBatchDeleteTimeEntries = () => {
           handlerId: "useBatchDeleteTimeEntries:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -316,22 +317,14 @@ export const useSplitTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "split",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...body,
-          },
-        },
-      });
+      await splitTimeEntry(workspaceId, body);
     },
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useSplitTimeEntry:failure",
         scope: { type: "handler", handlerId: "useSplitTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

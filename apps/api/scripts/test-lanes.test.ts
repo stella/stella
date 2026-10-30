@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -13,6 +13,11 @@ import {
   orderBatchesForLanes,
   runInLanes,
 } from "./test-lanes";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const GIB = 1024 * 1024 * 1024;
 

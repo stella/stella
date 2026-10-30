@@ -1,21 +1,39 @@
 import { panic } from "better-result";
 
 import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
-import type { WorkspaceFieldContent } from "@/lib/types";
+import type { WorkspaceField } from "@/lib/types";
 
 export type AiCellState =
   | { type: "not_run" }
   | { type: "queued" }
   | { type: "running" }
   | { type: "done" }
+  | { type: "not_stated" }
   | { type: "failed" }
+  | { type: "refused"; reason: "modelRefusal" }
   | { type: "refused_budget" };
 
 export const propertyAiCellState = (
-  content: WorkspaceFieldContent | undefined,
+  field: Pick<WorkspaceField, "aiSettlement" | "content"> | undefined,
 ): AiCellState => {
-  if (content === undefined) {
+  if (field === undefined) {
     return { type: "not_run" };
+  }
+  const { aiSettlement, content } = field;
+  if (aiSettlement !== null && aiSettlement !== undefined) {
+    switch (aiSettlement.type) {
+      case "value":
+        return { type: "done" };
+      case "notStated":
+        return { type: "not_stated" };
+      case "refused":
+        return { type: "refused", reason: aiSettlement.reason };
+      case "failed":
+        return { type: "failed" };
+      default:
+        aiSettlement satisfies never;
+        return panic("Unhandled AI cell settlement");
+    }
   }
   switch (content.type) {
     case "pending":
@@ -62,6 +80,7 @@ export const questionAiCellState = ({
   switch (answer.state) {
     case "pending":
       return { type: "running" };
+    case "withdrawn":
     case "answered":
     case "not_stated":
       return { type: "done" };

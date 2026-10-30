@@ -4,7 +4,8 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Returns whether the active member's role grants the requested
@@ -13,7 +14,7 @@ import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
  * the role cache hydrates.
  */
 export const usePermissions = (permissions: PermissionInput): boolean => {
-  const roleView = useQueryView(useQuery(roleOptions));
+  const roleView = queryView(useQuery(roleOptions));
   useQueryViewError(roleView, "usePermissions:query");
 
   if (roleView.type !== "items" || roleView.refetchError !== undefined) {

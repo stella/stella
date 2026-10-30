@@ -34,14 +34,15 @@ import { PinProperty } from "@/components/workspaces/properties/pin-property";
 import { PropertyConditions } from "@/components/workspaces/properties/property-conditions";
 import { PropertyPopoverTrigger } from "@/components/workspaces/properties/shared";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
-import { toSortHint } from "@/components/workspaces/property-utils";
+import { ALL_SORT_DIRECTIONS_AVAILABLE } from "@/components/workspaces/properties/sort-property.logic";
+import { PROPERTY_SORT_KINDS } from "@/components/workspaces/property-utils";
 import type { TableHeader } from "@/components/workspaces/table/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
@@ -111,7 +112,7 @@ export const PropertyPopover = ({
     availablePageRowIdSet.has(row.original.entityId),
   );
   const pageStates = pageRows.map((row) =>
-    propertyAiCellState(row.original.fields[id]?.content),
+    propertyAiCellState(row.original.fields[id]),
   );
   const runMenuItems = aiColumnRunMenu(pageStates);
   const selectedRowIds = Object.keys(rowSelection);
@@ -126,7 +127,7 @@ export const PropertyPopover = ({
   );
   const scopedStates = tableRows
     .filter((row) => availableScopeRowIds.has(row.original.entityId))
-    .map((row) => propertyAiCellState(row.original.fields[id]?.content));
+    .map((row) => propertyAiCellState(row.original.fields[id]));
   const headerRunAction = aiColumnRunMenu(scopedStates).at(0);
   const headerRunTargetIds =
     headerRunAction === undefined
@@ -336,7 +337,7 @@ export const PropertyPopover = ({
       case "ai-unavailable":
         // Running a column is an explicit request, so say why nothing
         // happened; the side-effect call sites stay quiet on this one.
-        notifyUserError(undefined, t("errors.failedToStartWorkflow"));
+        notifyUserProblem(t("errors.failedToStartWorkflow"));
         return;
       case "failed":
         // Already reported by `useStartWorkflow`, error included.
@@ -410,7 +411,8 @@ export const PropertyPopover = ({
             )}
             <SortProperty
               column={header.column}
-              sortHint={toSortHint(property.content.type)}
+              directions={ALL_SORT_DIRECTIONS_AVAILABLE}
+              kind={PROPERTY_SORT_KINDS[property.content.type]}
             />
             <Separator />
             <div className="flex flex-col p-1">

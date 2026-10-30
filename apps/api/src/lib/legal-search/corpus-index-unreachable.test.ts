@@ -325,6 +325,7 @@ describe("a scan answers an unavailable index with the typed refusal", () => {
       isSearchIndexUnavailable(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Search is temporarily unavailable",
         }),
       ),

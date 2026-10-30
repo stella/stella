@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { beforeAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
@@ -35,6 +43,11 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

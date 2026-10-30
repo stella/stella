@@ -243,6 +243,97 @@ const finiteUppercaseValues = (
   return values;
 };
 
+// Shared read queries may be embedded in a complete gated statement. Only
+// immutable module bindings resolve; their entire text still enters the DDL census.
+const uniqueModuleConstant = (name: string, context: SourceContext) => {
+  const bindings = context.nodes.filter((node) => {
+    if (!ts.isIdentifier(node) || node.text !== name) {
+      return false;
+    }
+    const { parent } = node;
+    return (
+      (ts.isVariableDeclaration(parent) ||
+        ts.isParameter(parent) ||
+        ts.isBindingElement(parent) ||
+        ts.isFunctionDeclaration(parent) ||
+        ts.isFunctionExpression(parent) ||
+        ts.isClassDeclaration(parent) ||
+        ts.isClassExpression(parent) ||
+        ts.isImportClause(parent) ||
+        ts.isImportSpecifier(parent) ||
+        ts.isNamespaceImport(parent) ||
+        ts.isImportEqualsDeclaration(parent) ||
+        ts.isEnumDeclaration(parent) ||
+        ts.isModuleDeclaration(parent)) &&
+      parent.name === node
+    );
+  });
+  const binding = bindings.at(0);
+  if (
+    bindings.length !== 1 ||
+    binding === undefined ||
+    !ts.isVariableDeclaration(binding.parent)
+  ) {
+    return undefined;
+  }
+  const declaration = binding.parent;
+  const list = declaration.parent;
+  if (
+    !ts.isVariableDeclarationList(list) ||
+    list.getFirstToken(context.source)?.kind !== ts.SyntaxKind.ConstKeyword ||
+    !ts.isVariableStatement(list.parent) ||
+    !ts.isSourceFile(list.parent.parent)
+  ) {
+    return undefined;
+  }
+  return declaration.initializer;
+};
+
+const readQueryConstant = (name: string, context: SourceContext) => {
+  const value = uniqueModuleConstant(name, context);
+  if (
+    value === undefined ||
+    (!ts.isStringLiteralLike(value) && !ts.isTemplateExpression(value))
+  ) {
+    return undefined;
+  }
+  const prefix = ts.isTemplateExpression(value) ? value.head.text : value.text;
+  return /^\s*(?:SELECT|WITH)\b/iu.test(prefix) ? value : undefined;
+};
+
+const provesQuotedLiteral = (context: SourceContext): boolean => {
+  const helper = uniqueModuleConstant("quoteLiteral", context);
+  if (
+    helper === undefined ||
+    !ts.isArrowFunction(helper) ||
+    helper.parameters.length !== 1
+  ) {
+    return false;
+  }
+  const parameter = helper.parameters.at(0);
+  return (
+    parameter !== undefined &&
+    ts.isIdentifier(parameter.name) &&
+    parameter.name.text === "value" &&
+    sameSyntax(helper.body, `\`'\${value.replaceAll("'", "''")}'\``)
+  );
+};
+
+const isQuotedSqlData = (
+  node: ts.Expression,
+  context: SourceContext,
+): boolean => {
+  const call = node.parent;
+  return (
+    ts.isCallExpression(call) &&
+    ts.isIdentifier(call.expression) &&
+    call.expression.text === "quoteLiteral" &&
+    call.arguments.length === 1 &&
+    call.arguments.at(0) === node &&
+    provesQuotedLiteral(context)
+  );
+};
+
 // Policy DDL already uses ACCESS EXCLUSIVE. Its expression placeholders must
 // never turn into an exception for unresolved ALTER TABLE actions elsewhere.
 const isPolicyExpressionSplice = (
@@ -283,6 +374,12 @@ const expandTemplateInterpolation = (
       return variants;
     }
   }
+  if (ts.isIdentifier(expression) && !visiting.has(expression.text)) {
+    const query = readQueryConstant(expression.text, context);
+    if (query !== undefined) {
+      return expand(query, context, new Set([...visiting, expression.text]));
+    }
+  }
   const finite = finiteUppercaseValues(expression, context);
   if (finite) {
     return finite;
@@ -300,12 +397,10 @@ const expandTemplateInterpolation = (
     ) {
       return [{ text: "TRUE", resolved: true }];
     }
-    const literal = ownerArrow(context, "quoteLiteral");
     if (
       name === "quoteLiteral" &&
       expression.arguments.length === 1 &&
-      literal &&
-      sameSyntax(literal.body, `\`'\${value.replaceAll("'", "''")}'\``)
+      provesQuotedLiteral(context)
     ) {
       return [{ text: "'online_ddl_literal'", resolved: true }];
     }
@@ -765,7 +860,11 @@ const checkSql = ({
   for (const variant of variants) {
     const line =
       source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-    const statements = parseMigrationStatements(variant);
+    // censusSql recursively classifies each complete DO/routine body. Its
+    // surfaced statements are not independent top-level SQL commands.
+    const statements = parseMigrationStatements(variant).filter(
+      ({ enclosingLine }) => enclosingLine === undefined,
+    );
     if (statements.length === 0) {
       errors.push(`${description} at line ${line} has an empty SQL variant`);
       continue;
@@ -1121,7 +1220,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
   }
 
   for (const { node } of sqlNodes) {
-    if (checked.has(node)) {
+    if (checked.has(node) || isQuotedSqlData(node, context)) {
       continue;
     }
     for (const variant of expand(node, context)) {

@@ -1,12 +1,9 @@
 import { Button } from "@stll/ui/button";
-import {
-  ArrowDownIcon,
-  ArrowUpDownIcon,
-  ArrowUpIcon,
-  XIcon,
-} from "@stll/ui/icons";
+import { ArrowUpDownIcon, XIcon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
+import { sortDirectionOf } from "./column-sort";
+import type { ColumnSortKind, SortDirectionLabels } from "./column-sort";
 import { PropertyIcon } from "./property-icon";
 import type { PropertyIconType } from "./property-icon";
 
@@ -21,6 +18,8 @@ export type SortableProperty = {
   id: string;
   name: string;
   type: PropertyIconType;
+  /** What the property orders by, which decides what its chip calls each direction. */
+  sortKind: ColumnSortKind;
 };
 
 export type SortChipsLabels = {
@@ -28,6 +27,8 @@ export type SortChipsLabels = {
   add: string;
   /** Accessible name of a chip's remove button. */
   remove: string;
+  /** What a chip calls its direction, per kind: the header menu's wording. */
+  directions: SortDirectionLabels;
 };
 
 export type SortChipsProps = {
@@ -89,7 +90,7 @@ export const SortChips = ({
             );
           }}
           propertyName={property.name}
-          propertyType={property.type}
+          sortKind={property.sortKind}
         />
       );
     })}
@@ -103,39 +104,9 @@ export const SortChips = ({
   </>
 );
 
-/**
- * What ascending means depends on what is being sorted: A→Z for words, 1→9 for
- * numbers, an arrow for dates. A type with no idiom falls back to the arrow
- * icon, which is why this returns null rather than a default string.
- */
-export const sortDirectionHint = (
-  propertyType: string | undefined,
-  desc: boolean,
-): string | null => {
-  if (!propertyType) {
-    return null;
-  }
-
-  switch (propertyType) {
-    case "text":
-    case "single-select":
-    case "multi-select":
-    case "file":
-    case "person":
-      return desc ? "Z→A" : "A→Z";
-    case "int":
-    case "money":
-      return desc ? "9→1" : "1→9";
-    case "date":
-      return desc ? "↓" : "↑";
-    default:
-      return null;
-  }
-};
-
 type SortChipProps = {
   propertyName: string;
-  propertyType?: string | undefined;
+  sortKind: ColumnSortKind;
   desc: boolean;
   onToggle: () => void;
   onRemove: () => void;
@@ -144,33 +115,29 @@ type SortChipProps = {
 
 const SortChip = ({
   propertyName,
-  propertyType,
+  sortKind,
   desc,
   onToggle,
   onRemove,
   labels,
-}: SortChipProps) => {
-  const SortIcon = desc ? ArrowDownIcon : ArrowUpIcon;
-  const hint = sortDirectionHint(propertyType, desc);
-
-  return (
-    <div className="bg-muted/50 flex items-center rounded-md border">
-      <Button onClick={onToggle} size="xs" variant="ghost">
-        {!hint && <SortIcon />}
-        {propertyName}
-        {hint && <span className="text-muted-foreground">{hint}</span>}
-      </Button>
-      <Button
-        aria-label={labels.remove}
-        onClick={onRemove}
-        size="icon-xs"
-        variant="ghost"
-      >
-        <XIcon />
-      </Button>
-    </div>
-  );
-};
+}: SortChipProps) => (
+  <div className="bg-muted/50 flex items-center rounded-md border">
+    <Button onClick={onToggle} size="xs" variant="ghost">
+      {propertyName}
+      <span className="text-muted-foreground">
+        {labels.directions[sortKind][sortDirectionOf(desc)]}
+      </span>
+    </Button>
+    <Button
+      aria-label={labels.remove}
+      onClick={onRemove}
+      size="icon-xs"
+      variant="ghost"
+    >
+      <XIcon />
+    </Button>
+  </div>
+);
 
 type AddSortButtonProps = {
   properties: readonly SortableProperty[];

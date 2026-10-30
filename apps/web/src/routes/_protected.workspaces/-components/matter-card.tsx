@@ -27,8 +27,8 @@ import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { useQueryView } from "@/lib/use-query-view";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 import { toMatterCardDragData } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
@@ -70,7 +70,7 @@ export const MatterCard = ({
     ...overviewOptions(workspace.id),
     enabled: previewEnabled,
   });
-  const previewView = useQueryView(previewQuery);
+  const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
 
   const hasPreviewContent =

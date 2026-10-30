@@ -18,8 +18,9 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import { answerRevisionHistoryOptions } from "./answer-edit-queries";
 
@@ -85,7 +86,7 @@ export const AnswerRevisionHistoryContent = ({
     }),
     enabled,
   });
-  const view = useQueryView(query);
+  const view = queryView(query);
   useQueryViewError(view, "AnswerRevisionHistory:query");
   const writeBlocked = !(
     writeState.status === "idle" ||

@@ -186,6 +186,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Now carries invoice create/delete/transition capabilities, not just the
   // read tool, so it reuses the billing write bucket.
   invoices: "stella:billing_write",
+  "client-invoices": "stella:billing_write",
   // A reader's highlights and comments: personal knowledge, like clauses.
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
@@ -443,6 +444,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   "case-law": "FEATURE_PUBLIC_LAW",
   expenses: "FEATURE_TIME_BILLING",
   invoices: "FEATURE_TIME_BILLING",
+  "client-invoices": "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
   memories: "FEATURE_AI_MEMORY",

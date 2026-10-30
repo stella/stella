@@ -3,6 +3,7 @@ import {
   type Comment,
   type EcmaScriptModule,
   type Node,
+  type ObjectProperty,
   parseSync,
   type Program,
   visitorKeys,
@@ -32,6 +33,36 @@ export type ParsedSource = {
   readonly locate: (offset: number) => SourceLocation;
 };
 
+/**
+ * oxc tags object literal entries and destructuring entries alike as
+ * `Property`; only an entry of an object literal is an `ObjectProperty`, whose
+ * value is an expression rather than a binding pattern.
+ */
+export const isObjectLiteralProperty = (
+  node: Node,
+  parent: Node | undefined,
+): node is ObjectProperty =>
+  node.type === "Property" &&
+  parent?.type === "ObjectExpression" &&
+  parent.properties.some((property) => property === node);
+
+/** Computed identifiers are expressions, while uncomputed identifiers name keys. */
+export const staticPropertyName = ({
+  computed,
+  key,
+}: Pick<ObjectProperty, "computed" | "key">): string | undefined => {
+  if (!computed && key.type === "Identifier") {
+    return key.name;
+  }
+  if (key.type === "Literal" && typeof key.value === "string") {
+    return key.value;
+  }
+  if (key.type === "TemplateLiteral" && key.expressions.length === 0) {
+    return key.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+
 const isNode = (value: unknown): value is Node =>
   typeof value === "object" &&
   value !== null &&
@@ -49,7 +80,8 @@ export const walk = (
   visit: (
     node: Node,
     ancestors: readonly Node[],
-  ) => "skip-children" | undefined,
+    // Any other return value, including none, visits the children.
+  ) => unknown,
 ): void => {
   const ancestors: Node[] = [];
   const enter = (node: Node): void => {

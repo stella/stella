@@ -27,6 +27,7 @@ import {
   plUodoFixture,
   plUokikFixture,
   skUsFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 type SupportedDriver = {
@@ -35,6 +36,7 @@ type SupportedDriver = {
   part: string;
   file?: string;
   text?: string;
+  textRoot?: string;
 };
 type Driver = SupportedDriver | { driver: "unsupported"; reason: string };
 const DRIVERS = {
@@ -121,6 +123,13 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     fixture: euEcjFixture,
     part: "document",
     file: "eu-ecj-fulltext-en.html",
+  },
+  "uk-fcl": {
+    driver: "xml",
+    fixture: ukFclFixture,
+    textRoot: "header, judgmentBody",
+    part: "document",
+    file: "../parsers/__fixtures__/uk-fcl.xml",
   },
   "hu-bhgy": {
     driver: "unsupported",
@@ -464,12 +473,20 @@ for (const adapter of replayAdapters) {
     const misses: string[] = [];
     for (const [slotIndex, slot] of slots.entries()) {
       const $ = cheerio.load(slot.text, { xml: driver.driver === "xml" });
+      const roots =
+        driver.textRoot === undefined
+          ? $("*")
+          : $(driver.textRoot).find("*").add($(driver.textRoot));
+      expect(
+        roots.length,
+        "The declared text surface must exist",
+      ).toBeGreaterThan(0);
       const containers =
         driver.driver === "json-text"
           ? ["text"]
           : [
               ...new Set(
-                $("*")
+                roots
                   .toArray()
                   .flatMap((node) =>
                     isTag(node) && node.children.length > 0 ? [node.name] : [],
@@ -486,7 +503,11 @@ for (const adapter of replayAdapters) {
         let mutated = `${first} ${slot.text} ${last} ${bare}`;
         if (driver.driver !== "json-text") {
           const dom = cheerio.load(slot.text, { xml: driver.driver === "xml" });
-          const target = dom("*")
+          const candidates =
+            driver.textRoot === undefined
+              ? dom("*")
+              : dom(driver.textRoot).find("*").add(dom(driver.textRoot));
+          const target = candidates
             .filter((_, node) => isTag(node) && node.name === kind)
             .first();
           target.prepend(`<zzprobe>${first}</zzprobe>${bare}`);

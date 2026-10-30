@@ -1,6 +1,6 @@
 {
   "name": "@stll/fetch",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Fetch with a mandatory timeout (headers or idle body window), connection-failure classification, and a robots-aware polite publisher fetch",
   "keywords": [
     "abort",

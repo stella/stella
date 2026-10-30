@@ -83,12 +83,9 @@ const mcpMemberCaller = async (
     organizationId: context.organizationId,
     userId: context.userId,
   };
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+  const orgSettings = await (context.testDependencies?.loadOrgSettingsForAuth?.(
+    reader,
+  ) ??
     operationDatabaseScope.scopedDb(
       async (tx) => await loadOrgSettingsForAuth(tx, reader),
     ));
@@ -121,10 +118,7 @@ const mcpMemberCaller = async (
     // The credential's attenuation travels with the role, so every check the
     // handler makes spends only what this credential was granted.
     memberRole: mcpMemberAuthority(context),
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
+    ...orgSettings,
     recordAuditEvent: context.recordAuditEvent,
     createAuditRecorder: recorderFactory(context, request, null),
   };
@@ -140,7 +134,7 @@ export const capabilityHandlerContext = async ({
   capabilityId,
   context,
   input,
-  request,
+  request: rpcRequest,
   workspaceId,
 }: {
   capabilityId: string;
@@ -149,6 +143,14 @@ export const capabilityHandlerContext = async ({
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<CapabilityHandlerContext> => {
+  const headers = new Headers(rpcRequest.headers);
+  headers.delete("Idempotency-Key");
+  // The RPC body is already decoded; its transport key does not identify a capability call.
+  const request = new Request(rpcRequest.url, {
+    method: rpcRequest.method,
+    headers,
+    signal: rpcRequest.signal,
+  });
   const member = await mcpMemberCaller(context, request);
   if (
     workspaceId !== undefined &&

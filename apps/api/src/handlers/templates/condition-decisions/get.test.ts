@@ -45,7 +45,7 @@ const previewFixture = ({
   refusal,
 }: {
   manifestFields?: typeof fields;
-  refusal?: "busy" | "unavailable";
+  refusal?: "busy" | "store_unavailable";
 } = {}) => {
   const { scopedDb, safeDb } = createScopedDbMock({
     query: {
@@ -150,7 +150,7 @@ describe("condition preview conditional AI gates", () => {
 
   test.each([
     { reason: "busy", status: 429 },
-    { reason: "unavailable", status: 503 },
+    { reason: "store_unavailable", status: 503 },
   ] as const)(
     "open conditions preserve admission $status",
     async ({ reason, status }) => {
@@ -162,7 +162,7 @@ describe("condition preview conditional AI gates", () => {
           code:
             reason === "busy"
               ? "action_concurrency_busy"
-              : "action_admission_unavailable",
+              : "limiter_store_unavailable",
         },
       });
       expect(fixture.authorizeUsage).toHaveBeenCalledTimes(1);

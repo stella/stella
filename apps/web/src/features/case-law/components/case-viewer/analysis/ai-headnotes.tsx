@@ -12,12 +12,10 @@ import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 
+import { CitationChip } from "@/components/references/citation-chip";
 import { useFormatter } from "@/i18n/formatting-context";
 
-import {
-  ParagraphReference,
-  useUnresolvedCitationTelemetry,
-} from "../paragraph-reference";
+import { useUnresolvedCitationTelemetry } from "../paragraph-citation-telemetry";
 import { resolveParagraphReference } from "../paragraph-reference.logic";
 
 /** Every block here was written by a model, and says so on each block. */
@@ -72,7 +70,7 @@ export const AiHeadnotes = ({
           label={t("caseLaw.viewer.legalSentence")}
           origin={AI_ORIGIN}
         >
-          <p className="reader-justify">
+          <p className="reader-prose">
             <BidiText as="span" lang={holding.language}>
               <CitedSpans
                 blocks={blocks}
@@ -95,7 +93,7 @@ export const AiHeadnotes = ({
         >
           <BidiText
             as="p"
-            className="reader-justify text-foreground-strong-muted"
+            className="reader-prose text-foreground-strong-muted"
             lang={abstract.language}
           >
             <CitedSpans
@@ -160,7 +158,8 @@ function CitedSpans({
           .map((anchor) => (
             <Fragment key={`${anchor.startAnchorId}-${anchor.endAnchorId}`}>
               {" "}
-              <ParagraphReference
+              <CitationChip
+                kind="paragraph"
                 language={language}
                 onAnchorClick={onAnchorClick}
                 reference={anchor}

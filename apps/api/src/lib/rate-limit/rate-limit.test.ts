@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { createHttpApp } from "@/api/http/app";
 import { toResponse } from "@/api/http/respond";
 import { mount, routes } from "@/api/http/route";
@@ -39,6 +41,7 @@ import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { consumeSignupOtpRateLimit } from "@/api/lib/signup-abuse";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
@@ -705,17 +708,31 @@ describe("RedisRateLimitContext", () => {
       });
       context.init(RATE_LIMIT_OPTIONS);
 
-      const counter = await context.increment("api:client", WINDOW_MS, 1000);
-
-      expect(counter.count).toBe(
-        failurePolicy === "fail_open_local" ? 1 : Number.MAX_SAFE_INTEGER,
+      const increment = context.increment("api:client", WINDOW_MS, 1000);
+      if (failurePolicy === "fail_open_local") {
+        expect((await increment).count).toBe(1);
+      } else {
+        expect(await rejectionOf(increment)).toBeInstanceOf(
+          LimiterStoreUnavailableError,
+        );
+      }
+      expect(operations).toEqual(
+        failurePolicy === "fail_open_local" ? ["increment"] : [],
       );
-      expect(operations).toEqual(["increment"]);
       expect(clientCreations).toBe(1);
-      await context.increment("api:client", WINDOW_MS, 1000);
+      const nextIncrement = context.increment("api:client", WINDOW_MS, 1000);
+      if (failurePolicy === "fail_open_local") {
+        expect((await nextIncrement).count).toBe(2);
+      } else {
+        expect(await rejectionOf(nextIncrement)).toBeInstanceOf(
+          LimiterStoreUnavailableError,
+        );
+      }
       expect(clientCreations).toBe(1);
       expect(sendCalls).toBe(1);
-      expect(operations).toEqual(["increment", "increment"]);
+      expect(operations).toEqual(
+        failurePolicy === "fail_open_local" ? ["increment", "increment"] : [],
+      );
 
       context.kill();
     });
@@ -992,7 +1009,7 @@ describe("RedisRateLimitContext", () => {
     context.kill();
   });
 
-  test("can fail closed with normal rate-limit counter semantics", async () => {
+  test("reports an unavailable store without inventing an exhausted window", async () => {
     const context = new RedisRateLimitContext({
       createRedis: () => ({
         send: async () => {
@@ -1004,14 +1021,9 @@ describe("RedisRateLimitContext", () => {
     });
     context.init(RATE_LIMIT_OPTIONS);
 
-    const counter = await context.increment(
-      "translate:client",
-      WINDOW_MS,
-      1000,
-    );
-
-    expect(counter.count).toBe(Number.MAX_SAFE_INTEGER);
-    expect(counter.nextReset).toEqual(new Date(2000));
+    expect(
+      await rejectionOf(context.increment("translate:client", WINDOW_MS, 1000)),
+    ).toBeInstanceOf(LimiterStoreUnavailableError);
     context.kill();
   });
 

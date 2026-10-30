@@ -67,7 +67,7 @@ import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   draggable,
@@ -1620,7 +1620,7 @@ export const FilesystemRow = ({
                   { count: folderStatistics.fileCount },
                 )}
               </span>
-              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100">
+              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100">
                 <span aria-hidden="true">·</span>
                 <span>{formattedFolderSize}</span>
               </span>
@@ -1831,7 +1831,7 @@ const formatDateValue = (
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   if (column.type === "metadata") {
     switch (column.id) {
       case FILESYSTEM_CREATED_BY_ID:

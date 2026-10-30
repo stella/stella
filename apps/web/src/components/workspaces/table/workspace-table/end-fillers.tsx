@@ -9,12 +9,14 @@ import type {
 } from "@/components/workspaces/table/types";
 import {
   WorkspaceGridCell,
+  WorkspaceGridFillerCell,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
 import {
   getEndFillerGridColumn,
   getGridPinningStyles,
+  getWorkspaceGridColumnMetadata,
   isPinnedBoundaryColumn,
   tableEndFillerCellStyle,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
@@ -72,37 +74,54 @@ export const TableEndFiller = <TRow extends TableRowData>({
 );
 
 type RowEndFillerCellProps<TRow extends TableRowData> = EndFillerInput<TRow> & {
+  actions?: React.ReactNode;
   selected: boolean;
 };
 
 export const RowEndFillerCell = <TRow extends TableRowData>({
   renderColumns,
   addPropertyColumn,
+  actions: fallbackActions,
   selected,
-}: RowEndFillerCellProps<TRow>) => (
-  <WorkspaceGridCell
-    aria-hidden="true"
-    className={cn("p-0", addPropertyColumn && "border-e-0")}
-    data-state={selected ? "selected" : undefined}
-    role="presentation"
-    style={{
-      gridColumn: getEndFillerGridColumn({
-        renderColumns,
-        addPropertyColumn,
-      }),
-    }}
-  />
-);
+}: RowEndFillerCellProps<TRow>) => {
+  const { actionsColumnIndex } = getWorkspaceGridColumnMetadata({
+    renderColumns,
+    addPropertyColumn,
+  });
+  const actions =
+    actionsColumnIndex === undefined ? undefined : fallbackActions;
+  const Cell =
+    actions === undefined ? WorkspaceGridFillerCell : WorkspaceGridCell;
+  return (
+    <Cell
+      aria-colindex={actions === undefined ? undefined : actionsColumnIndex}
+      aria-hidden={actions === undefined ? true : undefined}
+      className={cn(
+        "flex items-center justify-end p-0",
+        addPropertyColumn && "border-e-0",
+      )}
+      data-state={selected ? "selected" : undefined}
+      style={{
+        gridColumn: getEndFillerGridColumn({
+          renderColumns,
+          addPropertyColumn,
+        }),
+      }}
+    >
+      {actions}
+    </Cell>
+  );
+};
 
 type AddPropertyCellProps<TRow extends TableRowData> = {
   cell: TableCell<TRow> | undefined;
-  columnIndex: number;
+  renderColumns: TableColumn<TRow>[];
   selected: boolean;
 };
 
 export const AddPropertyCell = <TRow extends TableRowData>({
   cell,
-  columnIndex,
+  renderColumns,
   selected,
 }: AddPropertyCellProps<TRow>) => {
   if (!cell) {
@@ -111,7 +130,12 @@ export const AddPropertyCell = <TRow extends TableRowData>({
 
   return (
     <WorkspaceGridCell
-      aria-colindex={columnIndex}
+      aria-colindex={
+        getWorkspaceGridColumnMetadata({
+          renderColumns,
+          addPropertyColumn: cell.column,
+        }).addPropertyColumnIndex
+      }
       className="border-s-2 border-e-2 p-0"
       data-add-property-surface
       data-state={selected ? "selected" : undefined}
