@@ -455,8 +455,8 @@ export const risTextFidelity = (
  * are; the shorter length if one extends the other.
  */
 const firstDifference = (left: string, right: string): number => {
-  const leftPoints = [...left];
-  const rightPoints = [...right];
+  const leftPoints = Array.from(left);
+  const rightPoints = Array.from(right);
   const length = Math.min(leftPoints.length, rightPoints.length);
   for (let index = 0; index < length; index += 1) {
     if (leftPoints[index] !== rightPoints[index]) {
