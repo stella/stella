@@ -13,7 +13,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { CONDITION_RESERVED_WORDS } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -104,13 +104,14 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
       .stringMatching(IDENT_UNDERSCORE_RE)
       .filter((s) => s.length > 0 && HAS_LETTER_RE.test(s));
 
-    fc.assert(
+    assertProperty(
+      "identifiers with underscores and letters resolve as paths, not numbers",
       fc.property(identifiersWithUnderscores, (ident) => {
         const data = { [ident]: "found" };
         const result = resolvePath(ident, data);
         expect(result).toBe("found");
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -119,14 +120,15 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
       .integer({ min: 1, max: 10 })
       .map((n) => "_".repeat(n));
 
-    fc.assert(
+    assertProperty(
+      "underscore-only strings never resolve as numeric",
       fc.property(underscoreOnly, (ident) => {
         // Should resolve as a path lookup, not a number
         const data: Record<string, unknown> = {};
         const result = resolvePath(ident, data);
         expect(result).toBeUndefined();
       }),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 
@@ -136,13 +138,14 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
       .integer({ min: 0, max: 999 })
       .map((n) => `_${n}`);
 
-    fc.assert(
+    assertProperty(
+      "underscore-prefixed digits resolve as paths, not numbers",
       fc.property(underscoreDigit, (ident) => {
         const data = { [ident]: "found" };
         const result = resolvePath(ident, data);
         expect(result).toBe("found");
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });
@@ -154,7 +157,8 @@ describe("property: nested objects in #each items resolve", () => {
 
     // Generate: field name, nested field name, array of items
     // with nested objects, verify the output contains all values.
-    await fc.assert(
+    await assertProperty(
+      "all deep-path placeholders produce values in output",
       fc.asyncProperty(
         identifier,
         identifier,
@@ -186,12 +190,13 @@ describe("property: nested objects in #each items resolve", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 30 }),
+      { numRuns: 30 },
     );
   });
 
   test("mixed field types in array items: strings, numbers, nested objects", async () => {
-    await fc.assert(
+    await assertProperty(
+      "mixed field types in array items: strings, numbers, nested objects",
       fc.asyncProperty(
         identifier,
         leafValue,
@@ -217,7 +222,7 @@ describe("property: nested objects in #each items resolve", () => {
           expect(joined).toContain(nestedVal);
         },
       ),
-      propertyConfig({ numRuns: 30 }),
+      { numRuns: 30 },
     );
   });
 });
@@ -229,7 +234,8 @@ describe("property: declared nested loop paths stay condition aliases", () => {
       .array(fc.boolean(), { minLength: 1, maxLength: 6 })
       .filter((values) => values.includes(true));
 
-    fc.assert(
+    assertProperty(
+      "conditions resolve the current row at every generated nesting depth",
       fc.property(
         nestedPath,
         identifier,
@@ -280,7 +286,7 @@ describe("property: declared nested loop paths stay condition aliases", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 
@@ -293,7 +299,8 @@ describe("property: declared nested loop paths stay condition aliases", () => {
       })
       .filter((values) => values.some((year) => year > 2028));
 
-    fc.assert(
+    assertProperty(
+      "declared aliases preserve raw date values at every nesting depth",
       fc.property(nestedPath, identifier, years, (segments, field, values) => {
         const paths = segments.map((_, index) =>
           segments.slice(0, index + 1).join("."),
@@ -344,7 +351,7 @@ describe("property: declared nested loop paths stay condition aliases", () => {
           values.filter((year) => year > 2028).map(() => "after"),
         );
       }),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });
@@ -361,7 +368,8 @@ describe("property: arrays inside loop items are not recursed into", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    fc.assert(
+    assertProperty(
+      "array fields in items do not produce nonsensical patch keys",
       fc.property(
         identifier,
         fc.array(leafValue, { minLength: 1, maxLength: 5 }),
@@ -379,7 +387,7 @@ describe("property: arrays inside loop items are not recursed into", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });
@@ -390,7 +398,8 @@ describe("property: compound condition inference per sub-expression", () => {
     // string, causing all paths to be inferred as "string"
     // when any sub-expression had a comparison.
 
-    await fc.assert(
+    await assertProperty(
+      "truthiness-only variables inferred as boolean, comparison variables as string",
       fc.asyncProperty(
         fc.tuple(identifier, identifier).filter(([a, b]) => a !== b),
         leafValue,
@@ -419,7 +428,7 @@ describe("property: compound condition inference per sub-expression", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 
@@ -435,7 +444,8 @@ describe("property: compound condition inference per sub-expression", () => {
     const LITERAL_LEFT = "red";
     const LITERAL_RIGHT = "blue";
 
-    await fc.assert(
+    await assertProperty(
+      "and/or inside string literals do not split sub-expressions",
       fc.asyncProperty(
         identifier.filter((s) => s !== LITERAL_LEFT && s !== LITERAL_RIGHT),
         async (varName) => {
@@ -468,7 +478,7 @@ describe("property: compound condition inference per sub-expression", () => {
           expect(rightField).toBeUndefined();
         },
       ),
-      propertyConfig({ numRuns: 30 }),
+      { numRuns: 30 },
     );
   });
 });
@@ -608,7 +618,8 @@ describe("property: flattenTemplateData roundtrip", () => {
       }),
     });
 
-    fc.assert(
+    assertProperty(
+      "all leaf values are accessible via dot-path keys",
       fc.property(nestedObject, (obj) => {
         const flattened = flattenTemplateData(obj);
 
@@ -627,33 +638,35 @@ describe("property: flattenTemplateData roundtrip", () => {
         expect(flattened).toHaveProperty(["address.city"]);
         expect(flattened).toHaveProperty(["address.zip"]);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });
 
 describe("property: evaluateCondition consistency", () => {
   test("negation inverts truthiness for any path", async () => {
-    fc.assert(
+    assertProperty(
+      "negation inverts truthiness for any path",
       fc.property(identifier, leafValue, (path, value) => {
         const data = { [path]: value };
         const pos = evaluateCondition(path, data);
         const neg = evaluateCondition(`not ${path}`, data);
         expect(neg).toBe(!pos);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("comparison is symmetric for ==", async () => {
-    fc.assert(
+    assertProperty(
+      "comparison is symmetric for ==",
       fc.property(identifier, identifier, leafValue, (a, b, value) => {
         const data = { [a]: value, [b]: value };
         const forward = evaluateCondition(`${a} == ${b}`, data);
         const reverse = evaluateCondition(`${b} == ${a}`, data);
         expect(forward).toBe(reverse);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });
@@ -663,7 +676,8 @@ describe("property: loop-expanded num() markers number sequentially", () => {
     // Bug: assignNumbers reuses the first number for a repeated key,
     // so cloned {{ num("item") }} markers all rendered the same number.
     // Expansion now scopes loop-local keys per iteration.
-    await fc.assert(
+    await assertProperty(
+      "n items yield clause numbers exactly 1..n in document order",
       fc.asyncProperty(
         fc.array(leafValue, { minLength: 1, maxLength: 6 }),
         async (names) => {
@@ -686,12 +700,13 @@ describe("property: loop-expanded num() markers number sequentially", () => {
           expect(numbers).toEqual(names.map((_, i) => i + 1));
         },
       ),
-      propertyConfig({ numRuns: 20 }),
+      { numRuns: 20 },
     );
   });
 
   test("intra-iteration ref() always equals that iteration's num()", async () => {
-    await fc.assert(
+    await assertProperty(
+      "intra-iteration ref() always equals that iteration's num()",
       fc.asyncProperty(fc.integer({ min: 1, max: 6 }), async (count) => {
         const xml = WRAP(
           [
@@ -715,12 +730,13 @@ describe("property: loop-expanded num() markers number sequentially", () => {
           expect(pair[2]).toBe(String(i + 1));
         }
       }),
-      propertyConfig({ numRuns: 20 }),
+      { numRuns: 20 },
     );
   });
 
   test("a ref() to a clause outside the loop resolves identically in every iteration", async () => {
-    await fc.assert(
+    await assertProperty(
+      "a ref() to a clause outside the loop resolves identically in every iteration",
       fc.asyncProperty(fc.integer({ min: 1, max: 6 }), async (count) => {
         const xml = WRAP(
           [
@@ -741,7 +757,7 @@ describe("property: loop-expanded num() markers number sequentially", () => {
         );
         expect(refs).toEqual(Array.from({ length: count }, () => "1"));
       }),
-      propertyConfig({ numRuns: 20 }),
+      { numRuns: 20 },
     );
   });
 });
@@ -762,7 +778,8 @@ describe("property: an inline loop may condition on its own position", () => {
   // is the comma-join every drafting model writes. It has to render the list
   // for any item count, leave no marker behind, and produce no blank rows.
   test("a comma-join renders every item with n-1 separators", async () => {
-    await fc.assert(
+    await assertProperty(
+      "a comma-join renders every item with n-1 separators",
       fc.asyncProperty(
         fc.array(fc.constantFrom("Alice", "Bob", "Carol", "Dan", "Eve"), {
           minLength: 1,
@@ -784,12 +801,13 @@ describe("property: an inline loop may condition on its own position", () => {
           ]);
         },
       ),
-      propertyConfig({ numRuns: 25 }),
+      { numRuns: 25 },
     );
   });
 
   test("an item-field condition inside the loop reads that item", async () => {
-    await fc.assert(
+    await assertProperty(
+      "an item-field condition inside the loop reads that item",
       fc.asyncProperty(
         fc.array(fc.boolean(), { minLength: 1, maxLength: 5 }),
         async (leads) => {
@@ -814,7 +832,7 @@ describe("property: an inline loop may condition on its own position", () => {
           expect(await paragraphTextsOf(file)).toEqual([expected]);
         },
       ),
-      propertyConfig({ numRuns: 25 }),
+      { numRuns: 25 },
     );
   });
 });

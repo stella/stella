@@ -9,7 +9,7 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -1190,7 +1190,8 @@ describe("public statute list", () => {
       ),
       maxLength: 40,
     });
-    await fc.assert(
+    await assertProperty(
+      "the title fold agrees with the client-side fold",
       fc.asyncProperty(latinText, async (text) => {
         const folded = await legislationDb(async (tx) => {
           const [row] = await tx
@@ -1202,7 +1203,7 @@ describe("public statute list", () => {
 
         expect(folded).toBe(foldToAscii(text).toLowerCase());
       }),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   });
 });

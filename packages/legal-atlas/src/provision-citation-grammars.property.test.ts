@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -112,7 +112,8 @@ describe("provision citation grammar properties", () => {
   test(
     "embedded provisions retain their printed spans and normalized references",
     () => {
-      fc.assert(
+      assertProperty(
+        "embedded provisions retain their printed spans and normalized references",
         fc.property(
           provision,
           safePrefix,
@@ -139,7 +140,7 @@ describe("provision citation grammar properties", () => {
             expect(uppercase?.reference).toEqual(citation.reference);
           },
         ),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(10_000),
@@ -148,7 +149,8 @@ describe("provision citation grammar properties", () => {
   test(
     "coordinated provisions keep each span and inherit their section",
     () => {
-      fc.assert(
+      assertProperty(
+        "coordinated provisions keep each span and inherit their section",
         fc.property(
           sectionArbitrary,
           suffixArbitrary,
@@ -174,7 +176,7 @@ describe("provision citation grammar properties", () => {
             );
           },
         ),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(10_000),
@@ -183,7 +185,8 @@ describe("provision citation grammar properties", () => {
   test(
     "gazette spans locate the printed work inside surrounding text",
     () => {
-      fc.assert(
+      assertProperty(
+        "gazette spans locate the printed work inside surrounding text",
         fc.property(
           fc.integer({ min: 1, max: 99_999 }),
           fc.integer({ min: 1000, max: 9999 }),
@@ -204,7 +207,7 @@ describe("provision citation grammar properties", () => {
             expect(text.slice(expected.start, expected.end)).toBe(printed);
           },
         ),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(10_000),
@@ -213,7 +216,8 @@ describe("provision citation grammar properties", () => {
   test(
     "adversarial text preserves bounded spans and prefix offset shifts within a runtime bound",
     () => {
-      fc.assert(
+      assertProperty(
+        "adversarial text preserves bounded spans and prefix offset shifts within a runtime bound",
         fc.property(hostileText, safePrefix, (text, prefix) => {
           const started = performance.now();
           const provisions = czech.locateAbbreviatedProvisions(text);
@@ -244,7 +248,7 @@ describe("provision citation grammar properties", () => {
           );
           expect(performance.now() - started).toBeLessThan(2000);
         }),
-        propertyConfig({ numRuns: 40, seed: propertySeed() }),
+        { numRuns: 40, seed: propertySeed() },
       );
     },
     propertyTestTimeout(20_000),

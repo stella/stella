@@ -6,7 +6,7 @@ import {
   CHAT_RICH_PART_LIMITS,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
 import {
@@ -65,7 +65,8 @@ const streamedPartFromKind = (kind: number): UIMessage["parts"][number] => {
 
 describe("streamed chat message conversion invariants", () => {
   test("preserves every valid streamed part and drops invalid rich output", () => {
-    fc.assert(
+    assertProperty(
+      "preserves every valid streamed part and drops invalid rich output",
       fc.property(
         fc.array(fc.integer({ min: 0, max: 6 }), { maxLength: 20 }),
         (kinds) => {
@@ -86,7 +87,7 @@ describe("streamed chat message conversion invariants", () => {
           expect(message?.parts).toEqual(expectedParts);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

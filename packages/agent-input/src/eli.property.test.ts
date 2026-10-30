@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { normalizeEli } from "./eli";
 
@@ -53,7 +53,8 @@ const numberIsYear = ({ number }: Work): boolean =>
 
 describe("legislation identifiers", () => {
   test("every spelling of a work reads back to its canonical ELI", () => {
-    fc.assert(
+    assertProperty(
+      "every spelling of a work reads back to its canonical ELI",
       fc.property(workArb, fc.constantFrom(...SPELLINGS), (work, spell) => {
         const result = normalizeEli(spell(work), { hosts: HOSTS });
         if (numberIsYear(work)) {
@@ -64,19 +65,20 @@ describe("legislation identifiers", () => {
         expect(result.ok && result.value).toBe(canonicalOf(work));
         expect(result.ok && result.note).toBeString();
       }),
-      propertyConfig({ numRuns: 400 }),
+      { numRuns: 400 },
     );
   });
 
   test("a canonical ELI is a fixed point with nothing to report", () => {
-    fc.assert(
+    assertProperty(
+      "a canonical ELI is a fixed point with nothing to report",
       fc.property(workArb, (work) => {
         expect(normalizeEli(canonicalOf(work), { hosts: HOSTS })).toEqual({
           ok: true,
           value: canonicalOf(work),
         });
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

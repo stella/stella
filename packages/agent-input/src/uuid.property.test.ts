@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { isAbsentPlaceholder } from "./absent";
 import { isSentinelUuid, normalizeUuid, SENTINEL_UUIDS } from "./uuid";
@@ -30,17 +30,19 @@ const sentinelArb = fc.oneof(
 
 describe("record ids", () => {
   test("a real id round-trips unchanged, with nothing to report", () => {
-    fc.assert(
+    assertProperty(
+      "a real id round-trips unchanged, with nothing to report",
       fc.property(fc.uuid(), (id) => {
         fc.pre(!isSentinelUuid(id));
         expect(normalizeUuid(id)).toEqual({ ok: true, value: id });
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("every spelling of a real id reads back to the canonical id", () => {
-    fc.assert(
+    assertProperty(
+      "every spelling of a real id reads back to the canonical id",
       fc.property(fc.uuid(), fc.constantFrom(...SPELLINGS), (id, spell) => {
         fc.pre(!isSentinelUuid(id));
         const spelled = spell(id);
@@ -52,22 +54,24 @@ describe("record ids", () => {
           spelled !== id,
         );
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("an invented id is no value in every spelling", () => {
-    fc.assert(
+    assertProperty(
+      "an invented id is no value in every spelling",
       fc.property(sentinelArb, fc.constantFrom(...SPELLINGS), (id, spell) => {
         expect(normalizeUuid(spell(id)).ok).toBe("absent");
         expect(normalizeUuid(id).ok).toBe("absent");
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("a string that is not a uuid asks", () => {
-    fc.assert(
+    assertProperty(
+      "a string that is not a uuid asks",
       fc.property(fc.string({ minLength: 1, maxLength: 40 }), (text) => {
         fc.pre(
           !/^[\s{]*(?:urn:uuid:)?[0-9a-f-]{32,36}\}?\s*$/iu.test(text) &&
@@ -75,7 +79,7 @@ describe("record ids", () => {
         );
         expect(normalizeUuid(text).ok).toBe(false);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

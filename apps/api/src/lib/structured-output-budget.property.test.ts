@@ -5,7 +5,7 @@ import fc from "fast-check";
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { PROPERTIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -150,7 +150,8 @@ const TARGETS: readonly BudgetTarget[] = [
 
 describe("splitting a workflow batch for the provider's schema budget", () => {
   test("every chunk fits its provider and the chunks partition the batch in order", () => {
-    fc.assert(
+    assertProperty(
+      "every chunk fits its provider and the chunks partition the batch in order",
       fc.property(
         fc.constantFrom(...TARGETS),
         propertiesArbitrary,
@@ -187,7 +188,7 @@ describe("splitting a workflow batch for the provider's schema budget", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 30 }),
+      { numRuns: 30 },
     );
   });
 });

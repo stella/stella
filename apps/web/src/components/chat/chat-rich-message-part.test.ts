@@ -6,7 +6,7 @@ import fc from "fast-check";
 import { IntlProvider } from "use-intl";
 
 import { GENERATED_VISUAL_MIME_TYPE } from "@stll/api-contract/generated-visual";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import messages from "@/i18n/langs/en.json";
@@ -197,7 +197,8 @@ describe("rich chat message parts", () => {
   });
 
   test("handles every resource blob without throwing", () => {
-    fc.assert(
+    assertProperty(
+      "handles every resource blob without throwing",
       fc.property(fc.string(), (blob) => {
         expect(() =>
           normalizeUiResourcePart({
@@ -212,7 +213,7 @@ describe("rich chat message parts", () => {
           }),
         ).not.toThrow();
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

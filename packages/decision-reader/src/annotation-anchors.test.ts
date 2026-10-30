@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   annotationSegments,
@@ -103,7 +103,8 @@ describe("annotation anchors", () => {
   });
 
   test("files every anchor under the piece its own mark names", () => {
-    fc.assert(
+    assertProperty(
+      "files every anchor under the piece its own mark names",
       fc.property(marksArbitrary, (annotations: AnnotationAnchorSource[]) => {
         const pieceOf = new Map(
           annotations.map((annotation) => [
@@ -132,12 +133,13 @@ describe("annotation anchors", () => {
           expect(pieceOf.has(id ?? "")).toBe(true);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("draws every marked character exactly once", () => {
-    fc.assert(
+    assertProperty(
+      "draws every marked character exactly once",
       fc.property(marksArbitrary, (annotations: AnnotationAnchorSource[]) => {
         const marked = annotations.filter(
           (annotation) => annotation.endOffset > annotation.startOffset,
@@ -180,7 +182,7 @@ describe("annotation anchors", () => {
         expect(drawn).toEqual([...covered].toSorted((a, b) => a - b));
         expect(new Set(drawn).size).toBe(drawn.length);
       }),
-      propertyConfig(),
+      {},
     );
   });
 

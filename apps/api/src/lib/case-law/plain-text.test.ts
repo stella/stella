@@ -3,7 +3,7 @@ import { encodeHTML } from "entities";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   type PlainText,
@@ -130,7 +130,8 @@ describe("plain text preserves publisher wording without presentation syntax", (
   });
 
   test("successful output is a markup-free fixed point over arbitrary input", () => {
-    fc.assert(
+    assertProperty(
+      "successful output is a markup-free fixed point over arbitrary input",
       fc.property(fc.string(), (raw) => {
         const result = toPlainText(raw);
         if (result.isErr()) {
@@ -141,7 +142,7 @@ describe("plain text preserves publisher wording without presentation syntax", (
         expect(containsTagLikeMarkup(output)).toBe(false);
         expect(toPlainText(output).unwrap()).toBe(output);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
@@ -197,7 +198,8 @@ describe("plain text preserves publisher wording without presentation syntax", (
         "",
       ),
     );
-    fc.assert(
+    assertProperty(
+      "numeric entity encodings round trip language-blind publisher text",
       fc.property(
         fc.array(letter, { minLength: 1, maxLength: 80 }),
         (letters) => {
@@ -208,12 +210,13 @@ describe("plain text preserves publisher wording without presentation syntax", (
           expect(toPlainText(encoded).unwrap()).toBe(toPlainText(raw).unwrap());
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("contract-recognized structures cannot survive nested encoding or removal", () => {
-    fc.assert(
+    assertProperty(
+      "contract-recognized structures cannot survive nested encoding or removal",
       fc.property(
         fc.constantFrom(
           "<br>",
@@ -238,7 +241,7 @@ describe("plain text preserves publisher wording without presentation syntax", (
           expect(toPlainText(output).unwrap()).toBe(output);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

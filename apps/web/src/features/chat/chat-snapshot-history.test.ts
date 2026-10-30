@@ -4,7 +4,7 @@ import type { UIMessage } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   keepPostedMessages,
@@ -68,7 +68,8 @@ describe("keepPostedMessages", () => {
   });
 
   test("keeps every posted message, in the page's order, ahead of the run's", () => {
-    fc.assert(
+    assertProperty(
+      "keeps every posted message, in the page's order, ahead of the run's",
       fc.property(caseArb, ({ posted, snapshot }) => {
         const ids = keepPostedMessages(posted, snapshot).map(({ id }) => id);
         expect(ids).toEqual([
@@ -78,7 +79,7 @@ describe("keepPostedMessages", () => {
             .filter((id) => id.startsWith("added-")),
         ]);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 

@@ -4,7 +4,7 @@ import fc from "fast-check";
 
 import type { GazetteerEntry } from "@stll/anonymize";
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -226,7 +226,8 @@ const isRedactionOf = (output: string, input: string): boolean => {
 
 describe("joined anonymization fields", () => {
   test("split returns exactly the joined fields", () => {
-    fc.assert(
+    assertProperty(
+      "split returns exactly the joined fields",
       fc.property(fields, (input) => {
         const joined = joinFieldsForAnonymization({ fields: input });
         if (Result.isError(joined)) {
@@ -238,12 +239,13 @@ describe("joined anonymization fields", () => {
           expect(split.value).toEqual(input);
         }
       }),
-      propertyConfig({ numRuns: 300, seed: propertySeed() }),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("output in which any delimiter was rewritten is refused", () => {
-    fc.assert(
+    assertProperty(
+      "output in which any delimiter was rewritten is refused",
       fc.property(
         fields,
         fc.nat(),
@@ -272,7 +274,7 @@ describe("joined anonymization fields", () => {
           expect(Result.isError(split)).toBe(true);
         },
       ),
-      propertyConfig({ numRuns: 300, seed: propertySeed() }),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });
@@ -282,7 +284,8 @@ describe("anonymizing several fields through the pipeline", () => {
     "keeps every field boundary and each field's own text",
     async () => {
       let redactedRuns = 0;
-      await fc.assert(
+      await assertProperty(
+        "keeps every field boundary and each field's own text",
         fc.asyncProperty(fields, async (input) => {
           const anonymized = await anonymizeTextFields({
             catalogs: {
@@ -307,7 +310,7 @@ describe("anonymizing several fields through the pipeline", () => {
             redactedRuns += 1;
           }
         }),
-        propertyConfig({ numRuns: 150, seed: propertySeed() }),
+        { numRuns: 150, seed: propertySeed() },
       );
       // The inputs must actually reach the recognizers, or restoring them
       // would hold trivially.
@@ -319,7 +322,8 @@ describe("anonymizing several fields through the pipeline", () => {
   test(
     "redacts a short deny-list name at a field edge and keeps every boundary",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "redacts a short deny-list name at a field edge and keeps every boundary",
         fc.asyncProperty(
           shortEntryAtFieldEdge,
           async ({ edge, entries, fieldIndex, input, name, spacing }) => {
@@ -354,7 +358,7 @@ describe("anonymizing several fields through the pipeline", () => {
             });
           },
         ),
-        propertyConfig({ numRuns: 100, seed: propertySeed() }),
+        { numRuns: 100, seed: propertySeed() },
       );
     },
     propertyTestTimeout(60_000),

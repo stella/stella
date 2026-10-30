@@ -34,7 +34,7 @@ export type { PropertyFailureRecord } from "./failure-fingerprint";
  *     run log carries the full list of shrunk failing values (not only the
  *     final counterexample). The seed + counterexample fast-check already
  *     prints on failure are enough to replay a failure locally with
- *     `fc.assert(prop, propertyConfig({ seed, path }))`.
+ *     `assertProperty("normalization is idempotent", prop, { seed, path })`.
  *
  *  3. Deterministic PR inputs. Unless the caller supplies a seed, the tier
  *     policy supplies the fixed seed for PRs and explores during nightly runs.
@@ -63,21 +63,24 @@ const isCi = (): boolean => {
   return raw !== undefined && raw !== "" && raw !== "false" && raw !== "0";
 };
 
+type PropertyParameters<Ts> = Omit<fc.Parameters<Ts>, "seed"> & {
+  seed?: number | undefined;
+};
+
 /**
- * Build the `fc.assert` parameters for a property test: pass the per-test
+ * Build low-level `fc.check` parameters: pass the per-test
  * tuning you want in PR CI (typically just `numRuns`) and this scales it for
  * the nightly sweep and enables verbose reporting under CI. An omitted seed
  * defaults to propertySeed(): fixed in PR CI, exploratory in the nightly sweep.
- * An explicit seed is preserved.
+ * An explicit seed is preserved. `assertProperty` applies this internally;
+ * callers of that runner pass raw parameters instead.
  *
  * ```ts
- * fc.assert(fc.property(arb, predicate), propertyConfig({ numRuns: 200 }));
+ * fc.check(fc.property(arb, predicate), propertyConfig({ numRuns: 200 }));
  * ```
  */
 export const propertyConfig = <Ts>(
-  options: Omit<fc.Parameters<Ts>, "seed"> & {
-    seed?: number | undefined;
-  } = {},
+  options: PropertyParameters<Ts> = {},
 ): fc.Parameters<Ts> => {
   const { seed: requestedSeed, ...params } = options;
   const seed = "seed" in options ? requestedSeed : propertySeed();
@@ -138,7 +141,7 @@ const DEFAULT_PROPERTY_SEED = 20_260_901;
  * fast-check draws a fresh one) during the nightly sweep.
  *
  * ```ts
- * fc.assert(prop, propertyConfig({ numRuns: 300 }));
+ * assertProperty("normalization is idempotent", prop, { numRuns: 300 });
  * ```
  *
  * The two runs answer different questions. PR CI is a regression gate: it
@@ -290,7 +293,7 @@ type PropertyRunOptions<Ts> = {
   file: string;
   id: string;
   property: fc.IRawProperty<Ts>;
-  params: fc.Parameters<Ts>;
+  params: PropertyParameters<Ts>;
   pinned: readonly PinnedSeed[];
 };
 
@@ -402,17 +405,17 @@ export function runProperty<Ts>({
 export function assertProperty<Ts>(
   id: string,
   property: fc.IAsyncProperty<Ts>,
-  params?: fc.Parameters<Ts>,
+  params?: PropertyParameters<Ts>,
 ): Promise<void>;
 export function assertProperty<Ts>(
   id: string,
   property: fc.IProperty<Ts>,
-  params?: fc.Parameters<Ts>,
+  params?: PropertyParameters<Ts>,
 ): void;
 export function assertProperty<Ts>(
   id: string,
   property: fc.IRawProperty<Ts>,
-  params: fc.Parameters<Ts> = {},
+  params: PropertyParameters<Ts> = {},
 ): void | Promise<void> {
   if (id.trim() === "") {
     throw new PropertyTestConfigError(

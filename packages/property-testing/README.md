@@ -25,16 +25,17 @@ test("normalization is idempotent", () => {
 Use an explicit stable id matching the literal test title so `bun test -t`
 selects the property. Async properties return a promise: await it or return it
 from the test. Custom reporters are unsupported because this API owns failure
-reporting. Older `fc.assert(property, propertyConfig({ seed: propertySeed() }))`
-call sites remain supported; migrate them to `assertProperty` to replay pins.
+reporting. Pass raw run parameters to `assertProperty`: it applies
+`propertyConfig` once internally. Do not wrap its parameters in `propertyConfig`.
+`no-raw-property-assert` confines fast-check's `assert` export to this runner.
 
 Every workspace with properties needs a `test:property` script preloading
 `@stll/property-testing/preload`. Property runners select both `fc.assert` and
 `assertProperty`; the convention guard checks workspace/script agreement.
 
-Every `fc.assert` or `fc.check` call must pass parameters through
-`propertyConfig`, directly or through a configured helper. The guard checks
-each call, including files that already import the configuration helper.
+Low-level `fc.check` calls that inspect run details must pass parameters through
+`propertyConfig`, directly or through a configured helper. The convention guard
+checks each call, including files that already import the configuration helper.
 
 `propertyConfig()` defaults an omitted `seed` key to `propertySeed()`: a fixed
 seed in PR CI and `undefined` during the nightly sweep, so fast-check draws

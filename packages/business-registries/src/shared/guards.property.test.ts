@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -48,11 +48,12 @@ describe("registry response shapes", () => {
   test(
     "only object records pass the structural boundary",
     () => {
-      fc.assert(
+      assertProperty(
+        "only object records pass the structural boundary",
         fc.property(recordShape, ({ value, accepted }) => {
           expect(isRecord(value)).toBe(accepted);
         }),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -61,7 +62,8 @@ describe("registry response shapes", () => {
   test(
     "optional fields accept absent values and their declared primitive type",
     () => {
-      fc.assert(
+      assertProperty(
+        "optional fields accept absent values and their declared primitive type",
         fc.property(registryString, optionalField, (key, field) => {
           const record = { [key]: field.value };
           expect(hasOptionalString(record, key)).toBe(field.string);
@@ -69,7 +71,7 @@ describe("registry response shapes", () => {
           expect(hasOptionalString(record, `${key}\u0000absent`)).toBe(true);
           expect(hasOptionalNumber(record, `${key}\u0000absent`)).toBe(true);
         }),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),

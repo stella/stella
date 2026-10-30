@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import type { TableSchema } from "@stll/ui/data-table";
 import {
   hideableColumnIds,
@@ -50,7 +50,8 @@ const columnsArb = fc
 
 describe("table schema invariants", () => {
   test("the visible columns are a subsequence of the schema's, and hiding is idempotent", () => {
-    fc.assert(
+    assertProperty(
+      "the visible columns are a subsequence of the schema's, and hiding is idempotent",
       fc.property(
         columnsArb,
         fc.array(fc.constantFrom("a", "b", "c", "d")),
@@ -69,23 +70,25 @@ describe("table schema invariants", () => {
           expect(visibleColumnIds(example, hidden)).toEqual(visible);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("hiding nothing shows everything", () => {
-    fc.assert(
+    assertProperty(
+      "hiding nothing shows everything",
       fc.property(columnsArb, (columns) => {
         const example = schema([...columns]);
 
         expect(visibleColumnIds(example, [])).toEqual(tableColumnIds(example));
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("every hideable column can be hidden, and no other column can", () => {
-    fc.assert(
+    assertProperty(
+      "every hideable column can be hidden, and no other column can",
       fc.property(columnsArb, (columns) => {
         const example = schema([...columns]);
         const visible = new Set(
@@ -97,7 +100,7 @@ describe("table schema invariants", () => {
           expect(visible.has(id)).toBe(!hideable.has(id));
         }
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });

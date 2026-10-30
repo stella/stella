@@ -4,7 +4,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
@@ -244,7 +244,8 @@ describe("projectToProviderSafeJsonSchema", () => {
       { type: string; guidance: string }
     >;
 
-    fc.assert(
+    assertProperty(
+      "preserves every omitted bound as guidance without changing authored descriptions",
       fc.property(
         fc.integer({ min: 0, max: 100_000 }),
         fc.option(fc.string(), { nil: undefined }),
@@ -288,7 +289,7 @@ describe("projectToProviderSafeJsonSchema", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
@@ -512,7 +513,8 @@ describe("projectToProviderSafeJsonSchema", () => {
   });
 
   test("property: empty string enums remain admissible for Google-compatible providers", () => {
-    fc.assert(
+    assertProperty(
+      "property: empty string enums remain admissible for Google-compatible providers",
       fc.property(
         fc.array(fc.string({ minLength: 1, maxLength: 12 }), { maxLength: 4 }),
         fc.constantFrom("google", "openrouter"),
@@ -543,7 +545,7 @@ describe("projectToProviderSafeJsonSchema", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
@@ -1110,7 +1112,8 @@ describe("projectToProviderSafeJsonSchema", () => {
   });
 
   test("property: projection only emits provider-safe schema keywords", () => {
-    fc.assert(
+    assertProperty(
+      "property: projection only emits provider-safe schema keywords",
       fc.property(
         projectableSchema,
         fc.constantFrom("json-schema", "openapi" as const),
@@ -1122,7 +1125,7 @@ describe("projectToProviderSafeJsonSchema", () => {
           assertOnlyProviderSafeKeywords(schema);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
@@ -1142,7 +1145,8 @@ describe("projectToProviderSafeJsonSchema", () => {
   test("property: no projected root is left holding only annotations", () => {
     const annotations = new Set<string>(ANNOTATION_JSON_SCHEMA_KEYWORDS);
 
-    fc.assert(
+    assertProperty(
+      "property: no projected root is left holding only annotations",
       fc.property(
         projectableSchema,
         fc.constantFrom("json-schema", "openapi" as const),
@@ -1156,12 +1160,13 @@ describe("projectToProviderSafeJsonSchema", () => {
           ).toBe(true);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("property: projecting an already projected schema is stable", () => {
-    fc.assert(
+    assertProperty(
+      "property: projecting an already projected schema is stable",
       fc.property(
         projectableSchema,
         fc.constantFrom("json-schema", "openapi" as const),
@@ -1177,12 +1182,13 @@ describe("projectToProviderSafeJsonSchema", () => {
           expect(second.droppedKeywords).toEqual([]);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("property: OpenAPI enum nulls become nullable instead of disappearing", () => {
-    fc.assert(
+    assertProperty(
+      "property: OpenAPI enum nulls become nullable instead of disappearing",
       fc.property(
         fc.array(fc.oneof(fc.string({ maxLength: 8 }), fc.integer()), {
           minLength: 1,
@@ -1209,12 +1215,13 @@ describe("projectToProviderSafeJsonSchema", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("property: compatible allOf property refinements survive projection", () => {
-    fc.assert(
+    assertProperty(
+      "property: compatible allOf property refinements survive projection",
       fc.property(
         schemaPropertyName,
         fc.integer({ min: 1, max: 20 }),
@@ -1247,12 +1254,13 @@ describe("projectToProviderSafeJsonSchema", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("property: OpenAPI nullable allOf object wrappers keep property contracts", () => {
-    fc.assert(
+    assertProperty(
+      "property: OpenAPI nullable allOf object wrappers keep property contracts",
       fc.property(
         schemaPropertyName,
         fc.integer({ min: 1, max: 20 }),
@@ -1283,12 +1291,13 @@ describe("projectToProviderSafeJsonSchema", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("property: OpenAPI nullable oneOf branches collapse to nullable schemas", () => {
-    fc.assert(
+    assertProperty(
+      "property: OpenAPI nullable oneOf branches collapse to nullable schemas",
       fc.property(
         fc.constantFrom("string", "number", "boolean" as const),
         (type) => {
@@ -1302,7 +1311,7 @@ describe("projectToProviderSafeJsonSchema", () => {
           expect(schema).toEqual({ type, nullable: true });
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });

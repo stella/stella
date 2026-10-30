@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   PROVISION_KEY_MAX_BYTES,
@@ -183,7 +183,8 @@ const anchorOf = ({
   ].join("-");
 
 test("the writer and the reader agree: a link answers the filter at every depth it names", () => {
-  fc.assert(
+  assertProperty(
+    "the writer and the reader agree: a link answers the filter at every depth it names",
     fc.property(levelArbitrary, (reference) => {
       const { keys } = provisionKeysOfLinks([
         { workIdentifier: WORK, anchor: anchorOf(reference) },
@@ -204,12 +205,13 @@ test("the writer and the reader agree: a link answers the filter at every depth 
         }),
       );
     }),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
 });
 
 test("keys of any links are distinct, sorted, bounded, and independent of order", () => {
-  fc.assert(
+  assertProperty(
+    "keys of any links are distinct, sorted, bounded, and independent of order",
     fc.property(
       fc.array(
         levelArbitrary.map((reference) => ({
@@ -229,7 +231,7 @@ test("keys of any links are distinct, sorted, bounded, and independent of order"
         });
       },
     ),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
 });
 

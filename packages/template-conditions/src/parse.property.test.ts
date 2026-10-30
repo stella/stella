@@ -7,7 +7,7 @@ import {
   type Operand,
 } from "@stll/conditions";
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -88,11 +88,12 @@ const nodeAtDepth = (depth: number): fc.Arbitrary<ConditionNode> => {
 test(
   "canonical template trees round-trip through expressions",
   () => {
-    fc.assert(
+    assertProperty(
+      "canonical template trees round-trip through expressions",
       fc.property(nodeAtDepth(3), (node) => {
         expect(parseCondition(serializeCondition(node))).toEqual(node);
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -120,7 +121,8 @@ test(
         )
         .map((parts) => parts.join("")),
     );
-    fc.assert(
+    assertProperty(
+      "arbitrary expressions return a condition or null",
       fc.property(expression, (value) => {
         const parsed = parseCondition(value);
         expect(
@@ -128,7 +130,7 @@ test(
             ["compare", "predicate", "group"].includes(parsed.type),
         ).toBe(true);
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -159,7 +161,8 @@ test.each(["parentheses", "negation", "mixed"])(
 test(
   "template input limits are consistent across nesting shapes",
   () => {
-    fc.assert(
+    assertProperty(
+      "template input limits are consistent across nesting shapes",
       fc.property(
         fc.integer({ min: MAX_CONDITION_NESTING + 1, max: 20_000 }),
         fc.nat(),
@@ -176,7 +179,7 @@ test(
           ).not.toBeNull();
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+      { seed: propertySeed(), numRuns: 20 },
     );
   },
   propertyTestTimeout(5000),

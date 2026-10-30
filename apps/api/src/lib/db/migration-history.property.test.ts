@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
@@ -55,7 +55,8 @@ const migrationHistory = localMigrations.chain((local) =>
 
 describe("migration history invariant", () => {
   test("requires a named receipt or an unnamed legacy hash for each bundled migration", () => {
-    fc.assert(
+    assertProperty(
+      "requires a named receipt or an unnamed legacy hash for each bundled migration",
       fc.property(
         migrationHistory,
         ({ appliedRows, expectedUnapplied, local }) => {
@@ -67,7 +68,7 @@ describe("migration history invariant", () => {
           ).toEqual(expectedUnapplied);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

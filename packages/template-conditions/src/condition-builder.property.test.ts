@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { evaluateCondition as evaluateAst } from "@stll/conditions";
 import type { ConditionNode, Operand } from "@stll/conditions";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { serializeCondition } from "./condition-builder.js";
 import { evaluateCondition } from "./index.js";
@@ -110,7 +110,8 @@ const conditionNode: fc.Arbitrary<ConditionNode> = fc.letrec<{
 
 describe("condition round-trip", () => {
   test("the serialized expression decides every case the AST does", () => {
-    fc.assert(
+    assertProperty(
+      "the serialized expression decides every case the AST does",
       fc.property(conditionNode, conditionData, (node, data) => {
         const expression = serializeCondition(node);
         const fromAst = evaluateAst(node, (operand) =>
@@ -122,7 +123,7 @@ describe("condition round-trip", () => {
         );
         expect(evaluateCondition(expression, data)).toBe(fromAst);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

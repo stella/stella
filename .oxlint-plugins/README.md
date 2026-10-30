@@ -24,6 +24,8 @@ row there instead of writing a new import detector.
 
 - [`require-fingerprint-fields`](./require-fingerprint-fields.ts) (`require-fingerprint-fields`): requires inline TaggedError reason, phase and stage fields in API code to register each dimension in a class static block; import aliases are resolved, unrestricted strings and named prop types are outside this syntactic guard.
 
+- [`no-raw-property-assert`](./no-raw-property-assert.ts) (`no-raw-property-assert`): confines fast-check's `assert` export to the shared property runner; detects named imports, default/namespace member reads, stable aliases, destructuring and re-exports. Properties use `assertProperty` with a stable test-title id and unconfigured run parameters. Dynamic property names and interprocedural value flow are outside this syntactic guard.
+
 ## Automatic fixes
 
 `oxlint --fix` repairs violations only when the rule can derive one local,

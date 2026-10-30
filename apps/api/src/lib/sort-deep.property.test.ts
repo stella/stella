@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { sortDeep } from "@/api/lib/sort-deep";
 
@@ -51,34 +51,37 @@ const reverseKeyOrder = (value: unknown): unknown => {
 
 describe("sortDeep (properties)", () => {
   test("preserves the logical value (only key order changes)", () => {
-    fc.assert(
+    assertProperty(
+      "preserves the logical value (only key order changes)",
       fc.property(jsonValue, (value) => {
         // `toEqual` ignores key order, so equality here means no data was
         // added, dropped, or mutated.
         expect(sortDeep(value)).toEqual(value);
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("canonicalizes independently of input key order", () => {
-    fc.assert(
+    assertProperty(
+      "canonicalizes independently of input key order",
       fc.property(jsonValue, (value) => {
         expect(JSON.stringify(sortDeep(value))).toBe(
           JSON.stringify(sortDeep(reverseKeyOrder(value))),
         );
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("is idempotent", () => {
-    fc.assert(
+    assertProperty(
+      "is idempotent",
       fc.property(jsonValue, (value) => {
         const once = sortDeep(value);
         expect(sortDeep(once)).toEqual(once);
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 });

@@ -9,7 +9,7 @@ import type {
   DecisionIdentifiers,
   DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { czUohsDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
@@ -2430,7 +2430,8 @@ describe("extractCitations", () => {
     const divisions = fc.option(fc.constantFrom("II", "III", "1", "2"), {
       nil: undefined,
     });
-    fc.assert(
+    assertProperty(
+      "a cited competition authority decision keys like the identifiers its row stores",
       fc.property(
         units,
         divisions,
@@ -2450,7 +2451,7 @@ describe("extractCitations", () => {
           expect(held).toContain(bareCitationKey(citation?.citationText ?? ""));
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

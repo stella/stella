@@ -3,7 +3,6 @@ import fc from "fast-check";
 
 import {
   assertProperty,
-  propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -29,7 +28,8 @@ const spacing = fc.constantFrom(" ", "  ", "\t", "\n", "\u00a0", "\u202f");
 test(
   "case-number spellings retain their canonical identity",
   () => {
-    fc.assert(
+    assertProperty(
+      "case-number spellings retain their canonical identity",
       fc.property(
         caseNumber,
         spacing,
@@ -50,7 +50,7 @@ test(
           ).toBe(formatSpisZnCanonical(parsed));
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),

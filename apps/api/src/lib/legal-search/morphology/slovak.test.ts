@@ -13,7 +13,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { foldCorpusTerm } from "@/api/lib/legal-search/corpus-passage-highlight";
 import {
@@ -157,7 +157,8 @@ describe("stemSlovak", () => {
     expect(stemSlovak("domu")).toBe("dom");
 
     const letters = "aáäbcčdďeéfghiíjklĺľmnňoóôpqrŕsštťuúvwxyýzž".split("");
-    fc.assert(
+    assertProperty(
+      "short words pass through, and no stem ends shorter than three",
       fc.property(
         fc.string({
           unit: fc.constantFrom(...letters),
@@ -172,7 +173,7 @@ describe("stemSlovak", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 2000 }),
+      { numRuns: 2000 },
     );
   });
 });

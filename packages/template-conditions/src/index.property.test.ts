@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { evaluateCondition, MAX_CONDITION_DEPTH } from "./index";
 
@@ -385,13 +385,14 @@ const renderExpression = (node: ExprNode, parentPrecedence = 0): string => {
 
 describe("evaluateCondition property checks", () => {
   test("matches an independent evaluator for generated boolean expressions", () => {
-    fc.assert(
+    assertProperty(
+      "matches an independent evaluator for generated boolean expressions",
       fc.property(exprNode, conditionData, (node, data) => {
         expect(evaluateCondition(renderExpression(node), data)).toBe(
           evaluateReference(node, data),
         );
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { stripDiacriticsForSlug } from "@stll/text-normalize";
 
 import {
@@ -151,12 +151,13 @@ describe("createCaseLawDecisionSlug", () => {
   });
 
   test("is idempotent, so a stored slug normalizes to itself", () => {
-    fc.assert(
+    assertProperty(
+      "is idempotent, so a stored slug normalizes to itself",
       fc.property(fc.string({ maxLength: 400 }), (value) => {
         const slug = createCaseLawDecisionSlug(value);
         expect(createCaseLawDecisionSlug(slug)).toBe(slug);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -365,7 +366,8 @@ describe("createCaseLawDecisionRouteParams", () => {
       .string({ minLength: 1, maxLength: 300 })
       .filter((slug) => slug.trim() !== "");
 
-    fc.assert(
+    assertProperty(
+      "a slug-less decision's param carries its id; a stored slug is the param",
       fc.property(
         fc.string({ maxLength: 300 }),
         fc.uuid(),
@@ -386,7 +388,7 @@ describe("createCaseLawDecisionRouteParams", () => {
           expect(idFromParam).toBeNull();
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

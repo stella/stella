@@ -142,7 +142,8 @@ describe("splitting rendered text on a find term", () => {
   });
 
   test("a segment starts where the input says it does", () => {
-    fc.assert(
+    assertProperty(
+      "a segment starts where the input says it does",
       fc.property(fc.string(), fc.string(), (text, term) => {
         for (const segment of splitByMatch(text, term)) {
           expect(
@@ -150,12 +151,13 @@ describe("splitting rendered text on a find term", () => {
           ).toBe(segment.text);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("segments always reassemble into the input", () => {
-    fc.assert(
+    assertProperty(
+      "segments always reassemble into the input",
       fc.property(
         fc.oneof(fc.string(), unicodeText),
         fc.oneof(fc.string(), unicodeText),
@@ -163,18 +165,19 @@ describe("splitting rendered text on a find term", () => {
           expect(joined(text, term)).toBe(text);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("an empty term never marks anything", () => {
-    fc.assert(
+    assertProperty(
+      "an empty term never marks anything",
       fc.property(fc.string(), (text) => {
         expect(splitByMatch(text, "").some((segment) => segment.matched)).toBe(
           false,
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 

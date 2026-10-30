@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -195,7 +195,8 @@ describe("replay walk boundary", () => {
   test(
     "every stored decision is served exactly once, at any page size",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "every stored decision is served exactly once, at any page size",
         fc.asyncProperty(
           fc.uniqueArray(fc.integer({ min: 0, max: 999 }), {
             minLength: 2,
@@ -233,7 +234,7 @@ describe("replay walk boundary", () => {
             );
           },
         ),
-        propertyConfig({ numRuns: 12 }),
+        { numRuns: 12 },
       );
     },
     propertyTestTimeout(60_000),

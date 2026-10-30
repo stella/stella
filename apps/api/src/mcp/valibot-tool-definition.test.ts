@@ -9,7 +9,7 @@ import {
   reporterCitationIdentifierSchema,
 } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -245,7 +245,8 @@ describe("Valibot-backed MCP tool definitions", () => {
 
   test("compacted output schemas accept exactly what the uncompacted projection accepts", () => {
     const validator = createWireSchemaValidator();
-    fc.assert(
+    assertProperty(
+      "compacted output schemas accept exactly what the uncompacted projection accepts",
       fc.property(
         outputSourceArbitrary.chain((source) => {
           const compacted = defineMcpToolOutput(source).outputSchema;
@@ -269,7 +270,7 @@ describe("Valibot-backed MCP tool definitions", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 150 }),
+      { numRuns: 150 },
     );
   });
 

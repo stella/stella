@@ -8,7 +8,6 @@ import {
 } from "@stll/api-contract/us-reporter-citation";
 import {
   assertProperty,
-  propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -211,7 +210,8 @@ test("every exact table spelling proves a next-volume boundary", () => {
 test(
   "reporter tokens retain their source spans under a prefix",
   () => {
-    fc.assert(
+    assertProperty(
+      "reporter tokens retain their source spans under a prefix",
       fc.property(
         noise,
         reporter,
@@ -261,7 +261,7 @@ test(
           expect(shiftedTokens).toEqual(tokens);
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -270,7 +270,8 @@ test(
 test(
   "candidate production stops immediately past its work allowance",
   () => {
-    fc.assert(
+    assertProperty(
+      "candidate production stops immediately past its work allowance",
       fc.property(
         fc.integer({ min: 0, max: 100 }),
         fc.integer({ min: 1, max: 100 }),
@@ -289,7 +290,7 @@ test(
           expect(budget.spent).toBe(limit + 1);
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -298,7 +299,8 @@ test(
 test(
   "long separator and digit runs stay bounded",
   () => {
-    fc.assert(
+    assertProperty(
+      "long separator and digit runs stay bounded",
       fc.property(
         fc.constantFrom(
           "/",
@@ -331,7 +333,7 @@ test(
           ).toBe(true);
         },
       ),
-      propertyConfig({ numRuns: 20, seed: propertySeed() }),
+      { numRuns: 20, seed: propertySeed() },
     );
   },
   propertyTestTimeout(15_000),

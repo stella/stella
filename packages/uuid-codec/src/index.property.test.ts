@@ -9,7 +9,7 @@ import { Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   decodeCompactUuid,
@@ -52,27 +52,30 @@ const compactSegmentArbitrary = fc
 
 describe("compact uuid properties", () => {
   test("a compacted uuid decodes back to the uuid it was minted from", () => {
-    fc.assert(
+    assertProperty(
+      "a compacted uuid decodes back to the uuid it was minted from",
       fc.property(uuidArbitrary, (uuid) => {
         const encoded = Result.unwrap(encodeCompactUuid(uuid));
         expect(encoded).toHaveLength(COMPACT_UUID_LENGTH);
         expect(Result.unwrap(decodeCompactUuid(encoded))).toBe(uuid);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("decoding a uuid written out in full is a fixed point", () => {
-    fc.assert(
+    assertProperty(
+      "decoding a uuid written out in full is a fixed point",
       fc.property(uuidArbitrary, (uuid) => {
         expect(Result.unwrap(decodeCompactUuid(uuid))).toBe(uuid);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a value that is neither spelling is reported, never thrown", () => {
-    fc.assert(
+    assertProperty(
+      "a value that is neither spelling is reported, never thrown",
       fc.property(fc.string(), (value) => {
         const decoded = decodeCompactUuid(value);
         if (Result.isError(decoded)) {
@@ -84,7 +87,7 @@ describe("compact uuid properties", () => {
         const reencoded = Result.unwrap(encodeCompactUuid(decoded.value));
         expect(Result.unwrap(decodeCompactUuid(reencoded))).toBe(decoded.value);
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
@@ -92,7 +95,8 @@ describe("compact uuid properties", () => {
     // One id, one address. A segment whose bytes are an id's but whose four
     // unused trailing bits are set is not a second spelling of that id: it
     // does not decode at all, so a row is never reachable sixteen ways.
-    fc.assert(
+    assertProperty(
+      "a compact segment that decodes is the one the encoder would mint",
       fc.property(compactSegmentArbitrary, (segment) => {
         const decoded = decodeCompactUuid(segment);
         if (Result.isError(decoded)) {
@@ -100,12 +104,13 @@ describe("compact uuid properties", () => {
         }
         expect(Result.unwrap(encodeCompactUuid(decoded.value))).toBe(segment);
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("a uuid the encoder rejects is not a uuid", () => {
-    fc.assert(
+    assertProperty(
+      "a uuid the encoder rejects is not a uuid",
       fc.property(fc.string(), (value) => {
         const encoded = encodeCompactUuid(value);
         if (Result.isError(encoded)) {
@@ -117,14 +122,15 @@ describe("compact uuid properties", () => {
           value.toLowerCase(),
         );
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("a suffixed uuid reads back whatever the prefix and compact spelling", () => {
     // The separator is drawn from the base64url alphabet on purpose: a
     // compact id starting with or containing it must not move the split.
-    fc.assert(
+    assertProperty(
+      "a suffixed uuid reads back whatever the prefix and compact spelling",
       fc.property(
         uuidArbitrary,
         fc.string(),
@@ -139,7 +145,7 @@ describe("compact uuid properties", () => {
           expect(Result.unwrap(decoded)).toBe(uuid);
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 });

@@ -7,7 +7,7 @@ import {
   ebsBalance,
   LONG_TRANSACTION_SQL,
 } from "@stll/db-load-gate/indicators";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { readOnlineIndexConfig } from "../env-online-index";
@@ -315,7 +315,8 @@ describe("online index table lock blockers", () => {
   });
 
   test("a holder is a blocker exactly when one threshold is reached", () => {
-    fc.assert(
+    assertProperty(
+      "a holder is a blocker exactly when one threshold is reached",
       fc.property(
         fc.record({
           pid: fc.integer({ min: 1, max: 100_000 }),
@@ -343,7 +344,7 @@ describe("online index table lock blockers", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -561,7 +562,8 @@ describe("online index gate", () => {
       fc.integer({ min: 70, max: 100 }).map((value) => ebs(value, "normal")),
       fc.constant(ebs(null, "unknown")),
     );
-    await fc.assert(
+    await assertProperty(
+      "never starts below the configured floor and cancels within one poll after two real low readings",
       fc.asyncProperty(
         fc.array(metric, { minLength: 3, maxLength: 12 }),
         async (sequence) => {
@@ -613,7 +615,7 @@ describe("online index gate", () => {
           return true;
         },
       ),
-      propertyConfig({ numRuns: 60 }),
+      { numRuns: 60 },
     );
   });
 

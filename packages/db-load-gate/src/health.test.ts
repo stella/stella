@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
 import {
@@ -105,7 +105,8 @@ describe("fail-closed start decisions", () => {
     }
   }
   test("combination is permutation independent and worst wins", () => {
-    fc.assert(
+    assertProperty(
+      "combination is permutation independent and worst wins",
       fc.property(fc.array(fc.constantFrom(...kinds)), (sequence) => {
         const signals = sequence.map((kind) => reading(50, kind));
         const result = combine(signals);
@@ -122,11 +123,12 @@ describe("fail-closed start decisions", () => {
         }
         expect(result.kind).toBe(expected);
       }),
-      propertyConfig(),
+      {},
     );
   });
   test("any index metric sequence starts only above the configured floor", () => {
-    fc.assert(
+    assertProperty(
+      "any index metric sequence starts only above the configured floor",
       fc.property(
         fc.integer({ min: 1, max: 100 }),
         fc.array(fc.option(fc.integer({ min: 0, max: 100 }), { nil: null })),
@@ -152,7 +154,7 @@ describe("fail-closed start decisions", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -209,7 +211,8 @@ describe("critical readings cancel only consecutively", () => {
     }
   });
   test("for every history cancellation happens on the second real hard-floor reading, independently of progress", () => {
-    fc.assert(
+    assertProperty(
+      "for every history cancellation happens on the second real hard-floor reading, independently of progress",
       fc.property(
         fc.integer({ min: 1, max: 100 }),
         fc.array(fc.option(fc.integer({ min: 0, max: 100 }), { nil: null })),
@@ -242,7 +245,7 @@ describe("critical readings cancel only consecutively", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -331,7 +334,8 @@ describe("adaptive batch bounds and durable hold", () => {
     expectLogged(resumed);
   });
   test("batch size and step ratio stay bounded through any health/duration sequence and configured bounds", () => {
-    fc.assert(
+    assertProperty(
+      "batch size and step ratio stay bounded through any health/duration sequence and configured bounds",
       fc.property(
         fc.integer({ min: 1, max: 100 }),
         fc.integer({ min: 100, max: 20_000 }),
@@ -366,7 +370,7 @@ describe("adaptive batch bounds and durable hold", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
   test("missing duration cannot create evidence of a stable completed batch", () => {
@@ -452,7 +456,8 @@ describe("adaptive batch bounds and durable hold", () => {
     expect(isHeldTooLong({ heldSince: 1000 }, 999)).toBe(false);
   });
   test("busy-only extension and duplicated windows never consume held budget", () => {
-    fc.assert(
+    assertProperty(
+      "busy-only extension and duplicated windows never consume held budget",
       fc.property(fc.integer({ min: 1, max: 90 * 60_000 }), (extension) => {
         const heldSince = Temporal.Instant.from(
           "2026-10-01T04:30:00Z",
@@ -472,11 +477,12 @@ describe("adaptive batch bounds and durable hold", () => {
           isHeldTooLong({ heldSince }, heldSince + 90 * 60_000 + 1, config),
         ).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
   test("held budget matches elapsed nonbusy minutes for arbitrary hold ranges", () => {
-    fc.assert(
+    assertProperty(
+      "held budget matches elapsed nonbusy minutes for arbitrary hold ranges",
       fc.property(
         fc.integer({ min: 0, max: 1439 }),
         fc.integer({ min: 1, max: 2880 }),
@@ -517,7 +523,7 @@ describe("adaptive batch bounds and durable hold", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
   test("effective growth streak and upper clamp apply to fast healthy batches", () => {
@@ -535,7 +541,8 @@ describe("adaptive batch bounds and durable hold", () => {
       expect(result.size).toBe(expected);
       expectLogged(result);
     }
-    fc.assert(
+    assertProperty(
+      "effective growth streak and upper clamp apply to fast healthy batches",
       fc.property(
         fc.integer({ min: 100, max: 20_000 }),
         fc.integer({ min: 1, max: 8 }),
@@ -568,7 +575,7 @@ describe("adaptive batch bounds and durable hold", () => {
           expect(current.size).toBe(maxSize);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

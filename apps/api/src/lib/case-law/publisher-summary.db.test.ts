@@ -7,7 +7,7 @@ import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   TEXT_ABSENCE_REASON,
 } from "@stll/api-contract/case-law-text-field";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   PUBLISHER_SUMMARY_SOURCES,
@@ -290,7 +290,8 @@ test("both readings agree for arbitrary stored absence shapes", async () => {
     }),
   );
 
-  await fc.assert(
+  await assertProperty(
+    "both readings agree for arbitrary stored absence shapes",
     fc.asyncProperty(sidecar, safeString, async (value, candidateText) => {
       const metadata = {
         [DECISION_TEXT_ABSENCE_METADATA_KEY]: value,
@@ -301,7 +302,7 @@ test("both readings agree for arbitrary stored absence shapes", async () => {
         publisherSummaryOf({ documentAst: null, metadata }),
       );
     }),
-    propertyConfig({ numRuns: 100 }),
+    { numRuns: 100 },
   );
 });
 

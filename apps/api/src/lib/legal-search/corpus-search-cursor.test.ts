@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
@@ -335,16 +335,18 @@ test.each([
 });
 
 test("decode is total — never throws on arbitrary strings", () => {
-  fc.assert(
+  assertProperty(
+    "decode is total — never throws on arbitrary strings",
     fc.property(fc.string(), (input) => {
       expect(() => decodeCorpusSearchCursor(input)).not.toThrow();
     }),
-    propertyConfig(),
+    {},
   );
 });
 
 test("encode → decode round-trips every window, identity and order", () => {
-  fc.assert(
+  assertProperty(
+    "encode → decode round-trips every window, identity and order",
     fc.property(
       fc.double({ noDefaultInfinity: true, noNaN: true }).filter(
         // -0 is excluded because String(-0) === "0" loses the sign.
@@ -376,7 +378,7 @@ test("encode → decode round-trips every window, identity and order", () => {
         ).toEqual({ dictionary, id, score, sort, windowStart, target });
       },
     ),
-    propertyConfig(),
+    {},
   );
 });
 

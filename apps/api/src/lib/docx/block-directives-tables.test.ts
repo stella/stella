@@ -5,7 +5,7 @@ import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -873,7 +873,8 @@ describe("property: {% if %} markers placed anywhere inside one row", () => {
         withElse: fc.boolean(),
       });
 
-      fc.assert(
+      assertProperty(
+        "no cell is left without a paragraph and no table without a row",
         fc.property(placement, ({ cellPicks, flag, withElse }) => {
           const tokens = withElse
             ? [
@@ -928,7 +929,7 @@ describe("property: {% if %} markers placed anywhere inside one row", () => {
             expect(texts).toEqual([]);
           }
         }),
-        propertyConfig({ numRuns: 200, seed: propertySeed() }),
+        { numRuns: 200, seed: propertySeed() },
       );
     },
     propertyTestTimeout(15_000),
