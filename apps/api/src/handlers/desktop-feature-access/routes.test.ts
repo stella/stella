@@ -26,6 +26,7 @@ import { createDesktopFeatureAccessReadEndpoint } from "./read";
 import { desktopFeatureAccessRoute } from "./routes";
 
 const ORGANIZATION_ID = "org_test";
+const USER_ID = "user_test";
 const GRANTED_EMAIL = "granted@example.test";
 
 type Caller = { email: string; emailVerified: boolean } | null;
@@ -34,10 +35,40 @@ const testState = createTestState({ file: import.meta.path, config: env });
 const serve = (table: readonly RouteEntry[]) =>
   serveForTest(createHttpApp({ routes: table, middleware: [errorBoundary] }));
 
-const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
+const TIME_BILLING = {
+  enrolled: "enrolled",
+  notEnrolled: "not-enrolled",
+} as const;
+
+type ReadAsOptions = {
+  caller: Caller;
+  organizationId?: string;
+  timeBilling?: (typeof TIME_BILLING)[keyof typeof TIME_BILLING];
+};
+
+const readAs = async ({
+  caller,
+  organizationId = ORGANIZATION_ID,
+  timeBilling = TIME_BILLING.enrolled,
+}: ReadAsOptions) => {
+  const accountOrganizationId = toSafeId<"organization">(organizationId);
   const { scopedDb } = createScopedDbMock(
     {},
-    { featureAccess: { identity: caller } },
+    {
+      featureAccess: {
+        identity: caller,
+        enrolments:
+          timeBilling === TIME_BILLING.enrolled
+            ? [
+                {
+                  featureId: "time-billing",
+                  organizationId: accountOrganizationId,
+                  userId: USER_ID,
+                },
+              ]
+            : [],
+      },
+    },
   );
   const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopFeatureAccessReadEndpoint({
@@ -52,8 +83,8 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
           keyId: "key_test",
           credential: "fixture-credential",
         }),
-        organizationId: toSafeId<"organization">(organizationId),
-        userId: toSafeId<"user">("user_test"),
+        organizationId: accountOrganizationId,
+        userId: toSafeId<"user">(USER_ID),
         keyId: "key_test",
         memberRole: sessionMemberRole("member"),
         scopedDb,
@@ -62,6 +93,7 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
   await using server = serve(
     routes({ [DESKTOP_FEATURE_ACCESS_PATH]: { GET: endpoint } }),
   );
+  testState.setConfig("FEATURE_TIME_BILLING", true);
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline": [
       {
@@ -97,12 +129,26 @@ test("feature access requires the desktop account credential", async () => {
   }
 });
 
-test("a granted member sees the feature enabled", async () => {
-  const body = await readAs({ email: GRANTED_EMAIL, emailVerified: true });
+test("a granted member enrolled in time billing sees the feature enabled", async () => {
+  const body = await readAs({
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
+  });
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "enabled" },
-      "time-billing": { status: "hidden" },
+      "local-agents": { status: "hidden" },
+    },
+  });
+});
+
+test("a granted member without time billing sees the activity timeline hidden", async () => {
+  const body = await readAs({
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
+    timeBilling: TIME_BILLING.notEnrolled,
+  });
+  expect(body).toStrictEqual({
+    features: {
+      "activity-timeline": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -110,10 +156,10 @@ test("a granted member sees the feature enabled", async () => {
 
 test("a member grant does not cross the desktop account organization", async () => {
   const caller = { email: GRANTED_EMAIL, emailVerified: true };
-  expect(await readAs(caller)).toMatchObject({
+  expect(await readAs({ caller })).toMatchObject({
     features: { "activity-timeline": { status: "enabled" } },
   });
-  expect(await readAs(caller, "org_other")).toMatchObject({
+  expect(await readAs({ caller, organizationId: "org_other" })).toMatchObject({
     features: { "activity-timeline": { status: "hidden" } },
   });
 });
@@ -124,10 +170,9 @@ test("callers outside the grant see the feature hidden", async () => {
     { email: GRANTED_EMAIL, emailVerified: false },
     null,
   ]) {
-    expect(await readAs(caller)).toStrictEqual({
+    expect(await readAs({ caller })).toStrictEqual({
       features: {
         "activity-timeline": { status: "hidden" },
-        "time-billing": { status: "hidden" },
         "local-agents": { status: "hidden" },
       },
     });
@@ -136,8 +181,7 @@ test("callers outside the grant see the feature hidden", async () => {
 
 test("the response decides every desktop feature and nothing else", async () => {
   const body: unknown = await readAs({
-    email: GRANTED_EMAIL,
-    emailVerified: true,
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
   });
   const features = isRecord(body) ? body["features"] : undefined;
   expect(
