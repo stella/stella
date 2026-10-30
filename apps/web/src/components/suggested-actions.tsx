@@ -124,7 +124,11 @@ const labelRevealStyle = (reveal: LabelReveal): CSSProperties | undefined => {
 
 // The computed `translate` of a label that has not moved yet, as browsers
 // and the test DOM spell it.
-const UNMOVED_TRANSLATE = new Set(["", "none", "0px", "0px 0px"]);
+const isUnmovedTranslate = (translate: string) =>
+  translate === "" ||
+  translate === "none" ||
+  translate === "0px" ||
+  translate === "0px 0px";
 
 type SuggestedActionChipProps = {
   action: SuggestedAction;
@@ -184,8 +188,7 @@ const SuggestedActionChip = ({
     // Released before the delay ran out: nothing moved, so no transition
     // will end to hand back to `rest`.
     const moved =
-      label !== null &&
-      !UNMOVED_TRANSLATE.has(getComputedStyle(label).translate);
+      label !== null && !isUnmovedTranslate(getComputedStyle(label).translate);
     setReveal((current) => {
       if (current.type !== "revealing") {
         return current;
