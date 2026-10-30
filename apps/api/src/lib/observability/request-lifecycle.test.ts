@@ -61,6 +61,7 @@ import {
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
 import type { LogRecord } from "@/api/lib/observability/logger";
+import { ownedMessage } from "@/api/lib/observability/owned-message";
 import { openRequestContext } from "@/api/lib/observability/request-context";
 import {
   errorBoundary,
@@ -701,7 +702,7 @@ describe("the request lifecycle", () => {
                 mode === "configuration"
                   ? Result.err(
                       new ActionSizeError({
-                        message: "Unconfigured",
+                        message: ownedMessage("Unconfigured"),
                         reason: "configuration",
                       }),
                     )

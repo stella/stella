@@ -14,8 +14,6 @@ const HEX_SECRET_REGEX = /\b[0-9a-fA-F]{32,}\b/gu;
 const BASE64_SECRET_REGEX = /\b[A-Za-z0-9_-]{40,}={0,2}/gu;
 
 const REDACTED_SECRET = "[redacted-secret]";
-const REDACTED_EMAIL = "[redacted-email]";
-const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gu;
 // Provider keys, including the masked forms providers echo back in errors
 // ("sk-proj-****abcd", "sk-ab…wxyz"): the visible fragment is still a key.
 const PREFIXED_SECRET_REGEX =
@@ -70,7 +68,3 @@ export const sanitizeFeedbackSecrets = (input: string) => {
   }
   return { text, redactions };
 };
-
-/** Redact credential and email shapes before bounded failure text is logged. */
-export const sanitizeFailureText = (input: string): string =>
-  sanitizeCredentialText(input).text.replace(EMAIL_REGEX, () => REDACTED_EMAIL);

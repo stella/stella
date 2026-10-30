@@ -6,7 +6,7 @@
  * logged at its grade's severity with no shadow flag, and captured.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { SQL } from "bun";
 import {
   afterAll,
@@ -17,6 +17,7 @@ import {
   test,
 } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
+import * as v from "valibot";
 
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
@@ -34,6 +35,7 @@ import {
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
 import type { LogRecord } from "@/api/lib/observability/logger";
+import { ownedMessage } from "@/api/lib/observability/owned-message";
 import {
   enrichRequestContext,
   openRequestContext,
@@ -104,6 +106,47 @@ const sensitiveFailure = (): Error =>
     "upstream refused Bearer sk-live-super-secret for lawyer@example.com",
   );
 
+const RECEIVED_VALUE = "Jana Novakova, Example Billing s.r.o.";
+
+// Valibot quotes the value it rejected: here a provider payload field.
+const valibotFailure = (): Error => {
+  const parsed = v.safeParse(v.pipe(v.string(), v.email()), RECEIVED_VALUE);
+  return parsed.success
+    ? panic("The probe value must fail validation")
+    : new v.ValiError(parsed.issues);
+};
+
+const UNOWNED_FAILURES = [
+  {
+    name: "a Valibot error quoting a received value",
+    path: "/v1/signals/valibot",
+    failure: valibotFailure,
+    leaked: RECEIVED_VALUE,
+  },
+  {
+    name: "a message containing a personal name",
+    path: "/v1/signals/name",
+    failure: () => new Error("Cannot load contact Jana Novakova"),
+    leaked: "Jana Novakova",
+  },
+  {
+    name: "a message containing a token query",
+    path: "/v1/signals/token",
+    failure: () =>
+      new Error("GET https://api.example.test/v1/x?token=abc123 failed"),
+    leaked: "abc123",
+  },
+  {
+    name: "a provider echo",
+    path: "/v1/signals/echo",
+    failure: () =>
+      new Error(
+        'Provider rejected {"input":"Clause 4 of the client contract"}',
+      ),
+    leaked: "Clause 4 of the client contract",
+  },
+] as const;
+
 // A member route is a tenant action, so the admission boundary decides it.
 const memberRoute: RouteDefinition = {
   access: "member",
@@ -142,6 +185,16 @@ const handlerServer = serve(LIFECYCLE, {
       return Result.ok(searchIndexUnavailableResponse(sensitiveFailure()));
     }),
   },
+  ...Object.fromEntries(
+    UNOWNED_FAILURES.map(({ path, failure }) => [
+      path,
+      {
+        GET: createSafePublicHandler(config, async function* () {
+          return Result.ok(searchIndexUnavailableResponse(failure()));
+        }),
+      },
+    ]),
+  ),
 });
 
 const unconfiguredServer = serve(
@@ -152,7 +205,7 @@ const unconfiguredServer = serve(
       policy: () =>
         Result.err(
           new ActionSizeError({
-            message: "Unconfigured",
+            message: ownedMessage("Unconfigured"),
             reason: "configuration",
           }),
         ),
@@ -244,18 +297,27 @@ describe("a server error answer", () => {
     expect(analytics.exceptions()).toHaveLength(1);
   });
 
-  test("redacts credentials and personal data from a 5xx cause", async () => {
-    const response = await handlerServer.fetch(
-      "http://localhost/v1/signals/sensitive",
+  test.each(UNOWNED_FAILURES)(
+    "logs no summary for $name",
+    async ({ path, leaked }) => {
+      const response = await handlerServer.fetch(`http://localhost${path}`);
+      expect(response.status).toBe(503);
+
+      const cause = recordNamed(logs.records, "legal_search.index_unavailable");
+      expect(cause?.attributes?.["failure.reason"]).toBeDefined();
+      expect(cause?.attributes).not.toHaveProperty("cause.summary");
+      expect(JSON.stringify(logs.records)).not.toContain(leaked);
+    },
+  );
+
+  test("logs the message of an error that owns it", async () => {
+    const response = await unconfiguredServer.fetch(
+      "http://localhost/v1/mcp/connections",
     );
     expect(response.status).toBe(503);
 
-    const cause = recordNamed(logs.records, "legal_search.index_unavailable");
-    expect(cause?.attributes?.["cause.summary"]).toBe(
-      "upstream refused Bearer [redacted-secret] for [redacted-email]",
-    );
-    expect(JSON.stringify(cause)).not.toContain("sk-live-super-secret");
-    expect(JSON.stringify(cause)).not.toContain("lawyer@example.com");
+    const cause = recordNamed(logs.records, "action_size.unconfigured");
+    expect(cause?.attributes?.["cause.summary"]).toBe("Unconfigured");
   });
 
   test("captures a 5xx cause with the request's capture context", async () => {

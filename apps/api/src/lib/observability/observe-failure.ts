@@ -21,7 +21,6 @@ import {
 } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
-import { sanitizeFailureText } from "@/api/lib/observability/credential-text";
 import type {
   FailureGrading,
   FailureSink,
@@ -42,6 +41,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
+import { ownedMessageOf } from "@/api/lib/observability/owned-message";
 import { releaseFailureIdentity } from "@/api/lib/observability/release-failures";
 import {
   getActiveRequest,
@@ -198,17 +198,14 @@ const observe = (
   }
   const policy = resolvePolicy(sink, grading.grade, escalation);
   const context = acceptFailureContext(ctx);
+  const summary = ownedMessageOf(error);
   const attributes: LoggerAttributes = {
     ...context.accepted,
     ...requestFields(onRequest),
     ...errorFields(evidence),
-    ...(error instanceof Error
-      ? {
-          "cause.summary": sanitizeQueryErrorText(
-            sanitizeFailureText(error.message),
-          ),
-        }
-      : {}),
+    ...(summary === undefined
+      ? {}
+      : { "cause.summary": sanitizeQueryErrorText(summary) }),
     ...failureFields(grading, sink),
     "failure.policy": sanitizeQueryErrorText(policy.source),
     ...(context.rejected > 0
