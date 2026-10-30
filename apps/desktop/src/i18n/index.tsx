@@ -176,6 +176,7 @@ export const DesktopIntlProvider = ({
       labels={{
         close: messages.dialog.close,
         unsavedChanges: messages.dialog.unsavedChangesEscape,
+        unsavedChangesClose: messages.dialog.unsavedChangesClose,
       }}
     >
       {children}
