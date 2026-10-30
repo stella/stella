@@ -18,6 +18,29 @@ afterEach(() => {
 });
 
 describe("idle-bounded response body reads", () => {
+  test("a pre-aborted read cancels the body without awaiting cancellation", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("caller stopped", "AbortError");
+    controller.abort(reason);
+    let cancelledWith: unknown;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        async cancel(cancelReason) {
+          cancelledWith = cancelReason;
+          await new Promise<void>(() => {});
+        },
+      }),
+    );
+
+    const result = readBodyWithIdleDeadline(response, {
+      idleMs: 10,
+      signal: controller.signal,
+    }).catch((error: unknown) => error);
+
+    expect(await result).toBe(reason);
+    expect(cancelledWith).toBe(reason);
+  });
+
   test("the iterator re-arms its deadline for each progressing chunk", async () => {
     jest.useFakeTimers();
     let stream: ReadableStreamDefaultController<Uint8Array> | undefined;

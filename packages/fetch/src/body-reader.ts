@@ -37,7 +37,14 @@ export async function* iterateBodyWithIdleDeadline(
   if (invalidDuration !== undefined) {
     await Promise.reject(invalidDuration);
   }
-  signal?.throwIfAborted();
+  if (signal?.aborted === true) {
+    response.body?.cancel(signal.reason).catch((cancellationError: unknown) => {
+      // Cancellation only releases transport resources; the caller's abort
+      // reason remains authoritative when cleanup also fails.
+      cancellationError satisfies unknown;
+    });
+    signal.throwIfAborted();
+  }
   if (
     maxBytes !== undefined &&
     (!Number.isSafeInteger(maxBytes) || maxBytes < 0)

@@ -27,7 +27,12 @@ import {
 } from "@stll/api-contract/desktop-registry";
 import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 import { printError } from "@stll/errors";
-import { fetchWithTimeout, readBodyTextWithIdleDeadline } from "@stll/fetch";
+import {
+  BodyByteLimitError,
+  fetchWithTimeout,
+  readBodyTextWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -372,9 +377,10 @@ export const evaluateToolsList = ({
 
 const readProbeResponse = async (
   response: Response,
+  idleMs = PROBE_TIMEOUT_MS,
 ): Promise<ProbeResponse> => {
   const text = await readBodyTextWithIdleDeadline(response, {
-    idleMs: PROBE_TIMEOUT_MS,
+    idleMs,
   });
   let body: unknown;
   try {
@@ -956,24 +962,9 @@ const CANARY_SCOPE = MCP_DEFAULT_RESOURCE_SCOPES.filter(
   (scope) => scope === "stella:search" || scope === "stella:read",
 ).join(" ");
 
-const readBoundedJsonObjectBody = async (
-  body: ReadableStream<Uint8Array>,
-): Promise<Record<string, unknown> | undefined> => {
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  for await (const chunk of body) {
-    length += chunk.byteLength;
-    if (length > CLIENT_METADATA_BYTE_CAP) {
-      return undefined;
-    }
-    chunks.push(chunk);
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+const parseJsonObjectBody = (
+  bytes: Uint8Array,
+): Record<string, unknown> | undefined => {
   const parsed = Result.try((): unknown =>
     JSON.parse(new TextDecoder().decode(bytes)),
   );
@@ -982,7 +973,7 @@ const readBoundedJsonObjectBody = async (
     : undefined;
 };
 
-const readBoundedJsonObject = async (
+const readClientMetadataBody = async (
   response: Response,
 ): Promise<Record<string, unknown> | undefined> => {
   const declaredLength = Number(response.headers.get("content-length"));
@@ -993,9 +984,19 @@ const readBoundedJsonObject = async (
     await response.body?.cancel();
     return undefined;
   }
-  return response.body
-    ? await readBoundedJsonObjectBody(response.body)
-    : undefined;
+  const bytes = await Result.tryPromise(async () =>
+    readBodyWithIdleDeadline(response, {
+      idleMs: PROBE_TIMEOUT_MS,
+      maxBytes: CLIENT_METADATA_BYTE_CAP,
+    }),
+  );
+  if (Result.isError(bytes)) {
+    if (BodyByteLimitError.is(bytes.error.cause)) {
+      return undefined;
+    }
+    throw bytes.error.cause;
+  }
+  return parseJsonObjectBody(bytes.value);
 };
 
 type AuthorizeResponseOptions = {
@@ -1178,13 +1179,12 @@ export const runOAuthJourneys = async (
               `client metadata unavailable upstream (HTTP ${String(response.status)})`,
             );
           }
-          if (!(await readBoundedJsonObject(response))) {
-            return upstream(
-              metadataName,
-              "client metadata unavailable upstream (invalid JSON document)",
-            );
-          }
-          return passed(metadataName, "client metadata available upstream");
+          return (await readClientMetadataBody(response))
+            ? passed(metadataName, "client metadata available upstream")
+            : upstream(
+                metadataName,
+                "client metadata unavailable upstream (invalid JSON document)",
+              );
         });
         if (Result.isOk(attempt)) {
           return attempt.value;
@@ -1932,7 +1932,10 @@ const createReviewJourneyContext = (
       }
     }
     cookies.set(origin, responseCookies);
-    state.lastResponse = await readProbeResponse(response);
+    state.lastResponse = await readProbeResponse(
+      response,
+      requestBudgetMs ?? PROBE_TIMEOUT_MS,
+    );
     if (
       requestBudgetMs !== undefined &&
       performance.now() - started >= requestBudgetMs
