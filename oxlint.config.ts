@@ -2511,24 +2511,6 @@ const config = defineConfig({
                   "The viewport cuts the outgoing content to one line while the popup morphs to the incoming content's size.",
                 utilities: ["**:data-previous:truncate"],
               },
-              {
-                path: "packages/ui/src/components/identity-text.tsx",
-                reason:
-                  "Pending: IdentityText discloses a cut name when its owning control takes focus, which TruncatedText does not yet do.",
-                utilities: ["truncate"],
-              },
-              {
-                path: "packages/ui/src/components/composer-tokens.ts",
-                reason:
-                  "Pending: the placeholder token is applied to elements in apps/web; it moves to TruncatedText with those callers.",
-                utilities: ["truncate"],
-              },
-              {
-                path: "packages/workspace-ui/src/field-value.tsx",
-                reason:
-                  "Pending: getIntClassName is applied to elements in apps/web; it moves to TruncatedText with those callers.",
-                utilities: ["truncate"],
-              },
             ],
           },
         ],
