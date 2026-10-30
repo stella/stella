@@ -115,7 +115,9 @@ const generateBase = (root: string, base: string) => {
 const SHA = /^[0-9a-f]{40}$/u;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-const mergeGroupBase = (): string | undefined => {
+type MergeGroupRevisions = { base: string; head: string };
+
+const mergeGroupRevisions = (): MergeGroupRevisions | undefined => {
   if (process.env["GITHUB_EVENT_NAME"] !== "merge_group") {
     return undefined;
   }
@@ -134,7 +136,18 @@ const mergeGroupBase = (): string | undefined => {
   ) {
     throw new AdmissionError({ message: "Merge-group revisions are invalid" });
   }
-  return group["base_sha"];
+  return { base: group["base_sha"], head: group["head_sha"] };
+};
+
+const gitHead = (root: string) => {
+  const result = Bun.spawnSync(["git", "-C", root, "rev-parse", "HEAD"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({ message: "Cannot read the checked-out HEAD" });
+  }
+  return new TextDecoder().decode(result.stdout).trim();
 };
 
 type MergeGroupJobChange =
@@ -151,16 +164,22 @@ export class MergeGroupApprovalRequiredError extends TaggedError(
   approvalPath: string;
 }> {}
 
-const checkMergeGroupClassification = (root: string, base: string) => {
-  const eventBase = mergeGroupBase();
-  if (eventBase !== base) {
+// A queued group's base is its parent: main for the first entry, the previous
+// group's commit after that, so each group answers for its own entry only.
+const checkMergeGroupClassification = (
+  root: string,
+  { base, head }: MergeGroupRevisions,
+) => {
+  const checkedOut = gitHead(root);
+  if (checkedOut !== head) {
     throw new AdmissionError({
-      message: "Merge-group event base does not match the comparison base",
+      message: `Merge-group head ${head} is not the checked-out revision ${checkedOut}`,
     });
   }
   const groupInputs = readClassificationInputs(root);
   const group = generateWithJobs(groupInputs);
-  const baseGeneration = generateBase(root, base).generation;
+  const baseRevision = generateBase(root, base);
+  const baseGeneration = baseRevision.generation;
   const changes: MergeGroupJobChange[] = [
     ...new Set([...group.jobs.keys(), ...baseGeneration.jobs.keys()]),
   ].flatMap((key): MergeGroupJobChange[] => {
@@ -203,7 +222,24 @@ const checkMergeGroupClassification = (root: string, base: string) => {
       }
     }
   }
-  return { workflowCount: group.workflowCount, privilegedJobs: [] as string[] };
+  // Approvals cover review; the group tree must still pass every other
+  // generation rule (action pinning, complete classification, no cycles, no
+  // stale decisions).
+  if (
+    group.result.isErr() &&
+    !(group.result.error instanceof ReviewRequiredError)
+  ) {
+    throw group.result.error;
+  }
+  return {
+    workflowCount: group.workflowCount,
+    privilegedJobs: sensitiveChanges({
+      head: group,
+      headDecisions: groupInputs.decisions,
+      base: baseGeneration,
+      baseDecisions: baseRevision.inputs.decisions,
+    }),
+  };
 };
 
 // Rewrites only the digests of mechanical refreshes.
@@ -272,12 +308,9 @@ export const checkJobClassification = (root: string, base?: string) =>
           message: `Jobs that write the repository (contents write permission, an app token requesting it, or the signed-commit action) publish and must be classified priority. Set kind "priority" and describe what they publish in:\n${writers.map(decisionPathForKey).join("\n")}`,
         });
       }
-      const mergeGroup = mergeGroupBase();
+      const mergeGroup = mergeGroupRevisions();
       if (mergeGroup) {
-        if (!base) {
-          throw new AdmissionError({ message: "Merge-group base is missing" });
-        }
-        return checkMergeGroupClassification(root, base);
+        return checkMergeGroupClassification(root, mergeGroup);
       }
       const privilegedJobs = base
         ? (() => {

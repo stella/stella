@@ -738,6 +738,75 @@ test("a job removed by a merge group needs no approval", () => {
   });
 });
 
+test("a merge group refuses an approved job that uses a mutable action ref", () => {
+  const groupWorkflow =
+    "jobs: {check: {steps: [{run: echo check}, {uses: someorg/action@main}]}}";
+  const group = mergeGroupFixture(BEFORE, groupWorkflow);
+  approveGroupJob(group.root, groupWorkflow);
+  group.commitAll("group tree");
+
+  const result = mergeGroupRun(group.root, group.base, group.head());
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("someorg/action@main");
+});
+
+test("a merge group refuses a decision left for a removed job", () => {
+  const baseWorkflow =
+    "jobs: {check: {steps: [{run: echo check}]}, keep: {steps: [{run: echo keep}]}}";
+  const removedWorkflow = "jobs: {keep: {steps: [{run: echo keep}]}}";
+  const decisions = {
+    ...reviewed(baseWorkflow, "check"),
+    ...reviewed(baseWorkflow, "keep"),
+  };
+  // The group drops the job but keeps its decision.
+  const { root, commitAll } = repository(
+    { workflow: baseWorkflow, decisions },
+    { workflow: removedWorkflow, decisions },
+  );
+  const base = revision(root);
+  commitAll("remove job, keep decision");
+
+  const result = mergeGroupRun(root, base, revision(root));
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("check");
+});
+
+test("a merge group refuses an event head other than the checked-out tree", () => {
+  const group = mergeGroupFixture(BEFORE, AFTER);
+  approveGroupJob(group.root, AFTER);
+  group.commitAll("group tree");
+
+  const result = mergeGroupRun(group.root, group.base, group.base);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("is not the checked-out revision");
+});
+
+test("a later queue entry answers only for its own change", () => {
+  // The first entry's group commit is the second entry's base; only the
+  // second entry's change needs an approval in the second group.
+  const firstWorkflow = AFTER;
+  const secondWorkflow = AFTER.replace(
+    "1111111111111111111111111111111111111111",
+    "2222222222222222222222222222222222222222",
+  );
+  const group = mergeGroupFixture(BEFORE, firstWorkflow);
+  approveGroupJob(group.root, firstWorkflow);
+  group.commitAll("first entry");
+  const firstGroup = group.head();
+  writeFileSync(
+    path.join(group.root, ".github/workflows/ci.yml"),
+    secondWorkflow,
+  );
+  writeDecision(group.root, keyOf("check"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(secondWorkflow, "check"),
+  });
+  group.commitAll("second entry");
+
+  expect(mergeGroupRun(group.root, firstGroup, group.head()).exitCode).toBe(0);
+});
+
 test("the merge-group check never reads pull request refs", () => {
   const source = readFileSync(SCRIPT, "utf-8");
   expect(source).not.toContain(["refs", "pull"].join("/"));
