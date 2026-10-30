@@ -127,6 +127,7 @@ describe("corpus reader schema at persistence boundaries", () => {
       expect(
         prepareCorpusAst({
           ast: invalid,
+          fallbackText: "Decision text.",
           source: "synthetic",
           parserVersion: 1,
         }).unwrap(),

@@ -955,8 +955,8 @@ const replayConvergenceFixture = async (text: string) => {
     documentAst: astWithBlocks([paragraph("b1", text)]),
     parserVersion: 4,
   });
-  const sanitized = sanitizeResult(result);
-  const payload = caseLawCanonicalPayload(sanitized);
+  const sanitized = sanitizeResult(result).unwrap();
+  const payload = caseLawCanonicalPayload(sanitized).unwrap();
   await db.insert(caseLawDecisions).values({
     id,
     sourceId,

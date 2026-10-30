@@ -173,37 +173,39 @@ const observe = async ({
   file,
   order,
 }: ObserveOptions) =>
-  await processDecision({
-    input: plainTextIngestionResult({
-      caseNumber,
-      ...(sourceDocumentId === undefined ? {} : { sourceDocumentId }),
-      court: "Ústavný súd Slovenskej republiky",
-      country: "SVK",
-      language: "sk",
-      fulltext: "Rozhodnutie o veci samej.",
-      metadata: {},
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      rawHash: sha256(`${listing}|${file ?? ""}`),
-      documentAst: EMPTY_AST,
-      sourceRaw: encodeSourceRawEnvelope({ listing }),
-      ...(file === undefined
-        ? {}
-        : {
-            sourceRawObjects: {
-              "document-file": {
-                bytes: bytesOf(file),
-                contentType: "application/pdf",
+  (
+    await processDecision({
+      input: plainTextIngestionResult({
+        caseNumber,
+        ...(sourceDocumentId === undefined ? {} : { sourceDocumentId }),
+        court: "Ústavný súd Slovenskej republiky",
+        country: "SVK",
+        language: "sk",
+        fulltext: "Rozhodnutie o veci samej.",
+        metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: sha256(`${listing}|${file ?? ""}`),
+        documentAst: EMPTY_AST,
+        sourceRaw: encodeSourceRawEnvelope({ listing }),
+        ...(file === undefined
+          ? {}
+          : {
+              sourceRawObjects: {
+                "document-file": {
+                  bytes: bytesOf(file),
+                  contentType: "application/pdf",
+                },
               },
-            },
-          }),
-      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-    }),
-    sourceId,
-    scopedDb,
-    observedAt: new Date(),
-    observationOrder: order,
-    refresh: DECISION_REFRESH.ALWAYS,
-  });
+            }),
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: new Date(),
+      observationOrder: order,
+      refresh: DECISION_REFRESH.ALWAYS,
+    })
+  ).unwrap();
 
 const rowOf = async (decisionId: SafeId<"caseLawDecision">) =>
   (
@@ -1228,27 +1230,31 @@ describe("moving decisions out of the older layout", () => {
       .where(eq(caseLawDecisions.id, legacy.decisionId));
 
     // What a replay hands the pipeline: the stored envelope, no bytes.
-    await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "VIII. ÚS 1/2026",
-        sourceDocumentId: "replayed",
-        court: "Ústavný súd Slovenskej republiky",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: sha256(envelope),
-        documentAst: EMPTY_AST,
-        sourceRaw: envelope,
-        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      }),
-      sourceId,
-      scopedDb,
-      observedAt: new Date(),
-      observationOrder: 1n,
-      refresh: DECISION_REFRESH.ALWAYS,
-    });
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "VIII. ÚS 1/2026",
+          sourceDocumentId: "replayed",
+          court: "Ústavný súd Slovenskej republiky",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: sha256(envelope),
+          documentAst: EMPTY_AST,
+          sourceRaw: envelope,
+          sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        }),
+        sourceId,
+        scopedDb,
+        observedAt: new Date(),
+        observationOrder: 1n,
+        refresh: DECISION_REFRESH.ALWAYS,
+      })
+    ).unwrap();
 
     const named = await namedBy(legacy.decisionId);
     expect(named).toHaveLength(2);

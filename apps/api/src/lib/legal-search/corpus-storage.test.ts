@@ -971,15 +971,17 @@ test("standalone writes repair repeated identities before comparing the stored p
   }
   // The repaired AST must converge to the already stored document. The
   // aborted signal makes any unintended transfer fail before reaching S3.
-  const outcome = await writeCorpusDocument(
-    {
-      ...payload,
-      ast: invalidAst,
-      documentId: "synthetic",
-      jurisdiction: "SVK",
-      stored: plan.written,
-    },
-    { signal: AbortSignal.abort() },
-  );
+  const outcome = (
+    await writeCorpusDocument(
+      {
+        ...payload,
+        ast: invalidAst,
+        documentId: "synthetic",
+        jurisdiction: "SVK",
+        stored: plan.written,
+      },
+      { signal: AbortSignal.abort() },
+    )
+  ).unwrap();
   expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

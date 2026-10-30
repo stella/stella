@@ -159,7 +159,7 @@ const backfillRow = async (
       return "skipped";
     }
 
-    const outcome = await writeCorpusDocument({
+    const written = await writeCorpusDocument({
       documentId: row.id,
       jurisdiction: row.country,
       text: row.fulltext,
@@ -168,6 +168,17 @@ const backfillRow = async (
       // The scan admits only rows with no recorded corpus write.
       stored: null,
     });
+    if (written.isErr()) {
+      captureError(
+        written.error,
+        handlerErrorContext("runners.backfillRow", {
+          decisionId: row.id,
+          step: "caseLawCorpusStorageBackfill",
+        }),
+      );
+      return "failed";
+    }
+    const outcome = written.value;
     if (outcome.type === "skipped-empty") {
       // Nothing readable to store; null pointers already represent it.
       return "skipped";
@@ -241,7 +252,7 @@ const backfillLegislationRow = async (
       return "skipped";
     }
 
-    const outcome = await writeCorpusDocument({
+    const written = await writeCorpusDocument({
       documentId: row.id,
       jurisdiction: row.country,
       text: row.fulltext,
@@ -250,6 +261,17 @@ const backfillLegislationRow = async (
       // The scan admits only rows with no recorded corpus write.
       stored: null,
     });
+    if (written.isErr()) {
+      captureError(
+        written.error,
+        handlerErrorContext("runners.backfillLegislationRow", {
+          documentId: row.id,
+          step: "legislationCorpusStorageBackfill",
+        }),
+      );
+      return "failed";
+    }
+    const outcome = written.value;
     if (outcome.type === "skipped-empty") {
       // Nothing readable to store; null pointers already represent it.
       return "skipped";

@@ -1151,9 +1151,17 @@ const replayWouldChangeRow = async ({
   row: ReplayDecisionRow;
   result: IngestionResult;
   scopedDb: ScopedDb;
-}): Promise<boolean> => {
-  const result = sanitizeResult(input, metadataUrlSchema);
-  const payload = caseLawCanonicalPayload(result);
+}): Promise<Result<boolean, unknown>> => {
+  const normalized = sanitizeResult(input, metadataUrlSchema);
+  if (normalized.isErr()) {
+    return normalized;
+  }
+  const result = normalized.value;
+  const canonical = caseLawCanonicalPayload(result);
+  if (canonical.isErr()) {
+    return canonical;
+  }
+  const payload = canonical.value;
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return Result.ok(true);
   }
@@ -1260,7 +1268,7 @@ const replayRow = async ({
   withdraw,
   signal,
   s3Policy,
-}: ReplayRowOptions): Promise<ReplayRowReport> => {
+}: ReplayRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
   signal?.throwIfAborted();
   const base = {
     id: row.id,
@@ -1317,7 +1325,7 @@ const replayRow = async ({
     });
   }
 
-  const changed = await replayWouldChangeRow({
+  const planned = await replayWouldChangeRow({
     metadataUrlSchema,
     row,
     // The row holds the document its supplements were composed into, which
@@ -1331,6 +1339,11 @@ const replayRow = async ({
     }),
     scopedDb,
   });
+
+  if (planned.isErr()) {
+    return planned;
+  }
+  const changed = planned.value;
 
   if (
     !changed &&
@@ -1356,7 +1369,7 @@ const replayRow = async ({
   if (sourceLease === null) {
     return Result.ok({ ...base, outcome: candidate.outcome });
   }
-  const processed = await writeReplayCandidate({
+  const written = await writeReplayCandidate({
     ...(signal === undefined ? {} : { signal }),
     ...(s3Policy === undefined ? {} : { s3Policy }),
     candidate,
@@ -1365,6 +1378,10 @@ const replayRow = async ({
     sourceId,
     resolveSourceContract,
   });
+  if (written.isErr()) {
+    return written;
+  }
+  const processed = written.value;
   if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return Result.ok({
       ...base,
@@ -1544,23 +1561,25 @@ const replayOneRow = async ({
     return parsed;
   }
   signal?.throwIfAborted();
-  return await Result.tryPromise(
-    async () =>
-      await replayRow({
-        ...(signal === undefined ? {} : { signal }),
-        ...(s3Policy === undefined ? {} : { s3Policy }),
-        row,
-        raw,
-        resolveSourceContract,
-        metadataUrlSchema,
-        reparsed: parsed.value,
-        rejectionPolicy,
-        scopedDb,
-        sourceId,
-        sourceLease,
-        withdraw,
-      }),
-  );
+  return (
+    await Result.tryPromise(
+      async () =>
+        await replayRow({
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+          row,
+          raw,
+          resolveSourceContract,
+          metadataUrlSchema,
+          reparsed: parsed.value,
+          rejectionPolicy,
+          scopedDb,
+          sourceId,
+          sourceLease,
+          withdraw,
+        }),
+    )
+  ).andThen((outcome) => outcome);
 };
 
 // Every row outcome completes under the source lease, including paths that

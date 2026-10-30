@@ -898,7 +898,7 @@ const applyCompletionCandidate = async (
       candidate,
     });
     const guardedLease = createGuardedLease({ lease, ensure, raiseFailure });
-    yield* Result.await(
+    const written = yield* Result.await(
       legacyOperation(
         async () =>
           await guardedLease.beforeRemoteEffect(
@@ -916,6 +916,16 @@ const applyCompletionCandidate = async (
           ),
       ),
     );
+    if (written.isErr()) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Completion document could not be stored",
+          code: "storage",
+          scope: "systemic",
+          cause: written.error,
+        }),
+      );
+    }
     yield* Result.await(ensure());
     return await finalizeWrittenCompletion(context);
   });

@@ -70,7 +70,7 @@ test("typed recovery preserves the main validation contract and indexing require
   expect(withoutText.error).toBeInstanceOf(StoredCorpusValidationError);
   const withText = projectionAstOfResult(read, "Decision text.");
   expect(withText.isOk()).toBe(true);
-  if (Result.isErr(withText)) {
+  if (withText.isErr()) {
     return expect.unreachable("Readable text permits AST omission");
   }
   expect(withText.value).toBeNull();

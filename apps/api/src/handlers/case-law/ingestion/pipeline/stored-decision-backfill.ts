@@ -5,8 +5,10 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type ApplyStoredDecisionBackfillOptions = {
   report: { applied: number; deferred: number };
@@ -37,7 +39,7 @@ export const applyStoredDecisionBackfill = async (
   } = {},
 ) => {
   await sourceLease.beforeDatabaseMark();
-  const outcome = await processDecision({
+  const processed = await processDecision({
     input: { ...result, rawHash: row.sourceHash ?? result.rawHash },
     sourceId,
     scopedDb,
@@ -50,6 +52,18 @@ export const applyStoredDecisionBackfill = async (
       sourceId,
     }),
   });
+  if (processed.isErr()) {
+    report.deferred += 1;
+    captureError(
+      processed.error,
+      handlerErrorContext("ingestion.applyStoredDecisionBackfill", {
+        decisionId: row.id,
+        sourceId,
+      }),
+    );
+    return;
+  }
+  const outcome = processed.value;
   switch (outcome.status) {
     case PROCESS_DECISION_STATUS.COMPLETE:
       if (outcome.inserted) {

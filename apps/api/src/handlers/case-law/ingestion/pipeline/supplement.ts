@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { caseLawDecisionSupplements } from "@/api/db/schema";
@@ -49,7 +49,7 @@ import { logger } from "@/api/lib/observability/logger";
 const leaveFormerHolder = async (
   placement: SupplementPlacement,
   formerId: SafeId<"caseLawDecision">,
-): Promise<ProcessSupplementResult> => {
+): Promise<Result<ProcessSupplementResult, unknown>> => {
   const {
     supplement,
     sourceId,
@@ -103,8 +103,11 @@ const leaveFormerHolder = async (
     },
     placement.resolveSourceContract,
   );
-  if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return Result.ok(rewritten);
+  if (rewritten.isErr()) {
+    return rewritten;
+  }
+  if (rewritten.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return Result.ok(rewritten.value);
   }
   // The rewrite parks a supplement it leaves out; one still naming the
   // former holder is detached here.
@@ -185,7 +188,7 @@ export const processSupplement = async (
   resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     scopedDb,
   ),
-): Promise<ProcessSupplementResult> => {
+): Promise<Result<ProcessSupplementResult, unknown>> => {
   const { metadataUrlSchema } = await resolveSourceContract(sourceId);
   const { sourceDocumentId } = supplement.document;
   const expectedRole = DECISION_SUPPLEMENT_DOCUMENT_ROLE[supplement.kind];
@@ -197,7 +200,11 @@ export const processSupplement = async (
   }
   // The internal supplement kind does not establish a publisher role when
   // the adapter could not classify every component of the source enum.
-  const document = sanitizeResult(supplement.document, metadataUrlSchema);
+  const sanitized = sanitizeResult(supplement.document, metadataUrlSchema);
+  if (sanitized.isErr()) {
+    return sanitized;
+  }
+  const document = sanitized.value;
   assertDocketKeyedSupplementAllowed(document.country);
   const key: SupplementTargetKey = {
     sourceId,
@@ -339,8 +346,11 @@ export const processSupplement = async (
     },
     resolveSourceContract,
   );
-  if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return Result.ok(written);
+  if (written.isErr()) {
+    return written;
+  }
+  if (written.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return Result.ok(written.value);
   }
 
   const after = (

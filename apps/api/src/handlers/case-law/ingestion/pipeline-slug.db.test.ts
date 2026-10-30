@@ -79,13 +79,15 @@ const recordingDb = (
 const newLog = (): TransactionLog => ({ started: 0, failures: [] });
 
 const ingest = async (input: IngestionResult, scoped: ScopedDb = scopedDb) =>
-  await processDecision({
-    input,
-    observationOrder: 1n,
-    sourceId,
-    scopedDb: scoped,
-    observedAt: new Date("2026-07-31T12:00:00.000Z"),
-  });
+  (
+    await processDecision({
+      input,
+      observationOrder: 1n,
+      sourceId,
+      scopedDb: scoped,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    })
+  ).unwrap();
 
 const storedSlug = async (
   where: SQL | undefined,

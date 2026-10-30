@@ -409,7 +409,7 @@ describe("notice publication outcomes", () => {
         if (result === undefined) {
           throw new TypeError("Expected a decision from the captured HTML");
         }
-        return sanitizeResult(result);
+        return sanitizeResult(result).unwrap();
       };
       const complete = await read();
       expect(complete.metadata["noticeCelex"]).toBeDefined();
@@ -554,7 +554,7 @@ describe("notice publication outcomes", () => {
           ...refused,
           ...splitStoredDecisionTextMetadata(refused.metadata),
           observationDetail: "listing-only",
-        });
+        }).unwrap();
         expect(
           classifyObservation({ result: listingOnly, existing: stored })
             .preservesExistingDetail,

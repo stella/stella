@@ -417,7 +417,7 @@ export const supplementJudgmentReadFailed = (
 export const keepSupplementStandalone = async (
   placement: SupplementPlacement,
   reason: SupplementStandaloneReason,
-): Promise<ProcessSupplementResult> => {
+): Promise<Result<ProcessSupplementResult, unknown>> => {
   const {
     scopedDb,
     sourceId,
@@ -463,8 +463,11 @@ export const keepSupplementStandalone = async (
     },
     placement.resolveSourceContract,
   );
-  if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return Result.ok(written);
+  if (written.isErr()) {
+    return written;
+  }
+  if (written.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return Result.ok(written.value);
   }
   // Standalone, the supplement is its own row's: that row stored the
   // payload under its prefix, and the supplement names the same object.

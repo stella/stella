@@ -28,10 +28,11 @@ test("every prepared writer AST is readable", () => {
       const prepared = prepareCorpusAst({
         fallbackText: "Decision text.",
         ast,
-      });
+      }).unwrap();
       const read = parsePersistedCorpusAst(prepared.ast);
       expect(
-        prepareCorpusAst({ fallbackText: "Decision text.", ast: read }).ast,
+        prepareCorpusAst({ fallbackText: "Decision text.", ast: read }).unwrap()
+          .ast,
       ).toEqual(read);
     }),
   );
