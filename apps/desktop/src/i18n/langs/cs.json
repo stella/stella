@@ -430,7 +430,7 @@
     "aiSteerRemember": "Zapamatovat pro příště",
     "aiSteerSelectionLimit": "K úpravě najednou vyberte nejvýše {count} navržených položek.",
     "aiSteerShorter": "Stručněji",
-    "aiSteerWriteIn": "Jazyk: {language}",
+    "aiSteerWriteIn": "Psát v jazyce {language}",
     "aiStructureChanged": "Aktivita se změnila. Znovu zkontrolujte návrh a přijměte ho, nebo vytvořte nový.",
     "aiTaskCode": "Kód úkonu",
     "aiUndo": "Vrátit",

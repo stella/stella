@@ -425,7 +425,7 @@ describe("accepted proposals become batch items", () => {
                 proposal: structure,
                 groups: [riverside, meridian],
               }),
-              undoContent: content,
+              recovery: { type: "undo-structure", content },
             },
     };
   };

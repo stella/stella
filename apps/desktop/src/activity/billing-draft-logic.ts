@@ -338,7 +338,7 @@ const matterOf = ({ id, name, reference, color }: DesktopMatter) => ({
 export const absorbedGroupIds = (rows: readonly ReviewRow[]) =>
   new Set(
     rows.flatMap(({ group, content }) =>
-      content.type === "accepted"
+      content.type !== "single"
         ? content.sources.flatMap(({ id }) => (id === group.id ? [] : [id]))
         : [],
     ),
@@ -377,53 +377,11 @@ export const reviewSourcesCurrent = (
     );
   });
 
-/** Applied results are valid only for the source activity reviewed with them. */
-export const currentReviewContent = (
-  content: ReviewContent,
+const restoreReviewContent = (
+  undoContent: SingleReviewContent,
   groups: ReadonlyMap<string, DraftableGroup>,
-): ReviewContent => {
-  const acceptance =
-    content.type === "accepted"
-      ? {
-          type: content.ownership,
-          sources: content.sources,
-          undoContent: content.undoContent,
-        }
-      : content.sourceBinding;
-  if (
-    acceptance === undefined ||
-    reviewSourcesCurrent(acceptance.sources, groups)
-  ) {
-    return content;
-  }
-  if (acceptance.type === "user") {
-    if (content.notice === "sourceChanged") {
-      return content;
-    }
-    switch (content.type) {
-      case "single":
-        return {
-          type: "single",
-          narrative: content.narrative,
-          classification: content.classification,
-          billable: content.billable,
-          notice: "sourceChanged",
-        };
-      case "accepted":
-        return {
-          type: "accepted",
-          ownership: "user",
-          sources: content.sources,
-          undoContent: content.undoContent,
-          summary: content.summary,
-          items: content.items,
-          notice: "sourceChanged",
-        };
-      default:
-        return panic("Unknown review content", content satisfies never);
-    }
-  }
-  const original = currentReviewContent(acceptance.undoContent, groups);
+): SingleReviewContent => {
+  const original = currentReviewContent(undoContent, groups);
   if (original.type !== "single") {
     return panic("An applied draft must restore scalar content");
   }
@@ -434,6 +392,58 @@ export const currentReviewContent = (
     billable: original.billable,
     notice: "sourceChanged",
   };
+};
+
+/** Invalidation preserves user work and puts stale structures in a recoverable blocked branch. */
+export const currentReviewContent = (
+  content: ReviewContent,
+  groups: ReadonlyMap<string, DraftableGroup>,
+): ReviewContent => {
+  switch (content.type) {
+    case "blocked":
+      return content;
+    case "single": {
+      const binding = content.sourceBinding;
+      if (
+        binding === undefined ||
+        reviewSourcesCurrent(binding.sources, groups)
+      ) {
+        return content;
+      }
+      switch (binding.type) {
+        case "user":
+          return {
+            type: "single",
+            narrative: content.narrative,
+            classification: content.classification,
+            billable: content.billable,
+            notice: "sourceChanged",
+          };
+        case "ai":
+          return restoreReviewContent(binding.undoContent, groups);
+        default:
+          return panic("Unknown source binding", binding satisfies never);
+      }
+    }
+    case "accepted":
+      if (reviewSourcesCurrent(content.sources, groups)) {
+        return content;
+      }
+      if (content.ownership === "ai") {
+        return restoreReviewContent(content.recovery.content, groups);
+      }
+      return {
+        type: "blocked",
+        ownership: "user",
+        notice: "sourceChanged",
+        summary: content.summary,
+        sources: content.sources,
+        items: content.items,
+        recovery: content.recovery,
+      };
+    default:
+      return panic("Unknown review content", content satisfies never);
+  }
 };
 
 /** Display and submission cannot consume an acceptance for stale source ranges. */
@@ -452,9 +462,9 @@ export const reviewItems = (
     if (absorbed.has(group.id)) {
       return [];
     }
-    return content.type === "accepted"
-      ? [...content.items]
-      : [singleItem({ group, content })];
+    return content.type === "single"
+      ? [singleItem({ group, content })]
+      : [...content.items];
   });
 };
 

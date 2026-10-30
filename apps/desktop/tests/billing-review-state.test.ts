@@ -7,6 +7,8 @@ import { assertProperty } from "@stll/property-testing";
 import {
   absorbedGroupIds,
   captureReviewSources,
+  draftStructure,
+  resolveStructure,
   reviewItems,
 } from "../src/activity/billing-draft-logic";
 import type {
@@ -15,11 +17,16 @@ import type {
   ResolvedStructureProposal,
 } from "../src/activity/billing-draft-logic";
 import {
+  canAcceptStructure,
   initialReviewEdit,
+  reviewRecovery,
   reviewReducer,
   reviewStateForGroups,
 } from "../src/activity/billing-review-state";
-import type { ReviewState } from "../src/activity/billing-review-state";
+import type {
+  ReviewAction,
+  ReviewState,
+} from "../src/activity/billing-review-state";
 
 const classification = {
   type: "activity_group",
@@ -50,7 +57,11 @@ const makeGroup = (id: string): DraftableGroup => ({
       start: new Date(
         Date.UTC(2026, 9, 24, 7 + ["first", "second", "third"].indexOf(id)),
       ).toISOString(),
-      end: "2026-10-24T08:00:00Z",
+      end: new Date(
+        Date.UTC(2026, 9, 24, 8 + ["first", "second", "third"].indexOf(id)),
+      )
+        .toISOString()
+        .replace(".000Z", "Z"),
     },
   ],
 });
@@ -798,7 +809,7 @@ test("billing-review.applied-results-cannot-survive-source-edit-sequences", () =
             expect(reviewStateForGroups(state, currentGroups)).toBe(
               invalidated,
             );
-            if (entry(state).content.type === "accepted") {
+            if (entry(state).content.type === "blocked") {
               expect(entry(state).content).toMatchObject({ ownership: "user" });
               // Discarding the edited structure is an explicit user action, never an invalidation.
               state = reviewReducer(state, {
@@ -815,6 +826,427 @@ test("billing-review.applied-results-cannot-survive-source-edit-sequences", () =
             });
             expect(entry(state).draft?.using).toBe("draft");
             expect(reviewStateForGroups(state, live)).toBe(state);
+          }
+        }
+      },
+    ),
+  );
+});
+
+type ReviewModel = {
+  state: ReviewState;
+  groups: ReadonlyMap<string, DraftableGroup>;
+};
+const modelRows = ({ state, groups: live }: ReviewModel) =>
+  [...live.values()].map((group) => ({
+    group,
+    edit: state.get(group.id) ?? initial,
+  }));
+const modelItems = (model: ReviewModel) =>
+  reviewItems(
+    modelRows(model)
+      .filter(({ edit }) => edit.selected)
+      .map(({ group, edit }) => ({ group, content: edit.content })),
+    model.groups,
+  );
+const modelSubmittable = (model: ReviewModel) => {
+  const selected = modelRows(model).filter(({ edit }) => edit.selected);
+  return (
+    selected.length > 0 &&
+    selected.every(({ edit }) => edit.content.type !== "blocked") &&
+    modelItems(model).every(({ narrative }) => narrative.trim().length > 0)
+  );
+};
+
+/** Exercise only controls the editable review exposes; every recovery comes from its content. */
+const assertSubmissionReachable = (model: ReviewModel) => {
+  let next = model;
+  for (let step = 0; step <= model.groups.size * 2 + 1; step += 1) {
+    if (modelSubmittable(next)) {
+      return;
+    }
+    const visibleRows = modelRows(next);
+    const selected = visibleRows.filter(({ edit }) => edit.selected);
+    let action: ReviewAction;
+    if (selected.length === 0) {
+      const row = visibleRows.at(0) ?? panic("Model needs a visible matter");
+      action = {
+        type: "set-selected",
+        groupId: row.group.id,
+        initial: row.edit,
+        selected: true,
+      };
+    } else {
+      const blocked = selected.find(
+        ({ edit }) => edit.content.type === "blocked",
+      );
+      if (blocked) {
+        const recovery = reviewRecovery(blocked.edit.content);
+        if (recovery === null) {
+          panic("Blocked content has no visible recovery");
+        }
+        action = {
+          type: recovery.type,
+          groupId: blocked.group.id,
+          initial: blocked.edit,
+        };
+      } else {
+        const absorbed = absorbedGroupIds(
+          visibleRows.map(({ group, edit }) => ({
+            group,
+            content: edit.content,
+          })),
+        );
+        const row =
+          selected.find(
+            ({ group, edit }) =>
+              !absorbed.has(group.id) &&
+              reviewItems(
+                [{ group, content: edit.content }],
+                model.groups,
+              ).some(({ narrative }) => narrative.trim().length === 0),
+          ) ?? panic("Unsubmittable review has no enabled visible action");
+        const item =
+          reviewItems(
+            [{ group: row.group, content: row.edit.content }],
+            next.groups,
+          ).find(({ narrative }) => narrative.trim().length === 0) ??
+          panic("Missing empty review field");
+        action = {
+          type: "set-narrative",
+          groupId: row.group.id,
+          initial: row.edit,
+          itemKey: item.key,
+          narrative: "Reviewed work",
+        };
+      }
+    }
+    const updated = reviewStateForGroups(
+      reviewReducer(next.state, action),
+      next.groups,
+    );
+    expect(updated).not.toBe(next.state);
+    next = { state: updated, groups: next.groups };
+  }
+  expect(modelSubmittable(next)).toBe(true);
+};
+
+test("billing-review.visible-actions-always-reach-submission", () => {
+  assertProperty(
+    "billing-review.visible-actions-always-reach-submission",
+    fc.property(
+      fc.array(
+        fc.record({
+          type: fc.constantFrom(
+            "draft",
+            "steer",
+            "accept",
+            "review",
+            "narrative",
+            "billable",
+            "record",
+            "undo",
+            "undo-all",
+            "dismiss",
+            "select",
+          ),
+          structure: fc.constantFrom("split", "merge", "move"),
+          text: fc.string({ maxLength: 25 }),
+          checked: fc.boolean(),
+          group: fc.nat(1),
+        }),
+        { minLength: 1, maxLength: 60 },
+      ),
+      (events) => {
+        for (const scenario of ["split", "merge", "move"] as const) {
+          const prefix = (
+            ["draft", "accept", "narrative", "record", "undo-all"] as const
+          ).map((type) => ({
+            type,
+            structure: scenario,
+            text:
+              type === "narrative" ? "User corrected text" : "AI suggestion",
+            checked: true,
+            group: 0,
+          }));
+          let state: ReviewState = new Map();
+          const live = new Map(currentGroups);
+          for (const group of live.values()) {
+            expect(
+              group.ranges.reduce(
+                (duration, range) =>
+                  duration + Date.parse(range.end) - Date.parse(range.start),
+                0,
+              ),
+            ).toBe(group.durationMs);
+          }
+          assertSubmissionReachable({ state, groups: live });
+          for (const [index, event] of [...prefix, ...events].entries()) {
+            const visibleRows = modelRows({ state, groups: live });
+            const absorbed = absorbedGroupIds(
+              visibleRows.map(({ group, edit }) => ({
+                group,
+                content: edit.content,
+              })),
+            );
+            const visible = visibleRows.filter(
+              ({ group }) => !absorbed.has(group.id),
+            );
+            const row =
+              visible.at(event.group % visible.length) ??
+              panic("Missing visible review owner");
+            const targetRow = { groupId: row.group.id, initial: row.edit };
+            let action: ReviewAction | null = null;
+            switch (event.type) {
+              case "draft":
+              case "steer": {
+                const steer = event.type === "steer";
+                const requested = visibleRows.filter(
+                  ({ edit, group }) =>
+                    edit.selected &&
+                    edit.content.type === "single" &&
+                    !absorbed.has(group.id) &&
+                    (steer
+                      ? edit.draft?.using === "draft"
+                      : edit.draft === null ||
+                        edit.content.notice === "sourceChanged"),
+                );
+                if (requested.length === 0) {
+                  break;
+                }
+                const source =
+                  requested.at(0) ?? panic("Missing requested source");
+                const proposal = (() => {
+                  switch (event.structure) {
+                    case "split":
+                      return {
+                        type: "split" as const,
+                        parts: [
+                          {
+                            durationMinutes: 6,
+                            narrative: "First",
+                            billable: true,
+                            classification,
+                          },
+                          {
+                            durationMinutes: source.group.roundedTenths * 6 - 6,
+                            narrative: "Rest",
+                            billable: false,
+                            classification,
+                          },
+                        ],
+                      };
+                    case "move":
+                      return {
+                        type: "move" as const,
+                        targetMatterId: "destination",
+                        targetMatterName: "Destination",
+                        durationMinutes: 6,
+                        narrative: "Moved",
+                        billable: true,
+                        classification,
+                      };
+                    case "merge":
+                      return {
+                        type: "merge" as const,
+                        entryIds: requested.map((_, at) => `entry_${at + 1}`),
+                        narrative: "Combined",
+                        billable: true,
+                        classification,
+                      };
+                    default:
+                      return panic(
+                        "Unknown model structure",
+                        event.structure satisfies never,
+                      );
+                  }
+                })();
+                action = {
+                  type: "offer-results",
+                  groups: live,
+                  mode: steer ? "steer" : "initial",
+                  offers: requested.map(({ group, edit }, at) => ({
+                    groupId: group.id,
+                    initial: edit,
+                    expectedRevision: edit.revision,
+                    result: {
+                      sources: captureReviewSources(
+                        requested.map(({ group: sourceGroup }) => sourceGroup),
+                      ),
+                      draft: {
+                        ...result(event.text).draft,
+                        entryId: `entry_${at + 1}`,
+                        operations:
+                          at === 0 &&
+                          (proposal.type !== "merge" || requested.length > 1)
+                            ? [proposal]
+                            : [],
+                      },
+                    },
+                  })),
+                };
+                break;
+              }
+              case "accept": {
+                if (row.edit.draft === null) {
+                  break;
+                }
+                const structure = draftStructure(row.edit.draft.result.draft);
+                if (structure === null) {
+                  break;
+                }
+                const proposal = resolveStructure({
+                  structure,
+                  groupIds: row.edit.draft.result.sources.map(({ id }) => id),
+                  candidates: [...live.values(), makeGroup("destination")].map(
+                    ({ matter }) => matter,
+                  ),
+                });
+                if (proposal === null) {
+                  break;
+                }
+                const acceptance = {
+                  type: "accept-structure",
+                  ...targetRow,
+                  proposal,
+                  groups: visibleRows.map(({ group, edit }) => ({
+                    group,
+                    initial: edit,
+                  })),
+                } as const satisfies ReviewAction;
+                if (canAcceptStructure(state, acceptance)) {
+                  action = acceptance;
+                }
+                break;
+              }
+              case "review":
+                if (
+                  row.edit.content.type === "single" &&
+                  row.edit.draft !== null
+                ) {
+                  if (
+                    row.edit.draft.using === "proposal" ||
+                    row.edit.draft.proposal !== null
+                  ) {
+                    action = {
+                      type: "apply-proposal",
+                      ...targetRow,
+                      groups: live,
+                    };
+                  } else if (row.edit.draft.using === "original") {
+                    action = { type: "use-draft", ...targetRow, groups: live };
+                  }
+                }
+                break;
+              case "narrative":
+              case "billable": {
+                const item =
+                  reviewItems(
+                    [{ group: row.group, content: row.edit.content }],
+                    live,
+                  ).at(0) ?? panic("Missing editable item");
+                action =
+                  event.type === "narrative"
+                    ? {
+                        type: "set-narrative",
+                        ...targetRow,
+                        itemKey: item.key,
+                        narrative: event.text,
+                      }
+                    : {
+                        type: "set-billable",
+                        ...targetRow,
+                        itemKey: item.key,
+                        billable: event.checked,
+                      };
+                break;
+              }
+              case "record": {
+                const userValues = visibleRows
+                  .filter(
+                    ({ edit }) =>
+                      edit.content.type === "blocked" ||
+                      (edit.content.type === "accepted"
+                        ? edit.content.ownership === "user"
+                        : edit.content.sourceBinding?.type === "user"),
+                  )
+                  .map(({ group, edit }) => ({
+                    group,
+                    values: reviewItems(
+                      [{ group, content: edit.content }],
+                      live,
+                    ).map(({ narrative, billable }) => ({
+                      narrative,
+                      billable,
+                    })),
+                  }));
+                const end =
+                  row.group.ranges.at(-1)?.end ??
+                  panic("Missing recorded range");
+                live.set(row.group.id, {
+                  ...row.group,
+                  evidence: [`Recording ${index}`],
+                  roundedTenths: row.group.roundedTenths + 1,
+                  durationMs: row.group.durationMs + 360_000,
+                  ranges: [
+                    ...row.group.ranges,
+                    {
+                      start: end,
+                      end: new Date(Date.parse(end) + 360_000).toISOString(),
+                    },
+                  ],
+                });
+                state = reviewStateForGroups(state, live);
+                for (const { group, values } of userValues) {
+                  const edit = state.get(group.id) ?? initial;
+                  expect(
+                    reviewItems([{ group, content: edit.content }], live).map(
+                      ({ narrative, billable }) => ({ narrative, billable }),
+                    ),
+                  ).toEqual(values);
+                }
+                break;
+              }
+              case "undo": {
+                const recovery = reviewRecovery(row.edit.content);
+                if (recovery !== null) {
+                  action = { type: recovery.type, ...targetRow };
+                } else if (row.edit.draft?.using === "draft") {
+                  action = { type: "use-original", ...targetRow };
+                }
+                break;
+              }
+              case "undo-all":
+                if (visibleRows.some(({ edit }) => edit.draft !== null)) {
+                  action = { type: "undo-all" };
+                }
+                break;
+              case "dismiss":
+                if (
+                  row.edit.draft?.using === "proposal" ||
+                  (row.edit.draft !== null && row.edit.draft.proposal !== null)
+                ) {
+                  action = { type: "dismiss-proposal", ...targetRow };
+                }
+                break;
+              case "select":
+                action = {
+                  type: "set-selected",
+                  ...targetRow,
+                  selected: event.checked,
+                };
+                break;
+              default:
+                event.type satisfies never;
+            }
+            if (action !== null) {
+              state = reviewStateForGroups(reviewReducer(state, action), live);
+            }
+            if (index === prefix.length - 1) {
+              expect(entry(state).content.type).toBe("blocked");
+              expect(entry(state).draft).toBeNull();
+            }
+            assertSubmissionReachable({ state, groups: live });
           }
         }
       },

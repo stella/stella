@@ -66,8 +66,10 @@ import type {
 } from "./billing-draft-logic";
 import type {
   AcceptedReviewContent,
+  BlockedReviewContent,
   DraftEntryState,
   ReviewContent,
+  ReviewRecovery,
 } from "./billing-review-state";
 
 type BillingDraftSettings =
@@ -501,7 +503,7 @@ export const BillingDraftEntryReview = ({
     content.type === "single"
       ? content.narrative
       : content.items.map((item) => item.narrative).join("\n");
-  const structure = content.type === "accepted" ? content : null;
+  const structure = content.type === "single" ? null : content.summary;
   if (state.using === "proposal") {
     return (
       <div className="mt-1 flex flex-col gap-2 px-2">
@@ -708,10 +710,29 @@ export const BillingClassificationCodes = ({
   }
 };
 
+export const BillingDraftStructureRecovery = ({
+  content,
+  disabled,
+  onRecover,
+}: {
+  content: AcceptedReviewContent | BlockedReviewContent;
+  disabled: boolean;
+  onRecover: (recovery: ReviewRecovery) => void;
+}) => (
+  <StructureLine
+    proposal={null}
+    applicable={false}
+    applied={content.summary}
+    disabled={disabled}
+    onApply={() => undefined}
+    onUndo={() => onRecover(content.recovery)}
+  />
+);
+
 type StructureLineProps = {
   proposal: DraftStructure | null;
   applicable: boolean;
-  applied: AcceptedReviewContent | null;
+  applied: StructureSummary | null;
   disabled: boolean;
   onApply: () => void;
   onUndo: () => void;
@@ -731,7 +752,7 @@ const StructureLine = ({
     return (
       <p className="flex flex-wrap items-center gap-1 text-xs">
         <span className="font-medium">{t("aiApplied")}</span>
-        {summary(applied.summary)}
+        {summary(applied)}
         <Button
           size="xs"
           variant="link"

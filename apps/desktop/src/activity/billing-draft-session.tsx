@@ -26,6 +26,7 @@ import {
   BillingDraftGuidelines,
   BillingDraftShimmer,
   BillingDraftSteerBar,
+  BillingDraftStructureRecovery,
 } from "./ActivityBillingDrafts";
 import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import {
@@ -413,11 +414,20 @@ export const useBillingDraftSession = ({
       return <BillingDraftShimmer />;
     }
     const state = drafts.get(group.id);
-    if (!state) {
-      return null;
-    }
     const edit = editFor(group);
     const target = { groupId: group.id, initial: edit };
+    if (state === undefined || edit.content.type === "blocked") {
+      if (edit.content.type === "single") {
+        return null;
+      }
+      return (
+        <BillingDraftStructureRecovery
+          content={edit.content}
+          disabled={!editable || busy}
+          onRecover={({ type }) => dispatch({ type, ...target })}
+        />
+      );
+    }
     const structure = draftStructure(state.result.draft);
     const proposedStructure = structure
       ? resolveStructure({

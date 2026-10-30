@@ -32,14 +32,46 @@ export type SingleReviewContent = {
   notice?: "sourceChanged";
   sourceBinding?: ScalarSourceBinding;
 };
-export type AcceptedReviewContent = ReviewAcceptance & {
+export type AcceptedReviewContent = {
+  sources: readonly DraftableGroup[];
+  recovery: ReviewRecovery;
   type: "accepted";
   ownership: "ai" | "user";
-  notice?: "sourceChanged";
+  notice?: never;
   summary: StructureSummary;
   items: readonly ReviewItem[];
 };
-export type ReviewContent = SingleReviewContent | AcceptedReviewContent;
+export type ReviewRecovery = {
+  type: "undo-structure";
+  content: SingleReviewContent;
+};
+export type BlockedReviewContent = {
+  type: "blocked";
+  ownership: "user";
+  notice: "sourceChanged";
+  sources: readonly DraftableGroup[];
+  summary: StructureSummary;
+  items: readonly ReviewItem[];
+  recovery: ReviewRecovery;
+};
+export type ReviewContent =
+  SingleReviewContent | AcceptedReviewContent | BlockedReviewContent;
+
+/** Structured content owns its recovery independently of optional AI suggestions. */
+export const reviewRecovery = (
+  content: ReviewContent,
+): ReviewRecovery | null => {
+  switch (content.type) {
+    case "single":
+      return null;
+    case "accepted":
+      return content.recovery;
+    case "blocked":
+      return content.recovery;
+    default:
+      return panic("Unknown review content", content satisfies never);
+  }
+};
 type AppliedDraftState = {
   using: "draft" | "original";
   result: DraftResult;
@@ -139,11 +171,11 @@ const changedEntry = (
   }: EntryChange,
 ): EntryEdit => ({ selected, revision: entry.revision + 1, content, draft });
 const unitIds = (groupId: string, content: ReviewContent) =>
-  content.type === "accepted" ? content.sources.map(({ id }) => id) : [groupId];
+  content.type === "single" ? [groupId] : content.sources.map(({ id }) => id);
 const ownerOf = (state: ReviewState, groupId: string) => {
   for (const [id, edit] of state) {
     if (
-      edit.content.type === "accepted" &&
+      edit.content.type !== "single" &&
       edit.content.sources.some((source) => source.id === groupId)
     ) {
       return id;
@@ -183,7 +215,7 @@ const commitChange = ({
       id,
       changedEntry(
         participant,
-        selectUnit || updated.content.type === "accepted"
+        selectUnit || updated.content.type !== "single"
           ? { selected: updated.selected }
           : {},
       ),
@@ -376,23 +408,33 @@ const editItem = (
   ) {
     return state;
   }
+  const items = current.content.items.map((value) =>
+    value.key === action.itemKey ? { ...value, ...patch } : value,
+  );
+  const content: ReviewContent =
+    current.content.type === "blocked"
+      ? {
+          type: "blocked",
+          ownership: "user",
+          notice: "sourceChanged",
+          sources: current.content.sources,
+          summary: current.content.summary,
+          items,
+          recovery: current.content.recovery,
+        }
+      : {
+          type: "accepted",
+          ownership: "user",
+          sources: current.content.sources,
+          summary: current.content.summary,
+          items,
+          recovery: current.content.recovery,
+        };
   return commitChange({
     state,
     groupId: ownerId,
     current,
-    change: {
-      content: {
-        type: "accepted",
-        ownership: "user",
-        ...(current.content.notice ? { notice: current.content.notice } : {}),
-        summary: current.content.summary,
-        sources: current.content.sources,
-        undoContent: current.content.undoContent,
-        items: current.content.items.map((value) =>
-          value.key === action.itemKey ? { ...value, ...patch } : value,
-        ),
-      },
-    },
+    change: { content },
   });
 };
 
@@ -487,7 +529,7 @@ const acceptStructure = (
             .map(({ group: source }) => source),
         ),
         items,
-        undoContent: content,
+        recovery: { type: "undo-structure", content },
       },
     },
   });
@@ -573,16 +615,17 @@ export const reviewReducer = (
       return editItem(state, action);
     case "accept-structure":
       return acceptStructure(state, action);
-    case "undo-structure":
-      if (current.content.type !== "accepted") {
-        return state;
-      }
-      return commitChange({
-        state,
-        groupId: ownerId,
-        current,
-        change: { content: current.content.undoContent },
-      });
+    case "undo-structure": {
+      const recovery = reviewRecovery(current.content);
+      return recovery === null
+        ? state
+        : commitChange({
+            state,
+            groupId: ownerId,
+            current,
+            change: { content: recovery.content },
+          });
+    }
     case "use-original":
       if (own.draft?.using !== "draft" || ownerId !== action.groupId) {
         return state;

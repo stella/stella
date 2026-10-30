@@ -201,10 +201,7 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
     dispatch,
     sourceReviewRequired: [...edits].some(
       ([id, { selected, content }]) =>
-        groups.has(id) &&
-        selected &&
-        content.type === "accepted" &&
-        content.notice === "sourceChanged",
+        groups.has(id) && selected && content.type === "blocked",
     ),
     notice: [...edits.values()].some(
       ({ content }) => content.notice === "sourceChanged",
@@ -1119,7 +1116,7 @@ const ReviewEntries = ({
                       <ReviewItemFields
                         key={item.key}
                         item={item}
-                        structured={edit.content.type === "accepted"}
+                        structured={edit.content.type !== "single"}
                         editable={editable}
                         onNarrative={(narrative) =>
                           dispatch({
