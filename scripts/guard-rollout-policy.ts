@@ -75,4 +75,21 @@ export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
       ".",
     ],
   },
+  {
+    id: "require-fetch-after-all",
+    rules: ["bun-test-hygiene/require-fetch-after-all"],
+    type: "full",
+    check: [
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      "oxlint.config.ts",
+      "--allow",
+      "all",
+      "--deny",
+      "bun-test-hygiene/require-fetch-after-all",
+      ".",
+    ],
+  },
 ] as const;
