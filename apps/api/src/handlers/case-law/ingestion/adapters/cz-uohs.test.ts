@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
@@ -11,11 +11,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
   buildCzUohsDecision,
+  CZ_UOHS_PAGE_SIZE,
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
   czUohsLetterheadDate,
   encodeCzUohsCursor,
+  parseCzUohsCursor,
   parseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
@@ -26,6 +28,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -509,7 +512,12 @@ describe("ÚOHS JSON-LD", () => {
     );
     const parked = encodeCzUohsCursor({
       version: 1,
-      afterId: make("02").iri,
+      frontier: {
+        type: "after-record",
+        iri: make("02").iri,
+        fingerprint: fingerprintReconciliationPayload(make("02")),
+        occurrence: 0,
+      },
       parkedOn: "2000-01-01",
     });
     const page = (
@@ -528,6 +536,28 @@ describe("ÚOHS JSON-LD", () => {
     });
     const page = await czUohsAdapter.fetchPage("40", {}, undefined);
     expect(Result.isError(page)).toBe(true);
+    expect(requests).toBe(0);
+  });
+
+  test("rejects two valid cursor frontiers before reading the listing", async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests += 1;
+      return Response.json({ rozhodnutí: [] });
+    });
+    const result = await czUohsAdapter.fetchPage(
+      JSON.stringify({
+        version: 1,
+        afterId: "",
+        afterRecord: { iri: "", fingerprint: "a".repeat(64), occurrence: 0 },
+      }),
+      {},
+      undefined,
+    );
+    expect(result.isErr()).toBe(true);
+    expect(result.isErr() ? result.error.message : "").toContain(
+      "both frontiers",
+    );
     expect(requests).toBe(0);
   });
 
@@ -694,6 +724,154 @@ describe("ÚOHS decisions listed without a storable IRI", () => {
         identity.type === "document" ? identity.sourceDocumentId : null,
       ),
     ).toEqual([emptyId, keyed.iri, overLongId]);
+  });
+
+  test.each([
+    [CZ_UOHS_PAGE_SIZE + 1, false],
+    [CZ_UOHS_PAGE_SIZE * 2 + 1, true],
+    [CZ_UOHS_PAGE_SIZE * 3 + 1, false],
+  ])(
+    "walks every empty-IRI quarantine row exactly once across %i rows",
+    async (count, reverse) => {
+      const { empty } = await listed();
+      const rows = Array.from({ length: count }, (_, index) => ({
+        ...empty,
+        iri: "",
+        číslo_jednací: `EMPTY-${String(index).padStart(3, "0")}/2026/163`,
+        spisová_značka: `R${String(index).padStart(3, "0")}/2026/VZ`,
+        dokument: [],
+      }));
+      if (reverse) {
+        rows.reverse();
+      }
+      const listing = { rozhodnutí: rows };
+      serve(rows);
+      const expectedPage = await listSlice(rows);
+      const expectedIds = expectedPage.items.flatMap(({ identity }) =>
+        identity.type === "document" ? [identity.sourceDocumentId] : [],
+      );
+
+      globalThis.fetch = asFetchMock(async () => Response.json(listing));
+      let cursor: string | null = null;
+      const received: string[] = [];
+      for (
+        let boundary = 0;
+        boundary <= Math.ceil(count / CZ_UOHS_PAGE_SIZE);
+        boundary += 1
+      ) {
+        const page = (
+          await czUohsAdapter.fetchPage(cursor, {}, undefined)
+        ).unwrap();
+        received.push(
+          ...page.decisions.map(
+            ({ sourceDocumentId }) =>
+              sourceDocumentId ??
+              panic("A listed decision requires its source id"),
+          ),
+        );
+        if (
+          page.decisions.length < CZ_UOHS_PAGE_SIZE ||
+          page.nextCursor === null
+        ) {
+          break;
+        }
+        cursor = encodeCzUohsCursor({
+          ...parseCzUohsCursor(page.nextCursor).unwrap(
+            "A page writes a valid cursor",
+          ),
+          snapshotId: "forced-cache-miss",
+        });
+      }
+
+      expect(received).toHaveLength(count);
+      expect(new Set(received).size).toBe(count);
+      expect(received.toSorted()).toEqual(expectedIds.toSorted());
+    },
+  );
+
+  test("identical listing occurrences have distinct resumable positions", async () => {
+    const { empty } = await listed();
+    const row = { ...empty, iri: "", dokument: [] };
+    const count = CZ_UOHS_PAGE_SIZE * 2 + 1;
+    globalThis.fetch = asFetchMock(async () =>
+      Response.json({ rozhodnutí: Array.from({ length: count }, () => row) }),
+    );
+    let cursor: string | null = null;
+    let received = 0;
+    for (
+      let boundary = 0;
+      boundary <= Math.ceil(count / CZ_UOHS_PAGE_SIZE);
+      boundary += 1
+    ) {
+      const page = (
+        await czUohsAdapter.fetchPage(cursor, {}, undefined)
+      ).unwrap();
+      received += page.decisions.length;
+      const position = parseCzUohsCursor(page.nextCursor).unwrap(
+        "A page writes a valid cursor",
+      );
+      expect(position.frontier.type).toBe("after-record");
+      expect(
+        position.frontier.type === "after-record"
+          ? position.frontier.occurrence
+          : null,
+      ).toBe(received - 1);
+      if (page.decisions.length < CZ_UOHS_PAGE_SIZE) {
+        break;
+      }
+      cursor = encodeCzUohsCursor({
+        ...position,
+        snapshotId: "forced-cache-miss",
+      });
+    }
+    expect(received).toBe(count);
+  });
+
+  test("a legacy v1 IRI cursor replays its boundary group before using compound cursors", async () => {
+    const { empty } = await listed();
+    const rows = Array.from({ length: CZ_UOHS_PAGE_SIZE + 1 }, (_, index) => ({
+      ...empty,
+      iri: "",
+      číslo_jednací: `LEGACY-${String(index).padStart(3, "0")}/2026/163`,
+      spisová_značka: `R${String(index).padStart(3, "0")}/2026/VZ`,
+      dokument: [],
+    }));
+    const listing = { rozhodnutí: rows };
+    globalThis.fetch = asFetchMock(async () => Response.json(listing));
+    const legacyCursor = JSON.stringify({
+      version: 1,
+      afterId: "",
+      parkedOn: "2000-01-01",
+    });
+    const first = (
+      await czUohsAdapter.fetchPage(legacyCursor, {}, undefined)
+    ).unwrap();
+    expect(first.decisions).toHaveLength(CZ_UOHS_PAGE_SIZE);
+    const next =
+      first.nextCursor ??
+      panic("Expected a compound cursor after the first page");
+    const second = (
+      await czUohsAdapter.fetchPage(
+        encodeCzUohsCursor({
+          ...parseCzUohsCursor(next).unwrap("A page writes a valid cursor"),
+          snapshotId: "forced-cache-miss",
+        }),
+        {},
+        undefined,
+      )
+    ).unwrap();
+    const received = [
+      ...first.decisions.map(
+        ({ sourceDocumentId }) =>
+          sourceDocumentId ?? panic("A listed decision requires its source id"),
+      ),
+      ...second.decisions.map(
+        ({ sourceDocumentId }) =>
+          sourceDocumentId ?? panic("A listed decision requires its source id"),
+      ),
+    ];
+    expect(second.decisions).toHaveLength(1);
+    expect(new Set(received).size).toBe(CZ_UOHS_PAGE_SIZE + 1);
   });
 
   test("the crawl stores a quarantined decision listing-only under its listed id, reading no document", async () => {

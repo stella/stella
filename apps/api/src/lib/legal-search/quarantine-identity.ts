@@ -30,6 +30,10 @@ import type {
   ListingIdentity,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { ListingObservationReason } from "@/api/lib/legal-search/listing-observation-reasons";
+import {
+  LEGACY_QUARANTINE_PREFIXES,
+  PL_NCOURT_POSITION_QUARANTINE_PREFIX,
+} from "@/api/lib/legal-search/quarantine-prefixes";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 
 export {
@@ -91,9 +95,10 @@ export const LEGACY_REPAIR_NAMESPACE = {
   SK_COURTS_PLAINTEXT: "sk-courts-plaintext",
 } as const;
 
-type RepairNamespace =
-  | QuarantineNamespace
-  | (typeof LEGACY_REPAIR_NAMESPACE)[keyof typeof LEGACY_REPAIR_NAMESPACE];
+export type LegacyRepairNamespace =
+  (typeof LEGACY_REPAIR_NAMESPACE)[keyof typeof LEGACY_REPAIR_NAMESPACE];
+
+type RepairNamespace = QuarantineNamespace | LegacyRepairNamespace;
 
 /** Only fields present in the fingerprint may qualify that form for adoption. */
 const REPAIR_DISCRIMINATORS = {
@@ -225,10 +230,11 @@ type QuarantineIdentityOptions = {
 export const quarantinePrefix = (namespace: QuarantineNamespace): string =>
   `${namespace}-quarantine:`;
 
-// Existing national-court rows predate the shared quarantine namespace.
+// Legacy producers and classification share their exact stored prefixes.
 const QUARANTINE_PREFIXES = [
   ...Object.values(QUARANTINE_NAMESPACE).map(quarantinePrefix),
-  "ncourt-listed:",
+  ...Object.values(LEGACY_QUARANTINE_PREFIXES),
+  PL_NCOURT_POSITION_QUARANTINE_PREFIX,
 ];
 
 /**
@@ -298,9 +304,9 @@ type QuarantineObservation = {
  * AGENTS.md rule 17). The callers report these instead of folding them into
  * duplicates. Observations under publisher ids are ignored.
  */
-export const countQuarantineCollisions = (
+export const quarantineCollisionEvidence = (
   observations: Iterable<QuarantineObservation>,
-): Map<string, number> => {
+) => {
   const revisions = new Map<string, Set<string>>();
   for (const { sourceDocumentId, revision } of observations) {
     if (!isQuarantineListingIdentity({ type: "document", sourceDocumentId })) {
@@ -316,8 +322,11 @@ export const countQuarantineCollisions = (
       collisions.set(sourceDocumentId, seen.size - 1);
     }
   }
-  return collisions;
+  return { revisions, collisions };
 };
+export const countQuarantineCollisions = (
+  observations: Iterable<QuarantineObservation>,
+): Map<string, number> => quarantineCollisionEvidence(observations).collisions;
 
 type QuarantinePeerObservation = {
   readonly sourceDocumentId: string;

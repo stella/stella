@@ -144,6 +144,10 @@ import {
   repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
+import {
+  LEGACY_QUARANTINE_PREFIXES,
+  PL_NCOURT_POSITION_QUARANTINE_PREFIX,
+} from "@/api/lib/legal-search/quarantine-prefixes";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1228,7 +1232,7 @@ export type PlNcourtPosition = {
   next: PositionNeighbour | undefined;
 };
 
-const QUARANTINE_ID_PREFIX = "ncourt-quarantine:";
+const QUARANTINE_ID_PREFIX = PL_NCOURT_POSITION_QUARANTINE_PREFIX;
 
 /** Rows probed either side of an unservable one for a servable neighbour. */
 const QUARANTINE_REACH = 5;
@@ -1262,7 +1266,7 @@ export const plNcourtPositionId = ({
     }),
   )}`;
 
-const LISTED_ID_PREFIX = "ncourt-listed:";
+const LISTED_ID_PREFIX = LEGACY_QUARANTINE_PREFIXES["ncourt-listed"];
 
 /**
  * What a listed row states about the judgment, without its id: the fields

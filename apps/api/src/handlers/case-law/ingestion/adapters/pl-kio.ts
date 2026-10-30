@@ -116,6 +116,7 @@ import {
   repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -388,7 +389,8 @@ const normalizePlKioListingItem = (
   };
 };
 
-const QUARANTINE_ID_PREFIX = "uzp-quarantine:";
+const QUARANTINE_ID_PREFIX =
+  LEGACY_QUARANTINE_PREFIXES[LEGACY_REPAIR_NAMESPACE.PL_KIO];
 
 /**
  * The content-addressed identity of a counted row that states no record id.

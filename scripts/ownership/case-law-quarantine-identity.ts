@@ -4,10 +4,14 @@ export default {
   id: "case-law-quarantine-identity",
   capability:
     "The identity of a listed case-law record that states no usable publisher id",
-  owner: ["apps/api/src/lib/legal-search/quarantine-identity.ts"],
+  owner: [
+    "apps/api/src/lib/legal-search/quarantine-identity.ts",
+    "apps/api/src/lib/legal-search/quarantine-prefixes.ts",
+  ],
   summary:
     "`quarantineIdentity` owns existing stable-field quarantine keys and bounded " +
-    "repair aliases. `quarantinedListingObservation` owns a separate branded " +
+    "repair aliases. Pure shared prefix constants bind legacy producers to " +
+    "quarantine classification. `quarantinedListingObservation` owns a separate branded " +
     "source-and-fingerprint identity for SK-US and PL-courts listings without " +
     "usable stable fields, including unserved listing slots. These immutable " +
     "raw observations are stored in `case_law_listing_observations` before " +

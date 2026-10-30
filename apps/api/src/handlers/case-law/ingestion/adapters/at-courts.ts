@@ -64,6 +64,7 @@ import {
   repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -818,7 +819,7 @@ const quarantineSourceDocumentIds = (
       sourceMetadata: data.sourceMetadata,
       sibling: stableSibling,
     });
-    return `ris-quarantine:${hashContent(fingerprint)}`;
+    return `${LEGACY_QUARANTINE_PREFIXES[LEGACY_REPAIR_NAMESPACE.AT_COURTS]}${hashContent(fingerprint)}`;
   });
 };
 

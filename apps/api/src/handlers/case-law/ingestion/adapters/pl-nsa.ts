@@ -102,6 +102,7 @@ import {
   LEGACY_REPAIR_NAMESPACE,
   repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -863,7 +864,8 @@ const verbatimRow = (source: PlNsaDatasetRow): Record<string, unknown> =>
 
 // ── Identity ─────────────────────────────────────────────
 
-const QUARANTINE_PREFIX = "pl-nsa-quarantine:";
+const QUARANTINE_PREFIX =
+  LEGACY_QUARANTINE_PREFIXES[LEGACY_REPAIR_NAMESPACE.PL_NSA];
 
 type PlNsaIdentity = {
   id: string;

@@ -72,6 +72,7 @@ import {
   repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -91,7 +92,8 @@ const MAX_MANIFEST_BYTES = 64 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 20 * 1024 * 1024;
 const MAX_XML_BYTES = 12 * 1024 * 1024;
 const START_DIGEST = "start";
-const QUARANTINE_ID_PREFIX = "findok-quarantine:";
+const QUARANTINE_ID_PREFIX =
+  LEGACY_QUARANTINE_PREFIXES[LEGACY_REPAIR_NAMESPACE.AT_FINDOK];
 const SOURCE_FIRST_YEAR = Number.parseInt(
   ADAPTER_MANIFESTS[ADAPTER_KEYS.AT_FINDOK].dateRange.fromInclusive.slice(0, 4),
   10,

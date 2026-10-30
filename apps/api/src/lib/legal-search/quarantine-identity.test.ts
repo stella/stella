@@ -1,10 +1,21 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import {
+  listReconciliationSlice,
+  SLICE_LISTING_PROOF,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import {
+  EMPTY_AST,
   isKeyableListingIdentity,
   isPersistableSourceDocumentId,
 } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  filterQuarantinePeerCollisions,
   isQuarantineListingIdentity,
   isQuarantineSourceDocumentId,
   LEGACY_REPAIR_NAMESPACE,
@@ -16,6 +27,10 @@ import {
   type RepairAlias,
   repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
+import {
+  LEGACY_QUARANTINE_PREFIXES,
+  PL_NCOURT_POSITION_QUARANTINE_PREFIX,
+} from "@/api/lib/legal-search/quarantine-prefixes";
 
 describe("repair alias qualification", () => {
   test.each(Object.values(QUARANTINE_NAMESPACE))(
@@ -309,5 +324,71 @@ describe("court provenance of repair forms", () => {
     });
     expect(identity.sourceDocumentId).toStartWith("pl-courts-quarantine:");
     expect(identity.repairAliases).toEqual([]);
+  });
+});
+
+describe("legacy quarantine classification", () => {
+  test.each([
+    ...Object.values(LEGACY_QUARANTINE_PREFIXES),
+    PL_NCOURT_POSITION_QUARANTINE_PREFIX,
+  ])("recognises producer prefix %s", (prefix) => {
+    expect(
+      isQuarantineListingIdentity({
+        type: "document",
+        sourceDocumentId: `${prefix}${"a".repeat(64)}`,
+      }),
+    ).toBe(true);
+  });
+
+  test("a legacy quarantine peer remains separate in complete-scope filtering", async () => {
+    const sourceDocumentId = `${LEGACY_QUARANTINE_PREFIXES.ris}${"a".repeat(64)}`;
+    const aliases = repairAliasesForStableFields({
+      namespace: LEGACY_REPAIR_NAMESPACE.AT_COURTS,
+      sourceDocumentIds: [sourceDocumentId],
+      stableFields: { caseNumbers: "21 Cdo 12/2024", court: "Published court" },
+    });
+    const decision = plainTextIngestionResult({
+      caseNumber: "21 Cdo 12/2024",
+      sourceDocumentId: "publisher-record",
+      sourceDocumentIdRepairAliases: aliases,
+      court: "Nejvyšší soud",
+      country: "CZE",
+      language: "cs",
+      fulltext: "Published decision text.",
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: {},
+      rawHash: "b".repeat(64),
+      documentAst: EMPTY_AST,
+    });
+    expect(decision.sourceDocumentId).toBe("publisher-record");
+    const listing = (
+      await listReconciliationSlice({
+        adapterKey: "fixture",
+        proof: SLICE_LISTING_PROOF.IDENTITIES,
+        revisionOf: (payload) => payload,
+        listSlicePage: async () =>
+          await Promise.resolve({
+            observations: [],
+            items: [sourceDocumentId, "publisher-record"].map((id) => ({
+              identity: { type: "document" as const, sourceDocumentId: id },
+              payload: { id },
+            })),
+            totalPages: 1,
+          }),
+        slice: "all",
+        pageDelayMs: 0,
+        pageTimeoutMs: 5000,
+        sleep: async () => {
+          await Promise.resolve();
+        },
+      })
+    ).unwrap("A complete listing certifies its scope");
+    const filtered = filterQuarantinePeerCollisions({
+      decisions: [decision],
+      proof: listing.recoveryProof,
+    });
+    expect(filtered.collidingIds).toEqual([sourceDocumentId]);
+    expect(filtered.decisions.at(0)?.sourceDocumentIdRepairAliases).toEqual([]);
+    expect(decision.sourceDocumentIdRepairAliases).toEqual([sourceDocumentId]);
   });
 });

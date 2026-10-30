@@ -18,8 +18,8 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import {
-  countQuarantineCollisions,
   isQuarantineListingIdentity,
+  quarantineCollisionEvidence,
   quarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
@@ -57,6 +57,8 @@ type SliceListing = {
    * folded into `duplicate`.
    */
   quarantineCollisions: Map<string, number>;
+  /** Distinct content revisions per quarantined identity across every page. */
+  quarantineRevisions: Map<string, Set<string>>;
   /**
    * Quarantine ids listed both for a quarantined record and as the peer of a
    * keyed one (`ReconciliationListingItem.quarantinePeers`): two records the
@@ -166,6 +168,7 @@ const listSlicePass = async ({
     duplicate: 0,
     pages: 0,
     quarantineCollisions: new Map(),
+    quarantineRevisions: new Map(),
     quarantinePeerCollisions: [],
     withoutStableFields: 0,
   };
@@ -178,9 +181,9 @@ const listSlicePass = async ({
   }[] = [];
   let repeats = 0;
   const finish = (): SliceListing => {
-    listing.quarantineCollisions = countQuarantineCollisions(
-      quarantineObservations,
-    );
+    const evidence = quarantineCollisionEvidence(quarantineObservations);
+    listing.quarantineCollisions = evidence.collisions;
+    listing.quarantineRevisions = evidence.revisions;
     listing.duplicate = repeats - unstoredCollisionCount(listing);
     listing.quarantinePeerCollisions = quarantinePeerCollisions(
       [...listing.keyed.values()].map(({ identity, quarantinePeers }) => ({
@@ -291,13 +294,28 @@ const reportUnstoredRecords = (
   }
 };
 
+const sameQuarantineRevisions = (
+  first: SliceListing,
+  second: SliceListing,
+): boolean =>
+  first.quarantineRevisions.size === second.quarantineRevisions.size &&
+  [...first.quarantineRevisions].every(([key, revisions]) => {
+    const other = second.quarantineRevisions.get(key);
+    return (
+      other !== undefined &&
+      revisions.size === other.size &&
+      [...revisions].every((revision) => other.has(revision))
+    );
+  });
+
 const sameIdentities = (first: SliceListing, second: SliceListing): boolean =>
   first.keyed.size === second.keyed.size &&
   [...first.keyed.keys()].every((identityKey) =>
     second.keyed.has(identityKey),
   ) &&
   first.observations.size === second.observations.size &&
-  [...first.observations.keys()].every((key) => second.observations.has(key));
+  [...first.observations.keys()].every((key) => second.observations.has(key)) &&
+  sameQuarantineRevisions(first, second);
 
 /**
  * Every page of one slice, or an error. Never a partial listing: an

@@ -67,6 +67,7 @@ import {
   quarantineIdentity,
   type RepairAlias,
 } from "@/api/lib/legal-search/quarantine-identity";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -74,7 +75,7 @@ import { isRecord } from "@/api/lib/type-guards";
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
 const ORIGIN = "https://uohs.gov.cz";
 const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
-const PAGE_SIZE = 20;
+export const CZ_UOHS_PAGE_SIZE = 20;
 const CURSOR_VERSION = 1;
 
 export const CZ_UOHS_COLLECTIONS = [
@@ -835,31 +836,94 @@ export const buildCzUohsDecision = async (
   }
 };
 
+type CzUohsRecordKey = {
+  readonly iri: string;
+  readonly fingerprint: string;
+  readonly occurrence: number;
+};
+
 type CzUohsListing = {
-  records: CzUohsRecord[];
+  records: { record: CzUohsRecord; key: CzUohsRecordKey }[];
   snapshotId: string;
 };
 
 type CzUohsCursor = {
   version: typeof CURSOR_VERSION;
-  afterId?: string;
   parkedOn?: string;
   snapshotId?: string;
+  frontier:
+    | { type: "start" }
+    | { type: "before-group"; iri: string }
+    | ({ type: "after-record" } & CzUohsRecordKey);
+};
+
+/** The same tuple order determines sorting, resumption and checkpoint fields. */
+const compareCzUohsRecordKeys = (
+  left: CzUohsRecordKey,
+  right: CzUohsRecordKey,
+): number => {
+  for (const field of ["iri", "fingerprint"] as const) {
+    if (left[field] !== right[field]) {
+      return left[field] < right[field] ? -1 : 1;
+    }
+  }
+  return left.occurrence - right.occurrence;
 };
 
 const listingSnapshots = new Map<string, CzUohsListing>();
 
 const todayUtc = (): string => Temporal.Now.plainDateISO("UTC").toString();
 
-export const encodeCzUohsCursor = (cursor: CzUohsCursor): string =>
-  JSON.stringify(cursor);
+export const encodeCzUohsCursor = (cursor: CzUohsCursor): string => {
+  const { frontier, ...common } = cursor;
+  switch (frontier.type) {
+    case "start":
+      return JSON.stringify(common);
+    case "before-group":
+      return JSON.stringify({ ...common, afterId: frontier.iri });
+    case "after-record":
+      return JSON.stringify({
+        ...common,
+        afterRecord: {
+          iri: frontier.iri,
+          fingerprint: frontier.fingerprint,
+          occurrence: frontier.occurrence,
+        } satisfies CzUohsRecordKey,
+      });
+    default: {
+      frontier satisfies never;
+      return panic(
+        `Unhandled ÚOHS cursor frontier: ${JSON.stringify(frontier)}`,
+      );
+    }
+  }
+};
 
-const cursorSchema = v.strictObject({
-  version: v.literal(CURSOR_VERSION),
-  afterId: v.optional(v.string()),
-  parkedOn: v.optional(v.string()),
-  snapshotId: v.optional(v.string()),
-});
+const cursorSchema = v.pipe(
+  v.strictObject({
+    version: v.literal(CURSOR_VERSION),
+    afterId: v.optional(v.string()),
+    afterRecord: v.optional(
+      v.strictObject({
+        iri: v.string(),
+        fingerprint: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
+        occurrence: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(0),
+          v.maxValue(Number.MAX_SAFE_INTEGER),
+        ),
+      }),
+    ),
+    parkedOn: v.optional(v.string()),
+    snapshotId: v.optional(v.string()),
+  }),
+  v.check(
+    ({ afterId, afterRecord }) =>
+      afterId === undefined || afterRecord === undefined,
+    "ÚOHS cursor cannot contain both frontiers",
+  ),
+);
 
 // A cursor this adapter did not write is refused: restarting the walk would
 // silently re-fetch every decision.
@@ -867,16 +931,22 @@ export const parseCzUohsCursor = (
   cursor: string | null,
 ): Result<CzUohsCursor, AdapterFetchError> =>
   cursor === null
-    ? Result.ok({ version: CURSOR_VERSION })
+    ? Result.ok({ version: CURSOR_VERSION, frontier: { type: "start" } })
     : Result.try({
         try: (): CzUohsCursor => {
-          const { afterId, parkedOn, snapshotId } = v.parse(
+          const { afterId, afterRecord, parkedOn, snapshotId } = v.parse(
             cursorSchema,
             JSON.parse(cursor),
           );
+          let frontier: CzUohsCursor["frontier"] = { type: "start" };
+          if (afterRecord !== undefined) {
+            frontier = { type: "after-record", ...afterRecord };
+          } else if (afterId !== undefined) {
+            frontier = { type: "before-group", iri: afterId };
+          }
           return {
             version: CURSOR_VERSION,
-            ...(afterId === undefined ? {} : { afterId }),
+            frontier,
             ...(parkedOn === undefined ? {} : { parkedOn }),
             ...(snapshotId === undefined ? {} : { snapshotId }),
           };
@@ -894,15 +964,31 @@ const readListing = async (
   }
   const raw = rawResult.value;
   return Result.try({
-    try: () => ({
-      records: parseCzUohsListing(JSON.parse(raw)).toSorted((left, right) => {
-        if (left.iri === right.iri) {
-          return 0;
-        }
-        return left.iri < right.iri ? -1 : 1;
-      }),
-      snapshotId: sha256Hex(raw),
-    }),
+    try: () => {
+      const sorted = parseCzUohsListing(JSON.parse(raw))
+        .map((record) => ({
+          record,
+          key: {
+            iri: record.iri,
+            fingerprint: fingerprintReconciliationPayload(record),
+            occurrence: 0,
+          },
+        }))
+        .toSorted((left, right) =>
+          compareCzUohsRecordKeys(left.key, right.key),
+        );
+      let previous: CzUohsRecordKey | undefined;
+      let occurrence = 0;
+      const records = sorted.map(({ record, key }) => {
+        occurrence =
+          previous !== undefined && compareCzUohsRecordKeys(previous, key) === 0
+            ? occurrence + 1
+            : 0;
+        previous = key;
+        return { record, key: { ...key, occurrence } };
+      });
+      return { records, snapshotId: sha256Hex(raw) };
+    },
     catch: adapterCatch(ADAPTER_KEYS.CZ_UOHS, cursor),
   });
 };
@@ -1013,13 +1099,30 @@ export const czUohsAdapter = defineSourceAdapter({
     }
     // A parked walk resumes after its frontier: one listing read per cycle,
     // new documents only (rule 19); reconciliation covers the rest.
-    const afterId = position.afterId;
-    const remaining = listing.value.records.filter(
-      (record) => afterId === undefined || record.iri > afterId,
-    );
-    const selected = remaining.slice(0, PAGE_SIZE);
+    const frontier = position.frontier;
+    const remaining = listing.value.records.filter(({ key }) => {
+      switch (frontier.type) {
+        case "start":
+          return true;
+        case "before-group":
+          return (
+            compareCzUohsRecordKeys(key, {
+              iri: frontier.iri,
+              fingerprint: "",
+              occurrence: 0,
+            }) >= 0
+          );
+        case "after-record":
+          return compareCzUohsRecordKeys(key, frontier) > 0;
+        default: {
+          frontier satisfies never;
+          return panic("Unhandled ÚOHS cursor frontier");
+        }
+      }
+    });
+    const selected = remaining.slice(0, CZ_UOHS_PAGE_SIZE);
     const decisions: IngestionResult[] = [];
-    for (const record of selected) {
+    for (const { record } of selected) {
       if (czUohsListingIdentity(record) === undefined) {
         // The reconciliation counts it in `withoutStableFields`; this names
         // why the crawl stores nothing for it.
@@ -1032,14 +1135,22 @@ export const czUohsAdapter = defineSourceAdapter({
       }
       decisions.push(await buildCzUohsDecision(record, signal));
     }
-    const lastId = selected.at(-1)?.iri ?? afterId;
-    const reachedTip = selected.length < PAGE_SIZE;
+    const last = selected.at(-1);
+    const reachedTip = selected.length < CZ_UOHS_PAGE_SIZE;
     return Result.ok({
       observations: [],
       decisions,
       nextCursor: encodeCzUohsCursor({
         version: CURSOR_VERSION,
-        ...(lastId === undefined ? {} : { afterId: lastId }),
+        frontier:
+          last === undefined
+            ? frontier
+            : {
+                type: "after-record",
+                iri: last.key.iri,
+                fingerprint: last.key.fingerprint,
+                occurrence: last.key.occurrence,
+              },
         snapshotId: listing.value.snapshotId,
         ...(reachedTip ? { parkedOn: todayUtc() } : {}),
       }),
@@ -1072,9 +1183,9 @@ export const czUohsAdapter = defineSourceAdapter({
         return await Promise.reject(listing.error);
       }
       const { records } = listing.value;
-      const items = records.flatMap((payload) => {
-        const identity = czUohsListingIdentity(payload);
-        return identity === undefined ? [] : [{ identity, payload }];
+      const items = records.flatMap(({ record }) => {
+        const identity = czUohsListingIdentity(record);
+        return identity === undefined ? [] : [{ identity, payload: record }];
       });
       // A decision with no stable field is listed but cannot be keyed: it is
       // counted so coverage shows it, and the crawl warns on it.

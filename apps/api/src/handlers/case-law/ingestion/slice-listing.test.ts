@@ -20,6 +20,7 @@ import {
   quarantinedListingObservation,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 // Spies created in a test stay attached if it fails before restoring them.
@@ -502,4 +503,49 @@ test("a changed noncanonical observation invalidates a two-pass identity proof",
     sleep: async () => undefined,
   });
   expect(listing.isErr()).toBe(true);
+});
+
+test.each([
+  { change: "adds a record", first: ["A"], second: ["A", "B"] },
+  { change: "removes a record", first: ["A", "B"], second: ["A"] },
+  { change: "replaces a record", first: ["A"], second: ["B"] },
+])(
+  "verification rejects a quarantine key whose revision set $change",
+  async ({ first, second }) => {
+    const { sourceDocumentId } = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_NS,
+      stableFields: { docket: "21 Cdo 288/2026" },
+    });
+    const item = (row: string): ReconciliationListingItem => ({
+      identity: { type: "document", sourceDocumentId },
+      payload: { row },
+    });
+    const { listSlicePage, requests } = changingListing(
+      [first.map(item)],
+      [second.map(item)],
+    );
+    const result = await listWith(listSlicePage);
+    expect(result.isErr()).toBe(true);
+    expect(result.isErr() ? result.error : null).toBeInstanceOf(
+      AdapterFetchError,
+    );
+    expect(requests).toEqual([0, 0]);
+  },
+);
+
+test("verification rejects a new revision under an existing legacy quarantine key", async () => {
+  const sourceDocumentId = `${LEGACY_QUARANTINE_PREFIXES.ris}${"a".repeat(64)}`;
+  const item = (row: string): ReconciliationListingItem => ({
+    identity: { type: "document", sourceDocumentId },
+    payload: { row },
+  });
+  const { listSlicePage } = changingListing(
+    [[item("A")]],
+    [[item("A"), item("B")]],
+  );
+  const result = await listWith(listSlicePage);
+  expect(result.isErr()).toBe(true);
+  expect(result.isErr() ? result.error : null).toBeInstanceOf(
+    AdapterFetchError,
+  );
 });

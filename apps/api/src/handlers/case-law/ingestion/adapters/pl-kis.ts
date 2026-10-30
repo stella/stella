@@ -117,6 +117,7 @@ import {
   LEGACY_REPAIR_NAMESPACE,
   repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
+import { LEGACY_QUARANTINE_PREFIXES } from "@/api/lib/legal-search/quarantine-prefixes";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -723,7 +724,8 @@ export const plKisDocumentIdOf = (
   return id !== undefined && DOCUMENT_ID_PATTERN.test(id) ? id : undefined;
 };
 
-const QUARANTINE_ID_PREFIX = "eureka-quarantine:";
+const QUARANTINE_ID_PREFIX =
+  LEGACY_QUARANTINE_PREFIXES[LEGACY_REPAIR_NAMESPACE.PL_KIS];
 
 /**
  * The content-addressed identity of a counted row that states no usable id.
