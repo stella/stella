@@ -5,6 +5,7 @@ import {
   DESKTOP_FEATURE_ACCESS_PATH,
   DESKTOP_FEATURE_IDS,
 } from "@stll/api-contract/desktop-feature-access";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -19,7 +20,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopFeatureAccessReadEndpoint } from "./read";

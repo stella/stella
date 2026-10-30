@@ -35,6 +35,8 @@ const PURE_AUTOFIX = {
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
+  // Lists the committed rollout file names; never imports or runs them.
+  "guard-rollout-manifest": "scripts/generate-guard-rollouts.ts",
   // Parses the install tooling import closure and replaces one Docker block.
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
@@ -71,7 +73,7 @@ const PURE_AUTOFIX = {
   // and copies lucide-static's outlines, pinned by the lockfile, into the
   // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
-  // Reads folio's installed fontsource stylesheets, pinned by the lockfile.
+  // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
   "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
