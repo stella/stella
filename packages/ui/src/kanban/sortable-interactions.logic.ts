@@ -363,13 +363,16 @@ export const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (
     return undefined;
   }
 
-  const targetId = getKanbanKeyboardTarget({
-    activeId: active,
-    cells,
-    currentCellId,
-    currentOverId: overId,
-    direction,
-  });
+  const targetId =
+    keyboardTarget?.type === "pending"
+      ? keyboardTarget.targetId
+      : getKanbanKeyboardTarget({
+          activeId: active,
+          cells,
+          currentCellId,
+          currentOverId: overId,
+          direction,
+        });
   if (targetId === undefined) {
     return undefined;
   }
