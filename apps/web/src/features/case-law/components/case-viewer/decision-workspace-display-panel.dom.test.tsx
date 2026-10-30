@@ -22,7 +22,7 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { cleanup, fireEvent, render, screen, waitFor, within } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -239,12 +239,16 @@ test("the margin's display panel owns the cited provisions toggle", async () => 
     }),
   ).toBeNull();
 
-  fireEvent.click(toggle);
+  await act(async () => {
+    fireEvent.click(toggle);
+  });
 
   expect(toggle.getAttribute("aria-pressed")).toBe("true");
   await waitFor(() => expect(marginCards(view.container)).toHaveLength(1));
 
-  fireEvent.click(toggle);
+  await act(async () => {
+    fireEvent.click(toggle);
+  });
 
   expect(toggle.getAttribute("aria-pressed")).toBe("false");
   expect(marginCards(view.container)).toHaveLength(0);
