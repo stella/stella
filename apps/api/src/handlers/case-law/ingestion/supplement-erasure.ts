@@ -240,10 +240,19 @@ const recomposeHolder = async ({
           sourceId,
         }),
       });
-      if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
+      if (written.isErr()) {
         return {
           type: "withheld" as const,
-          reason: `retryable: ${written.reason}`,
+          reason:
+            written.error instanceof Error
+              ? written.error.message
+              : "the rebuild failed",
+        };
+      }
+      if (written.value.status !== PROCESS_DECISION_STATUS.COMPLETE) {
+        return {
+          type: "withheld" as const,
+          reason: `retryable: ${written.value.reason}`,
         };
       }
       // A write can complete without landing (a newer observation owns the

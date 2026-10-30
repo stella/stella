@@ -25,6 +25,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   STATED_ECLI_IDENTITY,
   type StatedEcliIdentity,
@@ -101,8 +102,15 @@ export const observeDecision = ({
   metadataUrlSchema,
   input,
   sourceId,
-}: ObserveDecisionOptions): ObservedDecision => {
-  const observed = sanitizeResult(input, metadataUrlSchema);
+}: ObserveDecisionOptions): Result<
+  ObservedDecision,
+  StoredCorpusValidationError
+> => {
+  const sanitized = sanitizeResult(input, metadataUrlSchema);
+  if (sanitized.isErr()) {
+    return sanitized;
+  }
+  const observed = sanitized.value;
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator
@@ -182,14 +190,14 @@ export const observeDecision = ({
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }
-  return {
+  return Result.ok({
     observed,
     persistedDecisionDate,
     exactSourceIdentityCandidates,
     repairSourceIdentityCandidates,
     sourceIdentityCandidates,
     legacyCaseNumbers,
-  };
+  });
 };
 
 const IDENTITY_COLUMNS = {

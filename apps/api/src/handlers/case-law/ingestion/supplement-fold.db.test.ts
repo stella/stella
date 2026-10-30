@@ -305,17 +305,19 @@ test("the fold merges every reasons row into the ruling it explains and keeps th
     ...RULINGS.map(rulingInput),
     ...LEGACY_REASONS.map(legacyReasonsInput),
   ]) {
-    const seeded = await processDecision({
-      input,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-09-01T00:00:00.000Z"),
-      observationOrder: await allocateSourceObservationOrder({
-        leaseToken: sourceLease.leaseToken,
-        scopedDb,
+    const seeded = (
+      await processDecision({
+        input,
         sourceId,
-      }),
-    });
+        scopedDb,
+        observedAt: new Date("2026-09-01T00:00:00.000Z"),
+        observationOrder: await allocateSourceObservationOrder({
+          leaseToken: sourceLease.leaseToken,
+          scopedDb,
+          sourceId,
+        }),
+      })
+    ).unwrap();
     expect(seeded.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   }
 

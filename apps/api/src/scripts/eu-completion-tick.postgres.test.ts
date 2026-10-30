@@ -1606,16 +1606,18 @@ if (!databaseUrl || !enabled) {
                 },
               },
             });
-            await processDecision({
-              input: candidate,
-              sourceId,
-              scopedDb: writer,
-              signal,
-              s3Policy: { mode: "replay-strict", signal },
-              observedAt: new Date(),
-              observationOrder,
-              refresh: DECISION_REFRESH.ALWAYS,
-            });
+            (
+              await processDecision({
+                input: candidate,
+                sourceId,
+                scopedDb: writer,
+                signal,
+                s3Policy: { mode: "replay-strict", signal },
+                observedAt: new Date(),
+                observationOrder,
+                refresh: DECISION_REFRESH.ALWAYS,
+              })
+            ).unwrap();
           } finally {
             await lease.release();
           }

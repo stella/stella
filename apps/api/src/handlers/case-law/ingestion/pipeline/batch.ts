@@ -597,13 +597,17 @@ export const applyDecisionBatch = async (
   let current = 0;
   const corpusBatch: CorpusPackBatch = {
     enqueue: (entry) => {
+      const enqueued = pack.enqueue(entry);
+      if (enqueued.isErr()) {
+        return enqueued;
+      }
       const indexes = queued.get(entry.decisionId);
       if (indexes === undefined) {
         queued.set(entry.decisionId, [current]);
       } else {
         indexes.push(current);
       }
-      pack.enqueue(entry);
+      return enqueued;
     },
     flush: pack.flush,
   };
@@ -628,7 +632,7 @@ export const applyDecisionBatch = async (
         continue;
       }
       const { decision: input, recordIdentity } = record;
-      const processed = await Result.tryPromise({
+      const attempt = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
           await processDecision(
@@ -648,6 +652,7 @@ export const applyDecisionBatch = async (
           ),
         catch: (cause) => cause,
       });
+      const processed = attempt.andThen((outcome) => outcome);
       // A caller cancellation leaves the record for replay. An operation's
       // error without that signal remains a decision failure.
       if (signal?.aborted) {

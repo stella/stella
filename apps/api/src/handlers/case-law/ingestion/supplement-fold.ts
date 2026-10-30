@@ -194,25 +194,25 @@ export const foldStoredSupplements = async ({
 
   const foldRow = async (
     row: FoldRow & { sourceRawS3Key: string },
-  ): Promise<SupplementFoldRowReport> => {
+  ): Promise<Result<SupplementFoldRowReport, unknown>> => {
     const base = { id: row.id, caseNumber: row.caseNumber };
     const read = await readStoredRaw(row.sourceRawS3Key);
     if (Result.isError(read)) {
-      return {
+      return Result.ok({
         ...base,
         outcome: read.error.permanent
           ? SUPPLEMENT_FOLD_OUTCOME.REJECTED
           : SUPPLEMENT_FOLD_OUTCOME.RETRYABLE,
         detail: read.error.message,
-      };
+      });
     }
     const raw = read.value;
     if (raw === null) {
-      return {
+      return Result.ok({
         ...base,
         outcome: SUPPLEMENT_FOLD_OUTCOME.MISSING_PAYLOAD,
         detail: row.sourceRawS3Key,
-      };
+      });
     }
     const reparsed = await reparseStoredRaw({
       raw,
@@ -230,14 +230,17 @@ export const foldStoredSupplements = async ({
     });
     switch (reparsed.type) {
       case "rejected":
-        return {
+        return Result.ok({
           ...base,
           outcome: SUPPLEMENT_FOLD_OUTCOME.REJECTED,
           rejection: reparsed.rejection,
           detail: reparsed.detail,
-        };
+        });
       case "parsed":
-        return { ...base, outcome: SUPPLEMENT_FOLD_OUTCOME.NOT_A_SUPPLEMENT };
+        return Result.ok({
+          ...base,
+          outcome: SUPPLEMENT_FOLD_OUTCOME.NOT_A_SUPPLEMENT,
+        });
       case "supplement":
         break;
       default: {
@@ -248,13 +251,13 @@ export const foldStoredSupplements = async ({
     if (
       reparsed.supplement.document.sourceDocumentId !== row.sourceDocumentId
     ) {
-      return {
+      return Result.ok({
         ...base,
         outcome: SUPPLEMENT_FOLD_OUTCOME.REJECTED,
         detail: `the payload names ${reparsed.supplement.document.sourceDocumentId}`,
-      };
+      });
     }
-    const placed = await processSupplement({
+    const placement = await processSupplement({
       // The bytes this run read: the standalone row keeps its pointer on the
       // same content-addressed object.
       supplement: {
@@ -275,39 +278,43 @@ export const foldStoredSupplements = async ({
       readStoredRaw,
       ...(corpus === undefined ? {} : { corpus }),
     });
+    if (placement.isErr()) {
+      return placement;
+    }
+    const placed = placement.value;
     if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-      return {
+      return Result.ok({
         ...base,
         outcome: SUPPLEMENT_FOLD_OUTCOME.RETRYABLE,
         detail: placed.reason,
-      };
+      });
     }
     const { disposition } = placed;
     switch (disposition.type) {
       case "merged":
-        return {
+        return Result.ok({
           ...base,
           outcome: SUPPLEMENT_FOLD_OUTCOME.MERGED,
           detail: disposition.judgmentId,
-        };
+        });
       case "standalone":
-        return {
+        return Result.ok({
           ...base,
           outcome: SUPPLEMENT_FOLD_OUTCOME.STANDALONE,
           detail: disposition.reason,
-        };
+        });
       case "withheld":
-        return {
+        return Result.ok({
           ...base,
           outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
           detail: disposition.judgmentId,
-        };
+        });
       case "erased":
-        return {
+        return Result.ok({
           ...base,
           outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
           detail: disposition.decisionId,
-        };
+        });
       default: {
         disposition satisfies never;
         return panic(
@@ -335,11 +342,13 @@ export const foldStoredSupplements = async ({
       if (sourceRawS3Key === null) {
         continue;
       }
-      const folded = await Result.tryPromise({
-        // db-await-in-loop: each supplement row folds into its own judgment, one locked write per row
-        try: async () => await foldRow({ ...row, sourceRawS3Key }),
-        catch: (cause) => cause,
-      });
+      const folded = (
+        await Result.tryPromise({
+          // db-await-in-loop: each supplement row folds into its own judgment, one locked write per row
+          try: async () => await foldRow({ ...row, sourceRawS3Key }),
+          catch: (cause) => cause,
+        })
+      ).andThen((outcome) => outcome);
       if (Result.isError(folded)) {
         // Says nothing about the row: hold the cursor behind it.
         report.haltReason = `${row.caseNumber} ${row.id} could not be folded: ${

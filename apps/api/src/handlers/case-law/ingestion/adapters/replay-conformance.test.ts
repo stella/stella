@@ -7,7 +7,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
-import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+import {
+  headMatterPrecedesBody,
+  withUniqueBlockIdentities,
+} from "@stll/legal-ast/document-ast";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -157,7 +160,20 @@ describe("every case-law adapter is replay safe", () => {
       });
       expect(snapshotOf(interrupted)).toEqual(snapshotOf(uninterrupted));
 
+      // A parser's own output repeats no block identity. Where one can (the
+      // Slovak parsers read a title set over two lines as two title
+      // headings), `sanitizeResult` re-keys the repeat before storage and the
+      // parser's version says so; any other parser repeating one here would
+      // need the same version decision.
+      const blocks =
+        "blocks" in first.documentAst ? first.documentAst.blocks : [];
+      expect(
+        withUniqueBlockIdentities(blocks),
+        "parser output repeats a block identity",
+      ).toEqual(blocks);
+
       const parserSnapshot = await loadParserFingerprint(adapter.key);
+
       expect(parserSnapshot).toEqual({
         version: PARSER_VERSIONS[adapter.key],
         fingerprint: fingerprint(first),

@@ -18,13 +18,13 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { CopyButton } from "@stll/ui/copy-button";
-import { LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { DesktopMessages } from "../i18n/index";
 import { calendarDate, timedSegments } from "./activity-logic";
@@ -33,7 +33,7 @@ import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
 import "./day-review.css";
-import { matchDay } from "./day-review-logic";
+import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type {
   DayReviewGroup,
   MatchConfidence,
@@ -187,7 +187,16 @@ export const ActivityDayReview = ({
   const narrative = (group: DayReviewGroup) =>
     group.evidence.length
       ? t("narrativeEvidence", {
-          evidence: format.list(group.evidence, { type: "conjunction" }),
+          evidence: format.list(
+            [
+              ...new Set(
+                group.evidence.flatMap(({ details }) =>
+                  details.slice(0, EVIDENCE_DETAIL_LIMIT),
+                ),
+              ),
+            ],
+            { type: "conjunction" },
+          ),
         })
       : t("narrativeApps", {
           apps: format.list(
@@ -540,11 +549,8 @@ const ReviewBar = ({
           hours,
         })}
       </span>
-      <span className="text-muted-foreground ms-auto flex items-center gap-1 text-xs">
-        <LockKeyholeIcon aria-hidden="true" className="size-3" />
-        {t("batchPrivacy")}
-      </span>
       <CopyButton
+        className="ms-auto"
         copiedLabel={t("copied")}
         disabled={selected.length === 0}
         iconClassName="size-4"
@@ -776,18 +782,53 @@ const Evidence = ({
 }: {
   group: DayReviewGroup;
   snapshot: ActivityDaySnapshot;
-}) => (
-  <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-    {group.apps.map(({ identifier }) => (
-      <ActivitySourceIcon
-        key={identifier}
-        appIdentifier={identifier}
-        sourceAppVisuals={snapshot.sourceAppVisuals}
-      />
-    ))}
-    <bdi className="min-w-0 wrap-break-word">
-      {group.evidence.join(" · ") ||
-        group.apps.map(({ name }) => name).join(" · ")}
-    </bdi>
-  </div>
-);
+}) => {
+  const format = useFormatter();
+  return (
+    <ul className="text-muted-foreground mt-1.5 flex flex-col gap-1 text-xs">
+      {group.apps.map(({ identifier, name }) => {
+        const details =
+          group.evidence.find((app) => app.identifier === identifier)
+            ?.details ?? [];
+        const hidden = details.length - EVIDENCE_DETAIL_LIMIT;
+        return (
+          <li key={identifier} className="flex min-w-0 items-center gap-2">
+            <ActivitySourceIcon
+              appIdentifier={identifier}
+              sourceAppVisuals={snapshot.sourceAppVisuals}
+            />
+            <bdi className="min-w-0 truncate">
+              {details.length > 0
+                ? details.slice(0, EVIDENCE_DETAIL_LIMIT).join(" · ")
+                : name}
+            </bdi>
+            {hidden > 0 ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      className="text-muted-foreground shrink-0 tabular-nums"
+                      size="xs"
+                      variant="ghost"
+                    />
+                  }
+                >
+                  +{format.number(hidden)}
+                </TooltipTrigger>
+                <TooltipPopup side="bottom" className="max-w-72 p-2">
+                  <ul className="flex flex-col gap-0.5">
+                    {details.slice(EVIDENCE_DETAIL_LIMIT).map((detail) => (
+                      <li key={detail}>
+                        <bdi>{detail}</bdi>
+                      </li>
+                    ))}
+                  </ul>
+                </TooltipPopup>
+              </Tooltip>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+};

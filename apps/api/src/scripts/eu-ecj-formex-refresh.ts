@@ -525,10 +525,14 @@ const refreshStoredRow = async ({
     observationOrder,
     refresh: DECISION_REFRESH.ALWAYS,
   });
+  if (written.isErr()) {
+    return { type: "terminal", outcome: "write-rejected", ...extra };
+  }
   return {
     type: "terminal",
     outcome:
-      written.status === PROCESS_DECISION_STATUS.RETRYABLE || !written.inserted
+      written.value.status === PROCESS_DECISION_STATUS.RETRYABLE ||
+      !written.value.inserted
         ? "write-rejected"
         : "refreshed",
     ...extra,

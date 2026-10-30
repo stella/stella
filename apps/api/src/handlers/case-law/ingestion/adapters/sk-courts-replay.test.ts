@@ -9,7 +9,7 @@ import type {
   StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
-import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser";
+import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
 import {
   decodeSourceRawEnvelope,
@@ -50,7 +50,7 @@ const rejectPublisherReads = () => {
 };
 
 describe("SK courts stored document replay", () => {
-  test("stored document objects reproduce the deferred parser and form a fixed point", async () => {
+  test("stored document objects match the backfill entry point and form a fixed point", async () => {
     const decision = await skCourtsFixture().buildDecision();
     const pdf = PDF.create();
     pdf
@@ -58,16 +58,19 @@ describe("SK courts stored document replay", () => {
       .drawText("Rozsudok stored decision text", { x: 72, y: 720, size: 12 });
     const bytes = await pdf.save();
     const expected =
-      (await parsePendingDocument(
-        {
-          caseNumber: decision.caseNumber,
-          court: decision.court,
-          ecli: decision.ecli ?? null,
-          decisionDate: decision.decisionDate ?? null,
-          decisionType: decision.decisionType ?? null,
-        },
-        bytes,
-      )) ?? panic("Fixture PDF must parse before replay");
+      (
+        await parsePendingDocument(
+          {
+            caseNumber: decision.caseNumber,
+            court: decision.court,
+            ecli: decision.ecli ?? null,
+            decisionDate: decision.decisionDate ?? null,
+            decisionType: decision.decisionType ?? null,
+          },
+          bytes,
+        )
+      ).unwrap("Fixture PDF must parse before replay") ??
+      panic("Fixture PDF must contain document text");
     const parts =
       decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
       panic("Fixture envelope missing");

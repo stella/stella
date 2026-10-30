@@ -152,15 +152,17 @@ const ingest = async ({
     })),
     documentAst: EMPTY_AST,
   });
-  const result = await processDecision({
-    input,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-23T08:00:00.000Z"),
-    observationOrder,
-    refresh: DECISION_REFRESH.ALWAYS,
-    corpus,
-  });
+  const result = (
+    await processDecision({
+      input,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T08:00:00.000Z"),
+      observationOrder,
+      refresh: DECISION_REFRESH.ALWAYS,
+      corpus,
+    })
+  ).unwrap();
   expect(result.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 

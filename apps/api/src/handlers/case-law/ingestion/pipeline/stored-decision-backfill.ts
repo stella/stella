@@ -7,6 +7,13 @@ import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestio
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const STORED_DECISION_BACKFILL_VALIDATION_SINK = failureSink({
+  event: "case_law.stored_backfill.payload_invalid",
+  expected: [],
+});
 
 type ApplyStoredDecisionBackfillOptions = {
   report: { applied: number; deferred: number };
@@ -37,7 +44,7 @@ export const applyStoredDecisionBackfill = async (
   } = {},
 ) => {
   await sourceLease.beforeDatabaseMark();
-  const outcome = await processDecision({
+  const processed = await processDecision({
     input: { ...result, rawHash: row.sourceHash ?? result.rawHash },
     sourceId,
     scopedDb,
@@ -50,6 +57,15 @@ export const applyStoredDecisionBackfill = async (
       sourceId,
     }),
   });
+  if (processed.isErr()) {
+    report.deferred += 1;
+    observeFailure(processed.error, {
+      sink: STORED_DECISION_BACKFILL_VALIDATION_SINK,
+      ctx: { decisionId: row.id, source: sourceId },
+    });
+    return;
+  }
+  const outcome = processed.value;
   switch (outcome.status) {
     case PROCESS_DECISION_STATUS.COMPLETE:
       if (outcome.inserted) {

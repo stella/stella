@@ -196,7 +196,7 @@ describe("persisted citation scopes", () => {
       documentAst: ast(rawText),
       citationScopes: opinions,
     });
-    const sanitized = sanitizeResult(input);
+    const sanitized = sanitizeResult(input).unwrap();
     const documentAst = sanitized.documentAst;
     if (!isDocumentAst(documentAst)) {
       throw new Error("Sanitized fixture must retain its AST");

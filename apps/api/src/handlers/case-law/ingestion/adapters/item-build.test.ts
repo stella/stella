@@ -96,7 +96,7 @@ describe("plain-text item rejection", () => {
       }
       expect(first.decision.sourceRaw).toBeDefined();
       expect(first.decision.sourceDocumentId).toBeDefined();
-      expect(sanitizeResult(first.decision).sourceDocumentId).toBe(
+      expect(sanitizeResult(first.decision).unwrap().sourceDocumentId).toBe(
         first.decision.sourceDocumentId,
       );
       expect(first.decision.caseNumber).not.toContain("\\rtf1");
