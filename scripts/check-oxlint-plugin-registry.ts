@@ -6,7 +6,11 @@ import path from "node:path";
 import oxlintConfig from "../oxlint.config.ts";
 import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
 import { GENERATORS } from "./generated-files";
-import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy.ts";
+import {
+  GUARD_ROLLOUT_DIRECTORY,
+  GUARD_ROLLOUTS,
+  type GuardRollout,
+} from "./guard-rollout-policy.ts";
 import { readScopes } from "./oxlint-config-scopes.ts";
 import { severityOf } from "./oxlint-effective-config.ts";
 
@@ -224,7 +228,7 @@ export const newGuardRolloutErrors = ({
       return [];
     }
     return [
-      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout`,
+      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout in ${GUARD_ROLLOUT_DIRECTORY}/<id>.ts`,
     ];
   });
 

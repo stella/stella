@@ -218,6 +218,7 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       ui_playground_specs: ${{ steps.ui-playground-plan.outputs.specs || '[]' }}
+      ui_playground_matrix: ${{ steps.ui-playground-plan.outputs.matrix || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
@@ -1004,6 +1005,8 @@ jobs:
         env:
           UI_PLAYGROUND_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          EVENT_NAME: ${{ github.event_name }}
+          DESKTOP_REQUIRED: ${{ steps.changed-files.outputs.desktop_browser_required }}
         run: |
           if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
             echo "::warning::Changed files are unknown; running every geometry spec."
@@ -1016,6 +1019,9 @@ jobs:
             specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
           fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          all_specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          matrix=$(UI_PLAYGROUND_SELECTED_SPECS="$specs" UI_PLAYGROUND_ALL_SPECS="$all_specs" bun scripts/ui-playground-shards.ts)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Plan query performance scope
         id: query-perf-scope
@@ -3325,11 +3331,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The UI playground suite runs alone in six Playwright shards: on one
-        # runner its dev-server page loads made it the longest merge-group job.
-        # A pull request runs only its selected geometry specs on one
-        # unsharded `playground` leg.
-        suite: ${{ github.event_name == 'pull_request' && needs.ci-plan.outputs.desktop_browser_required == 'true' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["desktop","playground"]') || github.event_name == 'pull_request' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["playground"]') || github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3","playground-4","playground-5","playground-6"]') }}
+        include: ${{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
@@ -3523,21 +3525,16 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: (matrix.suite == 'playground' || matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true'
+        if: startsWith(matrix.suite, 'playground-') && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
-          SUITE: ${{ matrix.suite }}
-          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
+          SELECTED_SPECS: ${{ toJSON(matrix.specs) }}
         run: |
           cd apps/web
-          if [[ "$SUITE" == playground ]]; then
-            # Selected specs are repository paths; Playwright matches them
-            # against each test file's absolute path.
-            mapfile -t specs < <(bun -e 'for (const spec of JSON.parse(process.env.SELECTED_SPECS ?? "[]")) console.log(spec)')
-            bun run test:e2e:ui-playground "${specs[@]}"
-            exit 0
-          fi
-          bun run test:e2e:ui-playground --shard="${SUITE#playground-}/6"
+          # Selected specs are repository paths; Playwright matches them
+          # against each test file's absolute path.
+          mapfile -t specs < <(bun -e 'for (const spec of JSON.parse(process.env.SELECTED_SPECS ?? "[]")) console.log(spec)')
+          bun run test:e2e:ui-playground "${specs[@]}"
 
       - name: Test extension browser boundary
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
