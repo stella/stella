@@ -1008,6 +1008,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/sharepoint/capabilities": {
+    type: "non-replay",
+    reason: "credential",
+  },
   "PUT /v1/sharepoint/enablement": {
     type: "non-replay",
     reason: "credential",
