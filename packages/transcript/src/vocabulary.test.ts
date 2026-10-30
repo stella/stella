@@ -156,9 +156,10 @@ test("vocabulary always respects count and token budgets with unique stable term
         expect(selection.estimatedTokens).toBe(
           estimateVocabularyTokens(selection.terms.join(", ")),
         );
-        expect(new Set(selection.terms.map(foldSearchMatchText)).size).toBe(
-          selection.terms.length,
-        );
+        expect(
+          new Set(selection.terms.map((term) => foldSearchMatchText(term)))
+            .size,
+        ).toBe(selection.terms.length);
         expect(budgetVocabulary({ candidates, mechanism }).unwrap()).toEqual(
           selection,
         );
