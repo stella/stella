@@ -18,7 +18,7 @@ const { plCourtsAdapter } =
 const { skCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/sk-courts");
 
-const originalFetch = globalThis.fetch;
+let originalFetch = globalThis.fetch;
 
 // The registry's adapter reserves a slot on the process-wide RIS publisher
 // gate before every request, so a file that walked any RIS adapter within the
@@ -782,10 +782,8 @@ describe("case-law adapter nullish optionals", () => {
 });
 
 test("route fixtures work when the captured fetch has no native static methods", async () => {
-  const descriptor = Object.getOwnPropertyDescriptor(
-    originalFetch,
-    "preconnect",
-  );
+  const captured = originalFetch;
+  originalFetch = asFetchMock(async () => new Response("unused"));
   expect(Reflect.deleteProperty(originalFetch, "preconnect")).toBe(true);
   try {
     mockFetchWithBodies([
@@ -795,8 +793,6 @@ test("route fixtures work when the captured fetch has no native static methods",
     expect(await response.json()).toEqual({ value: "retained" });
     expect(typeof fetch.preconnect).toBe("function");
   } finally {
-    if (descriptor !== undefined) {
-      Object.defineProperty(originalFetch, "preconnect", descriptor);
-    }
+    originalFetch = captured;
   }
 });
