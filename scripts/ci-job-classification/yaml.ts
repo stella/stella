@@ -609,9 +609,10 @@ const parse = (text: string): ParsedDocument => {
         isPrivileged && "on" in data ? { on: data["on"] } : {};
       const jobShape = callSurface ?? privilegedJobSurface(job, data);
       const jobContext = { document: workflowSurface, job: jobShape };
+      // The trigger decides whether a reusable-workflow call runs privileged,
+      // so a call job's privileged digest binds it like any other job's.
       const privilegedJobContext = {
-        document:
-          callSurface === undefined && "on" in data ? { on: data["on"] } : {},
+        document: "on" in data ? { on: data["on"] } : {},
         job: callSurface ?? privilegedJobSurface(job, data, true),
       };
       jobs[id] = {
