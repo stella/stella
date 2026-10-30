@@ -8,6 +8,7 @@ import { provisionDecisionCandidatesQuery } from "@/api/handlers/case-law/decisi
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
+  provisionLinkMatchesAfterSql,
   provisionLinkOutcomeEmitsHit,
   provisionLinkReadOutcomeSql,
   readCaseLawProvisionScope,
@@ -393,6 +394,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         );
         let after: { anchor: string; spanStart: number } | undefined;
         const outcomes = [];
+        const positions: { anchor: string; spanStart: number }[] = [];
         do {
           const continuationProbe = sql`SELECT ${provisionLinkReadOutcomeSql({
             decisionId: sql`${adversarialDecision}`,
@@ -438,6 +440,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
               anchor: position["anchor"],
               spanStart: position["spanStart"],
             };
+            positions.push(after);
           } else {
             after = undefined;
           }
@@ -448,6 +451,35 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           "incomplete",
           "match",
         ]);
+        // Hydration resolves every continuation in one statement: a match
+        // beyond any number of probe budgets is found, and a position past
+        // the last matching link finds none.
+        const continuation = async (position: {
+          anchor: string;
+          spanStart: number;
+        }) =>
+          (
+            await db.execute(
+              sql`SELECT ${provisionLinkMatchesAfterSql({
+                decisionId: sql`${adversarialDecision}::uuid`,
+                jurisdiction: "CZE",
+                provision: GAPPED_PROVISION,
+                after: {
+                  anchor: sql`${position.anchor}::text`,
+                  spanStart: sql`${position.spanStart}::integer`,
+                },
+              })} AS matched`,
+            )
+          ).at(0)?.["matched"];
+        const firstPosition =
+          positions.at(0) ?? panic("The walk recorded no continuation");
+        expect(await continuation(firstPosition)).toBe(true);
+        expect(
+          await continuation({
+            anchor: "cl_36",
+            spanStart: probeBudget * 3 + 9,
+          }),
+        ).toBe(false);
         await db.execute(sql`SET enable_bitmapscan = on`);
         await db.execute(sql`SET enable_seqscan = on`);
       } finally {

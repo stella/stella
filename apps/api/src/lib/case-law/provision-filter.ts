@@ -357,6 +357,32 @@ export const provisionLinkReadOutcomeSql = ({
   )`;
 };
 
+/**
+ * Whether the correlated decision cites the provision at a link after the
+ * position an incomplete probe stopped at. One statement resolves every
+ * continuation a hydrated page carries, so the statement count does not grow
+ * with the rows or with the probe rounds each would need.
+ */
+export const provisionLinkMatchesAfterSql = ({
+  decisionId,
+  after,
+  ...scope
+}: ProvisionScopeOptions & {
+  /** The decision id the predicate is correlated with. */
+  decisionId: SQL;
+  /** The last physical link the incomplete probe examined. */
+  after: { anchor: SQL; spanStart: SQL };
+}): SQL<boolean> => {
+  const link = caseLawProvisionCitations;
+  return sql<boolean>`EXISTS (
+    SELECT 1 FROM ${link}
+    WHERE ${link.decisionId} = ${decisionId}
+      AND ${sql.join(provisionLinkConditions(scope, "ordered"), sql` AND `)}
+      AND (${link.anchor} COLLATE "C", ${link.spanStart}) >
+        (${after.anchor} COLLATE "C", ${after.spanStart})
+  )`;
+};
+
 /** A complete small set, or a scope that needs candidate-by-candidate probes. */
 export type CaseLawProvisionScope =
   | { type: "decisions"; decisionIds: readonly SafeId<"caseLawDecision">[] }

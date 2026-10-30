@@ -142,6 +142,7 @@ import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributabl
 import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
+  provisionLinkMatchesAfterSql,
   provisionLinkOutcomeEmitsHit,
   type ProvisionLinkReadOutcome,
   provisionLinkReadOutcomeSql,
@@ -1625,36 +1626,55 @@ const partitionProvisionRecords = async <
   { body }: DecisionRowsQueryOptions,
   records: readonly ProvisionRecord<Row>[],
 ) => {
-  const resolved: {
-    id: string;
-    row: Omit<Row, "provisionOutcome"> | null;
-  }[] = [];
-  for (const record of records) {
-    if (record.row === null) {
-      resolved.push(record);
-      continue;
-    }
-    const { provisionOutcome: initial, ...row } = record.row;
-    let outcome = initial;
-    while (outcome?.type === "incomplete" && body.provision !== undefined) {
-      const next = await tx
-        .select({
-          outcome: provisionLinkReadOutcomeSql({
-            decisionId: sql`${record.id}::uuid`,
-            jurisdiction: body.country,
-            provision: body.provision,
-            after: outcome.after,
-          }),
-        })
-        .from(sql`(VALUES (1)) AS membership_probe(seed)`);
-      outcome = next.at(0)?.outcome ?? null;
-    }
-    resolved.push({
-      id: record.id,
-      row:
-        body.provision === undefined || outcome?.type === "match" ? row : null,
-    });
-  }
+  const continuations = records.flatMap(({ id, row }) =>
+    row?.provisionOutcome?.type === "incomplete"
+      ? [{ id, after: row.provisionOutcome.after }]
+      : [],
+  );
+  const continuedMatches = new Set(
+    body.provision === undefined || continuations.length === 0
+      ? []
+      : (
+          await tx
+            .select({ id: sql<string>`continuation.id` })
+            .from(
+              sql`(VALUES ${sql.join(
+                continuations.map(
+                  ({ id, after }) =>
+                    sql`(${id}::uuid, ${after.anchor}::text, ${after.spanStart}::integer)`,
+                ),
+                sql`, `,
+              )}) AS continuation(id, anchor, span_start)`,
+            )
+            .where(
+              provisionLinkMatchesAfterSql({
+                decisionId: sql`continuation.id`,
+                jurisdiction: body.country,
+                provision: body.provision,
+                after: {
+                  anchor: sql`continuation.anchor`,
+                  spanStart: sql`continuation.span_start`,
+                },
+              }),
+            )
+        ).map(({ id }) => id),
+  );
+  const resolved = records.map(
+    ({
+      id,
+      row,
+    }): { id: string; row: Omit<Row, "provisionOutcome"> | null } => {
+      if (row === null) {
+        return { id, row: null };
+      }
+      const { provisionOutcome, ...rest } = row;
+      const member =
+        body.provision === undefined ||
+        provisionOutcome?.type === "match" ||
+        continuedMatches.has(id);
+      return { id, row: member ? rest : null };
+    },
+  );
   return partitionReturnedCorpusRecords(resolved);
 };
 
