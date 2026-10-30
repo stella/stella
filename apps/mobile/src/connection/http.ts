@@ -10,6 +10,13 @@ const REQUEST_TIMEOUT_MS = 20_000;
  * `fetch` that aborts after `timeoutMs`, `REQUEST_TIMEOUT_MS` unless a slow
  * transfer names a longer one. Built on a controller and a timer rather than
  * `AbortSignal.timeout`, which not every React Native runtime provides.
+ *
+ * The deadline covers the body as well as the headers: the abort reaches a
+ * `fetch` that honours its signal mid-body, and a body read races the
+ * deadline for one that does not. The response is the platform's own,
+ * behind a proxy, never rebuilt: on a phone the global `Response` is a
+ * polyfill that cannot take a stream as its body and reads it as the text
+ * "[object ReadableStream]".
  */
 export const fetchWithTimeout = async (
   fetch: Fetch,
@@ -18,14 +25,12 @@ export const fetchWithTimeout = async (
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Response> => {
   const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const clear = () => {
-    clearTimeout(timer);
-    timer = undefined;
-  };
-  timer = setTimeout(() => {
+  const timer = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
+  const clear = () => {
+    clearTimeout(timer);
+  };
   let receivedHeaders = false;
   const response = await fetch(input, {
     ...init,
@@ -44,82 +49,42 @@ export const fetchWithTimeout = async (
     clear();
     return response;
   }
-
-  const reader = response.body.getReader();
-  let stopped = false;
-  let cancellation: Promise<void> | undefined;
-  let abort = () => undefined;
-  const finish = () => {
-    stopped = true;
-    clear();
-    controller.signal.removeEventListener("abort", abort);
-  };
-  const body = new ReadableStream<Uint8Array>({
-    start(stream) {
-      abort = () => {
-        if (stopped) {
-          return;
-        }
-        finish();
-        stream.error(controller.signal.reason);
-        cancellation = reader.cancel(controller.signal.reason).then(
-          () => reader.releaseLock(),
-          () => reader.releaseLock(),
-        );
-      };
-      controller.signal.addEventListener("abort", abort, { once: true });
-    },
-    async pull(stream) {
-      if (stopped) {
-        await cancellation;
+  const deadline = () =>
+    new Promise<never>((_resolve, reject) => {
+      if (controller.signal.aborted) {
+        reject(controller.signal.reason);
         return;
       }
-      await reader.read().then(
-        ({ done, value }) => {
-          if (stopped) {
-            return undefined;
-          }
-          if (done) {
-            finish();
-            reader.releaseLock();
-            stream.close();
-            return undefined;
-          }
-          stream.enqueue(value);
-          return undefined;
+      controller.signal.addEventListener(
+        "abort",
+        () => {
+          reject(controller.signal.reason);
         },
-        (error: unknown) => {
-          if (stopped) {
-            return undefined;
-          }
-          finish();
-          reader.releaseLock();
-          stream.error(error);
-          return undefined;
-        },
+        { once: true },
       );
-      await cancellation;
-    },
-    async cancel(reason: unknown) {
-      if (stopped) {
-        await cancellation;
-        return;
+    });
+  const bounded = async <T>(read: Promise<T>): Promise<T> =>
+    await Promise.race([read, deadline()]).finally(clear);
+  // The ways the app reads a body, each held to the deadline.
+  const readers = {
+    arrayBuffer: async () => await bounded(response.arrayBuffer()),
+    blob: async () => await bounded(response.blob()),
+    json: async (): Promise<unknown> => await bounded(response.json()),
+    text: async () => await bounded(response.text()),
+  } satisfies Partial<Response>;
+  const isReader = (property: PropertyKey): property is keyof typeof readers =>
+    Object.hasOwn(readers, property);
+  return new Proxy(response, {
+    get(target, property) {
+      if (isReader(property)) {
+        return readers[property];
       }
-      finish();
-      await reader.cancel(reason).finally(() => reader.releaseLock());
+      const value: unknown = Reflect.get(target, property, target);
+      // A method reads the platform response's own state, so it runs on it
+      // rather than on the proxy.
+      return typeof value === "function" ? value.bind(target) : value;
     },
   });
-  const wrapped = new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-  Object.defineProperties(wrapped, {
-    url: { value: response.url },
-    redirected: { value: response.redirected },
-    type: { value: response.type },
-  });
-  return wrapped;
 };
 
 /**

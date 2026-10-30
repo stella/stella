@@ -44,4 +44,42 @@ describe("HTTP request deadline", () => {
     expect(await response.json()).toEqual({ ready: true });
     expect(jest.getTimerCount()).toBe(0);
   });
+
+  test("reads a streamed body where the global Response cannot take a stream", async () => {
+    const PlatformResponse = Response;
+    // React Native's global `Response` is a polyfill that stores any body it
+    // does not know, a stream included, as the text "[object ReadableStream]".
+    class PolyfillResponse extends PlatformResponse {
+      constructor(body?: BodyInit | null, init?: ResponseInit) {
+        super(
+          body instanceof ReadableStream
+            ? Object.prototype.toString.call(body)
+            : body,
+          init,
+        );
+      }
+    }
+    const encoded = new TextEncoder().encode(JSON.stringify({ ready: true }));
+    const fetch = async (): Promise<Response> =>
+      new PlatformResponse(
+        new ReadableStream<Uint8Array>({
+          start(stream) {
+            stream.enqueue(encoded);
+            stream.close();
+          },
+        }),
+        { headers: { "content-type": "application/json" }, status: 201 },
+      );
+    globalThis.Response = PolyfillResponse;
+    try {
+      const response = await fetchWithTimeout(fetch, "https://example.com");
+
+      expect(response.status).toBe(201);
+      expect(response.ok).toBe(true);
+      expect(response.headers.get("content-type")).toBe("application/json");
+      expect(await response.json()).toEqual({ ready: true });
+    } finally {
+      globalThis.Response = PlatformResponse;
+    }
+  });
 });
