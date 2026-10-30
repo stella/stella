@@ -22,10 +22,10 @@ const stream = await fetchWithTimeout(url, {
 
 The timeout is required by the type. `headers` bounds the wait for the
 response; `idle` also restarts on every body chunk and errors the body stream
-when it stalls. A timeout rejects (or errors the body) with a `TimeoutError`
-`DOMException`, and the caller's `signal` and a `Request`'s own signal still
-abort the request. `timeoutMs: number` is a total deadline over the request
-and its body.
+when it stalls; `total` bounds the request and its body consumption. A timeout
+rejects (or errors the body) with a `TimeoutError` `DOMException`, and the
+caller's `signal` and a `Request`'s own signal still abort the request.
+`timeoutMs: number` remains the legacy numeric form of the total policy.
 
 `createFetchWithTimeout(fetcher)` returns the same function over another
 `fetch` implementation (a proxy-aware client, or a fake in tests).

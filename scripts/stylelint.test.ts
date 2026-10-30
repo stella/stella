@@ -6,8 +6,8 @@ const configFile = fileURLToPath(
   new URL("../.stylelintrc.json", import.meta.url),
 );
 
-const lintCss = async (code: string) =>
-  await stylelint.lint({ code, codeFilename: "guard.css", configFile });
+const lintCss = async (code: string, codeFilename = "guard.css") =>
+  await stylelint.lint({ code, codeFilename, configFile });
 
 describe("CSS correctness guard", () => {
   test.each([
@@ -102,6 +102,48 @@ describe("CSS correctness guard", () => {
         to { opacity: 1; transform: none; }
       }
     `);
+    expect(result.errored).toBe(false);
+    expect(result.results.flatMap((file) => file.warnings)).toEqual([]);
+  });
+
+  test.each(["hyphens: auto", "-webkit-hyphens: auto"])(
+    "rejects automatic hyphenation in decision reader CSS: %s",
+    async (declaration) => {
+      const result = await lintCss(
+        `.sample { ${declaration}; }`,
+        "packages/decision-reader/src/guard.css",
+      );
+      expect(result.errored).toBe(true);
+      expect(result.results.flatMap((file) => file.warnings)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            rule: "declaration-property-value-allowed-list",
+          }),
+        ]),
+      );
+    },
+  );
+
+  test("retains the motion guard in decision reader CSS", async () => {
+    const result = await lintCss(
+      ".sample { transition: all 150ms; }",
+      "packages/decision-reader/src/guard.css",
+    );
+    expect(result.errored).toBe(true);
+    expect(result.results.flatMap((file) => file.warnings)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rule: "declaration-property-value-disallowed-list",
+        }),
+      ]),
+    );
+  });
+
+  test("accepts manual hyphenation in decision reader CSS", async () => {
+    const result = await lintCss(
+      ".sample { hyphens: manual; -webkit-hyphens: none; }",
+      "packages/decision-reader/src/guard.css",
+    );
     expect(result.errored).toBe(false);
     expect(result.results.flatMap((file) => file.warnings)).toEqual([]);
   });

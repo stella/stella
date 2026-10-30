@@ -26,7 +26,7 @@ import {
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import {
   createSanctionsIndexCache,
@@ -68,6 +68,7 @@ import type {
 } from "./matcher-protocol";
 import {
   createPublicSanctionsScreening,
+  SANCTIONS_POST_STARTUP_WARM_RETRY_MS,
   SANCTIONS_WARM_READ_STALL_MS,
   SANCTIONS_WARM_RETRY_MS,
   SANCTIONS_WARM_STALL_MS,
@@ -875,6 +876,156 @@ test("a cold start converges when editions load for longer than any request dead
     expect(logs.at("ERROR")).toEqual([]);
   } finally {
     logs.restore();
+    await pool.close();
+  }
+});
+
+test("a startup failure remains tied to its edition while a replacement warms", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const original =
+    (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).find(
+      ({ source }) => source === "eu",
+    )?.edition ?? panic("Missing EU fixture edition");
+  const replacement = { ...original, id: createSafeId<"sanctionsEdition">() };
+  const reading = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const loaded: string[] = [];
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    clock,
+    loadEntries: async (options) => {
+      loaded.push(options.edition.id);
+      if (options.edition.id === original.id) {
+        reading.resolve(undefined);
+        await release.promise;
+      }
+      // The freshness seam changes identity; both use the actual stored fixture bytes.
+      return await loadEditionEntries({ ...options, edition: original });
+    },
+  });
+  try {
+    expect(publicScreen.warmupWant(requestDb, "eu", original)).toBe("warming");
+    await reading.promise;
+    publicScreen.warmupTerminalize();
+    expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+    expect(publicScreen.warmupWant(requestDb, "eu", original)).toBe(
+      "load-failed",
+    );
+    expect(publicScreen.warmupWant(requestDb, "eu", replacement)).toBe(
+      "warming",
+    );
+    expect(publicScreen.warmupStartupState("eu")).toBe("warming");
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    expect(loaded).toEqual([original.id, replacement.id]);
+    expect(
+      await pool.run(
+        async (session) =>
+          await Promise.resolve(session.hasEdition("eu", replacement.id)),
+      ),
+    ).toMatchObject({ status: "completed", value: true });
+  } finally {
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    await pool.close();
+  }
+});
+
+test.each([1, 6])(
+  "an unchanged terminal edition recovers on retry %i with capped slow backoff",
+  async (retryCount) => {
+    const clock = createMatcherTestClock();
+    const pool = createSanctionsMatcherPool({ clock });
+    const reads: number[] = [];
+    const publicScreen = createPublicSanctionsScreening({
+      pool,
+      clock,
+      reportFailure: () => undefined,
+      loadEntries: async (options) => {
+        const entries = await loadEditionEntries(options);
+        if (entries.at(0)?.source === "eu") {
+          reads.push(clock.now());
+          if (reads.length <= retryCount) {
+            throw new TypeError("Transient edition read failure");
+          }
+        }
+        return entries;
+      },
+    });
+    const ask = async () =>
+      (await publicScreen(publicProps("A Completely Distant Name"))).unwrap();
+    try {
+      await ask();
+      await publicScreen.warmupSettled();
+      publicScreen.warmupTerminalize();
+      expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+      expect(SANCTIONS_POST_STARTUP_WARM_RETRY_MS.initial).toBeGreaterThan(
+        SANCTIONS_WARM_RETRY_MS.initial,
+      );
+      for (let retry = 0; retry < retryCount; retry += 1) {
+        const delay = Math.min(
+          SANCTIONS_POST_STARTUP_WARM_RETRY_MS.initial * 2 ** retry,
+          SANCTIONS_POST_STARTUP_WARM_RETRY_MS.max,
+        );
+        clock.advance(delay - 1);
+        expect(reasonsBySource((await ask()).lists)["eu"]).toBe("load-failed");
+        expect(reads).toHaveLength(retry + 1);
+        clock.advance(1);
+        expect(reasonsBySource((await ask()).lists)["eu"]).toBe("load-failed");
+        await publicScreen.warmupSettled();
+        expect(reads).toHaveLength(retry + 2);
+        expect(
+          (reads.at(-1) ?? panic("Missing retry")) -
+            (reads.at(-2) ?? panic("Missing previous attempt")),
+        ).toBe(delay);
+        if (retry + 1 < retryCount) {
+          expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+        }
+      }
+      expect((await ask()).status).toBe("clear");
+    } finally {
+      await pool.close();
+    }
+  },
+);
+
+test("an edition that finishes loading after startup gave up clears its failure", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const edition =
+    (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).find(
+      ({ source }) => source === "eu",
+    )?.edition ?? panic("Missing EU fixture edition");
+  const reading = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    clock,
+    loadEntries: async (options) => {
+      reading.resolve(undefined);
+      await release.promise;
+      return await loadEditionEntries(options);
+    },
+  });
+  try {
+    expect(publicScreen.warmupWant(requestDb, "eu", edition)).toBe("warming");
+    await reading.promise;
+    publicScreen.warmupTerminalize();
+    expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    // No failure remains for the edition the worker now holds.
+    expect(publicScreen.warmupStartupState("eu")).toBe("warming");
+    expect(
+      await pool.run(
+        async (session) =>
+          await Promise.resolve(session.hasEdition("eu", edition.id)),
+      ),
+    ).toMatchObject({ status: "completed", value: true });
+  } finally {
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
     await pool.close();
   }
 });

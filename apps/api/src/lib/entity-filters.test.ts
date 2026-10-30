@@ -118,6 +118,13 @@ describe("buildFilterConditions (kind)", () => {
   test("kind filter with values produces one condition", () => {
     const conds = buildFilterConditions([kindIn(["task"])]);
     expect(conds).toHaveLength(1);
+    const condition = conds.at(0);
+    if (!condition) {
+      throw new Error("expected task kind condition");
+    }
+    const { sql, params } = new PgDialect().sqlToQuery(condition);
+    expect(sql).toContain('"list_item_type" is null');
+    expect(params).toEqual(["task", "task"]);
   });
 
   test("kind filter including document expands to folder", () => {

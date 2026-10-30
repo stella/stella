@@ -1212,6 +1212,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
+  "continue-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
+  ),
   copy: READS_ONLY,
   "delete-thread": notModelled(
     "Deleting the thread ends the conversation; nothing is left to check.",
@@ -1254,6 +1257,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
       SendUserMessage.allows(model) ||
       SupersedeCards.allows(model) ||
       isBusy(model),
+  ),
+  "submit-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
   ),
   "submit-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
