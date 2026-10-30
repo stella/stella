@@ -195,6 +195,16 @@ const run = async (): Promise<number> => {
     if (ecs.status === "environment-unavailable") {
       return await report(ecs.status, ecs.reason);
     }
+    if (ecs.status === "unrecorded") {
+      // A present receipt is checked strictly; an absent one is never silent.
+      console.log(
+        `::warning title=receipt-unrecorded::${annotationData(ecs.reason)}`,
+      );
+      const summary = process.env["GITHUB_STEP_SUMMARY"];
+      if (summary !== undefined) {
+        await appendFile(summary, `WARNING: ${ecs.reason}\n`);
+      }
+    }
     const child = Bun.spawn(
       [
         process.execPath,

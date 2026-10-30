@@ -71,7 +71,7 @@ export const ColumnFilterButton = ({
             aria-label={t("common.filter")}
             className={cn(
               "inline-flex size-4 cursor-pointer items-center justify-center rounded-sm opacity-0 transition-opacity",
-              "group-hover/header:opacity-100 focus-visible:opacity-100",
+              "group-hover/header:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
               isActive && "text-primary hover:text-primary/80 opacity-100",
             )}
             type="button"

@@ -13,6 +13,7 @@ export const FAILURE_TAGS = [
   "AdapterFetchError",
   "AggregateLockBusy",
   "AggregateLockUpgradeRefused",
+  "AnalysisInputVersionChangedError",
   "AnonymizedFieldBoundaryError",
   "ApiAccessTokenError",
   "AppleSignInConfigError",

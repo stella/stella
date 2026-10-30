@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; the source paragraphs it alone read are gone, and the rendered HTML, metadata and AST are unchanged.
 /**
  * The document the common courts' judgments API serves, read.
  *
@@ -18,21 +19,8 @@
  * sentence.
  */
 
-import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
-
-// parser-output-unchanged: imports the document AST from its package owner
-import type { Block } from "@stll/legal-ast/document-ast";
-
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-import type {
-  ValidationResult,
-  ValidationSubject,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { ANONYMIZED_CLASS } from "./shared-inlines";
 
@@ -61,14 +49,6 @@ export type PlNcourtContent = {
   legalReferences: PlNcourtLegalReference[];
   /** Unexpected element names, or #text/#cdata for stray text, each once. */
   unmappedMarkup: string[];
-  /**
-   * The text of every paragraph, title and unit name, read off the XML
-   * itself: what the parsed document is measured against, so a rendering
-   * that loses text cannot also be what vouches for it.
-   */
-  sourceParagraphs: string[];
-  /** XML text with rendered inline breaks, used only by the word comparison. */
-  comparisonParagraphs: string[];
 };
 
 const ISAP_DETAILS_URL = "https://isap.sejm.gov.pl/DetailsServlet?id=";
@@ -106,22 +86,6 @@ const textOf = (node: AnyNode): string => {
     return node.data;
   }
   return isTag(node) || isCDATA(node) ? node.children.map(textOf).join("") : "";
-};
-
-const comparisonTextOf = (node: AnyNode): string => {
-  if (isText(node)) {
-    return node.data;
-  }
-  if (isCDATA(node)) {
-    return node.children.map(comparisonTextOf).join("");
-  }
-  if (!isTag(node)) {
-    return "";
-  }
-  if (node.name === "xBRx") {
-    return ` ${node.children.map(comparisonTextOf).join("")}`;
-  }
-  return node.children.map(comparisonTextOf).join("");
 };
 
 const attributeOf = (element: Element, name: string): string =>
@@ -401,82 +365,11 @@ export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
     .join("\n");
   const title =
     name === undefined ? undefined : textOf(name).trim() || undefined;
-  const paragraphs = sourceParagraphsOf(root);
   return {
     attributes: { ...root.attribs },
     title,
     html,
     legalReferences: state.legalReferences,
     unmappedMarkup: [...state.unmapped],
-    sourceParagraphs: paragraphs.source,
-    comparisonParagraphs: paragraphs.comparison,
   };
-};
-
-/** Elements whose text is a paragraph of the document as the court wrote it. */
-const TEXT_ELEMENTS = new Set(["xText", "xTitle", "xName"]);
-
-const sourceParagraphsOf = (root: Element) => {
-  const source: string[] = [];
-  const comparison: string[] = [];
-  const push = (node: AnyNode, text: string): void => {
-    if (text.length > 0) {
-      source.push(text);
-      comparison.push(comparisonTextOf(node).replace(/\s+/gu, " ").trim());
-    }
-  };
-  const walk = (node: AnyNode): void => {
-    if (isTag(node)) {
-      if (TEXT_ELEMENTS.has(node.name)) {
-        // Only the root's own name labels the document rather than its text.
-        push(
-          node,
-          node.parent === root && node.name === "xName"
-            ? ""
-            : textOf(node).replace(/\s+/gu, " ").trim(),
-        );
-        return;
-      }
-      for (const child of node.children) {
-        walk(child);
-      }
-      return;
-    }
-    if (isText(node) || isCDATA(node)) {
-      push(node, textOf(node).replace(/\s+/gu, " ").trim());
-    }
-  };
-  walk(root);
-  return { source, comparison };
-};
-
-/**
- * Check a parsed document against the text the XML states, and log what it
- * lost. The parser checks itself against the HTML it was given; that HTML is
- * rendered here, so only the XML can say whether the rendering kept every
- * sentence.
- */
-export const validatePlNcourtDocument = (
-  subject: ValidationSubject,
-  content: PlNcourtContent,
-  blocks: Block[],
-): ValidationResult => {
-  const seen = new Set<string>();
-  const comparisonParts: string[] = [];
-  for (const [index, source] of content.sourceParagraphs.entries()) {
-    if (seen.has(source)) {
-      continue;
-    }
-    seen.add(source);
-    comparisonParts.push(
-      content.comparisonParagraphs[index] ??
-        panic("Missing pl-ncourt comparison paragraph"),
-    );
-  }
-  return validateAndLog(
-    subject,
-    buildValidationHtml(content.sourceParagraphs.map(escapeHtml)),
-    blocks,
-    { wordComparisonText: comparisonParts.join(" ") },
-  );
 };

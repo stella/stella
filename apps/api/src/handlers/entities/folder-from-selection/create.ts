@@ -180,6 +180,7 @@ export const createFolderFromSelectionHandler = async function* ({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create a folder and move the given documents, folders, or tasks into " +
     "it in one step. The folder is created under parentId, or at the matter " +
