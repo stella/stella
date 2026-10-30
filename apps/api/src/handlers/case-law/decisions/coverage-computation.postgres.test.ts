@@ -24,12 +24,31 @@ import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-ca
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "@/api/lib/decision-date-bounds-sql";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { refreshPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
+import {
+  readPgFtsBrowseFacets,
+  readPgFtsBrowseFacetsBatch,
+} from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { LIMITS } from "@/api/lib/limits";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+const byCourtName = (
+  left: { court: string | null },
+  right: { court: string | null },
+) => {
+  const leftCourt = left.court ?? "";
+  const rightCourt = right.court ?? "";
+  if (leftCourt < rightCourt) {
+    return -1;
+  }
+  if (leftCourt > rightCourt) {
+    return 1;
+  }
+  return 0;
+};
 
 describe.skipIf(!enabled)("coverage computation (postgres)", () => {
   // timeout: exercise the complete coverage read against migrated PostgreSQL.
@@ -54,6 +73,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           "case_law_decisions",
           "case_law_search_documents",
           "case_law_browse_facet_counts",
+          "case_law_coverage_court_buckets",
           "case_law_court_weights",
         ]) {
           // db-await-in-loop: clone the finite migrated corpus fixture.
@@ -322,7 +342,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               ({ adapterKey, publishedDecisions, courts }) => ({
                 adapterKey,
                 publishedDecisions,
-                courts,
+                courts: courts.toSorted(byCourtName),
               }),
             ),
           ).toEqual(
@@ -330,9 +350,42 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               ({ adapterKey, publishedDecisions, courts }) => ({
                 adapterKey,
                 publishedDecisions,
-                courts,
+                courts: courts.toSorted(byCourtName),
               }),
             ),
+          );
+
+          const facetQuery = {
+            jurisdiction: "CZE",
+            excludedSourceIds: [sourceId],
+            limit: LIMITS.caseLawFacetLimit,
+          };
+          const allSourceFacets = await readPgFtsBrowseFacets(tx, {
+            ...facetQuery,
+            excludedSourceIds: [],
+          });
+          const excludedSourceFacets = await readPgFtsBrowseFacets(
+            tx,
+            facetQuery,
+          );
+          expect(allSourceFacets.country.at(0)?.count).toBeGreaterThan(
+            excludedSourceFacets.country.at(0)?.count ?? 0,
+          );
+          const snapshotBatch = await readPgFtsBrowseFacetsBatch(tx, {
+            countries: ["CZE"],
+            excludedSourceIds: [sourceId],
+            limit: LIMITS.caseLawFacetLimit,
+          });
+          expect(snapshotBatch.get("CZE")).toEqual(excludedSourceFacets);
+
+          await tx.execute(sql`DELETE FROM ${caseLawBrowseFacetCounts}`);
+          const liveBatch = await readPgFtsBrowseFacetsBatch(tx, {
+            countries: ["CZE"],
+            excludedSourceIds: [sourceId],
+            limit: LIMITS.caseLawFacetLimit,
+          });
+          expect(liveBatch.get("CZE")).toEqual(
+            await readPgFtsBrowseFacets(tx, facetQuery),
           );
         });
       } finally {

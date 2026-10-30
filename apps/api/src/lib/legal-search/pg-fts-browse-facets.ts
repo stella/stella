@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import { and, desc, eq, isNotNull, notInArray, sql } from "drizzle-orm";
+import type { AnyColumn, SQL } from "drizzle-orm";
 
 import {
   caseLawBrowseFacetCounts,
@@ -31,11 +31,24 @@ const toFacetBuckets = (
   rows: readonly { count: number; value: string }[],
 ): FacetBucket[] => rows.map((row) => ({ count: row.count, value: row.value }));
 
+const sourceIsNotExcluded = (
+  sourceId: AnyColumn,
+  excludedSourceIds: readonly string[],
+) =>
+  excludedSourceIds.length === 0
+    ? undefined
+    : notInArray(sourceId, [...excludedSourceIds]);
+
 /** One readiness probe and one bounded aggregate for every coverage country. */
+type PgFtsBrowseFacetsBatchOptions = {
+  countries: readonly string[];
+  excludedSourceIds: readonly string[];
+  limit: number;
+};
+
 export const readPgFtsBrowseFacetsBatch = async (
   tx: CaseLawPublicReadTransaction,
-  countries: readonly string[],
-  limit: number,
+  { countries, excludedSourceIds, limit }: PgFtsBrowseFacetsBatchOptions,
 ): Promise<ReadonlyMap<string, LegalBrowseFacets>> => {
   const snapshot = await tx
     .select({ kind: caseLawBrowseFacetCounts.kind })
@@ -49,13 +62,21 @@ export const readPgFtsBrowseFacetsBatch = async (
       country,
       await readLivePgFtsBrowseFacets(tx, {
         jurisdiction: country,
-        excludedSourceIds: [],
+        excludedSourceIds,
         limit,
       }),
     ];
     const entries = await Promise.all(countries.map(readCountry));
     return new Map(entries);
   }
+
+  const sourceExclusion =
+    excludedSourceIds.length === 0
+      ? sql`true`
+      : sql`facets.source_id NOT IN (${sql.join(
+          excludedSourceIds.map((sourceId) => sql`${sourceId}`),
+          sql`, `,
+        )})`;
 
   const rows = executedRows(
     await tx.execute(sql`
@@ -69,6 +90,7 @@ export const readPgFtsBrowseFacetsBatch = async (
         sql`, `,
       )}]::text[])
         AND ${redistributableCaseLawSource}
+        AND ${sourceExclusion}
       GROUP BY facets.country, facets.kind, facets.value
     ), ranked AS (
       SELECT *, row_number() OVER (
@@ -121,6 +143,13 @@ const readLivePgFtsBrowseFacets = async (
   query: LegalBrowseFacetsQuery,
 ): Promise<LegalBrowseFacets> => {
   const scope: SQL[] = [redistributableCaseLawSource];
+  const sourceExclusion = sourceIsNotExcluded(
+    publishedCaseLawDecisions.sourceId,
+    query.excludedSourceIds,
+  );
+  if (sourceExclusion !== undefined) {
+    scope.push(sourceExclusion);
+  }
   if (query.jurisdiction) {
     scope.push(eq(publishedCaseLawDecisions.country, query.jurisdiction));
   }
@@ -195,6 +224,10 @@ export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
 
     const scope = and(
       redistributableCaseLawSource,
+      sourceIsNotExcluded(
+        caseLawBrowseFacetCounts.sourceId,
+        query.excludedSourceIds,
+      ),
       query.jurisdiction
         ? eq(caseLawBrowseFacetCounts.country, query.jurisdiction)
         : undefined,

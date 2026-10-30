@@ -999,11 +999,11 @@ export const computeCaseLawCoverageAnswer = async (
             readFacetsBatch: async (countries: readonly string[]) =>
               await caseLawDb(
                 async (tx) =>
-                  await readPgFtsBrowseFacetsBatch(
-                    tx,
+                  await readPgFtsBrowseFacetsBatch(tx, {
                     countries,
-                    LIMITS.caseLawFacetLimit,
-                  ),
+                    excludedSourceIds,
+                    limit: LIMITS.caseLawFacetLimit,
+                  }),
               ),
           }
         : {}),
