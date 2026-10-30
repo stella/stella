@@ -20,6 +20,7 @@ import {
   invoiceDocumentRenderOptions,
   invoicePdfFileName,
 } from "@/api/lib/billing/invoice-pdf/document";
+import { requestsPayment } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { buildInvoiceTemplateData } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -128,8 +129,10 @@ const openLinkedInvoice = async (
   const paid = invoice.status === INVOICE_STATUS.PAID;
   const payable =
     paid ||
-    invoice.documentType === "credit_note" ||
-    linked.outstandingAmount === 0
+    !requestsPayment({
+      documentType: invoice.documentType,
+      amountMinor: linked.outstandingAmount,
+    })
       ? null
       : data.value.payment;
   return await deliverInvoiceLink({

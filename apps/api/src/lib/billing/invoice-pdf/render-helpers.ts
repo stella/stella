@@ -88,6 +88,19 @@ export type RenderInvoicePdfOptions = {
   originalNumber: string | null;
 };
 
+/**
+ * Whether a document asks its recipient to pay: a credit note never does, and
+ * nothing is asked once the balance is settled. The PDF payment block, its QR
+ * code and the public link summary all decide through here.
+ */
+export const requestsPayment = ({
+  documentType,
+  amountMinor,
+}: {
+  documentType: InvoiceDocumentType;
+  amountMinor: number;
+}): boolean => documentType !== "credit_note" && amountMinor > 0;
+
 export const buildInvoicePaymentPayload = ({
   invoice,
   seller,
@@ -98,8 +111,10 @@ export const buildInvoicePaymentPayload = ({
   | (PolishQrPaymentResult & { errorCorrection: "L"; scheme: "zbp" })
 > | null => {
   if (
-    invoice.documentType === "credit_note" ||
-    paymentAmountMinor <= 0 ||
+    !requestsPayment({
+      documentType: invoice.documentType,
+      amountMinor: paymentAmountMinor,
+    }) ||
     !seller?.iban
   ) {
     return null;
