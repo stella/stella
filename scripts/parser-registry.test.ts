@@ -54,7 +54,7 @@ const sourceEntries = (directory: string) =>
     }),
   );
 
-const record = (value: unknown): Record<string, unknown> => {
+const objectValue = (value: unknown) => {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("Invalid parser registry value");
   }
@@ -98,7 +98,7 @@ const loadRegistry = (directory: string) => {
   });
   expect(result.stderr.toString()).toBe("");
   expect(result.exitCode).toBe(0);
-  return record(JSON.parse(result.stdout.toString()));
+  return objectValue(JSON.parse(result.stdout.toString()));
 };
 
 const assertRegistryMatchesEntries = (directory: string) => {
@@ -249,9 +249,12 @@ test("canonical JSON inventory includes new entries before Git staging", () => {
     );
     runGenerator(directory);
     const loaded = assertRegistryMatchesEntries(directory);
-    expect(record(Reflect.get(loaded, "PARSER_VERSIONS"))[added.key]).toBe(
-      added.parserVersion,
-    );
+    expect(
+      Reflect.get(
+        objectValue(Reflect.get(loaded, "PARSER_VERSIONS")),
+        added.key,
+      ),
+    ).toBe(added.parserVersion);
     runGenerator(directory, "check");
     const indexWithoutGit = readFileSync(
       path.join(directory, PARSER_REGISTRY_OUTPUT),
@@ -311,7 +314,9 @@ for (const operation of ["add", "bump"] as const) {
       const originalEntries = sourceEntries(repositoryRoot);
       initializeRepository(directory, originalEntries);
       const original = assertRegistryMatchesEntries(directory);
-      const originalVersions = record(Reflect.get(original, "PARSER_VERSIONS"));
+      const originalVersions = objectValue(
+        Reflect.get(original, "PARSER_VERSIONS"),
+      );
       const expectedEntries = new Map(originalEntries);
 
       for (const [branch, existing, added] of [
@@ -375,7 +380,7 @@ for (const operation of ["add", "bump"] as const) {
         );
         runGenerator(directory, "check");
         const loaded = assertRegistryMatchesEntries(directory);
-        const versions = record(Reflect.get(loaded, "PARSER_VERSIONS"));
+        const versions = objectValue(Reflect.get(loaded, "PARSER_VERSIONS"));
         const versionKey = operation === "add" ? added : existing;
         const expectedVersion =
           operation === "add"
@@ -414,15 +419,17 @@ for (const operation of ["add", "bump"] as const) {
       );
 
       const merged = loadRegistry(directory);
-      const mergedVersions = record(Reflect.get(merged, "PARSER_VERSIONS"));
+      const mergedVersions = objectValue(
+        Reflect.get(merged, "PARSER_VERSIONS"),
+      );
       if (operation === "add") {
-        expect(mergedVersions["test-left"]).toBe(1);
-        expect(mergedVersions["test-right"]).toBe(1);
+        expect(Reflect.get(mergedVersions, "test-left")).toBe(1);
+        expect(Reflect.get(mergedVersions, "test-right")).toBe(1);
       } else {
-        expect(mergedVersions["cz-ns"]).toBe(
+        expect(Reflect.get(mergedVersions, "cz-ns")).toBe(
           Number(Reflect.get(originalVersions, "cz-ns")) + 1,
         );
-        expect(mergedVersions["cz-us"]).toBe(
+        expect(Reflect.get(mergedVersions, "cz-us")).toBe(
           Number(Reflect.get(originalVersions, "cz-us")) + 1,
         );
       }
