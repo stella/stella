@@ -1,10 +1,13 @@
 #!/usr/bin/env bun
 
 import { panic } from "better-result";
+import { Glob } from "bun";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { createSha256 } from "@stll/sha256/bun";
+
+import { PR_GENERATORS } from "./pr-regeneration";
 
 export type MigrationIdentityChanges = {
   addedDirectories: readonly string[];
@@ -25,6 +28,17 @@ export class StaleMigrationStampError extends Error {
   override name = "StaleMigrationStampError";
   readonly _tag = "StaleMigrationStampError";
 }
+
+export class MigrationRestampScopeError extends Error {
+  override name = "MigrationRestampScopeError";
+  readonly _tag = "MigrationRestampScopeError";
+}
+
+// The regeneration job accepts only these outputs, so a reference outside
+// them is refused before anything is renamed.
+const WRITABLE_OUTPUTS = PR_GENERATORS["migration-restamp"].outputs.map(
+  (pattern) => new Glob(pattern),
+);
 
 export const MIGRATION_TIMESTAMP = /(?:^|\/)([0-9]{14})_[^/]+$/u;
 export const MIGRATION_FILE = /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u;
@@ -326,6 +340,14 @@ export const restampMigrations = ({
       plan.flatMap(({ oldName }) => trackedReferenceFiles(cwd, oldName)),
     ),
   ].filter((file) => path.posix.basename(file) !== "migration.sql");
+  const outside = referenceFiles.filter(
+    (file) => !WRITABLE_OUTPUTS.some((pattern) => pattern.match(file)),
+  );
+  if (outside.length > 0) {
+    throw new MigrationRestampScopeError(
+      `Migration references outside the re-stamp outputs; re-stamp by hand: ${outside.join(", ")}`,
+    );
+  }
   // Stamps only move forward, and a target equal to a later migration's
   // current name means that migration moves too; renaming from the last move
   // vacates every destination first.

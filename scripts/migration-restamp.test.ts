@@ -226,6 +226,31 @@ test("rewrites a reference inside a moved migration to another moved one", () =>
   }
 });
 
+test("refuses before renaming when a reference lies outside the generator outputs", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_first");
+    mkdirSync(path.join(root, "docs"), { recursive: true });
+    writeFileSync(
+      path.join(root, "docs/migrations.md"),
+      "See 20260101010000_first.\n",
+    );
+    commitFeature(root);
+    advanceBase(root);
+    expect(() => restampMigrations({ baseRef: "base", cwd: root })).toThrow(
+      "docs/migrations.md",
+    );
+    expect(
+      readFileSync(
+        path.join(root, "apps/api/drizzle/20260101010000_first/migration.sql"),
+        "utf-8",
+      ),
+    ).toBe("select 1;\n");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("keeps an added migration that already follows the moved ones", () => {
   const root = fixture();
   try {
