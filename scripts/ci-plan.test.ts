@@ -5344,7 +5344,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
   }
 });
 
-test("route-relevant changes plan the required merge-group smoke", () => {
+test("route-relevant changes plan the required route smoke", () => {
   const scope = "route_smoke_required";
   const selectedBy = jobIf(ciJobs["route-smoke"]);
   expect(selectedBy).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
@@ -5359,6 +5359,8 @@ test("route-relevant changes plan the required merge-group smoke", () => {
     "apps/web/src/lib/react-query.ts",
     "apps/web/src/components/new-query-component.tsx",
     "apps/api/src/handlers/tasks/get.ts",
+    "packages/fetch/src/index.ts",
+    "packages/api-client/src/index.ts",
     "packages/ui/src/button.tsx",
     "apps/web/e2e/network-baseline.json",
     "scripts/network-baseline-scope.ts",
