@@ -25,6 +25,11 @@ import {
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   splitTestId,
 } from "./flaky-test-quarantine";
+import {
+  GUARD_ROLLOUTS,
+  type GuardRollout,
+  guardRolloutSource,
+} from "./guard-rollout-policy.ts";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -55,6 +60,8 @@ export const RECHECK_INSTRUCTIONS = {
   "dependency-audit":
     "Re-run the dependency audit, check patched releases and dependency reachability; remove the acceptance.",
   "quarantined-test": "Run the quarantined test without its skip.",
+  "guard-rollout":
+    "Run the full guard and remove its temporary changed-lines scope.",
   "flaky-test-quarantine":
     "Run the test without its quarantine entry, fix its flake, and remove the entry.",
   "suppression-waiver":
@@ -110,6 +117,7 @@ type CollectWaiversOptions = {
   bunfigs: readonly string[];
   releaseAgeSources: Readonly<Record<string, string>>;
   quarantineSources?: Readonly<Record<string, string>>;
+  guardRollouts?: readonly GuardRollout[];
   flakyTestQuarantines?: readonly QuarantineEntry[];
   pendingContractMigrations?: readonly {
     name: string;
@@ -124,6 +132,7 @@ export const collectWaivers = ({
   bunfigs,
   releaseAgeSources,
   quarantineSources = {},
+  guardRollouts = [],
   flakyTestQuarantines = [],
   pendingContractMigrations = [],
 }: CollectWaiversOptions): DatedWaiver[] => {
@@ -243,6 +252,23 @@ export const collectWaivers = ({
     });
   }
   entries.push(...readTestQuarantines(quarantineSources));
+  for (const rollout of guardRollouts) {
+    if (rollout.type !== "changed-lines") {
+      continue;
+    }
+    const source = guardRolloutSource(rollout.id);
+    entries.push({
+      source,
+      line: sourceLine(read(source), rollout.id),
+      id: rollout.id,
+      kind: "guard-rollout",
+      expiresAt: rollout.expiresAt,
+      probe: {
+        command: ["env", "STELLA_GUARD_SCOPE=all", ...rollout.check],
+        attempts: TEST_ATTEMPTS,
+      },
+    });
+  }
   for (const entry of flakyTestQuarantines) {
     const identity =
       splitTestId(entry.id) ??
@@ -331,6 +357,7 @@ export const EXPIRY_AT_CHANGE_GATE = {
   "release-age-exception": "fail",
   "dependency-audit": "fail",
   "quarantined-test": "fail",
+  "guard-rollout": "fail",
   "flaky-test-quarantine": "annotate",
   "suppression-waiver": "fail",
   "pending-contract-migration": "fail",
@@ -585,6 +612,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([
       DOC_SOURCE_FILE,
+      ...GUARD_ROLLOUTS.map(({ id }) => guardRolloutSource(id)),
       FLAKY_TEST_QUARANTINE_FILE,
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
@@ -621,6 +649,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   return collectWaivers({
     read,
     docs: DOC_SOURCE_EXCLUSIONS,
+    guardRollouts: GUARD_ROLLOUTS,
     audit,
     bunfigs: files,
     releaseAgeSources: configSources,

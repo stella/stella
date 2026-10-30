@@ -127,6 +127,22 @@
     "currentVersion": "Current version",
     "loadFailed": "This item could not be loaded."
   },
+  "document": {
+    "title": "Document",
+    "failedTitle": "This document could not be opened",
+    "failure": {
+      "offline": "You are offline. Connect to the internet and try again.",
+      "noFile": "This document has no file yet.",
+      "failed": "Something went wrong while opening it. Try again in a moment.",
+      "unsupported": "Update the app to open documents.",
+      "android": "Documents cannot be opened in the Android app yet."
+    },
+    "retry": "Try again",
+    "preview": "Open preview",
+    "previewDescription": "This file opens in the system preview.",
+    "unrendered": "This document cannot be shown here, but the system preview may open it.",
+    "details": "Details"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Clarity for every case.",
@@ -151,7 +167,9 @@
   "settings": {
     "accountTitle": "Account",
     "server": "Server",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "deleteAccount": "Delete account",
+    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours."
   },
   "header": {
     "search": "Search"
@@ -161,7 +179,6 @@
     "newest": "Newest decisions",
     "noResults": "Nothing matched the words this search required.",
     "noResultsHint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.",
-    "unavailable": "Search is temporarily unavailable",
     "retry": "Try again",
     "headnote": "Headnote",
     "textUnavailable": "No text is available for this decision",
@@ -177,6 +194,14 @@
   "writes": {
     "consentNeeded": "To make changes from the app, stella needs your permission. Sign in again to give it.",
     "signInAgain": "Sign in again"
+  },
+  "loads": {
+    "offline": "stella could not reach your server. Check your connection and try again.",
+    "outdated": "Your server answered in a form this version of the app does not understand. Update the app, or the server if you run it.",
+    "consent": "This sign-in does not let the app read this. Sign in again to give it access.",
+    "session": "Your sign-in has expired. Sign in again.",
+    "server": "Your server ran into a problem (error {status}). Try again in a moment.",
+    "refused": "Your server refused the request (error {status})."
   },
   "timers": {
     "title": "Timers",
@@ -199,7 +224,8 @@
     "retry": "Try again",
     "unavailable": "Time tracking is not turned on for your organization.",
     "startFailed": "The timer could not be started. Try again.",
-    "changeFailed": "The timer could not be changed. Try again."
+    "changeFailed": "The timer could not be changed. Try again.",
+    "more": "{count, plural, one {# more timer} other {# more timers}}"
   },
   "scan": {
     "title": "Scan a document",
@@ -210,7 +236,27 @@
     "matterTitle": "Matter",
     "uploadFailed": "The scan could not be uploaded. Try again.",
     "failedTitle": "Scan failed",
-    "failed": "The camera could not save the scan. Try again."
+    "failed": "The camera could not save the scan. Try again.",
+    "save": "Save",
+    "saveTitle": "Save to a matter",
+    "share": "Share",
+    "addPages": "Add pages",
+    "page": "Page {number}",
+    "rotatePage": "Rotate page {number}",
+    "removePage": "Remove page {number}",
+    "deletePage": "Delete",
+    "movePage": "Reorder page {number}",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "noPages": "No pages left. Scan more with Add pages.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "The PDF could not be made. Try again.",
+    "shareFailed": "The PDF could not be shared. Try again.",
+    "discardTitle": "Discard this scan?",
+    "discardMessage": "Its pages are not saved to a matter and will be deleted from this device.",
+    "discard": "Discard",
+    "keepEditing": "Keep editing"
   },
   "shortcuts": {
     "search": "Search",

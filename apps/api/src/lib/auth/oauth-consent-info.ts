@@ -9,11 +9,18 @@ import type {
   OAuthConsentClient,
   VerifiedOAuthClientBrand,
 } from "@stll/api-contract";
+import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import type { OAUTH_REGISTRATION_SCOPE_POLICY } from "@/api/lib/db/oauth-scope-policy";
 
 type HttpsUrl = `https://${string}`;
+
+/** The brands only stella's own origins can verify. */
+type FirstPartyBrand = Extract<
+  VerifiedOAuthClientBrand,
+  "stella" | "stella_ios"
+>;
 
 /**
  * A third-party OAuth client location taken from the vendor's own
@@ -31,7 +38,7 @@ type VerifiedClientUrl = VerifiedClientLocation & {
    * platform redirect that serves connectors anyone can publish proves the
    * platform, not the publisher, so it verifies without naming a product.
    */
-  readonly brand: Exclude<VerifiedOAuthClientBrand, "stella"> | null;
+  readonly brand: Exclude<VerifiedOAuthClientBrand, FirstPartyBrand> | null;
 };
 
 const CLAUDE_DOCS =
@@ -195,14 +202,25 @@ export const mayMetadataDocumentClientHoldElevatedScopes = (
   );
 };
 
+/** Any first-party redirect is stella's. */
+const firstPartyRedirectBrand = (): FirstPartyBrand => "stella";
+
+/**
+ * A first-party metadata document names the iOS app when it is the mobile
+ * client's document, and stella otherwise.
+ */
+const firstPartyDocumentBrand = (url: URL): FirstPartyBrand =>
+  url.href === mobileClientMetadataUrl(url.origin) ? "stella_ios" : "stella";
+
 /**
  * The brand a location verifies, or `null` when it verifies none. Stella's own
- * origins are first-party; otherwise the location must match a documented
- * third-party entry exactly.
+ * origins are first-party, named by `firstPartyBrand`; otherwise the location
+ * must match a documented third-party entry exactly.
  */
 const brandOfLocation = (
   url: URL | null,
   entries: readonly VerifiedClientUrl[],
+  firstPartyBrand: (url: URL) => FirstPartyBrand,
   verifiedOrigins: readonly string[],
 ): VerifiedOAuthClientBrand | "unbranded" | null => {
   if (!url) {
@@ -213,7 +231,7 @@ const brandOfLocation = (
     url.password === "" &&
     verifiedOrigins.includes(url.origin)
   ) {
-    return "stella";
+    return firstPartyBrand(url);
   }
   const entry = findVerifiedUrl(url, entries);
   if (!entry) {
@@ -285,11 +303,17 @@ export const getOAuthConsentInfo = (
         brandOfLocation(
           clientUrl,
           VERIFIED_THIRD_PARTY_CLIENT_IDS,
+          firstPartyDocumentBrand,
           verifiedOrigins,
         ),
       ]
     : redirects.map((url) =>
-        brandOfLocation(url, VERIFIED_THIRD_PARTY_REDIRECTS, verifiedOrigins),
+        brandOfLocation(
+          url,
+          VERIFIED_THIRD_PARTY_REDIRECTS,
+          firstPartyRedirectBrand,
+          verifiedOrigins,
+        ),
       );
   return {
     client: consentClient(evidence, client.name || null),
