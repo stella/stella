@@ -95,6 +95,7 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  filterQuarantinePeerCollisions,
   LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
   quarantinedListingObservation,
@@ -1290,29 +1291,36 @@ describe("runIngestionPipeline — failure records", () => {
     ).toEqual([{ sourceDocumentId, collidingRecords: 1 }]);
   });
 
-  test("reports a keyed record whose repair alias the same page stores as a quarantined row", async () => {
-    // The alias would let the keyed record adopt the other one's row, merging
-    // two documents the fingerprint cannot tell apart.
+  test("withholds unproven repair aliases without reporting a peer collision", async () => {
     const source = caseLawSourceRow({ name: "Quarantine peer source" });
-    const { sourceDocumentId } = quarantineIdentity({
-      namespace: QUARANTINE_NAMESPACE.CZ_NS,
-      stableFields: { docket: "21 Cdo 288/2026" },
+    const { sourceDocumentId, repairAliases } = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.PL_SN,
+      stableFields: { docket: "Fixture reference" },
     });
+    const [repairAlias] = repairAliases;
+    if (repairAlias === undefined) {
+      panic("the PL-SN docket supplies an eligible repair alias");
+    }
+    const decisions = [
+      {
+        ...baseResult({}),
+        sourceDocumentId: "unid-a",
+        sourceDocumentIdRepairAliases: repairAliases,
+      },
+      { ...baseResult({}), sourceDocumentId },
+    ];
+    const filtered = filterQuarantinePeerCollisions({
+      decisions,
+      proof: { type: "no-listing-proof" },
+    });
+    expect(decisions[0]?.sourceDocumentIdRepairAliases).toEqual([repairAlias]);
+    expect(filtered.collidingIds).toEqual([]);
+    expect(filtered.decisions[0]?.sourceDocumentIdRepairAliases).toEqual([]);
+
     czNsAdapter.fetchPage = async () =>
       Result.ok({
         observations: [],
-        decisions: [
-          {
-            ...baseResult({}),
-            sourceDocumentId: "unid-a",
-            sourceDocumentIdRepairAliases: repairAliasesForStableFields({
-              namespace: QUARANTINE_NAMESPACE.PL_SN,
-              stableFields: { docket: "Fixture reference" },
-              sourceDocumentIds: [sourceDocumentId],
-            }),
-          },
-          { ...baseResult({}), sourceDocumentId, rawHash: "id-less" },
-        ],
+        decisions,
         nextCursor: "cursor-2",
       });
     const { scopedDb } = failingDecisionDb(null);
@@ -1327,13 +1335,11 @@ describe("runIngestionPipeline — failure records", () => {
     });
 
     expect(
-      logs.records
-        .filter(
-          ({ message }) =>
-            message === "case_law.ingestion.quarantine_peer_collision",
-        )
-        .map(({ attributes }) => attributes?.["sourceDocumentId"]),
-    ).toEqual([sourceDocumentId]);
+      logs.records.filter(
+        ({ message }) =>
+          message === "case_law.ingestion.quarantine_peer_collision",
+      ),
+    ).toEqual([]);
   });
 
   test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {

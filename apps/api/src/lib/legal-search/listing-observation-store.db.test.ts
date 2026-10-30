@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -12,8 +12,14 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+  plCourtsListingObservation,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { runListingCensus } from "@/api/handlers/case-law/ingestion/listing-census";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import {
@@ -38,7 +44,7 @@ beforeAll(async () => {
 });
 afterAll(async () => await client.close());
 
-test("source evidence is durable, immutable on replay, and never creates a canonical decision", async () => {
+test("source evidence is durable, queryable, and separate from canonical decisions", async () => {
   const first = createSafeId<"caseLawSource">();
   const second = createSafeId<"caseLawSource">();
   await db.insert(caseLawSources).values([
@@ -136,14 +142,123 @@ test("source evidence is durable, immutable on replay, and never creates a canon
   expect(census.unwrap("The census completes its configured range").type).toBe(
     "completed",
   );
-  const evidence = await db
+  const censusEvidence = await db
     .select()
     .from(caseLawListingObservations)
     .where(eq(caseLawListingObservations.sourceId, first))
     .limit(10);
   expect(
-    evidence.map(({ payload: storedPayload }) => storedPayload),
+    censusEvidence.map(({ payload: storedPayload }) => storedPayload),
   ).toContainEqual({
     listing: censusObservation.payload,
   });
+
+  const courtlessPayload = {
+    id: null,
+    courtCases: [],
+    courtType: null,
+    division: null,
+    judgmentDate: null,
+    judgmentType: null,
+    judges: [],
+  };
+  const courtlessObservation = plCourtsListingObservation(courtlessPayload);
+  if (courtlessObservation === null) {
+    return panic("the courtless item has no stable listing identity");
+  }
+  await storeListingObservations(scopedDb, {
+    sourceId: second,
+    adapterKey: "pl-courts",
+    observations: [courtlessObservation],
+  });
+  const courtlessEvidence = await db
+    .select({
+      fingerprint: caseLawListingObservations.fingerprint,
+      payload: caseLawListingObservations.payload,
+      reason: caseLawListingObservations.reason,
+    })
+    .from(caseLawListingObservations)
+    .where(
+      and(
+        eq(caseLawListingObservations.sourceId, second),
+        eq(
+          caseLawListingObservations.fingerprint,
+          courtlessObservation.identity.fingerprint,
+        ),
+      ),
+    );
+  expect(courtlessEvidence).toEqual([
+    {
+      fingerprint: courtlessObservation.identity.fingerprint,
+      payload: { listing: courtlessPayload },
+      reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+    },
+  ]);
+
+  const listingItem = normalizeSaosDumpItem({
+    id: 91_004,
+    courtCases: [{ caseNumber: "II Co 3/2026" }],
+    courtType: "COMMON",
+    judgmentDate: "2026-01-01",
+    judgmentType: "DECISION",
+  });
+  const keyed = buildPlDecision({
+    listingItem,
+    detail: null,
+    rawParts: { "listing-dump": JSON.stringify(listingItem) },
+  });
+  if (keyed === null) {
+    return panic("the keyed PL-Courts item builds a decision");
+  }
+  expect(keyed.court).toBe("Sąd powszechny");
+  expect(keyed.sourceDocumentId).toBe("91004");
+
+  await processDecision({
+    input: {
+      ...keyed,
+      sourceRaw: undefined,
+      sourceRawBytes: undefined,
+      sourceRawContentType: undefined,
+    },
+    observationOrder: 1n,
+    sourceId: second,
+    scopedDb,
+    observedAt: new Date("2026-01-02T00:00:00.000Z"),
+  });
+
+  const decisions = await db
+    .select({
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+      court: caseLawDecisions.court,
+      caseNumber: caseLawDecisions.caseNumber,
+    })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.sourceId, second),
+        eq(caseLawDecisions.court, "Sąd powszechny"),
+        eq(caseLawDecisions.caseNumber, "II Co 3/2026"),
+      ),
+    );
+  expect(decisions).toEqual([
+    {
+      sourceDocumentId: "91004",
+      court: "Sąd powszechny",
+      caseNumber: "II Co 3/2026",
+    },
+  ]);
+  expect(
+    await db
+      .select({ fingerprint: caseLawListingObservations.fingerprint })
+      .from(caseLawListingObservations)
+      .where(
+        and(
+          eq(caseLawListingObservations.sourceId, second),
+          eq(
+            caseLawListingObservations.fingerprint,
+            courtlessObservation.identity.fingerprint,
+          ),
+        ),
+      ),
+  ).toEqual([{ fingerprint: courtlessObservation.identity.fingerprint }]);
 });
