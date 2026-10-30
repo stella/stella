@@ -154,22 +154,24 @@ export const remapTranscript = ({ transcript, map, direction }: RemapOptions) =>
     const remap = (items: readonly TimedText[]) =>
       items.flatMap((item) => {
         if (direction === "to-original") {
-          const startMs = trimmedToOriginal(
-            map,
-            item.startMs,
-            "start",
-          ).unwrap();
+          const startMs = trimmedToOriginal(map, item.startMs, "start").unwrap(
+            "A validated item lies within the duration the time map covers",
+          );
           const endMs = trimmedToOriginal(
             map,
             item.endMs,
             item.startMs === item.endMs ? "start" : "end",
-          ).unwrap();
+          ).unwrap(
+            "A validated item lies within the duration the time map covers",
+          );
           return startMs === null || endMs === null
             ? []
             : [{ ...item, startMs, endMs }];
         }
         if (item.startMs === item.endMs) {
-          const point = originalToTrimmed(map, item.startMs).unwrap();
+          const point = originalToTrimmed(map, item.startMs).unwrap(
+            "A validated item lies within the duration the time map covers",
+          );
           return point === null
             ? []
             : [{ ...item, startMs: point, endMs: point }];
