@@ -952,26 +952,26 @@ case_law_decision_citation_stats_state.decision_id  safeUuid  pk,fk,not null    
 case_law_decision_citation_stats_state.status       text      default,not null  case-law.ts:3891
 ```
 
-## case_law_sitemap_drain_progress · `caseLawSitemapDrainProgress` · case-law.ts:3897 · rls
+## case_law_sitemap_drain_progress · `caseLawSitemapDrainProgress` · case-law.ts:3923 · rls
 
 A published recount's safe transaction boundary, retained while its log rows drain.
 
 ```text
-case_law_sitemap_drain_progress.country          text  not null          case-law.ts:3900
-case_law_sitemap_drain_progress.year             text  not null          case-law.ts:3901
-case_law_sitemap_drain_progress.month            text  not null          case-law.ts:3902
-case_law_sitemap_drain_progress.covered_before   xid8  not null          case-law.ts:3903
-case_law_sitemap_drain_progress.phase            text  default,not null  case-law.ts:3904
-case_law_sitemap_drain_progress.retired_through  xid8  default,not null  case-law.ts:3905
+case_law_sitemap_drain_progress.country          text  not null          case-law.ts:3926
+case_law_sitemap_drain_progress.year             text  not null          case-law.ts:3927
+case_law_sitemap_drain_progress.month            text  not null          case-law.ts:3928
+case_law_sitemap_drain_progress.covered_before   xid8  not null          case-law.ts:3929
+case_law_sitemap_drain_progress.phase            text  default,not null  case-law.ts:3930
+case_law_sitemap_drain_progress.retired_through  xid8  default,not null  case-law.ts:3931
 ```
 
-## case_law_sitemap_refresh_cursor · `caseLawSitemapRefreshCursor` · case-law.ts:3928 · rls
+## case_law_sitemap_refresh_cursor · `caseLawSitemapRefreshCursor` · case-law.ts:3954 · rls
 
 Singleton strict-lower cursor for bounded sitemap refresh discovery.
 
 ```text
-case_law_sitemap_refresh_cursor.slot          integer  default,not null  case-law.ts:3931
-case_law_sitemap_refresh_cursor.last_country  text     default,not null  case-law.ts:3932
-case_law_sitemap_refresh_cursor.last_year     text     default,not null  case-law.ts:3933
-case_law_sitemap_refresh_cursor.last_month    text     default,not null  case-law.ts:3934
+case_law_sitemap_refresh_cursor.slot          integer  default,not null  case-law.ts:3957
+case_law_sitemap_refresh_cursor.last_country  text     default,not null  case-law.ts:3958
+case_law_sitemap_refresh_cursor.last_year     text     default,not null  case-law.ts:3959
+case_law_sitemap_refresh_cursor.last_month    text     default,not null  case-law.ts:3960
 ```
