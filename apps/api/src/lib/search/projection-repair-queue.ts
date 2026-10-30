@@ -15,6 +15,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
+import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   reindexWorkspacesForContact,
@@ -76,10 +77,17 @@ type SearchProjectionRepairDb = Pick<
  */
 type SearchProjectionRepairDatabase = SearchProjectionRepairDb &
   Pick<typeof rootDb, "query" | "transaction">;
+type ProjectionRepairDatabase = Pick<
+  typeof rootDb,
+  "query" | "select" | "transaction"
+>;
 
 export type SearchProjectionRepairDeps = {
   db: SearchProjectionRepairDb;
-  repair: Record<SearchProjectionKind, (sourceId: string) => Promise<void>>;
+  repair: Record<
+    SearchProjectionKind,
+    (sourceId: string, organizationId: SafeId<"organization">) => Promise<void>
+  >;
 };
 
 export type SearchProjectionRepairOutcome = {
@@ -89,6 +97,7 @@ export type SearchProjectionRepairOutcome = {
 
 type ClaimedRepair = {
   kind: SearchProjectionKind;
+  organizationId: SafeId<"organization">;
   revision: string;
   sourceId: string;
 };
@@ -101,7 +110,7 @@ type ClaimedRepair = {
  */
 const repairContactProjection = async (
   sourceId: string,
-  database: SearchProjectionRepairDatabase,
+  database: ProjectionRepairDatabase,
 ): Promise<void> => {
   const contactId = toSafeId<"contact">(sourceId);
   await upsertContactSearchDocument(contactId, database);
@@ -114,20 +123,56 @@ const repairContactProjection = async (
  */
 export const createSearchProjectionRepairDeps = (
   database: SearchProjectionRepairDatabase,
-): SearchProjectionRepairDeps => ({
-  db: database,
-  repair: {
-    contact: async (sourceId) =>
-      await repairContactProjection(sourceId, database),
-    entity: async (sourceId) =>
-      await upsertSearchDocument(toSafeId<"entity">(sourceId), { database }),
-    workspace: async (sourceId) =>
-      await upsertWorkspaceSearchDocument(
-        toSafeId<"workspace">(sourceId),
-        database,
-      ),
-  },
-});
+): SearchProjectionRepairDeps => {
+  const repairInOrganization = async (
+    sourceId: string,
+    organizationId: SafeId<"organization">,
+    repair: (
+      id: string,
+      projectionDatabase: ProjectionRepairDatabase,
+    ) => Promise<void>,
+  ) => {
+    const workspaceIds = await database
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.organizationId, organizationId));
+    await createRootOrganizationBackgroundDb(
+      organizationId,
+      undefined,
+      workspaceIds.map(({ id }) => id),
+    )(async (scopedDatabase) => {
+      await repair(sourceId, {
+        query: scopedDatabase.query,
+        select: scopedDatabase.select.bind(scopedDatabase),
+        transaction: database.transaction.bind(database),
+      });
+    });
+  };
+
+  return {
+    db: database,
+    repair: {
+      contact: async (sourceId, organizationId: SafeId<"organization">) =>
+        await repairInOrganization(
+          sourceId,
+          organizationId,
+          repairContactProjection,
+        ),
+      entity: async (sourceId) =>
+        await upsertSearchDocument(toSafeId<"entity">(sourceId), { database }),
+      workspace: async (sourceId, organizationId: SafeId<"organization">) =>
+        await repairInOrganization(
+          sourceId,
+          organizationId,
+          async (id, projectionDatabase) =>
+            await upsertWorkspaceSearchDocument(
+              toSafeId<"workspace">(id),
+              projectionDatabase,
+            ),
+        ),
+    },
+  };
+};
 
 const uniqueIds = <T extends string>(ids: readonly T[]): T[] => [
   ...new Set(ids),
@@ -238,6 +283,7 @@ export const enqueueWorkspaceSearchRepairs = async (
 
 const claimedColumns = {
   kind: searchProjectionRepairQueue.kind,
+  organizationId: searchProjectionRepairQueue.organizationId,
   revision: searchProjectionRepairQueue.revision,
   sourceId: searchProjectionRepairQueue.sourceId,
 };
@@ -352,7 +398,8 @@ const repairClaim = async ({
   outcome: SearchProjectionRepairOutcome;
 }): Promise<void> => {
   const attempt = await Result.tryPromise({
-    try: async () => await deps.repair[claim.kind](claim.sourceId),
+    try: async () =>
+      await deps.repair[claim.kind](claim.sourceId, claim.organizationId),
     catch: (cause) =>
       cause instanceof Error ? cause : new UnhandledException({ cause }),
   });

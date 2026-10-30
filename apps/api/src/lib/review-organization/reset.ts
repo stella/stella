@@ -487,14 +487,19 @@ const deleteMatters = async (scope: ResetScope) => {
 
 const deleteContacts = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await readBounded(
-    scope.db
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(eq(contacts.organizationId, organizationId))
-      .orderBy(asc(contacts.id)),
-    LIMITS.contactsCount,
-  );
+  const rows = (
+    await scope.safeDb(
+      async (tx) =>
+        await readBounded(
+          tx
+            .select({ id: contacts.id })
+            .from(contacts)
+            .where(eq(contacts.organizationId, organizationId))
+            .orderBy(asc(contacts.id)),
+          LIMITS.contactsCount,
+        ),
+    )
+  ).unwrap("Review contact enumeration failed for the target organization");
   return await deleteEach(
     scope,
     "contacts",

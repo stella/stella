@@ -39,6 +39,7 @@ import { printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
+import type { Transaction } from "@/api/db/root";
 import {
   billingCodes,
   chatMessages,
@@ -5069,6 +5070,15 @@ export async function seed(organizationId?: string, userId?: string) {
   let USER_ID = userId ?? DEFAULT_USER_ID;
   let resolvedSeedUserIds: readonly string[] | undefined;
   const toWs = (id: WorkspaceId) => id;
+  const organizationTransaction = async <T>(
+    fn: (tx: Transaction) => Promise<T>,
+  ): Promise<T> =>
+    await withAggregateTransaction(db, async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ORG_ID}, true)`,
+      );
+      return await fn(tx);
+    });
 
   const ensureSeedUsers = async () => {
     if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {
@@ -5230,13 +5240,13 @@ export async function seed(organizationId?: string, userId?: string) {
             ),
       );
     }
-    await db.transaction(
+    await organizationTransaction(
       async (tx) =>
         await tx
           .delete(workspaces)
           .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`),
     );
-    await db.transaction(
+    await organizationTransaction(
       async (tx) =>
         await tx
           .delete(contacts)
@@ -5263,7 +5273,7 @@ export async function seed(organizationId?: string, userId?: string) {
     // 1. Contacts (original orgs + people)
     const coreContacts = [...orgContacts, ...personContacts];
     for (const c of coreContacts) {
-      await db.transaction(
+      await organizationTransaction(
         async (tx) =>
           await tx
             .insert(contacts)
@@ -5307,7 +5317,7 @@ export async function seed(organizationId?: string, userId?: string) {
     }
     // 1b. Additional org contacts for overview stress-testing
     for (const c of moreOrgContacts) {
-      await db.transaction(
+      await organizationTransaction(
         async (tx) =>
           await tx
             .insert(contacts)

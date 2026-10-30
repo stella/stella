@@ -47,6 +47,8 @@ import type {
   SchedulerSchedule,
 } from "./common";
 
+const contactsOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.contacts'::regclass)`;
+
 export const contacts = p.pgTable(
   "contacts",
   {
@@ -178,6 +180,12 @@ export const contacts = p.pgTable(
       )})`,
     ),
     ...orgPolicies(),
+    p.pgPolicy("contacts_owner_organization_access", {
+      for: "all",
+      to: "public",
+      using: sql`${contactsOwner} AND ${organizationCheck}`,
+      withCheck: sql`${contactsOwner} AND ${organizationCheck}`,
+    }),
   ],
 );
 

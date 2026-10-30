@@ -312,9 +312,9 @@ test("an edit that lands mid-repair survives the repair it raced", async () => {
     db: deps.db,
     repair: {
       ...deps.repair,
-      entity: async (sourceId) => {
+      entity: async (sourceId, organizationId) => {
         await enqueueEntitySearchRepairs(asTx(), [document]);
-        await deps.repair.entity(sourceId);
+        await deps.repair.entity(sourceId, organizationId);
       },
     },
   };
