@@ -535,7 +535,8 @@ const foldedPlainText = (
   options: SearchFoldOptions,
 ) => {
   const key = clipboardFoldKey(options);
-  const folds = foldedPlainTextCache.get(item) ?? new Map();
+  const folds =
+    foldedPlainTextCache.get(item) ?? new Map<string, FoldedSearchText>();
   const cached = folds.get(key);
   if (cached) {
     return cached;
