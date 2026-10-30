@@ -400,6 +400,8 @@ export const FAILURE_TAGS = [
   "ServiceClientUnavailableError",
   "SesInboundError",
   "SkCollectionIssueError",
+  "SkDocumentRawMissingError",
+  "SkDocumentRawStorageError",
   "SkillFileError",
   "SkillRequiredToolsError",
   "SnapshotReconciliationError",

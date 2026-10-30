@@ -204,11 +204,13 @@ test("allows test-kit helpers, production files, and the real-clock owner", asyn
       options,
     ),
   ).toEqual([]);
-  for (const sourcePath of ["x.ts", "packages/test-kit/src/clock.test.ts"]) {
-    expect(
-      await lintSingleRule(rule, "setTimeout(() => {}, 1);", { sourcePath }),
-    ).toEqual([]);
-  }
+  expect(
+    await Promise.all(
+      ["x.ts", "packages/test-kit/src/clock.test.ts"].map((sourcePath) =>
+        lintSingleRule(rule, "setTimeout(() => {}, 1);", { sourcePath }),
+      ),
+    ),
+  ).toEqual([[], []]);
   expect(
     await lintSingleRule(rule, "setTimeout(() => {}, 1);", {
       sourcePath: "x.property.spec.ts",
@@ -318,4 +320,15 @@ test("the registered fixture reaches the rule and a wrong clean fixture fails", 
     "fixture-violation",
   );
   expect(await lintSingleRule(rule, unsuppressed, options)).toEqual([4]);
+});
+
+test("reports synchronous Bun sleeps through direct, global and aliased calls", async () => {
+  const source = [
+    "Bun.sleepSync(1);",
+    "globalThis.Bun.sleepSync(1);",
+    "const { sleepSync: pause } = Bun; pause(1);",
+    "const runtime = Bun; runtime.sleepSync(1);",
+    "const local = (Bun) => Bun.sleepSync(1);",
+  ].join("\n");
+  expect(await lintSingleRule(rule, source, options)).toEqual([1, 2, 3, 4]);
 });

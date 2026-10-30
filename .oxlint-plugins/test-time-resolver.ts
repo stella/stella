@@ -265,6 +265,8 @@ export const createTimeResolver = (
       const { id, init } = definition.node;
       appendPaths({ pattern: id, source: init, binding: node.name });
     }
+    // Conservatively include every write: closures and conditional assignments
+    // can retain an earlier clock even when a later write replaces it.
     for (const reference of variable.references) {
       if (reference.isWrite() && !reference.init) {
         appendPaths({

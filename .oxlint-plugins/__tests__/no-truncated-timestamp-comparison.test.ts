@@ -59,3 +59,19 @@ lt(rows.createdAt,new Date(clockLookalike.now()));`,
     ),
   ).toEqual([5, 7]);
 });
+
+test("keeps stored timestamp identifiers out of fresh clock arithmetic", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      [
+        'import {lt} from "drizzle-orm";',
+        'import {createTestClock} from "@stll/test-kit";',
+        "const testClock = createTestClock();",
+        "lt(rows.createdAt,new Date(testClock.now() * 0 + cursorMillis));",
+        "lt(rows.createdAt,new Date(Date.now() + storedMillis));",
+        "lt(rows.createdAt,new Date(testClock.now() - 60_000));",
+      ].join("\n"),
+    ),
+  ).toEqual([4, 5]);
+});

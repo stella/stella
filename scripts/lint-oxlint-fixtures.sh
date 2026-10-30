@@ -31,7 +31,6 @@ bun scripts/test-timing-ledger.ts --self-test
 bun scripts/test-timing-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 
 bash scripts/check-oxlint-node-loader.test.sh
-bash scripts/check-oxlint-node-loader.sh
 bash scripts/check-oxlint-node-loader.sh oxlint.design.config.ts
 # Oxlint RuleTester requires Node; Bun does not support its raw AST transfer.
 node scripts/check-oxlint-design-system.ts

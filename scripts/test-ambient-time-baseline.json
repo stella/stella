@@ -2034,11 +2034,6 @@
     "owner": "agent-engine",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/api-client/src/index.test.ts": {
-    "count": 1,
-    "owner": "api-client",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/api-contract/src/generated-visual.test.ts": {
     "count": 1,
     "owner": "api-contract",

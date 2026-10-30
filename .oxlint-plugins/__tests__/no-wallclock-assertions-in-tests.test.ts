@@ -331,3 +331,36 @@ describe(RULE, () => {
     expect(await lint(fixture)).toEqual([6]);
   });
 });
+
+test("detects unary Date conversion, soft assertions and assigned assertion aliases", async () => {
+  expect(
+    await lint(
+      [
+        'import { expect } from "@playwright/test";',
+        "expect(+new Date() - +new Date()).toBeLessThan(100);",
+        "expect.soft(Date.now() - Date.now()).toBeLessThan(100);",
+        "let check; check = expect;",
+        "check(Date.now() - Date.now()).toBeLessThan(100);",
+        "expect(+new Date(0) - +new Date(0)).toBeLessThan(100);",
+        "const local = (expect) => expect.soft(Date.now() - Date.now()).toBeLessThan(100);",
+      ].join("\n"),
+    ),
+  ).toEqual([2, 3, 5]);
+});
+
+test.each(["<", "<=", ">", ">=", "===", "!=="])(
+  "detects Boolean elapsed comparisons using %s",
+  async (operator) => {
+    expect(
+      await lint(
+        [
+          "const elapsed = Date.now() - Date.now();",
+          `expect(elapsed ${operator} 100).toBe(true);`,
+          `expect(100 ${operator} elapsed).not.toBe(false);`,
+          `expect(5 ${operator} 100).toBe(true);`,
+          `const compare = (expect) => expect(elapsed ${operator} 100).toBe(true);`,
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3]);
+  },
+);

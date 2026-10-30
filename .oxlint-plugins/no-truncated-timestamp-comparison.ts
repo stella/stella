@@ -360,7 +360,6 @@ const isDateNowCall = (node: unknown): boolean => {
 const isClockAdjustment = (node: unknown): boolean =>
   isAstNode(node) &&
   (node.type === "Literal" ||
-    node.type === "Identifier" ||
     (node.type === "UnaryExpression" && isClockAdjustment(node.argument)) ||
     (node.type === "BinaryExpression" &&
       (node.operator === "+" ||

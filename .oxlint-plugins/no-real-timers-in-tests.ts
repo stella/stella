@@ -48,6 +48,7 @@ const rule = createTestDeterminismRule({
           path === "setTimeout" ||
           path === "setInterval" ||
           path === "Bun.sleep" ||
+          path === "Bun.sleepSync" ||
           SLEEP_HELPERS.has(path) ||
           (path.startsWith(`${IMPORTED_HELPERS}.`) &&
             SLEEP_HELPERS.has(path.slice(IMPORTED_HELPERS.length + 1))) ||

@@ -255,16 +255,13 @@ describe(RULE, () => {
         sourcePath: "packages/test-kit/src/clock.test.ts",
       }),
     ).toEqual([]);
-    for (const sourcePath of [
-      "x.spec.ts",
-      "x.property.test.ts",
-      "x.test.mjs",
-      "x.spec.tsx",
-    ]) {
-      expect(await lintSingleRule(RULE, "Date.now();", { sourcePath })).toEqual(
-        [1],
-      );
-    }
+    expect(
+      await Promise.all(
+        ["x.spec.ts", "x.property.test.ts", "x.test.mjs", "x.spec.tsx"].map(
+          (sourcePath) => lintSingleRule(RULE, "Date.now();", { sourcePath }),
+        ),
+      ),
+    ).toEqual([[1], [1], [1], [1]]);
   });
 
   test("accepts reasoned escapes but requires a nonempty reason", async () => {
@@ -353,4 +350,10 @@ describe(RULE, () => {
     expect(wrongFixture).not.toBe(fixture);
     expect(await lint(wrongFixture)).toEqual([1]);
   });
+});
+
+test("conservatively tracks clock aliases even after a non-clock replacement", async () => {
+  expect(await lint("let read = Date.now; read = () => 0; read();")).toEqual([
+    1,
+  ]);
 });
