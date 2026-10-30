@@ -35,6 +35,15 @@ const describeViolation = (routine: DefinerFunction) =>
 
 describe.skipIf(!enabled)("security-definer search paths (postgres)", () => {
   test("every security-definer function ends its search path with pg_temp", async () => {
+    const migration = Bun.file(
+      new URL(
+        "../../drizzle/20261030010000_security_definer_search_paths/migration.sql",
+        import.meta.url,
+      ),
+    );
+    expect(await migration.text()).toContain(
+      "ALTER FUNCTION public.entity_feature_gate_backfill(text, text, integer) SET search_path = pg_catalog, pg_temp;",
+    );
     const databaseUrl =
       process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
