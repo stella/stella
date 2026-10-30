@@ -1,6 +1,11 @@
-// parser-output-unchanged: adds named readers beside the unchanged `inlineStyleValue`; output changes only in parsers that call them, and those bump their own versions.
 import { isTag } from "domhandler";
 import type { Element } from "domhandler";
+
+// parser-output-unchanged: adds named readers beside the unchanged `inlineStyleValue`; output changes only in parsers that call them, and those bump their own versions.
+import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
 
 /** What a property's declaration means, or undefined for a value CSS rejects. */
 export type InlineStyleRead<T> = (
@@ -55,7 +60,44 @@ const BOLD_WEIGHT = 700;
 const BOLD_THRESHOLD = 600;
 // User agents style these with `font-weight: bolder`.
 const BOLDER_TAGS: ReadonlySet<string> = new Set(["b", "strong"]);
-const NUMERIC_WEIGHT = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/u;
+
+const parseCssNumber = (value: string): number | undefined => {
+  const exponentMarker = value.indexOf("e");
+  const mantissaToken =
+    exponentMarker === -1 ? value : value.slice(0, exponentMarker);
+  const exponentToken =
+    exponentMarker === -1 ? undefined : value.slice(exponentMarker + 1);
+  if (exponentToken?.includes("e") === true) {
+    return undefined;
+  }
+
+  const sign = mantissaToken.startsWith("-") ? "-" : "";
+  const unsignedMantissa =
+    mantissaToken.startsWith("+") || mantissaToken.startsWith("-")
+      ? mantissaToken.slice(1)
+      : mantissaToken;
+  let normalizedMagnitude = unsignedMantissa;
+  if (unsignedMantissa.startsWith(".")) {
+    normalizedMagnitude = `0${unsignedMantissa}`;
+  } else if (unsignedMantissa.endsWith(".")) {
+    normalizedMagnitude = unsignedMantissa.slice(0, -1);
+  }
+  const normalizedMantissa = `${sign}${normalizedMagnitude}`;
+  const mantissa = parseDecimalToken(normalizedMantissa).unwrapOr(undefined);
+  if (mantissa === undefined || exponentToken === undefined) {
+    return mantissa;
+  }
+
+  const normalizedExponent = exponentToken.startsWith("+")
+    ? exponentToken.slice(1)
+    : exponentToken;
+  const exponent = parseIntegerToken(normalizedExponent).unwrapOr(undefined);
+  if (exponent === undefined) {
+    return undefined;
+  }
+  const result = mantissa * 10 ** exponent;
+  return Number.isFinite(result) ? result : undefined;
+};
 
 /** `bolder` relative to the parent's computed weight (CSS Fonts 4). */
 const bolderThan = (weight: number): number => {
@@ -105,10 +147,10 @@ const ownWeight = (element: Element): number | undefined =>
       case "revert-layer":
         return { value: defaultWeight(element) };
       default: {
-        if (!NUMERIC_WEIGHT.test(value)) {
+        const weight = parseCssNumber(value);
+        if (weight === undefined) {
           return undefined;
         }
-        const weight = Number(value);
         return weight >= 1 && weight <= 1000 ? { value: weight } : undefined;
       }
     }
@@ -123,8 +165,19 @@ export const inlineStyleIsBold = (element: Element): boolean =>
 
 // User agents style these with `font-style: italic`.
 const ITALIC_TAGS: ReadonlySet<string> = new Set(["i", "em"]);
-const OBLIQUE_ANGLE =
-  /^oblique\s+[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:deg|grad|rad|turn)$/u;
+const ANGLE_UNITS = ["grad", "turn", "deg", "rad"] as const;
+
+const isObliqueAngle = (value: string): boolean => {
+  if (!value.startsWith("oblique") || !/^\s$/u.test(value.charAt(7))) {
+    return false;
+  }
+  const angle = value.slice(8).trimStart();
+  const unit = ANGLE_UNITS.find((candidate) => angle.endsWith(candidate));
+  return (
+    unit !== undefined &&
+    parseCssNumber(angle.slice(0, -unit.length)) !== undefined
+  );
+};
 
 const parentItalic = (element: Element): boolean =>
   element.parent !== null && isTag(element.parent)
@@ -152,7 +205,7 @@ const ownItalic = (element: Element): boolean | undefined =>
           value: ITALIC_TAGS.has(element.name) || parentItalic(element),
         };
       default:
-        return OBLIQUE_ANGLE.test(value) ? { value: true } : undefined;
+        return isObliqueAngle(value) ? { value: true } : undefined;
     }
   })?.value;
 
@@ -285,8 +338,44 @@ const CSS_WIDE_KEYWORDS: ReadonlySet<string> = new Set([
   "revert",
   "revert-layer",
 ]);
-const LENGTH =
-  /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?(?:px|pt|pc|in|cm|mm|q|em|rem|ex|rex|ch|rch|cap|rcap|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax)$/u;
+const LENGTH_UNITS = [
+  "vmin",
+  "vmax",
+  "rcap",
+  "rem",
+  "rex",
+  "rch",
+  "ric",
+  "rlh",
+  "cap",
+  "px",
+  "pt",
+  "pc",
+  "in",
+  "cm",
+  "mm",
+  "em",
+  "ex",
+  "ch",
+  "ic",
+  "lh",
+  "vw",
+  "vh",
+  "vi",
+  "vb",
+  "q",
+] as const;
+
+const isLength = (value: string): boolean => {
+  const unit = LENGTH_UNITS.find((candidate) => value.endsWith(candidate));
+  return (
+    unit !== undefined &&
+    parseCssNumber(value.slice(0, -unit.length)) !== undefined
+  );
+};
+
+const isUnitlessZero = (value: string): boolean =>
+  !value.includes("e") && !value.endsWith(".") && parseCssNumber(value) === 0;
 
 /**
  * The properties read for their presence, each with the values that declare
@@ -296,8 +385,8 @@ const DECLARED_PROPERTY_VALUES = {
   "letter-spacing": (value: string) =>
     value === "normal" ||
     CSS_WIDE_KEYWORDS.has(value) ||
-    LENGTH.test(value) ||
-    /^[+-]?0*\.?0+$/u.test(value),
+    isLength(value) ||
+    isUnitlessZero(value),
   "-aw-headerfooter-type": (value: string) => value.length > 0,
 } as const satisfies Record<string, (value: string) => boolean>;
 

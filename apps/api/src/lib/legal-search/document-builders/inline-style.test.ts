@@ -164,7 +164,17 @@ test("invalid declarations never override valid ones", () => {
 });
 
 test("an oblique angle is italic", () => {
-  expect(inlineStyleIsItalic(element("font-style:oblique 10deg"))).toBe(true);
+  for (const angle of [
+    "oblique 10deg",
+    "oblique\t\n  10deg",
+    `oblique${" ".repeat(10_000)}-.5turn`,
+    "oblique +10.grad",
+    "oblique 1e2rad",
+  ]) {
+    expect(inlineStyleIsItalic(element(`font-style:${angle}`)), angle).toBe(
+      true,
+    );
+  }
   expect(
     inlineStyleIsItalic(element("font-style:italic; font-style:oblique 10px")),
   ).toBe(true);
