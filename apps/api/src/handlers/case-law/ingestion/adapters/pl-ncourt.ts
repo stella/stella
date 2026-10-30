@@ -1,5 +1,9 @@
 import { panic, Result } from "better-result";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+
+import {
+  DECISION_DOCUMENT_ROLE,
+  type DecisionDocumentRole,
+} from "@stll/api-contract/decision-document-role";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -47,11 +51,6 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
  * their own rows; {@link plCommonCourtRulingKeys} is the relationship between
  * them, and nothing here merges or deletes either side.
  */
-
-import {
-  DECISION_DOCUMENT_ROLE,
-  type DecisionDocumentRole,
-} from "@stll/api-contract/decision-document-role";
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -59,6 +58,7 @@ import {
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { load } from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";

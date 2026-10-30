@@ -27,12 +27,12 @@
  */
 
 import { Result } from "better-result";
-import type * as cheerio from "cheerio/slim";
-import { isComment, isText } from "domhandler";
-import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
+import { isComment, isText } from "@stll/html/nodes";
+import type { AnyNode } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {

@@ -16,10 +16,16 @@
  */
 
 import { Result } from "better-result";
-import type * as cheerio from "cheerio/slim";
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
 import { load } from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,

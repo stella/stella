@@ -20,9 +20,14 @@
  * sentence.
  */
 
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
-
 import { load } from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
 
 import { judgeLexLink, type LexLinkRejection } from "./pl-ncourt-lexlink";
 import { ANONYMIZED_CLASS } from "./shared-inlines";

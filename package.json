@@ -161,7 +161,6 @@
     "@tanstack/eslint-plugin-router": "catalog:",
     "better-result": "catalog:",
     "bun-types": "catalog:",
-    "cheerio": "^1.2.0",
     "drizzle-orm": "catalog:",
     "eslint": "catalog:",
     "fast-check": "catalog:",

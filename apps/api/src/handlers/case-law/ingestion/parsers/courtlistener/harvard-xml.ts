@@ -11,10 +11,10 @@
  */
 
 import { Result } from "better-result";
-import { type Element, isTag } from "domhandler";
 import * as slimdom from "slimdom";
 
 import { load } from "@stll/html";
+import { type Element, isTag } from "@stll/html/nodes";
 
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";

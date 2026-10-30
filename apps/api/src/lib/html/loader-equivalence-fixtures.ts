@@ -1,8 +1,8 @@
 import { Glob } from "bun";
-import type { CheerioOptions } from "cheerio/slim";
 import { fileURLToPath } from "node:url";
-import { adapter } from "parse5-htmlparser2-tree-adapter";
 
+import { EMAIL_PREVIEW_DOM_OPTIONS } from "@stll/html/email";
+import type { CheerioOptions } from "@stll/html/selection";
 import { sha256Hex } from "@stll/sha256/bun";
 
 export const loaderModes = [
@@ -10,7 +10,7 @@ export const loaderModes = [
   { name: "fragment", options: undefined, document: false },
   {
     name: "email",
-    options: { scriptingEnabled: false, treeAdapter: adapter },
+    options: EMAIL_PREVIEW_DOM_OPTIONS,
     document: true,
   },
   { name: "xml", options: { xml: true }, document: true },

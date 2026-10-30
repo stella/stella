@@ -7,7 +7,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/load.ts"
+    ".": "./src/load.ts",
+    "./selection": "./src/selection.ts",
+    "./nodes": "./src/nodes.ts",
+    "./bounded": "./src/bounded.ts",
+    "./email": "./src/email.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

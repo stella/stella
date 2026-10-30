@@ -11,10 +11,10 @@
  */
 
 import { panic, Result } from "better-result";
-import type * as cheerio from "cheerio/slim";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import { load } from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import {
   hasInlineChildren,
   plainTextOf,

@@ -3,11 +3,11 @@
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { panic, Result } from "better-result";
-import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
 
 import { declareFingerprintFields } from "@stll/errors";
 import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,

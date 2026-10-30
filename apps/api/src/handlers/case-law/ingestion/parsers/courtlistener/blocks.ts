@@ -10,7 +10,7 @@
  */
 
 import { panic } from "better-result";
-import type * as cheerio from "cheerio/slim";
+
 import {
   type AnyNode,
   type Element,
@@ -20,8 +20,8 @@ import {
   isText,
   type ParentNode,
   Text,
-} from "domhandler";
-
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import {
   type Block,

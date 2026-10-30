@@ -14,10 +14,9 @@
  * to check the parser against, not available enough to parse from.
  */
 
-import type * as cheerio from "cheerio/slim";
-import type { AnyNode } from "domhandler";
-
 import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 
 type FormexHeading = {
   /** Formex nesting depth, clamped to the AST's 1–3 heading levels. */

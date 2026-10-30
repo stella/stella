@@ -11,10 +11,15 @@
  *      ruling items, tables)
  */
 
-import type * as cheerio from "cheerio/slim";
-import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
-
 import { load } from "@stll/html";
+import {
+  type AnyNode,
+  createElement,
+  createText,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
@@ -224,9 +229,9 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       const nodes: AnyNode[] = [];
       for (const [index, part] of parts.entries()) {
         if (index > 0) {
-          nodes.push(new Element("br", {}));
+          nodes.push(createElement("br", {}));
         }
-        nodes.push(new Text(part));
+        nodes.push(createText(part));
       }
       $(node).replaceWith(nodes);
     });
@@ -254,7 +259,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
     // Cheerio's text() omits breaks; keep boundaries without changing the DOM
     // used by the structured value splitter and complaint table walker.
     copy.find("br").each((_, br) => {
-      $(br).replaceWith(new Text("\n"));
+      $(br).replaceWith(createText("\n"));
     });
     return visibleHtmlText(copy).trim();
   };

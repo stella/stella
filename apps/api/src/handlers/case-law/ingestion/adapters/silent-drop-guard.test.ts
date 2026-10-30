@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
-import { isTag } from "domhandler";
 
 import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";

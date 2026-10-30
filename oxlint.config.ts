@@ -741,7 +741,7 @@ const noFastXmlParserImport = {
 const noCheerioImport = {
   name: "cheerio",
   message:
-    "Use @stll/html for string loading or cheerio/slim for types; the main entry bundles byte decoders (encoding-sniffer and whatwg-encoding).",
+    "Use @stll/html for string loading or @stll/html/selection for types; the main entry bundles byte decoders (encoding-sniffer and whatwg-encoding).",
 };
 
 const noClassicTypeScriptImport = {

@@ -65,7 +65,7 @@ describe.serial("HTML parser helper ownership", () => {
     }
 
     const bannedHtml = [
-      'import { load } from "@stll/html"; import type * as cheerio from "cheerio/slim";',
+      'import { load } from "@stll/html"; import type * as cheerio from "@stll/html/selection";',
       'const $ = load("<table><tr><td><script>hidden</script></td></tr></table>");',
       '$("main").text();',
       '$("table").find("tr");',
@@ -92,8 +92,8 @@ describe.serial("HTML parser helper ownership", () => {
   test("rejects raw text reads through load aliases, selection aliases and typed parameters", async () => {
     expect(
       await lint([
-        'import { load as read } from "@stll/html"; import type { Cheerio as Nodes, CheerioAPI as Document } from "cheerio/slim";',
-        'import type * as html from "cheerio/slim"; import * as htmlLoader from "@stll/html";',
+        'import { load as read } from "@stll/html"; import type { Cheerio as Nodes, CheerioAPI as Document } from "@stll/html/selection";',
+        'import type * as html from "@stll/html/selection"; import * as htmlLoader from "@stll/html";',
         'const parse = read; const $ = parse("<p>Visible</p>");',
         '$("p").text();',
         'const selection = $("p"); const alias = selection;',
@@ -152,7 +152,7 @@ describe.serial("HTML parser helper ownership", () => {
   test("accepts helper calls, direct cells, text setters, unrelated methods and selector attributes", async () => {
     expect(
       await lint([
-        'import { load } from "@stll/html"; import type * as cheerio from "cheerio/slim";',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html/selection";',
         'const $ = load("<table></table>"); const table = $("table");',
         'visibleHtmlText(table); ownTableRows(table); isExcludedHtmlTag("p");',
         'table.children("td, th");',
@@ -208,7 +208,7 @@ describe.serial("HTML parser helper ownership", () => {
   test("preserves XML text semantics while guarding HTML in a mixed parser", async () => {
     expect(
       await lint([
-        'import { load } from "@stll/html"; import type * as cheerio from "cheerio/slim";',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html/selection";',
         'const xml = load("<record></record>", { xml: true });',
         'const html = load("<p></p>");',
         'xml("record").text(); xml("record").find("td").text();',
@@ -232,7 +232,7 @@ describe.serial("HTML parser helper ownership", () => {
   test("follows XML provenance through stable state properties", async () => {
     expect(
       await lint([
-        'import { load } from "@stll/html"; import type * as cheerio from "cheerio/slim";',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html/selection";',
         'const xml = load("<record></record>", { xml: true });',
         'const html = load("<p></p>");',
         "const state = { $: xml };",
@@ -258,7 +258,7 @@ describe.serial("HTML parser helper ownership", () => {
   test("guards HTML helper modules and local Cheerio type aliases without a load call", async () => {
     expect(
       await lint([
-        'import { load } from "@stll/html"; import type * as cheerio from "cheerio/slim";',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html/selection";',
         'import { visibleHtmlText } from "./shared-inlines";',
         "type Root = cheerio.CheerioAPI;",
         "type Nodes = cheerio.Cheerio<unknown>;",

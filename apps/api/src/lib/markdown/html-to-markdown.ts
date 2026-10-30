@@ -1,7 +1,6 @@
-import { isTag, isText } from "domhandler";
-import type { AnyNode, Element } from "domhandler";
-
 import { load } from "@stll/html";
+import { isTag, isText } from "@stll/html/nodes";
+import type { AnyNode, Element } from "@stll/html/nodes";
 
 // Includes `|` so table-cell pipes are escaped in the same pass as backslashes
 // (renders as a literal `|` in GFM/CommonMark), rather than a separate pipe

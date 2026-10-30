@@ -1,10 +1,10 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
-import type * as cheerio from "cheerio/slim";
-import type { AnyNode } from "domhandler";
 import { Buffer } from "node:buffer";
 
+import type { AnyNode } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,

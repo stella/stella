@@ -1,8 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { adapter } from "parse5-htmlparser2-tree-adapter";
 
-import { load } from "@stll/html";
+import { htmlTreeAdapter as adapter, load } from "@stll/html";
 import { assertProperty } from "@stll/property-testing";
 
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";

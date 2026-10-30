@@ -5,6 +5,8 @@ import { isDocument } from "domhandler";
 import { parse, parseFragment, serializeOuter } from "parse5";
 import { adapter } from "parse5-htmlparser2-tree-adapter";
 
+export const htmlTreeAdapter = adapter;
+
 /** Parse strings without loading Cheerio's byte decoders or HTTP client. */
 export const load = (
   content: string,

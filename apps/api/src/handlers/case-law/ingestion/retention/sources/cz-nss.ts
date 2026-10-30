@@ -14,7 +14,7 @@
  * its projection is only reached once one is. Rows stored before the envelope hold the
  * rich document alone, as bare HTML.
  */
-import * as cheerio from "cheerio";
+import { load } from "@stll/html";
 
 import {
   RETENTION_TEXT_ABSENCE,
@@ -29,7 +29,7 @@ const DOCUMENT_PART = "document";
 const TEXT_PART = "text";
 
 const bodyOf = (html: string): string => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return `<html><body>${$("body").html() ?? ""}</body></html>`;
 };
 
@@ -58,7 +58,7 @@ const projectCzNss = (sourceRaw: string): RetentionProjection => {
   }
   // The endpoint's text can carry `<br>` and entities, so it is read as markup
   // and its lines are the paragraphs.
-  const $ = cheerio.load(text);
+  const $ = load(text);
   $("br").replaceWith("\n");
   const paragraphs = $.root()
     .text()

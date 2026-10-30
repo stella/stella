@@ -1,7 +1,7 @@
-import { isText } from "domhandler";
 import path from "node:path";
 
 import { load } from "@stll/html";
+import { isText } from "@stll/html/nodes";
 import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 // Runtime SDK imports and the call primitive stay at these explicit boundaries.

@@ -15,8 +15,9 @@
  * an anchor rather than as words.
  */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+
+import { load } from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 
 // Type-only: the part names stay the adapter's, without running its code.
 import type { COURTLISTENER_RAW_PART } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/raw";
@@ -207,8 +208,8 @@ const collectParagraphs = (nodes: readonly AnyNode[], paragraphs: string[]) => {
 
 const markupParagraphs = (markup: string, xml: boolean): string[] => {
   const $ = xml
-    ? cheerio.load(markup.replace(XML_DECLARATION, ""), { xml: true })
-    : cheerio.load(markup);
+    ? load(markup.replace(XML_DECLARATION, ""), { xml: true })
+    : load(markup);
   const nodes = xml
     ? $.root().contents().toArray()
     : $("body").first().contents().toArray();
@@ -219,7 +220,7 @@ const markupParagraphs = (markup: string, xml: boolean): string[] => {
 
 /** Whether a `plain_text` column holds an HTML document after all. */
 const holdsHtmlDocument = (text: string): boolean => {
-  const roots = cheerio.load(text, {}, false).root().contents().toArray();
+  const roots = load(text, {}, false).root().contents().toArray();
   let structural = false;
   for (const node of roots) {
     if (isText(node) && node.data.trim() !== "") {

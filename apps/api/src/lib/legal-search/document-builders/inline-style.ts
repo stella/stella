@@ -1,5 +1,5 @@
 // parser-output-unchanged: a new reader of an element's own style attribute; no parser calls it until it imports it, and the callers that do bump their versions.
-import type { Element } from "domhandler";
+import type { Element } from "@stll/html/nodes";
 
 /** What a property's declaration means, or undefined for a value CSS rejects. */
 export type InlineStyleRead<T> = (

@@ -12,16 +12,16 @@
  */
 
 import { panic } from "better-result";
-import type * as cheerio from "cheerio/slim";
+
+import { load } from "@stll/html";
 import {
   type Element,
   hasChildren,
   isTag,
   isText,
   type ParentNode,
-} from "domhandler";
-
-import { load } from "@stll/html";
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";

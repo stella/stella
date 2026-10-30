@@ -9,8 +9,6 @@
 
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type * as cheerio from "cheerio/slim";
-import type { Element } from "domhandler";
 import JSZip from "jszip";
 
 import {
@@ -19,6 +17,8 @@ import {
 } from "@stll/api-contract/case-law-source-languages";
 import { writeZipEntry } from "@stll/docx-utils";
 import { load } from "@stll/html";
+import type { Element } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";

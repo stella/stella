@@ -1,5 +1,5 @@
-import type { Cheerio, CheerioAPI } from "cheerio/slim";
-import type { AnyNode } from "domhandler";
+import type { Cheerio, CheerioAPI } from "@stll/html/selection";
+import type { AnyNode } from "@stll/html/nodes";
 
 import { load } from "@stll/html";
 

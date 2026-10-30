@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type * as cheerio from "cheerio/slim";
 
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html/selection";
 
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";

@@ -15,13 +15,13 @@
  * module opens nothing.
  */
 import { panic, Result, TaggedError } from "better-result";
-import type * as cheerio from "cheerio/slim";
-import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 

@@ -14,7 +14,8 @@
  * record with the page under `textHtml`.
  */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import {
   RETENTION_PROJECTION_FAILURE,
@@ -55,7 +56,7 @@ const projectCzUs = (sourceRaw: string): RetentionProjection => {
       reason: RETENTION_PROJECTION_FAILURE.MISSING_TEXT_PART,
     };
   }
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const region = $(".DocContent").first();
   if (region.length === 0) {
     return {

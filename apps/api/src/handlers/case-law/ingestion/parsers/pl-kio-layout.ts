@@ -36,13 +36,19 @@
  * apart from printed lines before the marks go.
  */
 
-import type { CheerioAPI } from "cheerio/slim";
-import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
-
 import {
   parseDecimalToken,
   parseIntegerToken,
 } from "@stll/agent-input/numeric-token";
+import {
+  type AnyNode,
+  createElement,
+  createText,
+  type Element,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
+import type { CheerioAPI } from "@stll/html/selection";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -467,7 +473,7 @@ const liftSmallTypeIndices = ($: CheerioAPI, bodySize: number): void => {
     while (span.prev !== null && span.prev !== base) {
       $(span.prev).remove();
     }
-    $(span).replaceWith(new Element(position, {}, [new Text(text)]));
+    $(span).replaceWith(createElement(position, {}, [createText(text)]));
   });
 };
 
@@ -484,7 +490,7 @@ const spaceWordNumbering = ($: CheerioAPI): void => {
     if (following === "" || /^\s/u.test(following)) {
       return;
     }
-    $(span).after(new Text(" "));
+    $(span).after(createText(" "));
   });
 };
 
@@ -769,7 +775,7 @@ const splitAt = ($: CheerioAPI, br: Element): void => {
   let branch: AnyNode = br;
   let moved: AnyNode[] = [];
   for (const ancestor of ancestors) {
-    const reopened = new Element(ancestor.name, { ...ancestor.attribs }, []);
+    const reopened = createElement(ancestor.name, { ...ancestor.attribs }, []);
     $(reopened).append(
       moved,
       ancestor.children.slice(ancestor.children.indexOf(branch) + 1),
@@ -778,7 +784,7 @@ const splitAt = ($: CheerioAPI, br: Element): void => {
     branch = ancestor;
   }
   moved.push(...block.children.slice(block.children.indexOf(branch) + 1));
-  const opened = new Element("p", { ...block.attribs }, []);
+  const opened = createElement("p", { ...block.attribs }, []);
   $(block).after(opened);
   $(opened).append(moved);
   $(br).remove();
@@ -1066,12 +1072,12 @@ export const readPlKioLayout = ($: CheerioAPI): PlKioLayoutReading => {
   // From the last: a block merged into the one before it brings along the
   // block it absorbed itself.
   for (const { before, after, joiner } of merges.toReversed()) {
-    $(before.element).append(new Text(joiner), [...after.element.children]);
+    $(before.element).append(createText(joiner), [...after.element.children]);
     $(after.element).remove();
   }
   for (const { br, join, joiner } of breaks) {
     if (join === LINE_JOINS.JOIN) {
-      $(br).replaceWith(new Text(joiner));
+      $(br).replaceWith(createText(joiner));
     }
   }
   for (const { br, join } of breaks.toReversed()) {

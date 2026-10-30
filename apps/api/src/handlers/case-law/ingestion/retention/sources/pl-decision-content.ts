@@ -5,7 +5,7 @@
  * interpretations both hand their document to that reader, so both project
  * their document the same way.
  */
-import * as cheerio from "cheerio";
+import { load } from "@stll/html";
 
 import {
   RETENTION_TEXT_ABSENCE,
@@ -37,7 +37,7 @@ export const plDecisionContentProjection = (
   }
   // The document is the decision alone, with no site navigation around it:
   // its body is the content region, and a fragment parses into a body too.
-  const $ = cheerio.load(content);
+  const $ = load(content);
   return {
     type: "source",
     source: {

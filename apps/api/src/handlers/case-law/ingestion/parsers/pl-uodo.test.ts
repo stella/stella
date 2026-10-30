@@ -9,9 +9,9 @@
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { type AnyNode, isTag, isText } from "domhandler";
 
 import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 import type {
   Block,
   Inline,

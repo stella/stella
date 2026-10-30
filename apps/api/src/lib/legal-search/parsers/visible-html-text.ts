@@ -1,6 +1,6 @@
+import { type AnyNode, hasChildren, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: moved unchanged from shared-inlines.ts; the visible-text walk and excluded tags are the same.
-import type * as cheerio from "cheerio/slim";
-import { type AnyNode, hasChildren, isTag, isText } from "domhandler";
+import type * as cheerio from "@stll/html/selection";
 
 const EXCLUDED_HTML_TAGS = ["script", "style"];
 

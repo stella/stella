@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
-import { isCDATA, isTag, isText } from "domhandler";
-import type { AnyNode } from "domhandler";
 import fc from "fast-check";
 
 import { load } from "@stll/html";
+import { isCDATA, isTag, isText } from "@stll/html/nodes";
+import type { AnyNode } from "@stll/html/nodes";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 export const markerPlan = fc.record({

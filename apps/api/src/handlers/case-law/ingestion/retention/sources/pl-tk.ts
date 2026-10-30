@@ -9,7 +9,8 @@
  * case record, the other rulings and the portal's navigation.
  */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import {
   RETENTION_PROJECTION_FAILURE,
@@ -68,7 +69,7 @@ const projectPlTkSourceRaw = (sourceRaw: string): RetentionProjection => {
   if (casePage === undefined) {
     return { type: "no-text", reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED };
   }
-  const $ = cheerio.load(casePage);
+  const $ = load(casePage);
   // Compared as an attribute value rather than built into a selector: the id
   // comes from stored data, and the portal's ids carry `:` that a selector
   // would read as syntax.

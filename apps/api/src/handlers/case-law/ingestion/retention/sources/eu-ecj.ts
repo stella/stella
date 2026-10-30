@@ -18,7 +18,7 @@
  * Interactive and non-content elements inside the region are removed, as no
  * reader sees them as text.
  */
-import * as cheerio from "cheerio";
+import { load } from "@stll/html";
 
 import {
   RETENTION_PROJECTION_FAILURE,
@@ -57,7 +57,7 @@ const projectEuEcj = (sourceRaw: string): RetentionProjection => {
       reason: RETENTION_PROJECTION_FAILURE.MISSING_TEXT_PART,
     };
   }
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const container = $(PORTAL_DOCUMENT_CONTAINER).first();
   const region = container.length > 0 ? container : $("body");
   region.find(NON_CONTENT).remove();

@@ -11,11 +11,11 @@
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { isTag, isText } from "domhandler";
-import type { AnyNode } from "domhandler";
 
 import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
 import { load } from "@stll/html";
+import { isTag, isText } from "@stll/html/nodes";
+import type { AnyNode } from "@stll/html/nodes";
 import { plainTextOf, projectPlainText } from "@stll/legal-ast/document-ast";
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import type {

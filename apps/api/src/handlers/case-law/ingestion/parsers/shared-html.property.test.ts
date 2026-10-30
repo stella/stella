@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import type * as cheerio from "cheerio/slim";
-import type { AnyNode } from "domhandler";
 import fc from "fast-check";
 
 import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import { assertProperty } from "@stll/property-testing";
 
 import {

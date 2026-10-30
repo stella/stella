@@ -8,8 +8,7 @@
  * shared budget ran out).
  */
 
-import type { AnyNode } from "domhandler";
-
+import type { AnyNode } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 

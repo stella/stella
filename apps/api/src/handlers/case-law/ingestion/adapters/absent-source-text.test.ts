@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import { isTag, isText } from "domhandler";
 import { readdirSync } from "node:fs";
 
 import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
 import { load } from "@stll/html";
+import { isTag, isText } from "@stll/html/nodes";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
