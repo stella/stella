@@ -64,21 +64,6 @@ export const DesktopConnectionCard = () => {
   const [challengeWaiting, setChallengeWaiting] = useState(false);
   const [host, setHost] = useState("");
 
-  // Capture the native challenge and remove its secret from browser history.
-  // The page answers it on its own only when the app on this computer proves
-  // the challenge is its own; otherwise the approve button stays.
-  useMountEffect(() => {
-    captureDesktopAccountLink();
-    const waiting = hasDesktopAccountChallenge();
-    setChallengeWaiting(waiting);
-    setHost(serverHost());
-    if (waiting) {
-      startConnect("local-proof");
-    }
-  });
-
-  const card = desktopCardState({ challengeWaiting, connection, presence });
-
   const handleConnect = async (approval: DesktopLinkApproval) => {
     const outcome = await connect(approval);
     // A failed or unproven approval keeps a challenge that is still valid;
@@ -101,12 +86,28 @@ export const DesktopConnectionCard = () => {
     }
     notifyUserProblem(t("errors.actionFailed"));
   };
-  function startConnect(approval: DesktopLinkApproval) {
+  const startConnect = (approval: DesktopLinkApproval) => {
     detached(
       handleConnect(approval),
       "settings-account-desktop.connect-desktop",
     );
-  }
+  };
+
+  // Capture the native challenge and remove its secret from browser history.
+  // The page answers it on its own only when the app on this computer proves
+  // the challenge is its own; otherwise the approve button stays.
+  useMountEffect(() => {
+    captureDesktopAccountLink();
+    const waiting = hasDesktopAccountChallenge();
+    setChallengeWaiting(waiting);
+    setHost(serverHost());
+    if (waiting) {
+      startConnect("local-proof");
+    }
+  });
+
+  const card = desktopCardState({ challengeWaiting, connection, presence });
+
   const onConnect = () => {
     startConnect("explicit");
   };
