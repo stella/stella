@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createFetchWithTimeout } from "./index";
+import type { FetchWithTimeoutInit } from "./index";
 
 describe("createFetchWithTimeout", () => {
   for (const code of [
@@ -30,8 +31,13 @@ describe("createFetchWithTimeout", () => {
   // caller reads the body the transport produced (and the browser's network
   // inspection sees it), never a script stream wrapped around it.
   for (const [form, deadline] of [
-    ["numeric", (ms: number) => ({ timeoutMs: ms })],
-    ["total", (ms: number) => ({ timeout: { type: "total", ms } })],
+    ["numeric", (ms: number): FetchWithTimeoutInit => ({ timeoutMs: ms })],
+    [
+      "total",
+      (ms: number): FetchWithTimeoutInit => ({
+        timeout: { type: "total", ms },
+      }),
+    ],
   ] as const) {
     test(`a ${form} deadline hands back the transport's response unchanged`, async () => {
       const transportResponse = new Response("payload");
