@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  stat,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,15 +20,9 @@ import {
   writeParserFingerprint,
 } from "./replay-parser-fingerprints";
 
-// Generated from b537b0a4aff785f20b7d54aeac71931b9db5d279 before splitting.
-const baseFixture = new URL(
-  "__fixtures__/replay-parser-fingerprints-base/",
-  import.meta.url,
-);
-
-test("split registry preserves the base keys and values", async () => {
-  expect(await loadParserFingerprints()).toEqual(
-    await loadParserFingerprints(baseFixture),
+test("each registered adapter has exactly one valid fingerprint and no orphan files", async () => {
+  expect(Object.keys(await loadParserFingerprints()).toSorted()).toEqual(
+    Object.values(ADAPTER_KEYS).toSorted(),
   );
   expect((await readdir(PARSER_FINGERPRINT_DIRECTORY)).toSorted()).toEqual(
     Object.values(ADAPTER_KEYS)
@@ -37,7 +39,7 @@ test("fingerprints cannot be registered in the retired aggregate file", async ()
   ).toBe(false);
 });
 
-for (const operation of ["add", "bump"]) {
+for (const operation of ["add", "bump", "bump-and-add"]) {
   test(`different parser ${operation}s merge cleanly and retain both values`, async () => {
     const temporary = await mkdtemp(
       path.join(tmpdir(), "parser-fingerprint-merge-"),
@@ -62,13 +64,15 @@ for (const operation of ["add", "bump"]) {
     };
     const entry = (version: number) => ({
       version,
-      fingerprint: "a".repeat(64),
+      fingerprint: version === 1 ? "a".repeat(64) : "b".repeat(64),
     });
     try {
       git("init", "--initial-branch=base");
       await writeFile(path.join(temporary, "README"), "registry\n");
-      if (operation === "bump") {
-        for (const key of ["parser-a", "parser-b"]) {
+      if (operation !== "add") {
+        const existingKeys =
+          operation === "bump" ? ["parser-a", "parser-b"] : ["parser-a"];
+        for (const key of existingKeys) {
           await writeParserFingerprint({
             key,
             fingerprint: entry(1),
@@ -83,6 +87,11 @@ for (const operation of ["add", "bump"]) {
         await mkdir(directory, { recursive: true });
         await writeParserFingerprint({ key, fingerprint: entry(2), directory });
         const file = new URL(`${key}.json`, directory);
+        expect(
+          git("status", "--porcelain", "--untracked-files=all").trim(),
+        ).toMatch(new RegExp(`^(?:M|\\?\\?) registry/${key}\\.json$`, "u"));
+        const historicalTime = new Date("2000-01-01T00:00:00.000Z");
+        await utimes(file, historicalTime, historicalTime);
         const before = await stat(file);
         await writeParserFingerprint({ key, fingerprint: entry(2), directory });
         expect((await stat(file)).mtimeMs).toBe(before.mtimeMs);
