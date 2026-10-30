@@ -343,7 +343,7 @@ fn build_tray_menu_with_activity(
   let clipboard_enabled = !crate::managed_policy::current().clipboard_disabled;
   if clipboard_enabled {
     builder = builder.item(
-      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard"))
+      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("clipboard.title"))
         .build(app)?,
     );
   }

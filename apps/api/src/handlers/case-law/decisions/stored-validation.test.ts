@@ -14,20 +14,8 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 
-// A collection is not the single-document wire shape the stored reader accepts.
-const invalidStoredAst = [
-  {
-    version: 1,
-    blocks: [
-      {
-        id: "first",
-        anchorId: "section-1",
-        type: "paragraph",
-        inlines: [{ type: "text", text: "Synthetic private decision text" }],
-      },
-    ],
-  },
-];
+// A text value is not the single-document wire shape the stored reader accepts.
+const invalidStoredAst = "Synthetic private decision text";
 
 const decisionId = createSafeId<"caseLawDecision">();
 
@@ -93,10 +81,8 @@ afterEach(() => {
 describe("invalid stored decision payloads", () => {
   test("classifies an invalid document root without retaining decision content", () => {
     const error = validationFailureOf(invalidStoredAst);
-    expect(error).toMatchObject({
-      code: "stored_corpus_invalid",
-      paths: ["$"],
-    });
+    expect(error.code).toBe("stored_corpus_invalid");
+    expect(error.paths).toEqual(["$"]);
     expect(JSON.stringify(error)).not.toContain("Synthetic private");
   });
 

@@ -18,6 +18,8 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   isCorpusS3Stale,
   isS3Stale,
@@ -29,6 +31,11 @@ import { ingestionDb } from "../db";
 
 const BATCH_SIZE = 50;
 const CONCURRENCY = 4;
+
+const CORPUS_BACKFILL_VALIDATION_SINK = failureSink({
+  event: "corpus.storage.backfill_payload_invalid",
+  expected: [],
+});
 
 type BackfillRow = {
   id: SafeId<"caseLawDecision">;
@@ -169,13 +176,10 @@ const backfillRow = async (
       stored: null,
     });
     if (written.isErr()) {
-      captureError(
-        written.error,
-        handlerErrorContext("runners.backfillRow", {
-          decisionId: row.id,
-          step: "caseLawCorpusStorageBackfill",
-        }),
-      );
+      observeFailure(written.error, {
+        sink: CORPUS_BACKFILL_VALIDATION_SINK,
+        ctx: { decisionId: row.id, step: "caseLawCorpusStorageBackfill" },
+      });
       return "failed";
     }
     const outcome = written.value;
@@ -262,13 +266,10 @@ const backfillLegislationRow = async (
       stored: null,
     });
     if (written.isErr()) {
-      captureError(
-        written.error,
-        handlerErrorContext("runners.backfillLegislationRow", {
-          documentId: row.id,
-          step: "legislationCorpusStorageBackfill",
-        }),
-      );
+      observeFailure(written.error, {
+        sink: CORPUS_BACKFILL_VALIDATION_SINK,
+        ctx: { documentId: row.id, step: "legislationCorpusStorageBackfill" },
+      });
       return "failed";
     }
     const outcome = written.value;

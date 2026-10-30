@@ -5,10 +5,15 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const STORED_DECISION_BACKFILL_VALIDATION_SINK = failureSink({
+  event: "case_law.stored_backfill.payload_invalid",
+  expected: [],
+});
 
 type ApplyStoredDecisionBackfillOptions = {
   report: { applied: number; deferred: number };
@@ -54,13 +59,10 @@ export const applyStoredDecisionBackfill = async (
   });
   if (processed.isErr()) {
     report.deferred += 1;
-    captureError(
-      processed.error,
-      handlerErrorContext("ingestion.applyStoredDecisionBackfill", {
-        decisionId: row.id,
-        sourceId,
-      }),
-    );
+    observeFailure(processed.error, {
+      sink: STORED_DECISION_BACKFILL_VALIDATION_SINK,
+      ctx: { decisionId: row.id, source: sourceId },
+    });
     return;
   }
   const outcome = processed.value;

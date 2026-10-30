@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "SK_US",
   "key": "sk-us",
-  "parserVersion": 19,
+  "parserVersion": 20,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage."
+    "reason": "Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage."
   }
 }

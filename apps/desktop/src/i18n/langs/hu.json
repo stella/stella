@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktív szerkesztés} other {{count} aktív szerkesztés}}",
-    "clipboard": "Vágólap előzményei",
     "activity": "Tevékenység",
     "activityRecording": "Tevékenység: Rögzítés · ma {hours} ó",
     "activityPaused": "Tevékenység: Szünetel · ma {hours} ó",
