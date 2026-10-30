@@ -8,31 +8,27 @@ import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
-import { AUTH_REJECTION_BODY, authenticateSession } from "@/api/lib/auth";
+import {
+  AUTH_REJECTION_BODY,
+  authenticateSession,
+  resolveCredentialMemberAuthorization,
+} from "@/api/lib/auth";
 import type { CallerOutcome, SessionCaller } from "@/api/lib/auth";
 import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
-import type { SafeId } from "@/api/lib/branded-types";
-import { readAccountEmail } from "@/api/lib/db/account-row";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
+import { McpTokenVerificationError } from "@/api/mcp/errors";
 
 type DownloadAuthenticationDependencies = {
   authenticateOAuth?: typeof authenticateAccountExportRequest;
   authenticateBrowserSession?: typeof authenticateSession;
-  resolveOAuthUser?: (
-    userId: SafeId<"user">,
-  ) => Promise<SessionCaller["user"] | null>;
-};
-
-const resolveOAuthUser = async (
-  userId: SafeId<"user">,
-): Promise<SessionCaller["user"] | null> => {
-  const email = await readAccountEmail(userId);
-  return email === undefined ? null : { id: userId, email };
+  resolveOAuthMembership?: typeof resolveCredentialMemberAuthorization;
 };
 
 const authenticateAccountExportDownload = async (
@@ -41,7 +37,7 @@ const authenticateAccountExportDownload = async (
   {
     authenticateOAuth = authenticateAccountExportRequest,
     authenticateBrowserSession = authenticateSession,
-    resolveOAuthUser: resolveUser = resolveOAuthUser,
+    resolveOAuthMembership = resolveCredentialMemberAuthorization,
   }: DownloadAuthenticationDependencies = {},
 ): Promise<CallerOutcome<SessionCaller>> => {
   const authorization = ctx.request.headers.get("authorization");
@@ -52,8 +48,16 @@ const authenticateAccountExportDownload = async (
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
   }
   const authenticated = await authenticateOAuth(authorization.slice(7));
+  if (Result.isError(authenticated)) {
+    if (authenticated.error instanceof McpTokenVerificationError) {
+      logger.error("account_export.download_verification_unavailable", {
+        errorType: errorTag(authenticated.error),
+      });
+      return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    }
+    return { ok: false, answer: status(403, AUTH_REJECTION_BODY[403]) };
+  }
   if (
-    Result.isError(authenticated) ||
     !hasAccountExportAuthority(
       {
         credential: authenticated.value.credential,
@@ -68,14 +72,28 @@ const authenticateAccountExportDownload = async (
   if (userId === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
   }
-  const user = await Result.tryPromise(async () => await resolveUser(userId));
-  if (Result.isError(user)) {
+  const organizationId = parseAuthProviderId<"organization">(
+    authenticated.value.organizationId,
+  );
+  if (organizationId === null) {
+    return { ok: false, answer: status(403, AUTH_REJECTION_BODY[403]) };
+  }
+  const membership = await Result.tryPromise(
+    async () => await resolveOAuthMembership({ userId, organizationId }),
+  );
+  if (Result.isError(membership)) {
     return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
   }
-  if (user.value === null) {
-    return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
+  if (
+    membership.value === null ||
+    membership.value.memberId !== authenticated.value.memberId
+  ) {
+    return { ok: false, answer: status(403, AUTH_REJECTION_BODY[403]) };
   }
-  return { ok: true, caller: { user: user.value } };
+  return {
+    ok: true,
+    caller: { user: { id: userId, email: membership.value.email } },
+  };
 };
 
 type DownloadPersonalDataExportDependencies =
