@@ -2,6 +2,7 @@
 import centralTestTimeout from "./guard-rollouts/central-test-timeout.ts";
 import noDirectDecisionIdentifierColumnWrite from "./guard-rollouts/no-direct-decision-identifier-column-write.ts";
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
+import noStyleSubstringMatch from "./guard-rollouts/no-style-substring-match.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
 import trackedSymlinks from "./guard-rollouts/tracked-symlinks.ts";
 import workerDatabaseLoginPosture from "./guard-rollouts/worker-database-login-posture.ts";
@@ -11,6 +12,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-direct-decision-identifier-column-write":
     noDirectDecisionIdentifierColumnWrite,
   "no-inert-autofocus": noInertAutofocus,
+  "no-style-substring-match": noStyleSubstringMatch,
   "portable-path": portablePath,
   "tracked-symlinks": trackedSymlinks,
   "worker-database-login-posture": workerDatabaseLoginPosture,
