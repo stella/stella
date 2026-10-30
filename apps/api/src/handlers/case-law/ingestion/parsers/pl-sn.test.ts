@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { readPdfTextPages } from "@/api/lib/legal-search/parsers/libpdf-utils";
 
 type PlSnTextLine = Extract<PlSnLine, { type: "text" }>;
 
@@ -741,5 +742,71 @@ test.each(
     expect(paragraphs).toContain(`${opening} ustala stan sprawy.`);
     expect(paragraphs).toContain("Nowy akapit opisuje inny fakt.");
     expect(paragraphs).toContain("1. Pierwszy punkt.");
+  },
+);
+
+test.each([
+  { inline: "1", layout: "spaced" },
+  { inline: "12", layout: "spaced" },
+  { inline: "1", layout: "adjacent" },
+  { inline: "12", layout: "adjacent" },
+] as const)(
+  "mixed superscript layout %j retains reference attachments and order",
+  async ({ inline, layout }) => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    const extraWidth = (inline.length - 1) * 4;
+    page.drawText("art. 12", { x: 72, y: 700, size: 12 });
+    page.drawText(inline, { x: 107, y: 701.9, size: 7 });
+    if (layout === "spaced") {
+      page.drawText(" oraz 34", { x: 112 + extraWidth, y: 700, size: 12 });
+    }
+    page.drawText("2", {
+      x: (layout === "spaced" ? 157.1 : 111.3) + extraWidth,
+      y: 704,
+      size: 7,
+    });
+    page.drawText(" koniec.", {
+      x: (layout === "spaced" ? 161.5 : 115.7) + extraWidth,
+      y: 700,
+      size: 12,
+    });
+    for (const index of [0, 1, 2]) {
+      page.drawText("Ordinary body text establishes the page type.", {
+        x: 72,
+        y: 600 - index * 15,
+        size: 12,
+      });
+    }
+    const bytes = await pdf.save();
+    const extracted = (await readPdfTextPages(bytes)).at(0);
+    if (extracted === undefined) {
+      expect.unreachable("The fixture has one printed page");
+    }
+    const bodyLine = extracted.lines.find(({ text }) =>
+      text.includes("art. 12"),
+    );
+    expect(bodyLine?.spans.some(({ text }) => text.trim() === inline)).toBe(
+      true,
+    );
+    expect(extracted.lines.some(({ text }) => text.trim() === "2")).toBe(true);
+    const content = await extractPlPdfLetterheadContent(
+      bytes,
+      PL_PDF_PARAGRAPH_START.INDENT,
+    );
+    const paragraphs = assemblePlSnParagraphs(content.body);
+    if (layout === "spaced") {
+      expect(plSnParagraphsToHtml(paragraphs)).toContain(
+        `art. 12<sup>${inline}</sup> oraz 34<sup>2</sup> koniec.`,
+      );
+    }
+    expect(
+      paragraphs
+        .flatMap((runs) =>
+          runs.filter(({ superscript }) => superscript === true),
+        )
+        .map(({ text }) => text)
+        .join(""),
+    ).toBe(`${inline}2`);
   },
 );

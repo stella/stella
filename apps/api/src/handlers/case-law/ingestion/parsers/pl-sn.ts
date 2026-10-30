@@ -1290,7 +1290,11 @@ const liftSuperscripts = (
     }
     if (inlineMarks) {
       const inline = withoutInlineMarks(line, bodySize);
-      out.push(extractedLineOf(inline.line, [...pending, ...inline.marks]));
+      // Removing digits can merge distinct anchors; preserve their original order first.
+      const mapped = [...pending, ...inline.originalMarks]
+        .toSorted((left, right) => left.after - right.after)
+        .map((mark) => ({ ...mark, after: inline.mapOffset(mark.after) }));
+      out.push(extractedLineOf(inline.line, mapped));
     } else {
       out.push(extractedLineOf(line, pending));
     }
@@ -1327,15 +1331,26 @@ const continuesNumber = (before: string, digits: string): boolean =>
  * each found from where the span before it ended, so equal digits earlier in
  * the line stay.
  */
+type WithoutInlineMarksResult = {
+  line: PdfTextLine;
+  originalMarks: SuperscriptMark[];
+  mapOffset: (originalPrintedOffset: number) => number;
+};
+
 const withoutInlineMarks = (
   line: PdfTextLine,
   bodySize: number,
-): { line: PdfTextLine; marks: SuperscriptMark[] } => {
+): WithoutInlineMarksResult => {
+  const unchanged = {
+    line,
+    originalMarks: [],
+    mapOffset: (after: number) => after,
+  };
   const body = printedCharactersOf(line).filter(
     ({ fontSize }) => fontSize > bodySize * SMALL_TYPE_RATIO,
   );
   if (body.length === 0) {
-    return { line, marks: [] };
+    return unchanged;
   }
   const baseline = Math.min(...body.map((character) => character.baseline));
   const raisedSmall = ({
@@ -1351,39 +1366,56 @@ const withoutInlineMarks = (
         character.baseline - baseline >= bodySize * SUPERSCRIPT_RAISE_RATIO,
     );
   if (!line.spans.some(raisedSmall)) {
-    return { line, marks: [] };
+    return unchanged;
   }
-  const marks: SuperscriptMark[] = [];
+  const originalMarks: SuperscriptMark[] = [];
   const kept: PdfTextLine["spans"] = [];
   let text = "";
   let cursor = 0;
   let printed = 0;
+  // Each original non-space code-point boundary maps to its retained boundary.
+  const offsets = [0];
   for (const span of line.spans) {
     const at = line.text.indexOf(span.text, cursor);
     if (at === -1) {
-      return { line, marks: [] };
+      return unchanged;
     }
     text += line.text.slice(cursor, at);
-    if (
+    const removed =
       raisedSmall(span) &&
-      !continuesNumber(line.text.slice(0, at), span.text.trim())
-    ) {
-      marks.push({
+      !continuesNumber(line.text.slice(0, at), span.text.trim());
+    if (removed) {
+      originalMarks.push({
         type: "superscript",
-        after: printed,
+        after: offsets.length - 1,
         text: span.text.trim(),
       });
     } else {
       kept.push(span);
       text += span.text;
-      printed += printedCodePointsIn(span.text);
+    }
+    for (
+      let remaining = printedCodePointsIn(span.text);
+      remaining > 0;
+      remaining -= 1
+    ) {
+      if (!removed) {
+        printed += 1;
+      }
+      offsets.push(printed);
     }
     cursor = at + span.text.length;
   }
   text += line.text.slice(cursor);
-  return marks.length === 0
-    ? { line, marks }
-    : { line: { ...line, spans: kept, text }, marks };
+  return originalMarks.length === 0
+    ? unchanged
+    : {
+        line: { ...line, spans: kept, text },
+        originalMarks,
+        mapOffset: (after) =>
+          offsets[after] ??
+          panic("Raised reference offset has no original printed boundary"),
+      };
 };
 
 /** Every line of every page, in reading order. */

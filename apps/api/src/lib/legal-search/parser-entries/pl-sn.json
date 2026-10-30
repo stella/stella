@@ -6,6 +6,6 @@
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. These values have no separate feature storage."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. These values have no separate feature storage."
   }
 }
