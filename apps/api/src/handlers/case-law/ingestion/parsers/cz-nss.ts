@@ -425,29 +425,6 @@ const toRoman = (n: number): string => {
   return result;
 };
 
-const paragraphLayoutOf = (style: string): PChunk["paragraphLayout"] => {
-  const indentDeclaration = style
-    .split(";")
-    .find((declaration) => declaration.trimStart().startsWith("text-indent:"));
-  const indentValue = indentDeclaration
-    ?.slice(indentDeclaration.indexOf(":") + 1)
-    .trim();
-  const indent = parseDecimalToken(
-    indentValue?.endsWith("pt") ? indentValue.slice(0, -2) : indentValue,
-  );
-  const startsIndented = Result.isOk(indent) && indent.value > 0;
-  const unindented =
-    indentDeclaration === undefined ||
-    (Result.isOk(indent) && indent.value === 0);
-  if (startsIndented) {
-    return "first-line";
-  }
-  if (unindented && style.includes("text-align:justify")) {
-    return "continuation";
-  }
-  return "unknown";
-};
-
 const TEXT_ALIGN_VALUES: ReadonlySet<string> = new Set([
   "left",
   "right",
@@ -457,15 +434,47 @@ const TEXT_ALIGN_VALUES: ReadonlySet<string> = new Set([
   "end",
 ]);
 
-/** Whether an element's own style centres it, read as the cascade reads it. */
+/** The alignment an element's own style gives it, read as the cascade reads it. */
+const textAlignOf = (node: AnyNode | undefined): string | undefined =>
+  node !== undefined && isTag(node)
+    ? inlineStyleValue(node, (property, value) =>
+        property === "text-align" && TEXT_ALIGN_VALUES.has(value)
+          ? { value }
+          : undefined,
+      )?.value
+    : undefined;
+
 const styleCentres = (node: AnyNode | undefined): boolean =>
-  node !== undefined &&
-  isTag(node) &&
-  inlineStyleValue(node, (property, value) =>
-    property === "text-align" && TEXT_ALIGN_VALUES.has(value)
-      ? { value: value === "center" }
-      : undefined,
-  )?.value === true;
+  textAlignOf(node) === "center";
+
+/**
+ * How a paragraph's first line sits: indented, or flush and justified as a
+ * paragraph continued from the previous page. An indent this reader cannot
+ * measure (`1em`) leaves the layout unknown.
+ */
+const paragraphLayoutOf = (
+  node: AnyNode | undefined,
+): PChunk["paragraphLayout"] => {
+  const indent =
+    node !== undefined && isTag(node)
+      ? inlineStyleValue(node, (property, value) => {
+          if (property !== "text-indent") {
+            return undefined;
+          }
+          const points = parseDecimalToken(
+            value.endsWith("pt") ? value.slice(0, -2) : value,
+          );
+          return { value: Result.isOk(points) ? points.value : null };
+        })
+      : undefined;
+  if (indent !== undefined && indent.value !== null && indent.value > 0) {
+    return "first-line";
+  }
+  const unindented = indent === undefined || indent.value === 0;
+  return unindented && textAlignOf(node) === "justify"
+    ? "continuation"
+    : "unknown";
+};
 
 const FONT_WEIGHT_RE = /^(?:normal|bold|bolder|lighter|\d{1,4})$/u;
 const BOLD_WEIGHT = 600;
@@ -512,7 +521,7 @@ const styledBlockChunk = (
       style.includes("letter-spacing") ||
       $el.find("span[style*='letter-spacing']").length > 0,
     fontSize: parseFontSize(style),
-    paragraphLayout: paragraphLayoutOf(style),
+    paragraphLayout: paragraphLayoutOf($el.get(0)),
     kind: "paragraph",
     listItemIndex: null,
     decimalList: false,

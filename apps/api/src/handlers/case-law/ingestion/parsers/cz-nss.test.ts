@@ -476,6 +476,33 @@ describe("parseNssDecisionHtml", () => {
     );
   });
 
+  // The continuation's layout is read as CSS reads its declarations: spacing
+  // and case do not matter, the later of two wins, and an indent in a unit
+  // the reader cannot measure leaves the paragraph apart.
+  test.each([
+    ["joined", "text-align: justify"],
+    ["joined", "TEXT-INDENT : 0PT ; Text-Align : Justify"],
+    ["joined", "text-align: center; text-align: justify"],
+    ["separate", "text-indent: 35.4pt; text-align: justify"],
+    ["separate", "text-align: justify; text-align: left"],
+    ["separate", "text-indent: 1em; text-align: justify"],
+  ])("%s continuation styled %p", (reading, style) => {
+    const before =
+      "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+    const after = "náklady řízení přitom musí být doloženy.";
+    const { documentAst } = parseNssDecisionHtml(
+      baseInput(
+        `<body>${bold("Odůvodnění:")}<p style="text-indent:35.4pt;text-align:justify">${before}</p><p style="${style}">${after}</p></body>`,
+      ),
+    );
+    const paragraphs = documentAst.blocks.filter(
+      (block) => block.type === "paragraph",
+    );
+    expect(paragraphs.map((block) => block.plainText)).toEqual(
+      reading === "joined" ? [`${before} ${after}`] : [before, after],
+    );
+  });
+
   describe("unordered list content", () => {
     test.each(["list", "table"])(
       "%s boundaries keep adjacent unfinished reasoning paragraphs apart",
