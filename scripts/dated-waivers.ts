@@ -25,7 +25,11 @@ import {
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   splitTestId,
 } from "./flaky-test-quarantine";
-import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy.ts";
+import {
+  GUARD_ROLLOUTS,
+  type GuardRollout,
+  guardRolloutSource,
+} from "./guard-rollout-policy.ts";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -252,7 +256,7 @@ export const collectWaivers = ({
     if (rollout.type !== "changed-lines") {
       continue;
     }
-    const source = "scripts/guard-rollout-policy.ts";
+    const source = guardRolloutSource(rollout.id);
     entries.push({
       source,
       line: sourceLine(read(source), rollout.id),
@@ -608,7 +612,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([
       DOC_SOURCE_FILE,
-      "scripts/guard-rollout-policy.ts",
+      ...GUARD_ROLLOUTS.map(({ id }) => guardRolloutSource(id)),
       FLAKY_TEST_QUARANTINE_FILE,
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",

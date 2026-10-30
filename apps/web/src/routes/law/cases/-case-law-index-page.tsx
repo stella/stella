@@ -392,7 +392,12 @@ export function PublicCaseLawIndex({
   // The rows are the only region that waits: either they are not there yet,
   // or they answer the search before this one and say so themselves rather
   // than the page being replaced.
-  const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
+  const rows = publicLawRowsPhase({
+    isLoading,
+    isPlaceholderData,
+    keptRowCount: pageDecisions(pageData).length,
+    routeState,
+  });
   const isRefreshing = rows === "stale";
 
   // The search the rows on screen answer, which lags the URL while their
