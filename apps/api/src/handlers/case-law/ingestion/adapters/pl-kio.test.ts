@@ -10,11 +10,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   assemblePlKioDecision,
@@ -35,6 +30,11 @@ import {
   fitsDecisionSearchCandidateRow,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {

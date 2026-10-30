@@ -8,10 +8,6 @@ import path from "node:path";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  EMPTY_AST,
-  StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -20,7 +16,11 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  EMPTY_AST,
+  StoredRawReadError,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   parseEcjFormexRefreshIds,
   runEcjFormexRefresh as runRefresh,

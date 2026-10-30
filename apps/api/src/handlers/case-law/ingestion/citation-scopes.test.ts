@@ -6,7 +6,6 @@ import { isDocumentAst, plainTextOf } from "@stll/legal-ast/document-ast";
 import { createSha256 } from "@stll/sha256/node";
 import { stableStringify } from "@stll/stable-stringify";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { mapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { recordedClusters } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -21,6 +20,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
 

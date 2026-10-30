@@ -15,13 +15,6 @@ import {
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  type IngestionResult,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  type StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   ECJ_LANGUAGES,
   euEcjAdapter,
   fetchDecisionsByCelex,
@@ -41,6 +34,13 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   readS3ObjectBoundedIfPresent,
   S3ObjectBudgetError,

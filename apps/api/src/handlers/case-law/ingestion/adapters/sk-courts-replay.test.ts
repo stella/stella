@@ -2,12 +2,12 @@ import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { createSafeId } from "@/api/lib/branded-types";
 import type {
   IngestionResult,
   StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/ingestion-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser";
 import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";

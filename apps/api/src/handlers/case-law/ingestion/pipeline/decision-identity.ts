@@ -8,7 +8,6 @@ import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_DATE_OUT_OF_BOUNDS,
@@ -35,6 +34,7 @@ import {
   observedDocketOf,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** An ECLI's lookup spelling, or undefined when nothing searchable remains. */

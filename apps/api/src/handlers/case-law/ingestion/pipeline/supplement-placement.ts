@@ -5,11 +5,6 @@ import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
-import type {
-  DecisionSupplement,
-  IngestionResult,
-  StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { absorbComposedSupplementRows } from "@/api/handlers/case-law/ingestion/pipeline/composed-supplements";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
@@ -41,6 +36,11 @@ import type { SupplementTargetKey } from "@/api/handlers/case-law/ingestion/supp
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import type {
+  DecisionSupplement,
+  IngestionResult,
+  StoredRawReadError,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   classifyCaseLawRawKey,
   deleteRawKeys,
