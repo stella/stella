@@ -28,6 +28,7 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 
@@ -104,16 +105,19 @@ const genericPlan = async (read: string) => {
         `EXPLAIN (FORMAT JSON) EXECUTE transition_page('CZE', 'cs'${takesCursor ? `, '${cursor}'` : ""})`,
       ),
     );
+    const paths = indexedAccessPaths(root, "case_law_decisions");
     return {
       nodeTypes: nodeTypes(root),
-      scans: scanOccurrences(root)
-        .filter(({ relation }) => relation === "case_law_decisions")
-        .map(({ nodeType, index, indexCond, filter }) => ({
-          nodeType,
-          index,
-          boundedOnId: indexCond !== null && /\bid > \$3\b/u.test(indexCond),
-          filter,
-        })),
+      paths: paths.map(({ indexNames, indexConditions, node }) => ({
+        indexNames,
+        boundedOnId: indexConditions.some((condition) =>
+          /\bid > \$3\b/u.test(condition),
+        ),
+        filter: node["Filter"] ?? null,
+      })),
+      scanCount: scanOccurrences(root).filter(
+        ({ relation }) => relation === "case_law_decisions",
+      ).length,
     };
   } finally {
     await client.exec("DEALLOCATE transition_page");
@@ -126,10 +130,10 @@ const expectScopeKeyset = async (read: string) => {
   const plan = await genericPlan(read);
   expect(plan.nodeTypes).not.toContain("Sort");
   expect(plan.nodeTypes).not.toContain("Seq Scan");
-  expect(plan.scans).toEqual([
+  expect(plan.scanCount).toBe(1);
+  expect(plan.paths).toEqual([
     {
-      nodeType: "Index Scan",
-      index: SCOPE_INDEX,
+      indexNames: [SCOPE_INDEX],
       boundedOnId: read.includes("$3"),
       filter: null,
     },
@@ -207,10 +211,9 @@ test(
     // The optional bound is a filter under a generic plan, not an index
     // condition: the page walks the scope from its start.
     const plan = await genericPlan(read);
-    expect(plan.scans).not.toEqual([
+    expect(plan.paths).not.toEqual([
       {
-        nodeType: "Index Scan",
-        index: SCOPE_INDEX,
+        indexNames: [SCOPE_INDEX],
         boundedOnId: true,
         filter: null,
       },

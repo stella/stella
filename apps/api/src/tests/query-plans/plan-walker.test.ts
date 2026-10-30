@@ -14,12 +14,9 @@ import {
 } from "@/api/tests/query-plans/plan-walker";
 import workspaceRlsPlan from "@/api/tests/query-plans/workspace-rls-plan.fixture.json" with { type: "json" };
 
-const INDEXED_PATH_PROPERTY_ID =
-  "equivalent index and bitmap plans preserve indexed access bounds";
-
-test(INDEXED_PATH_PROPERTY_ID, () => {
+test("equivalent index and bitmap plans preserve indexed access bounds", () => {
   assertProperty(
-    INDEXED_PATH_PROPERTY_ID,
+    "equivalent index and bitmap plans preserve indexed access bounds",
     fc.property(
       fc.string({ minLength: 1, maxLength: 20 }),
       fc.string({ minLength: 1, maxLength: 20 }),
