@@ -48,7 +48,7 @@ export const STRUCTURE_FIDELITY_RULES = {
   HOLDING_AFTER_SIGNATURE: "holding-after-signature",
 } as const;
 
-export type StructureFidelityRule =
+type StructureFidelityRule =
   (typeof STRUCTURE_FIDELITY_RULES)[keyof typeof STRUCTURE_FIDELITY_RULES];
 
 export type StructureFidelityFinding = {

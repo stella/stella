@@ -139,16 +139,14 @@ test("updater rejects working-file growth and committed growth, preserving the b
         findings: growth,
       }),
     ).toThrow("Structure-fidelity baseline cannot grow");
-    expect(
-      await updateStructureFidelityBaseline({
-        repositoryRoot: root,
-        baseRevision: "origin/main",
-        collectCensus: async () => ({
-          census: census([]),
-          documentedAdapters: new Set(["source"]),
-        }),
+    await updateStructureFidelityBaseline({
+      repositoryRoot: root,
+      baseRevision: "origin/main",
+      collectCensus: async () => ({
+        census: census([]),
+        documentedAdapters: new Set(["source"]),
       }),
-    ).toBeUndefined();
+    });
     expect(JSON.parse(readFileSync(baselinePath, "utf-8")).findings).toEqual(
       census([]),
     );
