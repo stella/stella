@@ -975,3 +975,20 @@ test("a nested list starting at the last court number stays a list", () => {
     5,
   ]);
 });
+
+test("a Roman section title is not an OCR-damaged paragraph 1", () => {
+  const texts = [
+    "I. Skutkový stav",
+    "2. Soud uvážil věc.",
+    "3. Soud uvážil věc.",
+  ];
+  const result = extractCourtParagraphNumbers(
+    texts.map((text, index) => paragraphOf(index, text)),
+  );
+  expect(
+    result.blocks.at(0)?.type === "paragraph" ? result.blocks.at(0) : undefined,
+  ).toMatchObject({
+    plainText: "I. Skutkový stav",
+  });
+  expect(labelsOf(result.blocks).at(0)).toBeUndefined();
+});

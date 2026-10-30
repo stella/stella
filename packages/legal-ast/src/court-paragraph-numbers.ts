@@ -147,6 +147,8 @@ export type CourtParagraphNumbering =
     }
   | { readonly type: "unnumbered"; readonly blocks: Block[] };
 
+const SENTENCE_END_RE = /[.!?:;…]["'»«“”„)\]]*$/u;
+
 const OCR_DOT_MARKER =
   /^(?<number>[\dlI]{1,4})\.(?:[ \t ]+(?![ \t \d\p{Ll}])|(?=\p{Lu}))/u;
 
@@ -430,6 +432,14 @@ const candidatesOf = (
     if (number === null && style === "dot") {
       const raw = OCR_DOT_MARKER.exec(text)?.groups?.["number"];
       if (raw === undefined || !/[lI]/u.test(raw)) {
+        return [];
+      }
+      // `I.`, `II.` before a title is a Roman section number. A paragraph
+      // the OCR misread ends like a sentence; a section title does not.
+      if (
+        /^I+$/u.test(raw) &&
+        !SENTENCE_END_RE.test(text.slice(raw.length + 1).trimEnd())
+      ) {
         return [];
       }
       const recovered = parseIntegerToken(raw.replace(/[lI]/gu, "1"), {
