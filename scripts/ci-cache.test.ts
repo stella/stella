@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import {
+  copyFileSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -105,6 +107,29 @@ test("a stalled restore stops its whole process tree before reporting a miss", a
       String(descendantPid),
     ]);
     expect(new TextDecoder().decode(status.stdout).trim()).toMatch(/^Z|^$/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the wrapper loads from a checkout without installed dependencies", () => {
+  // ci-install restores the install store through this wrapper before
+  // `bun install`, so its import closure must resolve without node_modules.
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-cache-bare-"));
+  try {
+    const scripts = path.join(directory, "scripts");
+    mkdirSync(scripts);
+    for (const file of ["ci-cache.ts", "process-tree.ts"]) {
+      copyFileSync(path.join(import.meta.dir, file), path.join(scripts, file));
+    }
+    const run = Bun.spawnSync([process.execPath, "scripts/ci-cache.ts"], {
+      cwd: directory,
+      env: { PATH: process.env["PATH"] ?? "" },
+    });
+    expect(new TextDecoder().decode(run.stderr)).toContain(
+      "cache wrapper requires INPUT_OPERATION",
+    );
+    expect(run.exitCode).toBe(1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

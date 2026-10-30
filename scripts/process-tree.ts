@@ -1,6 +1,6 @@
+// The cache wrapper restores the install store before dependencies exist, so
+// this module imports only runtime built-ins.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-
-import { sleep } from "@stll/concurrency/sleep";
 
 type KillTreeOptions = {
   onError: (error: unknown) => void;
@@ -59,7 +59,7 @@ export const killTree = async (
   try {
     process.kill(-child.pid, "SIGKILL");
     while (processGroupIsRunning(child.pid)) {
-      await sleep(10);
+      await Bun.sleep(10);
     }
   } catch (error) {
     if (
