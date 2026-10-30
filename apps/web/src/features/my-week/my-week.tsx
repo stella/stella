@@ -17,6 +17,7 @@ import {
   ManualTimeEntryForm,
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
+import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
 import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
 import {
   MatterCombobox,
@@ -199,7 +200,7 @@ export const MyWeek = ({
     [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
   );
 
-  const submitDialog = async (values: ManualTimeEntryValues) => {
+  const submitDialog = async (values: ManualTimeEntryValues) =>
     await submitGuard.run(async () => {
       const saved = await Result.tryPromise({
         try: async () => {
@@ -222,19 +223,23 @@ export const MyWeek = ({
               dialog satisfies never;
               return panic("Unhandled week dialog state");
           }
+          return undefined;
         },
         catch: (cause: unknown): unknown => cause,
       });
       if (Result.isError(saved)) {
+        if (isTimeEntryRateRequired(saved.error)) {
+          return Result.err(saved.error);
+        }
         // The create mutation reports its own failures.
         if (dialog.type !== "create") {
           actions.reportFailure(saved.error);
         }
-        return;
+        return Result.ok(undefined);
       }
       setDialog({ type: "closed" });
+      return Result.ok(undefined);
     });
-  };
 
   return (
     <div className="flex h-full flex-col">
@@ -421,7 +426,15 @@ export const MyWeek = ({
                 onCancel={() => setDialog({ type: "closed" })}
                 onSubmit={submitDialog}
                 pending={actions.pending || submitGuard.pending}
-                workspaceId={matterId}
+                activityCode={
+                  dialog.type === "edit" ? dialog.entry.activityCode : null
+                }
+                userId={userId}
+                workspaceId={
+                  dialog.type === "edit"
+                    ? (dialog.matter?.id ?? matterId)
+                    : matterId
+                }
               />
             )}
           </DialogPanel>

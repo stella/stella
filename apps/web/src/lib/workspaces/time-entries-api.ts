@@ -1,3 +1,4 @@
+import type { ExactRequestBody, RequestBody } from "@stll/api-client";
 import {
   parsePolishedTimeEntryNarrativeResponse,
   parseTimeApprovalBatch,
@@ -143,27 +144,31 @@ export const fetchTimeEntrySuggestions = async ({
     timeEntryResponseParsers.suggestions,
   );
 
-export type CreateTimeEntryBody = TimeEntryRoutes["put"]["body"];
+export type CreateTimeEntryBody = RequestBody<TimeEntryRoutes["put"]["body"]>;
 
-export const createTimeEntry = async (
+export const createTimeEntry = async <TActual extends CreateTimeEntryBody>(
   workspaceId: string,
-  body: CreateTimeEntryBody,
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).put(body),
+  body: ExactRequestBody<CreateTimeEntryBody, TActual>,
+) => {
+  const requestBody: CreateTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).put(requestBody),
     timeEntryResponseParsers.create,
   );
+};
 
-export type UpdateTimeEntryBody = TimeEntryRoutes["patch"]["body"];
+export type UpdateTimeEntryBody = RequestBody<TimeEntryRoutes["patch"]["body"]>;
 
-export const updateTimeEntry = async (
+export const updateTimeEntry = async <TActual extends UpdateTimeEntryBody>(
   workspaceId: string,
-  body: UpdateTimeEntryBody,
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).patch(body),
+  body: ExactRequestBody<UpdateTimeEntryBody, TActual>,
+) => {
+  const requestBody: UpdateTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).patch(requestBody),
     timeEntryResponseParsers.update,
   );
+};
 
 export const deleteTimeEntry = async (workspaceId: string, id: string) =>
   parseTimeEntryResponse(
@@ -171,14 +176,22 @@ export const deleteTimeEntry = async (workspaceId: string, id: string) =>
     timeEntryResponseParsers.delete,
   );
 
-export const batchUpdateTimeEntries = async (
+type BatchUpdateTimeEntryBody = RequestBody<
+  TimeEntryRoutes["batch"]["post"]["body"]
+>;
+
+export const batchUpdateTimeEntries = async <
+  TActual extends BatchUpdateTimeEntryBody,
+>(
   workspaceId: string,
-  body: TimeEntryRoutes["batch"]["post"]["body"],
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).batch.post(body),
+  body: ExactRequestBody<BatchUpdateTimeEntryBody, TActual>,
+) => {
+  const requestBody: BatchUpdateTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).batch.post(requestBody),
     timeEntryResponseParsers.batchUpdate,
   );
+};
 
 export const batchDeleteTimeEntries = async (
   workspaceId: string,
@@ -189,26 +202,35 @@ export const batchDeleteTimeEntries = async (
     timeEntryResponseParsers.batchDelete,
   );
 
-export const splitTimeEntry = async (
+type SplitTimeEntryBody = RequestBody<TimeEntryRoutes["split"]["post"]["body"]>;
+
+export const splitTimeEntry = async <TActual extends SplitTimeEntryBody>(
   workspaceId: string,
-  body: TimeEntryRoutes["split"]["post"]["body"],
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).split.post(body),
+  body: ExactRequestBody<SplitTimeEntryBody, TActual>,
+) => {
+  const requestBody: SplitTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).split.post(requestBody),
     timeEntryResponseParsers.split,
   );
+};
 
-export type TimeSuggestionDecisionBody =
-  TimeEntryRoutes["suggestions"]["decisions"]["post"]["body"];
+export type TimeSuggestionDecisionBody = RequestBody<
+  TimeEntryRoutes["suggestions"]["decisions"]["post"]["body"]
+>;
 
-export const decideTimeSuggestion = async (
+export const decideTimeSuggestion = async <
+  TActual extends TimeSuggestionDecisionBody,
+>(
   workspaceId: string,
-  body: TimeSuggestionDecisionBody,
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).suggestions.decisions.post(body),
+  body: ExactRequestBody<TimeSuggestionDecisionBody, TActual>,
+) => {
+  const requestBody: TimeSuggestionDecisionBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).suggestions.decisions.post(requestBody),
     timeEntryResponseParsers.decideSuggestion,
   );
+};
 
 type PolishTimeEntryNarrativeOptions = {
   instruction: string;

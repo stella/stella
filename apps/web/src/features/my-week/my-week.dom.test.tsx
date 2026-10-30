@@ -82,6 +82,7 @@ const draftEntry = (overrides: Partial<ClientEntry> = {}): ClientEntry =>
     narrative: "Review lease schedule",
     narrativeLanguage: null,
     billable: true,
+    activityCode: null,
     status: "draft",
     source: "manual",
     timerStartedAt: null,
@@ -146,9 +147,13 @@ const serveWeek = ({
   failLaterPages = false,
   failSubmitDates = [],
   failCreate = false,
+  noRate = false,
+  rejectRate = false,
 }: {
   entries: MyTimeEntry[];
   failCreate?: boolean;
+  noRate?: boolean;
+  rejectRate?: boolean;
   /** Drafts the fake API refuses to submit, with the reason it gives. */
   refusals?: Record<string, TimeSubmitRefusal>;
   /** Submitted entries waiting for the signed-in approver. */
@@ -367,6 +372,13 @@ const serveWeek = ({
         search: url.searchParams,
         body,
       });
+      if (request.method === "GET" && /^\/rates\/[^/]+\/resolve$/u.test(path)) {
+        return json(
+          noRate
+            ? { hourlyRate: null, currency: null }
+            : { hourlyRate: 10_000, currency: "EUR" },
+        );
+      }
       const start =
         url.searchParams.get("date") ?? url.searchParams.get("startDate") ?? "";
       const end = url.searchParams.get("endDate") ?? start;
@@ -387,6 +399,15 @@ const serveWeek = ({
       }
       const create = /^\/time-entries\/([^/]+)\/?$/u.exec(path);
       if (request.method === "PUT" && create?.[1] && isRecord(body)) {
+        if (rejectRate && body["billable"] === true) {
+          return new Response(
+            JSON.stringify({
+              code: "time_entry_rate_required",
+              message: "Changed server diagnostic",
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
         if (failCreate) {
           return new Response("unavailable", { status: 503 });
         }
@@ -557,7 +578,9 @@ const fillCreateEntry = async (dialog: HTMLElement) => {
     });
     fireEvent.change(
       within(dialog).getByLabelText(messages.common.description),
-      { target: { value: "  Príprava žaloby – skúšobný spis  " } },
+      {
+        target: { value: "  Príprava žaloby – skúšobný spis  " },
+      },
     );
     fireEvent.click(
       within(dialog).getByRole("checkbox", { name: messages.billing.billable }),
@@ -726,7 +749,9 @@ describe("my week", () => {
     await act(async () => {
       fireEvent.change(
         within(dialog).getByLabelText(messages.common.description),
-        { target: { value: "Skúšobný spis" } },
+        {
+          target: { value: "Skúšobný spis" },
+        },
       );
     });
     expect(save.hasAttribute("disabled")).toBe(true);
@@ -734,7 +759,9 @@ describe("my week", () => {
       await act(async () => {
         fireEvent.change(
           within(dialog).getByLabelText(messages.billing.minutes),
-          { target: { value: duration } },
+          {
+            target: { value: duration },
+          },
         );
         submitCreateForm(dialog);
       });
@@ -744,14 +771,18 @@ describe("my week", () => {
     await act(async () => {
       fireEvent.change(
         within(dialog).getByLabelText(messages.billing.minutes),
-        { target: { value: "15" } },
+        {
+          target: { value: "15" },
+        },
       );
     });
     expect(save.hasAttribute("disabled")).toBe(false);
     await act(async () => {
       fireEvent.change(
         within(dialog).getByLabelText(messages.common.description),
-        { target: { value: "   " } },
+        {
+          target: { value: "   " },
+        },
       );
     });
     await act(async () => {
@@ -1396,5 +1427,143 @@ describe("my week", () => {
         ),
       ),
     ).toBeTruthy();
+  });
+});
+
+describe("missing effective rate", () => {
+  const openCreate = async () => {
+    const client = mount();
+    seedMatters(client);
+    const trigger = await screen.findByRole("button", {
+      name: messages.common.logTime,
+    });
+    await act(async () => {
+      fireEvent.click(trigger);
+    });
+    const dialog = await screen.findByRole("dialog");
+    await pickCreateMatter(dialog);
+    await fillCreateEntry(dialog);
+    return dialog;
+  };
+
+  test("blocks billable save without a rate and explicitly saves non-billable time", async () => {
+    const calls = serveWeek({
+      entries: [draftEntry()],
+      suggestions: [],
+      noRate: true,
+    });
+    const dialog = await openCreate();
+    await within(dialog).findByText(
+      messages.billing.rates.effectiveRateRequired,
+    );
+    const save = within(dialog).getByRole("button", {
+      name: messages.common.save,
+    });
+    expect(save.hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      submitCreateForm(dialog);
+    });
+    expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(0);
+    expect(
+      within(dialog)
+        .getByRole("link", { name: messages.billing.rates.addRate })
+        .getAttribute("href"),
+    ).toContain("rates=manage");
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: messages.billing.rates.logNonBillable,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(save);
+    });
+    await waitFor(() =>
+      expect(calls.find(({ method }) => method === "PUT")?.body).toMatchObject({
+        billable: false,
+      }),
+    );
+  });
+
+  test("maps a typed API 400 to the same inline rate error", async () => {
+    const calls = serveWeek({
+      entries: [draftEntry()],
+      suggestions: [],
+      rejectRate: true,
+    });
+    const dialog = await openCreate();
+    const save = within(dialog).getByRole("button", {
+      name: messages.common.save,
+    });
+    await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
+    await act(async () => {
+      fireEvent.click(save);
+    });
+    await within(dialog).findByText(
+      messages.billing.rates.effectiveRateRequired,
+    );
+    expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
+    expect(save.hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: messages.billing.rates.logNonBillable,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(save);
+    });
+    await waitFor(() =>
+      expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(2),
+    );
+    expect(
+      calls.filter(({ method }) => method === "PUT").at(1)?.body,
+    ).toMatchObject({
+      billable: false,
+    });
+  });
+
+  test("blocks a billable edit without an effective rate", async () => {
+    const calls = serveWeek({
+      entries: [draftEntry()],
+      suggestions: [],
+      noRate: true,
+    });
+    mount();
+    const edit = await screen.findByRole("button", {
+      name: `${messages.common.edit}: Review lease schedule`,
+    });
+    await act(async () => {
+      fireEvent.click(edit);
+    });
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText(
+      messages.billing.rates.effectiveRateRequired,
+    );
+    expect(
+      within(dialog)
+        .getByRole("button", { name: messages.common.save })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(0);
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: messages.billing.rates.logNonBillable,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: messages.common.save }),
+      );
+    });
+    await waitFor(() =>
+      expect(
+        calls.find(({ method }) => method === "PATCH")?.body,
+      ).toMatchObject({ billable: false }),
+    );
   });
 });

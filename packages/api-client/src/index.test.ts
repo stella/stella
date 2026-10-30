@@ -6,6 +6,7 @@ import { createApiClient } from "./index";
 import type {
   ApiClientOptions,
   ApiTransportError,
+  RequestBody,
   ScopedResponse,
 } from "./index";
 
@@ -383,10 +384,12 @@ describe("createApiClient", () => {
 
     // Type-only: bun's `expectTypeOf` checks at compile time, so the
     // assertions name types rather than walking a value's runtime chain.
-    expectTypeOf<Parameters<typeof api.items.post>[0]>().toEqualTypeOf<{
-      name: string;
-      count?: number;
-    }>();
+    expectTypeOf<Parameters<typeof api.items.post>[0]>().toExtend<
+      RequestBody<{ name: string; count?: number }>
+    >();
+    expectTypeOf<RequestBody<{ name: string; count?: number }>>().toExtend<
+      Parameters<typeof api.items.post>[0]
+    >();
     expectTypeOf<Parameters<typeof api.filter.get>[0]>().toExtend<{
       readonly query: { status: "open" | "closed" };
     }>();

@@ -1,4 +1,4 @@
-import type { ApiClient } from "./index";
+import type { ApiClient, ExactRequestBody } from "./index";
 
 type HeaderContractRoute<THeaders> = {
   body: { name: string };
@@ -36,6 +36,29 @@ type ProofOptions = NonNullable<
 const capturedRequest = { headers: { "Idempotency-Key": "intent" } };
 const aliasedRequest = capturedRequest;
 const spreadRequest = { ...capturedRequest };
+const cachedBody = { name: "Created", queryKey: ["things"] };
+const aliasedBody = cachedBody;
+const spreadBody = { ...cachedBody };
+type CurrentBody = Parameters<HeaderContractClient["current"]["post"]>[0];
+const validBody = { name: "Created" };
+true satisfies typeof validBody extends CurrentBody ? true : false;
+true satisfies typeof cachedBody extends CurrentBody ? false : true;
+true satisfies typeof aliasedBody extends CurrentBody ? false : true;
+true satisfies typeof spreadBody extends CurrentBody ? false : true;
+const bodyWithClientMetadata = { name: "Created", optimisticId: "temporary" };
+const spreadBodyWithClientMetadata = { ...bodyWithClientMetadata };
+true satisfies typeof bodyWithClientMetadata extends ExactRequestBody<
+  CurrentBody,
+  typeof bodyWithClientMetadata
+>
+  ? false
+  : true;
+true satisfies typeof spreadBodyWithClientMetadata extends ExactRequestBody<
+  CurrentBody,
+  typeof spreadBodyWithClientMetadata
+>
+  ? false
+  : true;
 const replay: ReplayOptions = capturedRequest;
 const replayFetch: ReplayOptions = {
   fetch: { headers: new Headers(capturedRequest.headers) },
@@ -103,6 +126,8 @@ const inferHeaderContractOptions = (
 
 true satisfies Awaited<
   ReturnType<typeof inferHeaderContractOptions>["current"]
->["data"] extends { id: string } | null
+>["data"] extends {
+  id: string;
+} | null
   ? true
   : false;
