@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -21,7 +22,6 @@ import {
 } from "@/api/public-corpus-policy";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   createPublicCorpusAddressRateLimitOptions,
