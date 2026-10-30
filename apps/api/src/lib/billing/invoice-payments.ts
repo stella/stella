@@ -28,6 +28,13 @@ import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
+import {
+  invoicePaymentAmounts,
+  payableAmount,
+} from "./invoice-payment-amounts";
+
+export { invoicePaymentAmounts, paidAmountOf } from "./invoice-payment-amounts";
+
 /**
  * The owner of invoice payments: every payment write, and the rule that an
  * invoice is paid exactly when its non-voided payments reach its total.
@@ -42,39 +49,6 @@ import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
  * it reads the paid sum, so two concurrent payments are serialized and the
  * second sees the first: together they can never pay more than the total.
  */
-
-/**
- * What a document settles: the amount owed on an invoice, the refund owed on
- * a credit note (whose total is negative). Payments are always positive.
- */
-const payableAmount = (totalAmount: number) => Math.abs(totalAmount);
-
-type PaymentAmounts = { paidAmount: number; outstandingAmount: number };
-
-/** The paid and outstanding amounts an invoice read exposes. */
-export const invoicePaymentAmounts = ({
-  totalAmount,
-  paidAmount,
-}: {
-  totalAmount: number;
-  paidAmount: number;
-}): PaymentAmounts => ({
-  paidAmount,
-  outstandingAmount: Math.max(0, payableAmount(totalAmount) - paidAmount),
-});
-
-/** The sum of the non-voided payments among an invoice's loaded payments. */
-export const paidAmountOf = (
-  payments: readonly { amount: number; voidedAt: Date | null }[],
-) => {
-  let paid = 0;
-  for (const payment of payments) {
-    if (payment.voidedAt === null) {
-      paid += payment.amount;
-    }
-  }
-  return paid;
-};
 
 /**
  * The paid sum of the outer invoice row, for list projections. Payments are

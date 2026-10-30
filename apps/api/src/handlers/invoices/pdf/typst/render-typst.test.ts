@@ -132,8 +132,10 @@ describe("Typst invoice renderer", () => {
       data.totals.net,
       data.totals.vat,
       data.totals.gross,
-      ...(data.payment?.fields.map(({ value }) => value) ?? []),
-      data.payment?.accountNumber ?? "",
+      ...(data.payment?.status === "due"
+        ? data.payment.fields.map(({ value }) => value)
+        : []),
+      data.payment?.status === "due" ? (data.payment.accountNumber ?? "") : "",
       data.footerNotes ?? "",
     ];
     // Typst prints labels in small caps through `upper`; compare case-free.
@@ -245,7 +247,10 @@ describe("payment QR as SVG", () => {
       ...fixture,
       invoice: { ...fixture.invoice, documentType: "credit_note" },
     }).unwrap();
-    expect(data.payment?.qrSvg).toBeNull();
+    if (data.payment?.status !== "due") {
+      throw new TypeError("Expected due payment");
+    }
+    expect(data.payment.qrSvg).toBeNull();
   });
 });
 
@@ -339,12 +344,18 @@ test("Slovak payment documents carry the complete official print mark at its rec
     },
     invoice: { ...fixture.invoice, currency: "EUR", language: "sk" },
   }).unwrap();
-  expect(slovak.payment?.qrWidthMm).toBe(37.254);
-  expect(slovak.payment?.qrSvg).toContain('viewBox="0 0 64 75"');
+  if (slovak.payment?.status !== "due") {
+    throw new TypeError("Expected Slovak payment");
+  }
+  expect(slovak.payment.qrWidthMm).toBe(37.254);
+  expect(slovak.payment.qrSvg).toContain('viewBox="0 0 64 75"');
   for (const id of ["g3522-3", "g3493-4", "g3487-0"]) {
-    expect(slovak.payment?.qrSvg).toContain(`id="${id}"`);
+    expect(slovak.payment.qrSvg).toContain(`id="${id}"`);
   }
   const czech = buildInvoiceTemplateData(fixture).unwrap();
-  expect(czech.payment?.qrWidthMm).toBe(32);
-  expect(czech.payment?.qrSvg).not.toContain('id="g3522-3"');
+  if (czech.payment?.status !== "due") {
+    throw new TypeError("Expected Czech payment");
+  }
+  expect(czech.payment.qrWidthMm).toBe(32);
+  expect(czech.payment.qrSvg).not.toContain('id="g3522-3"');
 });

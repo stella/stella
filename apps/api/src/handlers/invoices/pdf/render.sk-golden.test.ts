@@ -4,7 +4,14 @@ import { afterAll, describe, expect, test } from "bun:test";
 import type { VatTreatment } from "@stll/invoicing";
 import { cents, formatMoneyCents } from "@stll/money";
 
+import {
+  invoicePaymentState,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payment-amounts";
+
+import { buildInvoicePaymentPayload } from "./render-helpers";
 import type { RenderInvoicePdfOptions } from "./render-helpers";
+import { buildInvoiceTemplateData } from "./typst/data";
 import { renderInvoiceWithTypst } from "./typst/render-typst";
 import { openTypstSession } from "./typst/session";
 
@@ -106,6 +113,7 @@ const golden = ({
       },
     ],
   },
+  settlement: { status: "due", amountMinor: line.netAmount + line.vatAmount },
   originalNumber: null,
 });
 
@@ -254,4 +262,115 @@ describe("golden Slovak invoices (zákon 222/2004 Z. z. § 74 ods. 1)", () => {
     });
     expect(text.split("Prenesenie daňovej povinnosti.").length - 1).toBe(1);
   });
+});
+
+describe("Slovak payment instructions follow settlement", () => {
+  test.each([
+    { name: "unpaid", paid: 0, voided: false, due: 12_345 },
+    { name: "partly paid", paid: 2344, voided: false, due: 10_001 },
+    { name: "fully paid", paid: 12_345, voided: false, due: 0 },
+    { name: "voided payment", paid: 12_345, voided: true, due: 12_345 },
+    { name: "one cent remaining", paid: 12_344, voided: false, due: 1 },
+  ])(
+    "$name keeps totals and prints the current payment instruction",
+    async ({ paid, voided, due }) => {
+      const base = golden({
+        line: {
+          netAmount: 12_345,
+          vatAmount: 0,
+          vatRateBps: 0,
+          vatTreatment: "not_vat_payer",
+        },
+        sellerVatId: null,
+        buyerVatId: null,
+        buyerCountry: "SK",
+      });
+      const input = {
+        ...base,
+        seller: {
+          ...seller,
+          legalName: "Fiktívna kancelária Žltý príklad",
+          registrationId: null,
+          taxId: null,
+          vatId: null,
+        },
+        invoice: {
+          ...base.invoice,
+          buyerName: "Fiktívny odberateľ Ľalia",
+          buyerRegistrationId: null,
+          buyerTaxId: null,
+          reference: null,
+          lines: base.invoice.lines.map((line) => ({
+            ...line,
+            quantity: "1",
+            unitPrice: 12_345,
+          })),
+        },
+        settlement: invoicePaymentState({
+          totalAmount: 12_345,
+          paidAmount: paidAmountOf([
+            {
+              amount: paid,
+              voidedAt: voided ? new Date("2026-10-20T00:00:00Z") : null,
+            },
+          ]),
+        }),
+      };
+      const data = buildInvoiceTemplateData(input).unwrap();
+      const text = await textOf(input);
+      expect(text).toContain(euro(12_345));
+      expect(text).toContain("Variabilný symbol");
+      expect(text).toContain("20260042");
+      if (due === 0) {
+        expect(data.payment).toEqual({
+          status: "settled",
+          statement: "Uhradené",
+        });
+        expect(buildInvoicePaymentPayload(input)).toBeNull();
+        expect(text).toContain("Uhradené");
+        expect(text).not.toContain("Na úhradu");
+        return;
+      }
+      expect(data.payment?.status).toBe("due");
+      if (data.payment?.status !== "due") {
+        throw new TypeError("Expected payment instructions");
+      }
+      expect(data.payment.qrSvg).not.toBeNull();
+      expect(data.payment.fields).toContainEqual({
+        label: "Na úhradu",
+        value: formatMoneyCents({
+          amountCents: due,
+          currency: "EUR",
+          locale: "sk",
+        }),
+      });
+      expect(text).toContain("Na úhradu");
+      expect(text).toContain(euro(due));
+    },
+  );
+
+  test.each(["SK", "CZ", "PL", "EU"] as const)(
+    "%s profile selects the variable symbol independently of language",
+    (country) => {
+      const base = golden({
+        line: {
+          netAmount: 100,
+          vatAmount: 0,
+          vatRateBps: 0,
+          vatTreatment: "not_vat_payer",
+        },
+        buyerVatId: null,
+        buyerCountry: "SK",
+      });
+      const data = buildInvoiceTemplateData({
+        ...base,
+        seller: { ...seller, country },
+        invoice: { ...base.invoice, language: "en", reference: "PO-42" },
+      }).unwrap();
+      expect(data.meta).toContainEqual({ label: "Reference", value: "PO-42" });
+      expect(data.meta.some(({ label }) => label === "Variable symbol")).toBe(
+        country === "SK" || country === "CZ",
+      );
+    },
+  );
 });

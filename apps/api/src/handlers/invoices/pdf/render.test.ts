@@ -73,6 +73,7 @@ const options = {
     grossAmountMinor: cents(55_555),
     vatBreakdown: [],
   },
+  settlement: { status: "due", amountMinor: 55_555 },
   originalNumber: null,
 } satisfies RenderInvoicePdfOptions;
 
@@ -301,7 +302,7 @@ describe("invoice PDF", () => {
     const flat = text.replace(/[  ]/gu, " ");
     expect(flat).toContain("Česko");
     expect(flat).toContain("Datum splatnosti: 14. 10. 2026");
-    expect(flat).toContain("Reference: 0987654321");
+    expect(flat).toContain("Variabilní symbol: 0987654321");
   });
 
   test("prints an unassigned country code as stored, not as an unknown region", async () => {

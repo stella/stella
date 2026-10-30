@@ -73,6 +73,7 @@ export {
   type InvoiceLanguage,
   type InvoicePartyId,
 } from "./profiles/country-profiles";
+export { INVOICE_VARIABLE_SYMBOL_PROFILES } from "./profiles/country-profiles";
 export { INVOICE_PDF_LABELS } from "./profiles/pdf-labels";
 export {
   formatExchangeRate,
