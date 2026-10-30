@@ -1343,6 +1343,27 @@ describe("layout read from inline style", () => {
       ).map(([type]) => type),
     ).toEqual(["paragraph"]);
   });
+
+  // Weight is inherited: text inside a normal span is normal, however bold
+  // the span around it.
+  test.each([
+    [
+      `<p style="text-align:center"><span style="font-weight:bold">2. <span style="font-weight:normal">Posouzení věci</span></span></p>`,
+      "paragraph",
+    ],
+    [
+      `<p style="text-align:center"><span style="font-weight:bold">2. Posouzení <span style="font-weight:normal">věci</span></span></p>`,
+      "heading",
+    ],
+    [
+      `<p style="text-align:center"><span style="font-weight:normal"><span style="font-weight:bold">2. Posouzení věci</span></span></p>`,
+      "heading",
+    ],
+  ])("reads each text's inherited weight: %s", (html, type) => {
+    expect(ownWeightSection(html).map(([blockType]) => blockType)).toEqual([
+      type,
+    ]);
+  });
 });
 
 describe("table caption retention", () => {

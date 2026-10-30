@@ -500,6 +500,34 @@ const ownBoldness = (node: AnyNode | undefined): boolean | undefined =>
 /** A block reads as bold when nearly all of its text is set bold. */
 const BOLD_SHARE = 0.7;
 
+const NON_SPACE = /\S/gu;
+
+/**
+ * How many visible non-space characters of a block are set bold: each text
+ * takes the weight of its nearest element that declares one, as CSS inherits
+ * it, so normal text inside a bold span is not counted.
+ */
+const boldCharacterCount = (root: AnyNode | undefined): number => {
+  let count = 0;
+  const visit = (node: AnyNode, bold: boolean): void => {
+    if (isText(node)) {
+      count += bold ? node.data.replaceAll(/\s/gu, "").length : 0;
+      return;
+    }
+    if (!isTag(node) || isExcludedHtmlTag(node.name)) {
+      return;
+    }
+    const weight = ownBoldness(node) ?? bold;
+    for (const child of node.children) {
+      visit(child, weight);
+    }
+  };
+  if (root !== undefined) {
+    visit(root, false);
+  }
+  return count;
+};
+
 /**
  * One leaf paragraph or <div> as a chunk, its heading cues read from the
  * inline style: centring, font size, a mostly-bold run and letter spacing.
@@ -516,17 +544,9 @@ const styledBlockChunk = (
     return null;
   }
 
-  const spanText = (weight: boolean): string =>
-    visibleHtmlText(
-      $el.find("span").filter((_, span) => ownBoldness(span) === weight),
-    ).trim();
-  // A bold block stays bold except where a span sets its text back to normal;
-  // otherwise its bold spans decide.
-  const boldSpanLength = spanText(true).length;
   const bold =
-    ownBoldness($el.get(0)) === true
-      ? spanText(false).length <= plainText.length * (1 - BOLD_SHARE)
-      : boldSpanLength > 0 && boldSpanLength >= plainText.length * BOLD_SHARE;
+    boldCharacterCount($el.get(0)) >=
+    (plainText.match(NON_SPACE)?.length ?? 0) * BOLD_SHARE;
   return {
     inlines,
     plainText,
