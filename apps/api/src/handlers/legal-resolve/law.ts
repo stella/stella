@@ -1,6 +1,7 @@
 import { panic, TaggedError } from "better-result";
 
 import { normalizeCountry } from "@stll/agent-input";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
   isPublicCountry,
@@ -288,13 +289,26 @@ const readStructuredAct = (
       ),
     };
   }
+  const parsedYear = parseIntegerToken(year, {
+    sign: "unsigned",
+    min: profile.citation.earliestYear,
+    max: 9999,
+  });
+  const parsedNumber = parseIntegerToken(number, {
+    sign: "unsigned",
+    min: 1,
+    max: 99_999,
+  });
+  if (parsedYear.isErr() || parsedNumber.isErr()) {
+    return { type: "unknown" };
+  }
   const printed = profile.citation.collections.find(({ spellings }) =>
     spellings.some(
       (spelling) => collectionKey(spelling) === collectionKey(collection),
     ),
   );
   const canonical =
-    statuteGazetteAbbreviation(collection, Number(year)) ??
+    statuteGazetteAbbreviation(collection, parsedYear.value) ??
     printed?.canonical ??
     null;
   if (
@@ -304,7 +318,11 @@ const readStructuredAct = (
     return { type: "unknown" };
   }
   return readWork(
-    { number: Number(number), year: Number(year), collection: canonical },
+    {
+      number: parsedNumber.value,
+      year: parsedYear.value,
+      collection: canonical,
+    },
     profile,
   );
 };

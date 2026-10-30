@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -138,7 +139,12 @@ const actFromNumber = (
     const spelling =
       collection === null
         ? null
-        : statuteGazetteAbbreviation(collection, Number(year));
+        : statuteGazetteAbbreviation(
+            collection,
+            parseIntegerToken(year, { sign: "unsigned" }).unwrap(
+              "Act number grammar captures a four-digit year",
+            ),
+          );
     if (
       spelling === null ||
       canonicalCollectionAbbreviation(foldStatuteQuery(spelling)) !==

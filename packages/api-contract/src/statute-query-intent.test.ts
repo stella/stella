@@ -10,6 +10,7 @@ import {
   foldStatuteQuery,
   parseStatuteQuery,
   readStatuteQueryReferences,
+  type StatuteQueryIntent,
 } from "./statute-query-intent";
 
 const countries = Object.keys(STATUTE_ALIASES).filter(
@@ -134,7 +135,7 @@ describe("reading an act number", () => {
         number: "1",
         provision: null,
         year: publicationYear,
-      };
+      } as const satisfies StatuteQueryIntent;
       expect(parseStatuteQuery("svk", `1/${publicationYear}`)).toEqual(
         expected,
       );

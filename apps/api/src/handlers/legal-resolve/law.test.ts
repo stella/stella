@@ -219,6 +219,26 @@ describe("law citation resolution", () => {
     expect(resolveCount).toBe(1);
   });
 
+  test.each(["", " ", "1e3", "0x10", "+1", "1junk", "1.5", "-1"])(
+    "structured identities reject non-integer tokens %j",
+    async (token) => {
+      for (const field of ["year", "number"] as const) {
+        expect(
+          await resolveCzechLaw(
+            {
+              collection: "sb",
+              year: "2024",
+              number: "1",
+              section: "12a",
+              [field]: token,
+            },
+            dependencies(),
+          ),
+        ).toEqual({ status: "not_found", reason: "unknown_document" });
+      }
+    },
+  );
+
   test("distinguishes unknown sections and documents", async () => {
     const input = {
       collection: "sb",
