@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
-      "headMatter": "Úvodná časť",
+      "headMatter": "Informácie o veci",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
     "research": {
@@ -2870,6 +2870,8 @@
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "hostedCheckoutOpen": "Pre túto organizáciu je už otvorená objednávka. Dokončite ju alebo začnite novú, keď vyprší.",
       "hostedSubscriptionLive": "Táto organizácia už má predplatné. Zmeňte ho v časti Spravovať hostované využitie.",
+      "idempotencyInProgress": "Táto požiadavka sa ešte spracúva. Chvíľu počkajte a skúste to znova.",
+      "idempotencyKeyReused": "Odosielané údaje sa od predchádzajúceho pokusu zmenili. Obnovte formulár a skúste to znova.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",

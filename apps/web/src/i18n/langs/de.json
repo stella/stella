@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
-      "headMatter": "Rubrum",
+      "headMatter": "Angaben zum Verfahren",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
     "research": {
@@ -2870,6 +2870,8 @@
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
       "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
+      "idempotencyInProgress": "Diese Anfrage wird noch verarbeitet. Warten Sie einen Moment und versuchen Sie es erneut.",
+      "idempotencyKeyReused": "Die Angaben haben sich seit dem vorherigen Versuch geändert. Setzen Sie das Formular zurück und versuchen Sie es erneut.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",

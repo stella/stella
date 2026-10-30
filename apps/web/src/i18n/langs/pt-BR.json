@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
-      "headMatter": "Cabeçalho",
+      "headMatter": "Informações do processo",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
     "research": {
@@ -2870,6 +2870,8 @@
       "forbidden": "Você não tem permissão para fazer isso.",
       "hostedCheckoutOpen": "Já existe um pagamento aberto para esta organização. Conclua-o ou inicie um novo depois que ele expirar.",
       "hostedSubscriptionLive": "Esta organização já tem uma assinatura. Altere-a em “Gerenciar uso hospedado”.",
+      "idempotencyInProgress": "Esta solicitação ainda está sendo processada. Aguarde um momento e tente novamente.",
+      "idempotencyKeyReused": "Os dados mudaram desde a tentativa anterior. Redefina o formulário e tente novamente.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",

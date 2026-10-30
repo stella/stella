@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
-      "headMatter": "En-tête",
+      "headMatter": "Informations sur l’affaire",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
     "research": {
@@ -2870,6 +2870,8 @@
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "hostedCheckoutOpen": "Un paiement est déjà en cours pour cette organisation. Finalisez-le ou lancez-en un nouveau après son expiration.",
       "hostedSubscriptionLive": "Cette organisation a déjà un abonnement. Modifiez-le dans « Gérer l’utilisation hébergée ».",
+      "idempotencyInProgress": "Cette demande est encore en cours de traitement. Patientez un instant, puis réessayez.",
+      "idempotencyKeyReused": "Les données ont changé depuis la tentative précédente. Réinitialisez le formulaire et réessayez.",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",
       "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",

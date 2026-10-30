@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
-      "headMatter": "Päis",
+      "headMatter": "Kohtuasja andmed",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
     "research": {
@@ -2870,6 +2870,8 @@
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "hostedCheckoutOpen": "Selle organisatsiooni jaoks on makse juba avatud. Viige see lõpule või alustage uut pärast selle aegumist.",
       "hostedSubscriptionLive": "Sellel organisatsioonil on juba tellimus. Muutke seda jaotises „Halda majutatud kasutust”.",
+      "idempotencyInProgress": "Seda päringut veel töödeldakse. Oodake hetk ja proovige uuesti.",
+      "idempotencyKeyReused": "Andmed on eelmise katsega võrreldes muutunud. Lähtestage vorm ja proovige uuesti.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",

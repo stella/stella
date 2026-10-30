@@ -35,9 +35,9 @@ import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "corpus-projection-delete-receipt";
@@ -174,7 +174,8 @@ type RepairRuntimeOptions = {
 
 export const createCorpusProjectionDeleteReceiptRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20260908140000_corpus_projection_delete_task_instant",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

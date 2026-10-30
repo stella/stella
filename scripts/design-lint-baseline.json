@@ -1646,7 +1646,6 @@
     "apps/web/src/components/search-matter-preview.tsx": 1,
     "apps/web/src/components/templates/fill-clauses-section.tsx": 1,
     "apps/web/src/components/templates/template-ai-conditions.tsx": 1,
-    "apps/web/src/components/templates/template-form.tsx": 1,
     "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
     "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts": 1,
     "apps/web/src/components/workspaces/hooks/use-retry-cell.ts": 1,

@@ -60,6 +60,7 @@ import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { knowledgeKeys, skillDetailOptions } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -370,7 +371,8 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
   });
 
-  const createResource = useMutation({
+  const createResource = useIdempotentMutation({
+    idempotencyScope: safeSkillId,
     mutationFn: async (payload: { path: string; content: string }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
