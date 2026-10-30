@@ -552,12 +552,9 @@ describe("list verification access grants across MCP tools", () => {
         resourceLookups += 1;
         return aggregateExecutionRows(statement, false);
       },
-      // Writes land nowhere; a history append skips its existing baseline.
+      // Writes land nowhere; the only insert here is a history append.
       insert: () => ({
-        values: () =>
-          Object.assign(Promise.resolve([]), {
-            onConflictDoNothing: async () => [],
-          }),
+        values: () => ({ onConflictDoNothing: async () => [] }),
       }),
       // A reader comment is written through its own guarded predicate; no
       // stored comment has the synthetic id, so the write reaches no row.

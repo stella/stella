@@ -520,12 +520,15 @@ const installPgliteGeneratedEntityFeatureGates = async (
       if (/^SET\s+(?:lock_timeout|statement_timeout)\b/iu.test(executable)) {
         continue;
       }
-      const policy = /^CREATE POLICY ("[^"]+") ON ("public"\."[^"]+")/u.exec(
-        executable,
-      );
-      if (policy !== null) {
+      const policy =
+        /^CREATE POLICY (?<name>"[^"]+") ON (?<table>"public"\."[^"]+")/u.exec(
+          executable,
+        )?.groups;
+      if (policy?.["name"] !== undefined && policy["table"] !== undefined) {
         await db.execute(
-          sql.raw(`DROP POLICY IF EXISTS ${policy[1]} ON ${policy[2]}`),
+          sql.raw(
+            `DROP POLICY IF EXISTS ${policy["name"]} ON ${policy["table"]}`,
+          ),
         );
       }
       await db.execute(sql.raw(executable));
