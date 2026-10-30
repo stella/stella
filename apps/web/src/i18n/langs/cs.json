@@ -1790,7 +1790,7 @@
       "unavailable": "Graf se nepodařilo vybrat. Zobrazuje se tabulka.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuji s kontextem",
+    "thinking": "Přemýšlení",
     "threadFiles": {
       "title": "Soubory v tomto chatu"
     },

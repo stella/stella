@@ -1790,7 +1790,7 @@
       "unavailable": "Impossible de sélectionner un graphique. Le tableau est affiché.",
       "values": "{label} : {value, number}"
     },
-    "thinking": "Traitement du contexte",
+    "thinking": "Réflexion",
     "threadFiles": {
       "title": "Fichiers de cette conversation"
     },

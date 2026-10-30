@@ -1790,7 +1790,7 @@
       "unavailable": "Nie udało się wybrać wykresu. Wyświetlana jest tabela.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuję z kontekstem",
+    "thinking": "Myślenie",
     "threadFiles": {
       "title": "Pliki w tym czacie"
     },

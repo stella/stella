@@ -1,21 +1,48 @@
+import type { ComponentProps } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { ChatTurnStatus } = await import("@/components/chat/chat-turn-status");
-const { ChatTurnDuration } =
-  await import("@/components/chat/chat-turn-duration");
+const { ChatThreadMessages } =
+  await import("@/components/chat/chat-thread-messages");
+const { ChatEditorProvider } =
+  await import("@/components/chat-editor-provider");
+const { ChatApprovalContext } =
+  await import("@/components/chat/chat-approval-context");
+const { testChatApprovalContextValue } =
+  await import("@/components/chat/chat-approval-context.test-fixtures");
+const { ChatMattersContext } =
+  await import("@/components/chat/chat-matters-context");
+const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
-afterAll(async () => unregisterDomEnvironment());
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
 
-const timing = {
+const user = {
+  id: "question",
+  role: "user",
+  parts: [{ type: "text", content: "Review the sources" }],
+} satisfies ChatUIMessage;
+const tool = {
+  type: "tool-call",
+  id: "search",
+  name: "read_document",
+  arguments: '{"documentId":"document-one"}',
+  state: "input-complete",
+} as const satisfies ChatUIMessage["parts"][number];
+const runningTiming = {
   status: "running",
   durationMs: 0,
   elapsedMs: 0,
@@ -23,50 +50,205 @@ const timing = {
   observedAt: "2026-01-01T00:00:00.000Z",
 } as const;
 
-const View = ({
-  state,
-  phase,
-}: {
-  state: "submitted" | "streaming" | "ready" | "error";
-  phase: Parameters<typeof ChatTurnStatus>[0]["turn"]["phase"];
-}) => (
-  <IntlProvider locale="en" messages={messages} timeZone="UTC">
-    <FormattingProvider locale="en" timeZone="UTC">
-      <div data-turn>
-        <ChatTurnStatus turn={{ state, phase, timing }} />
-        <ChatTurnDuration
-          timing={
-            state === "ready"
-              ? { status: "finished", durationMs: 5000 }
-              : timing
-          }
-        />
-      </div>
-    </FormattingProvider>
-  </IntlProvider>
+type ThreadProps = Pick<
+  ComponentProps<typeof ChatThreadMessages>,
+  "messages" | "isGenerating" | "error" | "stickyUserMessages"
+>;
+const View = (props: ThreadProps) => (
+  <ChatThreadTestRouter>
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatMattersContext
+          value={{ createDocumentMattersView: { type: "empty" } }}
+        >
+          <ChatApprovalContext value={testChatApprovalContextValue}>
+            <FormattingProvider locale="en" timeZone="UTC">
+              <ChatEditorProvider>
+                <ChatThreadMessages
+                  {...props}
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
+                  approvalPendingMessageId={null}
+                  onAskUserSubmit={() => {}}
+                  onCreateDocumentResolve={() => {}}
+                  onOpenCreatedDocument={() => {}}
+                  streamdownComponents={{}}
+                  showToolCalls
+                />
+              </ChatEditorProvider>
+            </FormattingProvider>
+          </ChatApprovalContext>
+        </ChatMattersContext>
+      </IntlProvider>
+    </QueryClientProvider>
+  </ChatThreadTestRouter>
 );
 
-test("owns one live indicator through every phase and yields to the summary", () => {
-  const view = render(<View state="submitted" phase={{ type: "thinking" }} />);
-  for (const phase of [
-    { type: "thinking" },
-    { type: "using-tool", label: "Integrations" },
-    { type: "analyzing-sources" },
-    { type: "writing" },
-    { type: "waiting-for-approval" },
+for (const stickyUserMessages of [false, true]) {
+  for (const { ending } of [
+    { ending: "finished" },
+    { ending: "stopped" },
+    { ending: "failed" },
   ] as const) {
-    view.rerender(<View state="streaming" phase={phase} />);
-    expect(
-      view.container.querySelectorAll("[data-turn-live-status]"),
-    ).toHaveLength(1);
-    expect(
-      view.container.querySelectorAll('[data-turn] [data-slot="loader"]'),
-    ).toHaveLength(1);
-    expect(view.container.textContent).not.toContain("Worked for");
+    test(`one live owner covers a ${ending} turn (sticky: ${stickyUserMessages})`, () => {
+      const view = render(
+        <View
+          messages={[user]}
+          isGenerating
+          stickyUserMessages={stickyUserMessages}
+        />,
+      );
+      const assertLive = (label: string) => {
+        const lines = view.container.querySelectorAll(
+          "[data-turn-live-status]",
+        );
+        expect(lines).toHaveLength(1);
+        expect(lines.item(0).textContent).toContain(label);
+        expect(
+          view.container.querySelectorAll('[data-slot="loader"]'),
+        ).toHaveLength(1);
+        expect(
+          [
+            ...view.container.querySelectorAll(
+              '[data-status="running"], .animate-spin',
+            ),
+          ].filter((node) => node.closest("[data-turn-live-status]") === null),
+        ).toHaveLength(0);
+        expect(
+          view.container.querySelectorAll(
+            "[data-chat-turn-duration], [data-tool-duration], [data-process-duration]",
+          ),
+        ).toHaveLength(0);
+      };
+      assertLive(messages.chat.thinking);
+      const assistant = {
+        id: "answer",
+        role: "assistant",
+        parts: [tool],
+        metadata: { turnTiming: runningTiming },
+      } satisfies ChatUIMessage;
+      view.rerender(
+        <View
+          messages={[user, assistant]}
+          isGenerating
+          stickyUserMessages={stickyUserMessages}
+        />,
+      );
+      assertLive(messages.chat.tool.read_document);
+      view.rerender(
+        <View
+          messages={[
+            user,
+            { ...assistant, parts: [{ ...tool, state: "approval-requested" }] },
+          ]}
+          isGenerating
+          stickyUserMessages={stickyUserMessages}
+        />,
+      );
+      assertLive(messages.chat.turnStatus.waitingForApproval);
+      const completed = { ...tool, state: "complete" } as const;
+      view.rerender(
+        <View
+          messages={[user, { ...assistant, parts: [completed] }]}
+          isGenerating
+          stickyUserMessages={stickyUserMessages}
+        />,
+      );
+      assertLive(messages.chat.analyzingSources);
+      const writing = {
+        ...assistant,
+        parts: [completed, { type: "text", content: "The sources agree." }],
+      } satisfies ChatUIMessage;
+      view.rerender(
+        <View
+          messages={[user, writing]}
+          isGenerating
+          stickyUserMessages={stickyUserMessages}
+        />,
+      );
+      assertLive(messages.chat.turnStatus.writing);
+      if (ending !== "finished") {
+        view.rerender(
+          <View
+            messages={[user, assistant]}
+            isGenerating
+            stickyUserMessages={stickyUserMessages}
+          />,
+        );
+        assertLive(messages.chat.tool.read_document);
+      }
+      const finished = {
+        ...writing,
+        parts:
+          ending === "finished" ? writing.parts : [{ ...tool, state: "error" }],
+        metadata: { turnTiming: { status: "finished", durationMs: 5000 } },
+      } satisfies ChatUIMessage;
+      const terminalProps = {
+        messages: [user, finished],
+        isGenerating: ending === "failed",
+        error: ending === "failed" ? new Error("provider failed") : undefined,
+        stickyUserMessages,
+      } satisfies ThreadProps;
+      view.rerender(<View {...terminalProps} />);
+      expect(
+        view.container.querySelectorAll(
+          '[data-turn-live-status], [data-slot="loader"], [data-status="running"]',
+        ),
+      ).toHaveLength(0);
+      expect(view.container.textContent).toContain("Worked for 5s");
+      expect(
+        view.container.querySelectorAll("[data-tool-duration]"),
+      ).toHaveLength(1);
+      expect(
+        view.container.querySelectorAll("[data-process-duration]"),
+      ).toHaveLength(1);
+      expect(
+        view.container.querySelector("[data-tool-duration]")?.textContent,
+      ).toMatch(/^\d+s$/u);
+      expect(
+        view.container.querySelector("[data-process-duration]")?.textContent,
+      ).toMatch(/^\d+s$/u);
+
+      // Reload has the persisted turn duration; per-step timings only exist for
+      // work this view observed and must not be invented during hydration.
+      view.unmount();
+      const reloaded = render(<View {...terminalProps} />);
+      expect(
+        reloaded.container.querySelectorAll(
+          '[data-turn-live-status], [data-slot="loader"], [data-status="running"]',
+        ),
+      ).toHaveLength(0);
+      expect(reloaded.container.textContent).toContain("Worked for 5s");
+      expect(
+        reloaded.container.querySelectorAll(
+          "[data-tool-duration], [data-process-duration]",
+        ),
+      ).toHaveLength(0);
+
+      if (ending === "finished") {
+        reloaded.rerender(
+          <View
+            messages={[user, finished, { ...user, id: "next-question" }]}
+            isGenerating
+            stickyUserMessages={stickyUserMessages}
+          />,
+        );
+        expect(
+          reloaded.container.querySelectorAll("[data-turn-live-status]"),
+        ).toHaveLength(1);
+        expect(
+          reloaded.container.querySelector("[data-turn-live-status]")
+            ?.textContent,
+        ).toContain(messages.chat.thinking);
+        expect(
+          reloaded.container.querySelectorAll("[data-chat-turn-duration]"),
+        ).toHaveLength(1);
+      }
+    });
   }
-  view.rerender(<View state="ready" phase={null} />);
-  expect(view.container.querySelector("[data-turn-live-status]")).toBeNull();
-  expect(view.container.textContent).toContain("Worked for 5s");
-  view.rerender(<View state="error" phase={null} />);
-  expect(view.container.querySelector("[data-turn-live-status]")).toBeNull();
-});
+}

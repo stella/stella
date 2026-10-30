@@ -1469,7 +1469,6 @@ const TemplateStudioChatInner = ({
                 sendNow: sendQueuedMessageNow,
               }}
               queuedMessages={queuedMessages}
-              showThinkingIndicator
               showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
             />

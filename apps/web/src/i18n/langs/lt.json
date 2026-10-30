@@ -1790,7 +1790,7 @@
       "unavailable": "Nepavyko parinkti diagramos. Rodoma lentelė.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Dirbama su kontekstu",
+    "thinking": "Mąstymas",
     "threadFiles": {
       "title": "Šio pokalbio failai"
     },

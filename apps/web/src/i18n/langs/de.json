@@ -1790,7 +1790,7 @@
       "unavailable": "Es konnte kein Diagramm ausgewählt werden. Die Tabelle wird angezeigt.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Arbeite mit Kontext",
+    "thinking": "Nachdenken",
     "threadFiles": {
       "title": "Dateien in diesem Chat"
     },

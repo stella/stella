@@ -1790,7 +1790,7 @@
       "unavailable": "A chart could not be selected. The table is shown.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Working with context",
+    "thinking": "Thinking",
     "threadFiles": {
       "title": "Files in this chat"
     },

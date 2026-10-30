@@ -3,6 +3,10 @@ import { panic } from "better-result";
 
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 
+import { getChatToolActivityCategory } from "@/components/chat/chat-activity.logic";
+import { isUserInputChatToolName } from "@/components/chat/chat-ui-tools";
+import type { ChatPart } from "@/components/chat/chat-ui-tools";
+
 export type TurnActivePhase =
   | { type: "thinking" }
   | { type: "using-tool"; label: string }
@@ -44,7 +48,6 @@ export const turnPhaseForTool = (
 ): TurnActivePhase | null => {
   switch (state) {
     case "awaiting-input":
-      return { type: "waiting-for-input" };
     case "input-streaming":
     case "input-complete":
       return { type: "using-tool", label };
@@ -60,4 +63,61 @@ export const turnPhaseForTool = (
         state: state satisfies never,
       });
   }
+};
+
+/** Latest active work wins; completed research hands off to source analysis. */
+export const turnPhaseFromParts = (
+  parts: readonly ChatPart[],
+  toolLabel: (name: string) => string,
+): TurnActivePhase => {
+  for (const part of parts.toReversed()) {
+    if (part.type === "tool-call") {
+      const phase = turnPhaseForTool(part.state, toolLabel(part.name));
+      if (phase !== null) {
+        if (
+          isUserInputChatToolName(part.name) &&
+          part.state === "input-complete"
+        ) {
+          return { type: "waiting-for-input" };
+        }
+        return phase;
+      }
+    }
+  }
+  for (const part of parts.toReversed()) {
+    switch (part.type) {
+      case "text":
+        if (part.content.trim()) {
+          return { type: "writing" };
+        }
+        break;
+      case "thinking":
+        if (part.content.trim()) {
+          return { type: "thinking" };
+        }
+        break;
+      case "tool-call":
+        if (
+          part.state === "complete" &&
+          getChatToolActivityCategory(part.name) === "research"
+        ) {
+          return { type: "analyzing-sources" };
+        }
+        break;
+      case "structured-output":
+      case "ui-resource":
+        return { type: "writing" };
+      case "activity":
+      case "image":
+      case "audio":
+      case "video":
+      case "document":
+      case "tool-result":
+      case "subagent":
+        break;
+      default:
+        return panic("Unhandled chat part", { part: part satisfies never });
+    }
+  }
+  return { type: "thinking" };
 };

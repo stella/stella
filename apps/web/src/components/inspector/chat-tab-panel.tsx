@@ -718,7 +718,6 @@ export const ChatTabPanel = ({
                     sendNow: sendQueuedMessageNow,
                   }}
                   queuedMessages={queuedMessages}
-                  showThinkingIndicator
                   streamdownComponents={streamdownComponents}
                   workspaceId={tabWorkspaceId}
                 />

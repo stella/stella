@@ -1790,7 +1790,7 @@
       "unavailable": "No se pudo seleccionar un gráfico. Se muestra la tabla.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Trabajando con contexto",
+    "thinking": "Razonando",
     "threadFiles": {
       "title": "Archivos de este chat"
     },

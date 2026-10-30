@@ -1790,7 +1790,7 @@
       "unavailable": "تعذّر اختيار رسم بياني. يتم عرض الجدول.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "العمل مع السياق",
+    "thinking": "جارٍ التفكير",
     "threadFiles": {
       "title": "الملفات في هذه الدردشة"
     },

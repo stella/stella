@@ -1790,7 +1790,7 @@
       "unavailable": "Diagrammi ei õnnestunud valida. Kuvatakse tabel.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Töötan kontekstiga",
+    "thinking": "Mõtlemine",
     "threadFiles": {
       "title": "Selle vestluse failid"
     },

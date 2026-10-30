@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import ts from "typescript6";
 
 const OWNER = "src/components/chat/chat-turn-status.tsx";
 const ALLOWED_NON_TURN_LOADERS = {
@@ -16,6 +17,71 @@ const ALLOWED_NON_TURN_LOADERS = {
   "src/features/chat/components/chat-title-rename.tsx": "title rename action",
 } as const;
 
+// Computed props cannot prove the absence of a running mark. Require explicit
+// settled literals outside the live owner and independently scoped actions.
+const hasPotentialRunningMark = (source: string) => {
+  const ast = ts.createSourceFile(
+    "status.tsx",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const names = new Set(["StatusMark"]);
+  const collect = (node: ts.Node) => {
+    if (
+      ts.isImportSpecifier(node) &&
+      (node.propertyName ?? node.name).text === "StatusMark"
+    ) {
+      names.add(node.name.text);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(ast);
+  let found = false;
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
+      names.has(node.tagName.getText(ast))
+    ) {
+      const status = node.attributes.properties.find(
+        (prop) =>
+          ts.isJsxAttribute(prop) && prop.name.getText(ast) === "status",
+      );
+      if (
+        status === undefined ||
+        !ts.isJsxAttribute(status) ||
+        status.initializer === undefined ||
+        !ts.isStringLiteral(status.initializer) ||
+        !["done", "failed", "pending"].includes(status.initializer.text) ||
+        node.attributes.properties.some(ts.isJsxSpreadAttribute)
+      ) {
+        found = true;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return found;
+};
+
+test("detects literal, computed, aliased, and spread running marks", () => {
+  for (const source of [
+    '<StatusMark status="running" />',
+    "<StatusMark status={status} />",
+    '<StatusMark status={active ? "running" : "done"} />',
+    "<StatusMark {...props} />",
+    'import { StatusMark as Mark } from "@stll/ui/status-mark"; const row = <Mark status={status} />;',
+  ]) {
+    expect(hasPotentialRunningMark(source)).toBe(true);
+  }
+  for (const status of ["done", "failed", "pending"]) {
+    expect(hasPotentialRunningMark(`<StatusMark status="${status}" />`)).toBe(
+      false,
+    );
+  }
+});
+
 test("the turn status owner is the only turn loader or elapsed ticker", async () => {
   const files = [
     ...new Bun.Glob("src/components/chat/**/*.{ts,tsx}").scanSync("."),
@@ -31,7 +97,7 @@ test("the turn status owner is the only turn loader or elapsed ticker", async ()
     const ownsLiveIndicator =
       source.includes("@stll/ui/loader") ||
       source.includes("use-live-elapsed") ||
-      source.includes('status="running"') ||
+      hasPotentialRunningMark(source) ||
       source.includes("animate-spin");
     if (
       ownsLiveIndicator &&
