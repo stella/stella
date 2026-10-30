@@ -1090,7 +1090,9 @@
     },
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
-      "remove": "Quitar el filtro {filter}"
+      "countryMismatch": "Se han eliminado los filtros que no corresponden a {country}: {filters}.",
+      "remove": "Quitar el filtro {filter}",
+      "showInCountry": "Mostrar {filter} en {country}"
     },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "La vista completa aún no está disponible"
     },
     "activity": {
+      "newerVersion": "Este contenido se muestra en una versión más reciente.",
       "review": "Actualización de la revisión"
     },
     "aiPrompt": "Campo de mensaje de IA",
@@ -5426,6 +5429,7 @@
     "showCitedPartOnly": "Mostrar solo la parte citada",
     "showFullProvision": "Mostrar la disposición completa",
     "showInText": "Ver en el texto",
+    "sortNeedsYear": "Elija un año en los filtros para ordenar por esta columna.",
     "statedWindow": "Fechas indicadas por el editor: {range}",
     "status": {
       "current": "En vigor",

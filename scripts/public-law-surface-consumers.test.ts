@@ -81,6 +81,8 @@ const CONSUMERS = {
   // Crawler rules.
   "apps/web/src/public-crawl-policy.ts": "crawl",
   // Search, listing and browse.
+  "apps/api/src/handlers/case-law/decisions/filter-validation.ts": "search",
+  "apps/api/src/lib/case-law/filter-country-scope.ts": "search",
   "apps/api/src/handlers/case-law/decisions/list.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search-expand.ts": "search",

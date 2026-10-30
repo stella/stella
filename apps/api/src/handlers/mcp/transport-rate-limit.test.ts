@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
@@ -35,7 +36,6 @@ import {
   MCP_LAW_HTTP_PATH,
 } from "@/api/mcp/constants";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

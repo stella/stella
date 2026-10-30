@@ -21,6 +21,7 @@ import {
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import {
@@ -52,7 +53,6 @@ import {
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const testState = createTestState({ file: import.meta.path, config: env });
