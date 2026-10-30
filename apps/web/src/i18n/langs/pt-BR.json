@@ -623,6 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "O valor por hora não pode ser negativo",
     "hours": "Horas",
+    "invalidNumberFormat": "Insira um valor no seu formato numérico",
     "invoiceComposer": {
       "addSellerProfile": "Adicione um perfil de vendedor nas configurações de faturamento",
       "billedHours": "Horas faturadas",

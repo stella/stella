@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import slovakMessages from "@/i18n/langs/sk.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/billing" });
@@ -29,7 +30,7 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const mount = () => {
+const mount = ({ locale = "en", localeMessages = messages } = {}) => {
   const submitted: unknown[] = [];
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -39,8 +40,8 @@ const mount = () => {
   ]);
   render(
     <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <FormattingProvider locale="en" timeZone="UTC">
+      <IntlProvider locale={locale} messages={localeMessages} timeZone="UTC">
+        <FormattingProvider locale={locale} timeZone="UTC">
           <ExpenseForm
             defaultValues={{
               matterId: "matter-1",
@@ -96,6 +97,28 @@ describe("ExpenseForm currency", () => {
     expect(
       screen.queryByText(messages.billing.sellerProfiles.invalidCurrency),
     ).toBeNull();
+    client.clear();
+  });
+});
+
+describe("ExpenseForm locale amount", () => {
+  test("accepts Slovak decimals and reports ambiguous input", async () => {
+    const { client, submitted } = mount({
+      locale: "sk-SK",
+      localeMessages: slovakMessages,
+    });
+    const amount = screen.getByLabelText(slovakMessages.billing.amount);
+    fireEvent.change(amount, { target: { value: "1234,56" } });
+    await submit();
+    await waitFor(() => expect(submitted).toHaveLength(1));
+    expect(submitted.at(0)).toMatchObject({ amount: 123_456 });
+
+    fireEvent.change(amount, { target: { value: "1.234" } });
+    await submit();
+    expect(
+      await screen.findByText(slovakMessages.billing.invalidNumberFormat),
+    ).not.toBeNull();
+    expect(submitted).toHaveLength(1);
     client.clear();
   });
 });

@@ -4,10 +4,89 @@ import { cents } from "./cents";
 import {
   currencyMinorUnitDigits,
   formatMoneyCents,
+  parseLocaleMinorUnits,
   toMajorUnits,
   toMinorUnits,
   tryToMinorUnits,
 } from "./format";
+
+describe("parseLocaleMinorUnits", () => {
+  const locales = ["sk-SK", "cs-CZ", "en-US", "de-DE", "pl-PL"];
+
+  test("round-trips locale-formatted minor-unit amounts", () => {
+    let state = 24_301;
+    for (const locale of locales) {
+      const formatter = new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: true,
+      });
+      for (let index = 0; index < 250; index += 1) {
+        state = (state * 48_271) % 2_147_483_647;
+        const amountCents = (state % 20_000_001) - 10_000_000;
+        const rendered = formatter.format(
+          toMajorUnits({ amountCents, currency: "EUR" }),
+        );
+        expect(
+          parseLocaleMinorUnits({
+            amount: rendered,
+            currency: "EUR",
+            locale,
+          }).unwrap(),
+        ).toBe(cents(amountCents));
+        if (/\s/u.test(rendered)) {
+          for (const separator of [" ", "\u00a0", "\u202f"]) {
+            expect(
+              parseLocaleMinorUnits({
+                amount: rendered.replace(/\s/gu, () => separator),
+                currency: "EUR",
+                locale,
+              }).unwrap(),
+            ).toBe(cents(amountCents));
+          }
+        }
+      }
+    }
+  });
+
+  test.each(["1.234", "1,2,3", "letters", ""])(
+    "refuses invalid or ambiguous Slovak input %p",
+    (amount) => {
+      expect(
+        parseLocaleMinorUnits({
+          amount,
+          currency: "EUR",
+          locale: "sk-SK",
+        }).isErr(),
+      ).toBe(true);
+    },
+  );
+
+  test("accepts locale grouping and decimal separators", () => {
+    for (const amount of [
+      "1234,56",
+      "1 234,56",
+      "1\u00a0234,56",
+      "1\u202f234,56",
+      "1.234,56",
+    ]) {
+      expect(
+        parseLocaleMinorUnits({
+          amount,
+          currency: "EUR",
+          locale: "sk-SK",
+        }).unwrap(),
+      ).toBe(cents(123_456));
+    }
+    expect(
+      parseLocaleMinorUnits({
+        amount: "1,234.56",
+        currency: "USD",
+        locale: "en-US",
+      }).unwrap(),
+    ).toBe(cents(123_456));
+  });
+});
 
 describe("currencyMinorUnitDigits", () => {
   test("asks the currency, not the reader", () => {

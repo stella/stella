@@ -623,6 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "hours": "Godziny",
+    "invalidNumberFormat": "Wprowadź kwotę w swoim formacie liczbowym",
     "invoiceComposer": {
       "addSellerProfile": "Dodaj profil sprzedawcy w ustawieniach rozliczeń",
       "billedHours": "Rozliczane godziny",

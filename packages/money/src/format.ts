@@ -13,7 +13,7 @@
  * from the app around it.
  */
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { cents, type CentsAmount } from "./cents";
 
@@ -49,6 +49,119 @@ export const currencyMinorUnitDigits = (currency: string): number => {
 
 /** A decimal amount in major units: an optional sign, digits, an optional point. */
 const DECIMAL_AMOUNT = /^(?<sign>[+-]?)(?<whole>\d*)(?:\.(?<fraction>\d*))?$/u;
+
+export class LocaleAmountParseError extends TaggedError(
+  "LocaleAmountParseError",
+)<{
+  message: string;
+  reason: "empty" | "syntax" | "ambiguous" | "unsafe-integer";
+}> {}
+
+export type ParseLocaleMinorUnitsParams = {
+  amount: string;
+  currency: string;
+  locale: string;
+};
+
+const localeSeparators = (locale: string) => {
+  const parts = new Intl.NumberFormat(locale).formatToParts(12_345.6);
+  return {
+    decimal: parts.find((part) => part.type === "decimal")?.value ?? ".",
+    group: parts.find((part) => part.type === "group")?.value,
+  };
+};
+
+/** Parse human-entered major units according to their formatting locale. */
+export const parseLocaleMinorUnits = ({
+  amount,
+  currency,
+  locale,
+}: ParseLocaleMinorUnitsParams): Result<
+  CentsAmount,
+  LocaleAmountParseError
+> => {
+  const text = amount.trim();
+  if (text.length === 0) {
+    return Result.err(
+      new LocaleAmountParseError({
+        reason: "empty",
+        message: "Amount is empty",
+      }),
+    );
+  }
+  const { decimal, group } = localeSeparators(locale);
+  const whitespaceGroup = group !== undefined && /^\s$/u.test(group);
+  const normalizedWhitespace = whitespaceGroup
+    ? text.replace(/[\u0020\u00a0\u202f]/gu, () => group)
+    : text;
+  const grouping =
+    decimal === "," && normalizedWhitespace.includes(".") ? "." : group;
+  const sign = /^[+-]/u.exec(normalizedWhitespace)?.at(0) ?? "";
+  const unsigned = sign ? normalizedWhitespace.slice(1) : normalizedWhitespace;
+  const decimalParts = unsigned.split(decimal);
+  if (
+    decimalParts.length > 2 ||
+    decimalParts.some((part) => part.length === 0)
+  ) {
+    return Result.err(
+      new LocaleAmountParseError({
+        reason: "syntax",
+        message: "Invalid amount format",
+      }),
+    );
+  }
+  const whole = decimalParts.at(0) ?? "";
+  const fraction = decimalParts.at(1);
+  let wholeDigits = whole;
+  if (grouping !== undefined && whole.includes(grouping)) {
+    // A separator with no decimal part has two plausible readings in locales
+    // where the separator is also commonly used as an ASCII decimal point.
+    if (fraction === undefined) {
+      return Result.err(
+        new LocaleAmountParseError({
+          reason: "ambiguous",
+          message: "Amount has an ambiguous separator",
+        }),
+      );
+    }
+    const groups = whole.split(grouping);
+    if (
+      !/^[0-9]{1,3}$/u.test(groups.at(0) ?? "") ||
+      groups.slice(1).some((part) => !/^[0-9]{3}$/u.test(part))
+    ) {
+      return Result.err(
+        new LocaleAmountParseError({
+          reason: "syntax",
+          message: "Invalid amount grouping",
+        }),
+      );
+    }
+    wholeDigits = groups.join("");
+  }
+  if (
+    !/^[0-9]+$/u.test(wholeDigits) ||
+    (fraction !== undefined && !/^[0-9]+$/u.test(fraction))
+  ) {
+    return Result.err(
+      new LocaleAmountParseError({
+        reason: "syntax",
+        message: "Invalid amount format",
+      }),
+    );
+  }
+  const parsed = tryToMinorUnits({
+    amount: `${sign}${wholeDigits}${fraction === undefined ? "" : `.${fraction}`}`,
+    currency,
+  });
+  return parsed === null
+    ? Result.err(
+        new LocaleAmountParseError({
+          reason: "unsafe-integer",
+          message: "Amount exceeds the supported range",
+        }),
+      )
+    : Result.ok(parsed);
+};
 
 /** Scientific notation, which `String(1e21)` and `String(1e-7)` both produce. */
 const EXPONENT_AMOUNT =
