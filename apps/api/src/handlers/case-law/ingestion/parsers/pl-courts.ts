@@ -29,6 +29,7 @@ import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import {
   type AnyNode,
+  cloneNode,
   Element,
   hasChildren,
   isComment,
@@ -1030,7 +1031,11 @@ const parseListItemContent = ({
       continue;
     }
     if (marker !== undefined && child.tagName.toLowerCase() === "p") {
-      if (parseParagraphElement($, state, $(child), marker)) {
+      const parsed =
+        state.markup === PL_DECISION_MARKUP.PRINTED_LINES
+          ? parsePrintedLineChildren($, state, $(child), marker)
+          : parseParagraphElement($, state, $(child), marker);
+      if (parsed) {
         marker = undefined;
       }
       continue;
@@ -1148,14 +1153,15 @@ const parsePrintedLineChildren = (
   $: cheerio.CheerioAPI,
   state: ParserState,
   root: cheerio.Cheerio<AnyNode>,
-): void => {
-  let run: AnyNode[] = [];
-  const flush = (): void => {
+  marker?: string,
+): boolean => {
+  let pendingMarker = marker;
+  let parsed = false;
+  const flush = (run: AnyNode[]): void => {
     if (run.length === 0) {
       return;
     }
     const wrapper = $("<span></span>").append($(run).clone());
-    run = [];
     wrapper.find("br").replaceWith(" ");
     // Reparse to coalesce text nodes inserted for adjacent breaks, then apply
     // the export's rendered-whitespace rules without consuming `&nbsp;`.
@@ -1169,60 +1175,126 @@ const parsePrintedLineChildren = (
           node.data = node.data.replace(/[\t\n\f\r ]+/gu, " ");
         }
       });
-    parseParagraphElement($, state, normalizedWrapper);
+    if (parseParagraphElement($, state, normalizedWrapper, pendingMarker)) {
+      parsed = true;
+      pendingMarker = undefined;
+    }
   };
+
   const contents = root.contents().toArray();
-  const adjacentContent = (
-    index: number,
-    step: -1 | 1,
-  ): AnyNode | undefined => {
-    for (
-      let sibling = index + step;
-      sibling >= 0 && sibling < contents.length;
-      sibling += step
-    ) {
-      const candidate = contents[sibling];
-      if (
-        candidate !== undefined &&
-        isText(candidate) &&
-        /^[\t\n\f\r ]*$/u.test(candidate.data)
-      ) {
+  if (contents.some((node) => commonCourtBlock($, node) !== undefined)) {
+    let inlineRun: AnyNode[] = [];
+    const flushInlineRun = (): void => {
+      if (inlineRun.length === 0) {
+        return;
+      }
+      const wrapper = $("<span></span>").append($(inlineRun).clone());
+      inlineRun = [];
+      if (parsePrintedLineChildren($, state, wrapper, pendingMarker)) {
+        parsed = true;
+        pendingMarker = undefined;
+      }
+    };
+    for (const node of contents) {
+      if (commonCourtBlock($, node) === undefined) {
+        inlineRun.push(node);
         continue;
       }
-      return candidate;
-    }
-    return undefined;
-  };
-  for (const [index, node] of contents.entries()) {
-    if (commonCourtBlock($, node) !== undefined) {
-      flush();
+      flushInlineRun();
       parseNode($, state, node);
-      continue;
     }
-    if (!isTag(node) || node.tagName.toLowerCase() !== "br") {
-      run.push(node);
-      continue;
-    }
-    const next = adjacentContent(index, 1);
-    if (
-      next !== undefined &&
-      isTag(next) &&
-      next.tagName.toLowerCase() === "br"
-    ) {
-      flush();
-      continue;
-    }
-    const previous = adjacentContent(index, -1);
-    if (
-      previous !== undefined &&
-      isTag(previous) &&
-      previous.tagName.toLowerCase() === "br"
-    ) {
-      continue;
-    }
-    run.push(node);
+    flushInlineRun();
+    return parsed;
   }
-  flush();
+
+  // Flatten only rendered content so whitespace-only text between breaks does
+  // not hide a blank line, including when the breaks sit inside inline tags.
+  const tokens: AnyNode[] = [];
+  const collectTokens = (nodes: AnyNode[]): void => {
+    for (const node of nodes) {
+      if (isText(node)) {
+        if (!/^[\t\n\f\r ]*$/u.test(node.data)) {
+          tokens.push(node);
+        }
+        continue;
+      }
+      if (!isTag(node)) {
+        continue;
+      }
+      if (node.tagName.toLowerCase() === "br" || node.children.length === 0) {
+        tokens.push(node);
+        continue;
+      }
+      collectTokens(node.children);
+    }
+  };
+  collectTokens(contents);
+
+  const separators = new Set<AnyNode>();
+  const omittedBreaks = new Set<AnyNode>();
+  const isBreak = (node: AnyNode | undefined): node is Element =>
+    node !== undefined && isTag(node) && node.tagName.toLowerCase() === "br";
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (!isBreak(token)) {
+      continue;
+    }
+    let end = index + 1;
+    while (isBreak(tokens[end])) {
+      end += 1;
+    }
+    if (end - index < 2) {
+      continue;
+    }
+    separators.add(token);
+    for (let omitted = index + 1; omitted < end; omitted += 1) {
+      const omittedBreak = tokens[omitted];
+      if (omittedBreak !== undefined) {
+        omittedBreaks.add(omittedBreak);
+      }
+    }
+    index = end - 1;
+  }
+
+  // Split recursively so an inline wrapper crossing the blank line is cloned
+  // onto both paragraphs rather than flattened or discarded.
+  const splitNodes = (nodes: AnyNode[]): AnyNode[][] => {
+    const parts: AnyNode[][] = [[]];
+    for (const node of nodes) {
+      if (separators.has(node)) {
+        parts.push([]);
+        continue;
+      }
+      if (omittedBreaks.has(node)) {
+        continue;
+      }
+      if (!isTag(node) || node.children.length === 0) {
+        parts.at(-1)?.push(cloneNode(node, true));
+        continue;
+      }
+      const childParts = splitNodes(node.children);
+      for (const [index, children] of childParts.entries()) {
+        if (index > 0) {
+          parts.push([]);
+        }
+        if (children.length === 0) {
+          continue;
+        }
+        const wrapper = cloneNode(node, false);
+        wrapper.children = children;
+        for (const child of children) {
+          child.parent = wrapper;
+        }
+        parts.at(-1)?.push(wrapper);
+      }
+    }
+    return parts;
+  };
+
+  for (const run of splitNodes(contents)) {
+    flush(run);
+  }
+  return parsed;
 };
 
 /** A marker no paragraph took, kept as a paragraph of its own. */

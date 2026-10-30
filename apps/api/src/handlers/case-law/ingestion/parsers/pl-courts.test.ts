@@ -722,6 +722,25 @@ describe("markup whitespace", () => {
     });
   });
 
+  test("a printed blank line inside an inline element splits its formatting", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p><b>First<br> \n <br>Second</b></p>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "First",
+      "Second",
+    ]);
+    expect(
+      documentAst.blocks.map((block) =>
+        "inlines" in block ? block.inlines.at(0)?.type : undefined,
+      ),
+    ).toEqual(["bold", "bold"]);
+  });
+
   test("paragraphs inside one cell stay apart, a line each", () => {
     // Captured KIO markup: each paragraph ends in a space and the next
     // follows with nothing between them.
@@ -818,6 +837,20 @@ describe("ordered list items print the number a browser gives them", () => {
     ["<ul><li>a</li><li>b</li></ul>", ["a", "b"]],
   ])("%s", (html, expected) => {
     expect(itemsOf(html)).toEqual(expected);
+  });
+
+  test("a numbered first paragraph keeps a printed blank line", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<ol><li><p>First<br> \n <br>Second</p></li></ol>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "1. First",
+      "Second",
+    ]);
   });
 
   test("reading an item's runs around its blocks costs work linear in the item", () => {
