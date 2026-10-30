@@ -15,17 +15,14 @@ import type {
 
 const PAGE_GAP = 8;
 
-/** Each page's height for a column `width` wide, from its own proportions. */
-const pageHeights = async (
+/** A page's height over its width. */
+const pageRatio = async (
   pdf: PDFDocumentProxy,
-  width: number,
-): Promise<number[]> =>
-  await Promise.all(
-    Array.from({ length: pdf.numPages }, async (_, index) => {
-      const viewport = (await pdf.getPage(index + 1)).getViewport({ scale: 1 });
-      return (viewport.height / viewport.width) * width;
-    }),
-  );
+  number: number,
+): Promise<number> => {
+  const viewport = (await pdf.getPage(number)).getViewport({ scale: 1 });
+  return viewport.height / viewport.width;
+};
 
 /** A PDF drawn by pdf.js, each page when it nears the screen. */
 export const PdfPages = ({
@@ -40,8 +37,10 @@ export const PdfPages = ({
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [layout, setLayout] = useState<{
     width: number;
-    heights: number[];
+    ratios: number[];
   } | null>(null);
+  // The pages watch how near they are to the screen within this scroller.
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const painted = useRef(false);
 
   const failed = useEffectEvent((error: unknown) => {
@@ -79,27 +78,52 @@ export const PdfPages = ({
       return undefined;
     }
     let current = true;
+    let width = document.documentElement.clientWidth;
+    let ratios: number[] | null = null;
+    const show = () => {
+      if (current && ratios !== null) {
+        setLayout({ width, ratios });
+      }
+    };
+    // The first page's proportions stand in for every page's until all are
+    // measured, so a long document does not wait on each page to draw.
     const measure = async () => {
-      const width = document.documentElement.clientWidth;
-      const heights = await Result.tryPromise(
-        async () => await pageHeights(pdf, width),
+      const first = await Result.tryPromise(
+        async () => await pageRatio(pdf, 1),
       );
-      if (Result.isError(heights)) {
-        failed(heights.error);
+      if (Result.isError(first)) {
+        failed(first.error);
         return;
       }
-      if (current) {
-        setLayout({ width, heights: heights.value });
+      ratios = Array.from({ length: pdf.numPages }, () => first.value);
+      show();
+      const all = await Result.tryPromise(
+        async () =>
+          await Promise.all(
+            Array.from(
+              { length: pdf.numPages },
+              async (_, index) => await pageRatio(pdf, index + 1),
+            ),
+          ),
+      );
+      if (Result.isError(all)) {
+        failed(all.error);
+        return;
+      }
+      if (all.value.some((ratio) => ratio !== first.value)) {
+        ratios = all.value;
+        show();
       }
     };
-    const remeasure = () => {
-      void measure();
+    const resized = () => {
+      width = document.documentElement.clientWidth;
+      show();
     };
-    remeasure();
-    window.addEventListener("resize", remeasure);
+    void measure();
+    window.addEventListener("resize", resized);
     return () => {
       current = false;
-      window.removeEventListener("resize", remeasure);
+      window.removeEventListener("resize", resized);
     };
   }, [pdf]);
 
@@ -107,16 +131,17 @@ export const PdfPages = ({
     return null;
   }
   return (
-    <div style={{ height: "100%", overflowY: "auto" }}>
-      {layout.heights.map((height, index) => (
+    <div ref={setScroller} style={{ height: "100%", overflowY: "auto" }}>
+      {layout.ratios.map((ratio, index) => (
         <PdfPage
-          height={height}
+          height={ratio * layout.width}
           // Pages never reorder; the number is the page's identity.
           key={`page-${String(index + 1)}`}
           number={index + 1}
           onFailed={pageFailed}
           onPainted={pagePainted}
           pdf={pdf}
+          scroller={scroller}
           width={layout.width}
         />
       ))}
@@ -129,6 +154,7 @@ const PdfPage = ({
   number,
   width,
   height,
+  scroller,
   onPainted,
   onFailed,
 }: {
@@ -136,6 +162,7 @@ const PdfPage = ({
   number: number;
   width: number;
   height: number;
+  scroller: HTMLDivElement | null;
   onPainted: () => void;
   onFailed: (error: unknown) => void;
 }) => {
@@ -145,13 +172,19 @@ const PdfPage = ({
 
   useEffect(() => {
     const element = canvas.current;
-    if (element === null) {
+    if (element === null || scroller === null) {
       return undefined;
     }
     const drawing: { task: RenderTask | null } = { task: null };
-    let done = false;
+    let drawn = false;
+    // Counts releases, so a draw that outlived its page's release stops.
+    let generation = 0;
     const draw = async () => {
+      const started = generation;
       const page = await pdf.getPage(number);
+      if (started !== generation) {
+        return;
+      }
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({
         scale: (width / base.width) * window.devicePixelRatio,
@@ -162,13 +195,23 @@ const PdfPage = ({
       await drawing.task.promise;
       painted();
     };
-    const observer = new IntersectionObserver(
+    // An iPhone page's canvas holds several megabytes, so a page far from the
+    // screen gives it back and draws again when it nears. A zero-sized canvas
+    // keeps the page's place by its style.
+    const release = () => {
+      generation += 1;
+      drawn = false;
+      drawing.task?.cancel();
+      drawing.task = null;
+      element.width = 0;
+      element.height = 0;
+    };
+    const near = new IntersectionObserver(
       (entries) => {
-        if (done || !entries.some((entry) => entry.isIntersecting)) {
+        if (drawn || !entries.some((entry) => entry.isIntersecting)) {
           return;
         }
-        done = true;
-        observer.disconnect();
+        drawn = true;
         draw().catch((error: unknown) => {
           // A page left before it finished drawing is not a failure.
           if (!(
@@ -180,14 +223,26 @@ const PdfPage = ({
         });
       },
       // Draw a screen ahead, so scrolling meets drawn pages.
-      { rootMargin: "100% 0px" },
+      { root: scroller, rootMargin: "100% 0px" },
     );
-    observer.observe(element);
+    const far = new IntersectionObserver(
+      (entries) => {
+        if (drawn && !entries.some((entry) => entry.isIntersecting)) {
+          release();
+        }
+      },
+      // A screen beyond where pages draw, so a page at the edge does not
+      // draw and release with every small scroll.
+      { root: scroller, rootMargin: "200% 0px" },
+    );
+    near.observe(element);
+    far.observe(element);
     return () => {
-      observer.disconnect();
+      near.disconnect();
+      far.disconnect();
       drawing.task?.cancel();
     };
-  }, [pdf, number, width]);
+  }, [pdf, number, width, scroller]);
 
   return (
     <canvas
