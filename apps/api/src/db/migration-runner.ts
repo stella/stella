@@ -356,7 +356,8 @@ type ApplyPendingOptions = {
   /** Names the step in the final error; defaults to the migration apply. */
   label?: string;
   apply: (lockTimeoutMs: number) => Promise<void>;
-  classifyLedger: () => Promise<MigrationLedgerProgress>;
+  classifyLedger: () =>
+    MigrationLedgerProgress | Promise<MigrationLedgerProgress>;
   /** Sessions seen blocking the failed attempts, named in the final error. */
   blockers: () => readonly MigrationBlocker[];
   retry: LockWaitRetry;
@@ -653,7 +654,7 @@ const prepareSchemaPhase = async ({
               }),
           );
         },
-        classifyLedger: async () => ({
+        classifyLedger: () => ({
           status: "unchanged",
           committedReceipts: 0,
         }),
