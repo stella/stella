@@ -1,0 +1,6 @@
+{
+  "metric": "ai-analytics-callback-seams",
+  "file": "apps/api/src/handlers/desktop-time-entries/narrative-model.ts",
+  "delta": 2,
+  "reason": "The desktop narrative call follows the established short-text handler shape (improve-prompt): the generation failure and an empty completion are each reported once through the request's AI analytics callbacks, which also carry its generation bookkeeping. The failure text never includes the window titles."
+}
