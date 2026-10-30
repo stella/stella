@@ -11,7 +11,7 @@ export const LINK_RECALL_KINDS = [
 
 export type LinkRecallKind = (typeof LINK_RECALL_KINDS)[number];
 
-export type ReferencePassage = {
+export type AuditReferencePassage = {
   anchor: string;
   text: string;
 };
@@ -81,7 +81,7 @@ export const auditDecisionKey = (text: string): string => {
 };
 
 type ExtractAuditReferencesOptions = {
-  passages: readonly ReferencePassage[];
+  passages: readonly AuditReferencePassage[];
   profile: ReferenceAuditProfile;
   selfIdentifiers: readonly string[];
 };
