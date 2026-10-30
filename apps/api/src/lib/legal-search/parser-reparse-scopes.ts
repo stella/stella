@@ -141,19 +141,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -325,11 +325,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 12,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
@@ -341,19 +341,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:
-        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 6,
+    version: 7,
     scope: {
       type: "all",
       reason:
-        "Re-read font-run segmentation after the shared PDF style mapping changed; Czech output remains plain text and footnote links, with no independent feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
 } as const satisfies ParserVersionScopes<
