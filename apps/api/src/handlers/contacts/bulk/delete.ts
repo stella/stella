@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
+import { CONTACT_BULK_DELETE_LIMIT, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { createErrorCapture } from "@/api/lib/analytics/capture";
@@ -12,6 +12,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -32,6 +33,7 @@ const config = {
   permissions: { contact: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.CONTACT),
   mcp: {
     type: "capability",
     reason: "contact_directory",
