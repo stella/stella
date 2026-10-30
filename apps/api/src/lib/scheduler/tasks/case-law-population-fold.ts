@@ -98,12 +98,16 @@ export const createCaseLawPopulationFoldTask =
               "caseLawPopulation.deltas": result.value.folded,
             });
             if (result.value.done) {
-              const { buckets } = await readCaseLawPopulationBucketCount(
-                db,
-                boundedSignal,
-              );
+              boundedSignal.throwIfAborted();
+              const summary = await runtime.step(async ({ tx }) => {
+                const { buckets } = await readCaseLawPopulationBucketCount(
+                  tx,
+                  boundedSignal,
+                );
+                return { cursor: null, done: true, value: buckets };
+              });
               logger.info("scheduler.case_law_population_current", {
-                "caseLawPopulation.buckets": buckets,
+                "caseLawPopulation.buckets": summary.value,
               });
               return;
             }
