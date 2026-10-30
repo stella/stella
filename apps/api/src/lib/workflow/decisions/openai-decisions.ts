@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
-import { readCappedBytes } from "@stll/skills/streaming";
+import { readBodyWithIdleDeadline } from "@stll/fetch";
 
 import {
   bindAnswer,
@@ -344,9 +344,10 @@ export const createOpenAIDecisionsClient = ({
       }
       const bytes = await Result.tryPromise({
         try: async () =>
-          sent.value.body === null
-            ? new Uint8Array()
-            : await readCappedBytes(sent.value.body, MAX_RESPONSE_BYTES),
+          await readBodyWithIdleDeadline(sent.value, {
+            idleMs: timeoutMs,
+            signal: abortSignal,
+          }),
         catch: (cause) =>
           new SystemOneError({
             kind: abortSignal?.aborted ? "aborted" : "network",
@@ -357,7 +358,8 @@ export const createOpenAIDecisionsClient = ({
       if (Result.isError(bytes)) {
         return Result.err(bytes.error);
       }
-      const bodyBytes = bytes.value;
+      const bodyBytes =
+        bytes.value.byteLength > MAX_RESPONSE_BYTES ? null : bytes.value;
       if (bodyBytes === null) {
         return Result.err(
           new SystemOneError({

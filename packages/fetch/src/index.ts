@@ -1,5 +1,11 @@
 // parser-output-unchanged: transport timeout fields on the fetcher type do not change parsed output.
 export { isConnectionFailure } from "./connection-failure";
+export {
+  iterateBodyWithIdleDeadline,
+  readBodyJsonWithIdleDeadline,
+  readBodyTextWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "./body-reader";
 
 export type FetchTimeout =
   { type: "total"; ms: number } | { type: "headers"; ms: number };
@@ -93,81 +99,6 @@ const executeFetchWithTimeout = async (
     throw combined.reason;
   }
   return response;
-};
-
-type ReadBodyWithIdleDeadlineOptions = {
-  idleMs: number;
-  signal?: AbortSignal | undefined;
-};
-
-/** Reads a response body while bounding the wait for each successive chunk. */
-export const readBodyWithIdleDeadline = async (
-  response: Response,
-  { idleMs, signal }: ReadBodyWithIdleDeadlineOptions,
-): Promise<Uint8Array> => {
-  if (!Number.isFinite(idleMs) || idleMs < 0 || idleMs > 2_147_483_647) {
-    throw new DOMException(
-      "Invalid body idle deadline duration",
-      "NotSupportedError",
-    );
-  }
-  signal?.throwIfAborted();
-  if (response.body === null) {
-    return new Uint8Array();
-  }
-
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let onAbort: (() => void) | undefined;
-  const clear = () => {
-    clearTimeout(timer);
-    timer = undefined;
-    if (onAbort !== undefined) {
-      signal?.removeEventListener("abort", onAbort);
-      onAbort = undefined;
-    }
-  };
-  const deadline = async () =>
-    await new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(
-        () => reject(new DOMException("Response body stalled", "TimeoutError")),
-        idleMs,
-      );
-      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- AbortSignal reasons are intentionally propagated by identity and may be any value.
-      onAbort = () => reject(signal?.reason);
-      signal?.addEventListener("abort", onAbort, { once: true });
-    });
-
-  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- Promise.race obscures the read result, but catch cancels and finally releases every path.
-  const reader = response.body.getReader();
-  try {
-    for (;;) {
-      signal?.throwIfAborted();
-      const next = await Promise.race([reader.read(), deadline()]);
-      clear();
-      if (next.done) {
-        const bytes = new Uint8Array(byteLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-          bytes.set(chunk, offset);
-          offset += chunk.byteLength;
-        }
-        return bytes;
-      }
-      chunks.push(next.value);
-      byteLength += next.value.byteLength;
-    }
-  } catch (error) {
-    clear();
-    await reader.cancel(error).catch(() => {
-      throw error;
-    });
-    throw error;
-  } finally {
-    clear();
-    reader.releaseLock();
-  }
 };
 
 /** Creates a wrapper with the supplied transport and an explicit timeout policy. */

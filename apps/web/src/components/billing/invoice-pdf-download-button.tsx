@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 
@@ -65,7 +65,10 @@ export const InvoicePdfDownloadButton = ({
           error: { status: file.status, value: "Invoice PDF download failed" },
         });
       }
-      const blob = await file.blob();
+      const bytes = await readBodyWithIdleDeadline(file, {
+        idleMs: PDF_DOWNLOAD_TIMEOUT_MS,
+      });
+      const blob = new Blob([Uint8Array.from(bytes).buffer]);
       downloadFile(blob, fileName);
     },
     onError: (error) => {

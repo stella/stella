@@ -9,7 +9,7 @@ import { EditorState } from "@tiptap/pm/state";
 import { EditorView } from "@tiptap/pm/view";
 import { Result } from "better-result";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, iterateBodyWithIdleDeadline } from "@stll/fetch";
 import {
   acceptAutocompleteSuggestion,
   acceptAutocompleteWord,
@@ -144,20 +144,19 @@ type StreamHandlers = {
 };
 
 const consumeStream = async (
-  body: ReadableStream<Uint8Array>,
+  response: Response,
+  signal: AbortSignal,
   handlers: StreamHandlers,
 ): Promise<void> => {
   const decoder = new TextDecoder();
   let buffer = "";
   let done = false;
-  const reader = body.getReader();
-  try {
-    while (!done) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        break;
-      }
-      buffer += decoder.decode(chunk.value, { stream: true });
+  for await (const chunk of iterateBodyWithIdleDeadline(response, {
+    idleMs: 15_000,
+    signal,
+  })) {
+    if (!done) {
+      buffer += decoder.decode(chunk, { stream: true });
       const boundary = buffer.lastIndexOf("\n\n");
       if (boundary === -1) {
         continue;
@@ -182,9 +181,6 @@ const consumeStream = async (
         }
       }
     }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
   }
 };
 
@@ -311,7 +307,7 @@ export const AutocompletePlayground = () => {
         let firstToken = true;
         const streamError: { value: string | null } = { value: null };
 
-        await consumeStream(response.body, {
+        await consumeStream(response, controller.signal, {
           onToken: (text) => {
             const live = viewRef.current;
             if (live === null) {

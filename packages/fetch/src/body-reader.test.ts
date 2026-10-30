@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
-import { readBodyWithIdleDeadline } from "./index";
+import { iterateBodyWithIdleDeadline, readBodyWithIdleDeadline } from "./index";
+import { raceAbort } from "./race-abort";
 
 const flush = async () => {
   for (let index = 0; index < 8; index += 1) {
@@ -13,6 +14,103 @@ afterEach(() => {
 });
 
 describe("idle-bounded response body reads", () => {
+  test("the iterator re-arms its deadline for each progressing chunk", async () => {
+    jest.useFakeTimers();
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          stream = controller;
+        },
+      }),
+    );
+    const values: number[] = [];
+    const result = (async () => {
+      for await (const chunk of iterateBodyWithIdleDeadline(response, {
+        idleMs: 10,
+      })) {
+        values.push(chunk[0] ?? 0);
+      }
+    })();
+    for (const value of [1, 2, 3]) {
+      jest.advanceTimersByTime(9);
+      stream?.enqueue(Uint8Array.of(value));
+      await flush();
+    }
+    stream?.close();
+    await result;
+    expect(values).toEqual([1, 2, 3]);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("the iterator propagates abort identity and detaches its listener", async () => {
+    jest.useFakeTimers();
+    const controller = new AbortController();
+    let listeners = 0;
+    const add = controller.signal.addEventListener.bind(controller.signal);
+    const remove = controller.signal.removeEventListener.bind(
+      controller.signal,
+    );
+    controller.signal.addEventListener = (
+      type: string,
+      callback: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => {
+      listeners += 1;
+      return add(type, callback, options);
+    };
+    controller.signal.removeEventListener = (
+      type: string,
+      callback: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => {
+      listeners -= 1;
+      return remove(type, callback, options);
+    };
+    const reason = new DOMException("caller stopped", "AbortError");
+    const result = (async () => {
+      for await (const _chunk of iterateBodyWithIdleDeadline(
+        new Response(new ReadableStream<Uint8Array>()),
+        { idleMs: 10, signal: controller.signal },
+      )) {
+        // The fixture never yields.
+      }
+    })().catch((error: unknown) => error);
+    controller.abort(reason);
+    await flush();
+    expect(await result).toBe(reason);
+    expect(listeners).toBe(0);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("the abort race detaches its listener after completion", async () => {
+    const controller = new AbortController();
+    let listeners = 0;
+    const add = controller.signal.addEventListener.bind(controller.signal);
+    const remove = controller.signal.removeEventListener.bind(
+      controller.signal,
+    );
+    controller.signal.addEventListener = (
+      type: string,
+      callback: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => {
+      listeners += 1;
+      return add(type, callback, options);
+    };
+    controller.signal.removeEventListener = (
+      type: string,
+      callback: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => {
+      listeners -= 1;
+      return remove(type, callback, options);
+    };
+    expect(await raceAbort(Promise.resolve("done"), controller.signal)).toBe(
+      "done",
+    );
+    expect(listeners).toBe(0);
+  });
   test("progress on every idle window permits a longer total download", async () => {
     jest.useFakeTimers();
     let stream: ReadableStreamDefaultController<Uint8Array> | undefined;

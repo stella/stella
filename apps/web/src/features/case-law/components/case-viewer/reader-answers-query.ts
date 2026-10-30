@@ -6,7 +6,11 @@ import type {
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
-import { fetchWithTimeout } from "@stll/fetch";
+import {
+  fetchWithTimeout,
+  iterateBodyWithIdleDeadline,
+  readBodyJsonWithIdleDeadline,
+} from "@stll/fetch";
 
 import { api } from "@/lib/api";
 import { getApiRequestHeaders } from "@/lib/api-request-context";
@@ -129,7 +133,11 @@ export const streamReaderAnswer = async ({
   const response = fetched.value;
   if (!response.ok) {
     const decoded = await Result.tryPromise(
-      async (): Promise<unknown> => await response.json(),
+      async (): Promise<unknown> =>
+        await readBodyJsonWithIdleDeadline(response, {
+          idleMs: READER_ANSWER_DEADLINE_MS,
+          signal,
+        }),
     );
     if (decoded.isErr()) {
       return Result.err(decoded.error);
@@ -156,7 +164,10 @@ export const streamReaderAnswer = async ({
     );
   }
   return await consumeReaderAnswerStream({
-    body: response.body,
+    chunks: iterateBodyWithIdleDeadline(response, {
+      idleMs: READER_ANSWER_DEADLINE_MS,
+      signal,
+    }),
     signal,
     onEvent,
   });
