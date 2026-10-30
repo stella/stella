@@ -3278,7 +3278,7 @@
         }
       ]
     },
-    "./button": {
+    "./button [default]": {
       "type": "module",
       "file": "./src/components/button.d.ts",
       "exports": [
@@ -3304,6 +3304,17 @@
         },
         {
           "name": "buttonVariants",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./button [react-native]": {
+      "type": "module",
+      "file": "./src/components/button.native.d.ts",
+      "exports": [
+        {
+          "name": "Button",
           "kind": "variable",
           "space": "value"
         }
@@ -3922,7 +3933,7 @@
         }
       ]
     },
-    "./components/button": {
+    "./components/button [default]": {
       "type": "module",
       "file": "./src/components/button.d.ts",
       "exports": [
@@ -3948,6 +3959,17 @@
         },
         {
           "name": "buttonVariants",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./components/button [react-native]": {
+      "type": "module",
+      "file": "./src/components/button.native.d.ts",
+      "exports": [
+        {
+          "name": "Button",
           "kind": "variable",
           "space": "value"
         }
@@ -4504,7 +4526,7 @@
         }
       ]
     },
-    "./components/input": {
+    "./components/input [default]": {
       "type": "module",
       "file": "./src/components/input.d.ts",
       "exports": [
@@ -4517,6 +4539,22 @@
           "name": "InputProps",
           "kind": "type",
           "space": "type"
+        }
+      ]
+    },
+    "./components/input [react-native]": {
+      "type": "module",
+      "file": "./src/components/input.native.d.ts",
+      "exports": [
+        {
+          "name": "Input",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "NativeField",
+          "kind": "variable",
+          "space": "value"
         }
       ]
     },
@@ -5081,7 +5119,7 @@
         }
       ]
     },
-    "./components/separator": {
+    "./components/separator [default]": {
       "type": "module",
       "file": "./src/components/separator.d.ts",
       "exports": [
@@ -5097,7 +5135,18 @@
         }
       ]
     },
-    "./components/sheet": {
+    "./components/separator [react-native]": {
+      "type": "module",
+      "file": "./src/components/separator.native.d.ts",
+      "exports": [
+        {
+          "name": "Separator",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./components/sheet [default]": {
       "type": "module",
       "file": "./src/components/sheet.d.ts",
       "exports": [
@@ -5169,6 +5218,47 @@
         {
           "name": "SheetTrigger",
           "kind": "function",
+          "space": "value"
+        }
+      ]
+    },
+    "./components/sheet [react-native]": {
+      "type": "module",
+      "file": "./src/components/sheet.native.d.ts",
+      "exports": [
+        {
+          "name": "Sheet",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetClose",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetDescription",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetHeader",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetPanel",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetPopup",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetTitle",
+          "kind": "variable",
           "space": "value"
         }
       ]
@@ -5351,9 +5441,20 @@
         }
       ]
     },
-    "./components/stella-wordmark": {
+    "./components/stella-wordmark [default]": {
       "type": "module",
       "file": "./src/components/stella-wordmark.d.ts",
+      "exports": [
+        {
+          "name": "StellaWordmarkLatin",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./components/stella-wordmark [react-native]": {
+      "type": "module",
+      "file": "./src/components/stella-wordmark.native.d.ts",
       "exports": [
         {
           "name": "StellaWordmarkLatin",
@@ -5494,7 +5595,7 @@
         }
       ]
     },
-    "./components/textarea": {
+    "./components/textarea [default]": {
       "type": "module",
       "file": "./src/components/textarea.d.ts",
       "exports": [
@@ -5507,6 +5608,17 @@
           "name": "TextareaProps",
           "kind": "type",
           "space": "type"
+        }
+      ]
+    },
+    "./components/textarea [react-native]": {
+      "type": "module",
+      "file": "./src/components/textarea.native.d.ts",
+      "exports": [
+        {
+          "name": "Textarea",
+          "kind": "variable",
+          "space": "value"
         }
       ]
     },
@@ -7795,7 +7907,7 @@
         }
       ]
     },
-    "./input": {
+    "./input [default]": {
       "type": "module",
       "file": "./src/components/input.d.ts",
       "exports": [
@@ -7808,6 +7920,22 @@
           "name": "InputProps",
           "kind": "type",
           "space": "type"
+        }
+      ]
+    },
+    "./input [react-native]": {
+      "type": "module",
+      "file": "./src/components/input.native.d.ts",
+      "exports": [
+        {
+          "name": "Input",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "NativeField",
+          "kind": "variable",
+          "space": "value"
         }
       ]
     },
@@ -8792,7 +8920,7 @@
         }
       ]
     },
-    "./loader": {
+    "./loader [default]": {
       "type": "module",
       "file": "./src/components/loader.d.ts",
       "exports": [
@@ -8805,6 +8933,22 @@
           "name": "LoaderState",
           "kind": "variable",
           "space": "value"
+        }
+      ]
+    },
+    "./loader [react-native]": {
+      "type": "module",
+      "file": "./src/components/loader.native.d.ts",
+      "exports": [
+        {
+          "name": "Loader",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LoaderContract",
+          "kind": "type",
+          "space": "type"
         }
       ]
     },
@@ -8864,7 +9008,7 @@
         }
       ]
     },
-    "./matter-icon": {
+    "./matter-icon [default]": {
       "type": "module",
       "file": "./src/components/matter-icon.d.ts",
       "exports": [
@@ -8875,6 +9019,17 @@
         },
         {
           "name": "MattersNavIcon",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./matter-icon [react-native]": {
+      "type": "module",
+      "file": "./src/components/matter-icon.native.d.ts",
+      "exports": [
+        {
+          "name": "MatterIcon",
           "kind": "variable",
           "space": "value"
         }
@@ -9713,7 +9868,7 @@
         }
       ]
     },
-    "./separator": {
+    "./separator [default]": {
       "type": "module",
       "file": "./src/components/separator.d.ts",
       "exports": [
@@ -9729,7 +9884,18 @@
         }
       ]
     },
-    "./sheet": {
+    "./separator [react-native]": {
+      "type": "module",
+      "file": "./src/components/separator.native.d.ts",
+      "exports": [
+        {
+          "name": "Separator",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./sheet [default]": {
       "type": "module",
       "file": "./src/components/sheet.d.ts",
       "exports": [
@@ -9801,6 +9967,47 @@
         {
           "name": "SheetTrigger",
           "kind": "function",
+          "space": "value"
+        }
+      ]
+    },
+    "./sheet [react-native]": {
+      "type": "module",
+      "file": "./src/components/sheet.native.d.ts",
+      "exports": [
+        {
+          "name": "Sheet",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetClose",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetDescription",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetHeader",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetPanel",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetPopup",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SheetTitle",
+          "kind": "variable",
           "space": "value"
         }
       ]
@@ -10010,9 +10217,20 @@
         }
       ]
     },
-    "./stella-wordmark": {
+    "./stella-wordmark [default]": {
       "type": "module",
       "file": "./src/components/stella-wordmark.d.ts",
+      "exports": [
+        {
+          "name": "StellaWordmarkLatin",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./stella-wordmark [react-native]": {
+      "type": "module",
+      "file": "./src/components/stella-wordmark.native.d.ts",
       "exports": [
         {
           "name": "StellaWordmarkLatin",
@@ -10048,9 +10266,20 @@
         }
       ]
     },
-    "./switch": {
+    "./switch [default]": {
       "type": "module",
       "file": "./src/components/switch.d.ts",
+      "exports": [
+        {
+          "name": "Switch",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./switch [react-native]": {
+      "type": "module",
+      "file": "./src/components/switch.native.d.ts",
       "exports": [
         {
           "name": "Switch",
@@ -10217,6 +10446,43 @@
         }
       ]
     },
+    "./text [default]": {
+      "type": "module",
+      "file": "./src/components/text.d.ts",
+      "exports": [
+        {
+          "name": "Text",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TextVariant",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./text [react-native]": {
+      "type": "module",
+      "file": "./src/components/text.native.d.ts",
+      "exports": [
+        {
+          "name": "Text",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TextVariant",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "textFontFamily",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./text-mark": {
       "type": "module",
       "file": "./src/review/text-mark.d.ts",
@@ -10283,7 +10549,7 @@
         }
       ]
     },
-    "./textarea": {
+    "./textarea [default]": {
       "type": "module",
       "file": "./src/components/textarea.d.ts",
       "exports": [
@@ -10296,6 +10562,17 @@
           "name": "TextareaProps",
           "kind": "type",
           "space": "type"
+        }
+      ]
+    },
+    "./textarea [react-native]": {
+      "type": "module",
+      "file": "./src/components/textarea.native.d.ts",
+      "exports": [
+        {
+          "name": "Textarea",
+          "kind": "variable",
+          "space": "value"
         }
       ]
     },
@@ -10634,7 +10911,9 @@
     "./src/components/bidi-text.d.ts": "import type * as React from \"react\";\nexport declare const BidiText: (props: BidiTextProps) => React.JSX.Element;\nexport declare const UserText: (props: BidiTextProps) => React.JSX.Element;\ntype BidiDirection = \"auto\" | \"ltr\" | \"rtl\";\ntype BdiElementProps = Omit<React.ComponentPropsWithoutRef<\"bdi\">, \"dir\"> & {\n    as?: \"bdi\";\n    direction?: BidiDirection;\n};\ntype SpanTextProps = Omit<React.ComponentPropsWithoutRef<\"span\">, \"dir\"> & {\n    as: \"span\";\n    direction?: BidiDirection;\n};\ntype DivTextProps = Omit<React.ComponentPropsWithoutRef<\"div\">, \"dir\"> & {\n    as: \"div\";\n    direction?: BidiDirection;\n};\ntype ParagraphTextProps = Omit<React.ComponentPropsWithoutRef<\"p\">, \"dir\"> & {\n    as: \"p\";\n    direction?: BidiDirection;\n};\ntype BidiTextProps = BdiElementProps | SpanTextProps | DivTextProps | ParagraphTextProps;\nexport type { BidiDirection, BidiTextProps };\n",
     "./src/components/brand-icons.d.ts": "import type * as React from \"react\";\ntype BrandIconProps = React.ComponentProps<\"svg\">;\nexport declare const DiscordLogoIcon: (props: BrandIconProps) => React.JSX.Element;\nexport declare const GitHubLogoIcon: (props: BrandIconProps) => React.JSX.Element;\nexport declare const XLogoIcon: (props: BrandIconProps) => React.JSX.Element;\nexport {};\n",
     "./src/components/breadcrumb.d.ts": "import type * as React from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\ndeclare const Breadcrumb: ({ ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\ndeclare const BreadcrumbList: ({ className, ...props }: React.ComponentProps<\"ol\">) => React.JSX.Element;\ndeclare const BreadcrumbItem: ({ className, ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ndeclare function BreadcrumbLink({ className, render, ...props }: useRender.ComponentProps<\"a\">): React.ReactElement<unknown, string | React.JSXElementConstructor<any>>;\ndeclare const BreadcrumbPage: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const BreadcrumbSeparator: ({ children, className, ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ndeclare const BreadcrumbEllipsis: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\nexport { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator, BreadcrumbEllipsis, };\n",
-    "./src/components/button.d.ts": "import type { ReactNode } from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport { type VariantProps } from \"class-variance-authority\";\ndeclare const buttonAccessibleDisabledClass = \"cursor-not-allowed opacity-64\";\ndeclare const buttonVariants: (props?: ({\n    size?: \"row\" | \"default\" | \"xs\" | \"sm\" | \"icon\" | \"chip\" | \"icon-lg\" | \"icon-sm\" | \"icon-xl\" | \"icon-xs\" | \"lg\" | \"xl\" | null | undefined;\n    variant?: \"link\" | \"destructive\" | \"default\" | \"destructive-outline\" | \"destructive-ghost\" | \"ghost\" | \"muted\" | \"outline\" | \"secondary\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const BUTTON_CONTENT: {\n    readonly icon: \"icon\";\n    readonly text: \"text\";\n};\ndeclare const BUTTON_SIZE_CONTENT: {\n    readonly chip: \"text\";\n    readonly default: \"text\";\n    readonly icon: \"icon\";\n    readonly \"icon-lg\": \"icon\";\n    readonly \"icon-sm\": \"icon\";\n    readonly \"icon-xl\": \"icon\";\n    readonly \"icon-xs\": \"icon\";\n    readonly lg: \"text\";\n    readonly row: \"text\";\n    readonly sm: \"text\";\n    readonly xl: \"text\";\n    readonly xs: \"text\";\n};\ntype ButtonProps = {\n    variant?: VariantProps<typeof buttonVariants>[\"variant\"];\n    size?: VariantProps<typeof buttonVariants>[\"size\"];\n    loading?: boolean;\n    icon?: ReactNode;\n    tooltip?: ReactNode;\n    \"data-accessible-disabled\"?: \"\";\n} & useRender.ComponentProps<\"button\">;\ndeclare function Button({ className, variant, size, render, loading, icon, children, disabled, tooltip, \"data-accessible-disabled\": accessibleDisabled, ...props }: ButtonProps): import(\"react\").JSX.Element;\nexport { Button, BUTTON_CONTENT, BUTTON_SIZE_CONTENT, buttonAccessibleDisabledClass, buttonVariants, };\n",
+    "./src/components/button.native.d.ts": "import type { PressableProps } from \"react-native\";\nimport { type ButtonContract } from \"./button.shared\";\ntype ButtonProps = Omit<PressableProps, \"children\" | \"disabled\"> & ButtonContract & {\n    className?: string | undefined;\n};\nexport declare const Button: ({ accessibilityState, children, className, disabled, hitSlop, icon, loading, size, variant, ...props }: ButtonProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/button.shared.d.ts": "import type { ReactNode } from \"react\";\nexport declare const BUTTON_VARIANT_TOKENS: {\n    readonly default: {\n        readonly surface: \"border-primary bg-primary\";\n        readonly label: \"text-primary-foreground\";\n    };\n    readonly destructive: {\n        readonly surface: \"border-destructive/32 bg-destructive/10\";\n        readonly label: \"text-destructive-foreground\";\n    };\n    readonly \"destructive-outline\": {\n        readonly surface: \"border-input bg-popover\";\n        readonly label: \"text-destructive-foreground\";\n    };\n    readonly \"destructive-ghost\": {\n        readonly surface: \"border-transparent\";\n        readonly label: \"text-destructive\";\n    };\n    readonly ghost: {\n        readonly surface: \"border-transparent\";\n        readonly label: \"text-foreground\";\n    };\n    readonly link: {\n        readonly surface: \"border-transparent\";\n        readonly label: \"\";\n    };\n    readonly muted: {\n        readonly surface: \"border-transparent\";\n        readonly label: \"text-muted-foreground\";\n    };\n    readonly outline: {\n        readonly surface: \"border-input bg-popover\";\n        readonly label: \"text-foreground\";\n    };\n    readonly secondary: {\n        readonly surface: \"border-transparent bg-secondary\";\n        readonly label: \"text-secondary-foreground\";\n    };\n};\nexport type ButtonVariant = keyof typeof BUTTON_VARIANT_TOKENS;\nexport declare const BUTTON_SIZES: readonly [\n    \"chip\",\n    \"default\",\n    \"icon\",\n    \"icon-lg\",\n    \"icon-sm\",\n    \"icon-xl\",\n    \"icon-xs\",\n    \"lg\",\n    \"row\",\n    \"sm\",\n    \"xl\",\n    \"xs\"\n];\nexport type ButtonSize = (typeof BUTTON_SIZES)[number];\nexport type ButtonContract = {\n    variant?: ButtonVariant | null | undefined;\n    size?: ButtonSize | null | undefined;\n    loading?: boolean;\n    disabled?: boolean;\n    icon?: ReactNode;\n    children?: ReactNode;\n};\n",
+    "./src/components/button.d.ts": "import type { ReactNode } from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport { type ButtonContract } from \"./button.shared\";\ndeclare const buttonAccessibleDisabledClass = \"cursor-not-allowed opacity-64\";\ndeclare const buttonVariants: (props?: ({\n    size?: \"row\" | \"default\" | \"xs\" | \"sm\" | \"icon\" | \"chip\" | \"icon-lg\" | \"icon-sm\" | \"icon-xl\" | \"icon-xs\" | \"lg\" | \"xl\" | null | undefined;\n    variant?: \"link\" | \"destructive\" | \"default\" | \"destructive-outline\" | \"destructive-ghost\" | \"ghost\" | \"muted\" | \"outline\" | \"secondary\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const BUTTON_CONTENT: {\n    readonly icon: \"icon\";\n    readonly text: \"text\";\n};\ndeclare const BUTTON_SIZE_CONTENT: {\n    readonly chip: \"text\";\n    readonly default: \"text\";\n    readonly icon: \"icon\";\n    readonly \"icon-lg\": \"icon\";\n    readonly \"icon-sm\": \"icon\";\n    readonly \"icon-xl\": \"icon\";\n    readonly \"icon-xs\": \"icon\";\n    readonly lg: \"text\";\n    readonly row: \"text\";\n    readonly sm: \"text\";\n    readonly xl: \"text\";\n    readonly xs: \"text\";\n};\ntype ButtonProps = Omit<ButtonContract, \"children\" | \"disabled\"> & {\n    tooltip?: ReactNode;\n    \"data-accessible-disabled\"?: \"\";\n} & useRender.ComponentProps<\"button\">;\ndeclare function Button({ className, variant, size, render, loading, icon, children, disabled, tooltip, \"data-accessible-disabled\": accessibleDisabled, ...props }: ButtonProps): import(\"react\").JSX.Element;\nexport { Button, BUTTON_CONTENT, BUTTON_SIZE_CONTENT, buttonAccessibleDisabledClass, buttonVariants, };\n",
     "./src/components/checkbox.d.ts": "import { Checkbox as CheckboxPrimitive } from \"@base-ui/react/checkbox\";\ndeclare const Checkbox: ({ className, ...props }: CheckboxPrimitive.Root.Props) => import(\"react\").JSX.Element;\nexport { Checkbox };\n",
     "./src/components/color-picker.d.ts": "import type * as React from \"react\";\ntype ColorPreset = {\n    label: string;\n    value: string;\n    color?: string;\n};\ntype ColorPickerProps = {\n    value?: string | undefined;\n    onSelect?: (value: string) => void;\n    onClear?: () => void;\n    presets?: ColorPreset[];\n    columns?: number;\n    defaultExpanded?: boolean;\n    moreLabel: string;\n    children: React.ReactNode;\n    side?: \"top\" | \"bottom\" | \"left\" | \"right\";\n    align?: \"start\" | \"center\" | \"end\";\n    className?: string;\n};\ntype ColorPickerContentBaseProps = {\n    value?: string | undefined;\n    onSelect?: ((value: string) => void) | undefined;\n    presets: ColorPreset[];\n    moreLabel: string;\n};\ntype ColorPickerContentProps = ColorPickerContentBaseProps & ({\n    columns: number;\n    defaultExpanded: boolean;\n    onClear?: (() => void) | undefined;\n    presentation?: \"popover\";\n} | {\n    columns?: never;\n    defaultExpanded?: never;\n    onClear?: never;\n    presentation: \"inline\";\n});\ndeclare const DEFAULT_PRESETS: ColorPreset[];\ndeclare const ColorPickerContent: ({ value, onSelect, onClear, presets, columns, defaultExpanded, moreLabel, presentation, }: ColorPickerContentProps) => React.JSX.Element;\ndeclare const ColorPicker: ({ value, onSelect, onClear, presets, columns, defaultExpanded, moreLabel, children, side, align, className, }: ColorPickerProps) => React.JSX.Element;\nexport { ColorPicker, ColorPickerContent, DEFAULT_PRESETS, type ColorPickerContentProps, type ColorPickerProps, type ColorPreset, };\n",
     "./src/components/combobox.d.ts": "import * as React from \"react\";\nimport { Combobox as ComboboxPrimitive } from \"@base-ui/react/combobox\";\nimport type { ControlSize } from \"../lib/control-size\";\ndeclare const Combobox: <Value, Multiple extends boolean | undefined = false>(props: ComboboxPrimitive.Root.Props<Value, Multiple>) => React.JSX.Element;\ndeclare const ComboboxChipsInput: ({ className, size, ...props }: Omit<ComboboxPrimitive.Input.Props, \"size\"> & {\n    size?: ControlSize | number;\n    ref?: React.Ref<HTMLInputElement>;\n}) => React.JSX.Element;\ndeclare const ComboboxInput: ({ className, showTrigger, showClear, startAddon, size, ...props }: Omit<ComboboxPrimitive.Input.Props, \"size\"> & {\n    showTrigger?: boolean;\n    showClear?: boolean;\n    startAddon?: React.ReactNode;\n    size?: ControlSize | number;\n    ref?: React.Ref<HTMLInputElement>;\n}) => React.JSX.Element;\ndeclare const ComboboxTrigger: ({ className, ...props }: ComboboxPrimitive.Trigger.Props) => React.JSX.Element;\ndeclare const ComboboxPopup: ({ className, children, side, sideOffset, alignOffset, align, ...props }: ComboboxPrimitive.Popup.Props & {\n    align?: ComboboxPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: ComboboxPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: ComboboxPrimitive.Positioner.Props[\"alignOffset\"];\n    side?: ComboboxPrimitive.Positioner.Props[\"side\"];\n}) => React.JSX.Element;\ndeclare const ComboboxItem: ({ className, children, ...props }: ComboboxPrimitive.Item.Props) => React.JSX.Element;\ndeclare const ComboboxSeparator: ({ className, ...props }: ComboboxPrimitive.Separator.Props) => React.JSX.Element;\ndeclare const ComboboxGroup: ({ className, ...props }: ComboboxPrimitive.Group.Props) => React.JSX.Element;\ndeclare const ComboboxGroupLabel: ({ className, ...props }: ComboboxPrimitive.GroupLabel.Props) => React.JSX.Element;\ndeclare const ComboboxEmpty: ({ className, ...props }: ComboboxPrimitive.Empty.Props) => React.JSX.Element;\ndeclare const ComboboxRow: ({ className, ...props }: ComboboxPrimitive.Row.Props) => React.JSX.Element;\ndeclare const ComboboxValue: ({ ...props }: ComboboxPrimitive.Value.Props) => React.JSX.Element;\ndeclare const ComboboxList: ({ className, ...props }: ComboboxPrimitive.List.Props) => React.JSX.Element;\ndeclare const ComboboxClear: ({ className, ...props }: ComboboxPrimitive.Clear.Props) => React.JSX.Element;\ndeclare const ComboboxStatus: ({ className, ...props }: ComboboxPrimitive.Status.Props) => React.JSX.Element;\ndeclare const ComboboxCollection: (props: ComboboxPrimitive.Collection.Props) => React.JSX.Element;\ndeclare const ComboboxChips: ({ className, children, startAddon, ...props }: ComboboxPrimitive.Chips.Props & {\n    startAddon?: React.ReactNode;\n}) => React.JSX.Element;\ndeclare const ComboboxChip: ({ children, ...props }: ComboboxPrimitive.Chip.Props) => React.JSX.Element;\nexport { Combobox, ComboboxChipsInput, ComboboxInput, ComboboxTrigger, ComboboxPopup, ComboboxItem, ComboboxSeparator, ComboboxGroup, ComboboxGroupLabel, ComboboxEmpty, ComboboxValue, ComboboxList, ComboboxClear, ComboboxStatus, ComboboxRow, ComboboxCollection, ComboboxChips, ComboboxChip, };\n",
@@ -10665,12 +10944,18 @@
     "./src/components/inline-rename.d.ts": "import type { ComponentProps } from \"react\";\ntype InlineRenameInputProps = Omit<ComponentProps<\"input\">, \"value\" | \"onChange\" | \"onKeyDown\" | \"size\"> & {\n    value: string;\n    onValueChange: (value: string) => void;\n    onCommit: () => void;\n    onCancel: () => void;\n    fill?: boolean;\n};\nexport declare const InlineRenameInput: ({ value, onValueChange, onCommit, onCancel, onBlur, className, ref, dir, fill, ...props }: InlineRenameInputProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/input-group.d.ts": "import type * as React from \"react\";\nimport type { VariantProps } from \"class-variance-authority\";\nimport type { InputProps } from \"./input\";\nimport type { TextareaProps } from \"./textarea\";\ndeclare const InputGroup: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const inputGroupAddonVariants: (props?: ({\n    align?: \"inline-end\" | \"inline-start\" | \"block-end\" | \"block-start\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const InputGroupAddon: ({ className, align, ...props }: React.ComponentProps<\"div\"> & VariantProps<typeof inputGroupAddonVariants>) => React.JSX.Element;\ndeclare const InputGroupText: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const InputGroupInput: ({ className, ...props }: InputProps) => React.JSX.Element;\ndeclare const InputGroupTextarea: ({ className, ...props }: TextareaProps) => React.JSX.Element;\nexport { InputGroup, InputGroupAddon, InputGroupText, InputGroupInput, InputGroupTextarea, };\n",
     "./src/components/input-otp.d.ts": "import * as React from \"react\";\nimport { OTPInput } from \"input-otp\";\ndeclare const InputOTP: ({ className, containerClassName, ...props }: React.ComponentProps<typeof OTPInput> & {\n    containerClassName?: string;\n}) => React.JSX.Element;\ndeclare const InputOTPGroup: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const InputOTPSlot: ({ index, className, ...props }: React.ComponentProps<\"div\"> & {\n    index: number;\n}) => React.JSX.Element;\ndeclare const InputOTPSeparator: ({ ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator };\n",
+    "./src/components/input.native.d.ts": "import type { TextInputProps } from \"react-native\";\nimport type { InputContract, TextFieldContract } from \"./input.shared\";\ntype NativeFieldProps = Omit<TextInputProps, keyof TextFieldContract> & TextFieldContract & {\n    className?: string | undefined;\n};\nexport declare const NativeField: ({ box, className, disabled, editable, onChangeText, onValueChange, size, style, ...props }: NativeFieldProps & {\n    box: string;\n}) => import(\"react\").JSX.Element;\ntype InputProps = NativeFieldProps & {\n    type?: InputContract[\"type\"];\n};\nexport declare const Input: ({ type, unstyled, size, ...props }: InputProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/input.shared.d.ts": "import type { ControlSize } from \"../lib/control-size\";\nexport type TextFieldContract = {\n    size?: ControlSize;\n    unstyled?: boolean;\n    value?: string;\n    defaultValue?: string;\n    placeholder?: string;\n    disabled?: boolean;\n    onValueChange?: (value: string) => void;\n};\nexport type InputContract = TextFieldContract & {\n    type?: \"email\" | \"search\" | \"tel\" | \"text\" | \"url\";\n};\n",
     "./src/components/input.d.ts": "import type * as React from \"react\";\nimport { Input as InputPrimitive } from \"@base-ui/react/input\";\nimport type { ControlSize } from \"../lib/control-size\";\ntype InputProps = Omit<InputPrimitive.Props & React.RefAttributes<HTMLInputElement>, \"size\" | \"style\" | \"type\"> & {\n    type?: Exclude<React.HTMLInputTypeAttribute, \"file\"> | undefined;\n    size?: ControlSize | number;\n    style?: React.CSSProperties;\n    unstyled?: boolean;\n    nativeInput?: boolean;\n};\ndeclare const Input: ({ className, size, unstyled, nativeInput, dir, onChange, ...props }: InputProps) => React.JSX.Element;\nexport { Input, type InputProps };\n",
     "./src/components/label.d.ts": "import { useRender } from \"@base-ui/react/use-render\";\ndeclare function Label({ className, render, ...props }: useRender.ComponentProps<\"label\">): import(\"react\").ReactElement<unknown, string | import(\"react\").JSXElementConstructor<any>>;\nexport { Label };\n",
     "./src/components/landing.d.ts": "import type { ReactElement, ReactNode } from \"react\";\ntype LandingLayoutProps = {\n    actions?: ReactNode | undefined;\n    hero: ReactNode;\n    children: ReactNode;\n    footer?: ReactNode | undefined;\n};\nexport declare const LandingLayout: ({ actions, hero, children, footer, }: LandingLayoutProps) => import(\"react\").JSX.Element;\ntype LandingGreetingProps = {\n    icon: ReactNode;\n    children: ReactNode;\n};\nexport declare const LandingGreeting: ({ icon, children }: LandingGreetingProps) => import(\"react\").JSX.Element;\nexport declare const LANDING_SECTION_HEADING_CLASS = \"text-foreground hover:bg-accent/50 focus-visible:ring-ring [&>svg]:text-muted-foreground flex items-center gap-2 rounded-md px-2 py-0.5 text-sm font-semibold outline-none focus-visible:ring-2\";\nexport declare const LANDING_ROW_CLASS = \"group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start outline-none focus-visible:ring-2\";\ntype LandingSectionProps = {\n    children: ReactNode;\n    heading: ReactNode;\n};\nexport declare const LandingSection: ({ children, heading }: LandingSectionProps) => import(\"react\").JSX.Element;\ntype LandingButtonProps = {\n    icon?: ReactElement;\n    meta?: ReactNode | undefined;\n    onClick: () => void;\n    title: ReactNode;\n};\nexport declare const LandingButton: ({ icon, meta, onClick, title, }: LandingButtonProps) => import(\"react\").JSX.Element;\ntype LandingItemTextProps = {\n    icon?: ReactElement;\n    iconTone?: \"muted\" | \"matter\" | undefined;\n    meta?: ReactNode | undefined;\n    title: ReactNode;\n};\nexport declare const LandingItemText: ({ icon, iconTone, meta, title, }: LandingItemTextProps) => import(\"react\").JSX.Element;\ntype LandingRowIconProps = {\n    children: ReactElement;\n    tone?: \"muted\" | \"matter\" | undefined;\n};\nexport declare const LandingRowIcon: ({ children, tone, }: LandingRowIconProps) => import(\"react\").JSX.Element;\ntype LandingEmptyProps = {\n    children: ReactNode;\n};\nexport declare const LandingEmpty: ({ children }: LandingEmptyProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/list.d.ts": "import type * as React from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport type { VariantProps } from \"class-variance-authority\";\ndeclare const ListGroup: ({ className, ...props }: React.ComponentProps<\"section\">) => React.JSX.Element;\ndeclare const ListGroupHeader: ({ className, ...props }: React.ComponentProps<\"header\">) => React.JSX.Element;\ndeclare const ListGroupHeading: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const ListGroupTitle: ({ className, children, ...props }: React.ComponentProps<\"h2\">) => React.JSX.Element;\ndeclare const ListGroupCount: ({ className, count, ...props }: Omit<React.ComponentProps<\"span\">, \"children\"> & {\n    count: string;\n}) => React.JSX.Element;\ndeclare const ListGroupDescription: ({ className, ...props }: React.ComponentProps<\"p\">) => React.JSX.Element;\ndeclare const ListGroupAction: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const List: ({ className, ...props }: React.ComponentProps<\"ul\">) => React.JSX.Element;\ndeclare const ListItem: ({ className, render, children, ...props }: useRender.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const listItemMediaVariants: (props?: ({\n    variant?: \"initial\" | \"icon\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const ListItemMedia: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & VariantProps<typeof listItemMediaVariants>) => React.JSX.Element;\ndeclare const ListItemContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const ListItemTitle: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const listItemDescriptionVariants: (props?: ({\n    variant?: \"code\" | \"text\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const ListItemDescription: ({ className, variant, ...props }: React.ComponentProps<\"span\"> & VariantProps<typeof listItemDescriptionVariants>) => React.JSX.Element;\ndeclare const ListItemActions: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const ListEmpty: ({ className, ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ntype StatusTone = \"neutral\" | \"success\" | \"warning\" | \"destructive\";\ndeclare const ListItemStatus: ({ tone, className, children, ...props }: React.ComponentProps<\"span\"> & {\n    tone?: StatusTone;\n}) => React.JSX.Element;\nexport { List, ListEmpty, ListGroup, ListGroupAction, ListGroupCount, ListGroupDescription, ListGroupHeader, ListGroupHeading, ListGroupTitle, ListItem, ListItemActions, ListItemContent, ListItemDescription, ListItemMedia, ListItemStatus, ListItemTitle, };\nexport type { StatusTone };\n",
-    "./src/components/loader.d.ts": "import type { ComponentProps } from \"react\";\ndeclare const Loader: ({ label, variant, size, animation, className, ...props }: LoaderProps) => import(\"react\").JSX.Element;\ndeclare const LoaderState: ({ label, detail, hint, className }: LoaderStateProps) => import(\"react\").JSX.Element;\ndeclare const LOADER_SIZE: {\n    readonly sm: \"size-4\";\n    readonly md: \"size-6\";\n    readonly lg: \"size-8\";\n};\ntype LoaderSize = keyof typeof LOADER_SIZE;\ntype LoaderProps = Omit<ComponentProps<\"span\">, \"children\" | \"role\" | \"aria-label\" | \"aria-hidden\" | \"aria-busy\"> & {\n    size?: LoaderSize;\n    animation?: \"none\" | \"spin\";\n} & ({\n    variant?: \"status\";\n    label: string;\n} | {\n    variant: \"decorative\";\n    label?: never;\n});\ntype LoaderStateProps = {\n    label: string;\n    detail?: string | undefined;\n    hint?: string | undefined;\n    className?: string | undefined;\n};\nexport { Loader, LoaderState };\n",
-    "./src/components/matter-icon.d.ts": "type MatterIconProps = {\n    className?: string | undefined;\n} & ({\n    matter: {\n        id: string;\n        color: string | null;\n    };\n} | {\n    variant: \"none\" | \"all\";\n});\nexport declare const MatterIcon: (props: MatterIconProps) => import(\"react\").JSX.Element;\nexport declare const MattersNavIcon: ({ className, }: {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/loader.native.d.ts": "import type { ActivityIndicatorProps } from \"react-native\";\nimport type { LoaderContract, LoaderSize } from \"./loader.shared\";\ntype LoaderProps = Omit<ActivityIndicatorProps, \"size\"> & {\n    className?: string | undefined;\n    color?: never;\n    accessibilityLabel?: never;\n    size?: LoaderSize | undefined;\n} & ({\n    variant?: \"status\";\n    label?: string | undefined;\n} | {\n    variant: \"decorative\";\n    label?: never;\n});\nexport declare const Loader: ({ label, size, variant, ...props }: LoaderProps) => import(\"react\").JSX.Element;\nexport type { LoaderContract };\n",
+    "./src/components/loader.shared.d.ts": "export declare const LOADER_SIZES: readonly [\n    \"sm\",\n    \"md\",\n    \"lg\"\n];\nexport type LoaderSize = (typeof LOADER_SIZES)[number];\nexport type LoaderContract = {\n    size?: LoaderSize;\n} & ({\n    variant?: \"status\";\n    label: string;\n} | {\n    variant: \"decorative\";\n    label?: never;\n});\n",
+    "./src/components/loader.d.ts": "import type { ComponentProps } from \"react\";\nimport type { LoaderSize } from \"./loader.shared\";\ndeclare const Loader: ({ label, variant, size, animation, className, ...props }: LoaderProps) => import(\"react\").JSX.Element;\ndeclare const LoaderState: ({ label, detail, hint, className }: LoaderStateProps) => import(\"react\").JSX.Element;\ntype LoaderProps = Omit<ComponentProps<\"span\">, \"children\" | \"role\" | \"aria-label\" | \"aria-hidden\" | \"aria-busy\"> & {\n    size?: LoaderSize;\n    animation?: \"none\" | \"spin\";\n} & ({\n    variant?: \"status\";\n    label: string;\n} | {\n    variant: \"decorative\";\n    label?: never;\n});\ntype LoaderStateProps = {\n    label: string;\n    detail?: string | undefined;\n    hint?: string | undefined;\n    className?: string | undefined;\n};\nexport { Loader, LoaderState };\n",
+    "./src/components/matter-icon.native.d.ts": "import { type MatterIconContract } from \"./matter-icon.shared\";\ntype MatterIconProps = ({\n    matter: {\n        id: string;\n        color?: string | null | undefined;\n    };\n} | Exclude<MatterIconContract, {\n    matter: unknown;\n}>) & {\n    size?: number | undefined;\n};\nexport declare const MatterIcon: (props: MatterIconProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/matter-icon.shared.d.ts": "export type MatterIconContract = {\n    matter: {\n        id: string;\n        color: string | null;\n    };\n} | {\n    variant: \"none\" | \"all\";\n};\nexport declare const ALL_MATTERS_STACK: readonly [\n    {\n        readonly d: \"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\";\n        readonly option: \"red\";\n    },\n    {\n        readonly d: \"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\";\n        readonly option: \"blue\";\n    },\n    {\n        readonly d: \"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\";\n        readonly option: \"green\";\n    }\n];\n",
+    "./src/components/matter-icon.d.ts": "import { type MatterIconContract } from \"./matter-icon.shared\";\ntype MatterIconProps = {\n    className?: string | undefined;\n} & MatterIconContract;\nexport declare const MatterIcon: (props: MatterIconProps) => import(\"react\").JSX.Element;\nexport declare const MattersNavIcon: ({ className, }: {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/menu-section.d.ts": "import type { PropsWithChildren } from \"react\";\ndeclare const MenuSection: ({ children, title, }: PropsWithChildren<{\n    title: string;\n}>) => import(\"react\").JSX.Element;\nexport { MenuSection };\n",
     "./src/components/menu.d.ts": "import type * as React from \"react\";\nimport { Menu as MenuPrimitive } from \"@base-ui/react/menu\";\ndeclare const MenuCreateHandle: typeof MenuPrimitive.createHandle;\ndeclare const Menu: typeof MenuPrimitive.Root;\ndeclare const MenuPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").ContextMenuPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ndeclare function MenuTrigger({ tooltip, ...props }: MenuPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const MenuPopup: ({ children, className, sideOffset, align, alignOffset, side, anchor, collisionAvoidance, header, viewportClassName, ...props }: MenuPrimitive.Popup.Props & {\n    header?: React.ReactNode;\n    viewportClassName?: string;\n    align?: MenuPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: MenuPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: MenuPrimitive.Positioner.Props[\"alignOffset\"];\n    side?: MenuPrimitive.Positioner.Props[\"side\"];\n    anchor?: MenuPrimitive.Positioner.Props[\"anchor\"];\n    collisionAvoidance?: MenuPrimitive.Positioner.Props[\"collisionAvoidance\"];\n}) => React.JSX.Element;\ndeclare const MenuGroup: (props: MenuPrimitive.Group.Props) => React.JSX.Element;\ndeclare const MenuItem: ({ className, inset, variant, ...props }: MenuPrimitive.Item.Props & {\n    inset?: boolean;\n    variant?: \"default\" | \"destructive\";\n}) => React.JSX.Element;\ndeclare const MenuCheckboxItem: ({ className, children, checked, variant, ...props }: MenuPrimitive.CheckboxItem.Props & {\n    variant?: \"default\" | \"switch\";\n}) => React.JSX.Element;\ndeclare const MenuRadioGroup: (props: MenuPrimitive.RadioGroup.Props) => React.JSX.Element;\ndeclare const MenuRadioItem: ({ className, children, indicator, ...props }: MenuPrimitive.RadioItem.Props & {\n    indicator?: \"check\" | \"none\";\n}) => React.JSX.Element;\ndeclare const MenuGroupLabel: ({ className, inset, ...props }: MenuPrimitive.GroupLabel.Props & {\n    inset?: boolean;\n}) => React.JSX.Element;\ndeclare const MenuSeparator: ({ className, ...props }: MenuPrimitive.Separator.Props) => React.JSX.Element;\ndeclare const MenuShortcut: ({ className, ...props }: React.ComponentProps<\"kbd\">) => React.JSX.Element;\ndeclare const MenuSub: (props: MenuPrimitive.SubmenuRoot.Props) => React.JSX.Element;\ndeclare const MenuSubTrigger: ({ className, inset, children, ...props }: MenuPrimitive.SubmenuTrigger.Props & {\n    inset?: boolean;\n}) => React.JSX.Element;\ndeclare const MenuSubPopup: ({ className, sideOffset, alignOffset, align, ...props }: MenuPrimitive.Popup.Props & {\n    header?: React.ReactNode;\n    viewportClassName?: string;\n    align?: MenuPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: MenuPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: MenuPrimitive.Positioner.Props[\"alignOffset\"];\n}) => React.JSX.Element;\nexport { MenuCreateHandle, MenuCreateHandle as DropdownMenuCreateHandle, Menu, Menu as DropdownMenu, MenuPortal, MenuPortal as DropdownMenuPortal, MenuTrigger, MenuTrigger as DropdownMenuTrigger, MenuPopup, MenuPopup as DropdownMenuContent, MenuGroup, MenuGroup as DropdownMenuGroup, MenuItem, MenuItem as DropdownMenuItem, MenuCheckboxItem, MenuCheckboxItem as DropdownMenuCheckboxItem, MenuRadioGroup, MenuRadioGroup as DropdownMenuRadioGroup, MenuRadioItem, MenuRadioItem as DropdownMenuRadioItem, MenuGroupLabel, MenuGroupLabel as DropdownMenuLabel, MenuSeparator, MenuSeparator as DropdownMenuSeparator, MenuShortcut, MenuShortcut as DropdownMenuShortcut, MenuSub, MenuSub as DropdownMenuSub, MenuSubTrigger, MenuSubTrigger as DropdownMenuSubTrigger, MenuSubPopup, MenuSubPopup as DropdownMenuSubContent, };\n",
     "./src/components/number-input.d.ts": "import { NumberField as NumberFieldPrimitive } from \"@base-ui/react/number-field\";\nimport type { ControlSize } from \"../lib/control-size\";\ntype NumberInputProps = Omit<NumberFieldPrimitive.Root.Props, \"children\" | \"className\" | \"render\"> & {\n    className?: string;\n    inputClassName?: string;\n    inputProps?: Omit<NumberFieldPrimitive.Input.Props, \"className\" | \"defaultValue\" | \"id\" | \"onChange\" | \"type\" | \"value\">;\n    size?: ControlSize;\n};\ndeclare const NumberInput: ({ className, inputClassName, inputProps, dir, size, ...props }: NumberInputProps) => import(\"react\").JSX.Element;\nexport { NumberInput, type NumberInputProps };\n",
@@ -10686,7 +10971,11 @@
     "./src/components/secret-input.d.ts": "import type { InputProps } from \"./input\";\ntype SecretInputProps = Omit<InputProps, \"type\"> & {\n    hideValueLabel: string;\n    showValueLabel: string;\n};\ndeclare const SecretInput: ({ className, dir, disabled, hideValueLabel, showValueLabel, ...props }: SecretInputProps) => import(\"react\").JSX.Element;\nexport { SecretInput, type SecretInputProps };\n",
     "./src/components/segmented-icon-toggle.d.ts": "import type { ComponentType } from \"react\";\ntype SegmentedIconToggleOption<T extends string> = {\n    value: T;\n    icon: ComponentType<{\n        className?: string;\n    }>;\n    label: string;\n};\ntype SegmentedIconToggleProps<T extends string> = {\n    value: T;\n    options: readonly SegmentedIconToggleOption<T>[];\n    onChange: (value: T) => void;\n    size?: \"compact\" | \"touch\";\n};\nexport declare const SegmentedIconToggle: <T extends string>({ value, options, onChange, size, }: SegmentedIconToggleProps<T>) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/select.d.ts": "import * as React from \"react\";\nimport { Select as SelectPrimitive } from \"@base-ui/react/select\";\nimport type { ControlSize } from \"../lib/control-size\";\ntype SelectItemProps = SelectPrimitive.Item.Props & {\n    label?: string;\n};\ndeclare const Select: <Value, Multiple extends boolean | undefined = false>({ children, isItemEqualToValue, itemToStringLabel, itemToStringValue, ...props }: SelectPrimitive.Root.Props<Value, Multiple>) => React.JSX.Element;\ndeclare const SelectTrigger: ({ className, align, size, children, ...props }: SelectPrimitive.Trigger.Props & {\n    size?: ControlSize;\n    align?: \"start\" | \"center\";\n}) => React.JSX.Element;\ndeclare const SelectValue: ({ className, children, placeholder, ...props }: SelectPrimitive.Value.Props) => React.JSX.Element;\ndeclare const SelectPopup: ({ className, children, side, sideOffset, align, alignOffset, alignItemWithTrigger, ...props }: SelectPrimitive.Popup.Props & {\n    side?: SelectPrimitive.Positioner.Props[\"side\"];\n    sideOffset?: SelectPrimitive.Positioner.Props[\"sideOffset\"];\n    align?: SelectPrimitive.Positioner.Props[\"align\"];\n    alignOffset?: SelectPrimitive.Positioner.Props[\"alignOffset\"];\n    alignItemWithTrigger?: SelectPrimitive.Positioner.Props[\"alignItemWithTrigger\"];\n}) => React.JSX.Element;\ndeclare const SelectItem: ({ className, children, label: _label, ...props }: SelectItemProps) => React.JSX.Element;\ndeclare const SelectSeparator: ({ className, ...props }: SelectPrimitive.Separator.Props) => React.JSX.Element;\ndeclare const SelectGroup: (props: SelectPrimitive.Group.Props) => React.JSX.Element;\ndeclare const SelectGroupLabel: (props: SelectPrimitive.GroupLabel.Props) => React.JSX.Element;\nexport { Select, SelectTrigger, SelectValue, SelectPopup, SelectPopup as SelectContent, SelectItem, SelectSeparator, SelectGroup, SelectGroupLabel, };\n",
+    "./src/components/separator.native.d.ts": "import type { ViewProps } from \"react-native\";\nimport type { SeparatorContract } from \"./separator.shared\";\nexport declare const Separator: ({ className, orientation, ...props }: ViewProps & SeparatorContract & {\n    className?: string | undefined;\n    children?: never;\n}) => import(\"react\").JSX.Element;\n",
+    "./src/components/separator.shared.d.ts": "export type SeparatorContract = {\n    orientation?: \"horizontal\" | \"vertical\";\n};\n",
     "./src/components/separator.d.ts": "import type { PropsWithChildren } from \"react\";\nimport { Separator as SeparatorPrimitive } from \"@base-ui/react/separator\";\ndeclare const Separator: ({ className, orientation, ...props }: SeparatorPrimitive.Props) => import(\"react\").JSX.Element;\ntype TextSeparatorProps = PropsWithChildren<{\n    className?: string;\n    labelClassName?: string;\n}>;\ndeclare const TextSeparator: ({ children, className, labelClassName, }: TextSeparatorProps) => import(\"react\").JSX.Element;\nexport { Separator, TextSeparator };\n",
+    "./src/components/sheet.native.d.ts": "import type { ComponentProps } from \"react\";\nimport type { ViewProps } from \"react-native\";\nimport { ScrollView } from \"react-native\";\nimport { Button } from \"./button.native\";\nimport type { SheetContract } from \"./sheet.shared\";\nimport { Text } from \"./text.native\";\nexport declare const Sheet: ({ children, onOpenChange, open, }: SheetContract) => import(\"react\").JSX.Element;\nexport declare const SheetPopup: ({ className, ...props }: ViewProps & {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const SheetHeader: ({ className, ...props }: ViewProps & {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const SheetTitle: (props: ComponentProps<typeof Text>) => import(\"react\").JSX.Element;\nexport declare const SheetDescription: (props: ComponentProps<typeof Text>) => import(\"react\").JSX.Element;\nexport declare const SheetPanel: ({ contentContainerClassName, ...props }: ComponentProps<typeof ScrollView>) => import(\"react\").JSX.Element;\nexport declare const SheetClose: ({ onPress, size, variant, ...props }: ComponentProps<typeof Button>) => import(\"react\").JSX.Element;\n",
+    "./src/components/sheet.shared.d.ts": "import type { ReactNode } from \"react\";\nexport type SheetContract = {\n    open?: boolean;\n    onOpenChange?: (open: boolean) => void;\n    children?: ReactNode;\n};\n",
     "./src/components/sheet.d.ts": "import type * as React from \"react\";\nimport { Dialog as SheetPrimitive } from \"@base-ui/react/dialog\";\ndeclare const Sheet: <Payload>(props: SheetPrimitive.Root.Props<Payload>) => React.JSX.Element;\ndeclare const SheetPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").AlertDialogPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ntype SheetSide = \"inline-start\" | \"inline-end\" | \"block-start\" | \"block-end\";\ndeclare function SheetTrigger({ tooltip, ...props }: SheetPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare function SheetClose({ tooltip, ...props }: SheetPrimitive.Close.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const SheetBackdrop: ({ className, ...props }: SheetPrimitive.Backdrop.Props) => React.JSX.Element;\ndeclare const SheetPopup: ({ className, children, showCloseButton, side, variant, ...props }: SheetPrimitive.Popup.Props & {\n    showCloseButton?: boolean;\n    side?: SheetSide;\n    variant?: \"default\" | \"inset\";\n}) => React.JSX.Element;\ndeclare const SheetHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const SheetFooter: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & {\n    variant?: \"default\" | \"bare\";\n}) => React.JSX.Element;\ndeclare const SheetTitle: ({ className, ...props }: SheetPrimitive.Title.Props) => React.JSX.Element;\ndeclare const SheetDescription: ({ className, ...props }: SheetPrimitive.Description.Props) => React.JSX.Element;\ndeclare const SheetPanel: ({ className, scrollFade, ...props }: React.ComponentProps<\"div\"> & {\n    scrollFade?: boolean;\n}) => React.JSX.Element;\nexport { Sheet, SheetTrigger, SheetPortal, SheetClose, SheetBackdrop, SheetBackdrop as SheetOverlay, SheetPopup, SheetPopup as SheetContent, SheetHeader, SheetFooter, SheetTitle, SheetDescription, SheetPanel, };\nexport type { SheetSide };\n",
     "./src/components/sidebar.logic.d.ts": "export type SidebarState = \"expanded\" | \"collapsed\";\nexport type SidebarLayout = \"rail\" | \"full\";\nexport declare const resolveSidebarLayout: ({ state, isMobile, }: {\n    state: SidebarState;\n    isMobile: boolean;\n}) => SidebarLayout;\nexport declare const resolveSidebarOpen: ({ requestedOpen, forceCollapsed, }: {\n    requestedOpen: boolean;\n    forceCollapsed: boolean;\n}) => boolean;\nexport declare const deriveSidebarState: (open: boolean) => SidebarState;\nexport declare const nextRequestedOpen: (requestedOpen: boolean) => boolean;\nexport declare const nextOpenMobile: (openMobile: boolean) => boolean;\n",
     "./src/components/sidebar.d.ts": "import type { VariantProps } from \"class-variance-authority\";\nimport { Button } from \"./button\";\nimport { Input } from \"./input\";\nimport { Separator } from \"./separator\";\nimport type { SidebarLayout } from \"./sidebar.logic\";\nimport { TooltipPopup } from \"./tooltip\";\nexport declare const SIDEBAR_WIDTH_PX = 256;\nexport declare const SIDEBAR_WIDTH_ICON_PX = 48;\ntype SidebarContextProps = {\n    state: \"expanded\" | \"collapsed\";\n    open: boolean;\n    setOpen: (open: boolean) => void;\n    openMobile: boolean;\n    setOpenMobile: (open: boolean) => void;\n    isMobile: boolean;\n    toggleSidebar: () => void;\n};\ndeclare function useSidebar(): SidebarContextProps;\ndeclare function useSidebarLayout(): SidebarLayout;\ndeclare function useSidebarInlineSize(): 0 | 256 | 48;\ndeclare const SidebarProvider: ({ defaultOpen, forceCollapsed, open: openProp, onOpenChange: setOpenProp, className, style, children, ...props }: React.ComponentProps<\"div\"> & {\n    defaultOpen?: boolean;\n    forceCollapsed?: boolean;\n    open?: boolean;\n    onOpenChange?: (open: boolean) => void;\n}) => import(\"react\").JSX.Element;\ndeclare const Sidebar: ({ side, variant, collapsible, mobileTitle, mobileDescription, className, style, children, ...props }: React.ComponentProps<\"div\"> & {\n    side?: \"left\" | \"right\";\n    variant?: \"sidebar\" | \"floating\" | \"inset\";\n    collapsible?: \"offcanvas\" | \"icon\" | \"none\";\n    mobileTitle?: string;\n    mobileDescription?: string;\n}) => import(\"react\").JSX.Element;\ntype PanelTriggerSide = \"left\" | \"right\";\ndeclare const PanelTrigger: ({ side, label, \"aria-label\": ariaLabel, ...props }: Omit<React.ComponentProps<typeof Button>, \"children\"> & {\n    side: PanelTriggerSide;\n    label: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarTrigger: ({ onClick, label, ...props }: Omit<React.ComponentProps<typeof PanelTrigger>, \"label\" | \"side\"> & {\n    label?: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarRail: ({ className, label, \"aria-label\": ariaLabel, ...props }: React.ComponentProps<\"button\"> & {\n    label?: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarInset: ({ className, ...props }: React.ComponentProps<\"main\">) => import(\"react\").JSX.Element;\ndeclare const SidebarInput: ({ className, ...props }: React.ComponentProps<typeof Input>) => import(\"react\").JSX.Element;\ndeclare const SidebarHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarSeparator: ({ className, ...props }: React.ComponentProps<typeof Separator>) => import(\"react\").JSX.Element;\ndeclare const SidebarContent: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarGroup: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupLabel: ({ className, asChild, ...props }: React.ComponentProps<\"div\"> & {\n    asChild?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupAction: ({ className, asChild, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupContent: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenu: ({ className, ...props }: React.ComponentProps<\"ul\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuItem: ({ className, ...props }: React.ComponentProps<\"li\">) => import(\"react\").JSX.Element;\ndeclare const sidebarMenuButtonVariants: (props?: ({\n    variant?: \"default\" | \"outline\" | null | undefined;\n    size?: \"default\" | \"sm\" | \"lg\" | \"rail\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const sidebarIdentityTriggerClassName: (layout: SidebarLayout) => string;\ndeclare const SidebarMenuButton: ({ asChild, isActive, variant, size, tooltip, className, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n    isActive?: boolean;\n    tooltip?: string | React.ComponentProps<typeof TooltipPopup>;\n} & VariantProps<typeof sidebarMenuButtonVariants>) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuAction: ({ className, asChild, showOnHover, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n    showOnHover?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuBadge: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSkeleton: ({ className, showIcon, ...props }: React.ComponentProps<\"div\"> & {\n    showIcon?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSub: ({ className, ...props }: React.ComponentProps<\"ul\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSubItem: ({ className, ...props }: React.ComponentProps<\"li\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSubButton: ({ asChild, size, isActive, className, ...props }: React.ComponentProps<\"a\"> & {\n    asChild?: boolean;\n    size?: \"sm\" | \"md\";\n    isActive?: boolean;\n}) => import(\"react\").JSX.Element;\nexport { PanelTrigger, Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupAction, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInput, SidebarInset, SidebarMenu, SidebarMenuAction, SidebarMenuBadge, SidebarMenuButton, sidebarIdentityTriggerClassName, SidebarMenuItem, SidebarMenuSkeleton, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarProvider, SidebarRail, SidebarSeparator, SidebarTrigger, useSidebar, useSidebarInlineSize, useSidebarLayout, };\n",
@@ -10694,13 +10983,20 @@
     "./src/components/split-button.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\nimport { Button, BUTTON_CONTENT } from \"./button\";\nimport { Menu } from \"./menu\";\nimport { Popover } from \"./popover\";\ntype SplitButtonSharedProps = {\n    menuLabel: string;\n    primaryDescriptionId?: string;\n    menuDescriptionId?: string;\n    onPrimaryClick: NonNullable<ComponentProps<typeof Button>[\"onClick\"]>;\n    menu: ReactNode;\n    primaryDisabled?: boolean;\n    menuDisabled?: boolean;\n    size?: \"sm\" | \"md\";\n    className?: string;\n};\ntype SplitButtonPrimary = {\n    children: ReactNode;\n    primaryContent: (typeof BUTTON_CONTENT)[keyof typeof BUTTON_CONTENT];\n    primaryLabel: string;\n} | {\n    children: string;\n    primaryContent?: never;\n    primaryLabel?: never;\n};\ntype SplitButtonProps = SplitButtonSharedProps & SplitButtonPrimary & ({\n    surface?: \"menu\";\n    open?: ComponentProps<typeof Menu>[\"open\"];\n    onOpenChange?: ComponentProps<typeof Menu>[\"onOpenChange\"];\n} | {\n    surface: \"popover\";\n    open?: ComponentProps<typeof Popover>[\"open\"];\n    onOpenChange?: ComponentProps<typeof Popover>[\"onOpenChange\"];\n});\nexport declare const SplitButton: (props: SplitButtonProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/status-mark.d.ts": "type StatusMarkStatus = \"pending\" | \"running\" | \"done\" | \"failed\";\ntype StatusMarkProps = {\n    status: StatusMarkStatus;\n    label?: string | undefined;\n    className?: string;\n};\ndeclare const StatusMark: ({ className, label, status }: StatusMarkProps) => import(\"react\").JSX.Element;\nexport { StatusMark };\nexport type { StatusMarkStatus };\n",
     "./src/components/stella-mark.d.ts": "import type { SVGProps } from \"react\";\nexport declare const StellaMark: (props: SVGProps<SVGSVGElement>) => import(\"react\").JSX.Element;\n",
+    "./src/components/stella-wordmark.native.d.ts": "export declare const StellaWordmarkLatin: ({ height, }: {\n    height?: number | undefined;\n}) => import(\"react\").JSX.Element;\n",
     "./src/components/stella-wordmark.d.ts": "import type { SVGProps } from \"react\";\nexport declare const StellaWordmarkLatin: (props: SVGProps<SVGSVGElement>) => import(\"react\").JSX.Element;\n",
     "./src/components/steps.d.ts": "import type * as React from \"react\";\nimport type { VariantProps } from \"class-variance-authority\";\ndeclare const stepsVariants: (props?: ({\n    variant?: \"progress\" | \"default\" | \"compact\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ntype StepsProps = React.ComponentProps<\"ol\"> & VariantProps<typeof stepsVariants> & {\n    markerStyle: NonNullable<React.CSSProperties[\"listStyleType\"]>;\n};\ndeclare const Steps: ({ className, variant, markerStyle, style, ...props }: StepsProps) => React.JSX.Element;\ndeclare const stepVariants: (props?: ({\n    status?: \"current\" | \"completed\" | \"upcoming\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ntype StepProps = React.ComponentProps<\"li\"> & VariantProps<typeof stepVariants>;\ndeclare const Step: ({ className, status, ...props }: StepProps) => React.JSX.Element;\nexport { Step, Steps };\n",
     "./src/components/swap-text.d.ts": "declare const SwapText: ({ className, text, }: {\n    className?: string;\n    text: string;\n}) => import(\"react\").JSX.Element;\nexport { SwapText };\n",
+    "./src/components/switch.native.d.ts": "import type { SwitchProps as PlatformSwitchProps } from \"react-native\";\nimport type { SwitchContract } from \"./switch.shared\";\ntype SwitchProps = Omit<PlatformSwitchProps, \"value\" | \"onValueChange\" | \"disabled\" | keyof SwitchContract> & SwitchContract;\nexport declare const Switch: ({ checked, defaultChecked, disabled, onCheckedChange, ...props }: SwitchProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/switch.shared.d.ts": "export type SwitchContract = {\n    checked?: boolean;\n    defaultChecked?: boolean;\n    disabled?: boolean;\n    onCheckedChange?: (checked: boolean) => void;\n};\n",
     "./src/components/switch.d.ts": "import { Switch as SwitchPrimitive } from \"@base-ui/react/switch\";\ndeclare const Switch: ({ className, ...props }: SwitchPrimitive.Root.Props) => import(\"react\").JSX.Element;\nexport { Switch };\n",
     "./src/components/table-chart.d.ts": "export type TableChartKind = \"bar\" | \"line\" | \"pie\" | \"scatter\";\nexport type TableChartPoint = {\n    label: string;\n    x: number;\n    y: number;\n    series?: string;\n};\nexport type TableChartProps = {\n    kind: TableChartKind;\n    points: readonly TableChartPoint[];\n    title: string;\n    summary: string;\n    xLabel?: string | undefined;\n    yLabel?: string | undefined;\n    xMode?: \"numeric\" | \"category\";\n    formatNumber: (value: number) => string;\n};\nexport declare const TableChart: ({ kind, points, title, summary, xLabel, yLabel, xMode, formatNumber, }: TableChartProps) => import(\"react\").JSX.Element;\n",
     "./src/components/table.d.ts": "import type * as React from \"react\";\ntype TableInset = \"default\" | \"card\";\ntype TableScroll = \"self\" | \"parent\";\ntype TableProps = React.ComponentProps<\"table\"> & {\n    inset?: TableInset;\n    scroll?: TableScroll;\n};\ndeclare const Table: ({ className, inset, scroll, ...props }: TableProps) => React.JSX.Element;\ntype TableHeaderProps = React.ComponentProps<\"thead\"> & {\n    surface?: \"plain\" | \"muted\";\n    sticky?: boolean;\n};\ndeclare const TableHeader: ({ className, surface, sticky, ...props }: TableHeaderProps) => React.JSX.Element;\ndeclare const TableBody: ({ className, ...props }: React.ComponentProps<\"tbody\">) => React.JSX.Element;\ndeclare const TableFooter: ({ className, ...props }: React.ComponentProps<\"tfoot\">) => React.JSX.Element;\ntype TableTone = \"default\" | \"muted\";\ndeclare const TableRow: ({ className, tone, ...props }: React.ComponentProps<\"tr\"> & {\n    tone?: TableTone | undefined;\n}) => React.JSX.Element;\ntype TableAlign = \"start\" | \"center\" | \"end\";\ntype TableHeadProps = Omit<React.ComponentProps<\"th\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    numeric?: boolean | undefined;\n};\ndeclare const TableHead: ({ className, align, numeric, ...props }: TableHeadProps) => React.JSX.Element;\ntype TableCellProps = Omit<React.ComponentProps<\"td\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    tone?: TableTone | undefined;\n    numeric?: boolean | undefined;\n    truncate?: boolean;\n    flush?: boolean;\n};\ndeclare const TableCell: ({ className, align, tone, numeric, truncate, flush, ...props }: TableCellProps) => React.JSX.Element;\ntype SortDirection = \"asc\" | \"desc\" | null;\ntype SortableHeadProps = Omit<TableHeadProps, \"onClick\"> & {\n    sortDirection?: SortDirection;\n    onSort: () => void;\n    trailing?: React.ReactNode;\n};\ndeclare const SortableHead: ({ children, sortDirection, onSort, trailing, className, align, numeric, ...props }: SortableHeadProps) => React.JSX.Element;\ndeclare const TableCaption: ({ className, ...props }: React.ComponentProps<\"caption\">) => React.JSX.Element;\nexport { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption, SortableHead, };\nexport type { SortDirection, TableAlign, TableHeadProps, TableCellProps, TableHeaderProps, TableInset, TableProps, TableScroll, TableTone, };\n",
     "./src/components/tabs.d.ts": "import { Tabs as TabsPrimitive } from \"@base-ui/react/tabs\";\ntype TabsVariant = \"default\" | \"underline\";\ndeclare const Tabs: ({ className, ...props }: TabsPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const TabsList: ({ variant, className, children, ref, ...props }: TabsPrimitive.List.Props & {\n    variant?: TabsVariant;\n}) => import(\"react\").JSX.Element;\ndeclare const TabsTab: ({ className, ...props }: TabsPrimitive.Tab.Props) => import(\"react\").JSX.Element;\ndeclare const TabsPanel: ({ className, ...props }: TabsPrimitive.Panel.Props) => import(\"react\").JSX.Element;\nexport { Tabs, TabsList, TabsTab, TabsTab as TabsTrigger, TabsPanel, TabsPanel as TabsContent, };\n",
+    "./src/components/text.native.d.ts": "import type { TextProps } from \"react-native\";\nimport { type TextContract } from \"./text.shared\";\nexport declare const textFontFamily: (variant: TextContract[\"variant\"]) => string;\nexport declare const Text: ({ className, style, variant, ...props }: Omit<TextProps, keyof TextContract> & TextContract & {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport type { TextVariant } from \"./text.shared\";\n",
+    "./src/components/text.shared.d.ts": "import type { ReactNode } from \"react\";\nexport declare const TEXT_VARIANT_CLASS_NAMES: {\n    readonly body: \"text-base\";\n    readonly rowTitle: \"text-base\";\n    readonly caption: \"text-sm text-muted-foreground\";\n    readonly error: \"text-sm text-destructive-foreground\";\n    readonly label: \"text-sm\";\n    readonly button: \"text-base\";\n    readonly section: \"text-xs uppercase text-muted-foreground\";\n    readonly headline: \"text-lg\";\n    readonly title: \"text-2xl\";\n    readonly display: \"text-[32px] leading-[37px] tracking-tight\";\n    readonly badge: \"text-[10px] uppercase tracking-[1px] text-muted-foreground\";\n    readonly link: \"text-sm text-muted-foreground underline\";\n    readonly reading: \"text-base leading-[26px]\";\n    readonly readingStrong: \"\";\n    readonly readingEmphasis: \"\";\n    readonly readingStrongEmphasis: \"\";\n};\nexport type TextVariant = keyof typeof TEXT_VARIANT_CLASS_NAMES;\nexport type TextFace = {\n    readonly family: \"sans\" | \"serif\";\n    readonly weight: \"light\" | \"regular\" | \"medium\" | \"semibold\" | \"bold\";\n    readonly italic?: true;\n};\nexport declare const TEXT_VARIANT_FACES: {\n    readonly body: TextFace;\n    readonly rowTitle: TextFace;\n    readonly caption: TextFace;\n    readonly error: TextFace;\n    readonly label: TextFace;\n    readonly button: TextFace;\n    readonly section: TextFace;\n    readonly headline: TextFace;\n    readonly title: TextFace;\n    readonly display: TextFace;\n    readonly badge: TextFace;\n    readonly link: TextFace;\n    readonly reading: {\n        readonly family: \"serif\";\n        readonly weight: \"regular\";\n    };\n    readonly readingStrong: {\n        readonly family: \"serif\";\n        readonly weight: \"bold\";\n    };\n    readonly readingEmphasis: {\n        readonly family: \"serif\";\n        readonly weight: \"regular\";\n        readonly italic: true;\n    };\n    readonly readingStrongEmphasis: {\n        readonly family: \"serif\";\n        readonly weight: \"bold\";\n        readonly italic: true;\n    };\n};\nexport type TextContract = {\n    variant?: TextVariant;\n    children?: ReactNode;\n};\n",
+    "./src/components/text.d.ts": "import type { ComponentProps } from \"react\";\nimport { type TextContract } from \"./text.shared\";\ndeclare const Text: ({ className, variant, ...props }: Omit<ComponentProps<\"span\">, keyof TextContract> & TextContract) => import(\"react\").JSX.Element;\nexport { Text };\nexport type { TextVariant } from \"./text.shared\";\n",
+    "./src/components/textarea.native.d.ts": "import type { ComponentProps } from \"react\";\nimport { NativeField } from \"./input.native\";\nexport declare const Textarea: ({ size, unstyled, ...props }: Omit<ComponentProps<typeof NativeField>, \"box\" | \"multiline\">) => import(\"react\").JSX.Element;\n",
     "./src/components/textarea.d.ts": "import type * as React from \"react\";\nimport type { ControlSize } from \"../lib/control-size\";\ntype TextareaProps = React.ComponentProps<\"textarea\"> & {\n    size?: ControlSize | number;\n    unstyled?: boolean;\n};\ndeclare const Textarea: ({ className, size, unstyled, dir, onChange, ...props }: TextareaProps) => React.JSX.Element;\nexport { Textarea, type TextareaProps };\n",
     "./src/components/toast.d.ts": "import * as React from \"react\";\nimport { Toast } from \"@base-ui/react/toast\";\nimport type { ToastManagerAddOptions, ToastObject } from \"@base-ui/react/toast\";\ntype ToastData = {\n    tooltipStyle?: boolean;\n    timeoutPolicy?: {\n        type: \"automatic\";\n    } | {\n        type: \"explicit\";\n        timeout: number;\n    };\n};\ndeclare const TOAST_RIGHT_OFFSET_VAR = \"--stella-toast-right-offset\";\ndeclare const TOAST_ICONS: {\n    readonly error: React.JSX.Element;\n    readonly info: React.JSX.Element;\n    readonly loading: null;\n    readonly neutral: null;\n    readonly success: React.JSX.Element;\n    readonly warning: React.JSX.Element;\n};\ntype ToastType = keyof typeof TOAST_ICONS;\ntype ToastAction = {\n    label: React.ReactNode;\n    onClick?: React.MouseEventHandler<HTMLButtonElement>;\n};\ntype ToastActionProps = ToastManagerAddOptions<ToastData>[\"actionProps\"];\ntype ToastOptions = Omit<ToastManagerAddOptions<ToastData>, \"actionProps\" | \"title\" | \"type\"> & {\n    action?: ToastAction | undefined;\n    actionProps?: ToastActionProps;\n};\ntype ToastUpdateFields = Partial<Omit<ToastOptions, \"timeout\">> & {\n    title?: React.ReactNode | undefined;\n};\ntype ToastUpdateOptions = (ToastUpdateFields & {\n    type: ToastType;\n    timeout?: number | undefined;\n}) | (ToastUpdateFields & {\n    type?: undefined;\n    timeout?: number | undefined;\n});\ntype ToastPromiseMessage = React.ReactNode | ToastUpdateOptions;\ntype ToastPromiseOptions<Value> = {\n    error: ToastPromiseMessage | ((error: unknown) => ToastPromiseMessage);\n    loading: ToastPromiseMessage;\n    success: ToastPromiseMessage | ((value: Value) => ToastPromiseMessage);\n};\ntype ToastApi = {\n    (title: React.ReactNode, options?: ToastOptions): string;\n    add: (options: ToastAddOptions) => string;\n    close: (id?: string) => void;\n    dismiss: (id?: string) => void;\n    error: (title: React.ReactNode, options?: ToastOptions) => string;\n    info: (title: React.ReactNode, options?: ToastOptions) => string;\n    loading: (title: React.ReactNode, options?: ToastOptions) => string;\n    promise: <Value>(promiseValue: Promise<Value>, options: ToastPromiseOptions<Value>) => Promise<Value>;\n    success: (title: React.ReactNode, options?: ToastOptions) => string;\n    update: (id: string, options: ToastUpdateOptions) => void;\n    warning: (title: React.ReactNode, options?: ToastOptions) => string;\n};\ntype ToastAddOptions = ToastUpdateOptions & {\n    title: React.ReactNode;\n};\ntype ToastPosition = \"top-left\" | \"top-center\" | \"top-right\" | \"bottom-left\" | \"bottom-center\" | \"bottom-right\";\ntype ToastProviderProps = {\n    position?: ToastPosition;\n} & Toast.Provider.Props;\ndeclare const stellaToast: ToastApi;\ndeclare const ToastProvider: ({ children, position, ...props }: ToastProviderProps) => React.JSX.Element;\ndeclare const AnchoredToastProvider: ({ children, ...props }: Toast.Provider.Props) => React.JSX.Element;\ndeclare function toastDedupeId({ action, actionProps, description, title, type, }: {\n    action?: ToastAction | undefined;\n    actionProps?: ToastActionProps | undefined;\n    description?: React.ReactNode | undefined;\n    title: React.ReactNode;\n    type?: ToastType | undefined;\n}): string | undefined;\ndeclare function toastCountdownMs({ timeout, type, }: {\n    timeout?: number | undefined;\n    type?: string | undefined;\n}): number | undefined;\ndeclare function resolveToastUpdateTimeout(options: ToastUpdateOptions, previous: Pick<ToastObject<ToastData>, \"actionProps\" | \"data\" | \"description\" | \"title\" | \"type\">): {\n    timeout?: number;\n};\nexport { ToastProvider, type ToastPosition, TOAST_RIGHT_OFFSET_VAR, stellaToast, AnchoredToastProvider, toastCountdownMs, toastDedupeId, resolveToastUpdateTimeout, };\n",
     "./src/components/toolbar-icon-action.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\nimport { Button } from \"./button\";\ntype ToolbarIconActionProps = Omit<ComponentProps<typeof Button>, \"aria-label\" | \"children\" | \"size\" | \"title\" | \"tooltip\" | \"variant\"> & {\n    label: string;\n    icon: ReactNode;\n    density: \"header\" | \"toolbar\";\n};\nexport declare const ToolbarIconAction: ({ density, icon, label, ...props }: ToolbarIconActionProps) => import(\"react\").JSX.Element;\nexport {};\n",
