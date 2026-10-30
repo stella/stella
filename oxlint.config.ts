@@ -2523,6 +2523,12 @@ const config = defineConfig({
                   "Pending: the placeholder token is applied to elements in apps/web; it moves to TruncatedText with those callers.",
                 utilities: ["truncate"],
               },
+              {
+                path: "packages/workspace-ui/src/field-value.tsx",
+                reason:
+                  "Pending: getIntClassName is applied to elements in apps/web; it moves to TruncatedText with those callers.",
+                utilities: ["truncate"],
+              },
             ],
           },
         ],

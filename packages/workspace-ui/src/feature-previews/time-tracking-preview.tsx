@@ -1,5 +1,6 @@
 import { ClockIcon, SquareIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   formatPreviewDate,
@@ -76,9 +77,9 @@ export const TimeTrackingPreview = ({
             <span className="bg-success relative size-2 rounded-full" />
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="truncate text-sm font-medium">
+            <TruncatedText className="text-sm font-medium">
               {running.description}
-            </span>
+            </TruncatedText>
             <PreviewMatterLabel matter={running.matter} />
           </div>
           <span className="shrink-0 text-xl font-medium tabular-nums">
@@ -99,7 +100,7 @@ export const TimeTrackingPreview = ({
                 {formatPreviewTime(locale, entry.end)}
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate">{entry.description}</span>
+                <TruncatedText>{entry.description}</TruncatedText>
                 <PreviewMatterLabel matter={entry.matter} />
               </div>
               <span className="shrink-0 tabular-nums">
@@ -122,7 +123,7 @@ export const TimeTrackingPreview = ({
 const PreviewMatterLabel = ({ matter }: { matter: PreviewMatter }) => (
   <span className="text-muted-foreground flex min-w-0 items-center gap-1.5">
     <MatterIcon className="size-3 shrink-0" matter={matter} />
-    <span className="truncate">{matter.name}</span>
+    <TruncatedText>{matter.name}</TruncatedText>
   </span>
 );
 

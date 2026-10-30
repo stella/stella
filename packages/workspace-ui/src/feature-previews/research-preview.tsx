@@ -2,6 +2,7 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import type { COURT_TIER_WEIGHT } from "@stll/ui/document-identity-badge.logic";
 import { CaseLawIcon, SearchIcon } from "@stll/ui/icons";
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { formatPreviewDate } from "./format";
 import { FeaturePreviewSurface } from "./surface";
@@ -52,7 +53,7 @@ export const ResearchPreview = ({
     <div className="flex h-full min-h-0 flex-col gap-2 p-3">
       <div className="bg-card flex h-9 shrink-0 items-center gap-2 rounded-md border px-2.5 text-sm shadow-xs">
         <SearchIcon className="text-muted-foreground size-4 shrink-0" />
-        <span className="truncate">{data.query}</span>
+        <TruncatedText>{data.query}</TruncatedText>
       </div>
       <ol className="flex min-h-0 flex-col divide-y">
         {data.decisions.map((decision) => (
@@ -65,9 +66,9 @@ export const ResearchPreview = ({
                   courtTier: decision.court.tier,
                 }}
               />
-              <span className="truncate text-sm font-medium">
+              <TruncatedText className="text-sm font-medium">
                 {decision.court.name}
-              </span>
+              </TruncatedText>
               <span className="text-muted-foreground ms-auto shrink-0 whitespace-nowrap tabular-nums">
                 {formatPreviewDate({
                   locale,
@@ -79,11 +80,15 @@ export const ResearchPreview = ({
             <bdi className="text-muted-foreground text-2xs font-mono">
               {decision.fileNumber}
             </bdi>
-            <p className="text-foreground-strong-muted line-clamp-2 leading-relaxed">
+            <TruncatedText
+              className="text-foreground-strong-muted leading-relaxed"
+              lines={2}
+              render={<p />}
+            >
               {decision.before}
               <TextMark {...SEARCH_HIT_MARK}>{decision.hit}</TextMark>
               {decision.after}
-            </p>
+            </TruncatedText>
           </li>
         ))}
       </ol>
