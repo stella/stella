@@ -43,6 +43,8 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   caseLawCitations,
   caseLawSources,
@@ -54,6 +56,7 @@ import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
@@ -100,7 +103,7 @@ export const DECISION_WORK_MANIFESTATIONS_MAX =
  * ceiling, and a group that fills it is treated as malformed whichever rows
  * came back, so the answer never depends on which subset the scan returned.
  */
-export const decisionWorkMembersSql = (decisionId: SQLWrapper): SQL => sql`
+const decisionWorkMembersSql = (decisionId: SQLWrapper): SQL => sql`
   SELECT ${decisionId}::uuid AS id
   UNION
   SELECT work_member.id
@@ -180,17 +183,24 @@ export const decisionWorkQuery = (
 ) =>
   tx
     .select({ id: sql<string>`decision_work.id` })
-    .from(sql`(${decisionWorkMembersSql(sql`${subjectId}`)}) AS decision_work`)
-    .orderBy(sql`decision_work.id`)
-    // The subject plus at most the ceiling: the member set states its bound.
-    .limit(DECISION_WORK_MANIFESTATIONS_MAX + 1);
+    .from(sql`(${decisionWorkMembersSql(sql`${subjectId}`)}) AS decision_work`);
 
 export const readDecisionWork = async (
   tx: Pick<CaseLawPublicReadTransaction, "select">,
   subjectId: SafeId<"caseLawDecision">,
 ): Promise<DecisionWork> => {
-  const rows = await decisionWorkQuery(tx, subjectId);
-  const ids = rows.map((row) => brandPersistedCaseLawDecisionId(row.id));
+  const read = await readBounded(
+    decisionWorkQuery(tx, subjectId),
+    DECISION_WORK_MANIFESTATIONS_MAX,
+  );
+  if (read.type === "overflow") {
+    // The member set keeps a group past the ceiling to the subject alone.
+    return panic("A decision's work exceeded its manifestation ceiling");
+  }
+  // Canonical lowercase UUID text sorts as PostgreSQL orders the UUIDs.
+  const ids = read.rows
+    .map((row) => brandPersistedCaseLawDecisionId(row.id))
+    .toSorted(compareCodeUnit);
   if (!ids.includes(subjectId)) {
     return panic("A decision's work must hold the decision itself");
   }
@@ -220,14 +230,14 @@ export const decisionWorkOf = async (
 };
 
 /** The work's version ids as a `uuid[]` expression. */
-export const decisionWorkIdsSql = (work: DecisionWork): SQL =>
+const decisionWorkIdsSql = (work: DecisionWork): SQL =>
   sql`ARRAY[${sql.join(
     work.manifestationIds.map((id) => sql`${id}`),
     sql`, `,
   )}]::uuid[]`;
 
 /** Which end of a citation row a read anchors on, and which end it shows. */
-export const CITATION_WORK_ENDPOINTS = {
+const CITATION_WORK_ENDPOINTS = {
   incoming: {
     anchor: caseLawCitations.citedDecisionId,
     related: caseLawCitations.citingDecisionId,
@@ -274,7 +284,7 @@ export const decisionWorkIdArraySql = (decisionId: SQLWrapper): SQL =>
   sql`ARRAY(${decisionWorkMembersSql(decisionId)})`;
 
 /** The columns of one citation row the canonical rule reads. */
-export type CitationIdentityColumns = {
+type CitationIdentityColumns = {
   citingDecisionId: SQLWrapper;
   citedDecisionId: SQLWrapper;
   kind: SQLWrapper;
@@ -347,7 +357,7 @@ export const canonicalWorkCitationSql = ({
  * identity columns. The doctrine fields are computed by the caller, which
  * alone knows whether its reader holds the doctrine grants.
  */
-export type WorkCitationFields = {
+type WorkCitationFields = {
   doctrinalTreatment: SQL.Aliased<DoctrineTreatment | null>;
   evidenceQuote: SQL.Aliased<string | null>;
 };
@@ -495,5 +505,3 @@ export const workCitationStream = ({
     .from(rows)
     .as("work_citation_window");
 };
-
-export type WorkCitationWindow = ReturnType<typeof workCitationStream>;

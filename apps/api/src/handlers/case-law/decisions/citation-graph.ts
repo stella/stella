@@ -553,7 +553,7 @@ type DecisionCitationPageQueryOptions = {
  * window holds a full page unless the rows of other versions crowd it, and a
  * page that must skip more ends at the window instead of reading on.
  */
-export const citationPageWindowSize = ({
+const citationPageWindowSize = ({
   direction,
   limit,
   work,

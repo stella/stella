@@ -53,7 +53,10 @@ import {
   DECISION_DATE_BANDS,
   type DecisionDateBand,
 } from "@/api/lib/case-law/decision-date-order";
-import { decisionWorkQuery } from "@/api/lib/case-law/decision-work";
+import {
+  DECISION_WORK_MANIFESTATIONS_MAX,
+  decisionWorkQuery,
+} from "@/api/lib/case-law/decision-work";
 import type { DecisionWork } from "@/api/lib/case-law/decision-work";
 import {
   decisionPageSql,
@@ -567,11 +570,15 @@ export const QUERY_PLAN_REGISTRY = [
   },
   {
     // The versions of one judgment: one bounded group read of its language
-    // key, whatever the corpus holds.
+    // key, whatever the corpus holds. The limit is the overflow probe
+    // `readBounded` adds to the ceiling `readDecisionWork` reads under.
     id: "case-law.decision-work",
     class: "point",
     role: "public-law-reader",
-    build: (tx) => decisionWorkQuery(tx, QUERY_PLAN_SAMPLE.caseLaw.decisionId),
+    build: (tx) =>
+      decisionWorkQuery(tx, QUERY_PLAN_SAMPLE.caseLaw.decisionId).limit(
+        DECISION_WORK_MANIFESTATIONS_MAX + 1,
+      ),
     seed: "case-law",
     contract: planContracts["case-law.decision-work"],
   },
