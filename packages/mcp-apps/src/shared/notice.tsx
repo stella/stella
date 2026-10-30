@@ -1,4 +1,9 @@
-import { ChevronRightIcon } from "@stll/ui/icons";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
 
 import { searchNoticeDetails } from "./notice.logic";
 import type { AppSearchWarning } from "./notice.logic";
@@ -7,26 +12,27 @@ export const AppNotice = ({ details }: { details: readonly string[] }) => {
   if (details.length === 0) {
     return null;
   }
+  const summary = details.join(" · ");
   return (
-    <details
-      className="group text-muted-foreground min-w-0 text-xs"
+    <Accordion
+      className="text-muted-foreground min-w-0 text-xs"
       data-app-notice
     >
-      <summary className="focus-visible:ring-ring flex min-w-0 cursor-pointer list-none items-center gap-1 rounded-sm outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
-        <ChevronRightIcon
-          aria-hidden="true"
-          className="size-3 shrink-0 group-open:rotate-90 rtl:rotate-180"
-        />
-        <span className="min-w-0 truncate">{details.join(" · ")}</span>
-      </summary>
-      <ul className="mt-2 list-disc space-y-1 ps-4">
-        {details.map((detail) => (
-          <li key={detail} className="break-words">
-            {detail}
-          </li>
-        ))}
-      </ul>
-    </details>
+      <AccordionItem className="border-0" value="notice">
+        <AccordionTrigger aria-label={summary} size="compact">
+          <span className="min-w-0 truncate">{summary}</span>
+        </AccordionTrigger>
+        <AccordionPanel size="compact">
+          <ul className="list-disc space-y-1 ps-4">
+            {details.map((detail) => (
+              <li key={detail} className="break-words">
+                {detail}
+              </li>
+            ))}
+          </ul>
+        </AccordionPanel>
+      </AccordionItem>
+    </Accordion>
   );
 };
 
