@@ -14,6 +14,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
@@ -315,22 +316,48 @@ export const parsedReplayInputPredicate = (targetParserVersion: number) =>
   ), false)`;
 
 /**
- * A row at the current parser whose stored parse is not of its current
- * input. The trigger-maintained state answers it from an index; a row
- * written before the trigger and not yet derived falls back to the same
- * comparison, so the selection is the same before and after derivation.
+ * The rows the background replay has not read at the current parser, as
+ * disjoint arms. Each arm is an equality or range on a prefix of the
+ * replay-pending index (source, parser version, parsed-input state), so the
+ * lag probe reads each from the index alone, whatever the planner estimates.
  */
-const unparsedAtCurrentVersionPredicate = (currentParserVersion: number) =>
-  and(
-    eq(caseLawDecisions.parserVersion, currentParserVersion),
-    or(
-      eq(caseLawDecisions.parsedInputState, PARSED_INPUT_STATE.UNPARSED),
-      and(
+export const BACKGROUND_REPLAY_ARMS = [
+  "unversioned",
+  "older-parser",
+  "unparsed",
+  "underived",
+] as const;
+
+export type BackgroundReplayArm = (typeof BACKGROUND_REPLAY_ARMS)[number];
+
+export const backgroundReplayArmPredicate = (
+  arm: BackgroundReplayArm,
+  currentParserVersion: number,
+): SQL | undefined => {
+  switch (arm) {
+    case "unversioned":
+      return isNull(caseLawDecisions.parserVersion);
+    case "older-parser":
+      return lt(caseLawDecisions.parserVersion, currentParserVersion);
+    case "unparsed":
+      return and(
+        eq(caseLawDecisions.parserVersion, currentParserVersion),
+        eq(caseLawDecisions.parsedInputState, PARSED_INPUT_STATE.UNPARSED),
+      );
+    // A row written before the state trigger and not yet derived falls back
+    // to the same comparison, so the selection is the same before and after
+    // derivation. The arm goes once every row is derived.
+    case "underived":
+      return and(
+        eq(caseLawDecisions.parserVersion, currentParserVersion),
         isNull(caseLawDecisions.parsedInputState),
         sql`${parsedInputStateOf()} = ${PARSED_INPUT_STATE.UNPARSED}`,
-      ),
-    ),
-  );
+      );
+    default:
+      arm satisfies never;
+      return panic(`Unhandled background replay arm: ${String(arm)}`);
+  }
+};
 
 /** Old writers may restore an earlier parser, but replay never downgrades one. */
 export const replayReadmissionInputPredicate = (targetParserVersion: number) =>
@@ -394,6 +421,77 @@ export const replayBatchReadmissionPredicate = () =>
     ),
   )}), false)`;
 
+type BackgroundReplaySelection = Extract<
+  ReplaySelection,
+  { type: "background" }
+>;
+
+/** What excludes a pending row from the background replay, whatever its arm. */
+const backgroundReplayExclusions = (
+  selection: BackgroundReplaySelection,
+  tx: Pick<Transaction, "select">,
+): SQL | undefined =>
+  and(
+    parserScopePredicate(selection.adapterKey),
+    // Durable reservations are recovered through pendingBatch; the sweep
+    // must not bypass a row's backoff or reselect a terminal receipt.
+    // Existence predicates let the planner combine receipt exclusions
+    // with owner RLS checks; scalar subplans repeat their startup cost.
+    sql<boolean>`NOT EXISTS (${tx
+      .select({ present: sql<boolean>`true` })
+      .from(caseLawReplayBatches)
+      .where(
+        and(
+          eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
+          // Exhausted previews exclude only this dry-run parser generation.
+          or(
+            sql`right(${caseLawReplayBatches.id}, length(${BACKGROUND_REPLAY_PREVIEW_SUFFIX})) <> ${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`,
+            selection.mode === "dry-run"
+              ? eq(
+                  caseLawReplayBatches.outcome,
+                  REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
+                )
+              : undefined,
+          ),
+          eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
+          eq(
+            caseLawReplayBatches.sourceRawS3Key,
+            caseLawDecisions.sourceRawS3Key,
+          ),
+          eq(
+            caseLawReplayBatches.parserVersionTo,
+            selection.currentParserVersion,
+          ),
+          // Reopening is bounded and fenced by the locked reservation owner.
+          not(replayBatchReadmissionPredicate()),
+        ),
+      )
+      .limit(1)})`,
+    sql<boolean>`NOT EXISTS (${tx
+      .select({ present: sql<boolean>`true` })
+      .from(caseLawReplayBlocked)
+      .where(
+        and(
+          eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
+          eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
+          // Unknown legacy receipts cannot identify a consumed object.
+          eq(
+            caseLawReplayBlocked.sourceRawS3Key,
+            caseLawDecisions.sourceRawS3Key,
+          ),
+          eq(
+            caseLawReplayBlocked.parserVersionTo,
+            selection.currentParserVersion,
+          ),
+          or(
+            eq(caseLawReplayBlocked.outcome, "rejected"),
+            parsedReplayInputPredicate(selection.currentParserVersion),
+          ),
+        ),
+      )
+      .limit(1)})`,
+  );
+
 export const replaySelectionPredicate = (
   selection: ReplaySelection,
   tx: Pick<Transaction, "select">,
@@ -403,69 +501,12 @@ export const replaySelectionPredicate = (
       return undefined;
     case "background":
       return and(
-        parserScopePredicate(selection.adapterKey),
         or(
-          isNull(caseLawDecisions.parserVersion),
-          lt(caseLawDecisions.parserVersion, selection.currentParserVersion),
-          unparsedAtCurrentVersionPredicate(selection.currentParserVersion),
+          ...BACKGROUND_REPLAY_ARMS.map((arm) =>
+            backgroundReplayArmPredicate(arm, selection.currentParserVersion),
+          ),
         ),
-        // Durable reservations are recovered through pendingBatch; the sweep
-        // must not bypass a row's backoff or reselect a terminal receipt.
-        // Existence predicates let the planner combine receipt exclusions
-        // with owner RLS checks; scalar subplans repeat their startup cost.
-        sql<boolean>`NOT EXISTS (${tx
-          .select({ present: sql<boolean>`true` })
-          .from(caseLawReplayBatches)
-          .where(
-            and(
-              eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
-              // Exhausted previews exclude only this dry-run parser generation.
-              or(
-                sql`right(${caseLawReplayBatches.id}, length(${BACKGROUND_REPLAY_PREVIEW_SUFFIX})) <> ${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`,
-                selection.mode === "dry-run"
-                  ? eq(
-                      caseLawReplayBatches.outcome,
-                      REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
-                    )
-                  : undefined,
-              ),
-              eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
-              eq(
-                caseLawReplayBatches.sourceRawS3Key,
-                caseLawDecisions.sourceRawS3Key,
-              ),
-              eq(
-                caseLawReplayBatches.parserVersionTo,
-                selection.currentParserVersion,
-              ),
-              // Reopening is bounded and fenced by the locked reservation owner.
-              not(replayBatchReadmissionPredicate()),
-            ),
-          )
-          .limit(1)})`,
-        sql<boolean>`NOT EXISTS (${tx
-          .select({ present: sql<boolean>`true` })
-          .from(caseLawReplayBlocked)
-          .where(
-            and(
-              eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
-              eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
-              // Unknown legacy receipts cannot identify a consumed object.
-              eq(
-                caseLawReplayBlocked.sourceRawS3Key,
-                caseLawDecisions.sourceRawS3Key,
-              ),
-              eq(
-                caseLawReplayBlocked.parserVersionTo,
-                selection.currentParserVersion,
-              ),
-              or(
-                eq(caseLawReplayBlocked.outcome, "rejected"),
-                parsedReplayInputPredicate(selection.currentParserVersion),
-              ),
-            ),
-          )
-          .limit(1)})`,
+        backgroundReplayExclusions(selection, tx),
       );
     default:
       selection satisfies never;
@@ -637,7 +678,12 @@ export const selectReplayPage = async ({
   );
 };
 
-/** Existence only: no aggregate, full-row projection, or corpus walk. */
+/**
+ * Existence only: no aggregate, full-row projection, or corpus walk. One
+ * read per arm, each ordered by the replay-pending index, so each is an index
+ * read stopping at its first row: a plan that is stable by construction, not
+ * one that depends on the planner's estimate of how many rows are behind.
+ */
 export const buildBackgroundReplayProbe = (
   tx: Transaction,
   {
@@ -651,25 +697,36 @@ export const buildBackgroundReplayProbe = (
     currentParserVersion: number;
     mode: "enrolled" | "dry-run";
   },
-) =>
-  tx
-    .select({ id: caseLawDecisions.id })
-    .from(caseLawDecisions)
-    .where(
-      and(
-        replayableRows(sourceId, CASE_LAW_REPLAY_SCOPE.SOURCE),
-        replaySelectionPredicate(
-          {
-            type: "background",
-            ...(adapterKey === undefined ? {} : { adapterKey }),
-            currentParserVersion,
-            mode,
-          },
-          tx,
+) => {
+  const selection = {
+    type: "background",
+    ...(adapterKey === undefined ? {} : { adapterKey }),
+    currentParserVersion,
+    mode,
+  } as const satisfies BackgroundReplaySelection;
+  const [first, second, ...rest] = BACKGROUND_REPLAY_ARMS.map((arm) =>
+    tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          replayableRows(sourceId, CASE_LAW_REPLAY_SCOPE.SOURCE),
+          backgroundReplayArmPredicate(arm, currentParserVersion),
+          backgroundReplayExclusions(selection, tx),
         ),
-      ),
-    )
-    .limit(1);
+      )
+      .orderBy(
+        asc(caseLawDecisions.sourceId),
+        asc(caseLawDecisions.parserVersion),
+        asc(caseLawDecisions.parsedInputState),
+      )
+      .limit(1),
+  );
+  if (first === undefined || second === undefined) {
+    return panic("The background replay probe reads at least two arms");
+  }
+  return unionAll(first, second, ...rest).limit(1);
+};
 
 export type ReplayabilitySplit = {
   /** Rows whose stored payload can be re-parsed locally. */

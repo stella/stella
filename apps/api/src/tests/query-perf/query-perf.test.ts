@@ -5,7 +5,9 @@ import { PgTable } from "drizzle-orm/pg-core";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 
+import { CASE_LAW_REPLAY_PENDING_INDEX } from "@/api/db/case-law-parsed-input-state";
 import * as schema from "@/api/db/schema";
+import { BACKGROUND_REPLAY_ARMS } from "@/api/handlers/case-law/ingestion/replay";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -441,6 +443,24 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 rows.every((row) => !row.eligible)
                 ? undefined
                 : `${budgetId}: expected 100 ineligible rows`,
+            );
+          }
+          // Plan stability by construction: every arm of the probe is one
+          // index read, never a scan whose cost rests on a row estimate.
+          if (budgetId === "statement.caseLaw.backgroundReplayProbe") {
+            const scans = scanOccurrences(result.plan.Plan).filter(
+              ({ relation }) => relation === "case_law_decisions",
+            );
+            note(
+              scans.length === BACKGROUND_REPLAY_ARMS.length &&
+                scans.every(
+                  ({ nodeType, index }) =>
+                    (nodeType === "Index Scan" ||
+                      nodeType === "Index Only Scan") &&
+                    index === CASE_LAW_REPLAY_PENDING_INDEX.name,
+                )
+                ? undefined
+                : `${budgetId}: each arm must read ${CASE_LAW_REPLAY_PENDING_INDEX.name} alone; scans: ${scans.map(({ nodeType, index }) => `${nodeType} ${String(index)}`).join(", ")}`,
             );
           }
         }

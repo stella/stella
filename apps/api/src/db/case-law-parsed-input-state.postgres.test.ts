@@ -3,9 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
+import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
-import { replaySelectionPredicate } from "@/api/handlers/case-law/ingestion/replay";
+import {
+  BACKGROUND_REPLAY_ARMS,
+  backgroundReplayArmPredicate,
+  buildBackgroundReplayProbe,
+  replaySelectionPredicate,
+} from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -228,6 +234,27 @@ if (!databaseUrl || !runPostgresTests) {
                 expect(selected.map(({ id }) => id)).toEqual(
                   expected.map(({ id }) => id),
                 );
+                // The probe reads the selection arm by arm: the arms are
+                // disjoint, together they are the selection, and the probe
+                // finds a row exactly when the selection holds one.
+                const armRows: string[] = [];
+                for (const arm of BACKGROUND_REPLAY_ARMS) {
+                  // db-await-in-loop: one read per arm, four in all.
+                  const rowsOfArm = await tx.execute<{ id: string }>(sql`
+                    SELECT id FROM case_law_decisions
+                    WHERE source_id = ${sourceId}
+                      AND ${backgroundReplayArmPredicate(arm, CURRENT_PARSER)}`);
+                  armRows.push(...rowsOfArm.map(({ id }) => id));
+                }
+                expect(armRows.toSorted(compareCodeUnit)).toEqual(
+                  expected.map(({ id }) => id).toSorted(compareCodeUnit),
+                );
+                const probed = await buildBackgroundReplayProbe(tx, {
+                  sourceId,
+                  currentParserVersion: CURRENT_PARSER,
+                  mode: "dry-run",
+                });
+                expect(probed.length).toBe(selected.length > 0 ? 1 : 0);
               });
             },
           ),
