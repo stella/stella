@@ -6,7 +6,7 @@
 
 import { panic, Result, UnhandledException } from "better-result";
 import { DrizzleQueryError, is, sql } from "drizzle-orm";
-import type { SQLWrapper } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { PgAsyncTransaction } from "drizzle-orm/pg-core";
 
 import {
@@ -28,9 +28,10 @@ import {
 } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
+  budgetedSetupRead,
   getPendingTransactionBudget,
   inheritTransactionBudget,
-  initializeTransactionBudget,
+  prepareTransactionBudgetSetting,
 } from "@/api/lib/db/transaction-budget-owner";
 import {
   DatabaseError,
@@ -125,6 +126,7 @@ type SetScopedTransactionSettingsOptions = {
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
   featureIds: readonly string[];
+  takeBudgetSetting?: () => SQL | undefined;
 };
 
 const workspaceIdsSetting = (workspaceScope: WorkspaceScope): string => {
@@ -142,12 +144,14 @@ export const setScopedTransactionSettings = async ({
   userId,
   workspaceScope,
   featureIds,
+  takeBudgetSetting,
 }: SetScopedTransactionSettingsOptions): Promise<void> => {
   const wsIds = workspaceIdsSetting(workspaceScope);
+  let setting = takeBudgetSetting?.();
   if (userId === null) {
     // A service actor has no membership-derived authority. Resolve its
     // explicit workspace IDs against the tenant before changing the role.
-    await tx.execute(sql`SELECT set_config(
+    const validation = sql`SELECT set_config(
       '${sql.raw(SETTING_WORKSPACE_IDS)}',
       coalesce((
         SELECT pg_catalog.array_agg(${workspaces.id})::text
@@ -156,12 +160,19 @@ export const setScopedTransactionSettings = async ({
           AND ${workspaces.organizationId} = ${organizationId}
       ), '{}'),
       true
-    )`);
+    )`;
+    await tx.execute(
+      setting === undefined
+        ? validation
+        : budgetedSetupRead({ setting, statement: validation }),
+    );
+    setting = undefined;
   }
 
   await tx.execute(
     sql`SELECT
       set_config('role', '${sql.raw(stella.name)}', true),
+      ${setting === undefined ? sql`` : sql`${setting},`}
       set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
       set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
       set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
@@ -246,25 +257,24 @@ type InitializeScopedBudgetOptions = {
 };
 
 /** A nested Drizzle transaction opens a savepoint, not a new deadline owner. */
-const initializeScopedBudget = async ({
+const initializeScopedBudget = ({
   database,
   tx,
   budget,
-}: InitializeScopedBudgetOptions): Promise<void> => {
+}: InitializeScopedBudgetOptions): SQL | undefined => {
   const state = database[RLS_DATABASE_MARKER];
   switch (state.kind) {
     case "transaction":
       inheritTransactionBudget(state.parent, tx);
       return;
     case "database":
-      await initializeTransactionBudget(
+      return prepareTransactionBudgetSetting(
         tx,
         tighterTransactionBudget({
           declared: budget,
           requested: getPendingTransactionBudget(),
         }),
       );
-      return;
     default:
       return panic(
         "Unknown RLS database transaction state",
@@ -286,7 +296,12 @@ const runScopedTransaction = async <
   featureAccessSnapshot,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
   await database.transaction(async (tx: TTransaction) => {
-    await initializeScopedBudget({ database, tx, budget });
+    let pendingSetting = initializeScopedBudget({ database, tx, budget });
+    const takeBudgetSetting = () => {
+      const setting = pendingSetting;
+      pendingSetting = undefined;
+      return setting;
+    };
     if (
       featureAccessSnapshot !== undefined &&
       (featureAccessSnapshot.organizationId !== organizationId ||
@@ -296,7 +311,12 @@ const runScopedTransaction = async <
     }
     const featureIds =
       featureAccessSnapshot === undefined
-        ? await resolveScopedFeatureIds({ tx, organizationId, userId })
+        ? await resolveScopedFeatureIds({
+            tx,
+            organizationId,
+            userId,
+            takeBudgetSetting,
+          })
         : [...featureAccessSnapshot.decisions]
             .filter(([, decision]) => decision.status === "enabled")
             .map(([featureId]) => featureId);
@@ -306,6 +326,7 @@ const runScopedTransaction = async <
       userId,
       workspaceScope,
       featureIds,
+      takeBudgetSetting,
     });
 
     return await fn(tx);
@@ -344,9 +365,9 @@ export const createTenantlessDb =
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await database.transaction(async (tx: TTransaction) => {
-      await initializeScopedBudget({ database, tx, budget });
+      const setting = initializeScopedBudget({ database, tx, budget });
       await tx.execute(
-        sql`SELECT set_config('role', '${sql.raw(stella.name)}', true)`,
+        sql`SELECT set_config('role', '${sql.raw(stella.name)}', true)${setting === undefined ? sql`` : sql`, ${setting}`}`,
       );
       return await fn(tx);
     });

@@ -232,6 +232,7 @@ test("every transaction owner uses its registered budget classification", async 
       true,
     );
     const budgetImports = new Set<string>();
+    const budgetTypeImports = new Set<string>();
     const transactionImports = new Set(["withAggregateTransaction"]);
     const uncappedImports = new Map<string, string>(
       uncappedBudgets.map((budget) => [budget.entryPoint, budget.entryPoint]),
@@ -253,8 +254,28 @@ test("every transaction owner uses its registered budget classification", async 
           case "AGGREGATE_TRANSACTION_BUDGETS":
             budgetImports.add(binding.name.text);
             break;
+          case "AggregateTransactionBudget":
+            if (
+              ts.isStringLiteral(statement.moduleSpecifier) &&
+              (statement.moduleSpecifier.text ===
+                "@/api/lib/db/aggregate-transaction-budget" ||
+                (statement.moduleSpecifier.text.startsWith(".") &&
+                  new URL(
+                    statement.moduleSpecifier.text,
+                    new URL(path, `file://${root}`),
+                  ).pathname.replace(/\.ts$/u, "") ===
+                    new URL(
+                      "aggregate-transaction-budget.ts",
+                      import.meta.url,
+                    ).pathname.replace(/\.ts$/u, "")))
+            ) {
+              budgetTypeImports.add(binding.name.text);
+            }
+            break;
           case "withAggregateTransaction":
             transactionImports.add(binding.name.text);
+            break;
+          default:
             break;
         }
       }
@@ -280,6 +301,93 @@ test("every transaction owner uses its registered budget classification", async 
         }
       }
     }
+    const isRequiredCallerBudget = (expression: ts.Expression): boolean => {
+      if (!ts.isIdentifier(expression)) {
+        return false;
+      }
+      const bindsBudget = (name: ts.BindingName): boolean =>
+        ts.isIdentifier(name)
+          ? name.text === expression.text
+          : name.elements.some(
+              (element) =>
+                ts.isBindingElement(element) && bindsBudget(element.name),
+            );
+      for (
+        let ancestor = expression.parent;
+        ancestor;
+        ancestor = ancestor.parent
+      ) {
+        if (!ts.isFunctionLike(ancestor)) {
+          continue;
+        }
+        for (const parameter of ancestor.parameters) {
+          if (ts.isIdentifier(parameter.name)) {
+            if (parameter.name.text === expression.text) {
+              return false;
+            }
+            continue;
+          }
+          if (!ts.isObjectBindingPattern(parameter.name)) {
+            // Other binding patterns can shadow a budget but cannot prove its policy.
+            if (bindsBudget(parameter.name)) {
+              return false;
+            }
+            continue;
+          }
+          const binding = parameter.name.elements.find(
+            (element) =>
+              ts.isIdentifier(element.name) &&
+              element.name.text === expression.text,
+          );
+          if (!binding) {
+            if (bindsBudget(parameter.name)) {
+              return false;
+            }
+            continue;
+          }
+          if (
+            parameter.initializer ||
+            parameter.questionToken ||
+            binding.initializer ||
+            binding.dotDotDotToken ||
+            !parameter.type ||
+            !ts.isTypeReferenceNode(parameter.type) ||
+            !ts.isIdentifier(parameter.type.typeName)
+          ) {
+            return false;
+          }
+          const parameterTypeName = parameter.type.typeName.text;
+          const options = source.statements.find(
+            (statement) =>
+              ts.isTypeAliasDeclaration(statement) &&
+              statement.name.text === parameterTypeName,
+          );
+          if (
+            !options ||
+            !ts.isTypeAliasDeclaration(options) ||
+            !ts.isTypeLiteralNode(options.type)
+          ) {
+            return false;
+          }
+          const propertyName = binding.propertyName ?? binding.name;
+          if (!ts.isIdentifier(propertyName)) {
+            return false;
+          }
+          return options.type.members.some(
+            (member) =>
+              ts.isPropertySignature(member) &&
+              ts.isIdentifier(member.name) &&
+              member.name.text === propertyName.text &&
+              !member.questionToken &&
+              member.type &&
+              ts.isTypeReferenceNode(member.type) &&
+              ts.isIdentifier(member.type.typeName) &&
+              budgetTypeImports.has(member.type.typeName.text),
+          );
+        }
+      }
+      return false;
+    };
     let directTransactions = 0;
     let aggregateTransactions = 0;
     const visit = (node: ts.Node): void => {
@@ -304,7 +412,7 @@ test("every transaction owner uses its registered budget classification", async 
             if (
               node.arguments.length !== 3 ||
               !budget ||
-              !isAggregateBudget(budget)
+              !(isAggregateBudget(budget) || isRequiredCallerBudget(budget))
             ) {
               missing.push(
                 `${owner}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`,

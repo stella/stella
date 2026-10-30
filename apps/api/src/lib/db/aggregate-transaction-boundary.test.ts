@@ -1,12 +1,22 @@
+import { TaggedError } from "better-result";
 import { expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { PG_ERROR } from "@/api/lib/pg-error";
 
 import { withAggregateTransactionBoundary } from "./aggregate-transaction-boundary";
 import {
   AGGREGATE_TRANSACTION_BUDGETS,
   AggregateTransactionTimeoutError,
 } from "./aggregate-transaction-budget";
+
+class TransactionBoundaryFixtureError extends TaggedError(
+  "TransactionBoundaryFixtureError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
 
 test.each(
   Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
@@ -15,12 +25,15 @@ test.each(
 )(
   "an uncapped owner preserves database timeout errors ($entryPoint)",
   async (budget) => {
-    const cause = { cause: { code: "25P04" } };
+    const cause = new TransactionBoundaryFixtureError({
+      message: "Transaction expired without an aggregate deadline",
+      cause: { code: PG_ERROR.TRANSACTION_TIMEOUT },
+    });
     expect(
       await rejectionOf(
         withAggregateTransactionBoundary(
           () => budget,
-          () => Promise.reject(cause),
+          async () => await Promise.reject(cause),
         ),
       ),
     ).toBe(cause);
@@ -34,11 +47,14 @@ test.each(
 )(
   "transaction rejection names the exhausted budget ($reason)",
   async (budget) => {
-    const cause = { cause: { code: "25P04" } };
+    const cause = new TransactionBoundaryFixtureError({
+      message: "Transaction exceeded its deadline",
+      cause: { code: PG_ERROR.TRANSACTION_TIMEOUT },
+    });
     const failure = await rejectionOf(
       withAggregateTransactionBoundary(
         () => budget,
-        () => Promise.reject(cause),
+        async () => await Promise.reject(cause),
       ),
     );
     expect(failure).toBeInstanceOf(AggregateTransactionTimeoutError);
@@ -58,17 +74,26 @@ test("transaction boundary preserves successful values and unrelated failures", 
   expect(
     await withAggregateTransactionBoundary(
       () => budget,
-      () => Promise.resolve(value),
+      async () => value,
     ),
   ).toBe(value);
-  for (const cause of [{ code: "57014" }, { cause: { code: "40001" } }, null]) {
+  for (const payload of [
+    { code: PG_ERROR.QUERY_CANCELED },
+    { cause: { code: PG_ERROR.SERIALIZATION_FAILURE } },
+    null,
+  ]) {
+    const cause = new TransactionBoundaryFixtureError({
+      message: "Unrelated transaction failure",
+      cause: payload,
+    });
     expect(
       await rejectionOf(
         withAggregateTransactionBoundary(
           () => budget,
-          () => Promise.reject(cause),
+          async () => await Promise.reject(cause),
         ),
       ),
     ).toBe(cause);
+    expect(cause.cause).toBe(payload);
   }
 });

@@ -75,6 +75,14 @@ export const AGGREGATE_TRANSACTION_BUDGETS = {
     reason:
       "retain the consistent export snapshot until realistic corpus and storage runtimes justify a total deadline",
   },
+  reviewOrganizationReset: {
+    kind: "uncapped-pending-measurement",
+    owner: "apps/api/src/lib/review-organization/reset.ts",
+    entryPoint: "resetReviewOrganization",
+    callers: ["apps/api/src/lib/scheduler/tasks/review-organization-reset.ts"],
+    reason:
+      "scheduler-only organization resets retain their existing uncapped policy until measured reset runtimes justify a deadline",
+  },
   scopedWorkerPendingMeasurement: {
     kind: "uncapped-pending-measurement",
     owner: "apps/api/src/db/scoped.ts",

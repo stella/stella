@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -13,8 +14,16 @@ import {
   getTransactionBudget,
   inheritTransactionBudget,
   initializeTransactionBudget,
+  prepareTransactionBudgetSetting,
   withTransactionBudgetContext,
 } from "./transaction-budget-owner.ts";
+
+class TransactionOwnerFixtureError extends TaggedError(
+  "TransactionOwnerFixtureError",
+)<{
+  message: string;
+  code: string;
+}> {}
 
 const createExecutor = () => {
   const statements: string[] = [];
@@ -26,6 +35,47 @@ const createExecutor = () => {
   };
   return { tx, statements };
 };
+
+test.each(
+  Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+    (budget) => budget.kind !== "lease-coordinated",
+  ),
+)(
+  "preparing a scoped budget claims its owner without executing SQL ($reason)",
+  async (budget) => {
+    const { tx, statements } = createExecutor();
+    const setting = prepareTransactionBudgetSetting(tx, budget);
+    expect(getTransactionBudget(tx)).toBe(budget);
+    expect(statements).toEqual([]);
+    switch (budget.kind) {
+      case "aggregate": {
+        expect(setting).toBeDefined();
+        if (setting !== undefined) {
+          const rendered = new PgDialect().sqlToQuery(setting);
+          expect(rendered.sql).toBe(
+            "set_config('transaction_timeout', $1, true)",
+          );
+          expect(rendered.params).toEqual([`${budget.milliseconds}ms`]);
+        }
+        break;
+      }
+      case "uncapped-pending-measurement":
+        expect(setting).toBeUndefined();
+        break;
+      default:
+        budget satisfies never;
+    }
+    expect(() => prepareTransactionBudgetSetting(tx, budget)).toThrow(
+      "Transaction budget is already initialized",
+    );
+    expect(
+      await rejectionOf(initializeTransactionBudget(tx, budget)),
+    ).toMatchObject({
+      message: "Transaction budget is already initialized",
+    });
+    expect(statements).toEqual([]);
+  },
+);
 
 test("budget selection never weakens either boundary and preserves declared ownership on ties", () => {
   const policies = Object.values(AGGREGATE_TRANSACTION_BUDGETS)
@@ -131,9 +181,9 @@ test("racing initializers cannot issue a second deadline statement", async () =>
   const pending = Promise.withResolvers<undefined>();
   let executions = 0;
   const tx = {
-    execute: () => {
+    execute: async () => {
       executions += 1;
-      return pending.promise;
+      return await pending.promise;
     },
   };
   const firstBudget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
@@ -225,12 +275,15 @@ test("concurrent transaction contexts retain their own budgets and restore their
 
 test("initialization and context failures preserve their cause without permitting deadline retries", async () => {
   const budget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
-  const cause = { code: "08006" };
+  const cause = new TransactionOwnerFixtureError({
+    message: "Connection failed while installing the transaction deadline",
+    code: "08006",
+  });
   let executions = 0;
   const tx = {
-    execute: () => {
+    execute: async () => {
       executions += 1;
-      return Promise.reject(cause);
+      return await Promise.reject(cause);
     },
   };
   expect(await rejectionOf(initializeTransactionBudget(tx, budget))).toBe(
@@ -245,7 +298,10 @@ test("initialization and context failures preserve their cause without permittin
   expect(executions).toBe(1);
   expect(
     await rejectionOf(
-      withTransactionBudgetContext(budget, () => Promise.reject(cause)),
+      withTransactionBudgetContext(
+        budget,
+        async () => await Promise.reject(cause),
+      ),
     ),
   ).toBe(cause);
   expect(getPendingTransactionBudget()).toBeUndefined();

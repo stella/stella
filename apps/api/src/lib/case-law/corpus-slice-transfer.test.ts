@@ -253,7 +253,8 @@ test("an export publishes its manifest only after the snapshot commits", async (
       write: async (key, bytes, contentType) => {
         if (key.endsWith("/manifest.json")) {
           expect(state.transaction).toBe("committed");
-          return await storage.write(key, bytes, contentType);
+          await storage.write(key, bytes, contentType);
+          return;
         }
         expect(key.endsWith(".ndjson")).toBe(true);
         expect(state.transaction).toBe("running");

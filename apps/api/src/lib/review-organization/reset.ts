@@ -68,7 +68,7 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.reviewOrganizationReset;
 
 export const REVIEW_RESET_REFUSAL = {
   unconfigured: "unconfigured",
@@ -257,7 +257,9 @@ class ReviewSweepBlockedError extends TaggedError("ReviewSweepBlockedError")<{
 /** The review organization gained a member while the reset ran. */
 class ReviewMembershipChangedError extends TaggedError(
   "ReviewMembershipChangedError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /**
  * Holds sole membership for the length of each transaction the reset writes
@@ -466,6 +468,7 @@ const deleteMatters = async (scope: ResetScope) => {
     }
     const outcome = await executeAuthorizedWorkspaceDeletion(
       {
+        budget: BUDGET,
         actorUserId: userId,
         organizationId,
         recordAuditEvent: scope.recorderFor(matter.id),

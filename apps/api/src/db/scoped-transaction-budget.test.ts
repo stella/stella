@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import { expect, test } from "bun:test";
 import { sql, type SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -26,8 +27,13 @@ import {
 } from "./scoped";
 import type { TransactionOf } from "./scoped";
 
+class ScopedBudgetFixtureError extends TaggedError("ScopedBudgetFixtureError")<{
+  message: string;
+  cause: unknown;
+}> {}
+
 const fixture = () => {
-  const statements: string[] = [];
+  const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const dialect = new PgDialect();
   const database = markRlsDatabase({
     transaction: async <T>(
@@ -39,14 +45,47 @@ const fixture = () => {
         execute: async (statement: SQLWrapper | string) => {
           statements.push(
             typeof statement === "string"
-              ? statement
-              : dialect.sqlToQuery(statement.getSQL()).sql,
+              ? { sql: statement, params: [] }
+              : dialect.sqlToQuery(statement.getSQL()),
           );
           return [];
         },
       }),
   });
   return { database, statements };
+};
+
+type ExpectedScopedBudgetSettingOptions = {
+  statements: ReturnType<typeof fixture>["statements"];
+  milliseconds: number;
+};
+
+const expectScopedBudgetSetting = ({
+  statements,
+  milliseconds,
+}: ExpectedScopedBudgetSettingOptions) => {
+  const timers = statements.filter(({ sql: text }) =>
+    text.includes("transaction_timeout"),
+  );
+  expect(timers).toHaveLength(1);
+  expect(timers.at(0)).toBe(statements.at(0));
+  const timer = timers.at(0);
+  const setting = /set_config\('transaction_timeout', \$(\d+), true\)/u.exec(
+    timer?.sql ?? "",
+  );
+  expect(setting).not.toBeNull();
+  expect(timer?.params.at(Number(setting?.at(1)) - 1)).toBe(
+    `${milliseconds}ms`,
+  );
+  expect([
+    ...(timer?.sql.matchAll(/set_config\('transaction_timeout'/gu) ?? []),
+  ]).toHaveLength(1);
+  expect(timer?.sql).toMatch(/\b(?:SELECT|WITH)\b/u);
+  expect(
+    statements.some(({ sql: text }) =>
+      text.startsWith("SET LOCAL transaction_timeout"),
+    ),
+  ).toBe(false);
 };
 
 test.each([
@@ -101,10 +140,10 @@ test.each([
       await tx.execute(sql`SELECT 1`);
     });
     expect(callbackRuns).toBe(1);
-    expect(statements.at(-1)).toBe("SELECT 1");
+    expect(statements.at(-1)?.sql).toBe("SELECT 1");
     expect(
-      statements.filter((statement) =>
-        statement.includes("transaction_timeout"),
+      statements.filter(({ sql: text }) =>
+        text.includes("transaction_timeout"),
       ),
     ).toEqual([]);
   },
@@ -127,14 +166,11 @@ test.each(["scoped", "tenantless"] as const)(
             AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
           );
     await run(async (tx) => await tx.execute(sql`SELECT 1`));
-    expect(statements.at(0)).toBe(
-      `SET LOCAL transaction_timeout = ${AGGREGATE_TRANSACTION_BUDGETS.scopedRequest.milliseconds}`,
-    );
-    expect(
-      statements.filter((statement) =>
-        statement.includes("transaction_timeout"),
-      ),
-    ).toHaveLength(1);
+    expectScopedBudgetSetting({
+      statements,
+      milliseconds: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest.milliseconds,
+    });
+    expect(statements).toHaveLength(scope === "scoped" ? 3 : 2);
   },
 );
 
@@ -172,11 +208,11 @@ test.each(["scoped", "tenantless"] as const)(
             await tx.execute(sql`SELECT 1`);
           }),
       );
-      expect(
-        statements.filter((statement) =>
-          statement.includes("transaction_timeout"),
-        ),
-      ).toEqual([`SET LOCAL transaction_timeout = ${expected.milliseconds}`]);
+      expectScopedBudgetSetting({
+        statements,
+        milliseconds: expected.milliseconds,
+      });
+      expect(statements).toHaveLength(scope === "scoped" ? 3 : 2);
     }
   },
 );
@@ -202,19 +238,22 @@ test("a worker opens its own untimed transaction even when started inside reques
       });
     },
   );
-  expect(request.statements).toEqual([
+  expect(request.statements.map(({ sql: text }) => text)).toEqual([
     `SET LOCAL transaction_timeout = ${AGGREGATE_TRANSACTION_BUDGETS.scopedRequest.milliseconds}`,
   ]);
   expect(
-    worker.statements.filter((statement) =>
-      statement.includes("transaction_timeout"),
+    worker.statements.filter(({ sql: text }) =>
+      text.includes("transaction_timeout"),
     ),
   ).toEqual([]);
 });
 
 test("a scoped commit timeout identifies the physical request budget under an uncapped caller", async () => {
   const { database, statements } = fixture();
-  const cause = { cause: { code: PG_ERROR.TRANSACTION_TIMEOUT } };
+  const cause = new ScopedBudgetFixtureError({
+    message: "Transaction expired during commit",
+    cause: { code: PG_ERROR.TRANSACTION_TIMEOUT },
+  });
   const rejectCommitDatabase = markRlsDatabase({
     transaction: async <T>(
       run: (tx: TransactionOf<typeof database>) => Promise<T>,
@@ -247,30 +286,26 @@ test("a scoped commit timeout identifies the physical request budget under an un
   expect(failure.budget).toBe(budget);
   expect(failure.cause).toBe(cause);
   expect(failure.message).toContain(`${budget.milliseconds} ms`);
-  expect(
-    statements.filter((statement) => statement.includes("transaction_timeout")),
-  ).toEqual([`SET LOCAL transaction_timeout = ${budget.milliseconds}`]);
+  expectScopedBudgetSetting({ statements, milliseconds: budget.milliseconds });
+  expect(statements).toHaveLength(3);
 });
 
 test("a tenant setup timeout identifies the request budget before the aggregate callback runs", async () => {
   const budget = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
-  const cause = { cause: { code: PG_ERROR.TRANSACTION_TIMEOUT } };
-  const statements: string[] = [];
+  const cause = new ScopedBudgetFixtureError({
+    message: "Transaction expired during tenant setup",
+    cause: { code: PG_ERROR.TRANSACTION_TIMEOUT },
+  });
+  const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const dialect = new PgDialect();
   const tx = {
     execute: async (statement: SQLWrapper | string) => {
-      const text =
+      const rendered =
         typeof statement === "string"
-          ? statement
-          : dialect.sqlToQuery(statement.getSQL()).sql;
-      statements.push(text);
-      if (statements.length === 1) {
-        expect(text).toBe(
-          `SET LOCAL transaction_timeout = ${budget.milliseconds}`,
-        );
-        return [];
-      }
-      expect(text).toContain("set_config(");
+          ? { sql: statement, params: [] }
+          : dialect.sqlToQuery(statement.getSQL());
+      statements.push(rendered);
+      expect(rendered.sql).toContain("set_config(");
       return await Promise.reject(cause);
     },
   };
@@ -302,7 +337,8 @@ test("a tenant setup timeout identifies the request budget before the aggregate 
   expect(failure.budget).toBe(budget);
   expect(failure.cause).toBe(cause);
   expect(failure.message).toContain(`${budget.milliseconds} ms`);
-  expect(statements).toHaveLength(2);
+  expect(statements).toHaveLength(1);
+  expectScopedBudgetSetting({ statements, milliseconds: budget.milliseconds });
 });
 
 test.each([
@@ -336,11 +372,10 @@ test.each([
         await tx.execute(sql`SELECT 1`);
       },
     );
-    const timeouts = statements.filter((statement) =>
-      statement.includes("transaction_timeout"),
-    );
-    expect(timeouts).toEqual([
-      `SET LOCAL transaction_timeout = ${expected.milliseconds}`,
-    ]);
+    expectScopedBudgetSetting({
+      statements,
+      milliseconds: expected.milliseconds,
+    });
+    expect(statements).toHaveLength(3);
   },
 );

@@ -17,7 +17,7 @@ import {
   lockWorkspaceLifecycle,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
+import type { AggregateTransactionBudget } from "@/api/lib/db/aggregate-transaction-budget";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -30,8 +30,6 @@ import {
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
-
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
@@ -48,6 +46,7 @@ export type WorkspaceDeletionDependencies = {
 };
 
 type ExecuteAuthorizedWorkspaceDeletionOptions = {
+  budget: AggregateTransactionBudget;
   actorUserId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
@@ -153,6 +152,7 @@ const actorCanAccessWorkspace = async ({
 export const executeAuthorizedWorkspaceDeletion = async (
   {
     actorUserId,
+    budget,
     organizationId,
     recordAuditEvent,
     workspaceId,
@@ -168,7 +168,7 @@ export const executeAuthorizedWorkspaceDeletion = async (
     attempt = 0,
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
-      return await withAggregateTransaction(database, BUDGET, async (tx) => {
+      return await withAggregateTransaction(database, budget, async (tx) => {
         const actorRole = await lockAuthorizedActorRole({
           actorUserId,
           organizationId,

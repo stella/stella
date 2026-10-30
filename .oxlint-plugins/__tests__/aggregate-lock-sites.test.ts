@@ -156,6 +156,28 @@ describe("aggregate lock confinement", () => {
       "for update",
     ]);
   });
+  test("scoped setup can interpolate the owner's timer fragment without duplicating its setter", () => {
+    const definition = `const timeout = sql\`set_config('transaction_timeout', \${milliseconds}, true)\`;`;
+    const consumer = `await tx.execute(sql\`SELECT \${timeout}, set_config('role', \${role}, true)\`);`;
+    expect(aggregateLockSites(TRANSACTION_BUDGET_OWNER, definition)).toEqual(
+      [],
+    );
+    expect(aggregateLockSites(file, consumer)).toEqual([]);
+    const foreignDefinition = aggregateLockSites(
+      file,
+      `${definition}\n${consumer}`,
+    );
+    expect(foreignDefinition).toHaveLength(1);
+    expect(foreignDefinition.at(0)?.primitive).toBe(
+      "transaction-timeout-setting",
+    );
+    const actual = aggregateLockBaseline(foreignDefinition);
+    expect(
+      aggregateLockBaselineProblems({ actual, baseline: actual }),
+    ).toContainEqual(
+      expect.stringContaining("Transaction timeout belongs only"),
+    );
+  });
   test("enumerates SQL savepoint creation, release and rollback", () => {
     for (const operation of [
       "SAVEPOINT example",

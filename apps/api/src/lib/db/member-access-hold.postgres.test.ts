@@ -402,6 +402,7 @@ if (!databaseUrl || !runPostgresTests) {
               await holdPrefix.promise;
               return await executeAuthorizedWorkspaceDeletion(
                 {
+                  budget: BUDGETS.scopedRequest,
                   actorUserId: seeded.userId,
                   organizationId: seeded.organizationId,
                   workspaceId: seeded.workspaceId,
@@ -493,6 +494,7 @@ if (!databaseUrl || !runPostgresTests) {
             await matterLocked.promise;
             return await executeAuthorizedWorkspaceDeletion(
               {
+                budget: BUDGETS.scopedRequest,
                 actorUserId: seeded.userId,
                 organizationId: seeded.organizationId,
                 workspaceId: seeded.workspaceId,

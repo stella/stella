@@ -30,11 +30,11 @@ type TransactionBudgetExecutor = {
   execute: (statement: SQL) => PromiseLike<unknown>;
 };
 
-/** Claim before awaiting SQL: concurrent initializers cannot restart the deadline. */
-export const initializeTransactionBudget = async (
-  tx: TransactionBudgetExecutor,
+/** Claim before producing SQL: concurrent initializers cannot restart the deadline. */
+const claimTransactionBudget = (
+  tx: object,
   budget: AggregateTransactionBudget,
-): Promise<void> => {
+): void => {
   if (transactionBudgets.has(tx)) {
     panic("Transaction budget is already initialized");
   }
@@ -44,10 +44,18 @@ export const initializeTransactionBudget = async (
   const admission = pendingBudget.getStore();
   if (admission !== undefined) {
     admission.budget = tighterTransactionBudget({
-      declared: admission.budget,
-      requested: budget,
+      declared: budget,
+      requested: admission.budget,
     });
   }
+};
+
+/** Standalone admission stays a SET so callbacks can still choose their snapshot. */
+export const initializeTransactionBudget = async (
+  tx: TransactionBudgetExecutor,
+  budget: AggregateTransactionBudget,
+): Promise<void> => {
+  claimTransactionBudget(tx, budget);
   switch (budget.kind) {
     case "aggregate":
       await tx.execute(
@@ -60,6 +68,40 @@ export const initializeTransactionBudget = async (
       return panic("Unknown transaction budget kind", budget satisfies never);
   }
 };
+
+/** Scoped admission shares its first setup SELECT instead of adding a statement. */
+export const prepareTransactionBudgetSetting = (
+  tx: object,
+  budget: AggregateTransactionBudget,
+): SQL | undefined => {
+  claimTransactionBudget(tx, budget);
+  switch (budget.kind) {
+    case "aggregate":
+      return sql`set_config('transaction_timeout', ${`${budget.milliseconds}ms`}, true)`;
+    case "uncapped-pending-measurement":
+      return undefined;
+    default:
+      return panic("Unknown transaction budget kind", budget satisfies never);
+  }
+};
+
+type BudgetedSetupReadOptions = {
+  setting: SQL;
+  statement: SQL;
+};
+
+/** Setup reads return at most one row. The correlated LIMIT forces the timer before their work, including empty identity lookups. */
+export const budgetedSetupRead = ({
+  setting,
+  statement,
+}: BudgetedSetupReadOptions): SQL => sql`
+  WITH stella_budget AS MATERIALIZED (SELECT ${setting} AS applied)
+  SELECT scoped_setup.* FROM stella_budget
+  CROSS JOIN LATERAL (
+    SELECT * FROM (${statement}) AS setup_read
+    LIMIT CASE WHEN stella_budget.applied IS NOT NULL THEN 1 ELSE 0 END
+  ) AS scoped_setup
+`;
 
 /** Savepoints share their physical transaction's deadline; they never reset it. */
 export const inheritTransactionBudget = (

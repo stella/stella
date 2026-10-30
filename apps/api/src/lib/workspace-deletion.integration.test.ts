@@ -533,6 +533,7 @@ describe("workspace deletion", () => {
     };
     const result = await executeAuthorizedWorkspaceDeletion(
       {
+        budget: BUDGETS.scopedRequest,
         actorUserId: fixture.actorUserId,
         organizationId: fixture.organizationId,
         recordAuditEvent,
@@ -745,6 +746,7 @@ describe("workspace deletion", () => {
 
     const result = await executeAuthorizedWorkspaceDeletion(
       {
+        budget: BUDGETS.scopedRequest,
         actorUserId: fixture.actorUserId,
         organizationId: fixture.organizationId,
         recordAuditEvent,
@@ -898,6 +900,7 @@ describe("workspace deletion", () => {
     for (const workspaceId of refusedMatterIds) {
       const result = await executeAuthorizedWorkspaceDeletion(
         {
+          budget: BUDGETS.scopedRequest,
           actorUserId: fixture.actorUserId,
           organizationId: fixture.organizationId,
           recordAuditEvent: async (_tx, event) => {

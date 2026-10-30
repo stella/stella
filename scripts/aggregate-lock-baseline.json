@@ -679,15 +679,15 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "33757e85b2ed95f5d9ce7b45f2e68e552468b0c760a9610985dec5dcb2ff3212",
+    "fingerprint": "685e07dce556fc2bdd3d492e9e549abeb00d79b4ab58ac16c121183d6fb48739",
     "count": 1,
-    "reason": "Initialize the existing createTenantlessDb physical transaction with its required typed budget, or inherit the parent budget for a scoped savepoint, before its role setting; the transaction count and deny-by-default tenantless scope are unchanged."
+    "reason": "Fold the required budget into the existing createTenantlessDb role-setting SELECT through the canonical owner, or inherit the parent deadline for a savepoint; the physical transaction count and deny-by-default tenantless scope are unchanged."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "5ff0f107c32ba531bee38d5ae7b405bd8529924c91258785caf60ade468257e0",
+    "fingerprint": "969e54d207a65ac23f8c3bc9c9095280a4686c8122cd69e2f1a6090f0ef5a1ed",
     "count": 1,
-    "reason": "Initialize the existing runScopedTransaction physical transaction with its required typed budget, or inherit the parent budget for a scoped savepoint, before feature, role, and tenant settings; the transaction count and scope are unchanged."
+    "reason": "Fold the required budget into the existing runScopedTransaction first setup read or settings SELECT through the canonical owner, or inherit the parent deadline for a savepoint; the physical transaction count and tenant scope are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/citation-authority.ts",
