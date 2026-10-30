@@ -1,6 +1,6 @@
 import { beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, watch } from "node:fs";
 import {
   cp,
   mkdir,
@@ -26,6 +26,7 @@ import {
   snapshotProblems,
   tailwindEntryPoints,
   tailwindFailureMessages,
+  writeCache,
 } from "./generate-tailwind-classes";
 import { GENERATORS } from "./generated-files";
 
@@ -485,6 +486,102 @@ test("the cache write keeps unused answers and drops obsolete snapshots", () => 
     [snapshotA]: '{"v":1}\n',
   });
 });
+
+// timeout: cold Tailwind compilation may take longer than Bun's default.
+test("regeneration never exposes a missing or partial snapshot", async () => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "tailwind-publish-"));
+  const cache = path.join(fixture, "cache");
+  await cp(generatedCache, cache, { recursive: true });
+  const snapshots = (await readdir(cache)).filter((name) =>
+    name.endsWith(".json"),
+  );
+  const snapshot = snapshots.at(0);
+  if (snapshot === undefined) {
+    throw new TypeError("Generated Tailwind cache has no snapshots");
+  }
+  const changedSnapshot = path.join(cache, snapshot);
+  await writeFile(
+    changedSnapshot,
+    `${await readFile(changedSnapshot, "utf-8")}\n`,
+  );
+  let cacheDirectoryRemoved = false;
+  const watcher = watch(fixture, (event, name) => {
+    if (event === "rename" && name === path.basename(cache)) {
+      cacheDirectoryRemoved = true;
+    }
+  });
+  const writer = writeCache(cache);
+  let reads = 0;
+  const readSnapshots = async () => {
+    for (const name of snapshots) {
+      JSON.parse(await readFile(path.join(cache, name), "utf-8"));
+      reads += 1;
+    }
+    return "read" as const;
+  };
+  while (true) {
+    const result = await Promise.race([
+      writer.then(() => "done" as const),
+      readSnapshots(),
+    ]);
+    if (result === "done") {
+      break;
+    }
+  }
+  await writer;
+  // real-time: allow the filesystem watcher to deliver a queued rename event.
+  await Bun.sleep(50);
+  watcher.close();
+  expect(cacheDirectoryRemoved).toBe(false);
+  expect(reads).toBeGreaterThan(0);
+  await rm(fixture, { recursive: true, force: true });
+}, 120_000);
+
+// timeout: two cold Tailwind compilations run serially behind the lock.
+test("concurrent generators wait for the writer lock and leave a complete cache", async () => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "tailwind-publish-"));
+  const cache = path.join(fixture, "cache");
+  await cp(generatedCache, cache, { recursive: true });
+  const lock = `${cache}.lock`;
+  const buildsBefore = new Set(
+    await Array.fromAsync(
+      new Bun.Glob(".tailwind-cache-build-*").scan({
+        cwd: fixture,
+        onlyFiles: false,
+      }),
+    ),
+  );
+  await writeFile(
+    lock,
+    JSON.stringify({
+      createdAt: Date.now(),
+      pid: process.pid,
+      token: "test-owner",
+    }),
+  );
+  const writers = [writeCache(cache), writeCache(cache)];
+  try {
+    // real-time: the lock must remain exclusive while another writer owns it.
+    await Bun.sleep(2 * 1000);
+    expect(
+      await Array.fromAsync(
+        new Bun.Glob(".tailwind-cache-build-*").scan({
+          cwd: fixture,
+          onlyFiles: false,
+        }),
+      ),
+    ).toEqual([...buildsBefore]);
+  } finally {
+    await rm(lock, { force: true });
+  }
+  await Promise.all(writers);
+  for (const name of await readdir(cache)) {
+    if (name.endsWith(".json")) {
+      JSON.parse(await readFile(path.join(cache, name), "utf-8"));
+    }
+  }
+  await rm(fixture, { recursive: true, force: true });
+}, 120_000);
 
 test("a crash inside the Tailwind plugin fails generation", () => {
   const crash =
