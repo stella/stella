@@ -5,7 +5,10 @@
 
 import { Result, TaggedError } from "better-result";
 
-import { assertReadCommittedUnit } from "@/api/lib/db/read-committed-unit";
+import {
+  assertReadCommittedUnit,
+  READ_COMMITTED_BEGIN,
+} from "@/api/lib/db/read-committed-unit";
 
 /**
  * A bound parameter. Scalars only: the scheduler binds through Bun SQL's
@@ -89,7 +92,7 @@ export const inBackfillTransaction = async (
   if (session.runUnit !== undefined) {
     return await session.runUnit({ lockTimeout, statementTimeout }, work);
   }
-  await session.execute("BEGIN ISOLATION LEVEL READ COMMITTED");
+  await session.execute(READ_COMMITTED_BEGIN);
   const unit = await Result.tryPromise({
     try: async () => {
       await assertReadCommittedUnit(

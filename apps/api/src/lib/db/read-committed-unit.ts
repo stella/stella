@@ -2,6 +2,9 @@ import { panic } from "better-result";
 
 import { isRecord } from "../type-guards";
 
+/** The statement that opens every backfill unit's transaction. */
+export const READ_COMMITTED_BEGIN = "BEGIN ISOLATION LEVEL READ COMMITTED";
+
 /**
  * Confirms a unit's transaction runs in read committed. A BEGIN issued
  * inside a transaction that is already open is ignored, so the explicit
