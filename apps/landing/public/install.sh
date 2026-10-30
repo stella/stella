@@ -14,15 +14,6 @@ case "$(uname -m)" in
 esac
 asset="stella-$platform-$arch"
 base=https://github.com/stella/stella/releases
-if [ -n "${STELLA_RELEASE_BASE_URL:-}" ]; then
-  [ "${STELLA_INSTALL_TEST:-}" = 1 ] || fail 'Release URL override is available only in test mode.'
-  base=$STELLA_RELEASE_BASE_URL
-fi
-case "$base" in
-  https://*) protocols='=https' ;;
-  file://*) [ "${STELLA_INSTALL_TEST:-}" = 1 ] || fail 'Local releases require test mode.'; protocols='=file' ;;
-  *) fail 'Release URL must use HTTPS.' ;;
-esac
 if [ -n "${STELLA_VERSION:-}" ]; then
   version=${STELLA_VERSION#v}
   case "$version" in *[!0-9A-Za-z.-]*|'') fail 'Invalid STELLA_VERSION.' ;; esac
@@ -35,7 +26,7 @@ case "$install_dir" in /*) ;; *) fail 'STELLA_INSTALL_DIR must be absolute.' ;; 
 mkdir -p "$install_dir"
 staging=$(mktemp -d "$install_dir/.stella-install.XXXXXXXX")
 trap 'rm -rf "$staging"' EXIT HUP INT TERM
-fetch() { curl --fail --silent --show-error --location --proto "$protocols" --proto-redir "$protocols" --connect-timeout 15 --max-time 300 "$1" -o "$2"; }
+fetch() { curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time 300 "$1" -o "$2"; }
 fetch "$release/$asset" "$staging/$asset"
 fetch "$release/checksums.txt" "$staging/checksums.txt"
 expected=$(awk -v name="$asset" '$2 == name { print $1 }' "$staging/checksums.txt")

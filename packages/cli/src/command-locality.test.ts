@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { commandNeedsRegistry } from "./command-locality.js";
+import {
+  argumentsBeforeTerminator,
+  commandNeedsRegistry,
+} from "./command-locality.js";
 
 describe("commandNeedsRegistry", () => {
   test("local hand-wired routes never need the registry", () => {
@@ -25,4 +28,23 @@ describe("commandNeedsRegistry", () => {
     expect(commandNeedsRegistry(["usage", "get"])).toBe(true);
     expect(commandNeedsRegistry(["reference", "get"])).toBe(true);
   });
+});
+
+test("startup argument scanning stops at the first positional terminator", () => {
+  for (const suffix of [
+    [],
+    ["--help"],
+    ["--version"],
+    ["--schema"],
+    ["--", "-h"],
+  ]) {
+    expect(
+      argumentsBeforeTerminator(["tasks", "create", "--", ...suffix]),
+    ).toEqual(["tasks", "create"]);
+  }
+  expect(
+    argumentsBeforeTerminator(["tasks", "--help", "--", "create"]),
+  ).toEqual(["tasks", "--help"]);
+  expect(argumentsBeforeTerminator(["update"])).toEqual(["update"]);
+  expect(argumentsBeforeTerminator([])).toEqual([]);
 });

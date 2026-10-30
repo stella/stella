@@ -59,6 +59,19 @@ async function withInstaller(
       options.version ? `download/v${options.version}` : "latest/download",
     );
     await mkdir(release, { recursive: true });
+    const publishedScript = await readFile(INSTALL_SCRIPT, "utf-8");
+    const releaseBase = "base=https://github.com/stella/stella/releases";
+    const transport = "--proto '=https' --proto-redir '=https'";
+    expect(publishedScript.split(releaseBase)).toHaveLength(2);
+    expect(publishedScript.split(transport)).toHaveLength(2);
+    // Only the temporary test copy can read fixture files; the published script has no alternate transport.
+    const fixtureScript = path.join(root, "install-fixture.sh");
+    await writeFile(
+      fixtureScript,
+      publishedScript
+        .replace(releaseBase, () => `base=${pathToFileURL(releases).href}`)
+        .replace(transport, "--proto '=file' --proto-redir '=file'"),
+    );
     await writeFile(path.join(release, asset), PAYLOAD);
     const checksum = options.mismatch ? "0".repeat(64) : sha256Hex(PAYLOAD);
     await writeFile(
@@ -72,14 +85,12 @@ async function withInstaller(
     );
     const run = () =>
       Bun.spawnSync({
-        cmd: ["/bin/sh", INSTALL_SCRIPT],
+        cmd: ["/bin/sh", fixtureScript],
         env: {
           HOME: home,
           PATH: `${options.onPath ? `${installDir}:` : ""}${commands}:/usr/bin:/bin`,
           SHELL: options.shell ?? "/bin/bash",
           XDG_CONFIG_HOME: path.join(home, ".config"),
-          STELLA_INSTALL_TEST: "1",
-          STELLA_RELEASE_BASE_URL: pathToFileURL(releases).href,
           STELLA_NO_MODIFY_PATH: options.noModifyPath ? "1" : "0",
           ...(options.customInstallDir
             ? { STELLA_INSTALL_DIR: installDir }
@@ -229,8 +240,19 @@ describe("native install script", () => {
     const script = await readFile(INSTALL_SCRIPT, "utf-8");
     expect(script).not.toMatch(/\bsudo\b|--insecure|\s-k\b/u);
     expect(script).toContain("--proto-redir");
+    expect(script).toContain("--tlsv1.2");
     expect(script).toContain("--max-time");
   });
+});
+
+test("published installers expose only the canonical HTTPS release source", async () => {
+  for (const filename of [INSTALL_SCRIPT, POWERSHELL_SCRIPT]) {
+    const script = await readFile(filename, "utf-8");
+    expect(script).toContain("https://github.com/stella/stella/releases");
+    expect(script).not.toMatch(
+      /STELLA_INSTALL_TEST|STELLA_RELEASE_BASE_URL|file:\/\//u,
+    );
+  }
 });
 
 describe("Windows install script", () => {
@@ -245,7 +267,7 @@ describe("Windows install script", () => {
     expect(script).not.toMatch(
       /RunAs|Start-Process|SkipCertificateCheck|sudo/iu,
     );
-    expect(script).toContain("'User'");
+    expect(script).toContain("[Microsoft.Win32.Registry]::CurrentUser");
     expect(script).toContain("STELLA_NO_MODIFY_PATH");
     expect(script).toContain("[TimeSpan]::FromSeconds(300)");
     expect(script).toContain("$handler.AllowAutoRedirect = $false");
@@ -253,6 +275,23 @@ describe("Windows install script", () => {
     expect(script).toContain(
       "(Join-Path $configDir 'install-path'), \"$destination`n\"",
     );
+  });
+  test("preserves unexpanded PATH references in storage and the printed command", async () => {
+    const script = await readFile(POWERSHELL_SCRIPT, "utf-8");
+    expect(script).toContain(
+      "[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames",
+    );
+    expect(script).toContain(
+      "[Microsoft.Win32.RegistryValueKind]::ExpandString",
+    );
+    expect(script).toContain("Set-StellaUserPath $installDir");
+    expect(script).toContain(
+      `Write-Output \${function:Set-StellaUserPath}.ToString()`,
+    );
+    expect(script).toContain(
+      "Write-Output \"Set-StellaUserPath '$quotedDir'\"",
+    );
+    expect(script).not.toContain("SetEnvironmentVariable");
   });
   test.skipIf(!Bun.which("pwsh"))(
     "PowerShell parses the script when available",

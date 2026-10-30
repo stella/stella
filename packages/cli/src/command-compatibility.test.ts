@@ -29,6 +29,8 @@ const metadata = (origin: string, protocol: number) => ({
   },
 });
 
+const inspectionFlags = ["--help", "-h", "--version", "--schema"];
+
 const commandFamilies = [
   ["auth", "whoami"],
   ["matter", "list"],
@@ -54,13 +56,32 @@ describe("compatibility admission before dispatch", () => {
     }
   });
 
-  for (const failure of [
-    "newer protocol",
-    "minimum version",
-    "missing",
-    "malformed",
-  ] as const) {
-    test(`${failure} refuses each command family before any API operation`, async () => {
+  test("inspection flags after the argument terminator are payloads, never exemptions", () => {
+    for (const argv of commandFamilies) {
+      for (const flag of inspectionFlags) {
+        expect(commandNeedsCompatibility([...argv, flag])).toBe(false);
+        expect(commandNeedsCompatibility([...argv, "--", flag])).toBe(true);
+      }
+    }
+    expect(commandNeedsCompatibility(["--", "tasks", "create", "--help"])).toBe(
+      true,
+    );
+    for (const command of ["update", "doctor"]) {
+      expect(commandNeedsCompatibility([command, "--", "--help"])).toBe(false);
+    }
+  });
+
+  const failureScenarios = [
+    ...["newer protocol", "minimum version", "missing", "malformed"].map(
+      (failure) => ({ failure, payloadFlag: undefined }),
+    ),
+    ...inspectionFlags.map((payloadFlag) => ({
+      failure: "newer protocol",
+      payloadFlag,
+    })),
+  ];
+  for (const { failure, payloadFlag } of failureScenarios) {
+    test(`${failure}${payloadFlag === undefined ? "" : ` with terminated ${payloadFlag}`} refuses each command family before any API operation`, async () => {
       const root = await mkdtemp(path.join(tmpdir(), "stella-admission-"));
       let operations = 0;
       let discoveries = 0;
@@ -94,14 +115,21 @@ describe("compatibility admission before dispatch", () => {
         },
       });
       try {
-        for (const argv of commandFamilies) {
+        const invocations =
+          payloadFlag === undefined
+            ? commandFamilies
+            : commandFamilies.map((argv) => [...argv, "--", payloadFlag]);
+        for (const argv of invocations) {
+          const terminator = argv.indexOf("--");
+          const flagsEnd = terminator === -1 ? argv.length : terminator;
           const child = Bun.spawn(
             [
               process.execPath,
               path.join(import.meta.dirname, "cli.ts"),
-              ...argv,
+              ...argv.slice(0, flagsEnd),
               "--server",
               server.url.origin,
+              ...argv.slice(flagsEnd),
             ],
             {
               env: {
@@ -121,7 +149,7 @@ describe("compatibility admission before dispatch", () => {
           expect(code).toBe(2);
           expect(stderr).toContain("npm i -g @stll/cli@latest");
         }
-        expect(discoveries).toBe(commandFamilies.length);
+        expect(discoveries).toBe(invocations.length);
         expect(operations).toBe(0);
       } finally {
         await server.stop();

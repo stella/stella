@@ -1,5 +1,6 @@
 import type { Result } from "better-result";
 
+import { argumentsBeforeTerminator } from "./command-locality.js";
 import {
   checkServerCompatibility,
   type CompatibilityCheckError,
@@ -17,15 +18,19 @@ import {
 
 /** Local inspection and recovery must remain available against an incompatible server. */
 export const commandNeedsCompatibility = (argv: readonly string[]): boolean => {
+  const commandArguments = argumentsBeforeTerminator(argv);
   const command = argv.at(0);
   return (
     command !== undefined &&
-    !argv.some((arg) =>
+    !commandArguments.some((arg) =>
       ["--help", "-h", "--version", "--schema"].includes(arg),
     ) &&
     !["help", "update", "doctor", "compatibility"].includes(command) &&
-    !(command === "auth" && ["logout", "switch"].includes(argv.at(1) ?? "")) &&
-    !(command === "tools" && argv.at(1) === "list")
+    !(
+      command === "auth" &&
+      ["logout", "switch"].includes(commandArguments.at(1) ?? "")
+    ) &&
+    !(command === "tools" && commandArguments.at(1) === "list")
   );
 };
 

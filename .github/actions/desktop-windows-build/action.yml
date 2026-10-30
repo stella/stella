@@ -100,6 +100,35 @@ runs:
         SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
       run: bun "${{ inputs.script-path }}" sign-windows "apps/desktop/src-tauri/target/${{ inputs.target }}/release/bundle"
 
+    - name: Verify Windows signatures and timestamps
+      if: inputs.dry-run != 'true'
+      shell: pwsh
+      env:
+        SIGNED_ARTIFACT_DIRECTORY: apps/desktop/src-tauri/target/${{ inputs.target }}/release/bundle
+        AZURE_TENANT_ID: ""
+        AZURE_CLIENT_ID: ""
+        AZURE_CLIENT_SECRET: ""
+        AZURE_ENDPOINT: ""
+        AZURE_CODE_SIGNING_ACCOUNT: ""
+        AZURE_CERT_PROFILE: ""
+        TAURI_SIGNING_PRIVATE_KEY: ""
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+      run: |
+        $ErrorActionPreference = "Stop"
+        $executables = @(Get-ChildItem -LiteralPath $env:SIGNED_ARTIFACT_DIRECTORY -Filter *.exe -File -Recurse -ErrorAction Stop)
+        if ($executables.Count -eq 0) {
+          throw "No Windows executables found for signature verification"
+        }
+        foreach ($executable in $executables) {
+          $signature = Get-AuthenticodeSignature -LiteralPath $executable.FullName -ErrorAction Stop
+          if ($signature.Status -ne "Valid") {
+            throw "Invalid Authenticode signature for $($executable.Name): $($signature.Status)"
+          }
+          if ($null -eq $signature.TimeStamperCertificate) {
+            throw "Missing Authenticode timestamp for $($executable.Name)"
+          }
+        }
+
     # Tauri's bundler signs the update package alongside the binary. Re-signing
     # changes the binary hash, so the bundler's .sig is no
     # longer valid; refresh it over the re-signed installer.

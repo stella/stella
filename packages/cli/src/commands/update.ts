@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { CliCommandError } from "../cli-exit-code.js";
 import type { Context } from "../context.js";
+import { CLI_VERSION } from "../generated/cli-version.js";
 import {
   detectInstallChannel,
   type InstallChannel,
@@ -29,12 +30,133 @@ export type UpdateFetch = (
   init?: RequestInit,
 ) => Promise<Response>;
 
+type StableVersion = { major: number; minor: number; patch: number };
+
+const parseStableVersion = (version: string): StableVersion | undefined => {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.exec(version);
+  if (match === null) {
+    return undefined;
+  }
+  const parsed = {
+    major: Number(match.at(1)),
+    minor: Number(match.at(2)),
+    patch: Number(match.at(3)),
+  };
+  return Object.values(parsed).every(Number.isSafeInteger) ? parsed : undefined;
+};
+
+type DownloadAssetOptions = {
+  name: string;
+  fetcher: UpdateFetch;
+  version?: string;
+};
+
+const downloadAsset = async ({
+  name,
+  fetcher,
+  version,
+}: DownloadAssetOptions): Promise<
+  Result<{ response: Response; version: string }, NativeUpdateError>
+> => {
+  let url = `${RELEASE_BASE_URL}/${version === undefined ? "latest/download" : `download/v${version}`}/${name}`;
+  let resolvedVersion = version;
+  // The pinned GitHub release redirect binds the binary and checksum to one version.
+  for (let redirects = 0; redirects < 5; redirects += 1) {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== "https:" ||
+      !(
+        parsed.hostname === "github.com" ||
+        parsed.hostname.endsWith(".githubusercontent.com")
+      )
+    ) {
+      return Result.err(
+        new NativeUpdateError({
+          message: "CLI release downloads require a verified HTTPS GitHub URL.",
+        }),
+      );
+    }
+    if (
+      parsed.hostname === "github.com" &&
+      parsed.pathname.startsWith("/stella/stella/releases/download/")
+    ) {
+      const match =
+        /^\/stella\/stella\/releases\/download\/v([^/]+)\/([^/]+)$/u.exec(
+          parsed.pathname,
+        );
+      const advertisedVersion = match?.at(1);
+      if (
+        advertisedVersion === undefined ||
+        parseStableVersion(advertisedVersion) === undefined ||
+        match?.at(2) !== name
+      ) {
+        return Result.err(
+          new NativeUpdateError({
+            message:
+              "CLI release redirect has a missing or malformed stable version.",
+          }),
+        );
+      }
+      if (
+        resolvedVersion !== undefined &&
+        resolvedVersion !== advertisedVersion
+      ) {
+        return Result.err(
+          new NativeUpdateError({
+            message: "CLI release redirects disagree on the target version.",
+          }),
+        );
+      }
+      resolvedVersion = advertisedVersion;
+    }
+    const response = await fetcher(url, {
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+      redirect: "manual",
+    });
+    if (![301, 302, 303, 307, 308].includes(response.status)) {
+      if (!response.ok) {
+        return Result.err(
+          new NativeUpdateError({
+            message: "Could not download the CLI release and checksums.",
+          }),
+        );
+      }
+      if (resolvedVersion === undefined) {
+        return Result.err(
+          new NativeUpdateError({
+            message:
+              "CLI release redirect did not identify a stable target version.",
+          }),
+        );
+      }
+      return Result.ok({ response, version: resolvedVersion });
+    }
+    const location = response.headers.get("location");
+    if (location === null) {
+      return Result.err(
+        new NativeUpdateError({
+          message: "CLI release redirect has no location.",
+        }),
+      );
+    }
+    url = new URL(location, url).href;
+  }
+  return Result.err(
+    new NativeUpdateError({ message: "Too many CLI release redirects." }),
+  );
+};
+
 type UpdateNativeOptions = {
   channel: InstallChannel;
   executablePath: string;
   platform?: NodeJS.Platform;
   arch?: string;
-  version?: string | undefined;
+  allowDowngrade?: boolean;
+  beforeReplace?: (change: {
+    from: string;
+    to: string;
+    direction: "upgrade" | "downgrade";
+  }) => void;
   fetcher?: UpdateFetch;
 };
 
@@ -43,20 +165,14 @@ export const updateNative = async ({
   executablePath,
   platform = process.platform,
   arch = process.arch,
-  version,
+  allowDowngrade = false,
+  beforeReplace,
   fetcher = fetch,
 }: UpdateNativeOptions): Promise<Result<string, NativeUpdateError>> => {
   if (channel !== "native") {
     return Result.err(
       new NativeUpdateError({
         message: `This installation is managed by ${channel}; run ${upgradeCommandFor(channel)}.`,
-      }),
-    );
-  }
-  if (version !== undefined && !/^\d+\.\d+\.\d+$/u.test(version)) {
-    return Result.err(
-      new NativeUpdateError({
-        message: "STELLA_VERSION must be a stable version (for example 6.2.0).",
       }),
     );
   }
@@ -75,72 +191,46 @@ export const updateNative = async ({
     );
   }
   const asset = `stella-${os}-${arch}${os === "windows" ? ".exe" : ""}`;
-  const release =
-    version === undefined
-      ? `${RELEASE_BASE_URL}/latest/download`
-      : `${RELEASE_BASE_URL}/download/v${version}`;
   const download = await Result.tryPromise({
     try: async () => {
-      const downloadAsset = async (name: string): Promise<Response> => {
-        let url = `${release}/${name}`;
-        // Release assets redirect to GitHub's asset CDN. Validate before each request.
-        for (let redirects = 0; redirects < 5; redirects += 1) {
-          const parsed = new URL(url);
-          if (
-            parsed.protocol !== "https:" ||
-            !(
-              parsed.hostname === "github.com" ||
-              parsed.hostname.endsWith(".githubusercontent.com")
-            )
-          ) {
-            return new Response(null, { status: 400 });
-          }
-          const response = await fetcher(url, {
-            signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-            redirect: "manual",
-          });
-          if (![301, 302, 303, 307, 308].includes(response.status)) {
-            return response;
-          }
-          const location = response.headers.get("location");
-          if (location === null) {
-            return new Response(null, { status: 400 });
-          }
-          url = new URL(location, url).href;
-        }
-        return new Response(null, { status: 400 });
-      };
-      const responses = await Promise.all(
-        [asset, "checksums.txt"].map(downloadAsset),
-      );
-      const binary = responses.at(0);
-      const sums = responses.at(1);
-      if (
-        binary === undefined ||
-        sums === undefined ||
-        !binary.ok ||
-        !sums.ok
-      ) {
+      const binary = await downloadAsset({ name: asset, fetcher });
+      if (Result.isError(binary)) {
+        return binary;
+      }
+      const version = binary.value.version;
+      const current = parseStableVersion(CLI_VERSION);
+      const target = parseStableVersion(version);
+      if (current === undefined || target === undefined) {
         return Result.err(
           new NativeUpdateError({
-            message: "Could not download the CLI release and checksums.",
+            message: "Could not compare stable CLI release versions.",
           }),
         );
       }
-      for (const response of responses) {
-        if (
-          response.url !== "" &&
-          new URL(response.url).protocol !== "https:"
-        ) {
-          return Result.err(
-            new NativeUpdateError({
-              message: "CLI release downloads require HTTPS.",
-            }),
-          );
-        }
+      const comparison =
+        target.major - current.major ||
+        target.minor - current.minor ||
+        target.patch - current.patch;
+      if (comparison < 0 && !allowDowngrade) {
+        return Result.err(
+          new NativeUpdateError({
+            message: `Refusing to downgrade stella ${CLI_VERSION} -> ${version}; repeat with --allow-downgrade to opt in.`,
+          }),
+        );
       }
-      const bytes = new Uint8Array(await binary.arrayBuffer());
-      const expected = (await sums.text())
+      if (comparison === 0) {
+        return Result.ok(`stella ${CLI_VERSION} is already current.`);
+      }
+      const sums = await downloadAsset({
+        name: "checksums.txt",
+        fetcher,
+        version,
+      });
+      if (Result.isError(sums)) {
+        return sums;
+      }
+      const bytes = new Uint8Array(await binary.value.response.arrayBuffer());
+      const expected = (await sums.value.response.text())
         .split(/\r?\n/u)
         .map((line) => line.trim().split(/\s+/u))
         .find((parts) => parts.at(1) === asset)
@@ -157,6 +247,11 @@ export const updateNative = async ({
           }),
         );
       }
+      beforeReplace?.({
+        from: CLI_VERSION,
+        to: version,
+        direction: comparison < 0 ? "downgrade" : "upgrade",
+      });
       // Stage beside the executable so rename stays on the same filesystem.
       const staging = await mkdtemp(
         path.join(path.dirname(executablePath), ".stella-update-"),
@@ -184,9 +279,7 @@ export const updateNative = async ({
         } else {
           await rename(replacement, executablePath);
         }
-        return Result.ok(
-          `Updated stella${version === undefined ? "" : ` to ${version}`}.`,
-        );
+        return Result.ok(`Updated stella ${CLI_VERSION} -> ${version}.`);
       });
       if (platform === "win32" && Result.isError(replaced)) {
         // A failed rollback must retain the previous executable for recovery.
@@ -233,13 +326,22 @@ export const updateNative = async ({
 };
 
 export const updateCommand: Command<Context> = buildCommand<
-  { server: string | undefined },
+  { server: string | undefined; "allow-downgrade": boolean | undefined },
   [],
   Context
 >({
   docs: { brief: "Update a standalone stella installation" },
-  parameters: { flags: buildServerFlag() },
-  func: async function func(this: Context) {
+  parameters: {
+    flags: {
+      ...buildServerFlag(),
+      "allow-downgrade": {
+        kind: "boolean",
+        optional: true,
+        brief: "Explicitly permit replacing this CLI with an older release",
+      },
+    },
+  },
+  func: async function func(this: Context, flags) {
     const channel = await detectInstallChannel({ configDir: this.configDir });
     if (Result.isError(channel)) {
       return new CliCommandError(channel.error.message, EXIT_CODES.validation);
@@ -247,7 +349,12 @@ export const updateCommand: Command<Context> = buildCommand<
     const result = await updateNative({
       channel: channel.value,
       executablePath: this.process.execPath,
-      version: this.process.env["STELLA_VERSION"],
+      allowDowngrade: flags["allow-downgrade"] === true,
+      beforeReplace: ({ from, to, direction }) => {
+        this.process.stdout.write(
+          `${direction === "downgrade" ? "Warning: downgrading" : "Updating"} stella ${from} -> ${to}.\n`,
+        );
+      },
     });
     if (Result.isError(result)) {
       return new CliCommandError(result.error.message, EXIT_CODES.validation);

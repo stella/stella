@@ -1,5 +1,5 @@
 {
   "kind": "support",
-  "qualifier": "Builds and signs standalone binaries for a validated CLI release before release asset publication.",
+  "qualifier": "Prepares standalone CLI release artifacts before publication.",
   "reviewedDigest": "207278d1f52600f3829c2bab738b81903c83d4ef0aa2a3afbdc03b172346a11e"
 }

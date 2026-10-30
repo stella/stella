@@ -26,16 +26,24 @@ function Save-ReleaseAsset([string]$Url, [string]$Destination) {
     } finally { $client.Dispose() }
 }
 
+function Set-StellaUserPath {
+    param([string]$Directory)
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+    try {
+        # Preserve references such as %USERPROFILE% instead of expanding them into the stored value.
+        $userPath = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $entries = @($userPath -split ';' | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\', '/') })
+        if ($entries -notcontains $Directory.TrimEnd('\', '/')) {
+            $key.SetValue('Path', "$Directory;$userPath", [Microsoft.Win32.RegistryValueKind]::ExpandString)
+        }
+    } finally { $key.Dispose() }
+}
+
 $platform = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
 $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 if ($platform -notmatch 'Windows' -or $arch -ne 'X64') { throw 'Only Windows x64 is supported. Use install.sh on macOS or Linux.' }
 $asset = 'stella-windows-x64.exe'
 $base = 'https://github.com/stella/stella/releases'
-if ($env:STELLA_RELEASE_BASE_URL) {
-    if ($env:STELLA_INSTALL_TEST -ne '1') { throw 'Release URL override is available only in test mode.' }
-    $base = $env:STELLA_RELEASE_BASE_URL
-}
-if ($base -notmatch '^https://') { throw 'Release URL must use HTTPS.' }
 if ($env:STELLA_VERSION) {
     $version = $env:STELLA_VERSION -replace '^v', ''
     if ($version -notmatch '^[0-9A-Za-z.-]+$') { throw 'Invalid STELLA_VERSION.' }
@@ -69,12 +77,12 @@ try {
     if ($pathEntries -notcontains $installDir.TrimEnd('\', '/')) {
         if ($env:STELLA_NO_MODIFY_PATH -eq '1') {
             $quotedDir = $installDir.Replace("'", "''")
-            Write-Output "[Environment]::SetEnvironmentVariable('Path', '$quotedDir;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
+            Write-Output 'function Set-StellaUserPath {'
+            Write-Output ${function:Set-StellaUserPath}.ToString()
+            Write-Output '}'
+            Write-Output "Set-StellaUserPath '$quotedDir'"
         } else {
-            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-            if (@($userPath -split ';' | ForEach-Object { $_.TrimEnd('\', '/') }) -notcontains $installDir.TrimEnd('\', '/')) {
-                [Environment]::SetEnvironmentVariable('Path', "$installDir;$userPath", 'User')
-            }
+            Set-StellaUserPath $installDir
             $env:PATH = "$installDir;$env:PATH"
         }
     }

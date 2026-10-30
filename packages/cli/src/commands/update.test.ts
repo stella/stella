@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -11,7 +12,9 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
+import { CLI_VERSION } from "../generated/cli-version.js";
 import {
   backgroundUpdateCheckEnabled,
   detectInstallChannel,
@@ -21,14 +24,30 @@ import { sha256Hex } from "../sha256.js";
 import { type UpdateFetch, updateNative } from "./update.js";
 
 const replacement = new TextEncoder().encode("new executable");
+const newerVersion = `${Number(CLI_VERSION.split(".").at(0)) + 1}.0.0`;
 const fakeRelease =
-  (checksum: string): UpdateFetch =>
-  async (input) =>
-    new Response(
-      String(input).endsWith("checksums.txt")
+  (
+    checksum: string,
+    version = newerVersion,
+    requests: string[] = [],
+  ): UpdateFetch =>
+  async (input) => {
+    const url = new URL(String(input));
+    requests.push(url.href);
+    if (url.pathname.includes("/latest/download/")) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `https://github.com/stella/stella/releases/download/v${version}/stella-linux-x64`,
+        },
+      });
+    }
+    return new Response(
+      url.pathname.endsWith("checksums.txt")
         ? `${checksum}  stella-linux-x64\n`
         : replacement,
     );
+  };
 
 describe("native self update", () => {
   test("a missing channel marker defaults to npm", async () => {
@@ -91,7 +110,7 @@ describe("native self update", () => {
       },
     });
     expect(Result.isError(result)).toBe(true);
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(1);
     expect(
       requests.every((url) =>
         url.startsWith("https://github.com/stella/stella/releases/"),
@@ -112,6 +131,9 @@ describe("native self update", () => {
         fetcher: fakeRelease("0".repeat(64)),
       });
       expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("checksum verification failed");
+      }
       expect(await readFile(executablePath, "utf-8")).toBe("old executable");
       expect(await readdir(dir)).toEqual(["stella"]);
     } finally {
@@ -132,7 +154,16 @@ describe("native self update", () => {
           platform: "linux",
           arch: "x64",
           fetcher: fakeRelease(sha256Hex(replacement)),
-          version: "6.2.0",
+          beforeReplace: ({ from, to, direction }) => {
+            expect({ from, to, direction }).toEqual({
+              from: CLI_VERSION,
+              to: newerVersion,
+              direction: "upgrade",
+            });
+            expect(readFileSync(executablePath, "utf-8")).toBe(
+              "old executable",
+            );
+          },
         });
         expect(Result.isOk(result)).toBe(true);
         expect(await readFile(executablePath, "utf-8")).toBe("new executable");
@@ -145,6 +176,207 @@ describe("native self update", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  test("a lower latest release refuses before changing the executable", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "stella-downgrade-"));
+    const executablePath = path.join(dir, "stella");
+    const requests: string[] = [];
+    try {
+      await writeFile(executablePath, "old executable");
+      const result = await updateNative({
+        channel: "native",
+        executablePath,
+        platform: "linux",
+        arch: "x64",
+        fetcher: fakeRelease(sha256Hex(replacement), "0.0.1", requests),
+      });
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("--allow-downgrade");
+      }
+      expect(await readFile(executablePath, "utf-8")).toBe("old executable");
+      expect(await readdir(dir)).toEqual(["stella"]);
+      expect(requests.some((url) => url.endsWith("checksums.txt"))).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an equal latest version leaves the executable alone", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "stella-equal-update-"));
+    const executablePath = path.join(dir, "stella");
+    try {
+      await writeFile(executablePath, "old executable");
+      const result = await updateNative({
+        channel: "native",
+        executablePath,
+        platform: "linux",
+        arch: "x64",
+        fetcher: fakeRelease(sha256Hex(replacement), CLI_VERSION),
+      });
+      expect(result).toEqual(
+        Result.ok(`stella ${CLI_VERSION} is already current.`),
+      );
+      expect(await readFile(executablePath, "utf-8")).toBe("old executable");
+      expect(await readdir(dir)).toEqual(["stella"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an explicit downgrade verifies and reports the transition before replacing", async () => {
+    const dir = await mkdtemp(
+      path.join(os.tmpdir(), "stella-opt-in-downgrade-"),
+    );
+    const executablePath = path.join(dir, "stella");
+    const transitions: string[] = [];
+    try {
+      await writeFile(executablePath, "old executable");
+      const result = await updateNative({
+        channel: "native",
+        executablePath,
+        platform: "linux",
+        arch: "x64",
+        allowDowngrade: true,
+        fetcher: fakeRelease(sha256Hex(replacement), "0.0.1"),
+        beforeReplace: ({ from, to, direction }) => {
+          expect(readFileSync(executablePath, "utf-8")).toBe("old executable");
+          transitions.push(`${direction}: ${from} -> ${to}`);
+        },
+      });
+      expect(Result.isOk(result)).toBe(true);
+      expect(transitions).toEqual([`downgrade: ${CLI_VERSION} -> 0.0.1`]);
+      expect(await readFile(executablePath, "utf-8")).toBe("new executable");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each(["not-a-version", "01.2.3", "1.2", "1.2.3-rc.1"])(
+    "a malformed release version %s refuses before replacement",
+    async (version) => {
+      const result = await updateNative({
+        channel: "native",
+        executablePath: "/unused",
+        platform: "linux",
+        arch: "x64",
+        fetcher: fakeRelease(sha256Hex(replacement), version),
+      });
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("malformed stable version");
+      }
+    },
+  );
+
+  test("a response without a versioned GitHub redirect fails closed", async () => {
+    const result = await updateNative({
+      channel: "native",
+      executablePath: "/unused",
+      platform: "linux",
+      arch: "x64",
+      fetcher: async () => new Response(replacement),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toContain(
+        "did not identify a stable target version",
+      );
+    }
+  });
+
+  test("checksums are fetched from the resolved version instead of latest", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "stella-pinned-update-"));
+    const requests: string[] = [];
+    try {
+      const result = await updateNative({
+        channel: "native",
+        executablePath: path.join(dir, "stella"),
+        platform: "linux",
+        arch: "x64",
+        fetcher: fakeRelease(sha256Hex(replacement), newerVersion, requests),
+      });
+      expect(Result.isOk(result)).toBe(true);
+      expect(requests).toContain(
+        `https://github.com/stella/stella/releases/download/v${newerVersion}/checksums.txt`,
+      );
+      expect(requests).not.toContain(
+        "https://github.com/stella/stella/releases/latest/download/checksums.txt",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    {
+      environmentVersion: "0.0.1",
+      targetVersion: newerVersion,
+      allowDowngrade: false,
+    },
+    {
+      environmentVersion: "not-a-version",
+      targetVersion: newerVersion,
+      allowDowngrade: false,
+    },
+    {
+      environmentVersion: "not-a-version",
+      targetVersion: "0.0.1",
+      allowDowngrade: true,
+    },
+  ])(
+    "the update command ignores inherited pins and requires explicit downgrade consent: %j",
+    async ({ environmentVersion, targetVersion, allowDowngrade }) => {
+      const dir = await mkdtemp(
+        path.join(os.tmpdir(), "stella-command-update-"),
+      );
+      try {
+        const executablePath = path.join(dir, "stella");
+        const configHome = path.join(dir, "config");
+        await mkdir(path.join(configHome, "stella"), { recursive: true });
+        await writeFile(
+          path.join(configHome, "stella", "install-channel"),
+          "native\n",
+        );
+        await writeFile(executablePath, "old executable");
+        const entrypoint = path.join(dir, "entry.ts");
+        await writeFile(
+          entrypoint,
+          `process.execPath = ${JSON.stringify(executablePath)};
+process.argv = [process.execPath, ${JSON.stringify(path.join(import.meta.dirname, "../cli.ts"))}, "update", ...${JSON.stringify(allowDowngrade ? ["--allow-downgrade"] : [])}];
+globalThis.fetch = async (input) => {
+  const url = new URL(String(input));
+  if (url.pathname.includes("/latest/download/")) return new Response(null, { status: 302, headers: { location: ${JSON.stringify(`https://github.com/stella/stella/releases/download/v${targetVersion}/stella-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`)} } });
+  return new Response(url.pathname.endsWith("checksums.txt") ? ${JSON.stringify(`${sha256Hex(replacement)}  stella-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}\n`)} : new TextEncoder().encode("new executable"));
+};
+await import(${JSON.stringify(pathToFileURL(path.join(import.meta.dirname, "../cli-main.ts")).href)});
+`,
+        );
+        const child = Bun.spawn([process.execPath, entrypoint], {
+          env: {
+            ...process.env,
+            XDG_CONFIG_HOME: configHome,
+            STELLA_VERSION: environmentVersion,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const [code, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]);
+        expect(stderr).toBe("");
+        expect(code).toBe(0);
+        expect(stdout).toContain(
+          `${allowDowngrade ? "Warning: downgrading" : "Updating"} stella ${CLI_VERSION} -> ${targetVersion}`,
+        );
+        expect(await readFile(executablePath, "utf-8")).toBe("new executable");
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   test.each(["npm", "homebrew"] as const)(
     "%s stays with its package manager without making a request",

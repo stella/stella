@@ -29,7 +29,10 @@ import {
   checkCommandCompatibility,
   commandNeedsCompatibility,
 } from "./command-compatibility.js";
-import { commandNeedsRegistry } from "./command-locality.js";
+import {
+  argumentsBeforeTerminator,
+  commandNeedsRegistry,
+} from "./command-locality.js";
 import {
   HOME,
   STELLA_API_KEY,
@@ -81,7 +84,9 @@ const resolvePreamble = async (
     // precede token refresh and the registry request just as for execution.
     const projectsCallerHelp =
       commandNeedsRegistry(argv) &&
-      argv.some((arg) => ["--help", "-h", "--schema"].includes(arg));
+      argumentsBeforeTerminator(argv).some((arg) =>
+        ["--help", "-h", "--schema"].includes(arg),
+      );
     if (
       !projectsCallerHelp ||
       (!STELLA_API_KEY &&
@@ -160,13 +165,18 @@ const refuseAdmission = (
   process.exitCode = resolveMcpErrorCodeExit(refusal.code) ?? EXIT_CODES.server;
 };
 
-const isVersionAdmissionExempt = (argv: readonly string[]): boolean =>
-  argv.length === 0 ||
-  argv.includes("--help") ||
-  argv.includes("-h") ||
-  argv.includes("--version") ||
-  argv.at(0) === "help" ||
-  argv.at(0) === "update";
+const isVersionAdmissionExempt = (argv: readonly string[]): boolean => {
+  const commandArguments = argumentsBeforeTerminator(argv);
+  return (
+    argv.length === 0 ||
+    commandArguments.includes("--help") ||
+    commandArguments.includes("-h") ||
+    commandArguments.includes("--version") ||
+    commandArguments.at(0) === "help" ||
+    commandArguments.at(0) === "update" ||
+    commandArguments.at(0) === "doctor"
+  );
+};
 
 const cachedUnsupportedLine = async ({
   serverUrl,
