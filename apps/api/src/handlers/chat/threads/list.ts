@@ -30,6 +30,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   paginationCursorSchema,
   resourceIdSchema,
@@ -144,8 +145,24 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+const THREAD_LIST_PROJECTION = {
+  createdAt: chatThreads.createdAt,
+  forkedFromMessageId: chatThreads.forkedFromMessageId,
+  id: chatThreads.id,
+  subjectDecisionId: chatThreads.subjectDecisionId,
+  title: chatThreads.title,
+  titleSource: chatThreads.titleSource,
+  updatedAt: chatThreads.updatedAt,
+  usedAnonymization: chatThreads.usedAnonymization,
+  updatedAtCursor:
+    chatThreadListCursorCodec.cursorValue.as("updated_at_cursor"),
+  workspaceId: chatThreads.workspaceId,
+  workspaceName: workspacesTable.name,
+} as const;
+
 type GetThreadsDependencies = {
   readDecisionBadges: typeof readPublicDecisionBadges;
+  readCopies?: typeof readWithdrawnCopyProjection;
 };
 
 const GET_THREADS_DEPENDENCIES = {
@@ -154,6 +171,7 @@ const GET_THREADS_DEPENDENCIES = {
 
 export const createGetThreads = ({
   readDecisionBadges,
+  readCopies = readWithdrawnCopyProjection,
 }: GetThreadsDependencies = GET_THREADS_DEPENDENCIES) =>
   createSafeRootHandler(
     config,
@@ -245,19 +263,7 @@ export const createGetThreads = ({
           }
 
           let listQuery = tx
-            .select({
-              createdAt: chatThreads.createdAt,
-              forkedFromMessageId: chatThreads.forkedFromMessageId,
-              id: chatThreads.id,
-              subjectDecisionId: chatThreads.subjectDecisionId,
-              title: chatThreads.title,
-              updatedAt: chatThreads.updatedAt,
-              usedAnonymization: chatThreads.usedAnonymization,
-              updatedAtCursor:
-                chatThreadListCursorCodec.cursorValue.as("updated_at_cursor"),
-              workspaceId: chatThreads.workspaceId,
-              workspaceName: workspacesTable.name,
-            })
+            .select(THREAD_LIST_PROJECTION)
             .from(chatThreads)
             .leftJoin(
               workspacesTable,
@@ -303,6 +309,9 @@ export const createGetThreads = ({
         readDecisionBadges,
       );
 
+      const withdrawal = yield* Result.await(
+        Result.tryPromise(async () => readCopies({ values: page })),
+      );
       const global: ChatThreadListItem[] = [];
 
       const groupedWorkspaceThreads = new Map<
@@ -327,7 +336,7 @@ export const createGetThreads = ({
             decision,
             id: thread.id,
             origin,
-            title: thread.title,
+            title: withdrawal.thread(thread).title,
             createdAt: thread.createdAt,
             updatedAt: thread.updatedAt,
             usedAnonymization: thread.usedAnonymization,
@@ -344,7 +353,7 @@ export const createGetThreads = ({
           decision,
           id: thread.id,
           origin,
-          title: thread.title,
+          title: withdrawal.thread(thread).title,
           createdAt: thread.createdAt,
           updatedAt: thread.updatedAt,
           usedAnonymization: thread.usedAnonymization,

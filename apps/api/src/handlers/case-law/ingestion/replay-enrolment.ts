@@ -50,6 +50,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.AT_FINDOK]: { mode: "off" },
   [ADAPTER_KEYS.EU_ECJ]: { mode: "off" },
   [ADAPTER_KEYS.HU_BHGY]: { mode: "off" },
+  [ADAPTER_KEYS.UK_FCL]: { mode: "off" },
   [ADAPTER_KEYS.PL_KIS]: { mode: "off" },
   [ADAPTER_KEYS.PL_UODO]: { mode: "off" },
   [ADAPTER_KEYS.PL_UOKIK]: { mode: "off" },

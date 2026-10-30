@@ -30,8 +30,8 @@ registerInspectorView<CaseDecisionViewPayload>({
   type: CASE_DECISION_VIEW,
   render: CaseDecisionView,
   railIcon: CaseDecisionRailIcon,
-  // The rail icon is the court's abbreviation, two or three capitals at chip
-  // size: the inactive fade would take them under the contrast floor.
+  // The rail icon is the case number in small type, like a statute's: the
+  // inactive fade would take it under the contrast floor.
   railIconInactive: "legible",
   validate: isCaseDecisionViewPayload,
   ariaLabel: (tab) => tab.label,

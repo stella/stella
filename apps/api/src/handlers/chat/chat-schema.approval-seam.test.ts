@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { CHAT_CONTINUATION_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -17,17 +18,27 @@ import {
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
+import { createChatCodeModeSurface } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 import {
   createPastChatTools,
   PAST_CHAT_SCOPE_TYPE,
   SEARCH_ALL_PAST_CHATS_TOOL_NAME,
 } from "@/api/handlers/chat/tools/past-chat-tools";
+import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  type ChatToolMap,
+  chatToolMapToArray,
+} from "@/api/lib/chat/chat-tool-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { LIMITS } from "@/api/lib/limits";
+import { hasToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
+
+registerSandboxTestHygiene();
 
 const assistantFromSdk = (candidate: UIMessage | ModelMessage | undefined) => {
   if (candidate === undefined) {
@@ -61,10 +72,40 @@ const noDefaultsTool = toolDefinition({
   description: "A tool without defaulted input",
   inputSchema: toTanStackToolSchema(v.strictObject({ query: v.string() })),
 }).server(async () => ({ ok: true }));
+const saveMatterTool = toolDefinition({
+  name: "save_matter",
+  description: "Update a matter",
+  inputSchema: toTanStackToolSchema(
+    v.strictObject({ matter_id: v.string(), name: v.string() }),
+  ),
+}).server(async () => ({ ok: true }));
+const matterId = toSafeId<"workspace">("matter-approval-target");
+const otherMatterId = toSafeId<"workspace">("matter-other-target");
 
-for (const definition of [searchTool, noDefaultsTool]) {
+for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
   for (const approved of [true, false]) {
     test(`accepts the SDK approval resume for ${definition.name} (${approved})`, async () => {
+      const refRegistry = createChatRefRegistry();
+      const isMatterTool = definition.name === saveMatterTool.name;
+      const rawInput = isMatterTool
+        ? { matter_id: "mat_1", name: "Updated matter" }
+        : { query: "search phrase" };
+      const changedInput = isMatterTool
+        ? { matter_id: "mat_2", name: "Updated matter" }
+        : { query: "different phrase" };
+      const codeMode = createChatCodeModeSurface({
+        concurrencyKey: `approval-seam-${approved}`,
+        documentedReads: ["list_matters"],
+        runReadTool: async () =>
+          Result.ok({
+            matters: [matterId, otherMatterId].map((workspaceId) => ({
+              matterRef: refRegistry.toMatterRef(workspaceId),
+            })),
+          }),
+      });
+      if (!hasToolSchemaInputs(codeMode.tool)) {
+        panic("Code Mode must expose chat-compatible tool schemas");
+      }
       const executions: unknown[] = [];
       const tool = {
         ...definition,
@@ -79,13 +120,28 @@ for (const definition of [searchTool, noDefaultsTool]) {
           };
         },
       };
-      const tools = { [tool.name]: tool };
+      const tools: ChatToolMap = {
+        [tool.name]: tool,
+        ...(isMatterTool ? { [codeMode.tool.name]: codeMode.tool } : {}),
+      };
       const adapter = createScriptedTextAdapter([
+        ...(isMatterTool
+          ? [
+              {
+                type: "tool-call" as const,
+                toolName: codeMode.tool.name,
+                toolCallId: "matter-lookup",
+                arguments: JSON.stringify({
+                  typescriptCode: "return await external_list_matters({});",
+                }),
+              },
+            ]
+          : []),
         {
           type: "tool-call",
           toolName: tool.name,
           toolCallId: "approval-call",
-          arguments: '{"query":"search phrase"}',
+          arguments: JSON.stringify(rawInput),
         },
       ]);
       const submitted =
@@ -100,6 +156,7 @@ for (const definition of [searchTool, noDefaultsTool]) {
               submitted.resolve({
                 message: assistantFromSdk(messages.at(-1)),
                 persistedMessage: stored,
+                refRegistry,
                 resume: runContext.resume,
                 safeDb: noDbReads,
                 threadId,
@@ -110,9 +167,9 @@ for (const definition of [searchTool, noDefaultsTool]) {
             }
             yield* chat({
               adapter,
-              agentLoopStrategy: maxIterations(2),
+              agentLoopStrategy: maxIterations(3),
               messages,
-              tools: [tool],
+              tools: chatToolMapToArray(tools),
               threadId,
               runId: runContext?.runId,
             });
@@ -120,7 +177,9 @@ for (const definition of [searchTool, noDefaultsTool]) {
         },
         onError: submitted.reject,
       });
-      await client.sendMessage("Search earlier chats");
+      await client.sendMessage(
+        isMatterTool ? "Find and update the matter" : "Search earlier chats",
+      );
       const generated = assistantFromSdk(client.getMessages().at(-1));
       const generatedParts = generated.parts;
       if (!generatedParts.every(isChatPart)) {
@@ -144,6 +203,11 @@ for (const definition of [searchTool, noDefaultsTool]) {
           }
           return {
             ...part,
+            input: resolveRegistryToolInputRefs({
+              input: part.input,
+              refRegistry,
+              toolName: part.name,
+            }),
             metadata: {
               ...part.metadata,
               [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
@@ -176,13 +240,26 @@ for (const definition of [searchTool, noDefaultsTool]) {
           typeof part === "object" &&
           part !== null &&
           "type" in part &&
-          part.type === "tool-call",
+          part.type === "tool-call" &&
+          "id" in part &&
+          part.id === "approval-call",
       );
       expect(incomingCall).toMatchObject({
-        input: { query: "search phrase" },
+        input: rawInput,
         state: "approval-responded",
         approval: { approved },
       });
+      if (isMatterTool) {
+        expect(refRegistry.resolveMatterRefs(["mat_1"]).unwrap()).toEqual([
+          matterId,
+        ]);
+        expect(canonicalParts).toContainEqual(
+          expect.objectContaining({
+            id: "approval-call",
+            input: { matter_id: matterId, name: "Updated matter" },
+          }),
+        );
+      }
       if (definition.name === SEARCH_ALL_PAST_CHATS_TOOL_NAME) {
         expect(canonicalParts).toContainEqual(
           expect.objectContaining({
@@ -213,17 +290,36 @@ for (const definition of [searchTool, noDefaultsTool]) {
               .getMessages()
               .at(-1)
               ?.parts.map((part) =>
-                part.type === "tool-call"
+                part.type === "tool-call" && part.id === "approval-call"
                   ? {
                       ...part,
-                      input: { query: "different phrase" },
-                      arguments: '{"query":"different phrase"}',
+                      input: changedInput,
+                      arguments: JSON.stringify(changedInput),
                     }
                   : part,
               ) ?? panic("Missing continued message"),
         },
       });
       expect(Result.isError(changed)).toBe(true);
+      if (Result.isError(changed)) {
+        expect(changed.error).toMatchObject({
+          code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+        });
+      }
+      if (isMatterTool) {
+        const reboundRegistry = createChatRefRegistry();
+        expect(reboundRegistry.toMatterRef(otherMatterId)).toBe("mat_1");
+        const rebound = await validateMessage({
+          ...request,
+          refRegistry: reboundRegistry,
+        });
+        expect(Result.isError(rebound)).toBe(true);
+        if (Result.isError(rebound)) {
+          expect(rebound.error).toMatchObject({
+            code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+          });
+        }
+      }
 
       const resumed = await Array.fromAsync(
         chat({
@@ -243,16 +339,24 @@ for (const definition of [searchTool, noDefaultsTool]) {
         expect.objectContaining({ type: "RUN_FINISHED" }),
       );
       expect(executions).toHaveLength(approved ? 1 : 0);
-      if (approved) {
-        expect(executions.at(0)).toEqual(
-          definition.name === SEARCH_ALL_PAST_CHATS_TOOL_NAME
-            ? {
-                query: "search phrase",
-                limit: LIMITS.chatHistorySearchPageSizeDefault,
-              }
-            : { query: "search phrase" },
-        );
+      if (!approved) {
+        return;
       }
+      if (isMatterTool) {
+        expect(executions.at(0)).toEqual({
+          matter_id: matterId,
+          name: "Updated matter",
+        });
+        return;
+      }
+      expect(executions.at(0)).toEqual(
+        definition.name === SEARCH_ALL_PAST_CHATS_TOOL_NAME
+          ? {
+              query: "search phrase",
+              limit: LIMITS.chatHistorySearchPageSizeDefault,
+            }
+          : { query: "search phrase" },
+      );
     });
   }
 }

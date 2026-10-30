@@ -149,6 +149,7 @@ export const resolveCatalogueSkillPackage = async (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: `Catalogue skill license does not match its reviewed manifest: ${slug}`,
         }),
       );
@@ -157,6 +158,7 @@ export const resolveCatalogueSkillPackage = async (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: `Catalogue skill name does not match its reviewed manifest: ${slug}`,
         }),
       );

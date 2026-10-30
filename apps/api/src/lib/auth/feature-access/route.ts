@@ -1,3 +1,4 @@
+import type { ResponseHeaders } from "@/api/http/context";
 import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
@@ -11,6 +12,12 @@ type FeatureAccessGateDependencies = {
 };
 
 const gatedFeatures = new WeakMap<Middleware, FeatureId>();
+
+/** Whether the request's refusal set an RFC 6750 bearer challenge. */
+const bearerChallenge = (headers: ResponseHeaders): boolean => {
+  const challenge = headers["www-authenticate"];
+  return typeof challenge === "string" && challenge.startsWith("Bearer ");
+};
 
 /** The feature a route gate stands for, or `undefined` for any other middleware. */
 export const featureAccessGateFeature = (
@@ -32,6 +39,19 @@ export const featureAccessGate = (
     if (!authorization.ok) {
       if (authorization.statusCode === 500) {
         return toResponse(status(500, AUTH_REJECTION_BODY[500]), ctx.set);
+      }
+      // An access token the resolver challenged (expired, or without this
+      // route's scope) hears the challenge, so its client can refresh or ask
+      // for the scope again; it already proved it is a client of this
+      // server. Every other refusal still answers like an absent route.
+      if (bearerChallenge(ctx.set.headers)) {
+        return toResponse(
+          status(
+            authorization.statusCode,
+            AUTH_REJECTION_BODY[authorization.statusCode],
+          ),
+          ctx.set,
+        );
       }
       throw new HttpFailureError(HTTP_FAILURE.notFound);
     }

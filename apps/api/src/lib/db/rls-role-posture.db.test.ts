@@ -1,10 +1,6 @@
-import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -26,6 +22,7 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const testState = createTestState({ file: import.meta.path, config: envBase });
@@ -40,167 +37,36 @@ const capturePostureRejection = async (database = rootDb) =>
 // cluster so no concurrent suite or application session can assume it.
 const withElevatedApplicationRole = async (
   run: (db: GatedTestDb, admin: SQL) => Promise<void>,
-) => {
-  const root = mkdtempSync(path.join(tmpdir(), "rls-posture-"));
-  const dataDir = path.join(root, "data");
-  const socketDir = path.join(root, "sock");
-  const native = Bun.which("initdb");
-  const fixture =
-    native === null
-      ? ({
-          type: "container",
-          name: `rls-posture-${Bun.randomUUIDv7()}`,
-        } as const)
-      : ({ type: "native", initdb: native } as const);
-  const command = (cmd: string[]) =>
-    Bun.spawnSync(cmd, { stdout: "pipe", stderr: "pipe" });
-  const checked = (cmd: string[]) => {
-    const result = command(cmd);
-    if (result.exitCode !== 0) {
-      panic(
-        `Role fixture command failed: ${new TextDecoder().decode(result.stderr)}`,
-      );
-    }
-  };
-  let started = false;
-  try {
-    const listener = Bun.listen({
-      hostname: "127.0.0.1",
-      port: 0,
-      socket: { data: () => undefined },
-    });
-    const port = String(listener.port);
-    listener.stop(true);
-    const passwordFile = path.join(root, "password");
-    writeFileSync(passwordFile, "fixture\n", { mode: 0o600 });
-    mkdirSync(socketDir);
-    switch (fixture.type) {
-      case "native":
-        checked([
-          fixture.initdb,
-          "-D",
-          dataDir,
-          "-U",
-          "fixture_admin",
-          "--auth-local=trust",
-          "--auth-host=scram-sha-256",
-          `--pwfile=${passwordFile}`,
-          "-E",
-          "utf-8",
-          "--locale=en_US.UTF-8",
-        ]);
-        started = true;
-        checked([
-          "pg_ctl",
-          "-D",
-          dataDir,
-          "-w",
-          "-l",
-          path.join(root, "postgres.log"),
-          "-o",
-          `-c listen_addresses=127.0.0.1 -c port=${port} -c unix_socket_directories=${socketDir}`,
-          "start",
-        ]);
-        checked([
-          "createdb",
-          "-h",
-          socketDir,
-          "-p",
-          port,
-          "-U",
-          "fixture_admin",
-          "stella",
-        ]);
-        break;
-      case "container":
-        started = true;
-        checked([
-          "docker",
-          "run",
-          "--name",
-          fixture.name,
-          "-e",
-          "POSTGRES_USER=fixture_admin",
-          "-e",
-          "POSTGRES_PASSWORD=fixture",
-          "-e",
-          "POSTGRES_DB=stella",
-          "-p",
-          `127.0.0.1:${port}:5432`,
-          "-d",
-          "postgres:18.6",
-        ]);
-        break;
-      default:
-        fixture satisfies never;
-    }
-    const deadline = Date.now() + 10_000;
-    const readiness =
-      fixture.type === "native"
-        ? [
-            "pg_isready",
-            "-h",
-            "127.0.0.1",
-            "-p",
-            port,
-            "-U",
-            "fixture_admin",
-            "-d",
-            "stella",
-          ]
-        : [
-            "docker",
-            "exec",
-            fixture.name,
-            "pg_isready",
-            "-h",
-            "127.0.0.1",
-            "-U",
-            "fixture_admin",
-            "-d",
-            "stella",
-          ];
-    while (command(readiness).exitCode !== 0) {
-      if (Date.now() >= deadline) {
-        panic("Role fixture did not become ready");
-      }
-      await Bun.sleep(100);
-    }
-    const adminUrl = `postgres://fixture_admin:fixture@127.0.0.1:${port}/stella`;
-    await withGatedTestClients(adminUrl, async ({ openClient }) => {
-      const admin = openClient().sql;
-      await admin.unsafe(`CREATE ROLE stella NOLOGIN NOSUPERUSER BYPASSRLS;
-        CREATE ROLE fixture_owner LOGIN PASSWORD 'fixture' NOSUPERUSER NOBYPASSRLS;
-        GRANT stella TO fixture_owner WITH INHERIT FALSE, SET TRUE;
-        ALTER DATABASE stella OWNER TO fixture_owner`);
-      const { db } = openClient({
-        databaseUrl: `postgres://fixture_owner:fixture@127.0.0.1:${port}/stella`,
+) =>
+  await withIsolatedPostgresCluster(
+    {
+      prefix: "rls-posture",
+      database: "stella",
+      user: "fixture_admin",
+      password: "fixture",
+    },
+    async (adminUrl) => {
+      await withGatedTestClients(adminUrl, async ({ openClient }) => {
+        const admin = openClient().sql;
+        await admin.unsafe(`CREATE ROLE stella NOLOGIN NOSUPERUSER BYPASSRLS;
+          CREATE ROLE fixture_owner LOGIN PASSWORD 'fixture' NOSUPERUSER NOBYPASSRLS;
+          GRANT stella TO fixture_owner WITH INHERIT FALSE, SET TRUE;
+          ALTER DATABASE stella OWNER TO fixture_owner`);
+        const applicationUrl = new URL(adminUrl);
+        applicationUrl.username = "fixture_owner";
+        applicationUrl.password = "fixture";
+        const { db } = openClient({ databaseUrl: applicationUrl.href });
+        const posture = await db.execute<{
+          superuser: boolean;
+          bypass: boolean;
+        }>(
+          sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
+        );
+        expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
+        await run(db, admin);
       });
-      const posture = await db.execute<{ superuser: boolean; bypass: boolean }>(
-        sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
-      );
-      expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
-      await run(db, admin);
-    });
-  } finally {
-    try {
-      if (started) {
-        switch (fixture.type) {
-          case "native":
-            checked(["pg_ctl", "-D", dataDir, "-m", "immediate", "-w", "stop"]);
-            break;
-          case "container":
-            checked(["docker", "rm", "-fv", fixture.name]);
-            break;
-          default:
-            fixture satisfies never;
-        }
-      }
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  }
-};
+    },
+  );
 
 if (!runPostgresTests) {
   describe.skip("application RLS role database posture", () => {

@@ -4,6 +4,7 @@ import type { JobProgress, QueueOptions, WorkerListener } from "bullmq";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
@@ -68,6 +69,18 @@ export class BullMqWorker<
   ResultType = void,
   NameType extends string = string,
 > extends Worker<DataType, ResultType, NameType> {
+  protected override async callProcessJob(
+    job: Job<DataType, ResultType, NameType>,
+    token: string,
+    signal?: AbortSignal,
+  ): Promise<ResultType> {
+    return runWithStatementCeiling({
+      kind: "worker",
+      key: this.name,
+      run: async () => super.callProcessJob(job, token, signal),
+    });
+  }
+
   protected override get Job() {
     return QueueFailureJob;
   }
@@ -113,7 +126,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "document-review-runs-v2": "api",
   "document-translation-runs": "api",
   "entity-deletion-cleanup": "api",
-  "file-derivatives": "api",
+  "file-derivatives": "file-derivative-worker",
   "flow-run": "api",
   "legal-list-verification-runs": "api",
   "report-exports": "api",
@@ -123,7 +136,8 @@ export const BULLMQ_QUEUE_HOSTS = {
   "workflow-flex": "api",
 } as const satisfies Record<string, BullMqWorkerHost>;
 
-export type BullMqWorkerHost = "api" | "document-processing-worker";
+export type BullMqWorkerHost =
+  "api" | "document-processing-worker" | "file-derivative-worker";
 
 export type BullMqQueueName = keyof typeof BULLMQ_QUEUE_HOSTS;
 

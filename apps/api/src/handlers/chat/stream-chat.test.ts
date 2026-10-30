@@ -1954,14 +1954,18 @@ const persistAdmissionLoss = async ({
     admission.abort(
       new ActionAdmissionError({
         message: "Admission lease lost",
-        reason: "unavailable",
+        reason: "lease_lost",
       }),
     );
     if (controlReason !== undefined) {
       control.abort(controlReason);
     }
     if (exit === "throw") {
-      throw new HandlerError({ status: 503, message: "Provider aborted" });
+      throw new HandlerError({
+        status: 503,
+        code: "internal_error",
+        message: "Provider aborted",
+      });
     }
     if (exit === "adapter-error") {
       yield {
@@ -1996,12 +2000,16 @@ describe("admission loss before message production identifies the persisted assi
       const source = async function* (): AsyncIterable<StreamChunk> {
         admission.abort(
           new ActionAdmissionError({
-            reason: "unavailable",
+            reason: "lease_lost",
             message: "Admission lost",
           }),
         );
         if (exit === "throw") {
-          throw new HandlerError({ status: 503, message: "Provider aborted" });
+          throw new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: "Provider aborted",
+          });
         }
         if (exit === "adapter-error") {
           yield {
@@ -2048,7 +2056,7 @@ describe("admission loss before message production identifies the persisted assi
       expect(emitted.at(1)).toEqual(
         expect.objectContaining({
           type: EventType.RUN_ERROR,
-          code: ACTION_ADMISSION_CODES.admissionUnavailable,
+          code: ACTION_ADMISSION_CODES.leaseLost,
         }),
       );
       expect(finish.responseMessage.metadata.turnOutcome).toEqual(
@@ -2077,9 +2085,9 @@ describe("admission loss preserves complete interaction checkpoints", () => {
                 type: "failed",
                 error: "provider_unavailable",
                 refusal: {
-                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  code: ACTION_ADMISSION_CODES.leaseLost,
                   ...ACTION_ADMISSION_REFUSALS[
-                    ACTION_ADMISSION_CODES.admissionUnavailable
+                    ACTION_ADMISSION_CODES.leaseLost
                   ],
                 },
               }
@@ -2138,7 +2146,7 @@ describe("late admission loss retains a completed and charged response", () => {
       charges += 1;
       admission.abort(
         new ActionAdmissionError({
-          reason: "unavailable",
+          reason: "lease_lost",
           message: "Lease lost after empty completion",
         }),
       );
@@ -2182,13 +2190,14 @@ describe("late admission loss retains a completed and charged response", () => {
           }
           admission.abort(
             new ActionAdmissionError({
-              reason: "unavailable",
+              reason: "lease_lost",
               message: "Lease lost during upstream cleanup",
             }),
           );
           if (exit === "throw") {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Upstream cleanup aborted",
             });
           }
@@ -2218,9 +2227,9 @@ describe("late admission loss retains a completed and charged response", () => {
                 type: "failed",
                 error: "provider_unavailable",
                 refusal: {
-                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  code: ACTION_ADMISSION_CODES.leaseLost,
                   ...ACTION_ADMISSION_REFUSALS[
-                    ACTION_ADMISSION_CODES.admissionUnavailable
+                    ACTION_ADMISSION_CODES.leaseLost
                   ],
                 },
               },
@@ -2264,7 +2273,7 @@ describe("admission lost before continuation production retains the original che
       const admission = new AbortController();
       admission.abort(
         new ActionAdmissionError({
-          reason: "unavailable",
+          reason: "lease_lost",
           message: "Lease lost before dispatch",
         }),
       );
@@ -2272,6 +2281,7 @@ describe("admission lost before continuation production retains the original che
         if (exit === "throw") {
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Already aborted provider",
           });
         }
@@ -3218,6 +3228,7 @@ describe("approved client tool with an output schema", () => {
         },
       ],
       safeDb: noDbReads,
+      refRegistry: createChatRefRegistry(),
       threadId: toSafeId<"chatThread">("thread-1"),
       tools: browserTools,
       userId: toSafeId<"user">("user-1"),

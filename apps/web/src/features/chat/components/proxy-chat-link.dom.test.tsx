@@ -85,7 +85,6 @@ afterEach(async () => {
   await act(async () => cleanup());
   observers.length = 0;
   globalThis.IntersectionObserver = originalIntersectionObserver;
-  jest.useRealTimers();
 });
 afterAll(async () => {
   await unregisterDomEnvironment();

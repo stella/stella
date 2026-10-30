@@ -148,7 +148,7 @@ export const withDemoActionBudget = async <T>(
     catch: (cause: unknown) =>
       new ActionAdmissionError({
         message: "Action admission is unavailable",
-        reason: "unavailable",
+        reason: "organization_state_unreadable",
         cause,
       }),
   });
@@ -172,7 +172,7 @@ export const withDemoActionBudget = async <T>(
     catch: (cause: unknown) =>
       new ActionAdmissionError({
         message: "Action admission is unavailable",
-        reason: "unavailable",
+        reason: "store_unavailable",
         cause,
       }),
   });

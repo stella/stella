@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterTemplatesByName } from "./new-document-from-template-dialog.logic";
 
@@ -29,21 +30,22 @@ const searchText = fc
   )
   .map((characters) => characters.join(""));
 
-const containsPreviousScalarSearchKey = (content: string, query: string) => {
-  const contentScalars = Array.from(content.toWellFormed());
-  const queryScalars = Array.from(query.toWellFormed());
-  if (queryScalars.length === 0) {
-    return true;
-  }
-  return contentScalars.some((_, start) =>
-    queryScalars.every(
-      (scalar, offset) => contentScalars.at(start + offset) === scalar,
-    ),
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
   );
 };
 
 describe("template picker search", () => {
-  it("trims and case-folds the query while keeping accent-sensitive matching and order", () => {
+  it("trims and folds case and accents on both sides, keeping order", () => {
     const templates = [
       { id: "second", name: "CASE note" },
       { id: "accent", name: "Café" },
@@ -53,14 +55,22 @@ describe("template picker search", () => {
     expect(
       filterTemplatesByName(templates, " CASE ").map(({ id }) => id),
     ).toEqual(["second", "first"]);
-    expect(filterTemplatesByName(templates, "cafe")).toEqual([]);
+    expect(
+      filterTemplatesByName(templates, "cafe").map(({ id }) => id),
+    ).toEqual(["accent"]);
+    expect(
+      filterTemplatesByName(
+        [{ name: "Smlouva Dvořák" }, { name: "Kaufvertrag Straße" }],
+        "DVORAK",
+      ),
+    ).toEqual([{ name: "Smlouva Dvořák" }]);
   });
 
   it("returns all templates in input order for an empty query", () => {
     const templates = [{ name: "Second" }, { name: "First" }];
 
-    expect(filterTemplatesByName(templates, "")).toBe(templates);
-    expect(filterTemplatesByName(templates, "  ")).toBe(templates);
+    expect(filterTemplatesByName(templates, "")).toEqual(templates);
+    expect(filterTemplatesByName(templates, "  ")).toEqual(templates);
   });
 
   it("matches malformed template names by replacement scalar without matching emoji", () => {
@@ -78,25 +88,18 @@ describe("template picker search", () => {
   });
 });
 
-it("template filtering matches the previous trimmed name substring behavior", () => {
+it("template filtering keeps exactly the templates whose name matches", () => {
   assertProperty(
-    "template filtering matches the previous trimmed name substring behavior",
+    "template filtering keeps exactly the templates whose name matches",
     fc.property(
       fc.array(fc.record({ id: fc.string(), name: searchText }), {
         maxLength: GENERATED_TEMPLATES_MAX_COUNT,
       }),
       searchText,
       (templates, query) => {
-        const normalizedQuery = query.trim().toLowerCase();
-        const expected =
-          normalizedQuery === ""
-            ? templates
-            : templates.filter((template) =>
-                containsPreviousScalarSearchKey(
-                  template.name.toLowerCase(),
-                  normalizedQuery,
-                ),
-              );
+        const expected = templates.filter((template) =>
+          matchesFolded(template.name, query),
+        );
 
         expect(filterTemplatesByName(templates, query)).toEqual(expected);
       },

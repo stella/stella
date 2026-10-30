@@ -12,7 +12,10 @@ import { status } from "@/api/http/status";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
-import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
+import {
+  isCurrentVersionOfWork,
+  legislationDocumentStatusToday,
+} from "@/api/lib/legal-search/legislation-current-version";
 import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
@@ -73,7 +76,7 @@ const shelfColumns = {
   country: legislationDocuments.country,
   language: legislationDocuments.language,
   documentType: legislationDocuments.documentType,
-  status: legislationDocuments.status,
+  status: legislationDocumentStatusToday,
   versionValidFrom: legislationDocuments.versionValidFrom,
 };
 

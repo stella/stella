@@ -583,7 +583,9 @@ describe("authenticateMcpRequest credential dispatch", () => {
     // invalid.
     const { authenticateMcpRequest } = await import("@/api/mcp/auth");
 
-    const rejected = await authenticateMcpRequest("header.payload.signature");
+    const rejected = await authenticateMcpRequest("header.payload.signature", {
+      resolveApiKeySession: resolveMachineApiKeySession,
+    });
 
     expect(Result.isError(rejected)).toBe(true);
 

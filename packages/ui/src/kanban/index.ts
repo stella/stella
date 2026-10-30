@@ -10,7 +10,10 @@
 
 export type { KanbanCardFieldSelection } from "./card-properties";
 export { selectKanbanCardFieldIds } from "./card-properties";
-export type { KanbanCardShellProps } from "./card-shell";
+export type {
+  KanbanCardSelectionModifiers,
+  KanbanCardShellProps,
+} from "./card-shell";
 export { KanbanCardShell } from "./card-shell";
 export type { KanbanCellActionProps } from "./cell-action";
 export { KanbanCellAction } from "./cell-action";
@@ -38,6 +41,7 @@ export {
   KANBAN_CHROME_ROW_HEIGHT_PX,
 } from "./layout-tokens";
 export type {
+  KanbanCardDragPreview,
   RegisterKanbanBoardAutoScrollOptions,
   RegisterKanbanCardDragOptions,
 } from "./drag-interactions";

@@ -8,9 +8,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import plannerSettings from "./planner-settings.json" with { type: "json" };
 
-export const QUERY_PERF_SETTINGS = plannerSettings;
 // Startup settings cover seed, VACUUM, policy DDL and database DDL outside transactions.
-// Keep these separate from the planner settings digest and recorded baseline.
 export const QUERY_PERF_CONNECTION_SETTINGS = {
   statement_timeout: 30_000,
   lock_timeout: 3000,
@@ -45,7 +43,13 @@ export const applyPlannerSettings = async (tx: TransactionOf<GatedTestDb>) => {
   await tx.execute(sql`SELECT ${sql.join(Object.values(settings), sql`, `)}`);
 };
 
-export const assertPlannerSettings = async (tx: TransactionOf<GatedTestDb>) => {
+/** The measuring role: `stella` under row security, or the fixture's owner. */
+type MeasuringRole = "stella" | "owner";
+
+export const assertPlannerSettings = async (
+  tx: TransactionOf<GatedTestDb>,
+  role: MeasuringRole = "stella",
+) => {
   for (const [name, value] of Object.entries(plannerSettings)) {
     // db-await-in-loop: bounded planner GUC file; verify every effective value as the measuring role.
     const row = v.parse(
@@ -57,6 +61,22 @@ export const assertPlannerSettings = async (tx: TransactionOf<GatedTestDb>) => {
         `Query perf setting ${name}: expected ${value}, got ${String(row[name])}`,
       );
     }
+  }
+  if (role === "owner") {
+    // Public corpus statements run as the scheduler's owner role; only the
+    // server version is asserted.
+    const { version } = v.parse(
+      v.strictObject({ version: v.number() }),
+      executedRows(
+        await tx.execute(
+          sql`SELECT current_setting('server_version_num')::integer AS version`,
+        ),
+      ).at(0),
+    );
+    if (version < 180_000 || version >= 190_000) {
+      panic("Query perf requires PostgreSQL 18");
+    }
+    return;
   }
   const row = v.parse(
     v.strictObject({

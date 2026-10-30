@@ -42,6 +42,7 @@ import type {
   DesktopUpdateSnapshot,
   LinkedAccountSnapshot,
 } from "../shared/rpc";
+import { StellaAppIcon } from "../shared/StellaAppIcon";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -50,10 +51,10 @@ import {
 } from "../telemetry/desktop-telemetry";
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
-import stellaFavicon from "./stella-favicon.svg";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
@@ -305,7 +306,7 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
             {t(error === "read" ? "errorReadTelemetry" : "errorSaveTelemetry")}
           </p>
           {error === "read" ? (
-            <Button onClick={onRetry} size="sm" variant="outline">
+            <Button onClick={onRetry} variant="outline">
               {t("tryAgain")}
             </Button>
           ) : null}
@@ -328,6 +329,7 @@ const GeneralPane = ({
 }) => {
   const format = useFormatter();
   const t = useTranslations("settings");
+  const tSubscriptions = useTranslations("agentSubscriptions");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -409,7 +411,6 @@ const GeneralPane = ({
           <Button
             disabled={presentation.status === "loading"}
             onClick={onAccountAction}
-            size="sm"
             variant={presentation.actionVariant}
           >
             {t(presentation.actionKey, { host: presentation.host ?? "" })}
@@ -421,6 +422,11 @@ const GeneralPane = ({
       <PanelGroup>
         <ShortcutSetting />
       </PanelGroup>
+      <AgentSubscriptionsSection
+        renderGroup={(content) => (
+          <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
+        )}
+      />
       <PanelGroup title={t("permissions")}>
         <PermissionsSection window={DESKTOP_TELEMETRY_WINDOWS.main} />
       </PanelGroup>
@@ -509,7 +515,6 @@ const SetupGuideSetting = () => {
         onClick={() => {
           void restart();
         }}
-        size="sm"
         variant="outline"
       >
         {t("setupGuideAction")}
@@ -584,11 +589,7 @@ const AboutPane = ({
     <div className="space-y-4">
       <PanelGroup>
         <div className="flex flex-col items-center px-4 pt-6 pb-2">
-          <img
-            alt="stella"
-            className="size-16 shrink-0 rounded-2xl"
-            src={stellaFavicon}
-          />
+          <StellaAppIcon className="size-16 rounded-2xl" />
           <p className="mt-3 text-sm font-semibold">{t("stellaDesktop")}</p>
           <p className="text-muted-foreground mt-0.5 text-xs">{versionLabel}</p>
         </div>
@@ -597,7 +598,7 @@ const AboutPane = ({
       <PanelGroup title={t("support")}>
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">hello@stll.app</p>
-          <Button onClick={onEmailSupport} size="sm" variant="outline">
+          <Button onClick={onEmailSupport} variant="outline">
             {t("email")}
           </Button>
         </div>
@@ -606,7 +607,6 @@ const AboutPane = ({
           <Button
             className="flex-1"
             onClick={onCopyDiagnostics}
-            size="sm"
             variant="outline"
           >
             {t("copyDiagnostics")}
@@ -614,7 +614,6 @@ const AboutPane = ({
           <Button
             className="flex-1"
             onClick={onRevealSupportRoot}
-            size="sm"
             variant="ghost"
           >
             {t("revealAppData")}
@@ -900,10 +899,7 @@ const App = () => {
         )}
       >
         <header className="pb-2">
-          <p className="text-muted-foreground text-2xs font-medium tracking-[0.14em] uppercase">
-            {t("stellaDesktop")}
-          </p>
-          <h1 className="mt-1 text-xl font-semibold">{t("title")}</h1>
+          <h1 className="text-xl font-semibold">{t("title")}</h1>
         </header>
 
         <Tabs

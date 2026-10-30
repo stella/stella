@@ -276,6 +276,18 @@ const HOST_USER_FIELDS = {
     input: "server-managed",
     returned: false,
   }),
+  emailUndeliverableAddress: hostField("emailUndeliverableAddress", "string", {
+    input: "server-managed",
+    returned: false,
+  }),
+  emailUndeliverableReason: hostField("emailUndeliverableReason", "string", {
+    input: "server-managed",
+    returned: false,
+  }),
+  emailUndeliverableAt: hostField("emailUndeliverableAt", "date", {
+    input: "server-managed",
+    returned: false,
+  }),
 };
 
 const HOST_SESSION_FIELDS = normalizeRuntimeFields(SESSION_LIFETIME_FIELDS, {

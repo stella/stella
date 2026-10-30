@@ -13,6 +13,18 @@ import type { skillDetailOptions } from "@/lib/knowledge/queries";
 
 export type ExternalTabId = `external:${string}`;
 
+/**
+ * What the file's chat does with a handed-over draft: leave it in the
+ * composer for the reader to edit and send, or send it at once (a request
+ * whose wording the reader does not write, such as "Explain").
+ */
+export const FILE_CHAT_DRAFT_DELIVERY = {
+  draft: "draft",
+  send: "send",
+} as const;
+export type FileChatDraftDelivery =
+  (typeof FILE_CHAT_DRAFT_DELIVERY)[keyof typeof FILE_CHAT_DRAFT_DELIVERY];
+
 /** The route a page-owned tab belongs to; the tab closes when it leaves. */
 export type InspectorOwnerRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 
@@ -241,8 +253,10 @@ type InspectorCommandState = {
   } | null;
   pendingDocxEditTabId: string | null;
   /** A composer draft handed to the chat over one document (a review
-   *  finding to discuss); the overlay for that file consumes it. */
+   *  finding to discuss, a selected passage); the overlay for that file
+   *  consumes it. */
   pendingFileChatDraft: {
+    delivery: FileChatDraftDelivery;
     fileFieldId: string;
     /** What the composer takes: prose or its own inline Markdown. */
     markdown: ComposerSource;
@@ -438,6 +452,7 @@ type InspectorCommandActions = {
   requestDocxEdit: (tabId: string) => void;
   clearDocxEditRequest: () => void;
   requestFileChatDraft: (request: {
+    delivery: FileChatDraftDelivery;
     fileFieldId: string;
     markdown: ComposerSource;
   }) => void;

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
@@ -30,6 +31,7 @@ import { OpenOriginalButton } from "@/components/legal-reader/open-original-butt
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {
   statuteOptions,
@@ -42,8 +44,13 @@ import {
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -66,7 +73,7 @@ export const StatuteInspectorView = ({
   // A provision opened from a heading offers its drafting history only where
   // the work has more than one consolidation, and the count is what says so.
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
-  const versionsView = useQueryView(versionsQuery);
+  const versionsView = queryView(versionsQuery);
   useQueryViewError(versionsView, "StatuteInspectorView:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
@@ -103,7 +110,10 @@ export const StatuteInspectorView = ({
   const activeLegal = {
     type: "statute",
     documentId: payload.documentId,
-    title: payload.statuteTitle,
+    title:
+      statute === undefined
+        ? payload.statuteTitle
+        : statuteDisplayLabel(statute).text,
   } as const satisfies ActiveLegalDocument;
 
   return (
@@ -118,23 +128,41 @@ export const StatuteInspectorView = ({
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <>
-            {statute !== undefined && (
-              <OpenOriginalButton
-                href={statute.documentUrl ?? statute.sourceUrl}
-                size="icon-xs"
+        actions={[
+          ...(statute === undefined
+            ? []
+            : [
+                {
+                  id: "open-original",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <OpenOriginalButton
+                      href={statute.documentUrl ?? statute.sourceUrl}
+                      size="icon-xs"
+                    />
+                  ),
+                },
+              ]),
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            // The wording moves to the page, so the tab that held it goes.
+            render: () => (
+              <StatuteMainViewAction
+                onMoveToMain={onClose}
+                payload={payload}
+                searchQuery={find.findQuery}
               />
-            )}
-            {/* The wording moves to the page, so the tab that held it goes. */}
-            <StatuteMainViewAction
-              onMoveToMain={onClose}
-              payload={payload}
-              searchQuery={find.findQuery}
-            />
-          </>
-        }
+            ),
+          },
+        ]}
         label={tab.label}
+        labelOverflow="wrap"
+        labelContent={
+          statute === undefined ? undefined : (
+            <StatuteDisplayLabel statute={statute} />
+          )
+        }
         onClose={onClose}
       />
       <InspectorFindBar find={find} />

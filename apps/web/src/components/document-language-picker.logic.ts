@@ -8,8 +8,7 @@ import {
   DOCUMENT_TRANSLATION_TARGET_LANGUAGES,
   type DocumentTranslationTargetLanguageCode,
 } from "@stll/api-contract/document-translation";
-import { foldToAscii } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 const DEFAULT_TARGET_LANG: DocumentTranslationTargetLanguageCode = "EN-GB";
 const FALLBACK_SOURCE_LANG: DocumentTranslationTargetLanguageCode = "CS";
@@ -64,17 +63,6 @@ export const defaultTargetLanguage = (
 ): DocumentTranslationTargetLanguageCode =>
   languageForLocale(locale) ?? DEFAULT_TARGET_LANG;
 
-/**
- * Match key for the picker's typeahead.
- *
- * `foldToAscii` rather than the highlighter's `foldSearchMatchText`: mark
- * stripping alone leaves Polish `ł` standing, so typing "lotewski" would miss
- * "Łotewski" in the pl catalog. Folding also keeps Greek, Cyrillic and Arabic
- * names matchable in their own script.
- */
-const languageMatchKey = (text: string): string =>
-  foldToAscii(text).toLowerCase();
-
 type LanguageQueryCandidate = {
   code: string;
   label: string;
@@ -82,19 +70,13 @@ type LanguageQueryCandidate = {
 
 /**
  * A language matches on its localized name or its code, diacritics-insensitive
- * and anywhere in the string: "brit" finds "English (British)" and "pt" finds
- * both Portuguese entries.
+ * and anywhere in the string: "brit" finds "English (British)", "lotewski"
+ * finds "Łotewski", and "pt" finds both Portuguese entries.
  */
 export const matchesLanguageQuery = (
   { code, label }: LanguageQueryCandidate,
   query: string,
 ): boolean => {
-  const needle = languageMatchKey(query).trim();
-  if (needle.length === 0) {
-    return true;
-  }
-  return (
-    containsSearchMatchKey(languageMatchKey(label), needle) ||
-    containsSearchMatchKey(languageMatchKey(code), needle)
-  );
+  const matches = createSearchQueryMatcher(query);
+  return matches(label) || matches(code);
 };

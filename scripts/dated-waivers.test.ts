@@ -259,7 +259,10 @@ test("an elapsed test quarantine and other elapsed waivers still fail the check"
     new Date("2026-10-07T00:00:00.000Z"),
   );
   expect(allElapsed).toHaveLength(
-    entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
+    entries.filter(
+      ({ kind }) =>
+        kind !== "release-age-exclusion" && kind !== "dependency-audit",
+    ).length,
   );
   expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
     false,
@@ -600,4 +603,21 @@ test("tracked-files input rejects absolute and parent paths", () => {
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+test("dependency acceptance expiry warns on main and refuses only its owning file", () => {
+  const entries = inventory().filter(({ kind }) => kind === "dependency-audit");
+  const now = new Date("2026-10-07T00:00:00Z");
+  const source = "scripts/dependency-audit-baseline.json";
+  expect(entries.length).toBeGreaterThan(0);
+  for (const changes of [undefined, new Set<string>(), new Set(["bun.lock"])]) {
+    expect(expiredWaiverFailures(entries, now, changes)).toEqual([]);
+    expect(dueWaiverWarnings(entries, now, changes)).toHaveLength(
+      entries.length,
+    );
+  }
+  expect(expiredWaiverFailures(entries, now, new Set([source]))).toHaveLength(
+    entries.length,
+  );
+  expect(dueWaiverWarnings(entries, now, new Set([source]))).toEqual([]);
 });

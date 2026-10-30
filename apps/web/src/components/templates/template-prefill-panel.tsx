@@ -23,7 +23,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 /**
@@ -78,7 +78,7 @@ export const TemplatePrefillPanel = ({
       return;
     }
     if (!ACCEPTED_MIME_TYPES.includes(candidate.type)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     setFile(candidate);

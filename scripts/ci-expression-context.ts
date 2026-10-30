@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import {
+  POSTGRES_MAX_SHARDS,
+  postgresShardMatrix,
+} from "../packages/scripts/src/test-shard-planning";
 import type { ScopeOutput } from "./ci-plan-scope";
 import { predicateVariables } from "./ci-plan-variables";
 
@@ -257,6 +261,10 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "pilot-plan": { fast_jobs: "[]" },
   "pilot-queue-plan": { queue_jobs: "[]" },
   pilot: { coverage_profile: "normal-v1" },
+  "postgres-shards": {
+    postgres_shard_count: String(POSTGRES_MAX_SHARDS),
+    postgres_shards: JSON.stringify(postgresShardMatrix(POSTGRES_MAX_SHARDS)),
+  },
   "postgres-test-durations": { hash: "" },
   "postgres-test-plan": {
     postgres_selection_reason: "",
@@ -267,6 +275,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "root-checks": { root_checks: "[]" },
   suites: { armed_delta: "false", run_required: "true", heavy_proof: "true" },
   "target-base": { base_sha: "" },
+  "ui-playground-plan": { specs: "[]" },
 };
 
 const NEEDS = [

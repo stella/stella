@@ -26,7 +26,7 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
@@ -51,7 +51,7 @@ export const WorkspaceBreadcrumb = ({
   });
   const [refInputEl, setRefInputEl] = useState<HTMLInputElement | null>(null);
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
-  const workspaceView = useQueryView(workspaceQuery);
+  const workspaceView = queryView(workspaceQuery);
   const cachedWorkspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const updateWorkspace = useUpdateWorkspace();
