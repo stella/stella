@@ -94,7 +94,7 @@ const nonSpace = (text: string): string => text.replaceAll(/[\s ]/gu, "");
 describe("RIS fragments", () => {
   test("every printed character and inline element survives", () => {
     assertProperty(
-      "at-ris-markup-survives",
+      "every printed character and inline element survives",
       fc.property(fragments, separators, (parts, separator) => {
         const xml = `<risdok><nutzdaten><abschnitt><absatz ct="text">${parts
           .map(({ xml: part }) => part)
@@ -160,7 +160,7 @@ const leavesOf = (inlines: readonly Inline[]): Inline[] =>
 describe("RIS inline layout", () => {
   test("no line break leads, trails or repeats, whatever wraps it", () => {
     assertProperty(
-      "at-ris-markup-line-breaks-single",
+      "no line break leads, trails or repeats, whatever wraps it",
       fc.property(fc.array(layoutInline, { maxLength: 8 }), (inlines) => {
         const leaves = leavesOf(normalizeInlineLayout(inlines));
         const breaks = leaves.flatMap((leaf, index) =>
@@ -206,7 +206,7 @@ const readItems = (body: string) => {
 describe("RIS unknown wrappers", () => {
   test("paragraphs inside unknown wrappers read as they would unwrapped", () => {
     assertProperty(
-      "at-ris-markup-unknown-wrappers-transparent",
+      "paragraphs inside unknown wrappers read as they would unwrapped",
       fc.property(
         fc.array(fc.constantFrom(...BLOCK_BODIES), {
           minLength: 1,
