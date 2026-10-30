@@ -416,7 +416,6 @@ export const AnonymizeLiveDemo = () => {
         <Label className="sr-only" htmlFor="anon-demo-textarea">
           Try the anonymization engine: edit this paragraph
         </Label>
-        {/* oxlint-disable-next-line no-native-ui/no-native-textarea -- a transparent typing layer laid exactly over the highlighted copy of the same text: it must share the backdrop's padding, type and wrapping glyph for glyph, where Textarea brings its own border, padding, focus ring and auto-sizing */}
         <textarea
           id="anon-demo-textarea"
           className={`${textLayerClassName} absolute inset-0 border-0 bg-transparent text-transparent caret-[var(--foreground)] outline-none [-webkit-text-fill-color:transparent]`}

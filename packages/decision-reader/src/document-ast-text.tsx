@@ -1734,7 +1734,6 @@ const renderTableBlock = ({
           </Button>
         </span>
       )}
-      {/* oxlint-disable-next-line no-native-ui/no-native-table -- a court's own table, parsed from the decision's source text: its cells wrap legal prose at the reader's text scale and carry the anchors deep links and citations point at, where Table's hover rows, nowrap cells and own scroll box would rewrite the document */}
       <table
         className={cn(
           "reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]",
@@ -1743,10 +1742,9 @@ const renderTableBlock = ({
         )}
         {...documentAnchorProps}
       >
-        {/* oxlint-disable-next-line no-native-ui/no-native-table -- body of the court's source table above */}
         <tbody>
           {block.rows.map((row, rowIndex) => (
-            // oxlint-disable-next-line react/no-array-index-key, no-native-ui/no-native-table -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds tableCellPieceId's identity below) and never reordered/inserted by the reader UI, and a source row is no TableRow (no hover highlight on a document).
+            // oxlint-disable-next-line react/no-array-index-key -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds tableCellPieceId's identity below) and never reordered/inserted by the reader UI.
             <tr key={rowIndex}>
               {row.map((cell, columnIndex) => {
                 const pieceId = tableCellPieceId({

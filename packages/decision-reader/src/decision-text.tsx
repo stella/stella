@@ -204,12 +204,10 @@ const groupApparatusWrap = (
     const runBlocks = run;
     run = [];
     out.push(
-      // oxlint-disable-next-line no-native-ui/no-native-accordion -- the reporter's apparatus is part of the decision's source text: closed, it stays in the document for copy and print, and browser find-in-page opens it on a match; its one-line label is reader chrome at the reader's text scale, where AccordionTrigger's fixed sizes and chevron do not belong
       <details
         className="reader-apparatus"
         key={`apparatus-${runBlocks[0]?.id ?? String(out.length)}`}
       >
-        {/* oxlint-disable-next-line no-native-ui/no-native-accordion -- the apparatus disclosure's own label, see the details above */}
         <summary className="reader-apparatus-summary">{apparatusLabel}</summary>
         {runBlocks.map((block) => (
           <Fragment key={block.id}>{renderBlock(block)}</Fragment>

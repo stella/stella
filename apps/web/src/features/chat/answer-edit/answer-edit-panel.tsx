@@ -291,10 +291,7 @@ export const AnswerEditFrame = (
   props: Omit<ComponentProps<"div">, "role" | "tabIndex"> & {
     "aria-label": string;
   },
-) => (
-  // oxlint-disable-next-line no-native-ui/no-native-dialog -- the panel is the content of the shared SelectionToolbar, already the floating layer over the selected text; Dialog would add a modal backdrop and focus trap over the chat, and Popover would stack a second floating layer on the bar
-  <div {...props} role="dialog" tabIndex={-1} />
-);
+) => <div {...props} role="dialog" tabIndex={-1} />;
 
 type EditState =
   | { status: "instruction"; error?: string }

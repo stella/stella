@@ -890,7 +890,9 @@
     "apps/web/src/components/oauth-consent/scope-summary.tsx": 2,
     "apps/web/src/components/pdf/page-organizer-crop.tsx": 2,
     "apps/web/src/components/templates/template-form.tsx": 2,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-arrangement-editor.tsx": 2
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-arrangement-editor.tsx": 2,
+    "packages/decision-reader/src/decision-text.tsx": 2,
+    "packages/decision-reader/src/headnote-block.tsx": 2
   },
   "no-native-ui/no-native-button": {
     "apps/desktop/src/activity/ActivityTimeline.tsx": 1,
@@ -1024,7 +1026,9 @@
     "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx": 2,
     "apps/web/src/routes/onboarding/-components/steps/download-step.tsx": 1,
     "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx": 1,
-    "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx": 1
+    "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx": 1,
+    "packages/decision-reader/src/annotation-anchors.tsx": 1,
+    "packages/decision-reader/src/cited-provision.tsx": 1
   },
   "no-native-ui/no-native-checkbox": {
     "apps/web/src/components/chat/request-secret-card.tsx": 2,
@@ -1032,6 +1036,7 @@
     "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx": 1
   },
   "no-native-ui/no-native-details-grid": {
+    "apps/landing/src/components/react/previews/RegistryLookupPreview.tsx": 3,
     "apps/web/src/components/ai-suggestions/review-term-row.tsx": 5,
     "apps/web/src/components/chat/tool-approval-card.tsx": 9,
     "apps/web/src/components/inspector/email-html-viewer.tsx": 6,
@@ -1040,7 +1045,8 @@
     "apps/web/src/components/oauth-consent/oauth-account.tsx": 3
   },
   "no-native-ui/no-native-dialog": {
-    "apps/web/src/components/ai-suggestions/host.tsx": 1
+    "apps/web/src/components/ai-suggestions/host.tsx": 1,
+    "apps/web/src/features/chat/answer-edit/answer-edit-panel.tsx": 1
   },
   "no-native-ui/no-native-form": {
     "apps/web/src/components/billing/manual-time-entry-form.tsx": 1,
@@ -1155,9 +1161,11 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.tsx": 15,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx": 9,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx": 39,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx": 21
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx": 21,
+    "packages/decision-reader/src/document-ast-text.tsx": 3
   },
   "no-native-ui/no-native-textarea": {
+    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
     "apps/web/src/components/chat-pasted-text-node.tsx": 1,
     "apps/web/src/components/workspaces/editable-field.tsx": 1,
     "apps/web/src/routes/knowledge/-components/skill-editor.tsx": 1,

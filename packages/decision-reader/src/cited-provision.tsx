@@ -593,7 +593,6 @@ export const CitedProvisionExpansion = ({
       density="compact"
       onClick={toggleExpanded}
       onKeyDown={onKeyDown}
-      // oxlint-disable-next-line no-native-ui/no-native-button -- the card holds its own open-in-panel Button and the provision's wording with links; a <button> may not contain interactive content, so the card takes button semantics by role with its own Enter/Space handling
       role="button"
       tabIndex={0}
     >
