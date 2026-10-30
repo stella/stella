@@ -90,8 +90,8 @@ import { isRecord } from "@/api/lib/type-guards";
  *
  * Two populations of number appear, and they are never added together:
  *
- * - `searchable`, from the serving index, is what a public search can find.
- *   Only an admitted country has one.
+ * - `searchable` is the published population eligible for public search,
+ *   counted independently of the provider. Only an admitted country has one.
  * - `stored`, counted from the corpus itself, is what is held, including the
  *   identities a publisher listed whose document has not arrived. It is what
  *   the publisher's own total describes, so it is the completeness numerator.
@@ -99,7 +99,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Whether a country's decisions can be searched publicly yet. */
 export const CASE_LAW_COVERAGE_AVAILABILITY = {
-  /** Admitted: the numbers come from the index a public search reads. */
+  /** Admitted: the numbers describe the published, policy-eligible population. */
   SEARCHABLE: "searchable",
   /** Ingested, not yet admitted: the numbers are what the corpus stores. */
   IN_PREPARATION: "in-preparation",
@@ -164,9 +164,9 @@ type CaseLawCoverageCountryBase = {
 type CaseLawCoverageCountry =
   | (CaseLawCoverageCountryBase & {
       availability: typeof CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE;
-      /** What a public search can find: the serving index's country bucket. */
+      /** Published decisions eligible for search under the live source policy. */
       searchable: number;
-      /** Earliest and latest decision year the index holds; null when empty. */
+      /** Earliest and latest held decision year; null when empty. */
       decisionYearFrom: number | null;
       decisionYearTo: number | null;
       /**

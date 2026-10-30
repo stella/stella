@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 
 import {
   budgetProblem,
@@ -43,6 +44,49 @@ test("a sequential scan on a large table fails while a declared small table pass
       statement: "select * from legislation_sources",
     }),
   ).toEqual([]);
+});
+
+test("only a verified zero-work coverage delta queue bypasses the large-scan guard", () => {
+  const emptyQueue = {
+    "Node Type": "Seq Scan",
+    "Relation Name": "case_law_population_deltas",
+    "Actual Rows": 0,
+    "Rows Removed by Filter": 0,
+    "Shared Hit Blocks": 0,
+    "Shared Read Blocks": 0,
+  };
+  const analyze = (node: Record<string, unknown>, owner: string) =>
+    analyzePlan({
+      document: plan(node),
+      owner,
+      ownerDeadlineMs: 30_000,
+      profileId: "corpus",
+      statement: "select maintained coverage",
+    }).map(({ kind }) => kind);
+  expect(analyze(emptyQueue, SCHEDULER_BACKFILL_IDS.coverage)).toEqual([]);
+  for (const field of [
+    "Actual Rows",
+    "Rows Removed by Filter",
+    "Shared Hit Blocks",
+    "Shared Read Blocks",
+  ]) {
+    expect(
+      analyze({ ...emptyQueue, [field]: 1 }, SCHEDULER_BACKFILL_IDS.coverage),
+    ).toEqual(["large-scan"]);
+  }
+  expect(analyze(emptyQueue, "statement.otherOwner")).toEqual(["large-scan"]);
+  expect(
+    analyze(
+      { ...emptyQueue, "Relation Name": "unregistered_table" },
+      SCHEDULER_BACKFILL_IDS.coverage,
+    ),
+  ).toEqual(["large-scan"]);
+  expect(
+    analyze(
+      { ...emptyQueue, "Shared Hit Blocks": undefined },
+      SCHEDULER_BACKFILL_IDS.coverage,
+    ),
+  ).toEqual(["large-scan"]);
 });
 
 test("a lossy bitmap heap scan fails even without rows removed by recheck", () => {
