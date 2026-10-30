@@ -95,6 +95,56 @@ describe("bulkDeleteContacts", () => {
     expect(auditCount).toBe(1);
   });
 
+  test("keeps a matter's client and deletes the rest of the batch", async () => {
+    const clientId = toSafeId<"contact">(Bun.randomUUIDv7());
+    const plainId = toSafeId<"contact">(Bun.randomUUIDv7());
+    let selectCall = 0;
+    const auditedIds: unknown[] = [];
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => {
+            selectCall += 1;
+            if (selectCall === 1) {
+              return {
+                orderBy: () => ({
+                  limit: async () => [
+                    { id: clientId, displayName: "Client" },
+                    { id: plainId, displayName: "Plain" },
+                  ],
+                }),
+              };
+            }
+            // The second read lists contacts that are a matter's client.
+            return selectCall === 2 ? [{ id: clientId }] : [];
+          },
+        }),
+      }),
+      delete: () => ({ where: async () => [] }),
+    });
+
+    const response = await bulkDeleteContacts.handler(
+      createContext([clientId, plainId], {
+        safeDb,
+        scopedDb,
+        recordAuditEvent: async (_tx, events) => {
+          for (const { resourceId } of [events].flat()) {
+            auditedIds.push(resourceId);
+          }
+        },
+      }),
+    );
+
+    expect(response).toEqual({
+      outcomes: [
+        { contactId: clientId, status: "blocked" },
+        { contactId: plainId, status: "deleted" },
+      ],
+    });
+    expect(auditedIds).toEqual([plainId]);
+  });
+
   test("rejects a batch above the import limit", () => {
     const result = v.safeParse(bulkDeleteContactsBodySchema, {
       contactIds: Array.from({ length: CONTACT_BULK_DELETE_LIMIT + 1 }, () =>
