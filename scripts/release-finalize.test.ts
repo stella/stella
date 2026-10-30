@@ -72,7 +72,7 @@ test("a retry with the final tag on the candidate publishes without pushing agai
 
 for (const finalTag of [undefined, "candidate"] as const) {
   test(`finalization arms exactly the matching release head (${finalTag ?? "fresh"})`, () => {
-    const proof = finalize({ finalTag });
+    const proof = finalize(finalTag === undefined ? {} : { finalTag });
     expect(proof.landing?.exitCode, proof.landing?.stderr.toString()).toBe(0);
     expect(proof.stepOutput).toBe("final_tag=v1.2.3\n");
     expect(proof.merges.trim()).toBe(
