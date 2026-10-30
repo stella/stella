@@ -208,9 +208,13 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             { court: "", decisionDate: "0001-01-01" },
             { court: "Krajský soud v Brně", decisionDate: "9999-01-01" },
           ];
-          const regionalCourts = Object.values(CZ_ECLI_COURT_REGISTRY).map(
-            ({ name }) => name,
-          );
+          const regionalCourts = [
+            ...Object.values(CZ_ECLI_COURT_REGISTRY).map(({ name }, index) =>
+              index < 3 ? "" : name,
+            ),
+            "Coverage overflow court 1",
+            "Coverage overflow court 2",
+          ];
           expect(regionalCourts.length).toBeGreaterThan(
             LIMITS.caseLawFacetLimit,
           );
@@ -321,11 +325,24 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           });
           expect(undated?.courts).toContainEqual({
             court: null,
-            decisions: regionalCourts.length - LIMITS.caseLawFacetLimit,
+            decisions: regionalCourts.length - LIMITS.caseLawFacetLimit + 1,
           });
+          expect(
+            undated?.courts.filter(({ court }) => court === null),
+          ).toHaveLength(1);
           expect(computedCountry.decisionYearFrom).toBe(2024);
           expect(computedCountry.decisionYearTo).toBe(2026);
           await refreshPgFtsBrowseFacets(tx);
+          const unnamedBuckets = await tx.execute(sql`
+            SELECT rank, total FROM case_law_coverage_court_buckets
+            WHERE source_id = ${undatedSourceId} AND court IS NULL
+          `);
+          expect(unnamedBuckets).toEqual([
+            {
+              rank: LIMITS.caseLawFacetLimit + 1,
+              total: regionalCourts.length - LIMITS.caseLawFacetLimit + 1,
+            },
+          ]);
           const snapshot = await computeCaseLawCoverageAnswer(
             async (read) => await read(tx),
             [],

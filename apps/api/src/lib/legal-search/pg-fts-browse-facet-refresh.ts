@@ -63,10 +63,12 @@ export const refreshPgFtsBrowseFacets = async (
         FROM normalized
       ), buckets AS (
         SELECT source_id, rank::int, court, total FROM ranked
-        WHERE rank <= ${LIMITS.caseLawFacetLimit}
+        WHERE rank <= ${LIMITS.caseLawFacetLimit} AND court IS NOT NULL
         UNION ALL
         SELECT source_id, (${LIMITS.caseLawFacetLimit} + 1)::int, NULL, sum(total)::int
-        FROM ranked WHERE rank > ${LIMITS.caseLawFacetLimit} GROUP BY source_id
+        FROM ranked
+        WHERE rank > ${LIMITS.caseLawFacetLimit} OR court IS NULL
+        GROUP BY source_id
       )
       INSERT INTO ${caseLawCoverageCourtBuckets} (source_id, rank, court, total)
       SELECT source_id, rank, court, total FROM buckets
