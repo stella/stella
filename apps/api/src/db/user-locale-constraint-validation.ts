@@ -10,7 +10,7 @@ export const USER_LOCALE_CONSTRAINT = {
 } as const satisfies OnlineConstraintValidation;
 
 export const USER_LOCALE_CONSTRAINT_VALIDATION = {
-  introducedBy: "20261029222032_user_locale",
+  introducedBy: "20261030210847_user_locale",
   name: USER_LOCALE_CONSTRAINT.constraintName,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
