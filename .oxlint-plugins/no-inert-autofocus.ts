@@ -19,7 +19,8 @@ const AUTOFOCUSED_ELEMENTS = new Set(["button", "input", "select", "textarea"]);
 
 const MESSAGE =
   "React applies `autoFocus` only to input, select, textarea and button; " +
-  "here it focuses nothing. Focus the element from a ref callback " +
+  "here it focuses nothing. Make sure the element is focusable " +
+  "(`contentEditable` or `tabIndex`), then focus it from a ref callback " +
   "(`ref={(node) => node?.focus()}`).";
 
 export default eslintCompatPlugin({
