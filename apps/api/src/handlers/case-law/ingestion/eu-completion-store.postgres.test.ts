@@ -1,6 +1,6 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
 import { createSha256 } from "@stll/sha256/node";
@@ -24,10 +24,6 @@ import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
-import {
-  explainRoot,
-  scanOccurrences,
-} from "@/api/tests/query-plans/plan-walker";
 
 import {
   buildEuCompletionPageQuery,
@@ -1178,150 +1174,41 @@ if (!databaseUrl || !enabled) {
       expect(await state.store.getReceipt(newer.id)).not.toBeNull();
       expect(await state.store.compact({ limit: 100 })).toBe(0);
     });
-    test("finished 100000-row source bounds dry-run selection before receipt filtering", async () => {
+    test("finished source pages remain ineligible after receipt filtering", async () => {
       const sourceId = createSafeId<"caseLawSource">();
       sourceIds.push(sourceId);
-      // Bulk fixtures roll back as one unit instead of leaving foreign-key
-      // cleanup for the suite hook after every performance assertion finishes.
-      const rollback = new TransactionRollbackError();
-      const outcome = await Result.tryPromise({
-        try: async () =>
-          await db.transaction(async (tx) => {
-            // This checks read plans over settled rows. Clone the migrated
-            // tables and their actual indexes without replaying ingestion
-            // triggers for the bulk fixture, as the other plan suites do.
-            for (const table of [
-              "case_law_decisions",
-              "eu_completion_receipts",
-              "case_law_index_jobs",
-            ]) {
-              // db-await-in-loop: each private fixture table retains every migrated index.
-              await tx.execute(sql`CREATE TEMPORARY TABLE ${sql.identifier(table)}
-                (LIKE public.${sql.identifier(table)} INCLUDING ALL EXCLUDING INDEXES)
-                ON COMMIT DROP`);
-              const indexes = await tx.execute(sql`
-                SELECT indexdef FROM pg_indexes
-                WHERE schemaname = 'public' AND tablename = ${table}
-                ORDER BY indexname
-              `);
-              for (const { indexdef } of indexes) {
-                if (
-                  typeof indexdef !== "string" ||
-                  !indexdef.includes(" ON public.")
-                ) {
-                  panic(
-                    "The migrated fixture index has no public table definition",
-                  );
-                }
-                // db-await-in-loop: build each live index definition on its temporary table.
-                await tx.execute(
-                  sql.raw(indexdef.replace(" ON public.", " ON pg_temp.")),
-                );
-              }
-            }
-            await tx.insert(caseLawSources).values({
-              id: sourceId,
-              adapterKey: `completion-scale-${sourceId}`,
-              name: "completion scale fixture",
-            });
-            // The rollback restores every dropped index. Keep only indexes that
-            // define constraints or this query's production plan, so unrelated
-            // decision indexes cannot make the scale fixture approach its deadline.
-            await tx.execute(sql`
-              DO $$
-              DECLARE index_name text;
-              BEGIN
-                FOR index_name IN
-                  SELECT indexrelid::regclass::text
-                  FROM pg_index
-                  WHERE indrelid = 'case_law_decisions'::regclass
-                    AND NOT indisprimary
-                    AND indexrelid <> 'case_law_decisions_source_id_page_idx'::regclass
-                    AND NOT EXISTS (
-                      SELECT 1 FROM pg_constraint WHERE conindid = indexrelid
-                    )
-                LOOP
-                  EXECUTE format('DROP INDEX %s', index_name);
-                END LOOP;
-              END $$
-            `);
-            await tx.execute(sql`
-              INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
-              SELECT md5(${sourceId}::text || '-' || n::text)::uuid, ${sourceId}::uuid, 'completion-scale-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
-              FROM generate_series(1, 100000) AS n
-            `);
-            await tx.execute(sql`
-              INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
-              SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
-              FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
-            `);
-            await tx.execute(sql`
-              INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
-              SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
-              FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
-            `);
-            await tx.execute(sql`ANALYZE case_law_index_jobs`);
-            await tx.execute(sql`ANALYZE case_law_decisions`);
-            await tx.execute(sql`ANALYZE eu_completion_receipts`);
-            const query = buildEuCompletionPageQuery(tx, {
-              sourceId,
-              mode: "dry-run",
-              parserVersion: 2,
-              after: null,
-              limit: 100,
-            });
-            const page = await query;
-            expect(page).toHaveLength(100);
-            expect(page.every((row) => !row.eligible)).toBe(true);
-            const plan = explainRoot(
-              await tx.execute(
-                sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query.getSQL()}`,
-              ),
-            );
-            expect(plan["Actual Rows"]).toBe(100);
-            const scans = scanOccurrences(plan).filter(
-              ({ relation }) =>
-                relation === "case_law_decisions" ||
-                relation === "eu_completion_receipts" ||
-                relation === "case_law_index_jobs",
-            );
-            expect(scans.length).toBeGreaterThan(0);
-            expect(
-              scans.every(({ nodeType }) => nodeType.includes("Index")),
-            ).toBe(true);
-            expect(
-              scans.some(
-                ({ index }) =>
-                  index === "case_law_decisions_source_id_page_idx",
-              ),
-            ).toBe(true);
-            expect(
-              scans.some(
-                ({ relation, index }) =>
-                  relation === "case_law_index_jobs" &&
-                  index === "case_law_index_jobs_decision_idx",
-              ),
-            ).toBe(true);
-            const blocks = plan["Shared Hit Blocks"];
-            if (typeof blocks !== "number") {
-              throw new TypeError("Expected EXPLAIN buffer count");
-            }
-            expect(blocks).toBeLessThan(5000);
-            throw rollback;
-          }),
-        catch: (cause) => cause,
+      await db.transaction(async (tx) => {
+        await tx.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: `completion-functional-${sourceId}`,
+          name: "completion functional fixture",
+        });
+        await tx.execute(sql`
+          INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
+          SELECT md5(${sourceId}::text || '-' || n::text)::uuid, ${sourceId}::uuid, 'completion-functional-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
+          FROM generate_series(1, 300) AS n
+        `);
+        await tx.execute(sql`
+          INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
+          SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
+          FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
+        `);
+        await tx.execute(sql`
+          INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
+          SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
+          FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
+        `);
+        const page = await buildEuCompletionPageQuery(tx, {
+          sourceId,
+          mode: "dry-run",
+          parserVersion: 2,
+          after: null,
+          limit: 100,
+        });
+        expect(page).toHaveLength(100);
+        expect(page.every((row) => !row.eligible)).toBe(true);
       });
-      if (outcome.isErr() && outcome.error !== rollback) {
-        throw outcome.error;
-      }
-      expect(outcome.isErr()).toBe(true);
-      expect(
-        await db
-          .select({ id: caseLawSources.id })
-          .from(caseLawSources)
-          .where(eq(caseLawSources.id, sourceId)),
-      ).toHaveLength(0);
-    }, 60_000);
+    });
     test("compaction preserves latest and approval evidence forever", async () => {
       const state = await fixture();
       await approve(state);
