@@ -40,12 +40,14 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import type { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   extractFieldFileRefs,
   type FieldFileRef,
   filterUnreferencedFieldFileRefs,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
@@ -83,6 +85,7 @@ type CopyToWorkspaceHandlerProps = {
 };
 
 export type CopyToWorkspaceDependencies = CopyEntitiesDependencies & {
+  deleteCopiedObjects?: typeof deleteOrganizationFilesWithSignal;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
   enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
@@ -545,7 +548,7 @@ const copyToWorkspaceHandler = async function* ({
     copiedS3Keys,
   });
   if (Result.isError(fileMappings)) {
-    await rollbackS3Copies(copiedS3Keys);
+    await rollbackS3Copies(copiedS3Keys, dependencies.deleteCopiedObjects);
     captureError(
       fileMappings.error,
       handlerErrorContext(
@@ -572,6 +575,16 @@ const copyToWorkspaceHandler = async function* ({
   // to ensure atomicity — either both succeed or neither does.
   const sourceEntityIds = sourceEntities.map((e) => e.id);
   const txResultResult = await safeDb(async (tx) => {
+    if (deleteSource) {
+      const hold = await requireNoHold({
+        tx,
+        organizationId,
+        target: { type: "entities", entityIds: sourceEntityIds },
+      });
+      if (hold.isErr()) {
+        return hold;
+      }
+    }
     const copyResult = await copyEntities({
       organizationId,
       tx,
@@ -635,7 +648,7 @@ const copyToWorkspaceHandler = async function* ({
     .mapError(transactionAbortError)
     .andThen((copyResult) => copyResult);
   if (Result.isError(copied)) {
-    await rollbackS3Copies(copiedS3Keys);
+    await rollbackS3Copies(copiedS3Keys, dependencies.deleteCopiedObjects);
     return Result.err(copied.error);
   }
 

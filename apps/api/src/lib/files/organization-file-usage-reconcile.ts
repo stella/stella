@@ -18,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   commitOrganizationFilesBytes,
   FILE_RESERVATION_ABANDON_DELAY_MS,
@@ -212,8 +213,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         }),
     );
     const { headObject } = await import("@/api/lib/s3-presign");
-    const { deleteS3ObjectWithSignal, isMissingS3ObjectError } =
-      await import("@/api/lib/s3");
+    const { isMissingS3ObjectError } = await import("@/api/lib/s3");
     const recoveryWriteId = Bun.randomUUIDv7();
     const claims =
       candidates.length === 0
@@ -336,9 +336,10 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         committed += 1;
         continue;
       }
-      await deleteS3ObjectWithSignal(
+      yield* await deleteOrganizationFileWithSignal(
         candidate.objectKey,
         signal ?? AbortSignal.timeout(30_000),
+        { fileUsageDb: db },
       );
       toRelease.push(reservation);
       deleted += 1;

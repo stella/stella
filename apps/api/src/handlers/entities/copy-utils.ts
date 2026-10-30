@@ -544,14 +544,13 @@ const remapFieldFileId = ({
  * Best-effort cleanup of S3 keys. A failure never fails the rollback, but
  * it is reported: the object stays in the bucket, billed and unreferenced.
  */
-export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
+export const rollbackS3Copies = async (
+  keys: string[],
+  deleteObjects = deleteOrganizationFilesWithSignal,
+): Promise<void> => {
   const result = Result.flatten(
     await Result.tryPromise({
-      try: async () =>
-        await deleteOrganizationFilesWithSignal(
-          keys,
-          AbortSignal.timeout(10_000),
-        ),
+      try: async () => await deleteObjects(keys, AbortSignal.timeout(10_000)),
       catch: (error: unknown) => error,
     }),
   );

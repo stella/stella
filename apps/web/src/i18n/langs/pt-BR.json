@@ -2879,6 +2879,7 @@
       "idempotencyInProgress": "Esta solicitação ainda está sendo processada. Aguarde um momento e tente novamente.",
       "idempotencyKeyReused": "Os dados mudaram desde a tentativa anterior. Redefina o formulário e tente novamente.",
       "internalServerError": "Algo deu errado. Tente novamente.",
+      "legalHoldActive": "A exclusão está bloqueada porque esses registros devem ser preservados.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
       "matterContactCapacityExceeded": "Este caso tem mais contatos do que é possível exibir. Remova vínculos visíveis com contatos para exibir os contatos restantes.",

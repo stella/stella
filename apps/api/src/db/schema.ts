@@ -3,6 +3,7 @@ export * from "./registration-budget-schema";
 export * from "./schema/synthetic-session";
 export * from "./schema/account-exports";
 export * from "./schema/contacts";
+export * from "./schema/legal-holds";
 export * from "./schema/backfill-state";
 export * from "./schema/case-law-replay";
 export * from "./schema/eu-completion";

@@ -28,20 +28,16 @@ import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   generateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
   type CheckedFileWrite,
-  removeOrganizationFilesBytes,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
-import {
-  deleteS3ObjectWithSignal,
-  readS3ArrayBuffer,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -75,25 +71,15 @@ type EntityFieldRow = {
 const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
 
 const deleteThumbnailsBestEffort = async (thumbnailKeys: string[]) => {
-  const deletedKeys: string[] = [];
   for (const thumbnailKey of thumbnailKeys) {
-    const cleanup = await Result.tryPromise({
-      try: async () =>
-        await deleteS3ObjectWithSignal(
-          thumbnailKey,
-          AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
-        ),
-      catch: (cause) => cause,
-    });
+    const cleanup = await deleteOrganizationFileWithSignal(
+      thumbnailKey,
+      AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
+      { fileUsageDb: db },
+    );
     if (Result.isError(cleanup)) {
       console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
-      continue;
     }
-    deletedKeys.push(thumbnailKey);
-  }
-  const removed = await removeOrganizationFilesBytes(deletedKeys);
-  if (Result.isError(removed)) {
-    throw removed.error;
   }
 };
 

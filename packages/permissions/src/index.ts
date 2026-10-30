@@ -16,6 +16,7 @@ import type { OrganizationRoleName } from "@stll/auth-model";
  */
 export const statements = {
   ...BETTER_AUTH_ORGANIZATION_STATEMENTS,
+  legalHold: ["place", "release"],
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -81,6 +82,7 @@ export type PermissionInput = RequireAtLeastOne<PermissionMap>;
 export const ac = createAccessControl(statements);
 
 const externalStellaGrants = {
+  legalHold: [],
   workspace: ["read"],
   contact: [],
   invoice: [],
@@ -125,6 +127,7 @@ const internStellaGrants = {
 } satisfies StellaPermissionMap;
 
 const memberStellaGrants = {
+  legalHold: [],
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -159,6 +162,7 @@ const memberStellaGrants = {
 
 const managementStellaGrants = {
   ...memberStellaGrants,
+  legalHold: ["place", "release"],
   timeEntry: ["read", "create", "update", "delete", "approve"],
   playbook: ["create", "update", "delete", "apply", "approve"],
   rate: ["read", "create", "update", "delete"],

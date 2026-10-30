@@ -28,6 +28,7 @@ import {
 import { panic, Result } from "better-result";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
@@ -286,6 +287,7 @@ import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
@@ -1818,6 +1820,12 @@ export const createAuth = (
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
+          if (LegalHoldActiveError.is(teardown.error)) {
+            throw new APIError("CONFLICT", {
+              error: LEGAL_HOLD_ACTIVE,
+              message: teardown.error.message,
+            });
+          }
           captureError(
             teardown.error,
             handlerErrorContext("lib.beforeDeleteOrganization.teardown_error", {

@@ -17,6 +17,7 @@ export const AUDIT_ACTION = {
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  LEGAL_HOLD: "legal_hold",
   MCP_WEB_HANDOFF: "mcp_web_handoff",
   SERVICE_OAUTH_CLIENT: "service_oauth_client",
   LEGAL_RESOLVE: "legal_resolve",

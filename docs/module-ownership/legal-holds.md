@@ -1,0 +1,7 @@
+# Legal-hold placement, release, and deletion refusal
+
+Generated from `scripts/ownership/legal-holds.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                          | Owner                                                                    | Enforcement | Summary                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `legal-holds` — Legal-hold placement, release, and deletion refusal | `apps/api/src/lib/legal-holds/`, `apps/api/src/db/schema/legal-holds.ts` | none        | The legal-hold owner resolves matter, item, file, contact, account and organization protection in the caller's transaction. Placement, release and deletion share the organization lock before active holds are read under shared row locks. |

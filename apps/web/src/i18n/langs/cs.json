@@ -2879,6 +2879,7 @@
       "idempotencyInProgress": "Tento požadavek se ještě zpracovává. Chvíli počkejte a zkuste to znovu.",
       "idempotencyKeyReused": "Odesílané údaje se od předchozího pokusu změnily. Obnovte formulář a zkuste to znovu.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
+      "legalHoldActive": "Smazání je zablokováno, protože tyto záznamy musí být zachovány.",
       "legalSourceEntityLimitReached": "Tento spis dosáhl limitu položek, takže dokument nelze vytvořit.",
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
       "matterContactCapacityExceeded": "Tento spis obsahuje více kontaktů, než lze zobrazit. Odebráním viditelných propojení s kontakty zobrazíte zbývající kontakty.",

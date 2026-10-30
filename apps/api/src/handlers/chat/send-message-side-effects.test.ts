@@ -12,7 +12,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { rollbackUnpersistedChatSideEffects } from "./send-message-side-effects";
 
@@ -140,7 +143,19 @@ describe("send-message side-effect rollback", () => {
     const deleteRowsWhere = mock(async () => undefined);
     const deleteRows = mock(() => ({ where: deleteRowsWhere }));
     const recordAuditEvent = mock(async () => undefined);
-    const { safeDb } = createScopedDbMock({ delete: deleteRows });
+    const recordCleanup = mock(async () => undefined);
+    const { safeDb } = createScopedDbMock({
+      delete: deleteRows,
+      insert: () => ({ values: recordCleanup }),
+      query: {
+        chatThreads: {
+          findFirst: async () => ({
+            organizationId: toSafeId<"organization">("organization_test"),
+          }),
+        },
+      },
+      select: () => createSelectQueryMock([]),
+    });
     const uploadedFile: UploadedChatFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000004"),
       s3Key: testFileKey("chat/thread/attachment.txt"),
@@ -158,11 +173,13 @@ describe("send-message side-effect rollback", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
-    // The attachment is gone from the store, under the key the row named.
-    expect(fake.objects.size).toBe(0);
-    expect(
-      fake.requests.filter(({ method }) => method === "DELETE"),
-    ).toMatchObject([{ bucket, key: uploadedFile.s3Key }]);
+    expect(fake.objects.size).toBe(1);
+    expect(fake.requests.filter(({ method }) => method === "DELETE")).toEqual(
+      [],
+    );
+    expect(recordCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ s3Keys: [uploadedFile.s3Key] }),
+    );
     expect(deleteRows).toHaveBeenCalledTimes(1);
     expect(deleteRowsWhere).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(expect.anything(), [

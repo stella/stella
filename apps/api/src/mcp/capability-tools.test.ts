@@ -1960,17 +1960,29 @@ describe("capability executor gates", () => {
         }),
       });
 
-    test("every destructive capability is unavailable, even with confirm", async () => {
+    test("every confirmation-gated capability is unavailable, even with confirm", async () => {
       // Derived from the catalog, not a list: a capability that later becomes
       // destructive is covered without touching this test.
       const destructiveIds = capabilityCatalog
         .filter(
-          (entry) => entry.destructive && !requiresVerificationGrant(entry),
+          (entry) =>
+            (entry.destructive || entry.confirmation === "required") &&
+            !requiresVerificationGrant(entry),
         )
         .map((entry) => entry.id);
       expect(destructiveIds.length).toBeGreaterThan(0);
 
       for (const capability of destructiveIds) {
+        const described = await handleMcpToolCall({
+          mode: "advanced",
+          toolName: "describe_capability",
+          args: { capability },
+          context: createContext({ grantedScopes: MCP_OAUTH_SCOPES }),
+        });
+        if (described.isError) {
+          expect(errorEnvelope(described).code).toBe("not_found");
+          continue;
+        }
         const result = await agentRunCall({
           capability,
           input: {},
@@ -2011,6 +2023,12 @@ describe("capability executor gates", () => {
 
       expect(listed.length).toBeGreaterThan(0);
       expect(listed.filter(({ destructive }) => destructive)).toEqual([]);
+      const approvalRequired = new Set(
+        capabilityCatalog
+          .filter((entry) => entry.confirmation === "required")
+          .map(({ id }) => id),
+      );
+      expect(listed.filter(({ id }) => approvalRequired.has(id))).toEqual([]);
     });
 
     test("a capability that needs no confirmation is unaffected", async () => {

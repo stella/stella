@@ -26,6 +26,7 @@ import {
 import type {
   AccountDeletionRequestStatus,
   AccountDeletionStorageCleanup,
+  AccountErasureReport,
 } from "./common";
 import { workspaces } from "./contacts";
 import {
@@ -691,6 +692,10 @@ export const accountDeletionRequests = p.pgTable(
       .$type<AccountDeletionRequestStatus>()
       .notNull()
       .default("pending"),
+    erasureReport: jsonb("erasure_report")
+      .$type<AccountErasureReport>()
+      .notNull()
+      .default({ retainedMatterContent: [] }),
     storageCleanup: jsonb("storage_cleanup")
       .$type<AccountDeletionStorageCleanup>()
       .notNull(),

@@ -18,6 +18,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type UploadMessageFilesWithRollbackProps = {
@@ -102,7 +103,9 @@ export const rollbackUnpersistedChatSideEffects = async ({
   threadState: ChatThreadState;
   uploadedFiles: UploadedChatFile[];
   userId: SafeId<"user">;
-}): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
+}): Promise<
+  Result<void, HandlerError<500> | LegalHoldActiveError | SafeDbError>
+> => {
   const fileRollbackResult = await deleteUploadedChatFiles({
     files: uploadedFiles,
     recordAuditEvent,

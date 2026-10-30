@@ -2879,6 +2879,7 @@
       "idempotencyInProgress": "Seda päringut veel töödeldakse. Oodake hetk ja proovige uuesti.",
       "idempotencyKeyReused": "Andmed on eelmise katsega võrreldes muutunud. Lähtestage vorm ja proovige uuesti.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
+      "legalHoldActive": "Kustutamine on blokeeritud, sest need andmed tuleb säilitada.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",

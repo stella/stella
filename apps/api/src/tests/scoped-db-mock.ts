@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
 import { QueryPromise } from "drizzle-orm/query-promise";
 
-import { member, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -10,6 +10,7 @@ import {
   entityVersions,
   featureEnrolments,
   fields,
+  legalHolds,
 } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -202,6 +203,24 @@ const fixtureSelect =
       return panic("Missing fixture select");
     }
     const result: unknown = Reflect.apply(tx.select, tx, [selection]);
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "from" in result &&
+      typeof result.from === "function"
+    ) {
+      const from = result.from;
+      return {
+        ...result,
+        from: (table: unknown) =>
+          table === legalHolds ||
+          (table === organization &&
+            columns.length === 1 &&
+            columns.at(0) === organization.id)
+            ? createSelectQueryMock([]).from()
+            : Reflect.apply(from, result, [table]),
+      };
+    }
     return result;
   };
 
@@ -231,9 +250,7 @@ export const createScopedDbMock = (
         ? providedQuery.documentProcessingRuns
         : {};
     const transaction = {
-      execute: async () => {
-        await Promise.resolve();
-      },
+      execute: async () => await Promise.resolve([]),
       ...(options?.authorizedWorkspaceIds === undefined
         ? {}
         : {

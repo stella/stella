@@ -33,6 +33,7 @@ import {
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -76,6 +77,14 @@ export const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const entityHolds = await requireNoHold({
+        tx,
+        organizationId,
+        target: { type: "entities", entityIds: body.entityIds },
+      });
+      if (entityHolds.isErr()) {
+        return { status: "rejected" as const, error: entityHolds.error };
+      }
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );

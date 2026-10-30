@@ -43,8 +43,10 @@ import {
   fields,
   invoiceLines,
   invoices,
+  legalHolds,
   organizationSettings,
   pdfSigningSessions,
+  pendingUploads,
   requestIdempotencyReceipts,
   timeEntries,
   workspaceMembers,
@@ -3362,4 +3364,70 @@ export const lockUnbillableRateCandidates = async (
     })
     .from(timeEntries)
     .where(condition)
+    .for("update");
+
+/** Legal-hold rows are locked after their organization placement fence. */
+export const readLockedLegalHolds = async ({
+  tx,
+  predicate,
+  mode,
+}: {
+  tx: Transaction;
+  predicate: SQL;
+  mode: "share" | "update";
+}) => await tx.select().from(legalHolds).where(predicate).for(mode);
+
+/** Account erasure locks every affected organization in one stable order. */
+export const lockLegalHoldOrganizations = async ({
+  tx,
+  predicate,
+}: {
+  tx: Transaction;
+  predicate: SQL;
+}) => {
+  const rows = await tx
+    .select({ id: organization.id })
+    .from(organization)
+    .where(predicate);
+  const locked = await withAggregateParentBatch({
+    tx,
+    organizationIds: rows.map(({ id }) => id),
+    mode: "update",
+  });
+  return rows.filter(({ id }) => locked.organizationIds.has(id));
+};
+
+/** In-flight upload cancellation keeps content belonging to held matters. */
+export const lockAccountDeletionPendingUploads = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: {
+  tx: Transaction;
+  currentUserId: string;
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
+}) =>
+  await tx
+    .select({
+      declaredMime: pendingUploads.declaredMime,
+      id: pendingUploads.id,
+      organizationId: pendingUploads.organizationId,
+      purpose: pendingUploads.purpose,
+      purposeData: pendingUploads.purposeData,
+      status: pendingUploads.status,
+      workspaceId: pendingUploads.workspaceId,
+    })
+    .from(pendingUploads)
+    .where(
+      and(
+        eq(pendingUploads.userId, currentUserId),
+        retainedWorkspaceIds.length === 0
+          ? undefined
+          : sql`${pendingUploads.workspaceId} NOT IN (${sql.join(
+              retainedWorkspaceIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})`,
+        sql`${pendingUploads.status} <> 'finalized'`,
+      ),
+    )
     .for("update");

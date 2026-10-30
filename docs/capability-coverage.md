@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `place`, `prefill`, `prepare`, `preview`, `release`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -178,6 +178,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.folders.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.from-legal-source.create` | write | stella:documents_write | — | generic invoke → `stella capability entities from-legal-source-create` |
 | `entities.get` | read | stella:read | — | curated tool `read_document` |
+| `entities.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-place` |
+| `entities.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-release` |
 | `entities.list` | read | stella:read | — | curated tool `list_documents` |
 | `entities.move` | write | stella:documents_write | — | covered by `save_document` |
 | `entities.ocr.create` | write | stella:matters_write | — | generic invoke → `stella capability entities ocr-create` |
@@ -345,6 +347,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.delete` | write, destructive | stella:matters_write | — | curated tool `delete_matter` |
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
+| `matters.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-place` |
+| `matters.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-release` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
 | `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
 | `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
