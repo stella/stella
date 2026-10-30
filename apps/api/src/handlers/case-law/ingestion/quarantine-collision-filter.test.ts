@@ -44,6 +44,7 @@ describe("quarantine collision filtering", () => {
         adapterKey: "fixture",
         proof: SLICE_LISTING_PROOF.IDENTITIES,
         revisionOf: (payload) => payload,
+        persistCollisionEvidence: async () => undefined,
         listSlicePage: async () =>
           await Promise.resolve({
             observations: [],

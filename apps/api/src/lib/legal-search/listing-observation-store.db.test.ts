@@ -12,6 +12,7 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
+import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
@@ -20,13 +21,20 @@ import {
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { runListingCensus } from "@/api/handlers/case-law/ingestion/listing-census";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import {
+  listReconciliationSlice,
+  SLICE_LISTING_PROOF,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
 import { createSafeId } from "@/api/lib/branded-types";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
+import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
 import {
   LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
   quarantinedListingObservation,
+  quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const { createTestPglite } = await import("@/api/tests/pglite-test-db");
@@ -261,4 +269,154 @@ test("source evidence is durable, queryable, and separate from canonical decisio
         ),
       ),
   ).toEqual([{ fingerprint: courtlessObservation.identity.fingerprint }]);
+});
+
+test("a listing census retains collision evidence without double-counting its records", async () => {
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: "cz-ns",
+    name: "Collision census source",
+  });
+  const { sourceDocumentId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_NS,
+    stableFields: { docket: "21 Cdo 3/2026" },
+  });
+  const records = [{ record: "first" }, { record: "second" }];
+  const reconciliation = czNsAdapter.reconciliation;
+  if (reconciliation === undefined) {
+    panic("The fixture adapter lists reconciliation slices");
+  }
+  const date = new Date("2026-01-01T00:00:00.000Z");
+  const result = (
+    await runListingCensus({
+      scopedDb,
+      adapter: {
+        ...czNsAdapter,
+        reconciliation: {
+          ...reconciliation,
+          firstSlice: "2026-01-01",
+          revisionOf: (payload) => payload,
+          listSlicePage: async () => ({
+            observations: [],
+            items: records.map((payload) => ({
+              identity: { type: "document" as const, sourceDocumentId },
+              payload,
+            })),
+            totalPages: 1,
+          }),
+        },
+      },
+      from: date,
+      to: date,
+      now: date,
+      maxSlices: 1,
+      sleep: async () => undefined,
+    })
+  ).unwrap("The census stores its complete slice");
+  expect(result).toMatchObject({ type: "completed", checkpoint: { total: 2 } });
+  const evidence = await db
+    .select()
+    .from(caseLawListingObservations)
+    .where(eq(caseLawListingObservations.sourceId, sourceId))
+    .limit(10);
+  expect(evidence).toHaveLength(2);
+  expect(evidence.map(({ payload }) => payload)).toEqual(
+    expect.arrayContaining(
+      records.map((record) => ({
+        listing: {
+          quarantineId: sourceDocumentId,
+          revision: fingerprintReconciliationPayload(record),
+          record,
+        },
+      })),
+    ),
+  );
+});
+
+test("a completed slice retains every colliding payload and replay adds no duplicate", async () => {
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: "cz-regional",
+    name: "Collision evidence source",
+  });
+  const quarantineId = `cz-regional-quarantine:${"d".repeat(64)}`;
+  const first = { record: "first", listedField: "publisher value A" };
+  const second = { record: "second", listedField: "publisher value B" };
+  const third = { record: "third", listedField: "publisher value C" };
+  const persistCollisionEvidence = async (
+    observations: readonly ListingObservation[],
+  ) =>
+    await storeListingObservations(scopedDb, {
+      sourceId,
+      adapterKey: "cz-regional",
+      observations,
+    });
+  const walk = async (payloads: readonly unknown[]) =>
+    (
+      await listReconciliationSlice({
+        adapterKey: "cz-regional",
+        proof: SLICE_LISTING_PROOF.IDENTITIES,
+        revisionOf: (payload) => payload,
+        persistCollisionEvidence,
+        listSlicePage: async () => ({
+          observations: [],
+          items: payloads.map((payload) => ({
+            identity: {
+              type: "document" as const,
+              sourceDocumentId: quarantineId,
+            },
+            payload,
+          })),
+          totalPages: 1,
+        }),
+        slice: "2026-01-01",
+        pageDelayMs: 0,
+        pageTimeoutMs: 5000,
+        sleep: async () => undefined,
+      })
+    ).unwrap("The complete source slice is retained");
+  const readEvidence = async () =>
+    await db
+      .select()
+      .from(caseLawListingObservations)
+      .where(eq(caseLawListingObservations.sourceId, sourceId))
+      .orderBy(caseLawListingObservations.fingerprint)
+      .limit(10);
+  const listed = await walk([first, first, second]);
+  expect([...listed.keyed.values()].map(({ payload }) => payload)).toEqual([
+    first,
+  ]);
+  expect(listed.listed).toBe(3);
+  expect(listed.duplicate).toBe(1);
+  const before = await readEvidence();
+  expect(before).toHaveLength(2);
+  expect(before.map(({ payload }) => payload)).toEqual(
+    expect.arrayContaining(
+      [first, second].map((record) => ({
+        listing: {
+          quarantineId,
+          revision: fingerprintReconciliationPayload(record),
+          record,
+        },
+      })),
+    ),
+  );
+  expect(before.map(({ reason }) => reason)).toEqual([
+    "quarantine-collision",
+    "quarantine-collision",
+  ]);
+  await walk([first, second]);
+  expect(await readEvidence()).toEqual(before);
+  await walk([first, second, third]);
+  const afterThird = await readEvidence();
+  expect(afterThird).toHaveLength(3);
+  expect(afterThird.map(({ payload }) => payload)).toContainEqual({
+    listing: {
+      quarantineId,
+      revision: fingerprintReconciliationPayload(third),
+      record: third,
+    },
+  });
 });

@@ -19,6 +19,9 @@ export default {
     "crawl or reconciliation progress; they never enter canonical identity " +
     "matching or alias adoption. The ingestion collision filter owns the opaque " +
     "decisions accepted by crawl and reconciliation writes, requiring a " +
-    "complete reconciliation scope before retaining repair candidates.",
+    "complete reconciliation scope before retaining repair candidates. Separately branded " +
+    "quarantine-collision observations retain every raw payload revision under " +
+    "its source, quarantine id and content revision; the slice owner flushes " +
+    "them before each page advances, without changing canonical record counts.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

@@ -10,6 +10,7 @@ import {
   LEGACY_REPAIR_NAMESPACE,
   LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
+  quarantineCollisionObservation,
   quarantinedListingObservation,
   quarantineIdentity,
   quarantineSourceDocumentId,
@@ -20,6 +21,65 @@ import {
   LEGACY_QUARANTINE_PREFIXES,
   PL_NCOURT_POSITION_QUARANTINE_PREFIX,
 } from "@/api/lib/legal-search/quarantine-prefixes";
+
+test("collision evidence has its own source/revision identity without widening unidentified listings", () => {
+  const { sourceDocumentId: quarantineId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_US,
+    stableFields: { docket: "I. US 1/2026", court: "Fixture court" },
+  });
+  const first = quarantineCollisionObservation({
+    source: "cz-us",
+    quarantineId,
+    payload: { record: "first" },
+  });
+  const second = quarantineCollisionObservation({
+    source: "cz-us",
+    quarantineId,
+    payload: { record: "second" },
+  });
+  expect(first.reason).toBe("quarantine-collision");
+  expect(first.identity.fingerprint).not.toBe(second.identity.fingerprint);
+  expect(
+    quarantineCollisionObservation({
+      source: "cz-us",
+      quarantineId,
+      payload: { record: "first" },
+    }),
+  ).toEqual(first);
+  expect(first.payload.record).toEqual({ record: "first" });
+  expect(second.payload.record).toEqual({ record: "second" });
+  expectTypeOf<"cz-us">().not.toExtend<
+    Parameters<typeof quarantinedListingObservation>[0]["source"]
+  >();
+  expectTypeOf<
+    ReturnType<typeof quarantineCollisionObservation>["identity"]
+  >().not.toExtend<
+    ReturnType<typeof quarantinedListingObservation>["identity"]
+  >();
+});
+
+test("captured listing observations keep their payload when the publisher object is reused", () => {
+  const raw = { nested: { value: "first capture" } };
+  const { sourceDocumentId: quarantineId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_US,
+    stableFields: { docket: "I. US 2/2026", court: "Fixture court" },
+  });
+  const collision = quarantineCollisionObservation({
+    source: "cz-us",
+    quarantineId,
+    payload: raw,
+  });
+  const unidentified = quarantinedListingObservation({
+    source: QUARANTINE_NAMESPACE.SK_US,
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+    payload: raw,
+  });
+  raw.nested.value = "later publisher mutation";
+  expect(collision.payload.record).toEqual({
+    nested: { value: "first capture" },
+  });
+  expect(unidentified.payload).toEqual({ nested: { value: "first capture" } });
+});
 
 describe("repair alias qualification", () => {
   test.each(Object.values(QUARANTINE_NAMESPACE))(
@@ -210,7 +270,8 @@ describe("noncanonical listing observations", () => {
     expect(first.identity.fingerprint).not.toBe(
       otherSource.identity.fingerprint,
     );
-    expect(first.payload).toBe(payload);
+    expect(first.payload).toEqual(payload);
+    expect(first.payload).not.toBe(payload);
     expectTypeOf(first.identity).not.toExtend<string>();
     expect(first.identity).not.toHaveProperty("sourceDocumentId");
   });

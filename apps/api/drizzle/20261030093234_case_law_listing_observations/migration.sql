@@ -11,7 +11,7 @@ CREATE TABLE "case_law_listing_observations" (
   "first_seen_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "case_law_listing_observations_pkey" PRIMARY KEY ("source_id", "fingerprint"),
   CONSTRAINT "case_law_listing_observations_fingerprint" CHECK ("fingerprint" ~ '^[a-f0-9]{64}$'),
-  CONSTRAINT "case_law_listing_observations_reason" CHECK ("reason" IN ('no-usable-id', 'unserved-listing-record'))
+  CONSTRAINT "case_law_listing_observations_reason" CHECK ("reason" IN ('no-usable-id', 'unserved-listing-record', 'quarantine-collision'))
 );--> statement-breakpoint
 ALTER TABLE "case_law_listing_observations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "case_law_listing_observations" FORCE ROW LEVEL SECURITY;--> statement-breakpoint

@@ -23,12 +23,18 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
-import type { ListingObservationReason } from "@/api/lib/legal-search/listing-observation-reasons";
+import {
+  LISTING_OBSERVATION_REASON,
+  type ListingObservationReason,
+} from "@/api/lib/legal-search/listing-observation-reasons";
 import {
   LEGACY_QUARANTINE_PREFIXES,
   PL_NCOURT_POSITION_QUARANTINE_PREFIX,
 } from "@/api/lib/legal-search/quarantine-prefixes";
-import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
+import {
+  fingerprintReconciliationPayload,
+  snapshotReconciliationPayload,
+} from "@/api/lib/legal-search/reconciliation-payload";
 
 export { LISTING_OBSERVATION_REASON } from "@/api/lib/legal-search/listing-observation-reasons";
 
@@ -391,9 +397,14 @@ type ListingObservationIdentity = v.InferOutput<
   typeof listingObservationIdentitySchema
 >;
 
-export type ListingObservation = {
+type NonCollisionListingObservationReason = Exclude<
+  ListingObservationReason,
+  typeof LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION
+>;
+
+type UnidentifiedListingObservation = {
   readonly identity: ListingObservationIdentity;
-  readonly reason: ListingObservationReason;
+  readonly reason: NonCollisionListingObservationReason;
   /** The record exactly as the listing exposed it, including malformed fields. */
   readonly payload: unknown;
 };
@@ -401,7 +412,7 @@ export type ListingObservation = {
 type QuarantinedListingObservationOptions = {
   source: ListingObservationIdentity["source"];
   payload: unknown;
-  reason: ListingObservationReason;
+  reason: NonCollisionListingObservationReason;
 };
 
 /** Content addressing makes replay a fixed point without deciding which court record it is. */
@@ -409,11 +420,71 @@ export const quarantinedListingObservation = ({
   source,
   payload,
   reason,
-}: QuarantinedListingObservationOptions): ListingObservation => ({
-  identity: v.parse(listingObservationIdentitySchema, {
-    source,
-    fingerprint: fingerprintReconciliationPayload({ source, payload }),
+}: QuarantinedListingObservationOptions): UnidentifiedListingObservation => {
+  const snapshot = snapshotReconciliationPayload(payload);
+  return {
+    identity: v.parse(listingObservationIdentitySchema, {
+      source,
+      fingerprint: fingerprintReconciliationPayload({
+        source,
+        payload: snapshot,
+      }),
+    }),
+    reason,
+    payload: snapshot,
+  };
+};
+
+const quarantineCollisionObservationIdentitySchema = v.pipe(
+  v.object({
+    source: v.pipe(v.string(), v.nonEmpty(), v.maxLength(32)),
+    fingerprint: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
   }),
-  reason,
+  v.brand("QuarantineCollisionObservationIdentity"),
+);
+
+/** A payload revision is evidence, never a replacement canonical identity. */
+export type QuarantineCollisionObservation = {
+  readonly identity: v.InferOutput<
+    typeof quarantineCollisionObservationIdentitySchema
+  >;
+  readonly reason: typeof LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION;
+  readonly payload: {
+    readonly quarantineId: string;
+    readonly revision: string;
+    readonly record: unknown;
+  };
+};
+
+export type ListingObservation =
+  UnidentifiedListingObservation | QuarantineCollisionObservation;
+
+type QuarantineCollisionObservationOptions = {
+  source: string;
+  quarantineId: string;
+  payload: unknown;
+};
+
+/** The existing ledger key holds one immutable source/quarantine/raw-revision tuple. */
+export const quarantineCollisionObservation = ({
+  source,
+  quarantineId,
   payload,
-});
+}: QuarantineCollisionObservationOptions): QuarantineCollisionObservation => {
+  const snapshot = snapshotReconciliationPayload(payload);
+  const revision = fingerprintReconciliationPayload(snapshot);
+  const reason = LISTING_OBSERVATION_REASON.QUARANTINE_COLLISION;
+  return {
+    identity: v.parse(quarantineCollisionObservationIdentitySchema, {
+      source,
+      fingerprint: fingerprintReconciliationPayload({
+        reason,
+        source,
+        quarantineId,
+        revision,
+      }),
+    }),
+    reason,
+    payload: { quarantineId, revision, record: snapshot },
+  };
+};

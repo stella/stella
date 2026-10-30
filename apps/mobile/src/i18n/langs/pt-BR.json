@@ -127,6 +127,22 @@
     "currentVersion": "Versão atual",
     "loadFailed": "Não foi possível carregar este item."
   },
+  "document": {
+    "title": "Documento",
+    "failedTitle": "Não foi possível abrir este documento",
+    "failure": {
+      "offline": "Você está offline. Conecte-se à internet e tente novamente.",
+      "noFile": "Este documento ainda não tem arquivo.",
+      "failed": "Algo deu errado ao abrir. Tente novamente em instantes.",
+      "unsupported": "Atualize o app para abrir documentos.",
+      "android": "Ainda não é possível abrir documentos no app para Android."
+    },
+    "retry": "Tentar novamente",
+    "preview": "Abrir pré-visualização",
+    "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
+    "unrendered": "Este documento não pode ser exibido aqui, mas a pré-visualização do sistema talvez consiga abri-lo.",
+    "details": "Detalhes"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Clareza para cada caso.",

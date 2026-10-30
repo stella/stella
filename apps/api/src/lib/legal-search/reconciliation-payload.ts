@@ -12,9 +12,9 @@ class ReconciliationPayloadSerializationError extends TaggedError(
   cause: unknown;
 }> {}
 
-/** Fingerprint the JSON the driver persists, including omitted object keys and null array slots. */
-export const fingerprintReconciliationPayload = (payload: unknown): string => {
-  const normalized = Result.try({
+/** Capture detached JSON with the same omitted keys and null array slots the driver persists. */
+export const snapshotReconciliationPayload = (payload: unknown) =>
+  Result.try({
     try: () => {
       const serialized =
         JSON.stringify(payload) ||
@@ -28,6 +28,10 @@ export const fingerprintReconciliationPayload = (payload: unknown): string => {
         cause,
       }),
   }).unwrap("Reconciliation payload must be JSON serializable.");
+
+/** Fingerprint the JSON the driver persists, including omitted object keys and null array slots. */
+export const fingerprintReconciliationPayload = (payload: unknown): string => {
+  const normalized = snapshotReconciliationPayload(payload);
   const hasher = createSha256();
   hasher.update(stableStringify(normalized));
   return hasher.digest("hex");

@@ -2357,6 +2357,7 @@
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
     "unsavedChanges": "Modifications non enregistrées",
+    "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",
@@ -5425,6 +5426,7 @@
     "showCitedPartOnly": "Afficher seulement la partie citée",
     "showFullProvision": "Afficher toute la disposition",
     "showInText": "Afficher dans le texte",
+    "sortNeedsYear": "Choisissez une année dans les filtres pour trier selon cette colonne.",
     "statedWindow": "Dates indiquées par l'éditeur : {range}",
     "status": {
       "current": "En vigueur",

@@ -178,6 +178,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "mobile-icons": ["packages/portable-path/src/index.ts"],
+  "mobile-folio-fonts": ["packages/portable-path/src/index.ts"],
   "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
@@ -1173,6 +1174,29 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "mobile-folio-fonts",
+    outputKind: "committed",
+    outputs: ["apps/mobile/src/components/document-viewer/folio-fonts.gen.ts"],
+    inputs: [
+      "scripts/generate-mobile-folio-fonts.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      // folio's version, which pins the fontsource stylesheets it imports.
+      "apps/mobile/package.json",
+      "package.json",
+      "bun.lock",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["mobile-folio-fonts"],
+    ],
+    write: ["bun", "scripts/generate-mobile-folio-fonts.ts", "--write"],
+    check: ["bun", "scripts/generate-mobile-folio-fonts.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "case-law-publication-migration",
     outputKind: "committed",
     outputs: [
@@ -1651,6 +1675,23 @@ const GENERATOR_DECLARATIONS = [
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
     checkedBy: "Module ownership",
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "guard-rollout-manifest",
+    outputKind: "committed",
+    outputs: ["scripts/guard-rollouts.gen.ts"],
+    inputs: [
+      "scripts/generate-guard-rollouts.ts",
+      "scripts/guard-rollouts/*.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "packages/portable-path/src/index.ts",
+    ],
+    checkInputs: ["bunfig.toml", ".prettierrc.yml"],
+    write: ["bun", "scripts/generate-guard-rollouts.ts", "--write"],
+    check: ["bun", "scripts/generate-guard-rollouts.ts", "--check"],
     autofix: true,
     after: [],
   },

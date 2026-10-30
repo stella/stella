@@ -446,6 +446,13 @@ const countSlice = async ({
         proof: SLICE_LISTING_PROOF.COUNT,
         listSlicePage: adapter.reconciliation.listSlicePage,
         revisionOf: adapter.reconciliation.revisionOf,
+        persistCollisionEvidence: async (observations) => {
+          await storeListingObservations(scopedDb, {
+            sourceId,
+            adapterKey: adapter.key,
+            observations,
+          });
+        },
         pageDelayMs: adapter.minRequestIntervalMs,
         pageTimeoutMs: adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE,
         slice: target,

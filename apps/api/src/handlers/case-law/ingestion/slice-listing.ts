@@ -6,7 +6,7 @@
  * disagree about the same slice.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -20,6 +20,8 @@ import {
   isQuarantineListingIdentity,
   type ListingObservation,
   quarantineCollisionEvidence,
+  type QuarantineCollisionObservation,
+  quarantineCollisionObservation,
   quarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
@@ -52,7 +54,7 @@ type SliceListing = {
    * for: repeats whose payload revision differs from every earlier one. A
    * publisher id names one document however often it is listed, but a
    * content-addressed id is only as distinct as the fields it hashes, so two
-   * records whose stable fields agree share it and only one row can be
+   * records whose stable fields agree share it and only one canonical row can be
    * stored (case-law AGENTS.md rule 17's failure mode). Counted, never
    * folded into `duplicate`.
    */
@@ -106,7 +108,7 @@ const unstoredCollisionCount = ({
 }: SliceListing): number =>
   [...quarantineCollisions.values()].reduce((sum, extra) => sum + extra, 0);
 
-/** Records a slice lists that cannot each have a row of their own. */
+/** Listed records that cannot each have a canonical row of their own; collision evidence is retained separately. */
 export const unstoredRecordCount = (listing: SliceListing): number =>
   listing.withoutStableFields + unstoredCollisionCount(listing);
 
@@ -139,6 +141,10 @@ type ListReconciliationSliceOptions = {
   proof: SliceListingProof;
   listSlicePage: SourceReconciliation["listSlicePage"];
   revisionOf: SourceReconciliation["revisionOf"];
+  /** Durable evidence must finish before another page or a verification verdict. */
+  persistCollisionEvidence: (
+    observations: readonly QuarantineCollisionObservation[],
+  ) => Promise<void>;
   slice: string;
   /** Pause before every page after the first. */
   pageDelayMs: number;
@@ -148,19 +154,96 @@ type ListReconciliationSliceOptions = {
   signal?: AbortSignal | undefined;
 };
 
-/** One pass over every page of a slice, keyed as the ingest keys it. */
-const listSlicePass = async ({
+type CollisionEvidenceGroup =
+  | {
+      type: "single-revision";
+      observations: Map<string, QuarantineCollisionObservation>;
+    }
+  | { type: "colliding"; known: Set<string> };
+
+type ObserveCollisionEvidenceOptions = {
+  sourceDocumentId: string;
+  payload: unknown;
+};
+
+/** Share the evidence accumulator across both passes, including an unstable verification. */
+const createCollisionEvidenceCollector = ({
   adapterKey,
-  listSlicePage,
-  pageDelayMs,
-  pageTimeoutMs,
-  revisionOf,
-  slice,
-  sleep,
-  signal,
-}: ListReconciliationSliceOptions): Promise<
-  Result<SliceListing, AdapterFetchError>
-> => {
+  persistCollisionEvidence,
+}: Pick<
+  ListReconciliationSliceOptions,
+  "adapterKey" | "persistCollisionEvidence"
+>) => {
+  const groups = new Map<string, CollisionEvidenceGroup>();
+  const pending = new Map<string, QuarantineCollisionObservation>();
+  return {
+    observe: ({
+      sourceDocumentId,
+      payload,
+    }: ObserveCollisionEvidenceOptions): void => {
+      const observation = quarantineCollisionObservation({
+        source: adapterKey,
+        quarantineId: sourceDocumentId,
+        payload,
+      });
+      const key = observation.identity.fingerprint;
+      const group = groups.get(sourceDocumentId);
+      if (group === undefined) {
+        groups.set(sourceDocumentId, {
+          type: "single-revision",
+          observations: new Map([[key, observation]]),
+        });
+        return;
+      }
+      switch (group.type) {
+        case "single-revision":
+          group.observations.set(key, observation);
+          if (group.observations.size === 1) {
+            return;
+          }
+          for (const [fingerprint, retained] of group.observations) {
+            pending.set(fingerprint, retained);
+          }
+          groups.set(sourceDocumentId, {
+            type: "colliding",
+            known: new Set(group.observations.keys()),
+          });
+          return;
+        case "colliding":
+          if (!group.known.has(key)) {
+            group.known.add(key);
+            pending.set(key, observation);
+          }
+          return;
+        default:
+          group satisfies never;
+          panic("Unknown collision evidence state");
+      }
+    },
+    flush: async (): Promise<void> => {
+      if (pending.size === 0) {
+        return;
+      }
+      await persistCollisionEvidence([...pending.values()]);
+      pending.clear();
+    },
+  };
+};
+
+/** One pass over every page of a slice, keyed as the ingest keys it. */
+const listSlicePass = async (
+  {
+    adapterKey,
+    listSlicePage,
+    pageDelayMs,
+    pageTimeoutMs,
+    revisionOf,
+    slice,
+    sleep,
+    signal,
+  }: ListReconciliationSliceOptions,
+  collisionEvidence: ReturnType<typeof createCollisionEvidenceCollector>,
+): Promise<Result<SliceListing, AdapterFetchError>> => {
   const listing: SliceListing = {
     keyed: new Map(),
     observations: new Map(),
@@ -229,9 +312,16 @@ const listSlicePass = async ({
         item.identity.type === "document" &&
         isQuarantineListingIdentity(item.identity)
       ) {
+        const revision = fingerprintReconciliationPayload(
+          revisionOf(item.payload),
+        );
         quarantineObservations.push({
           sourceDocumentId: item.identity.sourceDocumentId,
-          revision: fingerprintReconciliationPayload(revisionOf(item.payload)),
+          revision,
+        });
+        collisionEvidence.observe({
+          sourceDocumentId: item.identity.sourceDocumentId,
+          payload: item.payload,
         });
       }
       if (listing.keyed.has(identityKey)) {
@@ -243,6 +333,8 @@ const listSlicePass = async ({
       }
       listing.keyed.set(identityKey, item);
     }
+    // A failed evidence write holds this page and prevents any later progress.
+    await collisionEvidence.flush();
     if (page + 1 >= listed.totalPages) {
       return Result.ok(finish());
     }
@@ -339,7 +431,8 @@ const sameIdentities = (first: SliceListing, second: SliceListing): boolean =>
 export const listReconciliationSlice = async (
   options: ListReconciliationSliceOptions,
 ): Promise<Result<ListedSlice, AdapterFetchError>> => {
-  const first = await listSlicePass(options);
+  const collisionEvidence = createCollisionEvidenceCollector(options);
+  const first = await listSlicePass(options, collisionEvidence);
   if (Result.isError(first)) {
     return first;
   }
@@ -352,7 +445,7 @@ export const listReconciliationSlice = async (
   }
   const { adapterKey, pageDelayMs, slice, sleep, signal } = options;
   await abortableSleep(sleep, pageDelayMs, signal);
-  const verification = await listSlicePass(options);
+  const verification = await listSlicePass(options, collisionEvidence);
   if (Result.isError(verification)) {
     return verification;
   }

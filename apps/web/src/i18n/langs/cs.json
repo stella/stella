@@ -2357,6 +2357,7 @@
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
     "unsavedChanges": "Neuložené změny",
+    "unsavedChangesClose": "Neuložené změny. Dalším zavřením je zahodíte",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
     "unverified": "Neověřeno",
@@ -5425,6 +5426,7 @@
     "showCitedPartOnly": "Zobrazit jen citovanou část",
     "showFullProvision": "Zobrazit celé ustanovení",
     "showInText": "Zobrazit v textu",
+    "sortNeedsYear": "Pro řazení podle tohoto sloupce zvolte ve filtrech rok.",
     "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {
       "current": "Účinné",

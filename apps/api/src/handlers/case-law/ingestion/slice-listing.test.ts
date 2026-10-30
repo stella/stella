@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { afterEach, expect, expectTypeOf, mock, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
@@ -17,6 +19,7 @@ import type {
 import {
   LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
+  type QuarantineCollisionObservation,
   quarantinedListingObservation,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
@@ -31,6 +34,185 @@ afterEach(() => {
 type ReconciliationListSlicePage = SourceReconciliation["listSlicePage"];
 
 const payloadRevision = (payload: unknown): unknown => payload;
+
+test("raw collision variants remain evidence without changing projected record counts", async () => {
+  const { sourceDocumentId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 4/2026", court: "Fixture court" },
+  });
+  const records = [{ record: "first capture" }, { record: "second capture" }];
+  const saved: QuarantineCollisionObservation[] = [];
+  const listing = unwrapListing(
+    await listReconciliationSlice({
+      adapterKey: "cz-regional",
+      proof: SLICE_LISTING_PROOF.COUNT,
+      revisionOf: () => "same canonical projection",
+      persistCollisionEvidence: async (observations) => {
+        saved.push(...observations);
+      },
+      listSlicePage: async () => ({
+        observations: [],
+        items: records.map((payload) => ({
+          identity: { type: "document" as const, sourceDocumentId },
+          payload,
+        })),
+        totalPages: 1,
+      }),
+      pageDelayMs: 0,
+      pageTimeoutMs: 5000,
+      slice: "all",
+      sleep: async () => undefined,
+    }),
+  );
+  expect(saved.map(({ payload }) => payload.record)).toEqual(records);
+  expect(listing.keyed.size).toBe(1);
+  expect(listing.duplicate).toBe(1);
+  expect(listing.quarantineCollisions.size).toBe(0);
+  expect(unstoredRecordCount(listing)).toBe(0);
+});
+
+test("collision payloads are flushed before the next page and the last slice verdict", async () => {
+  const { sourceDocumentId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 1/2026", court: "Fixture court" },
+  });
+  const records = [
+    { record: "first" },
+    { record: "second" },
+    { record: "third" },
+  ];
+  const saved: QuarantineCollisionObservation[] = [];
+  const events: [string, number][] = [];
+  const outcome = await listReconciliationSlice({
+    adapterKey: "cz-regional",
+    proof: SLICE_LISTING_PROOF.COUNT,
+    revisionOf: payloadRevision,
+    persistCollisionEvidence: async (observations) => {
+      await Promise.resolve();
+      events.push(["persist", observations.length]);
+      saved.push(...observations);
+    },
+    listSlicePage: async ({ page }) => {
+      events.push(["page", page]);
+      if (page === 1) {
+        expect(saved.map(({ payload }) => payload.record)).toEqual(
+          records.slice(0, 2),
+        );
+      }
+      return {
+        observations: [],
+        items: (page === 0 ? records.slice(0, 2) : records.slice(2)).map(
+          (payload) => ({
+            identity: { type: "document" as const, sourceDocumentId },
+            payload,
+          }),
+        ),
+        totalPages: 2,
+      };
+    },
+    pageDelayMs: 0,
+    pageTimeoutMs: 5000,
+    slice: "all",
+    sleep: async () => {
+      expect(saved.map(({ payload }) => payload.record)).toEqual(
+        records.slice(0, 2),
+      );
+    },
+  });
+  const listing = unwrapListing(outcome);
+  expect(events).toEqual([
+    ["page", 0],
+    ["persist", 2],
+    ["page", 1],
+    ["persist", 1],
+  ]);
+  expect(saved.map(({ payload }) => payload.record)).toEqual(records);
+  expect([...listing.keyed.values()].map(({ payload }) => payload)).toEqual(
+    records.slice(0, 1),
+  );
+  expect(listing.listed).toBe(3);
+  expect(listing.duplicate).toBe(0);
+  expect(listing.observations.size).toBe(0);
+  expect(unstoredRecordCount(listing)).toBe(2);
+});
+
+test("an evidence write failure stops listing before another page", async () => {
+  const { sourceDocumentId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 5/2026", court: "Fixture court" },
+  });
+  const failure = new AdapterFetchError({
+    adapterKey: "cz-regional",
+    cursor: null,
+    message: "Listing evidence write rejected",
+  });
+  const pages: number[] = [];
+  const rejected = await rejectionOf(
+    listReconciliationSlice({
+      adapterKey: "cz-regional",
+      proof: SLICE_LISTING_PROOF.IDENTITIES,
+      revisionOf: payloadRevision,
+      persistCollisionEvidence: async () => {
+        throw failure;
+      },
+      listSlicePage: async ({ page }) => {
+        pages.push(page);
+        return {
+          observations: [],
+          items: [{ record: "first" }, { record: "second" }].map((payload) => ({
+            identity: { type: "document" as const, sourceDocumentId },
+            payload,
+          })),
+          totalPages: 2,
+        };
+      },
+      pageDelayMs: 0,
+      pageTimeoutMs: 5000,
+      slice: "all",
+      sleep: async () => undefined,
+    }),
+  );
+  expect(rejected).toBe(failure);
+  expect(pages).toEqual([0]);
+});
+
+test("verification retains colliding payloads before rejecting a changed listing", async () => {
+  const { sourceDocumentId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 2/2026", court: "Fixture court" },
+  });
+  const records = [{ record: "first" }, { record: "second" }];
+  const saved: QuarantineCollisionObservation[] = [];
+  let pass = 0;
+  const outcome = await listReconciliationSlice({
+    adapterKey: "cz-regional",
+    proof: SLICE_LISTING_PROOF.IDENTITIES,
+    revisionOf: payloadRevision,
+    persistCollisionEvidence: async (observations) => {
+      saved.push(...observations);
+    },
+    listSlicePage: async () => {
+      pass += 1;
+      return {
+        observations: [],
+        items: records.slice(0, pass).map((payload) => ({
+          identity: { type: "document" as const, sourceDocumentId },
+          payload,
+        })),
+        totalPages: 1,
+      };
+    },
+    pageDelayMs: 0,
+    pageTimeoutMs: 5000,
+    slice: "all",
+    sleep: async () => undefined,
+  });
+  if (outcome.isOk()) {
+    expect.unreachable("Verification rejects a changed revision set");
+  }
+  expect(outcome.error.message).toContain("changed while it was listed");
+  expect(saved.map(({ payload }) => payload.record)).toEqual(records);
+});
 
 const documentItem = (id: string): ReconciliationListingItem => ({
   identity: { type: "document", sourceDocumentId: id },
@@ -58,6 +240,7 @@ test("keys each identity once and counts its repeats", async () => {
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
+      persistCollisionEvidence: async () => undefined,
       listSlicePage: pagedListing([
         [documentItem("a"), documentItem("b")],
         [documentItem("a"), documentItem("c")],
@@ -107,6 +290,7 @@ test("completed page delays remove their aborted-signal listeners", async () => 
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
+      persistCollisionEvidence: async () => undefined,
       listSlicePage: pagedListing([[], [], [], []]),
       pageDelayMs: 0,
       pageTimeoutMs: 5000,
@@ -131,6 +315,7 @@ test("an empty slice lists nothing after one request", async () => {
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
+      persistCollisionEvidence: async () => undefined,
       listSlicePage: async () => {
         requests += 1;
         return await Promise.resolve({
@@ -157,6 +342,7 @@ test("a listing past the page ceiling is refused, not truncated", async () => {
     adapterKey: "fake",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     revisionOf: payloadRevision,
+    persistCollisionEvidence: async () => undefined,
     listSlicePage: async ({ page }) => {
       requests += 1;
       return await Promise.resolve({
@@ -208,6 +394,7 @@ const listWith = async (listSlicePage: ReconciliationListSlicePage) =>
     adapterKey: "fake",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     revisionOf: payloadRevision,
+    persistCollisionEvidence: async () => undefined,
     listSlicePage,
     pageDelayMs: 0,
     pageTimeoutMs: 5000,
@@ -279,6 +466,7 @@ test("a count needs no second walk, even of a changed slice", async () => {
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.COUNT,
       revisionOf: payloadRevision,
+      persistCollisionEvidence: async () => undefined,
       listSlicePage,
       pageDelayMs: 0,
       pageTimeoutMs: 5000,
@@ -333,6 +521,7 @@ test("a quarantine id listed for two different records is a counted collision, n
         adapterKey: "fake",
         proof: SLICE_LISTING_PROOF.IDENTITIES,
         revisionOf: payloadRevision,
+        persistCollisionEvidence: async () => undefined,
         listSlicePage: async () =>
           await Promise.resolve({
             observations: [],
@@ -407,6 +596,7 @@ test("a keyed record whose quarantine peer is also listed quarantined is a repor
         adapterKey: "fake",
         proof: SLICE_LISTING_PROOF.COUNT,
         revisionOf: payloadRevision,
+        persistCollisionEvidence: async () => undefined,
         listSlicePage: async () =>
           await Promise.resolve({
             observations: [],
@@ -462,6 +652,7 @@ test("identity proofs retain noncanonical observations and count only exact repe
       adapterKey: "sk-us",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       revisionOf: payloadRevision,
+      persistCollisionEvidence: async () => undefined,
       listSlicePage: async () => ({
         items: [],
         observations: [a, b, a],
@@ -486,6 +677,7 @@ test("a changed noncanonical observation invalidates a two-pass identity proof",
     adapterKey: "sk-us",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     revisionOf: payloadRevision,
+    persistCollisionEvidence: async () => undefined,
     listSlicePage: async () => ({
       items: [],
       observations: [

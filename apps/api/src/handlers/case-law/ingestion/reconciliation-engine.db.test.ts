@@ -23,6 +23,7 @@ import {
   caseLawCoverageSlices,
   caseLawDecisions,
   caseLawDecisionSupplements,
+  caseLawListingObservations,
   caseLawReconciliationItems,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
@@ -75,6 +76,7 @@ import {
   QUARANTINE_NAMESPACE,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -2782,6 +2784,101 @@ const decisionsForSource = async (sourceId: SafeId<"caseLawSource">) =>
     })
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.sourceId, sourceId));
+
+test("a completed reconciliation retains all colliding revisions without rewriting its canonical row", async () => {
+  const { quarantine } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const canonicalId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+  const records = [
+    { record: "first" },
+    { record: "second" },
+    { record: "third" },
+  ];
+  let currentRecords = records.slice(0, 2);
+  const reconciliation: SourceReconciliation = {
+    ...stubReconciliation,
+    listSlicePage: async () => ({
+      observations: [],
+      items: currentRecords.map((payload) => ({
+        identity: {
+          type: "document" as const,
+          sourceDocumentId: quarantine.sourceDocumentId,
+        },
+        payload,
+      })),
+      totalPages: 1,
+    }),
+    heldRequiresDetail: true,
+  };
+  const readEvidence = async () =>
+    await db
+      .select()
+      .from(caseLawListingObservations)
+      .where(eq(caseLawListingObservations.sourceId, sourceId))
+      .orderBy(caseLawListingObservations.fingerprint)
+      .limit(10);
+  const first = await runUnit(sourceId, reconciliation);
+  expect(first).toMatchObject({
+    type: "worked",
+    summary: { keyable: 1, heldBefore: 1, written: 0, unstored: 1 },
+  });
+  const retained = await readEvidence();
+  expect(retained).toHaveLength(2);
+  expect(retained.map(({ payload }) => payload)).toEqual(
+    expect.arrayContaining(
+      records.slice(0, 2).map((record) => ({
+        listing: {
+          quarantineId: quarantine.sourceDocumentId,
+          revision: fingerprintReconciliationPayload(record),
+          record,
+        },
+      })),
+    ),
+  );
+  await db
+    .update(caseLawCoverageSlices)
+    .set({
+      reported: 2,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    })
+    .where(
+      and(
+        eq(caseLawCoverageSlices.sourceId, sourceId),
+        eq(caseLawCoverageSlices.slice, OWED_SLICE),
+      ),
+    );
+  expect(await runUnit(sourceId, reconciliation)).toMatchObject({
+    type: "worked",
+  });
+  expect(await readEvidence()).toEqual(retained);
+  currentRecords = records;
+  await db
+    .update(caseLawCoverageSlices)
+    .set({
+      reported: 3,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    })
+    .where(
+      and(
+        eq(caseLawCoverageSlices.sourceId, sourceId),
+        eq(caseLawCoverageSlices.slice, OWED_SLICE),
+      ),
+    );
+  expect(await runUnit(sourceId, reconciliation)).toMatchObject({
+    type: "worked",
+    summary: { keyable: 1, unstored: 2 },
+  });
+  expect(await readEvidence()).toHaveLength(3);
+  expect(await decisionsForSource(sourceId)).toEqual([
+    { id: canonicalId, sourceDocumentId: quarantine.sourceDocumentId },
+  ]);
+});
 
 test("a fresh listing that proves a quarantine peer collision preserves both rows", async () => {
   const { quarantine, peer, decision } = quarantineRecoveryFixture();
