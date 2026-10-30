@@ -17,6 +17,7 @@ export const FAILURE_TAGS = [
   "AnonymizedFieldBoundaryError",
   "ApiAccessTokenError",
   "AppleSignInConfigError",
+  "ArtefactSourceLimitError",
   "AuthorizedWorkspaceReadError",
   "BackfillFailedError",
   "BackfillHeldError",

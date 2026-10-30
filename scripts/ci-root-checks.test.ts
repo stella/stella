@@ -315,6 +315,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Module ownership invariants": [
     ".oxlint-plugins/__tests__/lint-single-rule.ts",
+    "scripts/generated-artefact-provenance.ts",
     "scripts/generated-artifacts.ts",
     "scripts/ownership-loader.ts",
     "scripts/ownership.test.ts",
