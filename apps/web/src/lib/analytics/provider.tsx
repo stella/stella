@@ -1,8 +1,10 @@
 import { createContext, use } from "react";
 
 import { shouldEnablePostHog } from "@stll/analytics-config";
+import type { ExceptionScope } from "@stll/errors";
 
 import { env } from "@/env";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { noopAnalytics } from "@/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/lib/analytics/posthog";
 import type { Analytics } from "@/lib/analytics/types";
@@ -12,6 +14,19 @@ let globalAnalytics: Analytics = noopAnalytics;
 
 export const useAnalytics = () => use(AnalyticsContext);
 export const getAnalytics = () => globalAnalytics;
+
+type QueryErrorOwner = {
+  fingerprintKey: ExceptionFingerprintKey;
+  scope: ExceptionScope;
+};
+
+/** The sole query-failure capture boundary; analytics classifies API transports. */
+export const captureQueryError = (
+  error: Error,
+  owner: QueryErrorOwner,
+): void => {
+  getAnalytics().captureError(error, owner);
+};
 
 /**
  * Wraps the app with the configured analytics provider.

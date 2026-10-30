@@ -9,7 +9,10 @@
  * only place a raw string is minted into a `Secret<...>` brand.
  */
 
+import { Result } from "better-result";
 import * as v from "valibot";
+
+import { classifyFailure } from "@stll/errors";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
@@ -29,8 +32,23 @@ type DecryptedKind<P extends SharepointSecretPurpose> =
 
 type DecryptedFor<P extends SharepointSecretPurpose> = Secret<DecryptedKind<P>>;
 
-const toDecryptedSecret = <K extends SecretKind>(value: string): Secret<K> =>
-  v.parse(secretSchema, value);
+const invalidSecretEnvelope = (cause?: unknown): HandlerError<500> =>
+  classifyFailure(
+    new HandlerError({
+      status: 500,
+      message: "Stored SharePoint secret envelope is invalid",
+      ...(cause === undefined ? {} : { cause }),
+    }),
+    "credentials_token_unreadable",
+  );
+
+const toDecryptedSecret = <K extends SecretKind>(
+  value: string,
+): Result<Secret<K>, HandlerError<500>> =>
+  Result.try({
+    try: () => v.parse(secretSchema, value),
+    catch: () => invalidSecretEnvelope(),
+  });
 
 type SecretEnvelope = {
   purpose: SharepointSecretPurpose;
@@ -74,25 +92,32 @@ export const decryptSharepointSecret = async <
   organizationId: SafeId<"organization">;
   purpose: P;
   userId: SafeId<"user">;
-}): Promise<DecryptedFor<P>> => {
-  const json = await decryptContent(organizationId, ciphertext, iv);
-  const parsed: unknown = JSON.parse(json);
-
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("purpose" in parsed) ||
-    !("secret" in parsed) ||
-    !("userId" in parsed) ||
-    parsed.purpose !== purpose ||
-    parsed.userId !== userId ||
-    typeof parsed.secret !== "string"
-  ) {
-    throw new HandlerError({
-      status: 500,
-      message: "Stored SharePoint secret envelope is invalid",
+}): Promise<Result<DecryptedFor<P>, HandlerError<500>>> => {
+  const decrypted = await Result.tryPromise({
+    try: async () => await decryptContent(organizationId, ciphertext, iv),
+    catch: invalidSecretEnvelope,
+  });
+  return decrypted
+    .andThen((json) =>
+      Result.try({
+        try: (): unknown => JSON.parse(json),
+        // Parser diagnostics can contain the decrypted token; keep only the failure kind.
+        catch: () => invalidSecretEnvelope(),
+      }),
+    )
+    .andThen((parsed) => {
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("purpose" in parsed) ||
+        !("secret" in parsed) ||
+        !("userId" in parsed) ||
+        parsed.purpose !== purpose ||
+        parsed.userId !== userId ||
+        typeof parsed.secret !== "string"
+      ) {
+        return Result.err(invalidSecretEnvelope());
+      }
+      return toDecryptedSecret<DecryptedKind<P>>(parsed.secret);
     });
-  }
-
-  return toDecryptedSecret<DecryptedKind<P>>(parsed.secret);
 };

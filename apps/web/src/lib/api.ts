@@ -2,6 +2,7 @@ import { createApiClient } from "@stll/api-client";
 import type { ApiClientOptions } from "@stll/api-client";
 import type { ConnectConnectorDecision } from "@stll/api-contract/chat-connector";
 import { INTERNAL_UI_TRANSPORT_ROUTES } from "@stll/api-contract/internal-ui-transport";
+import type { Microsoft365Capability } from "@stll/api-contract/microsoft365";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
@@ -15,7 +16,7 @@ import {
 import { browserApiBaseUrl } from "@/lib/api-url";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { observeActionAdmissionResponse } from "@/lib/errors/action-admission-response";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { apiResponseResult, unwrapApiResponse } from "@/lib/errors/api";
 import {
   notifyUserError,
   reportUserVisibleError,
@@ -131,4 +132,30 @@ export const chatConnectorReceipt = {
         .connectors({ toolCallId })
         .post({ decision }),
     ),
+} as const;
+
+export const sharepointConnect = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointConnect,
+  start: async (capability: Microsoft365Capability) =>
+    apiResponseResult(
+      await api.sharepoint.connect.post({ capabilities: [capability] }),
+    ),
+} as const;
+
+export const sharepointCapabilities = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointCapabilities,
+  update: async (capabilities: Microsoft365Capability[]) =>
+    apiResponseResult(await api.sharepoint.capabilities.put({ capabilities })),
+} as const;
+
+export const sharepointDisable = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointDisable,
+  disable: async () =>
+    apiResponseResult(await api.sharepoint.enablement.put({ enabled: false })),
+} as const;
+
+export const sharepointDisconnect = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointDisconnect,
+  disconnect: async () =>
+    apiResponseResult(await api.sharepoint.connection.delete()),
 } as const;

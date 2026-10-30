@@ -88,6 +88,8 @@ export const sharepointOAuthState = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     codeVerifier: p.text("code_verifier").notNull(),
     redirectUri: p.text("redirect_uri").notNull(),
+    /** Exact server-authorized scopes for this consent attempt. */
+    requestedScope: p.text("requested_scope"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

@@ -59,6 +59,16 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    sharepointPolicy: {
+      aggregate: "sharepointPolicy",
+      id: organizationId,
+      mode: "update",
+    },
+    sharepointConnection: {
+      aggregate: "sharepointConnection",
+      id: { id: createSafeId<"sharepointConnection">(), organizationId },
+      mode: "share",
+    },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,

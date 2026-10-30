@@ -14,6 +14,7 @@
     "./stella-logo": "./src/stella-logo.ts",
     "./stella-logo-512.png": "./assets/stella-logo-512.png",
     "./mcp-web-handoff": "./src/mcp-web-handoff.ts",
+    "./microsoft365": "./src/microsoft365.ts",
     "./redirect-path": "./src/redirect-path.ts",
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",

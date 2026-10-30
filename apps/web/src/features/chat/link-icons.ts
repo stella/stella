@@ -2,9 +2,9 @@ import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
+import { captureQueryError } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { captureQueryError } from "@/lib/errors/query-result";
 
 const LINK_ICON_REQUEST_TIMEOUT_MS = 5000;
 const LINK_ICON_CACHE_MS = 60 * 60 * 1000;

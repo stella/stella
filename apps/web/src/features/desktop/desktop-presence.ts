@@ -4,10 +4,11 @@ import { panic, Result, UnhandledException } from "better-result";
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import { captureQueryError } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { queryView } from "@/lib/query-view.logic";
 
 export type DesktopPresenceType = DesktopPresence["type"];

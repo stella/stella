@@ -24,8 +24,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // The deployment flag is read at env import time; the gate itself is not
 // under test here, so replace it wholesale (a full module mock, no partial).
 const sharepointOAuthCallback = createSharepointOAuthCallback({
-  assertSharepointConnectionEnabled: async () =>
-    await Promise.resolve(Result.ok(undefined)),
+  deploymentEnabled: () => true,
 });
 
 type CallbackCtx = Parameters<typeof sharepointOAuthCallback.handler>[0];

@@ -55,7 +55,7 @@ type Status<TTable extends StatusTable> = GetColumnData<TTable["status"]> &
   string;
 type FenceKey<TTable extends StatusTable> = Extract<
   keyof TTable["_"]["columns"],
-  "leaseToken" | "attempt" | "claimedAt" | "generation"
+  "leaseToken" | "attempt" | "claimedAt" | "generation" | "accessTokenEncrypted"
 >;
 
 export type TransitionSpec = {

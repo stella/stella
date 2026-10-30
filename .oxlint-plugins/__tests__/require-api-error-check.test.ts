@@ -86,3 +86,22 @@ api.tasks.get().then(response=>consume(response.data));`,
     ),
   ).toEqual([2]);
 });
+
+test("recognizes the Result response adapter only from its canonical owner", async () => {
+  expect(
+    await lintSingleRule(
+      "require-api-error-check",
+      `import {api} from "@/lib/api";
+import {apiResponseResult as result} from "@/lib/errors/api";
+async function load(){return result(await api.tasks.get());}`,
+    ),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule(
+      "require-api-error-check",
+      `import {api} from "@/lib/api";
+import {apiResponseResult} from "@/other";
+async function load(){return apiResponseResult(await api.tasks.get());}`,
+    ),
+  ).toEqual([3]);
+});

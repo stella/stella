@@ -93,7 +93,7 @@ const APPROVED_RESPONSE_ADAPTERS: ReadonlyMap<
   string,
   ReadonlySet<string>
 > = new Map([
-  ["@/lib/errors/api", new Set(["unwrapApiResponse"])],
+  ["@/lib/errors/api", new Set(["unwrapApiResponse", "apiResponseResult"])],
   ["@/lib/public-law-api", new Set(["unwrapPublicLawResponse"])],
   ["@/lib/knowledge/public-knowledge-api", new Set(["unwrapPublicKnowledge"])],
 ]);

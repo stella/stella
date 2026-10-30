@@ -32,6 +32,7 @@ import {
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
+import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
 import {
   apiScalingSurface,
   mcpScalingSurface,
@@ -59,6 +60,7 @@ const measuredApiScenarios = [
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  sharepointCapabilitiesScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

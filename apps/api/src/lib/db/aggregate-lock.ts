@@ -73,6 +73,8 @@ export const AGGREGATE_LOCKS = {
   organizationObjectIntent: { rank: -1, kind: "advisory" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
+  sharepointPolicy: { rank: 6, kind: "row" },
+  sharepointConnection: { rank: 7, kind: "row" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
@@ -226,6 +228,7 @@ export const AGGREGATE_CHAINS = {
   ],
   organizationObjectIntentWriter: ["organizationObjectIntent", "workspace"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
+  sharepointConsent: ["sharepointPolicy", "sharepointConnection"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
@@ -313,6 +316,11 @@ type AggregateIdentities = {
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organizationObjectIntent: SafeId<"organization">;
   organization: SafeId<"organization">;
+  sharepointPolicy: SafeId<"organization">;
+  sharepointConnection: {
+    id: SafeId<"sharepointConnection">;
+    organizationId: SafeId<"organization">;
+  };
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
@@ -1036,8 +1044,38 @@ const auxiliaryRowResource = (
   }
 };
 
+const sharepointRowResource = (
+  options: Extract<
+    RowIdentityOptions,
+    { aggregate: "sharepointPolicy" | "sharepointConnection" }
+  >,
+): RowResource => {
+  switch (options.aggregate) {
+    case "sharepointPolicy":
+      return {
+        table: "organization_settings",
+        columns: ["organization_id"],
+        values: [options.id],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "sharepointConnection":
+      return byIdWithin(
+        "sharepoint_connections",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
+    default:
+      options satisfies never;
+      return panic("Unknown SharePoint row resource");
+  }
+};
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "sharepointPolicy":
+    case "sharepointConnection":
+      return sharepointRowResource(options);
     case "requestReceipt":
       return {
         table: "request_idempotency_receipts",
