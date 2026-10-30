@@ -2,7 +2,14 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -24,7 +31,7 @@ import { isOffline, readDocumentFile } from "@/state/document-file";
 import type { DocumentFile } from "@/state/document-file";
 import { useAppColors } from "@/theme";
 
-type Failure = "offline" | "noFile" | "failed" | "unsupported";
+type Failure = "offline" | "noFile" | "failed" | "unsupported" | "android";
 
 type Phase =
   | { readonly status: "opening" }
@@ -48,7 +55,11 @@ const openDocument = async ({
   entityId: string;
 }): Promise<Phase> => {
   if (!canOpenFiles()) {
-    return { status: "failed", failure: "unsupported" };
+    // An older iPhone build gains the viewer by updating; Android has none.
+    return {
+      status: "failed",
+      failure: Platform.OS === "android" ? "android" : "unsupported",
+    };
   }
   const file = await readDocumentFile({ fetch, source, workspaceId, entityId });
   if (Result.isError(file)) {
@@ -162,9 +173,14 @@ const OpenedDocument = ({
     };
   }, [source, workspaceId, entityId]);
 
-  const preview = useEffectEvent(async (opened: OpenedFile) => {
-    await previewOpenedFile(opened);
-  });
+  const showPreview = async (opened: OpenedFile) => {
+    const shown = await previewOpenedFile(opened);
+    // A preview already open is the one asked for.
+    if (Result.isError(shown) && !shown.error.busy && mounted.current) {
+      Alert.alert(t("failedTitle"), t("failure.failed"));
+    }
+  };
+  const preview = useEffectEvent(showPreview);
 
   // Any other file opens in Quick Look straight away; closing it returns here,
   // where it can be opened again.
@@ -193,7 +209,8 @@ const OpenedDocument = ({
             title={t("failedTitle")}
           >
             {phase.failure === "noFile" ||
-            phase.failure === "unsupported" ? null : (
+            phase.failure === "unsupported" ||
+            phase.failure === "android" ? null : (
               <Button className="mt-4" onPress={onRetry} variant="outline">
                 {t("retry")}
               </Button>
@@ -215,7 +232,7 @@ const OpenedDocument = ({
             <Button
               className="mt-4"
               onPress={() => {
-                void previewOpenedFile(opened);
+                void showPreview(opened);
               }}
               variant="outline"
             >

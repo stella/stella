@@ -134,7 +134,8 @@
       "offline": "Ste offline. Pripojte sa na internet a skúste to znova.",
       "noFile": "Tento dokument zatiaľ nemá súbor.",
       "failed": "Pri otváraní sa niečo pokazilo. Skúste to o chvíľu znova.",
-      "unsupported": "Na otváranie dokumentov aktualizujte aplikáciu."
+      "unsupported": "Na otváranie dokumentov aktualizujte aplikáciu.",
+      "android": "V aplikácii pre Android zatiaľ dokumenty nemožno otvoriť."
     },
     "retry": "Skúsiť znova",
     "preview": "Otvoriť náhľad",

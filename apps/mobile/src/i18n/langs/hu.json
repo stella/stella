@@ -134,7 +134,8 @@
       "offline": "Nincs internetkapcsolat. Csatlakozzon az internethez, és próbálja újra.",
       "noFile": "Ehhez a dokumentumhoz még nincs fájl.",
       "failed": "Hiba történt a megnyitáskor. Próbálja újra egy kis idő múlva.",
-      "unsupported": "Frissítse az alkalmazást a dokumentumok megnyitásához."
+      "unsupported": "Frissítse az alkalmazást a dokumentumok megnyitásához.",
+      "android": "Az Android-alkalmazásban még nem lehet dokumentumokat megnyitni."
     },
     "retry": "Újra",
     "preview": "Előnézet megnyitása",

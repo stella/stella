@@ -69,10 +69,30 @@ export const readOpenedFile = async (
 ): Promise<string> =>
   files === null ? "" : await files.readBase64(file.uri, offset, length);
 
+export class DocumentPreviewError extends TaggedError("DocumentPreviewError")<{
+  message: string;
+  /** A preview is already open, so this one was not needed. */
+  busy: boolean;
+  cause?: unknown;
+}> {}
+
 /** Shows an opened file in Quick Look; settles when it closes. */
-export const previewOpenedFile = async (file: OpenedFile): Promise<void> => {
-  await files?.preview(file.uri);
-};
+export const previewOpenedFile = async (
+  file: OpenedFile,
+): Promise<Result<void, DocumentPreviewError>> =>
+  files === null
+    ? Result.ok(undefined)
+    : await Result.tryPromise({
+        try: async () => {
+          await files.preview(file.uri);
+        },
+        catch: (cause) =>
+          new DocumentPreviewError({
+            message: "The preview could not be opened",
+            busy: codeOf(cause) === "ERR_DOCUMENT_BUSY",
+            cause,
+          }),
+      });
 
 /** Removes an opened file from the phone. */
 export const discardOpenedFile = (file: OpenedFile): void => {

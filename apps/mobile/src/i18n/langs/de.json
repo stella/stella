@@ -134,7 +134,8 @@
       "offline": "Sie sind offline. Stellen Sie eine Internetverbindung her und versuchen Sie es erneut.",
       "noFile": "Dieses Dokument hat noch keine Datei.",
       "failed": "Beim Öffnen ist ein Fehler aufgetreten. Versuchen Sie es gleich noch einmal.",
-      "unsupported": "Aktualisieren Sie die App, um Dokumente zu öffnen."
+      "unsupported": "Aktualisieren Sie die App, um Dokumente zu öffnen.",
+      "android": "In der Android-App lassen sich Dokumente noch nicht öffnen."
     },
     "retry": "Erneut versuchen",
     "preview": "Vorschau öffnen",

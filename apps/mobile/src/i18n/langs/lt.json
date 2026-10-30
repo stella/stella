@@ -134,7 +134,8 @@
       "offline": "Esate neprisijungę. Prisijunkite prie interneto ir bandykite dar kartą.",
       "noFile": "Šis dokumentas dar neturi failo.",
       "failed": "Atidarant kažkas nepavyko. Po akimirkos bandykite dar kartą.",
-      "unsupported": "Atnaujinkite programėlę, kad galėtumėte atidaryti dokumentus."
+      "unsupported": "Atnaujinkite programėlę, kad galėtumėte atidaryti dokumentus.",
+      "android": "Android programėlėje dokumentų dar negalima atidaryti."
     },
     "retry": "Bandyti dar kartą",
     "preview": "Atidaryti peržiūrą",

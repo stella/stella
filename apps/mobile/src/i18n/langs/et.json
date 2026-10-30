@@ -134,7 +134,8 @@
       "offline": "Olete võrguühenduseta. Looge internetiühendus ja proovige uuesti.",
       "noFile": "Sellel dokumendil pole veel faili.",
       "failed": "Avamisel läks midagi valesti. Proovige hetke pärast uuesti.",
-      "unsupported": "Dokumentide avamiseks värskendage rakendust."
+      "unsupported": "Dokumentide avamiseks värskendage rakendust.",
+      "android": "Androidi rakenduses ei saa dokumente veel avada."
     },
     "retry": "Proovi uuesti",
     "preview": "Ava eelvaade",
