@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_COURTS",
+  "key": "pl-courts",
+  "parserVersion": 18,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage."
+  }
+}

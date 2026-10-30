@@ -588,6 +588,11 @@ export type SessionHandlerConfig = InputSchema &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
     mcp: McpExposure;
+    /**
+     * Session handlers run outside an organization scope, so they can only
+     * state that a successful call announces no resource sets.
+     */
+    realtime?: NoResourceSetUpdates;
   };
 
 type SessionHandlerContext<
@@ -2254,6 +2259,7 @@ export const createSafeHandler = <
 };
 
 type SessionHandlerDependencies = {
+  authenticate?: typeof authenticateSession;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
@@ -2264,6 +2270,7 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
+    authenticate = authenticateSession,
     checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => {
@@ -2296,7 +2303,7 @@ export const createSafeSessionHandler = <
   return {
     ...core,
     run: async (request) => {
-      const account = await authenticateSession(request.ctx, config);
+      const account = await authenticate(request.ctx, config);
       if (!account.ok) {
         return account.answer;
       }

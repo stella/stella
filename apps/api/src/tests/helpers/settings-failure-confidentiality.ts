@@ -17,6 +17,8 @@ type SettingsFailureOutputs = {
   captureEntries: readonly unknown[];
   developmentEntries: readonly unknown[];
   developmentLogInputs?: readonly unknown[];
+  developmentJsonlEntries?: readonly unknown[];
+  trustedDevelopmentStack?: string;
   groupIdentifies: readonly OrganizationGroupIdentifyParams[];
   logRecords: readonly LogRecord[];
   returned: unknown;
@@ -105,6 +107,17 @@ const errorPayload = (error: Error): Record<string, unknown> =>
       .map((key) => [key, Reflect.get(error, key)]),
   );
 
+export const assertCanonicalStoredAIConfigError = (error: unknown): void => {
+  if (!(error instanceof Error)) {
+    panic("Expected the stored AI config public error");
+  }
+  const canonical = storedAIConfigUnreadableError();
+  expect(Reflect.ownKeys(error).toSorted(compareKeys)).toEqual(
+    Reflect.ownKeys(canonical).toSorted(compareKeys),
+  );
+  expect(errorPayload(error)).toStrictEqual(errorPayload(canonical));
+};
+
 const REPOSITORY_PATH = "(?:apps|packages)/[A-Za-z0-9_./-]+\\.ts";
 const REPOSITORY_ROOT = import.meta.dir.replace(
   /apps\/api\/src\/tests\/helpers$/u,
@@ -165,6 +178,40 @@ const normalizeFrame = (value: unknown): unknown => {
   return value.replace(/:\d+:\d+$/u, ":[line]:[column]");
 };
 
+const normalizeStack = (value: unknown): string => {
+  if (typeof value !== "string") {
+    panic("Expected an error stack");
+  }
+  return value
+    .split("\n")
+    .map((line, index) => {
+      if (index === 0 || line === "    at unknown") {
+        return line;
+      }
+      expect(line).toMatch(STACK_FRAME);
+      return line.replace(/:\d+:\d+(\)?)$/u, ":[line]:[column]$1");
+    })
+    .join("\n");
+};
+
+/** Compare all source-bearing fields with a clean, trusted construction. */
+export const assertSettingsErrorLocations = (
+  actual: Error,
+  expected: Error,
+): void => {
+  expect(normalizeStack(reflectedValue(actual, "stack"))).toBe(
+    normalizeStack(reflectedValue(expected, "stack")),
+  );
+  expect(reflectedValue(actual, "sourceURL")).toBe(
+    reflectedValue(expected, "sourceURL"),
+  );
+  for (const key of ["line", "column", "originalLine", "originalColumn"]) {
+    const actualValue = reflectedValue(actual, key);
+    const expectedValue = reflectedValue(expected, key);
+    expect(typeof actualValue).toBe(typeof expectedValue);
+  }
+};
+
 export const assertSettingsAnalyticsFrame = (value: unknown): unknown => {
   const normalizedFrame = normalizeFrame(value);
   expect(normalizedFrame).toBe(
@@ -202,10 +249,7 @@ const normalizedDevProjection = (error: Error): unknown => {
   }
   return {
     ...record,
-    stack: [
-      stack.at(0),
-      stack.at(1)?.replace(/:\d+:\d+(\)?)$/u, ":[line]:[column]$1"),
-    ].join("\n"),
+    stack: normalizeStack(stackValue),
   };
 };
 
@@ -490,9 +534,19 @@ export const assertSettingsFailureConfidential = ({
     expect(errorPayload(developmentError)).toStrictEqual(
       errorPayload(canonicalDevelopmentError),
     );
-    expect(normalizedDevProjection(developmentError)).toStrictEqual(
+    const developmentProjection = ownRecord(
+      normalizedDevProjection(developmentError),
+    );
+    const canonicalProjection = ownRecord(
       normalizedDevProjection(canonicalDevelopmentError),
     );
+    const trustedStack =
+      outputs.trustedDevelopmentStack ??
+      panic("Expected a trusted development stack");
+    expect(developmentProjection).toStrictEqual({
+      ...canonicalProjection,
+      stack: trustedStack,
+    });
     const devLogCall = arrayValue(outputs.developmentLogInputs?.at(0));
     expect(devLogCall).toHaveLength(2);
     const devLogError = devLogCall.at(0);
@@ -503,7 +557,20 @@ export const assertSettingsFailureConfidential = ({
     expect(errorPayload(devLogError)).toStrictEqual(
       errorPayload(canonicalDevelopmentError),
     );
+    expect(normalizeStack(reflectedValue(devLogError, "stack"))).toBe(
+      trustedStack,
+    );
     expect(devLogCall.at(1)).toEqual(properties);
+    expect(outputs.developmentJsonlEntries).toHaveLength(1);
+    const { when, ...jsonlRecord } = ownRecord(
+      outputs.developmentJsonlEntries?.at(0),
+    );
+    expect(when).toBeString();
+    expect(jsonlRecord).toStrictEqual({
+      tag: "Error",
+      context: properties,
+      error: serializeDevError(developmentError),
+    });
   }
   if (isDirectFailure) {
     expect(outputs.captureEntries).toEqual([]);

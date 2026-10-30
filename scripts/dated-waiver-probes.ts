@@ -25,6 +25,7 @@ import {
   serializeRegistry,
   splitTestId,
 } from "./flaky-test-quarantine";
+import { guardRolloutSource } from "./guard-rollout-policy.ts";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -348,6 +349,11 @@ const leadingComments = (ast: ParsedSource, node: Node) =>
   );
 
 const removeGuardRollout = (source: string, entry: DatedWaiver): string => {
+  if (entry.source !== guardRolloutSource(entry.id)) {
+    panic(
+      `Guard rollout heals only in its own file: ${entry.source} (${entry.id})`,
+    );
+  }
   const ast = parseOwner(source, entry.source);
   const matches: ObjectExpression[] = [];
   walk(ast.program, (node) => {

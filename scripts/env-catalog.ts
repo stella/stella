@@ -1505,7 +1505,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI playground planning passes the selected and complete spec sets to the
+  // shard planner, together with the desktop scope decision.
   "UI_PLAYGROUND_CHANGED_PATHS",
+  "UI_PLAYGROUND_SELECTED_SPECS",
+  "UI_PLAYGROUND_ALL_SPECS",
+  "DESKTOP_REQUIRED",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
@@ -1655,6 +1660,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKY_TEST_QUARANTINE_REGISTRY",
   "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
+  // Served API journeys: the listening port and captured server log.
+  "SERVED_MCP_API_LOG",
+  "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1687,6 +1695,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
   "MCP_CANARY_REQUIRE_CREDENTIALS",
+  "MCP_CANARY_THIRD_PARTY_FETCHES",
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",
