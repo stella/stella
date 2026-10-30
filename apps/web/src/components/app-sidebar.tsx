@@ -176,12 +176,6 @@ import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
-// Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
-// SidebarContent); a thin track over the narrow icon strip reads as a bright
-// artifact rather than chrome.
-const SCROLLABLE_GROUP_CONTENT =
-  "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
-
 // Lazy so the guides feature stays out of the shell bundle until the user
 // opens Help. The spotlight engine remains a second, runner-owned lazy chunk.
 const GuideHelpDrawer = lazy(async () => {
@@ -193,6 +187,53 @@ const SearchDialog = lazy(async () => {
   const module = await import("@/components/search-dialog");
   return { default: module.SearchDialog };
 });
+
+// Hide scrollbars in the collapsed icon rail, where a track over the narrow
+// icon strip reads as an artifact rather than chrome.
+const SCROLLABLE_GROUP_CONTENT =
+  "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
+
+type SidebarMatterGroupsProps = {
+  pinnedItems: React.ReactNode[];
+  pinnedLabel: string;
+  recentItems: React.ReactNode[];
+  recentLabel: string;
+};
+
+export const SidebarMatterGroups = ({
+  pinnedItems,
+  pinnedLabel,
+  recentItems,
+  recentLabel,
+}: SidebarMatterGroupsProps) => (
+  <>
+    {pinnedItems.length > 0 && (
+      <SidebarGroup
+        aria-label={pinnedLabel}
+        className="max-h-1/2 min-h-0 flex-none"
+        role="group"
+      >
+        <SidebarGroupLabel>{pinnedLabel}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>{pinnedItems}</SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    )}
+
+    {recentItems.length > 0 && (
+      <SidebarGroup
+        aria-label={recentLabel}
+        className="min-h-0 flex-1"
+        role="group"
+      >
+        <SidebarGroupLabel>{recentLabel}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>{recentItems}</SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    )}
+  </>
+);
 
 const SEARCH_DIALOG_STATES = {
   idle: "idle",
@@ -776,64 +817,47 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
           canCreateWorkspace={canCreateMatter}
           onCreateWorkspace={handleCreateWorkspace}
         >
-          {/* Pinned */}
-          {pinned.length > 0 && (
-            <SidebarGroup className="min-h-0 flex-1">
-              <SidebarGroupLabel>{t("navigation.pinned")}</SidebarGroupLabel>
-              <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-                <SidebarMenu>
-                  {pinned.map((ws, i) => (
-                    <MatterItem
-                      activeOrganizationId={user.activeOrganizationId}
-                      userId={user.id}
-                      isActive={activeWorkspaceId === ws.id}
-                      isExpanded={!isCollapsed && expandedMatterId === ws.id}
-                      isPinned
-                      key={ws.id}
-                      navBadge={
-                        showNavBadges && i < 3
-                          ? primaryNavItems.length + 1 + i
-                          : undefined
-                      }
-                      onDeleted={handleMatterDeleted}
-                      onEntityDrop={handleEntityDropOnMatter}
-                      onExpandedChange={() => toggleMatterExpansion(ws.id)}
-                      onReorder={reorderPinned}
-                      billingLinks={matterBillingLinks}
-                      onTogglePin={togglePin}
-                      workspace={ws}
-                    />
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {/* Recents — sorted by lastActivityAt. Header intentionally omitted;
-              the list reads as the continuation of the matter list above. */}
-          {recents.length > 0 && (
-            <SidebarGroup className="min-h-0 flex-1">
-              <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-                <SidebarMenu>
-                  {recents.map((ws) => (
-                    <MatterItem
-                      activeOrganizationId={user.activeOrganizationId}
-                      userId={user.id}
-                      isActive={activeWorkspaceId === ws.id}
-                      isExpanded={!isCollapsed && expandedMatterId === ws.id}
-                      key={ws.id}
-                      onDeleted={handleMatterDeleted}
-                      onEntityDrop={handleEntityDropOnMatter}
-                      onExpandedChange={() => toggleMatterExpansion(ws.id)}
-                      billingLinks={matterBillingLinks}
-                      onTogglePin={togglePin}
-                      workspace={ws}
-                    />
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+          <SidebarMatterGroups
+            pinnedLabel={t("navigation.pinned")}
+            pinnedItems={pinned.map((ws, i) => (
+              <MatterItem
+                activeOrganizationId={user.activeOrganizationId}
+                userId={user.id}
+                isActive={activeWorkspaceId === ws.id}
+                isExpanded={!isCollapsed && expandedMatterId === ws.id}
+                isPinned
+                key={ws.id}
+                navBadge={
+                  showNavBadges && i < 3
+                    ? primaryNavItems.length + 1 + i
+                    : undefined
+                }
+                onDeleted={handleMatterDeleted}
+                onEntityDrop={handleEntityDropOnMatter}
+                onExpandedChange={() => toggleMatterExpansion(ws.id)}
+                onReorder={reorderPinned}
+                billingLinks={matterBillingLinks}
+                onTogglePin={togglePin}
+                workspace={ws}
+              />
+            ))}
+            recentLabel={t("navigation.recentMatters")}
+            recentItems={recents.map((ws) => (
+              <MatterItem
+                activeOrganizationId={user.activeOrganizationId}
+                userId={user.id}
+                isActive={activeWorkspaceId === ws.id}
+                isExpanded={!isCollapsed && expandedMatterId === ws.id}
+                key={ws.id}
+                onDeleted={handleMatterDeleted}
+                onEntityDrop={handleEntityDropOnMatter}
+                onExpandedChange={() => toggleMatterExpansion(ws.id)}
+                billingLinks={matterBillingLinks}
+                onTogglePin={togglePin}
+                workspace={ws}
+              />
+            ))}
+          />
         </SidebarContextArea>
       </SidebarContent>
 

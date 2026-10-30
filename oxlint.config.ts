@@ -454,6 +454,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
+  fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
+    "no-constructed-fetch-object/no-constructed-fetch-object",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -541,6 +544,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
     "bun-test-hygiene/no-promise-matchers",
+    "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
     "bun-test-hygiene/require-module-mock-reset",
@@ -1857,6 +1861,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-unowned-icon.ts",
@@ -2008,6 +2013,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
+    "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -2080,6 +2086,7 @@ const config = defineConfig({
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
+    "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
@@ -2345,6 +2352,12 @@ const config = defineConfig({
     ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      // `apps/web` runs each DOM test file in its own process; the packages
+      // run them together, where `screen` reads another file's document.
+      files: ["packages/**/*.dom.test.{ts,tsx}"],
+      rules: { "bun-test-hygiene/no-global-testing-library-screen": "error" },
+    },
     {
       // The built-in jest/vitest rules do not recognise `bun:test`; these
       // resolve test functions through their `bun:test` import.
@@ -3830,6 +3843,23 @@ const config = defineConfig({
       },
     },
     {
+      // Keys on the chat stream and message paths are read off the wire
+      // (event types, part types, tool names); `key in table` also matches
+      // inherited names, so membership goes through the own-key helpers.
+      files: [
+        "packages/chat/src/**/*.{ts,tsx}",
+        "apps/web/src/features/chat/**/*.{ts,tsx}",
+        "apps/web/src/components/chat/**/*.{ts,tsx}",
+        "apps/api/src/handlers/chat/**/*.{ts,tsx}",
+        "apps/api/src/lib/chat/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dynamic-key-in-operator.fixture.ts",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}"],
+      rules: {
+        "no-dynamic-key-in-operator/no-dynamic-key-in-operator": "error",
+      },
+    },
+    {
       // Reader prose must choose manual word breaks; automated hyphenation
       // varies by browser and language. Model rationale keeps its own contract.
       files: [
@@ -4349,6 +4379,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-hookless-use-function/no-hookless-use-function": "error",
+      },
+    },
+    {
+      // On React Native the global Response and Request are the whatwg-fetch
+      // polyfill, which reads a stream body as "[object ReadableStream]".
+      // Tests stub fetch with real responses and stay out of scope.
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/test-support/**",
+      ],
+      rules: {
+        "no-constructed-fetch-object/no-constructed-fetch-object": "error",
       },
     },
     {
@@ -5976,6 +6020,17 @@ const config = defineConfig({
           "error",
           { entries: enforcedOwnershipEntries },
         ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-inline-flatten.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-parser-inline-flatten/no-parser-inline-flatten": "error",
       },
     },
     {

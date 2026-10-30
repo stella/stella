@@ -1128,7 +1128,9 @@
     },
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
-      "remove": "Quitar el filtro {filter}"
+      "countryMismatch": "Se han eliminado los filtros que no corresponden a {country}: {filters}.",
+      "remove": "Quitar el filtro {filter}",
+      "showInCountry": "Mostrar {filter} en {country}"
     },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
@@ -1384,6 +1386,7 @@
       "toastTitle": "La vista completa aún no está disponible"
     },
     "activity": {
+      "newerVersion": "Este contenido se muestra en una versión más reciente.",
       "review": "Actualización de la revisión"
     },
     "aiPrompt": "Campo de mensaje de IA",
@@ -5115,6 +5118,8 @@
       "desktopCardConnectedTitle": "stella desktop está vinculado",
       "desktopCardMissingDetail": "Instálalo, o conéctalo si ya está instalado en este equipo.",
       "desktopCardMissingTitle": "stella desktop aún no está vinculado",
+      "desktopCardOpeningDetail": "Vinculando este equipo a <bdi>{identity}</bdi> en {host}. Si el navegador lo pide, permite que abra stella desktop.",
+      "desktopCardOpeningTitle": "Abriendo stella desktop...",
       "desktopCardOutdatedDetail": "La versión {version} está vinculada a <bdi>{identity}</bdi>. Instala la última versión para que los documentos y la actividad sigan funcionando.",
       "desktopCardOutdatedTitle": "stella desktop necesita una actualización",
       "desktopClipboardDescription": "Abre, busca, organiza y reutiliza texto copiado desde cualquier aplicación.",
@@ -5134,6 +5139,7 @@
       "desktopInstallOpenStep": "Abre stella desktop una vez. El portapapeles aparece de inmediato y queda disponible en la barra de menús de macOS o en la bandeja del sistema de Windows.",
       "desktopInstallTitle": "Instalar y abrir",
       "desktopInstallWindowsStep": "Ejecuta el instalador y sigue las instrucciones.",
+      "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "El historial del portapapeles se cifra y se guarda en este dispositivo.",
       "desktopPrivacyTitle": "Privado de forma predeterminada",
       "desktopSelfHostDescription": "Confía en esta URL de stella en la app de escritorio firmada para abrir localmente los documentos de esta instalación.",
@@ -6587,6 +6593,14 @@
           "started": "Inició una revisión de"
         },
         "empty": "Aún no hay actividad en este asunto.",
+        "fields": {
+          "dueDate": "fecha de vencimiento",
+          "parentFolder": "carpeta superior",
+          "priority": "prioridad",
+          "property": "propiedad",
+          "schedule": "programación",
+          "sortOrder": "orden"
+        },
         "filterLabel": "Filtrar actividad",
         "filters": {
           "all": "Toda la actividad",
@@ -6636,6 +6650,7 @@
           "translation": "traducción"
         },
         "title": "Actividad",
+        "updatedFields": "Se actualizó: {fields}",
         "views": {
           "list": "Vista de lista",
           "timeline": "Vista cronológica"

@@ -41,6 +41,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/app/law/**/*.{ts,tsx}",
   "apps/mobile/src/app/task/**/*.{ts,tsx}",
   "apps/mobile/src/app/timers/**/*.{ts,tsx}",
+  "apps/mobile/src/app/scan/**/*.{ts,tsx}",
   "apps/mobile/src/components/ui/**/*.{ts,tsx}",
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
