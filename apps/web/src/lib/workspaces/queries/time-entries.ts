@@ -2,6 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { TimeEntrySource, TimeEntryStatus } from "@stll/api-contract";
+import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 
 import { visitCursorPages } from "@/lib/infinite-query";
 import {
@@ -34,17 +35,20 @@ type TimeEntriesListKey = {
   hasActiveTimer?: boolean | undefined;
 };
 
-type PersonalTimeEntry = {
-  billable: boolean;
-  dateWorked: string;
-  durationMinutes: number;
-  id: string;
-  narrative: string;
-  narrativeLanguage: string | null;
-  source: TimeEntrySource;
-  status: TimeEntryStatus;
-  timerStartedAt: string | null;
-};
+type PersonalTimeEntry = Pick<
+  TimeEntry,
+  | "userId"
+  | "activityCode"
+  | "billable"
+  | "dateWorked"
+  | "durationMinutes"
+  | "id"
+  | "narrative"
+  | "narrativeLanguage"
+  | "source"
+  | "status"
+  | "timerStartedAt"
+>;
 
 type PersonalTimeEntryPage = {
   items: PersonalTimeEntry[];
@@ -172,6 +176,8 @@ const listPersonalTimeEntries = async ({
   return {
     items: page.items.map(
       ({
+        userId,
+        activityCode,
         billable,
         dateWorked,
         durationMinutes,
@@ -182,6 +188,8 @@ const listPersonalTimeEntries = async ({
         status,
         timerStartedAt,
       }) => ({
+        userId,
+        activityCode,
         billable,
         dateWorked,
         durationMinutes,

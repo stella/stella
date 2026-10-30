@@ -92,14 +92,16 @@ afterAll(async () => {
 });
 
 test("a settled case-law write advances desired state and dedup replay repairs to a fixed point", async () => {
-  await processDecision({
-    input: input("Nejvyšší správní soud", "publisher-v1"),
-    observationOrder: 1n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-08-31T12:00:00.000Z"),
-    corpus,
-  });
+  (
+    await processDecision({
+      input: input("Nejvyšší správní soud", "publisher-v1"),
+      observationOrder: 1n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-08-31T12:00:00.000Z"),
+      corpus,
+    })
+  ).unwrap();
   const decision = (
     await db
       .select({ id: caseLawDecisions.id, textKey: caseLawDecisions.textS3Key })
@@ -132,14 +134,16 @@ test("a settled case-law write advances desired state and dedup replay repairs t
   ).at(0);
 
   const refreshed = input("Ústavní soud", "publisher-v2");
-  await processDecision({
-    input: refreshed,
-    observationOrder: 2n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-08-31T12:00:01.000Z"),
-    corpus,
-  });
+  (
+    await processDecision({
+      input: refreshed,
+      observationOrder: 2n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-08-31T12:00:01.000Z"),
+      corpus,
+    })
+  ).unwrap();
   const refreshedState = (
     await db
       .select({
@@ -150,14 +154,16 @@ test("a settled case-law write advances desired state and dedup replay repairs t
       .where(eq(corpusIndexProjectionStates.entityId, decision.id))
   ).at(0);
 
-  await processDecision({
-    input: refreshed,
-    observationOrder: 3n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-08-31T12:00:02.000Z"),
-    corpus,
-  });
+  (
+    await processDecision({
+      input: refreshed,
+      observationOrder: 3n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-08-31T12:00:02.000Z"),
+      corpus,
+    })
+  ).unwrap();
   const replay = (
     await db
       .select({

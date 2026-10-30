@@ -7,6 +7,10 @@ export const QUERY_PERF_TABLE_SIZES = {
   // The court registry: patterns per country, read whole into the weight cache.
   case_law_court_weights: "small",
   case_law_sources: "small",
+  // One row per country-month or broad invalidation target currently being retired.
+  case_law_sitemap_drain_progress: "small",
+  // The slot=0 primary-key/check contract permits exactly one discovery cursor.
+  case_law_sitemap_refresh_cursor: "small",
   corpus_index_generations: "small",
   corpus_index_jurisdiction_serving: "small",
   corpus_index_projection_intents: "large",
