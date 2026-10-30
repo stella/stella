@@ -243,7 +243,7 @@ describe("invoice document export", () => {
 
     await exportPdf();
     const partialPayment = await pay(200_000);
-    if (!isRecord(partialPayment) || typeof partialPayment["id"] !== "string") {
+    if (!isRecord(partialPayment) || typeof partialPayment.id !== "string") {
       throw new Error("the payment ledger did not return a payment id");
     }
     await exportPdf();
@@ -255,7 +255,7 @@ describe("invoice document export", () => {
         route: "/v1/invoices/:workspaceId/:invoiceId/payments/:paymentId/void",
         params: {
           ...context("own", [], settlementInvoiceId).params,
-          paymentId: partialPayment["id"],
+          paymentId: partialPayment.id,
         },
       }),
     );
