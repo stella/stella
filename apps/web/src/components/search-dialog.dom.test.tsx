@@ -26,6 +26,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
   VITE_BETA_FEATURES_ENABLED: "true",
+  VITE_PUBLIC_LAW_ENABLED: "true",
 });
 Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
   configurable: true,
@@ -192,7 +193,6 @@ const { ActionCapabilitiesProvider } =
   await import("@/lib/organization/feature-access/capability-actions");
 const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
-const { useDevStore } = await import("@/lib/dev-store");
 const { assignUserStorage } = await import("@/lib/account/user-scoped-storage");
 const { SearchDialog } = await import("./search-dialog");
 
@@ -217,7 +217,6 @@ afterEach(() => {
   searchHits = [hit];
   citationHits = citationResponse.hits;
   assignUserStorage(undefined);
-  useDevStore.setState({ publicLawPreview: false });
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -316,7 +315,6 @@ test("actions stay on the blank screen and never sit above results", async () =>
 });
 
 test("a resolved citation is the first keyboard result above matter hits", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   const appRouter = await mount(async () => {
     const root = router.createRootRoute({ component: SearchDialogHarness });
     const decision = router.createRoute({
@@ -366,7 +364,6 @@ test("a resolved citation is the first keyboard result above matter hits", async
 });
 
 test("Case law scope searches only case law and drops matter recents and actions", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   await mount();
   await testing.act(async () => {
     testing.fireEvent.click(
@@ -457,7 +454,6 @@ test("a folder result reveals the folder in the tree on screen, not the first tr
 });
 
 test("a bare docket shows the sheet identifier of every matching decision", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   const first = citationDecision;
   citationHits = [
     first,
@@ -490,7 +486,6 @@ test("highlighting a citation clears the selected supplemental case-law preview"
       identifiers: [{ type: "case-number", value: "22 As 40/2025 - 51" }],
     },
   ];
-  useDevStore.setState({ publicLawPreview: true });
   await mount();
   const input = await typeQuery(hit.title, "22 As 40/2025 - 49");
   await testing.act(async () => {
