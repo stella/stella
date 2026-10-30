@@ -87,7 +87,9 @@ const report = async ({
 const showChip = (installUrl?: string) =>
   render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <BrowserExtensionChip installUrl={installUrl} />
+      <BrowserExtensionChip
+        {...(installUrl === undefined ? {} : { installUrl })}
+      />
     </IntlProvider>,
   );
 
