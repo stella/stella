@@ -155,6 +155,16 @@ const databaseUrlWithName = (source: URL, databaseName: string) => {
   return result.toString();
 };
 
+const dropClone = async (admin: PostgresAdmin, databaseName: string) => {
+  // Only client sessions: an owner role may not terminate autovacuum
+  // workers, and DROP DATABASE already stops those on its own.
+  await admin.query(
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
+    [databaseName],
+  );
+  await admin.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`);
+};
+
 export const runPostgresWorkers = async ({
   files,
   durations,
@@ -270,11 +280,15 @@ export const runPostgresWorkers = async ({
       child.kill(received);
     }
   });
+  const cloneTemplate = async (databaseName: string) => {
+    await admin.query(
+      `CREATE DATABASE ${quoteIdentifier(databaseName)} TEMPLATE ${quoteIdentifier(template)}`,
+    );
+  };
+
   try {
     for (const databaseName of databaseNames) {
-      await admin.query(
-        `CREATE DATABASE ${quoteIdentifier(databaseName)} TEMPLATE ${quoteIdentifier(template)}`,
-      );
+      await cloneTemplate(databaseName);
     }
     const started = plan.map(() => now());
     const runBatch = async (batch: readonly string[], index: number) => {
@@ -292,7 +306,20 @@ export const runPostgresWorkers = async ({
     const statuses = await Promise.all(
       plan.map(async (workerPlan, index) => {
         let firstFailure = 0;
-        for (const batch of workerPlan.batches) {
+        for (const [position, batch] of workerPlan.batches.entries()) {
+          // An exclusive suite starts from the template, not from the rows the
+          // suites before it on this worker left behind: its assertions over
+          // shared tables then depend on nothing but its own writes.
+          const databaseName = databaseNames.at(index);
+          if (
+            signal === undefined &&
+            position > 0 &&
+            databaseName !== undefined &&
+            batch.every((file) => exclusivePaths.has(file))
+          ) {
+            await dropClone(admin, databaseName);
+            await cloneTemplate(databaseName);
+          }
           if (signal !== undefined) {
             break;
           }
@@ -341,15 +368,7 @@ export const runPostgresWorkers = async ({
   } finally {
     unregister();
     for (const databaseName of databaseNames.toReversed()) {
-      // Only client sessions: an owner role may not terminate autovacuum
-      // workers, and DROP DATABASE already stops those on its own.
-      await admin.query(
-        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
-        [databaseName],
-      );
-      await admin.query(
-        `DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`,
-      );
+      await dropClone(admin, databaseName);
     }
     await admin.close();
   }

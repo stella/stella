@@ -1,5 +1,6 @@
 // parser-output-unchanged: Reconciliation exposes the existing totalHits count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
+// parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -1161,7 +1162,7 @@ const readDocument = async (
   if (html !== undefined) {
     return { output: parsePlKisDocumentHtml({ ...input, html }), from: "html" };
   }
-  if (pdfBytes === undefined) {
+  if (pdfBytes === undefined || !isPdf(pdfBytes)) {
     return undefined;
   }
   const read = await Result.tryPromise({
@@ -1348,7 +1349,7 @@ export const assemblePlKisDecision = async ({
       // The PDF is stored beside the envelope rather than in it, so a corrected
       // rendition under an unchanged detail has to change the hash too.
       rawHash:
-        parsed?.from === "pdf" && pdfBytes !== undefined
+        pdfBytes !== undefined
           ? hashContent(
               `${sourceRaw}\n${createSha256().update(pdfBytes).digest("hex")}`,
             )
@@ -1356,7 +1357,7 @@ export const assemblePlKisDecision = async ({
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
       documentAst,
       sourceRaw,
-      ...(parsed?.from === "pdf" && pdfBytes !== undefined
+      ...(pdfBytes !== undefined
         ? {
             sourceRawObjects: {
               [PDF_OBJECT]: { bytes: pdfBytes, contentType: "application/pdf" },
@@ -1422,7 +1423,7 @@ const fetchPdf = async (
       requestError(cursor, `PDF answered ${response.status}`, response.status),
     );
   }
-  return Result.ok(isPdf(response.bytes) ? response.bytes : undefined);
+  return Result.ok(response.bytes);
 };
 
 /**

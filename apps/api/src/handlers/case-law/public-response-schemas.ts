@@ -40,6 +40,7 @@ import {
   CENSUS_VERDICTS,
   publisherCensusSchema,
 } from "@/api/lib/case-law/completeness-census-contract";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -413,7 +414,7 @@ const provisionProcessingState = v.union([
   }),
 ]);
 
-export const coverageResponseSchema = v.object({
+const coverageSnapshotEntries = {
   generatedAt: boundedString(128),
   provisionProcessing: v.pipe(
     v.array(
@@ -448,6 +449,17 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
+};
+
+/** The answer the scheduler stores, before a reader states its age. */
+export const coverageSnapshotSchema = v.object(coverageSnapshotEntries);
+
+export const coverageResponseSchema = v.object({
+  ...coverageSnapshotEntries,
+  freshness: v.object({
+    status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+    ageSeconds: v.number(),
+  }),
 } satisfies Record<
   keyof Success<typeof readCaseLawCoverageHandler>,
   v.GenericSchema

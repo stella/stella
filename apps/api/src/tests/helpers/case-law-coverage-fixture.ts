@@ -1,6 +1,11 @@
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type { PublisherCensus } from "@/api/lib/case-law/completeness-census-contract";
 
+type CoverageResponse = Exclude<
+  Awaited<ReturnType<typeof readCaseLawCoverageHandler>>,
+  { message: string }
+>;
+
 const asOf = "2026-10-01T12:00:00.000Z";
 const storedAsOf = "2026-09-30T12:00:00.000Z";
 
@@ -62,7 +67,8 @@ const base = {
   ],
 } as const;
 
-export const CASE_LAW_COVERAGE_FIXTURE = {
+/** The answer as the refresh stores it. */
+export const CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE = {
   generatedAt: asOf,
   provisionProcessing: [],
   totals: {
@@ -115,7 +121,13 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
       courts: null,
     },
   ],
-} as const satisfies Awaited<ReturnType<typeof readCaseLawCoverageHandler>>;
+} as const satisfies Omit<CoverageResponse, "freshness">;
+
+/** The answer as a reader receives it, served a minute after it was computed. */
+export const CASE_LAW_COVERAGE_FIXTURE = {
+  ...CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+  freshness: { status: "current", ageSeconds: 60 },
+} as const satisfies CoverageResponse;
 
 const expectedSources = [
   {
@@ -135,6 +147,7 @@ const expectedSources = [
 
 export const CASE_LAW_COVERAGE_EXPECTED = {
   asOf,
+  freshness: CASE_LAW_COVERAGE_FIXTURE.freshness,
   countries: [
     {
       country: "CZE",

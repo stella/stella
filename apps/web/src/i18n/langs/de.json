@@ -2088,8 +2088,6 @@
     "clearFilters": "Filter löschen",
     "clearSearch": "Suche löschen",
     "close": "Schließen",
-    "closeAll": "Alle schließen",
-    "closeOthers": "Andere schließen",
     "columns": "Spalten",
     "comfortable": "Komfortabel",
     "comingSoon": "Demnächst verfügbar",
@@ -2874,6 +2872,8 @@
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
       "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
+      "idempotencyInProgress": "Diese Anfrage wird noch verarbeitet. Warten Sie einen Moment und versuchen Sie es erneut.",
+      "idempotencyKeyReused": "Die Angaben haben sich seit dem vorherigen Versuch geändert. Setzen Sie das Formular zurück und versuchen Sie es erneut.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
@@ -3676,6 +3676,9 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "closeAllTabs": "{count, plural, one {# Tab} other {Alle # Tabs}} schließen",
+    "closeOtherTabs": "{count, plural, one {# anderen Tab} other {# andere Tabs}} schließen",
+    "closeTab": "<bdi>{name}</bdi> schließen",
     "conversionRefusal": {
       "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
       "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",

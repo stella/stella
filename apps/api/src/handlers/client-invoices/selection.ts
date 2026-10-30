@@ -1,5 +1,8 @@
 import { Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
+import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -36,4 +39,40 @@ export const validateClientInvoiceSelection = (
     );
   }
   return Result.ok({ ids, first });
+};
+
+type ResolveClientInvoiceMattersOptions = {
+  organizationId: SafeId<"organization">;
+  clientId: SafeId<"contact">;
+  workspaceIds: readonly SafeId<"workspace">[];
+};
+
+export const resolveClientInvoiceMatters = async (
+  tx: Pick<Transaction, "select">,
+  {
+    organizationId,
+    clientId,
+    workspaceIds,
+  }: ResolveClientInvoiceMattersOptions,
+) => {
+  const selected = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        eq(workspaces.clientId, clientId),
+      ),
+    )
+    .orderBy(workspaces.id)
+    .limit(workspaceIds.length);
+  return selected.length === workspaceIds.length
+    ? Result.ok(selected)
+    : Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Some client matters were not found or are inaccessible",
+        }),
+      );
 };
