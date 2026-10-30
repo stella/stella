@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { printError } from "@stll/errors";
@@ -21,10 +21,39 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { runEcjFormexRefresh } from "@/api/scripts/eu-ecj-formex-refresh";
 import { operatorFlags } from "@/api/scripts/operator-flags";
+
+const holdSourceLease = async (
+  options: Parameters<typeof withCaseLawSourceIngestionLease>[0],
+) => {
+  let markStarted!: (lease: CaseLawSourceIngestionLease) => void;
+  const started = new Promise<CaseLawSourceIngestionLease>((resolve) => {
+    markStarted = resolve;
+  });
+  let finish!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const run = withCaseLawSourceIngestionLease(options, async (lease) => {
+    markStarted(lease);
+    await finished;
+  });
+  const sourceLease = await Promise.race([run.then(() => null), started]);
+  if (sourceLease === null) {
+    return null;
+  }
+  return {
+    sourceLease,
+    release: async () => {
+      finish();
+      await run;
+    },
+  };
+};
 
 /**
  * Refresh named EU decisions through the ingestion pipeline. Full refetches
@@ -118,29 +147,20 @@ const runStoredFormexRefresh = async ({
       limit,
       acquireBatch: async () => {
         const lane = await enterCaseLawMaintenanceLane();
-        const acquired = await Result.tryPromise({
-          try: async () =>
-            await acquireCaseLawSourceIngestionLease({
-              scopedDb: lane.ingestionDb,
-              sourceId: source.id,
-            }),
-          catch: (cause) => cause,
+        const held = await holdSourceLease({
+          scopedDb: lane.ingestionDb,
+          sourceId: source.id,
         });
-        if (Result.isError(acquired)) {
-          await lane.release();
-          throw acquired.error;
-        }
-        const sourceLease = acquired.value;
-        if (sourceLease === null) {
+        if (held === null) {
           await lane.release();
           return null;
         }
         return {
           ingestionDb: lane.ingestionDb,
-          sourceLease,
+          sourceLease: held.sourceLease,
           release: async () => {
             try {
-              await sourceLease.release();
+              await held.release();
             } finally {
               await lane.release();
             }
@@ -341,16 +361,17 @@ const runCelexRefresh = async ({
     process.exit(1);
   }
 
-  const sourceLease = await acquireCaseLawSourceIngestionLease({
+  const held = await holdSourceLease({
     scopedDb: ingestionDb,
     sourceId: source.id,
   });
-  if (sourceLease === null) {
+  if (held === null) {
     console.error(
       "Source eu-ecj is being ingested right now (lease held). Retry later.",
     );
     process.exit(1);
   }
+  const { sourceLease } = held;
 
   // Object-held so the flag's cross-callback mutation is visible to
   // per-site flow analysis; a plain boolean reads as always-false.
@@ -459,7 +480,7 @@ const runCelexRefresh = async ({
       await Bun.sleep(delayMs);
     }
   } finally {
-    await sourceLease.release();
+    await held.release();
   }
 
   console.log("--- outcomes ---");

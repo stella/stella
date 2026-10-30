@@ -1661,6 +1661,43 @@ export const acquireReplayLease = async <TLease>({
   return { type: "unavailable", waitedMs };
 };
 
+type WithReplayLeaseOptions<T> = Omit<
+  AcquireReplayLeaseOptions<never>,
+  "acquire"
+> & {
+  run: () => Promise<T | null>;
+};
+
+/** Wait for a lease owner to run one complete operation, without exporting its lease. */
+export const runWithReplayLease = async <T>({
+  run,
+  waitBudgetMs,
+  onWaitStart,
+  sleep = Bun.sleep,
+}: WithReplayLeaseOptions<T>): Promise<
+  | { type: "completed"; value: T; waitedMs: number }
+  | { type: "unavailable"; waitedMs: number }
+> => {
+  const first = await run();
+  if (first !== null) {
+    return { type: "completed", value: first, waitedMs: 0 };
+  }
+  if (waitBudgetMs < REPLAY_LEASE_RETRY_PAUSE_MS) {
+    return { type: "unavailable", waitedMs: 0 };
+  }
+  onWaitStart?.();
+  let waitedMs = 0;
+  while (waitedMs + REPLAY_LEASE_RETRY_PAUSE_MS <= waitBudgetMs) {
+    await sleep(REPLAY_LEASE_RETRY_PAUSE_MS);
+    waitedMs += REPLAY_LEASE_RETRY_PAUSE_MS;
+    const value = await run();
+    if (value !== null) {
+      return { type: "completed", value, waitedMs };
+    }
+  }
+  return { type: "unavailable", waitedMs };
+};
+
 /**
  * How many decisions one run may visit.
  *

@@ -153,3 +153,24 @@ export const acquireCaseLawSourceIngestionLease = async ({
     source,
   };
 };
+
+/**
+ * Run one bounded source operation while owning its ingestion lease.
+ *
+ * A held lease remains a typed `null` outcome. Once acquisition succeeds,
+ * this owner is the only code responsible for releasing it.
+ */
+export const withCaseLawSourceIngestionLease = async <T>(
+  options: AcquireCaseLawSourceIngestionLeaseOptions,
+  work: (lease: CaseLawSourceIngestionLease) => Promise<T>,
+): Promise<T | null> => {
+  const lease = await acquireCaseLawSourceIngestionLease(options);
+  if (lease === null) {
+    return null;
+  }
+  try {
+    return await work(lease);
+  } finally {
+    await lease.release();
+  }
+};

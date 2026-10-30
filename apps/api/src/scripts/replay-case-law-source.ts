@@ -50,7 +50,6 @@ import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter"
  */
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
-  acquireReplayLease,
   countReplayability,
   REPLAY_ROW_OUTCOME,
   replayCapability,
@@ -58,10 +57,11 @@ import {
   type ReplayRowReport,
   type ReplayRunReport,
   type ReplayVisitBound,
+  runWithReplayLease,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { parseReplayArguments } from "@/api/handlers/case-law/ingestion/replay-arguments";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   readS3ObjectIfPresent,
   refreshCorpusS3,
@@ -238,13 +238,33 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
   // A writing run takes the source's ingestion lease: it allocates observation
   // orders from the same counter a crawl does, and the two must not interleave.
   // A dry run writes nothing and takes nothing.
+  const runReplay = async (
+    sourceLease: Parameters<typeof replayCaseLawSource>[0]["sourceLease"],
+  ) =>
+    await Result.tryPromise({
+      try: async () =>
+        await replayCaseLawSource({
+          adapter,
+          scopedDb: ingestionDb,
+          sourceId: source.id,
+          readStoredRaw,
+          sourceLease,
+          bound,
+          pageSize,
+          after,
+          scope,
+          rejectionPolicy,
+          recordRow,
+        }),
+      catch: (cause) => cause,
+    });
   const acquisition = apply
-    ? await acquireReplayLease({
-        acquire: async () =>
-          await acquireCaseLawSourceIngestionLease({
-            scopedDb: ingestionDb,
-            sourceId: source.id,
-          }),
+    ? await runWithReplayLease({
+        run: async () =>
+          await withCaseLawSourceIngestionLease(
+            { scopedDb: ingestionDb, sourceId: source.id },
+            runReplay,
+          ),
         waitBudgetMs: leaseWaitMinutes * MINUTE_MS,
         onWaitStart: () => {
           console.log(
@@ -265,29 +285,11 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
       `lease acquired:      after ${String(acquisition.waitedMs / 1000)} s of waiting`,
     );
   }
-  const sourceLease = acquisition?.lease ?? null;
+  const replayed =
+    acquisition?.type === "completed"
+      ? acquisition.value
+      : await runReplay(null);
 
-  const replayed = await Result.tryPromise({
-    try: async () =>
-      await replayCaseLawSource({
-        adapter,
-        scopedDb: ingestionDb,
-        sourceId: source.id,
-        readStoredRaw,
-        sourceLease,
-        bound,
-        pageSize,
-        after,
-        scope,
-        rejectionPolicy,
-        recordRow,
-      }),
-    catch: (cause) => cause,
-  });
-
-  // Released on both paths: a lease left behind blocks the source's next
-  // ingestion cycle until it expires.
-  await sourceLease?.release();
   await resultsFile?.close();
 
   if (Result.isError(replayed)) {

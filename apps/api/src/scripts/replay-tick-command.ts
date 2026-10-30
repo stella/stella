@@ -41,8 +41,8 @@ import {
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import type {
-  acquireCaseLawSourceIngestionLease,
   CaseLawSourceIngestionLease,
+  withCaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
@@ -149,7 +149,7 @@ const loadReplayTickRuntime = async () => {
     { runBackgroundReplayTick },
     { createBackgroundReplayRunner },
     { createBackgroundReplayStore },
-    { acquireCaseLawSourceIngestionLease },
+    { withCaseLawSourceIngestionLease },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -166,7 +166,7 @@ const loadReplayTickRuntime = async () => {
     runBackgroundReplayTick,
     createBackgroundReplayRunner,
     createBackgroundReplayStore,
-    acquireCaseLawSourceIngestionLease,
+    withCaseLawSourceIngestionLease,
   };
 };
 
@@ -269,29 +269,45 @@ export const createReplayPreflightGate = ({
 };
 
 type ReplayLeaseOwnerOptions = {
-  acquire: typeof acquireCaseLawSourceIngestionLease;
+  runWithLease: typeof withCaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
 };
 
 const createReplayLeaseOwner = ({
-  acquire,
+  runWithLease,
   scopedDb,
 }: ReplayLeaseOwnerOptions) => {
   let lease: CaseLawSourceIngestionLease | null = null;
   return {
     getLease: () => lease,
     acquireLease: async (source: BackgroundReplaySource) => {
-      lease = await acquire({
-        scopedDb,
-        sourceId: source.id,
-        releaseDb: releaseReplayDb,
+      let markStarted!: (acquired: boolean) => void;
+      const started = new Promise<boolean>((resolve) => {
+        markStarted = resolve;
       });
-      if (lease === null) {
+      let finish!: () => void;
+      const finished = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const run = runWithLease(
+        { scopedDb, sourceId: source.id, releaseDb: releaseReplayDb },
+        async (acquired) => {
+          lease = acquired;
+          markStarted(true);
+          await finished;
+        },
+      ).then((outcome) => {
+        if (outcome === null) {
+          markStarted(false);
+        }
+        return outcome;
+      });
+      if (!(await started)) {
         return null;
       }
-      const claimed = lease;
       return async () => {
-        await claimed.release();
+        finish();
+        await run;
         lease = null;
       };
     },
@@ -408,7 +424,7 @@ const runReplayOnSlotSession = async ({
   });
   let lastVerdict: Verdict = { kind: "unknown", signals: [] };
   const leaseOwner = createReplayLeaseOwner({
-    acquire: runtime.acquireCaseLawSourceIngestionLease,
+    runWithLease: runtime.withCaseLawSourceIngestionLease,
     scopedDb: ingestionDb,
   });
   const cleanupStore = await createReplayCleanupStore();

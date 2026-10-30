@@ -189,7 +189,7 @@ const loadRuntime = async () => {
     { createEuCompletionStore },
     { runEuCompletionTick },
     { createEuCompletionRunner },
-    { acquireCaseLawSourceIngestionLease },
+    { withCaseLawSourceIngestionLease },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -208,7 +208,7 @@ const loadRuntime = async () => {
     createEuCompletionStore,
     runEuCompletionTick,
     createEuCompletionRunner,
-    acquireCaseLawSourceIngestionLease,
+    withCaseLawSourceIngestionLease,
     caseLawSources,
   };
 };
@@ -255,6 +255,8 @@ const createCompletionFence = async ({
   });
   let slotHeld = false;
   let lease: CaseLawSourceIngestionLease | null = null;
+  let finishLease: (() => void) | null = null;
+  let leaseRun: Promise<unknown> | null = null;
   return {
     getLease: () => lease,
     fence: async () => {
@@ -293,12 +295,36 @@ const createCompletionFence = async ({
     },
     acquireDocument: async () => {
       signal.throwIfAborted();
-      lease ??= await runtime.acquireCaseLawSourceIngestionLease({
-        scopedDb: handles.ingestionDb,
-        sourceId,
-        releaseDb: cleanup.ingestionDb,
+      if (lease !== null) {
+        return;
+      }
+      let markStarted!: (acquired: boolean) => void;
+      const started = new Promise<boolean>((resolve) => {
+        markStarted = resolve;
       });
-      if (lease === null) {
+      const finished = new Promise<void>((resolve) => {
+        finishLease = resolve;
+      });
+      leaseRun = runtime
+        .withCaseLawSourceIngestionLease(
+          {
+            scopedDb: handles.ingestionDb,
+            sourceId,
+            releaseDb: cleanup.ingestionDb,
+          },
+          async (acquired) => {
+            lease = acquired;
+            markStarted(true);
+            await finished;
+          },
+        )
+        .then((outcome) => {
+          if (outcome === null) {
+            markStarted(false);
+          }
+          return outcome;
+        });
+      if (!(await started)) {
         throw new EuCompletionStop({
           message: "Completion source lease is held",
           reason: "held",
@@ -306,13 +332,17 @@ const createCompletionFence = async ({
       }
     },
     releaseDocument: async () => {
-      const acquired = lease;
+      finishLease?.();
+      await leaseRun;
       lease = null;
-      await acquired?.release();
+      finishLease = null;
+      leaseRun = null;
     },
     close: async () => {
       try {
-        await lease?.release();
+        finishLease?.();
+        await leaseRun;
+        lease = null;
       } finally {
         await slot.close();
       }

@@ -21,7 +21,7 @@ import { caseLawSources } from "@/api/db/schema";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { readS3ObjectIfPresent, refreshS3 } from "@/api/lib/s3";
@@ -112,37 +112,28 @@ export const runCaseLawSourceBackfill = async <
     process.exit(1);
   }
 
-  const sourceLease = await acquireCaseLawSourceIngestionLease({
-    scopedDb: ingestionDb,
-    sourceId: source.id,
-  });
-  if (sourceLease === null) {
+  const outcome = await withCaseLawSourceIngestionLease(
+    { scopedDb: ingestionDb, sourceId: source.id },
+    async (sourceLease) =>
+      await run({
+        scopedDb: ingestionDb,
+        sourceId: source.id,
+        sourceLease,
+        readStoredRaw: async (key) => {
+          const bytes = await readS3ObjectIfPresent(
+            key,
+            AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
+          );
+          return bytes === null ? null : new Uint8Array(bytes);
+        },
+        requestBudget,
+      }),
+  );
+  if (outcome === null) {
     console.error(
       `Source ${adapterKey} is being ingested right now (lease held). Retry later.`,
     );
     process.exit(1);
-  }
-
-  let outcome: Result<TReport, TError>;
-  try {
-    outcome = await run({
-      scopedDb: ingestionDb,
-      sourceId: source.id,
-      sourceLease,
-      readStoredRaw: async (key) => {
-        const bytes = await readS3ObjectIfPresent(
-          key,
-          AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
-        );
-        return bytes === null ? null : new Uint8Array(bytes);
-      },
-      requestBudget,
-    });
-  } finally {
-    // Released on every path, including a rejection the pass does not turn
-    // into a `Result`: a failed pass must not leave the source locked against
-    // the crawl until the lease expires.
-    await sourceLease.release();
   }
 
   if (Result.isError(outcome)) {

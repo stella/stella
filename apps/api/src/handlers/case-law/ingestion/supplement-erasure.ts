@@ -43,12 +43,12 @@ import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipel
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
-import { acquireReplayLease } from "@/api/handlers/case-law/ingestion/replay";
+import { runWithReplayLease } from "@/api/handlers/case-law/ingestion/replay";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
 
@@ -203,78 +203,83 @@ const recomposeHolder = async ({
       reason: "its adapter cannot rebuild a stored payload",
     };
   }
-  const acquisition = await acquireReplayLease({
-    acquire: async () =>
-      await acquireCaseLawSourceIngestionLease({ scopedDb, sourceId }),
+  const acquisition = await runWithReplayLease({
+    run: async () =>
+      await withCaseLawSourceIngestionLease(
+        { scopedDb, sourceId },
+        async (lease) =>
+          await Result.tryPromise({
+            try: async () => {
+              const rebuilt = await rebuildStoredJudgment({
+                judgmentId,
+                scopedDb,
+                reparseStoredRaw,
+                readStoredRaw,
+              });
+              if (rebuilt.type === "unreadable") {
+                return { type: "withheld" as const, reason: rebuilt.detail };
+              }
+              if (rebuilt.type === "read-failed") {
+                return {
+                  type: "withheld" as const,
+                  reason: rebuilt.error.message,
+                };
+              }
+              await lease.beforeDatabaseMark();
+              const written = await processStoredDecision({
+                input: rebuilt.result,
+                decisionId: judgmentId,
+                sourceRawS3Key: rebuilt.sourceRawS3Key,
+                sourceId,
+                scopedDb,
+                observedAt: new Date(),
+                observationOrder: await allocateSourceObservationOrder({
+                  leaseToken: lease.leaseToken,
+                  scopedDb,
+                  sourceId,
+                }),
+              });
+              if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
+                return {
+                  type: "withheld" as const,
+                  reason: `retryable: ${written.reason}`,
+                };
+              }
+              // A write can complete without landing (a newer observation owns the
+              // row); only a document that no longer composes the erased row counts.
+              const landed = await scopedDb(async (tx) =>
+                (
+                  await tx
+                    .select({ id: caseLawDecisions.id })
+                    .from(caseLawDecisions)
+                    .where(
+                      and(
+                        eq(caseLawDecisions.id, judgmentId),
+                        isNotNull(caseLawDecisions.fulltext),
+                      ),
+                    )
+                    .limit(1)
+                ).at(0),
+              );
+              const stillHolds = (await selectHolders(scopedDb, erasedId)).some(
+                ({ id }) => id === judgmentId,
+              );
+              return landed !== undefined && !stillHolds
+                ? { type: "recomposed" as const }
+                : {
+                    type: "withheld" as const,
+                    reason: "the rebuild did not replace its document",
+                  };
+            },
+            catch: (cause) => cause,
+          }),
+      ),
     waitBudgetMs: leaseWaitMs,
   });
   if (acquisition.type === "unavailable") {
     return { type: "withheld", reason: "the source's ingestion lease is held" };
   }
-  const { lease } = acquisition;
-  const rebuiltAndWritten = await Result.tryPromise({
-    try: async () => {
-      const rebuilt = await rebuildStoredJudgment({
-        judgmentId,
-        scopedDb,
-        reparseStoredRaw,
-        readStoredRaw,
-      });
-      if (rebuilt.type === "unreadable") {
-        return { type: "withheld" as const, reason: rebuilt.detail };
-      }
-      if (rebuilt.type === "read-failed") {
-        return { type: "withheld" as const, reason: rebuilt.error.message };
-      }
-      await lease.beforeDatabaseMark();
-      const written = await processStoredDecision({
-        input: rebuilt.result,
-        decisionId: judgmentId,
-        sourceRawS3Key: rebuilt.sourceRawS3Key,
-        sourceId,
-        scopedDb,
-        observedAt: new Date(),
-        observationOrder: await allocateSourceObservationOrder({
-          leaseToken: lease.leaseToken,
-          scopedDb,
-          sourceId,
-        }),
-      });
-      if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
-        return {
-          type: "withheld" as const,
-          reason: `retryable: ${written.reason}`,
-        };
-      }
-      // A write can complete without landing (a newer observation owns the
-      // row); only a document that no longer composes the erased row counts.
-      const landed = await scopedDb(async (tx) =>
-        (
-          await tx
-            .select({ id: caseLawDecisions.id })
-            .from(caseLawDecisions)
-            .where(
-              and(
-                eq(caseLawDecisions.id, judgmentId),
-                isNotNull(caseLawDecisions.fulltext),
-              ),
-            )
-            .limit(1)
-        ).at(0),
-      );
-      const stillHolds = (await selectHolders(scopedDb, erasedId)).some(
-        ({ id }) => id === judgmentId,
-      );
-      return landed !== undefined && !stillHolds
-        ? { type: "recomposed" as const }
-        : {
-            type: "withheld" as const,
-            reason: "the rebuild did not replace its document",
-          };
-    },
-    catch: (cause) => cause,
-  });
-  await lease.release();
+  const rebuiltAndWritten = acquisition.value;
   if (Result.isError(rebuiltAndWritten)) {
     return {
       type: "withheld",
