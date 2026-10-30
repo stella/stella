@@ -23,7 +23,7 @@ const UNID = "0123456789abcdef0123456789abcdef";
 
 const projectionOf = async (sourceRaw: string) =>
   czNsRetention.type === "checked"
-    ? await czNsRetention.project(sourceRaw)
+    ? await czNsRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("cz-ns is declared unparsed");
 
 /** The oracle's verdict on the adapter's document against the projection. */

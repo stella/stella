@@ -28,7 +28,7 @@ const ADAPTER_FIXTURES = new URL(
 
 const projectionOf = async (sourceRaw: string) =>
   czUohsRetention.type === "checked"
-    ? await czUohsRetention.project(sourceRaw)
+    ? await czUohsRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("cz-uohs is declared unparsed");
 
 const records = () => parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING);

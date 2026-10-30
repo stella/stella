@@ -927,3 +927,33 @@ test("retains nested table text only in its owning outer cell", () => {
   expect(fulltext).toContain("Header");
   expect(fulltext).toContain("Footer");
 });
+
+const parsedLinkHrefs = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => [
+    ...(inline.type === "link" ? [inline.href] : []),
+    ...(hasInlineChildren(inline) ? parsedLinkHrefs(inline.children) : []),
+  ]);
+
+const footnoteLinksOf = (content: string, footnoteIds?: readonly string[]) => {
+  const result = parsePlDecisionContent(baseInput(content, { footnoteIds }));
+  return result.documentAst.blocks.flatMap((block) =>
+    "inlines" in block ? parsedLinkHrefs(block.inlines) : [],
+  );
+};
+
+test("only exact footnotes from the current document extend the URL policy", async () => {
+  const html = await Bun.file(
+    new URL("__fixtures__/pl-footnote-fragments.html", import.meta.url),
+  ).text();
+  expect(footnoteLinksOf(html)).toEqual(["https://example.test/source"]);
+  expect(footnoteLinksOf(html, ["note"])).toEqual([
+    "#note",
+    "https://example.test/source",
+  ]);
+  expect(
+    footnoteLinksOf(
+      '<p>Other <a href="#note">source</a> <a href="#other-document-note">note</a></p>',
+      ["other-document-note"],
+    ),
+  ).toEqual(["#other-document-note"]);
+});

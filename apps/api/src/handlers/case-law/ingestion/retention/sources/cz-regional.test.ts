@@ -62,6 +62,7 @@ const projectionOf = async (decision: IngestionResult) =>
   czRegionalRetention.type === "checked"
     ? await czRegionalRetention.project(
         decision.sourceRaw ?? panic("the decision stores no raw"),
+        { sourceRawObjects: decision.sourceRawObjects ?? {} },
       )
     : panic("cz-regional is declared unparsed");
 
@@ -179,13 +180,15 @@ describe("cz-regional retention against the finaldoc the court served", () => {
   test("a raw that is not this source's envelope is reported unreadable", async () => {
     expect(
       czRegionalRetention.type === "checked" &&
-        (await czRegionalRetention.project("{}")).type,
+        (await czRegionalRetention.project("{}", { sourceRawObjects: {} }))
+          .type,
     ).toBe("unreadable");
     expect(
       czRegionalRetention.type === "checked" &&
         (
           await czRegionalRetention.project(
             encodeSourceRawEnvelope({ listing: "{}", document: "not json" }),
+            { sourceRawObjects: {} },
           )
         ).type,
     ).toBe("unreadable");

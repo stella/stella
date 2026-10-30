@@ -259,7 +259,7 @@ export const czUohsDocumentAst = ({
         ? { type: "text", text }
         : {
             type: "link",
-            href: `#footnote-${footnoteReference}`,
+            href: `#${encodeURIComponent(footnoteReference.noteId)}`,
             children: [
               {
                 type: "superscript" as const,
