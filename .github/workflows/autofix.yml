@@ -553,7 +553,7 @@ jobs:
         run: |
           if git diff --quiet "$BASE_SHA" HEAD -- scripts/fix-bridge-version.sh; then
             bash scripts/fix-bridge-version.sh
-            echo "allowed=apps/desktop/src-tauri/src/types.rs" >> "$GITHUB_OUTPUT"
+            echo "allowed=apps/desktop/src-tauri/src/types.rs|apps/desktop/fixtures/rpc/app-snapshot.json" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::Bridge-version fixer changed; CI enforces the bump without automatic edits."
           fi

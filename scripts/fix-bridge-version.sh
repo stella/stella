@@ -3,6 +3,7 @@ set -euo pipefail
 
 base_ref="${BASE_SHA:?BASE_SHA is required}"
 types_path=apps/desktop/src-tauri/src/types.rs
+fixture_path=apps/desktop/fixtures/rpc/app-snapshot.json
 bridge_files=(
   apps/desktop/src-tauri/src/bridge.rs
   apps/desktop/src-tauri/src/commands.rs
@@ -33,6 +34,17 @@ if (( head_version > base_version )); then
 fi
 
 next_version=$((base_version + 1))
-sed -i.bak -E "s/^pub const BRIDGE_VERSION: u32 = [0-9]+;/pub const BRIDGE_VERSION: u32 = $next_version;/" "$types_path"
-rm -f "$types_path.bak"
+types_tmp=$(mktemp "${types_path}.XXXXXX")
+fixture_tmp=$(mktemp "${fixture_path}.XXXXXX")
+trap 'rm -f "$types_tmp" "$fixture_tmp"' EXIT
+
+sed -E "s/^pub const BRIDGE_VERSION: u32 = [0-9]+;/pub const BRIDGE_VERSION: u32 = $next_version;/" \
+  "$types_path" > "$types_tmp"
+sed -E "s/^(  \"bridgeVersion\": )[0-9]+,/\1$next_version,/" \
+  "$fixture_path" > "$fixture_tmp"
+
+grep -q "^pub const BRIDGE_VERSION: u32 = $next_version;$" "$types_tmp"
+grep -q "^  \"bridgeVersion\": $next_version,$" "$fixture_tmp"
+mv "$types_tmp" "$types_path"
+mv "$fixture_tmp" "$fixture_path"
 echo "Raised BRIDGE_VERSION from $head_version to $next_version."

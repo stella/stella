@@ -3,6 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   AUTOFIX_BOT,
   AUTOFIX_COMMIT_SUBJECT,
+  BRIDGE_VERSION_ALLOWED,
+  isAutofixablePath,
+  isBridgeVersionAllowedPath,
   planAutofix,
   settledAncestor,
 } from "./autofix-push-scope";
@@ -68,15 +71,26 @@ describe("push-scoped autofix plan", () => {
     });
   });
 
-  test("a bridge surface change schedules its version fixer", () => {
-    const bridge = "apps/desktop/src-tauri/src/bridge.rs";
-    const plan = planAutofix({
-      pullRequestFiles: [bridge],
-      pushFiles: [bridge],
-    });
+  test("Rust bridge files are not formatter inputs", () => {
+    expect(isAutofixablePath("apps/desktop/src-tauri/src/bridge.rs")).toBe(
+      false,
+    );
+    expect(isAutofixablePath("apps/desktop/src-tauri/src/types.rs")).toBe(
+      false,
+    );
+  });
 
-    expect(plan.scoped).toEqual([bridge]);
-    expect(plan.needed).toBe(true);
+  test("the bridge allowance admits exactly the files its fixer writes", () => {
+    expect([...BRIDGE_VERSION_ALLOWED]).toEqual([
+      "apps/desktop/src-tauri/src/types.rs",
+      "apps/desktop/fixtures/rpc/app-snapshot.json",
+    ]);
+    for (const file of BRIDGE_VERSION_ALLOWED) {
+      expect(isBridgeVersionAllowedPath(file)).toBe(true);
+    }
+    expect(
+      isBridgeVersionAllowedPath("apps/desktop/src-tauri/src/bridge.rs"),
+    ).toBe(false);
   });
 
   test("a push that changes nothing the pull request owns needs no job", () => {
