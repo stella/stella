@@ -118,7 +118,6 @@ const correctUntilEmpty = async (
   { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
 ) => {
   const runtime = createBackfillRuntime({
-    introducedBy: "20261030213329_case_law_polarity_kind_evidence",
     name: POLARITY_RULE_KIND_REPAIR_NAME,
     tableName: TABLE_NAME,
     initialSize: BATCH,
