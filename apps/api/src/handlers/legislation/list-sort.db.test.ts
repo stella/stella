@@ -373,7 +373,12 @@ const amendmentCountRuns = async () => {
         )
       );
     })
-    .map((node) => node["Actual Loops"]);
+    .map((node) => {
+      const loops = node["Actual Loops"];
+      return typeof loops === "number"
+        ? loops
+        : panic("An amendment count plan node has no loop count");
+    });
 };
 
 describe("a year-bounded order", () => {
@@ -381,7 +386,10 @@ describe("a year-bounded order", () => {
     const before = await amendmentCountRuns();
     // The year's five Works each get a sort key; the page's three rows (two
     // and the one that proves a next page) each get their column.
-    expect(before.toSorted()).toEqual([3, YEAR_WORKS.length]);
+    expect(before.toSorted((left, right) => left - right)).toEqual([
+      3,
+      YEAR_WORKS.length,
+    ]);
 
     await seedOtherYears(200, 1000);
     expect(await amendmentCountRuns()).toEqual(before);

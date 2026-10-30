@@ -28,7 +28,9 @@ const orderAt = (
     sort,
     year,
     needsYearReason: REASON,
-    onSortChange: (next) => changes.push(next),
+    onSortChange: (next) => {
+      changes.push(next);
+    },
   });
   return { changes, order };
 };
