@@ -23,6 +23,8 @@ export const CI_MARKDOWN_READER_INPUTS = [] as const;
 
 // Short for fast tests, long enough for two shell starts on a busy host.
 const BOUND_SECONDS = 2;
+// Two real deadlines still fit Bun's default per-test budget.
+const RETRY_BOUND_SECONDS = 1;
 
 // Call N of the fake runs the fixture responses/N with $dir set to the
 // directory the download was asked to write into.
@@ -244,24 +246,24 @@ test("a stalled first attempt is stopped at the bound and the retry's files alon
   expect(result.leftovers).toEqual([]);
 });
 
-// timeout: this case deliberately waits for two 2-second process-group deadlines plus child cleanup.
 test("two stalled attempts fail with one error naming the artifact, both outcomes and the run", async () => {
   const result = await runScenario({
     responses: [HANG, HANG],
     args: ["--name", "e2e-web-build"],
+    boundSeconds: RETRY_BOUND_SECONDS,
   });
   expect(result.exitCode).toBe(1);
   expect(result.calls).toHaveLength(2);
   expect(errorLines(result.stdout + result.stderr)).toHaveLength(1);
   const [error] = errorLines(result.stdout);
   expect(error).toStartWith(
-    `::error::Artifact download failed for artifact 'e2e-web-build' in run 4242 of example/repo: attempt 1 timed out after ${String(BOUND_SECONDS)} s`,
+    `::error::Artifact download failed for artifact 'e2e-web-build' in run 4242 of example/repo: attempt 1 timed out after ${String(RETRY_BOUND_SECONDS)} s`,
   );
   expect(error).toContain(
-    `; attempt 2 timed out after ${String(BOUND_SECONDS)} s`,
+    `; attempt 2 timed out after ${String(RETRY_BOUND_SECONDS)} s`,
   );
   expect(existsSync(result.destination)).toBe(false);
-}, 10_000);
+});
 
 test("the download names this run, its repository and the artifact selector", async () => {
   const result = await runScenario({
@@ -340,17 +342,17 @@ test("a stopped attempt leaves no partial file in an existing destination", asyn
   expect(result.leftovers).toEqual([]);
 });
 
-// timeout: this case deliberately waits for two 2-second process-group deadlines plus child cleanup.
 test("stopped attempts that never complete leave no file behind", async () => {
   const result = await runScenario({
     responses: [list("playwright-blob-1"), HANG, HANG],
     args: ["--pattern", "playwright-blob-*", "--merge"],
     existing: { "unrelated.txt": "kept" },
+    boundSeconds: RETRY_BOUND_SECONDS,
   });
   expect(result.exitCode).toBe(1);
   expect(result.files).toEqual({ "unrelated.txt": "kept" });
   expect(result.leftovers).toEqual([]);
-}, 10_000);
+});
 
 test("a pattern that matches no artifact of the run downloads nothing and succeeds", async () => {
   const result = await runScenario({
