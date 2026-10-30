@@ -18,7 +18,7 @@
  * Relative imports only: `migrate.ts` ships as a loose file.
  */
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import type { ReservedSQL } from "bun";
 
 import { declareFingerprintFields } from "@stll/errors";
@@ -103,17 +103,63 @@ const hasPauseColumns = async (connection: ReservedSQL): Promise<boolean> => {
   return row?.present === REQUIRED_COLUMNS.length;
 };
 
-/** Pauses every job not already paused; returns exactly the ids it paused. */
-const pauseJobs = async (connection: ReservedSQL): Promise<string[]> => {
-  const rows = await connection.unsafe<{ id: string }[]>(
-    `UPDATE scheduler_jobs
-     SET paused_until = now() + $1::integer * interval '1 millisecond',
-         paused_by = $2,
-         pause_reason = $3,
-         updated_at = now()
-     WHERE id <> $4
-       AND (paused_until IS NULL OR paused_until <= now())
-     RETURNING id`,
+/** An operator pause that ends within the pause bound, as it was before the takeover. */
+type TakenOverPause = {
+  id: string;
+  pausedBy: string;
+  pauseReason: string;
+  /** Rendered by PostgreSQL, so microseconds and offset survive the round trip. */
+  pausedUntil: string;
+};
+
+type PauseOutcome = {
+  /** Jobs that were not paused; cleared on resume. */
+  pausedIds: string[];
+  /** Operator pauses that would have ended during the schema phase; restored on resume. */
+  takenOver: TakenOverPause[];
+};
+
+/**
+ * One statement pauses every job whose pause (if any) ends before this step's
+ * would, and returns the pauses it replaced. A pause that outlasts the step's
+ * bound stays untouched. `paused_since` is kept by the database trigger, which
+ * preserves it while one active pause replaces another.
+ */
+const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
+  const rows = await connection.unsafe<
+    {
+      id: string;
+      taken_over: boolean;
+      paused_by: string | null;
+      pause_reason: string | null;
+      paused_until_text: string | null;
+    }[]
+  >(
+    `WITH targets AS (
+       SELECT id, paused_by, pause_reason, paused_until AS raw_paused_until,
+              coalesce(paused_until > now(), false) AS taken_over,
+              paused_until::text AS paused_until_text
+       FROM scheduler_jobs
+       WHERE id <> $4
+         AND paused_by IS DISTINCT FROM $2
+         AND (paused_until IS NULL
+              OR paused_until < now() + $1::integer * interval '1 millisecond')
+     ), paused AS (
+       UPDATE scheduler_jobs job
+       SET paused_until = now() + $1::integer * interval '1 millisecond',
+           paused_by = $2,
+           pause_reason = $3,
+           updated_at = now()
+       FROM targets
+       WHERE job.id = targets.id
+         AND job.paused_by IS NOT DISTINCT FROM targets.paused_by
+         AND job.paused_until IS NOT DISTINCT FROM targets.raw_paused_until
+       RETURNING job.id
+     )
+     SELECT targets.id, targets.taken_over, targets.paused_by,
+            targets.pause_reason, targets.paused_until_text
+     FROM targets JOIN paused ON paused.id = targets.id
+     ORDER BY targets.id`,
     [
       SCHEDULER_DRAIN_PAUSE_BOUND_MS,
       SCHEDULER_DRAIN_ACTOR,
@@ -121,7 +167,47 @@ const pauseJobs = async (connection: ReservedSQL): Promise<string[]> => {
       UNPAUSABLE_SCHEDULER_JOB_ID,
     ],
   );
-  return rows.map(({ id }) => id);
+  const outcome: PauseOutcome = { pausedIds: [], takenOver: [] };
+  for (const row of rows) {
+    if (
+      row.taken_over &&
+      row.paused_by !== null &&
+      row.pause_reason !== null &&
+      row.paused_until_text !== null
+    ) {
+      outcome.takenOver.push({
+        id: row.id,
+        pausedBy: row.paused_by,
+        pauseReason: row.pause_reason,
+        pausedUntil: row.paused_until_text,
+      });
+      continue;
+    }
+    outcome.pausedIds.push(row.id);
+  }
+  return outcome;
+};
+
+/** Passes after which a job still changing under the step is a bug, not a race. */
+const MAX_PAUSE_PASSES = 5;
+
+/**
+ * A row an operator changes between the scan and the write fails the write's
+ * compare-and-set (PostgreSQL rechecks it against the new row version), so it
+ * is skipped rather than overwritten with stale originals; another pass picks
+ * it up. The loop ends on the first pass that pauses nothing.
+ */
+const pauseJobs = async (connection: ReservedSQL): Promise<PauseOutcome> => {
+  const total: PauseOutcome = { pausedIds: [], takenOver: [] };
+  for (let pass = 0; pass < MAX_PAUSE_PASSES; pass += 1) {
+    const outcome = await pauseOnce(connection);
+    if (outcome.pausedIds.length + outcome.takenOver.length === 0) {
+      return total;
+    }
+    total.pausedIds.push(...outcome.pausedIds);
+    total.takenOver.push(...outcome.takenOver);
+  }
+  return panic("Scheduler jobs kept changing; the drain could not pause them");
 };
 
 /**
@@ -149,14 +235,16 @@ const readLeased = async (
 };
 
 /**
- * Resumes only the rows this step paused, and only while `paused_by` is still
- * this step's: an operator pause made meanwhile is never overridden.
+ * Clears the pauses this step wrote on unpaused jobs and restores the operator
+ * pauses it replaced, both only while `paused_by` is still this step's: a
+ * pause written meanwhile is never overridden. A restored deadline that has
+ * passed means "elapsed", which the runner treats as resumed.
  */
 const resumeJobs = async (
   connection: ReservedSQL,
-  ids: readonly string[],
-): Promise<number> => {
-  const rows = await connection.unsafe<{ id: string }[]>(
+  { pausedIds, takenOver }: PauseOutcome,
+): Promise<{ resumedCount: number; restoredCount: number }> => {
+  const cleared = await connection.unsafe<{ id: string }[]>(
     `UPDATE scheduler_jobs
      SET paused_until = NULL,
          paused_by = $2,
@@ -166,9 +254,34 @@ const resumeJobs = async (
        AND paused_by = $2
        AND paused_until IS NOT NULL
      RETURNING id`,
-    [JSON.stringify(ids), SCHEDULER_DRAIN_ACTOR, RESUME_REASON],
+    [JSON.stringify(pausedIds), SCHEDULER_DRAIN_ACTOR, RESUME_REASON],
   );
-  return rows.length;
+  const restored = await connection.unsafe<{ id: string }[]>(
+    `UPDATE scheduler_jobs job
+     SET paused_until = original.paused_until::timestamptz,
+         paused_by = original.paused_by,
+         pause_reason = original.pause_reason,
+         updated_at = now()
+     FROM jsonb_to_recordset($1::text::jsonb) AS original(
+       id text, paused_by text, pause_reason text, paused_until text
+     )
+     WHERE job.id = original.id
+       AND job.paused_by = $2
+       AND job.paused_until IS NOT NULL
+     RETURNING job.id`,
+    [
+      JSON.stringify(
+        takenOver.map(({ id, pausedBy, pauseReason, pausedUntil }) => ({
+          id,
+          paused_by: pausedBy,
+          pause_reason: pauseReason,
+          paused_until: pausedUntil,
+        })),
+      ),
+      SCHEDULER_DRAIN_ACTOR,
+    ],
+  );
+  return { resumedCount: cleared.length, restoredCount: restored.length };
 };
 
 const errorName = (error: unknown): string =>
@@ -176,12 +289,12 @@ const errorName = (error: unknown): string =>
 
 const resumeAndReport = async (
   { connection, timing, runtime }: SchedulerDrainOptions,
-  ids: readonly string[],
+  paused: PauseOutcome,
 ): Promise<void> => {
   const startedAt = runtime.now();
   const durationMs = () => Math.max(0, Math.round(runtime.now() - startedAt));
   const resumed = await Result.tryPromise({
-    try: async () => await resumeJobs(connection, ids),
+    try: async () => await resumeJobs(connection, paused),
     catch: (cause) => cause,
   });
   // The pause deadline resumes the jobs on its own; the outcome of the
@@ -191,15 +304,19 @@ const resumeAndReport = async (
       ? {
           event: "migrate.scheduler_resume",
           outcome: "resumed",
-          pausedCount: ids.length,
-          resumedCount: resumed.value,
+          pausedCount: paused.pausedIds.length,
+          takenOverCount: paused.takenOver.length,
+          resumedCount: resumed.value.resumedCount,
+          restoredCount: resumed.value.restoredCount,
           durationMs: durationMs(),
         }
       : {
           event: "migrate.scheduler_resume",
           outcome: "failed",
-          pausedCount: ids.length,
+          pausedCount: paused.pausedIds.length,
+          takenOverCount: paused.takenOver.length,
           resumedCount: 0,
+          restoredCount: 0,
           durationMs: durationMs(),
           errorName: errorName(resumed.error),
         },
@@ -207,9 +324,10 @@ const resumeAndReport = async (
 };
 
 /**
- * Pauses the scheduled jobs not already paused, waits until no pausable job
- * holds a live lease (operator-paused ones included, never touched), runs
- * `work`, and resumes only the jobs it paused whether `work` returned or
+ * Pauses the scheduled jobs, taking over operator pauses that would end within
+ * the pause bound (and leaving longer ones untouched), waits until no pausable job
+ * holds a live lease (operator-paused ones included), runs
+ * `work`, and undoes only its own writes whether `work` returned or
  * threw. A job still leased at the deadline fails the run before `work` starts.
  */
 export const withDrainedScheduler = async <T>(
@@ -221,7 +339,7 @@ export const withDrainedScheduler = async <T>(
     return await work();
   }
   const startedAt = runtime.now();
-  const pausedIds = await pauseJobs(connection);
+  const paused = await pauseJobs(connection);
 
   try {
     let leased = await readLeased(connection);
@@ -231,7 +349,8 @@ export const withDrainedScheduler = async <T>(
         timing.emit({
           event: "migrate.scheduler_drain",
           outcome: "timed_out",
-          pausedCount: pausedIds.length,
+          pausedCount: paused.pausedIds.length,
+          takenOverCount: paused.takenOver.length,
           leasedCount: leased.length,
           drainWaitMs: waitedMs,
         });
@@ -254,14 +373,15 @@ export const withDrainedScheduler = async <T>(
     timing.emit({
       event: "migrate.scheduler_drain",
       outcome: "drained",
-      pausedCount: pausedIds.length,
+      pausedCount: paused.pausedIds.length,
+      takenOverCount: paused.takenOver.length,
       leasedCount: 0,
       drainWaitMs: Math.max(0, Math.round(runtime.now() - startedAt)),
     });
     return await work();
   } finally {
-    if (pausedIds.length > 0) {
-      await resumeAndReport(options, pausedIds);
+    if (paused.pausedIds.length + paused.takenOver.length > 0) {
+      await resumeAndReport(options, paused);
     }
   }
 };

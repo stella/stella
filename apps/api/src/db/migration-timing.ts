@@ -41,6 +41,8 @@ export type MigrationTimingRecord =
       event: "migrate.scheduler_drain";
       outcome: "drained" | "timed_out";
       pausedCount: number;
+      /** Operator pauses replaced for the schema phase. */
+      takenOverCount: number;
       /** Jobs still leased when the drain ended. */
       leasedCount: number;
       drainWaitMs: number;
@@ -50,7 +52,9 @@ export type MigrationTimingRecord =
       event: "migrate.scheduler_resume";
       outcome: "resumed" | "failed";
       pausedCount: number;
+      takenOverCount: number;
       resumedCount: number;
+      restoredCount: number;
       durationMs: number;
       errorName?: string;
     };
