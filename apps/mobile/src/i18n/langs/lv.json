@@ -127,6 +127,22 @@
     "currentVersion": "Pašreizējā versija",
     "loadFailed": "Šo ierakstu neizdevās ielādēt."
   },
+  "document": {
+    "title": "Dokuments",
+    "failedTitle": "Šo dokumentu neizdevās atvērt",
+    "failure": {
+      "offline": "Jūs esat bezsaistē. Izveidojiet savienojumu ar internetu un mēģiniet vēlreiz.",
+      "noFile": "Šim dokumentam vēl nav faila.",
+      "failed": "Atverot radās kļūda. Pēc brīža mēģiniet vēlreiz.",
+      "unsupported": "Lai atvērtu dokumentus, atjauniniet lietotni.",
+      "android": "Android lietotnē dokumentus vēl nevar atvērt."
+    },
+    "retry": "Mēģināt vēlreiz",
+    "preview": "Atvērt priekšskatījumu",
+    "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
+    "unrendered": "Šo dokumentu šeit nevar parādīt, taču sistēmas priekšskatījums, iespējams, to atvērs.",
+    "details": "Detalizēta informācija"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Skaidrība ikvienā lietā.",
