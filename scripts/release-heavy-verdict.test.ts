@@ -300,12 +300,12 @@ test.each([
   [
     "a record of another run",
     { record: record({ run_id: RUN_ID + 1 }) },
-    "another run or commit",
+    "another run, attempt or commit",
   ],
   [
     "a record of another commit",
     { record: record({ head_sha: "e".repeat(40) }) },
-    "another run or commit",
+    "another run, attempt or commit",
   ],
   [
     "a record without a failed screenshots entry",
