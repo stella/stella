@@ -3,10 +3,13 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
+  assertTemplateDatabaseTestsAreExclusive,
   clusterExclusiveMigrationTests,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
   isolateSharedTableDdlTests,
+  needsTemplateDatabase,
+  TEMPLATE_DATABASE_TEST_PATHS,
 } from "./postgres-test-plan";
 import { discoverGatedTestFiles } from "./run-gated-tests";
 
@@ -153,6 +156,28 @@ describe("PostgreSQL shared-table DDL isolation", () => {
       ["src/first.postgres.test.ts", "src/last.postgres.test.ts"],
       [isolated],
     ]);
+  });
+});
+
+describe("PostgreSQL migrated template planning", () => {
+  test("creates a template only when a declared path is selected", () => {
+    expect(needsTemplateDatabase(["src/example.postgres.test.ts"])).toBeFalse();
+    expect(
+      needsTemplateDatabase([
+        "src/example.postgres.test.ts",
+        ...TEMPLATE_DATABASE_TEST_PATHS,
+      ]),
+    ).toBeTrue();
+  });
+
+  test("requires every template consumer to run exclusively", () => {
+    expect(() => assertTemplateDatabaseTestsAreExclusive()).not.toThrow();
+    expect(() =>
+      assertTemplateDatabaseTestsAreExclusive(
+        TEMPLATE_DATABASE_TEST_PATHS,
+        new Set(),
+      ),
+    ).toThrow("src/db/online-repairs-beside-writer.postgres.test.ts");
   });
 });
 

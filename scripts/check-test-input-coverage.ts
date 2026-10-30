@@ -23,6 +23,9 @@
 import { panic } from "better-result";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import { readStringLiterals, readTestInputs } from "./test-input-readers";
 
@@ -48,6 +51,11 @@ const WORKSPACE_DEPENDENCY_PROTOCOL = "workspace:";
  * declaration.
  */
 const TURBO_GLOBAL_INPUTS = new Set(["package.json", "bun.lock", TURBO_CONFIG]);
+const TEST_MODULE_RESOLUTION_OPTIONS = {
+  allowImportingTsExtensions: true,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+} satisfies ts.CompilerOptions;
 
 /** Directories no test reads as repository source. */
 const IGNORED_SEGMENTS = [
@@ -60,6 +68,7 @@ const IGNORED_SEGMENTS = [
   ".astro",
   "coverage",
 ] as const;
+const IGNORED_SEGMENT_SET = new Set<string>(IGNORED_SEGMENTS);
 
 /**
  * Calls whose string arguments are values rather than paths: a matcher compares
@@ -446,6 +455,117 @@ type OutsideRead = {
   readonly value: string;
 };
 
+type LocalModuleRead = {
+  readonly line: number;
+  readonly target: string;
+  readonly value: string;
+};
+
+/** Local imports are test dependencies even when their source omits `.ts`. */
+const localModuleReads = ({
+  packageDir,
+  root,
+  source,
+  testFile,
+}: {
+  readonly packageDir: string;
+  readonly root: string;
+  readonly source: string;
+  readonly testFile: string;
+}): readonly LocalModuleRead[] => {
+  const absoluteTestFile = path.join(root, testFile);
+  const sourceFile = ts.createSourceFile(
+    absoluteTestFile,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const specifiers: ts.StringLiteralLike[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier);
+    } else if (
+      ts.isExportDeclaration(node) &&
+      !node.isTypeOnly &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      !node.isTypeOnly &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteralLike(node.moduleReference.expression)
+    ) {
+      specifiers.push(node.moduleReference.expression);
+    } else if (ts.isCallExpression(node) && node.arguments.length > 0) {
+      const [argument] = node.arguments;
+      const isDynamicImport =
+        node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire =
+        ts.isIdentifier(node.expression) && node.expression.text === "require";
+      if (
+        (isDynamicImport || isRequire) &&
+        argument !== undefined &&
+        ts.isStringLiteralLike(argument)
+      ) {
+        specifiers.push(argument);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const reads: LocalModuleRead[] = [];
+  for (const specifier of specifiers) {
+    if (!isRelativeSpecifier(specifier.text)) {
+      continue;
+    }
+    const unresolved = path.posix.normalize(
+      path.posix.join(path.posix.dirname(testFile), specifier.text),
+    );
+    if (isInside(unresolved, packageDir)) {
+      continue;
+    }
+    const resolved = ts.resolveModuleName(
+      specifier.text,
+      absoluteTestFile,
+      TEST_MODULE_RESOLUTION_OPTIONS,
+      ts.sys,
+    ).resolvedModule;
+    if (resolved === undefined) {
+      // The test runner reports unresolved imports; they name no source input.
+      continue;
+    }
+    if (!isPathInside(root, resolved.resolvedFileName)) {
+      continue;
+    }
+    const repositoryTarget = repoRelativePath(root, resolved.resolvedFileName);
+    if (repositoryTarget === "") {
+      continue;
+    }
+    if (
+      repositoryTarget
+        .split("/")
+        .some((segment) => IGNORED_SEGMENT_SET.has(segment))
+    ) {
+      continue;
+    }
+    reads.push({
+      line:
+        sourceFile.getLineAndCharacterOfPosition(specifier.getStart(sourceFile))
+          .line + 1,
+      target: repositoryTarget,
+      value: specifier.text,
+    });
+  }
+  return reads;
+};
+
 /** Every repository path the package's tests reach outside their own package. */
 const outsideReads = ({
   packageDir,
@@ -458,6 +578,22 @@ const outsideReads = ({
   for (const relative of testFiles(root, packageDir)) {
     const testFile = `${packageDir}/${relative}`;
     const source = readFileSync(path.join(root, testFile), "utf-8");
+    for (const read of localModuleReads({
+      packageDir,
+      root,
+      source,
+      testFile,
+    })) {
+      const { target } = read;
+      if (
+        TURBO_GLOBAL_INPUTS.has(target) ||
+        target === packageDir ||
+        target.startsWith(`${packageDir}/`)
+      ) {
+        continue;
+      }
+      reads.push({ ...read, testFile });
+    }
     for (const { callee, line, value } of readStringLiterals(source)) {
       if (callee !== undefined && NON_READ_CALLS.has(callee)) {
         continue;
@@ -484,7 +620,14 @@ const outsideReads = ({
       }
     }
   }
-  return reads;
+  return [
+    ...new Map(
+      reads.map((read) => [
+        `${read.testFile}:${read.line}:${read.target}`,
+        read,
+      ]),
+    ).values(),
+  ];
 };
 
 export const checkTestInputCoverage = (root: string): readonly string[] => {
