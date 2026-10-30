@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Online repair behind migration 20261019010000_invoice_party_tax_vat_ids,
  * which gave contacts a vat_id beside tax_id. A contact written before then
@@ -18,6 +20,7 @@ import {
   EU_VAT_ID_SQL_COMPACT,
   EU_VAT_ID_SQL_PATTERN,
 } from "@/api/lib/billing/invoice-prefill.logic";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
 import type {
@@ -47,30 +50,63 @@ type Query = Pick<OnlineMigrationConnection, "query">;
  */
 const moveContactVatIdBatch = async (
   tx: Query,
+  organizationId: string,
   size: number,
 ): Promise<number> =>
   (
     await tx.query(
-      `UPDATE public."${TABLE_NAME}" SET vat_id = tax_id, tax_id = NULL
+      `WITH organization_scope AS MATERIALIZED (
+         SELECT set_config('app.organization_id', $2, true)
+       )
+       UPDATE public."${TABLE_NAME}" SET vat_id = tax_id, tax_id = NULL
+        FROM organization_scope
         WHERE ${MOVABLE}
           AND id IN (
             SELECT id FROM public."${TABLE_NAME}"
              WHERE ${MOVABLE}
              ORDER BY id
-             LIMIT $2
+             LIMIT $3
           )
         RETURNING id`,
-      [EU_VAT_ID_SQL_PATTERN, size],
+      [EU_VAT_ID_SQL_PATTERN, organizationId, size],
     )
   ).length;
 
-const hasMovableContact = async (connection: Query): Promise<boolean> =>
+const organizationIds = async (connection: Query): Promise<string[]> =>
   (
     await connection.query(
-      `SELECT 1 FROM public."${TABLE_NAME}" WHERE ${MOVABLE} LIMIT 1`,
-      [EU_VAT_ID_SQL_PATTERN],
+      "SELECT id::text AS organization_id FROM public.organization ORDER BY id",
+    )
+  ).map((row) =>
+    isRecord(row) && typeof row["organization_id"] === "string"
+      ? row["organization_id"]
+      : panic("Organization enumeration returned an invalid identifier"),
+  );
+
+const hasMovableContactInOrganization = async (
+  connection: Query,
+  organizationId: string,
+): Promise<boolean> =>
+  (
+    await connection.query(
+      `WITH organization_scope AS MATERIALIZED (
+         SELECT set_config('app.organization_id', $2, true)
+       )
+       SELECT 1 FROM public."${TABLE_NAME}", organization_scope
+       WHERE ${MOVABLE} LIMIT 1`,
+      [EU_VAT_ID_SQL_PATTERN, organizationId],
     )
   ).length > 0;
+
+const hasMovableContact = async (connection: Query): Promise<boolean> => {
+  for (const organizationId of await organizationIds(connection)) {
+    // db-await-in-loop: forced RLS admits exactly one organization per query.
+    if (await hasMovableContactInOrganization(connection, organizationId)) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const readCompletion = async (
   connection: OnlineMigrationConnection,
@@ -121,8 +157,14 @@ const moveUntilEmpty = async (
       sleep,
       step: async () =>
         await runtime.step(async ({ tx, size, cursor }) => {
-          const moved = await moveContactVatIdBatch(tx, size);
-          return { cursor, done: moved === 0, value: moved };
+          for (const organizationId of await organizationIds(tx)) {
+            // db-await-in-loop: move one forced-RLS tenant batch per throttled step.
+            const moved = await moveContactVatIdBatch(tx, organizationId, size);
+            if (moved > 0) {
+              return { cursor, done: false, value: moved };
+            }
+          }
+          return { cursor, done: true, value: 0 };
         }),
     });
   } finally {
@@ -145,7 +187,11 @@ export const createContactVatIdRepair = (
     if (pass.isErr()) {
       throw pass.error;
     }
-    return { type: "complete" };
+    const completion = await readCompletion(connection);
+    if (completion.type !== "complete") {
+      return panic("Contact VAT ID repair left movable contacts behind");
+    }
+    return completion;
   },
 });
 

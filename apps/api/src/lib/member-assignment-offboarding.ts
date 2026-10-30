@@ -77,6 +77,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockTaskAssignmentMembers } from "@/api/lib/tasks/assignment-membership";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
@@ -610,10 +611,49 @@ const clearMemberContactAssignments = async ({
   if (scope.type === "workspace") {
     return;
   }
-  const contactScope =
+  const organizationIds =
     scope.type === "organization"
-      ? eq(contacts.organizationId, scope.organizationId)
-      : undefined;
+      ? [scope.organizationId]
+      : (
+          await tx
+            .select({ organizationId: organization.id })
+            .from(organization)
+        ).map((row) => brandPersistedOrganizationId(row.organizationId));
+  for (const organizationId of organizationIds) {
+    // db-await-in-loop: forced contact RLS requires one tenant setting at a time.
+    await runScopedWorkInTransaction({
+      tx,
+      organizationId,
+      userId,
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.explicit,
+        workspaceIds: [],
+      },
+      fn: async (scopedTx) =>
+        await clearOrganizationContactAssignments({
+          tx: scopedTx,
+          organizationId,
+          userId,
+          actorUserId,
+        }),
+    });
+  }
+};
+
+type ClearOrganizationContactAssignmentsOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  actorUserId: SafeId<"user">;
+};
+
+const clearOrganizationContactAssignments = async ({
+  tx,
+  organizationId,
+  userId,
+  actorUserId,
+}: ClearOrganizationContactAssignmentsOptions) => {
+  const contactScope = eq(contacts.organizationId, organizationId);
   const attorneyScope = and(
     contactScope,
     or(
@@ -685,32 +725,34 @@ const clearMemberContactAssignments = async ({
     // db-await-in-loop: audit the changed contact page before consuming the next counted batch.
     await recordAuditGroups({
       tx,
-      groups: [...contactsByOrganization].map(([organizationId, rows]) => ({
-        bindings: {
-          organizationId,
-          workspaceId: null,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user", id: actorUserId },
-            trigger: { type: "system", source: "membership_removal" },
+      groups: [...contactsByOrganization].map(
+        ([auditOrganizationId, rows]) => ({
+          bindings: {
+            organizationId: auditOrganizationId,
+            workspaceId: null,
+            userId: actorUserId,
+            execution: {
+              performer: { type: "user", id: actorUserId },
+              trigger: { type: "system", source: "membership_removal" },
+            },
           },
-        },
-        events: rows.map((row) => ({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
-          resourceId: row.id,
-          workspaceId: null,
-          changes: {
-            ...(row.originatingAttorneyId === userId
-              ? { originatingAttorneyId: { old: userId, new: null } }
-              : {}),
-            ...(row.responsibleAttorneyId === userId
-              ? { responsibleAttorneyId: { old: userId, new: null } }
-              : {}),
-          },
-          metadata: { cause: "membership_removed" },
-        })),
-      })),
+          events: rows.map((row) => ({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+            resourceId: row.id,
+            workspaceId: null,
+            changes: {
+              ...(row.originatingAttorneyId === userId
+                ? { originatingAttorneyId: { old: userId, new: null } }
+                : {}),
+              ...(row.responsibleAttorneyId === userId
+                ? { responsibleAttorneyId: { old: userId, new: null } }
+                : {}),
+            },
+            metadata: { cause: "membership_removed" },
+          })),
+        }),
+      ),
     });
   }
 };
