@@ -15,7 +15,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import parserFingerprints from "@/api/handlers/case-law/ingestion/adapters/replay-parser-fingerprints.json";
+import { loadParserFingerprint } from "@/api/handlers/case-law/ingestion/adapters/replay-parser-fingerprints";
 import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
@@ -172,7 +172,8 @@ describe("every case-law adapter is replay safe", () => {
         "parser output repeats a block identity",
       ).toEqual(blocks);
 
-      const parserSnapshot = parserFingerprints[adapter.key];
+      const parserSnapshot = await loadParserFingerprint(adapter.key);
+
       expect(parserSnapshot).toEqual({
         version: PARSER_VERSIONS[adapter.key],
         fingerprint: fingerprint(first),

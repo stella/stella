@@ -538,6 +538,29 @@ const readPreservedPayload = async ({
   return Result.ok({ preserveStoredDocument, pendingMirrorPayload });
 };
 
+/** Replace an untrusted scope envelope with the one attached to the final AST. */
+const preparedCitationMetadata = (
+  {
+    metadata,
+    citationScopes,
+  }: Pick<IngestionResult, "metadata" | "citationScopes">,
+  documentAst: IngestionResult["documentAst"],
+) => {
+  const {
+    [CITATION_SCOPE_METADATA_KEY]: _untrustedScope,
+    ...ordinaryMetadata
+  } = metadata;
+  return citationScopes && hasUsableAst(documentAst)
+    ? {
+        ...ordinaryMetadata,
+        [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
+          documentAst,
+          citationScopes,
+        ),
+      }
+    : ordinaryMetadata;
+};
+
 /**
  * Everything the row write needs, computed before its transaction opens:
  * the payload and where it is stored, the identifiers, and the references
@@ -620,20 +643,7 @@ export const planDecisionWrite = async ({
     return Result.err(extraction.error);
   }
   const finalAst = extraction.value.documentAst ?? result.documentAst;
-  const {
-    [CITATION_SCOPE_METADATA_KEY]: _untrustedScope,
-    ...ordinaryMetadata
-  } = result.metadata;
-  const preparedMetadata =
-    result.citationScopes && hasUsableAst(finalAst)
-      ? {
-          ...ordinaryMetadata,
-          [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
-            finalAst,
-            result.citationScopes,
-          ),
-        }
-      : ordinaryMetadata;
+  const preparedMetadata = preparedCitationMetadata(result, finalAst);
   const plainMetadata = toPlainTextMetadataObject(
     preparedMetadata,
     metadataUrlSchema,

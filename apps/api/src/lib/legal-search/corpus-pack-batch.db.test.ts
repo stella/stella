@@ -859,9 +859,7 @@ test("invalid structure without text is rejected before reservation or transfer"
   const queued = batch.enqueue(entry);
   expect(queued.isErr()).toBe(true);
   if (queued.isOk()) {
-    return expect.unreachable(
-      "Unreadable structure without text cannot be queued",
-    );
+    expect.unreachable("Unreadable structure without text cannot be queued");
   }
   expect(queued.error.code).toBe("stored_corpus_invalid");
   expect(unwrapOutcomes(await batch.flush()).size).toBe(0);

@@ -24,7 +24,7 @@ test.each([null, "", " \n"])(
       expect(prepared.error).toBeInstanceOf(StoredCorpusValidationError);
       return;
     }
-    return expect.unreachable("Invalid structure without text is rejected");
+    expect.unreachable("Invalid structure without text is rejected");
   },
 );
 
@@ -57,7 +57,7 @@ test("typed recovery preserves the main validation contract and indexing require
   });
   expect(read.isErr()).toBe(true);
   if (Result.isOk(read)) {
-    return expect.unreachable();
+    expect.unreachable();
   }
   expect(read.error).toBeInstanceOf(StoredCorpusValidationError);
   expect(read.error.code).toBe("stored_corpus_invalid");
@@ -66,13 +66,13 @@ test("typed recovery preserves the main validation contract and indexing require
   const withoutText = projectionAstOfResult(read, " \n");
   expect(withoutText.isErr()).toBe(true);
   if (Result.isOk(withoutText)) {
-    return expect.unreachable("Invalid AST without text remains an error");
+    expect.unreachable("Invalid AST without text remains an error");
   }
   expect(withoutText.error).toBeInstanceOf(StoredCorpusValidationError);
   const withText = projectionAstOfResult(read, "Decision text.");
   expect(withText.isOk()).toBe(true);
   if (withText.isErr()) {
-    return expect.unreachable("Readable text permits AST omission");
+    expect.unreachable("Readable text permits AST omission");
   }
   expect(withText.value).toBeNull();
 });
@@ -88,7 +88,7 @@ test("a stored non-JSON AST has the same path-only classified failure", async ()
   });
   expect(read.isErr()).toBe(true);
   if (Result.isOk(read)) {
-    return expect.unreachable();
+    expect.unreachable();
   }
   expect(read.error).toBeInstanceOf(StoredCorpusValidationError);
   expect(read.error.paths).toEqual(["$"]);

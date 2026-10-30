@@ -1,4 +1,4 @@
-import { type InferOk, panic, Result } from "better-result";
+import { type InferOk, panic, Result, UnhandledException } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
@@ -476,8 +476,10 @@ type PreparedProjectionFailure = {
 
 export const classifyCorpusProjectionPayloadReadFailure = (
   error: unknown,
-): PreparedProjectionFailure =>
-  error instanceof PayloadBudgetError || error instanceof S3ObjectBudgetError
+): PreparedProjectionFailure => {
+  const cause = UnhandledException.is(error) ? error.cause : error;
+  return cause instanceof PayloadBudgetError ||
+    cause instanceof S3ObjectBudgetError
     ? {
         kind: "revision_too_large",
         message: "projection payload exceeds the transfer or decode ceiling",
@@ -486,6 +488,7 @@ export const classifyCorpusProjectionPayloadReadFailure = (
         kind: "payload_unavailable",
         message: "projection payload read failed before append",
       };
+};
 
 type PreparedProjectionRequest = {
   indexId: string;

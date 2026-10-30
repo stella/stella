@@ -14,16 +14,20 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 
-// Historical parser output can repeat a section anchor despite distinct block ids.
-const duplicateAnchors = {
-  version: 1,
-  blocks: ["first", "second"].map((id) => ({
-    id,
-    anchorId: "section-1",
-    type: "paragraph",
-    inlines: [{ type: "text", text: "Synthetic private decision text" }],
-  })),
-};
+// A collection is not the single-document wire shape the stored reader accepts.
+const invalidStoredAst = [
+  {
+    version: 1,
+    blocks: [
+      {
+        id: "first",
+        anchorId: "section-1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Synthetic private decision text" }],
+      },
+    ],
+  },
+];
 
 const decisionId = createSafeId<"caseLawDecision">();
 
@@ -63,7 +67,7 @@ const readInvalidRowAst = () => {
     await read({
       key: decisionId,
       documentId: decisionId,
-      read: async () => duplicateAnchors,
+      read: async () => invalidStoredAst,
     });
 };
 
@@ -87,8 +91,8 @@ afterEach(() => {
 });
 
 describe("invalid stored decision payloads", () => {
-  test("classifies historical duplicate anchors without retaining decision content", () => {
-    const error = validationFailureOf(duplicateAnchors);
+  test("classifies an invalid document root without retaining decision content", () => {
+    const error = validationFailureOf(invalidStoredAst);
     expect(error).toMatchObject({
       code: "stored_corpus_invalid",
       paths: ["$"],
@@ -132,7 +136,7 @@ describe("invalid stored decision payloads", () => {
       documentId: decisionId,
       key: "synthetic-ast-key",
       step: "test.storedValidation",
-      read: async () => parsePersistedCorpusAst(duplicateAnchors),
+      read: async () => parsePersistedCorpusAst(invalidStoredAst),
       fallback: () =>
         parsePersistedCorpusAst({ version: 1, blocks: [] }, decisionId),
     });
@@ -182,7 +186,7 @@ describe("invalid stored decision payloads", () => {
             id: decisionId,
             astS3Key: null,
             contentHash: null,
-            documentAst: duplicateAnchors,
+            documentAst: invalidStoredAst,
           },
           async () => new Set<string>(),
         ),
@@ -194,7 +198,7 @@ describe("invalid stored decision payloads", () => {
           documentId: decisionId,
           key: "synthetic-ast-key",
           step: "test.storedValidation",
-          read: async () => parsePersistedCorpusAst(duplicateAnchors),
+          read: async () => parsePersistedCorpusAst(invalidStoredAst),
           fallback: () => null,
         }),
     },
@@ -204,7 +208,7 @@ describe("invalid stored decision payloads", () => {
         await readServedDecisionAst({
           astS3Key: null,
           contentHash: null,
-          pgAst: duplicateAnchors,
+          pgAst: invalidStoredAst,
           decisionId,
           corpusReadEnabled: false,
           readStore: async () => null,

@@ -97,7 +97,7 @@ describe("corpus reader schema at persistence boundaries", () => {
         }).unwrap();
         expect(prepared.type).toBe("readable");
         if (!isDocumentAst(prepared.ast)) {
-          return expect.unreachable("Repaired structure remains a document");
+          expect.unreachable("Repaired structure remains a document");
         }
         expect(prepared.ast.blocks.map((block) => block.plainText)).toEqual(
           ast.blocks.map((block) => block.plainText),
