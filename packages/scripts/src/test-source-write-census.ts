@@ -207,13 +207,17 @@ type EvaluatePathOptions = {
   seen?: Set<Node>;
 };
 
+type NestedPathOptions = Omit<EvaluatePathOptions, "seen"> & {
+  seen: Set<Node>;
+};
+
 const evaluateUrlPath = ({
   node,
   analysis,
   absoluteFile,
   packageRoot,
   seen,
-}: EvaluatePathOptions) => {
+}: NestedPathOptions) => {
   if (node.type !== "NewExpression") {
     return undefined;
   }
@@ -251,7 +255,7 @@ const evaluateCallPath = ({
   absoluteFile,
   packageRoot,
   seen,
-}: EvaluatePathOptions) => {
+}: NestedPathOptions) => {
   if (node.type !== "CallExpression") {
     return undefined;
   }
