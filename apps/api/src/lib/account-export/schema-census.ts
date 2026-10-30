@@ -1,4 +1,4 @@
-import { getColumns, is } from "drizzle-orm";
+import { getColumns, getTableName, is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -8,13 +8,32 @@ import { isDecisionReferenceKey } from "@/api/lib/case-law/withdrawn-copy-fields
 
 export type DatabaseSchema = typeof schema;
 
+type SchemaTable = Extract<
+  | (typeof schema)[keyof typeof schema]
+  | (typeof authSchema)[keyof typeof authSchema]
+  | (typeof agentAuthSchema)[keyof typeof agentAuthSchema],
+  PgTable
+>;
+
+export type SchemaTableName = SchemaTable["_"]["name"];
+
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
 
-const allSchemaExports: Record<string, unknown> = {
+const allSchemaExports = {
   ...agentAuthSchema,
   ...authSchema,
   ...schema,
 };
+
+/** Physical table names from every canonical schema, without exposing table handles. */
+export const allSchemaTableNames = () =>
+  [
+    ...new Set(
+      Object.values(allSchemaExports)
+        .filter((value): value is SchemaTable => is(value, PgTable))
+        .map((table) => getTableName(table)),
+    ),
+  ].toSorted();
 
 // These tables bind to a user in application code and intentionally have no FK.
 // Keep their declarations here so the census imports schema metadata only.

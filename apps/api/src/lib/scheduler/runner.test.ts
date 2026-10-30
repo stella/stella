@@ -146,6 +146,7 @@ test("scheduler failure logs preserve Bun driver codes and SQLSTATEs", async () 
       throw new DrizzleQueryError("query failed", [], driver);
     });
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -191,6 +192,7 @@ test.each([
       // A void callback may return an incidental value, including an object
       // whose method happens to have the same name as a Result method.
       const result = await runSchedulerOnce({
+        tablesForTask: () => [],
         db,
         leaseMs: LEASE_MS,
         registry: registryOf(taskName, () => returned),
@@ -257,6 +259,7 @@ test.each(["expression", "provision"] as const)(
     const recording = installRecordingLogger();
     try {
       const result = await runSchedulerOnce({
+        tablesForTask: () => [],
         db,
         leaseMs: LEASE_MS,
         registry: registryOf(taskName, task),
@@ -307,6 +310,7 @@ test("a genuine expression hold keeps success semantics and omits an absent held
   const recording = installRecordingLogger();
   try {
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: registryOf("test.expression.held", task),
@@ -360,12 +364,14 @@ describe("acquireNextDueJob claim exclusivity", () => {
     await seedJob();
 
     const first = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
       runnerId: "runner-a",
     });
     const second = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -388,6 +394,7 @@ describe("acquireNextDueJob task registration", () => {
     await seedJob({ id: "foreign.job", task: "test.unregistered" });
 
     const claimed = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -413,6 +420,7 @@ describe("acquireNextDueJob task registration", () => {
     await seedJob({ id: "own.job", task: "test.noop" });
 
     const claimed = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -426,6 +434,7 @@ describe("acquireNextDueJob task registration", () => {
     await seedJob({ id: "foreign.job", task: "test.unregistered" });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -457,6 +466,7 @@ describe("bounded scheduler sweeps", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -480,6 +490,7 @@ describe("bounded scheduler sweeps", () => {
     }
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -509,6 +520,7 @@ describe("bounded scheduler sweeps", () => {
     ]);
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -539,6 +551,7 @@ describe("bounded scheduler sweeps", () => {
       currentTime = 100;
     });
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxSweepDurationMs: 50,
@@ -559,6 +572,7 @@ describe("bounded scheduler sweeps", () => {
 
   test("reports a fully drained sweep", async () => {
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -580,6 +594,7 @@ describe("lease expiry", () => {
     await seedJob({ lockedBy: "dead-runner", lockedUntil: PAST });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -598,6 +613,7 @@ describe("lease expiry", () => {
     await seedJob({ lockedBy: "live-runner", lockedUntil: future });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -616,6 +632,7 @@ describe("failure accounting", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -645,6 +662,7 @@ describe("task-requested continuation", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -678,6 +696,7 @@ describe("per-job runtime ceiling", () => {
     );
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -734,6 +753,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -766,6 +786,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -802,6 +823,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -849,6 +871,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const runPromise = runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 60_000,
@@ -900,6 +923,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db: abortingDb,
       leaseMs: LEASE_MS,
       registry,
@@ -1190,6 +1214,7 @@ test("scheduled job ownership scopes the same nested failure by persisted defini
     }
   });
   const result = await runSchedulerOnce({
+    tablesForTask: () => [],
     db,
     leaseMs: LEASE_MS,
     registry,

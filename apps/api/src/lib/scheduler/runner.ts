@@ -35,8 +35,24 @@ import type {
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
-const DEFAULT_POLL_INTERVAL_MS = 60_000;
-const DEFAULT_LEASE_MS = 30 * 60_000;
+import {
+  acquireJobTableLeases,
+  jobTableLeasesAvailable,
+  releaseJobTableLeases,
+  renewJobTableLeases,
+  tableLeaseClaimLock,
+} from "../../db/table-lease-queue";
+import {
+  lockSchedulerClaimCandidate,
+  withAggregateTransaction,
+} from "../db/aggregate-lock";
+import { tablesForSchedulerTask } from "./jobs";
+import {
+  DEFAULT_LEASE_MS,
+  DEFAULT_POLL_INTERVAL_MS,
+  defaultHeartbeatIntervalMs,
+} from "./lease-timing";
+
 // A sweep runs every job that is due, once; this caps only the extra runs of
 // jobs that asked for an immediate continuation within the same sweep. Nine
 // keeps a single continuing job at the ten runs per sweep it always had, so
@@ -73,6 +89,7 @@ type RunSchedulerOnceOptions = {
   // Wall-clock milliseconds for eligibility tests; production uses PostgreSQL.
   eligibilityNow?: () => number;
   registry: SchedulerTaskRegistry;
+  tablesForTask?: (task: string) => readonly string[];
   signal?: AbortSignal;
 };
 
@@ -117,6 +134,7 @@ export const runSchedulerOnce = async ({
   maxSweepDurationMs = DEFAULT_SWEEP_DURATION_MS,
   now,
   registry,
+  tablesForTask = tablesForSchedulerTask,
   rerunLimit = DEFAULT_RERUN_LIMIT,
   runnerId = defaultRunnerId(),
   signal,
@@ -175,6 +193,7 @@ export const runSchedulerOnce = async ({
       ...(eligibilityNow && { now: eligibilityNow }),
       excludeJobIds: reruns < rerunLimit ? [] : [...ranThisSweep],
       registry,
+      tablesForTask,
       runnerId,
     });
     if (!job) {
@@ -194,6 +213,7 @@ export const runSchedulerOnce = async ({
       job,
       leaseMs,
       maxRuntimeMs,
+      tableCount: new Set(tablesForTask(job.task)).size,
       ...(eligibilityNow && { now: eligibilityNow }),
       registry,
       runnerId,
@@ -317,6 +337,7 @@ type AcquireNextDueJobOptions = {
   runnerId: string;
   leaseMs: number;
   registry: SchedulerTaskRegistry;
+  tablesForTask?: (task: string) => readonly string[];
   now?: () => number;
 };
 
@@ -326,6 +347,7 @@ export const acquireNextDueJob = async ({
   now,
   leaseMs,
   registry,
+  tablesForTask = tablesForSchedulerTask,
   runnerId,
 }: AcquireNextDueJobOptions): Promise<SchedulerJob | null> => {
   if (!Number.isInteger(leaseMs) || leaseMs < MIN_LEASE_MS) {
@@ -342,26 +364,49 @@ export const acquireNextDueJob = async ({
   const eligibilityTime = now
     ? sql`${new Date(now())}::timestamptz`
     : sql`now()`;
-  return await db.transaction(async (tx) => {
-    const [candidate] = await tx
-      .select()
-      .from(schedulerJobs)
-      .where(
-        and(
-          dueJobPredicate(runnableTasks, eligibilityTime),
-          excludeJobIds.length > 0
-            ? notInArray(schedulerJobs.id, [...excludeJobIds])
-            : undefined,
-        ),
-      )
-      .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
-      .limit(1)
-      .for("update", { skipLocked: true });
+  const taskTables = runnableTasks.map((task) => ({
+    task,
+    tables: tablesForTask(task),
+  }));
+  return await withAggregateTransaction(db, async (tx) => {
+    await tableLeaseClaimLock(tx);
+    const [candidate] = await lockSchedulerClaimCandidate(
+      tx
+        .select()
+        .from(schedulerJobs)
+        .where(
+          and(
+            dueJobPredicate(runnableTasks, eligibilityTime),
+            or(
+              ...taskTables.map(({ task, tables }) =>
+                and(
+                  eq(schedulerJobs.task, task),
+                  jobTableLeasesAvailable(tables),
+                ),
+              ),
+            ),
+            excludeJobIds.length > 0
+              ? notInArray(schedulerJobs.id, [...excludeJobIds])
+              : undefined,
+          ),
+        )
+        .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
+        .limit(1),
+    );
     if (!candidate) {
       return null;
     }
 
     const leaseToken = acquireLeaseToken(runnerId);
+    const admitted = await acquireJobTableLeases({
+      tx,
+      tables: tablesForTask(candidate.task),
+      holderId: tableLeaseHolderId(candidate.id, leaseToken),
+      leaseMs,
+    });
+    if (!admitted) {
+      return null;
+    }
     const [job] = await tx
       .update(schedulerJobs)
       .set({
@@ -409,9 +454,6 @@ const dueJobPredicate = (runnableTasks: string[], eligibilityTime: SQL) =>
 const leaseExpiry = (leaseMs: number) =>
   sql`now() + ${leaseMs}::integer * interval '1 millisecond'`;
 
-const defaultHeartbeatIntervalMs = (leaseMs: number): number =>
-  Math.max(DEFAULT_POLL_INTERVAL_MS, Math.floor(leaseMs / 3));
-
 type LeaseHeartbeat = {
   stop: () => void;
 };
@@ -425,6 +467,7 @@ type StartLeaseHeartbeatOptions = {
   onLeaseLost: () => void;
   runnerId: string;
   signal: AbortSignal;
+  tableCount?: number;
 };
 
 // A renewal that matches no row means the lease token no longer owns the job:
@@ -442,6 +485,7 @@ export const startLeaseHeartbeat = ({
   onLeaseLost,
   runnerId,
   signal,
+  tableCount,
 }: StartLeaseHeartbeatOptions): LeaseHeartbeat => {
   let stopped = false;
   // Read through a function: `stopped` changes in `stop()` while a renewal
@@ -470,21 +514,35 @@ export const startLeaseHeartbeat = ({
     }
 
     const attemptStartedAt = performance.now();
-    const renewed = await db
-      .update(schedulerJobs)
-      .set({ lockedUntil: leaseExpiry(leaseMs) })
-      .where(
-        and(
-          eq(schedulerJobs.id, jobId),
-          eq(schedulerJobs.lockedBy, leaseToken),
-          eq(schedulerJobs.enabled, true),
-          or(
-            isNull(schedulerJobs.pausedUntil),
-            lte(schedulerJobs.pausedUntil, sql`now()`),
+    const renewed = await withAggregateTransaction(db, async (tx) => {
+      const renewedJobs = await tx
+        .update(schedulerJobs)
+        .set({ lockedUntil: leaseExpiry(leaseMs) })
+        .where(
+          and(
+            eq(schedulerJobs.id, jobId),
+            eq(schedulerJobs.lockedBy, leaseToken),
+            sql`${schedulerJobs.lockedUntil} > clock_timestamp()`,
+            eq(schedulerJobs.enabled, true),
+            or(
+              isNull(schedulerJobs.pausedUntil),
+              lte(schedulerJobs.pausedUntil, sql`now()`),
+            ),
           ),
-        ),
-      )
-      .returning({ id: schedulerJobs.id });
+        )
+        .returning({ id: schedulerJobs.id });
+      if (renewedJobs.length > 0) {
+        const renewedCount = await renewJobTableLeases(
+          tx,
+          tableLeaseHolderId(jobId, leaseToken),
+          leaseMs,
+        );
+        if (tableCount !== undefined && renewedCount !== tableCount) {
+          return [];
+        }
+      }
+      return renewedJobs;
+    });
 
     // A renewal still in flight when the run completed matches no row because
     // the completion released the lease, not because another runner took it.
@@ -582,6 +640,7 @@ type RunJobOptions = {
   registry: SchedulerTaskRegistry;
   signal: AbortSignal | undefined;
   now?: () => number;
+  tableCount?: number;
 };
 
 type RunJobStatus = "failed" | "skipped" | "success";
@@ -596,6 +655,7 @@ export const runJob = async ({
   registry,
   runnerId,
   signal,
+  tableCount,
 }: RunJobOptions): Promise<RunJobStatus> =>
   await withExceptionScope(
     { type: "job", jobId: job.id, task: job.task },
@@ -677,6 +737,7 @@ export const runJob = async ({
         },
         runnerId,
         signal: controller.signal,
+        tableCount,
       });
       const task = registry.get(job.task);
       let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1001,7 +1062,7 @@ const completeRun = async ({
   runId,
   runValues,
 }: CompleteRunOptions): Promise<void> => {
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const [updatedRun] = await tx
       .update(schedulerJobRuns)
       .set(runValues)
@@ -1014,6 +1075,7 @@ const completeRun = async ({
       .returning({ id: schedulerJobRuns.id });
 
     if (!updatedRun) {
+      await releaseJobTableLeases(tx, tableLeaseHolderId(jobId, leaseToken));
       return;
     }
 
@@ -1026,6 +1088,7 @@ const completeRun = async ({
           eq(schedulerJobs.lockedBy, leaseToken),
         ),
       );
+    await releaseJobTableLeases(tx, tableLeaseHolderId(jobId, leaseToken));
   });
 };
 
@@ -1165,3 +1228,6 @@ const acquireLeaseToken = (runnerId: string): string => {
 // token rather than the reusable runnerId.
 const leaseTokenOf = (job: SchedulerJob): string =>
   job.lockedBy ?? panic("Leased scheduler job is missing its lease token");
+
+const tableLeaseHolderId = (jobId: string, leaseToken: string) =>
+  `${jobId}:${leaseToken}`;

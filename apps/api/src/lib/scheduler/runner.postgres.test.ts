@@ -69,6 +69,7 @@ if (!databaseUrl || !runPostgresTests) {
           });
 
           firstRunner = runSchedulerOnce({
+            tablesForTask: () => [],
             db: firstDb,
             heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
             leaseMs: LEASE_MS,
@@ -102,6 +103,7 @@ if (!databaseUrl || !runPostgresTests) {
           const firstResult = await firstRunner;
 
           const secondResult = await runSchedulerOnce({
+            tablesForTask: () => [],
             db: secondDb,
             leaseMs: LEASE_MS,
             rerunLimit: 0,
