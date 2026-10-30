@@ -538,6 +538,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
     "bun-test-hygiene/no-promise-matchers",
+    "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
     "bun-test-hygiene/require-module-mock-reset",
@@ -2343,6 +2344,12 @@ const config = defineConfig({
     ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      // `apps/web` runs each DOM test file in its own process; the packages
+      // run them together, where `screen` reads another file's document.
+      files: ["packages/**/*.dom.test.{ts,tsx}"],
+      rules: { "bun-test-hygiene/no-global-testing-library-screen": "error" },
+    },
     {
       // The built-in jest/vitest rules do not recognise `bun:test`; these
       // resolve test functions through their `bun:test` import.
