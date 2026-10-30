@@ -67,6 +67,7 @@ import {
   threadStoredContentSendModeOf,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -354,7 +355,21 @@ const readActiveCheckpointOnTx = async ({
     .orderBy(desc(chatThreadCompactions.createdAt))
     .limit(1);
 
-  return row.at(0) ?? null;
+  const checkpoint = row.at(0);
+  if (checkpoint === undefined) {
+    return null;
+  }
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: checkpoint,
+  });
+  return {
+    ...checkpoint,
+    summaryMarkdown:
+      projection.marker(checkpoint, subjectByThread.get(threadId)) ??
+      checkpoint.summaryMarkdown,
+  };
 };
 
 /**
@@ -538,8 +553,15 @@ const readCompactionDeltaOnTx = async ({
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
     .limit(CHAT_COMPACTION_DELTA_BATCH_MAX + 1);
 
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: rows,
+  });
   return {
-    messages: rows.slice(0, CHAT_COMPACTION_DELTA_BATCH_MAX),
+    messages: rows
+      .slice(0, CHAT_COMPACTION_DELTA_BATCH_MAX)
+      .map((row) => projection.chat(row, subjectByThread.get(threadId))),
     nextMessage: rows.at(CHAT_COMPACTION_DELTA_BATCH_MAX) ?? null,
   };
 };

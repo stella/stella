@@ -83,7 +83,7 @@ const refineCaseLawSearch = createSafeRootHandler(
     user,
   }): SafeHandlerGenerator<{ query: string } | PublicCountryUnavailableAnswer> {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     const countryRead = readPublicLawCountry(body.country, {

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The court's own paragraph numbers, read off the start of its paragraphs.
  *
@@ -18,8 +19,7 @@
  * outcome rather than storing a guess.
  */
 
-import { panic } from "better-result";
-
+import { closedQuotationParagraphStarts } from "./closed-quotation-paragraphs";
 import type { Block, ParagraphBlock } from "./document-ast.js";
 import { normalizeInlineLine, stripInlineLinePrefix } from "./inline-line.js";
 
@@ -190,6 +190,8 @@ type Body = {
   readonly paragraphs: readonly number[];
   /** Body positions where a separate opinion begins. */
   readonly opinionStarts: ReadonlySet<number>;
+  /** Body positions inside a closed quotation begun before them. */
+  readonly quotedStarts: ReadonlySet<number>;
 };
 
 /**
@@ -200,6 +202,8 @@ type Body = {
 const bodyOf = (blocks: readonly Block[]): Body => {
   const paragraphs: number[] = [];
   const opinionStarts = new Set<number>();
+  /** Body positions a heading or a separate opinion opens. */
+  const sectionStarts = new Set<number>();
   let headingSinceBody = false;
   let inDissent = false;
   let inInstruction = false;
@@ -226,11 +230,18 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     if (dissent && (!inDissent || headingSinceBody)) {
       opinionStarts.add(paragraphs.length);
     }
+    if (headingSinceBody) {
+      sectionStarts.add(paragraphs.length);
+    }
     inDissent = dissent;
     headingSinceBody = false;
     paragraphs.push(index);
   }
-  return { paragraphs, opinionStarts };
+  const quotedStarts = closedQuotationParagraphStarts(
+    paragraphs.map((blockIndex) => blocks[blockIndex]?.plainText ?? ""),
+    new Set([...sectionStarts, ...opinionStarts]),
+  );
+  return { paragraphs, opinionStarts, quotedStarts };
 };
 
 /**
@@ -278,8 +289,8 @@ type Walk = {
  * Read a style's candidates as the court's run beside nested lists. A
  * nested list starts at 1 after a court paragraph and counts up; a separate
  * opinion may start the run again at 1; a forward skip of a few numbers is
- * the court's own. Everything else is left unassigned, and an unassigned
- * marker rejects the reading.
+ * the court's own. Quoted markers are excluded before this walk. Everything
+ * else is left unassigned, and an unassigned marker rejects the reading.
  */
 const walk = (candidates: readonly Candidate[]): Walk => {
   const accepted: Candidate[] = [];
@@ -360,6 +371,11 @@ const candidatesOf = (
   style: CourtParagraphMarkerStyle,
 ): Candidate[] =>
   body.paragraphs.flatMap((blockIndex, bodyIndex) => {
+    // A closed quotation's markers cannot advance either the court's run
+    // or a nested list, including when lookahead examines them.
+    if (body.quotedStarts.has(bodyIndex)) {
+      return [];
+    }
     const block = blocks[blockIndex];
     const number =
       block?.type === "paragraph"

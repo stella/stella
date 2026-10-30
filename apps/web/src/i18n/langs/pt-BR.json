@@ -132,6 +132,7 @@
     "checkSpamHint": "Se você não o vir, verifique a pasta de spam.",
     "chooseOrganization": "Escolha em qual organização trabalhar",
     "codeSentAgain": "Enviamos um novo código.",
+    "continueWithApple": "Continuar com a Apple",
     "continueWithEmail": "Continuar",
     "continueWithGoogle": "Continuar com o Google",
     "continueWithMicrosoft": "Continuar com a Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Aprovar",
     "approveSelected": "Aprovar selecionados",
+    "arrangement": {
+      "alertThreshold": "Limite de alerta (%)",
+      "amountCap": "Limite de honorários",
+      "flatFee": "Honorários fixos",
+      "invalidCap": "Informe limites positivos e um limite de alerta entre 0,01% e 100%.",
+      "minuteCap": "Limite de tempo (minutos)",
+      "title": "Contrato de honorários"
+    },
     "batchActions": "Ações em lote",
     "billable": "Faturável",
     "billedAmount": "Valor faturado",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Despesas vinculadas",
       "linkedTimeEntries": "Entradas de tempo vinculadas",
-      "markPaid": "Marcar como pago",
       "noEntries": "Nenhuma entrada vinculada a esta fatura",
       "noInvoices": "Ainda não há faturas",
       "paidAt": "Pago em",
+      "payments": {
+        "amountTooHigh": "O valor é maior que o saldo em aberto de {amount}.",
+        "confirmVoid": "O pagamento continua registrado como cancelado e deixa de ser abatido desta fatura.",
+        "empty": "Nenhum pagamento registrado ainda",
+        "method": "Forma de pagamento",
+        "methods": {
+          "bank_transfer": "Transferência bancária",
+          "card": "Cartão",
+          "cash": "Dinheiro",
+          "other": "Outra forma"
+        },
+        "outstandingAmount": "Em aberto {amount}",
+        "paidOn": "Data do pagamento",
+        "partiallyPaid": "Paga parcialmente",
+        "record": "Registrar pagamento",
+        "summary": "Pago {paid}, em aberto {outstanding}",
+        "title": "Pagamentos",
+        "void": "Cancelar pagamento",
+        "voided": "Cancelado"
+      },
       "removeEntries": "Remover entradas",
       "send": "Enviar",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "A IA não está configurada.",
     "availabilityUnknown": "Não foi possível confirmar a disponibilidade.",
     "deeplMissing": "O DeepL não está configurado.",
+    "deeplPdfRequired": "A tradução de arquivos PDF requer o DeepL.",
     "desktopUnavailable": "Conecte ou atualize o stella desktop.",
     "featureUnavailable": "Este recurso está indisponível.",
     "ocrUnavailable": "O OCR está indisponível.",
@@ -912,12 +941,16 @@
         "reasoning": "Fundamentação"
       },
       "errors": {
+        "analysisDisabled": "A geração de análises por IA está desativada neste servidor. Leia o texto da decisão ou tente novamente mais tarde.",
         "answerIncomplete": "{source, select, organization {A chave {provider} da sua organização retornou uma resposta incompleta.} other {O modelo de IA retornou uma resposta incompleta.}}",
+        "decisionNotFound": "Esta decisão não foi encontrada. Abra-a novamente pela busca.",
+        "documentUnparseable": "O texto da decisão não está pronto para análise. Consulte a fonte original.",
+        "languageUnsupported": "A análise por IA ainda não oferece suporte ao idioma desta decisão. Leia o texto da decisão ou consulte a fonte original.",
         "providerRefused": "{source, select, organization {{provider} recusou a solicitação feita com a chave da sua organização. Verifique a chave, a cota e o faturamento nas configurações da organização.} other {O provedor de IA recusou a solicitação.}}",
         "providerUnavailable": "{source, select, organization {{provider} está indisponível no momento para a chave da sua organização.} other {O provedor de IA está indisponível no momento.}}",
         "retryAfter": "Você poderá tentar novamente a partir de {time}.",
-        "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}",
-        "unavailable": "A análise por IA não está disponível para esta decisão."
+        "sourceRestricted": "A fonte não permite análise por IA. Leia o texto da decisão ou consulte a fonte original.",
+        "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}"
       },
       "generate": "Gerar ementas com IA",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
@@ -1057,7 +1090,9 @@
     },
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
-      "remove": "Remover o filtro {filter}"
+      "countryMismatch": "Filtros removidos porque não correspondem a {country}: {filters}.",
+      "remove": "Remover o filtro {filter}",
+      "showInCountry": "Mostrar {filter} em {country}"
     },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
@@ -1122,7 +1157,7 @@
     "reader": {
       "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
-      "headMatter": "Cabeçalho",
+      "headMatter": "Informações do processo",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1289,8 @@
       "versionAtDecisionDateInferred": "Versão na data da decisão (inferida)",
       "versionBasisInferredCompact": "Data da decisão · inferida",
       "versionBasisInferredExplanation": "A versão é inferida da data da decisão. A decisão não informa qual redação se aplica."
-    }
+    },
+    "withdrawnByPublisher": "Retirado pelo publicador"
   },
   "catalogue": {
     "addCustom": "Adicionar personalizado",
@@ -1312,6 +1348,7 @@
       "toastTitle": "Visualização completa ainda não disponível"
     },
     "activity": {
+      "newerVersion": "Este conteúdo é exibido em uma versão mais recente.",
       "review": "Atualização da revisão"
     },
     "aiPrompt": "Campo de mensagem de IA",
@@ -1551,6 +1588,12 @@
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# mais} many {+# mais} other {+# mais}}",
+      "dismiss": "Ocultar aviso de conexão",
+      "stoppedWorking": "Sua conexão com <name>{server}</name> parou de funcionar.",
+      "waitingApproval": "Sua conexão com <name>{server}</name> está aguardando aprovação."
+    },
     "mention": {
       "category": {
         "entities": "Neste caso",
@@ -2044,8 +2087,6 @@
     "clearFilters": "Limpar filtros",
     "clearSearch": "Limpar busca",
     "close": "Fechar",
-    "closeAll": "Fechar tudo",
-    "closeOthers": "Fechar outros",
     "columns": "Colunas",
     "comfortable": "Confortável",
     "comingSoon": "Em breve",
@@ -2319,6 +2360,7 @@
     "unknownUser": "Usuário desconhecido",
     "unpin": "Desafixar",
     "unsavedChanges": "Alterações não salvas",
+    "unsavedChangesClose": "Alterações não salvas. Feche novamente para descartá-las",
     "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las",
     "unsavedLeaveConfirm": "Você tem alterações não salvas. Sair sem salvar?",
     "unverified": "Não verificado",
@@ -2360,6 +2402,8 @@
     "returnToAgent": "Volte ao seu agente para continuar.",
     "returnsLocally": "Você voltará para {clientName} neste computador",
     "returnsTo": "Você voltará para {clientName}",
+    "scopeAccountExportRead": "Ler suas exportações de dados pessoais",
+    "scopeAccountExportWrite": "Solicitar exportações dos seus dados pessoais",
     "scopeAdminRead": "Ler o registro de auditoria da sua organização",
     "scopeAdminWrite": "Gerenciar membros e configurações da organização",
     "scopeBillingWrite": "Criar, editar e excluir seus lançamentos de horas",
@@ -2457,6 +2501,8 @@
       "aresNotFound": "Nenhuma empresa encontrada para este IČO.",
       "aresTitle": "Registro Tcheco (ARES)",
       "contactName": "Nome do contato",
+      "displayNameOrganizationHint": "Substituição opcional; caso contrário, gerado a partir do nome da organização.",
+      "displayNamePersonHint": "Substituição opcional; caso contrário, gerado a partir do nome e sobrenome.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Insira um IČO de 8 dígitos."
     },
@@ -2769,12 +2815,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
       "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
+      "configurationIncomplete": "Esta ação não está totalmente configurada. Entre em contato com seu administrador.",
       "contact": "Entre em contato",
       "featureDisabled": "Este recurso está temporariamente desativado.",
+      "leaseLost": "A reserva da ação expirou. Tente novamente.",
       "notEnabled": "Esta ação não está habilitada para sua organização.",
-      "periodExhausted": "Esta ação está pausada para sua organização."
+      "organizationStateUnreadable": "Não foi possível verificar o acesso da organização. Tente novamente em instantes.",
+      "periodExhausted": "Esta ação está pausada para sua organização.",
+      "storeUnavailable": "O serviço está temporariamente indisponível. Tente novamente em instantes."
     },
     "actionFailed": "Não deu certo. Tente novamente ou recarregue a página se isso continuar acontecendo.",
     "api": {
@@ -2825,6 +2874,8 @@
       "forbidden": "Você não tem permissão para fazer isso.",
       "hostedCheckoutOpen": "Já existe um pagamento aberto para esta organização. Conclua-o ou inicie um novo depois que ele expirar.",
       "hostedSubscriptionLive": "Esta organização já tem uma assinatura. Altere-a em “Gerenciar uso hospedado”.",
+      "idempotencyInProgress": "Esta solicitação ainda está sendo processada. Aguarde um momento e tente novamente.",
+      "idempotencyKeyReused": "Os dados mudaram desde a tentativa anterior. Redefina o formulário e tente novamente.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
@@ -3627,6 +3678,9 @@
       "unsupportedVisualContent": "Este arquivo contém imagens ou gráficos vetoriais que não podem ser verificados quanto a texto sensível. A exportação não está disponível.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
+    "closeAllTabs": "Fechar {count, plural, one {# aba} other {todas as # abas}}",
+    "closeOtherTabs": "Fechar {count, plural, one {a outra aba} other {as outras # abas}}",
+    "closeTab": "Fechar <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
       "unsupportedEncoding": "Este documento usa a codificação {encoding}, que não é compatível, portanto não pode ser convertido.",
@@ -4845,7 +4899,9 @@
     "viewOnGithub": "Ver no GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Idioma da resposta",
     "budgetError": "O orçamento para respostas foi esgotado.",
+    "documentLanguage": "Idioma do documento ({language})",
     "expand": "Expandir resposta",
     "explain": "Explicar",
     "followUp": "Fazer uma pergunta de acompanhamento",
@@ -4999,6 +5055,8 @@
       "desktopCardConnectedTitle": "stella desktop está vinculado",
       "desktopCardMissingDetail": "Instale-o, ou conecte-o se já estiver instalado neste computador.",
       "desktopCardMissingTitle": "stella desktop ainda não está vinculado",
+      "desktopCardOpeningDetail": "Vinculando este computador a <bdi>{identity}</bdi> em {host}. Se o navegador pedir, permita que ele abra o stella desktop.",
+      "desktopCardOpeningTitle": "Abrindo stella desktop...",
       "desktopCardOutdatedDetail": "A versão {version} está vinculada a <bdi>{identity}</bdi>. Instale a versão mais recente para que documentos e atividade continuem funcionando.",
       "desktopCardOutdatedTitle": "stella desktop precisa de atualização",
       "desktopClipboardDescription": "Abra, pesquise, organize e reutilize textos copiados de qualquer aplicativo.",
@@ -5018,6 +5076,7 @@
       "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
       "desktopInstallTitle": "Instalar e abrir",
       "desktopInstallWindowsStep": "Execute o instalador e siga as instruções.",
+      "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "O histórico da área de transferência é criptografado e armazenado neste dispositivo.",
       "desktopPrivacyTitle": "Privado por padrão",
       "desktopSelfHostDescription": "Confie nesta URL da stella no app desktop assinado para abrir localmente os documentos desta instalação.",
@@ -5027,11 +5086,30 @@
       "displayNameSaved": "Nome de exibição atualizado",
       "enterOtp": "Código de verificação",
       "otpSentSuccess": "Código de verificação enviado para o seu e-mail.",
+      "personalDataExportDescription": "Solicite uma cópia para download dos dados pessoais armazenados na sua conta. O download ficará disponível por uma hora.",
+      "personalDataExportExpired": "Esta exportação expirou.",
+      "personalDataExportExpiresAt": "Disponível até {expiresAt}.",
+      "personalDataExportFailed": "Não foi possível preparar a exportação.",
+      "personalDataExportReady": "Sua exportação está pronta.",
+      "personalDataExportRequest": "Solicitar exportação",
+      "personalDataExportRequestNew": "Solicitar nova exportação",
+      "personalDataExportTitle": "Exportar meus dados",
+      "personalDataExportWorking": "Preparando sua exportação…",
       "preferredName": "Nome preferido",
       "preferredNameDescription": "Usado como autor de alterações e comentários rastreados em DOCX.",
       "preferredNamePlaceholder": "Seu nome",
       "profileDescription": "Gerencie suas preferências pessoais",
       "sendOtpCode": "Enviar código de verificação",
+      "signInMethods": {
+        "confirmDescription": "Digite um novo código enviado para seu e-mail para desconectar este método de login.",
+        "confirmTitle": "Desconectar {provider}?",
+        "description": "Conecte contas que usam o mesmo endereço de e-mail verificado.",
+        "emailCode": "Código por e-mail",
+        "emailCodeDescription": "Você sempre pode entrar com um código enviado para seu e-mail.",
+        "lastMethod": "Conecte outra conta antes de desconectar esta.",
+        "title": "Métodos de login",
+        "unavailable": "O envio de e-mails precisa estar configurado para desconectar métodos de login."
+      },
       "timezone": "Fuso horário",
       "timezoneDescription": "Usado para carimbos de data/hora em notificações e e-mails",
       "timezoneSaved": "Fuso horário atualizado",
@@ -5354,6 +5432,7 @@
     "showCitedPartOnly": "Mostrar apenas a parte citada",
     "showFullProvision": "Mostrar o dispositivo completo",
     "showInText": "Mostrar no texto",
+    "sortNeedsYear": "Escolha um ano nos filtros para ordenar por esta coluna.",
     "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
       "current": "Em vigor",
@@ -6451,6 +6530,14 @@
           "started": "Iniciou uma revisão de"
         },
         "empty": "Ainda não há atividade neste caso.",
+        "fields": {
+          "dueDate": "data de vencimento",
+          "parentFolder": "pasta principal",
+          "priority": "prioridade",
+          "property": "propriedade",
+          "schedule": "programação",
+          "sortOrder": "ordem"
+        },
         "filterLabel": "Filtrar atividade",
         "filters": {
           "all": "Toda a atividade",
@@ -6500,6 +6587,7 @@
           "translation": "tradução"
         },
         "title": "Atividade",
+        "updatedFields": "Atualizado: {fields}",
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"

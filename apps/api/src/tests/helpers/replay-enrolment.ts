@@ -1,0 +1,40 @@
+import type { ReplayEnrolment } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@/api/lib/legal-search/ingestion-constants";
+
+/** Every source starts disabled so a test enables only the sources it owns. */
+export const OFF_REPLAY_ENROLMENT_FIXTURE = {
+  [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_NS]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_NSS]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_US]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_UOHS]: { mode: "off" },
+  [ADAPTER_KEYS.SK_COURTS]: { mode: "off" },
+  [ADAPTER_KEYS.SK_US]: { mode: "off" },
+  [ADAPTER_KEYS.PL_COURTS]: { mode: "off" },
+  [ADAPTER_KEYS.PL_SN]: { mode: "off" },
+  [ADAPTER_KEYS.PL_KIO]: { mode: "off" },
+  [ADAPTER_KEYS.PL_TK]: { mode: "off" },
+  [ADAPTER_KEYS.PL_NSA]: { mode: "off" },
+  [ADAPTER_KEYS.PL_NCOURT]: { mode: "off" },
+  [ADAPTER_KEYS.AT_COURTS]: { mode: "off" },
+  [ADAPTER_KEYS.AT_VFGH]: { mode: "off" },
+  [ADAPTER_KEYS.AT_VWGH]: { mode: "off" },
+  [ADAPTER_KEYS.AT_BVWG]: { mode: "off" },
+  [ADAPTER_KEYS.AT_LVWG]: { mode: "off" },
+  [ADAPTER_KEYS.AT_ASYLGH]: { mode: "off" },
+  [ADAPTER_KEYS.AT_UBAS]: { mode: "off" },
+  [ADAPTER_KEYS.AT_UVS]: { mode: "off" },
+  [ADAPTER_KEYS.AT_VERG]: { mode: "off" },
+  [ADAPTER_KEYS.AT_UMSE]: { mode: "off" },
+  [ADAPTER_KEYS.AT_BKS]: { mode: "off" },
+  [ADAPTER_KEYS.AT_FINDOK]: { mode: "off" },
+  [ADAPTER_KEYS.EU_ECJ]: { mode: "off" },
+  [ADAPTER_KEYS.HU_BHGY]: { mode: "off" },
+  [ADAPTER_KEYS.UK_FCL]: { mode: "off" },
+  [ADAPTER_KEYS.PL_KIS]: { mode: "off" },
+  [ADAPTER_KEYS.PL_UODO]: { mode: "off" },
+  [ADAPTER_KEYS.PL_UOKIK]: { mode: "off" },
+} as const satisfies Record<AdapterKey, ReplayEnrolment>;

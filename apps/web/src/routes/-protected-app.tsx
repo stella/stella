@@ -27,6 +27,7 @@ import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import { AppSidebar } from "@/components/app-sidebar";
+import { appSidebarSurfaceOf } from "@/components/app-sidebar-surface";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
@@ -279,7 +280,14 @@ export const ProtectedAppFrame = ({
                       routeMatterChromeStyle={routeMatterChromeStyle}
                     />
                   }
-                  navigation={{ content: <AppSidebar />, mode: "responsive" }}
+                  navigation={{
+                    content: (
+                      <AppSidebar
+                        surface={appSidebarSurfaceOf(activeMatterColor)}
+                      />
+                    ),
+                    mode: "responsive",
+                  }}
                   topBar={() => <ProtectedContent />}
                 >
                   {children}

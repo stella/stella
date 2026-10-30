@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 
 import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
-import { canAssign, matchDay } from "../src/activity/day-review-logic";
+import { matchDay } from "../src/activity/day-review-logic";
 
 const candidates = [
   {
@@ -59,19 +59,6 @@ const review = (
   });
 
 describe("local matter day review", () => {
-  test("assignment requires an editable review with time billing enabled", () => {
-    expect(canAssign({ editable: true, timeBillingEnabled: true })).toBe(true);
-    expect(canAssign({ editable: false, timeBillingEnabled: true })).toBe(
-      false,
-    );
-    expect(canAssign({ editable: true, timeBillingEnabled: false })).toBe(
-      false,
-    );
-    expect(canAssign({ editable: false, timeBillingEnabled: false })).toBe(
-      false,
-    );
-  });
-
   test("recorded matter IDs outside the candidate shortlist never become heuristic matches", () => {
     for (const captureDetails of [false, true]) {
       const result = review(

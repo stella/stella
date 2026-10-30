@@ -292,13 +292,34 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   fi
   failure="HTTP $http"
   transient=false
+  forward_output=false
   if ((permanent == 0 && (http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0))); then
     transient=true
   elif ((http >= 200 && http <= 299)); then
     if [[ "$response_retryable" == true ]]; then
-      # gh can fail while decoding a successful response, including a later
-      # page of a paginated read. Repeating a read cannot duplicate a write.
-      transient=true
+      # Classify the response that made gh fail, not stdout from earlier pages.
+      # Typed GraphQL errors are definitive refusals and reach the caller;
+      # decoding failures and other incomplete diagnostics remain retryable.
+      if awk '
+        { body = body $0 "\n" }
+        END {
+          if (body ~ /"errors"[[:space:]]*:/ &&
+              (body ~ /"type"[[:space:]]*:/ ||
+               body ~ /"extensions"[[:space:]]*:[[:space:]]*\{[^}]*"code"[[:space:]]*:/)) exit 1
+          compact = body
+          gsub(/[[:space:]]/, "", compact)
+          if (compact == "" || compact !~ /^(\{.*\}|\[.*\])$/) exit 0
+          lower = tolower(body)
+          transient = lower ~ /(internal server error|service unavailable|bad gateway|gateway timeout|timed out|timeout|couldn.t respond to your request in time|something went wrong while executing your query)/
+          exit !transient
+        }
+      ' "$scratch/trace"; then
+        # gh can fail while decoding a successful response, including a later
+        # page of a paginated read. Repeating a read cannot duplicate a write.
+        transient=true
+      else
+        forward_output=true
+      fi
     else
       failure="HTTP $http (operation is not safe to retry)"
     fi
@@ -321,6 +342,7 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   if [[ "$retryable" != true || "$transient" != true ]] || ((attempt == 4)); then
     # Traces are never forwarded: URLs, request bodies and even native error
     # messages can contain credentials. Exit codes and status remain observable.
+    [[ "$forward_output" != true ]] || cat "$scratch/output"
     exit "$status"
   fi
   delay=$((2 ** (attempt - 1) + RANDOM % 3))
