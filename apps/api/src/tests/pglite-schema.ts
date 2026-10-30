@@ -1127,9 +1127,45 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
   if (replacements.length !== 1) {
     panic("Expected the latest parsed-source invalidation function");
   }
-  for (const statement of [...statements, ...replacements]) {
+  for (const statement of [
+    ...statements,
+    ...replacements,
+    // The parsed-input state is derived from the row the invalidation leaves.
+    ...caseLawParsedInputStateStatements(),
+  ]) {
     await db.execute(sql.raw(statement));
   }
+};
+
+/**
+ * The parsed-input state's comparison function, trigger function and trigger,
+ * read from the production migration, for test databases built without it.
+ */
+export const caseLawParsedInputStateStatements = (): string[] => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261030140000_case_law_parsed_input_state",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        "CREATE OR REPLACE FUNCTION case_law_parsed_input_state",
+      ) ||
+      source.startsWith(
+        "CREATE OR REPLACE FUNCTION derive_case_law_parsed_input_state",
+      ) ||
+      source.startsWith(
+        "CREATE TRIGGER case_law_decisions_zz_parsed_input_state",
+      )
+    );
+  });
+  if (statements.length !== 3) {
+    panic("Expected the parsed-input state functions and trigger");
+  }
+  return statements;
 };
 
 /**

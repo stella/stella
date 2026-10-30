@@ -530,6 +530,38 @@ const parsedSourceComplete = (t: ParsedSourceSchemaColumns) =>
     "case_law_decisions_parsed_source_complete",
     sql`(${t.parsedSourceHash} IS NULL AND ${t.parsedSourceHashVersion} IS NULL AND ${t.parsedSourceRawS3Key} IS NULL) OR (${t.parsedSourceHash} IS NOT NULL AND ${t.parsedSourceHashVersion} IS NOT NULL AND ${t.parsedSourceHashVersion} >= 0 AND ${t.parsedSourceRawS3Key} IS NOT NULL)`,
   );
+/** `parsed_input_state`: the parse stored for a decision is of its current input, or not. */
+export const PARSED_INPUT_STATES = ["parsed", "unparsed"] as const;
+export const PARSED_INPUT_STATE = {
+  PARSED: "parsed",
+  UNPARSED: "unparsed",
+} as const satisfies Record<string, (typeof PARSED_INPUT_STATES)[number]>;
+const PARSED_INPUT_STATE_SQL_VALUES = PARSED_INPUT_STATES.map((state) =>
+  sql.raw(`'${state}'`),
+);
+// Added NOT VALID; validated once every row is derived.
+const parsedInputStateCheck = (t: { parsedInputState: SQLWrapper }) =>
+  p.check(
+    "case_law_decisions_parsed_input_state_check",
+    sql`${t.parsedInputState} IN (${sql.join(PARSED_INPUT_STATE_SQL_VALUES, sql`, `)})`,
+  );
+type ReplayPendingIndexColumns = {
+  sourceId: PgColumn;
+  parserVersion: PgColumn;
+  parsedInputState: PgColumn;
+  sourceRawS3Key: SQLWrapper;
+  redactedAt: SQLWrapper;
+};
+// Built online (`CASE_LAW_REPLAY_PENDING_INDEX`): the background replay's lag
+// probe answers from it, whatever the source's size.
+const replayPendingIndex = (t: ReplayPendingIndexColumns) =>
+  p
+    .index("case_law_decisions_replay_pending_idx")
+    .on(t.sourceId, t.parserVersion, t.parsedInputState)
+    .where(sql`${t.sourceRawS3Key} IS NOT NULL AND ${t.redactedAt} IS NULL`);
+const parsedInputStateTableItems = (
+  t: ReplayPendingIndexColumns & { parsedInputState: SQLWrapper },
+) => [parsedInputStateCheck(t), replayPendingIndex(t)] as const;
 const parsedSourcePendingIndex = (t: ParsedSourceSchemaColumns) =>
   p
     .index("case_law_decisions_parse_pending_idx")
@@ -750,6 +782,14 @@ export const caseLawDecisions = p.pgTable(
     parsedSourceRawS3Key: p.varchar("parsed_source_raw_s3_key", {
       length: 512,
     }),
+    /**
+     * Whether the stored parse was made from the decision's current input:
+     * derived from the columns above by a database trigger on every write,
+     * NULL only for rows written before it existed and not yet derived.
+     */
+    parsedInputState: p.text("parsed_input_state", {
+      enum: PARSED_INPUT_STATES,
+    }),
     sourceObservedAt: timestamptz("source_observed_at"),
     sourceObservationOrder: p.bigint("source_observation_order", {
       mode: "bigint",
@@ -908,6 +948,7 @@ export const caseLawDecisions = p.pgTable(
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
     parsedSourcePendingIndex(t),
+    ...parsedInputStateTableItems(t),
     // The generation rebuild walks its snapshot in decision-date order, so the
     // documents one split receives cover a contiguous span of dates and a
     // timestamp-filtered query can skip the splits outside its window. The

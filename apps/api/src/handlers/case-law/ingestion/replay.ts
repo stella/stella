@@ -24,6 +24,7 @@ import {
   caseLawDecisions,
   caseLawReplayBatches,
   caseLawReplayBlocked,
+  PARSED_INPUT_STATE,
 } from "@/api/db/schema";
 import {
   STORED_RAW_REPARSE_REJECTION,
@@ -292,14 +293,44 @@ const replayableRows = (
     isNull(caseLawDecisions.redactedAt),
   );
 
+/**
+ * The comparison of a row's stored parse with its current input, made by the
+ * database function the `parsed_input_state` trigger also calls.
+ */
+const parsedInputStateOf = () =>
+  sql<string>`case_law_parsed_input_state(
+    ${caseLawDecisions.sourceHash},
+    ${caseLawDecisions.sourceHashVersion},
+    ${caseLawDecisions.sourceRawS3Key},
+    ${caseLawDecisions.parsedSourceHash},
+    ${caseLawDecisions.parsedSourceHashVersion},
+    ${caseLawDecisions.parsedSourceRawS3Key}
+  )`;
+
 /** One database predicate owns successful parsing of the current raw input. */
 export const parsedReplayInputPredicate = (targetParserVersion: number) =>
   sql<boolean>`coalesce((
     ${caseLawDecisions.parserVersion} >= ${targetParserVersion}
-    AND ${caseLawDecisions.parsedSourceHash} = ${caseLawDecisions.sourceHash}
-    AND ${caseLawDecisions.parsedSourceHashVersion} = ${caseLawDecisions.sourceHashVersion}
-    AND ${caseLawDecisions.parsedSourceRawS3Key} = ${caseLawDecisions.sourceRawS3Key}
+    AND ${parsedInputStateOf()} = ${PARSED_INPUT_STATE.PARSED}
   ), false)`;
+
+/**
+ * A row at the current parser whose stored parse is not of its current
+ * input. The trigger-maintained state answers it from an index; a row
+ * written before the trigger and not yet derived falls back to the same
+ * comparison, so the selection is the same before and after derivation.
+ */
+const unparsedAtCurrentVersionPredicate = (currentParserVersion: number) =>
+  and(
+    eq(caseLawDecisions.parserVersion, currentParserVersion),
+    or(
+      eq(caseLawDecisions.parsedInputState, PARSED_INPUT_STATE.UNPARSED),
+      and(
+        isNull(caseLawDecisions.parsedInputState),
+        sql`${parsedInputStateOf()} = ${PARSED_INPUT_STATE.UNPARSED}`,
+      ),
+    ),
+  );
 
 /** Old writers may restore an earlier parser, but replay never downgrades one. */
 export const replayReadmissionInputPredicate = (targetParserVersion: number) =>
@@ -376,10 +407,7 @@ export const replaySelectionPredicate = (
         or(
           isNull(caseLawDecisions.parserVersion),
           lt(caseLawDecisions.parserVersion, selection.currentParserVersion),
-          and(
-            eq(caseLawDecisions.parserVersion, selection.currentParserVersion),
-            not(parsedReplayInputPredicate(selection.currentParserVersion)),
-          ),
+          unparsedAtCurrentVersionPredicate(selection.currentParserVersion),
         ),
         // Durable reservations are recovered through pendingBatch; the sweep
         // must not bypass a row's backoff or reselect a terminal receipt.
