@@ -28,7 +28,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookVersionItem } from "@/lib/knowledge/playbook-types";
@@ -36,9 +36,9 @@ import {
   knowledgeKeys,
   playbookVersionsOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 
 type PlaybookVersionHistorySheetProps = {
   onOpenChange: (open: boolean) => void;
@@ -73,7 +73,7 @@ const PlaybookVersionHistorySheetBody = ({
     playbookVersionsOptions(organizationId, playbookId),
   );
   const { isLoading } = dataQuery;
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.items.length === 0,
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -85,7 +85,7 @@ const PlaybookVersionHistorySheetBody = ({
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
         .versions({ version })
         .restore.post();
-      unwrapEden(response);
+      unwrapApiResponse(response);
     },
     onSuccess: async () => {
       // The definition (detail), its version list, and the playbook list

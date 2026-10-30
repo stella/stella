@@ -80,8 +80,26 @@ const paneToggle = (dock: Locator, name: string) =>
 const resizeHandle = (dock: Locator) =>
   dock.getByRole("separator", { name: messages.inspector.resizePane });
 
-const paneWidth = async (dock: Locator): Promise<number> =>
-  Number(await resizeHandle(dock).getAttribute("aria-valuenow"));
+// Opening a document re-raises the key-required dialog wherever the target
+// has no AI provider, and a modal dialog takes the dock out of the
+// accessibility tree. `getAttribute` never runs the page's locator handlers;
+// these auto-waiting assertions do, so the dialog is dismissed before the
+// read, and anything else hiding the handle fails a named assertion.
+// The value is read through the handle's slot, not its role: the dialog can
+// re-raise between the assertion and the read, and a modal hides the role
+// from the accessibility tree while the attribute stays readable.
+const paneWidth = async (dock: Locator): Promise<number> => {
+  await expect(dock).toHaveAttribute("data-state", DOCK_STATE.expanded);
+  await expect(
+    resizeHandle(dock),
+    "the expanded dock exposes its resize handle",
+  ).toBeVisible();
+  return Number(
+    await dock
+      .locator('[data-slot="inspector-resize-handle"]')
+      .getAttribute("aria-valuenow"),
+  );
+};
 
 const expectDocumentOpen = async (page: Page, dock: Locator) => {
   await expect(dock).toHaveAttribute("data-state", DOCK_STATE.expanded);

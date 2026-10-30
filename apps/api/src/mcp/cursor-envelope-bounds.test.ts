@@ -144,6 +144,7 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "law.fetch.nextCursor": offsetCursor,
   "advanced.list_matters.nextCursor": idCursor,
   "advanced.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+    tier: 2,
     score: SCORE,
     id: `case-law:${UUID}`,
     seen: GLOBAL_SEARCH_RESULT_LIMIT - 1,

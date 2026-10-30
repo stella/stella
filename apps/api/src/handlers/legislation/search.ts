@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
 import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status } from "elysia";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   isPublicLegislationCountry,
   PUBLIC_LEGISLATION_COUNTRIES,
 } from "@stll/api-contract/legislation-publication";
+import { isLegislationWindowStatus } from "@stll/api-contract/legislation-status";
 import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
@@ -27,6 +27,7 @@ import {
   searchLegislationResponseSchema,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
@@ -92,7 +93,10 @@ import {
   legislationCorpusAppliedRevision,
   legislationCorpusWorkCanRecur,
 } from "@/api/lib/legal-search/legislation-corpus-projection";
-import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
+import {
+  isCurrentVersionOfWork,
+  legislationDocumentStatusToday,
+} from "@/api/lib/legal-search/legislation-current-version";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import {
   publishedLegislationCountryFor,
@@ -103,6 +107,7 @@ import {
   eligibleExpression,
   inForceOn,
   inForceToday,
+  legislationStatusToday,
   type LegislationVersionRef,
   legislationVersionRef,
   legislationVersionRefAt,
@@ -155,7 +160,7 @@ import {
 } from "@/api/lib/search/highlight";
 import { isRecord } from "@/api/lib/type-guards";
 
-type LegislationHit = Static<
+type LegislationHit = v.InferOutput<
   typeof searchLegislationSuccessResponseSchema
 >["items"][number];
 
@@ -218,6 +223,12 @@ const toNullableString = (x: unknown): string | null => {
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
+/** `legislationStatusToday` for the `d` alias the Postgres search reads. */
+const statusTodayAtD = legislationStatusToday(
+  legislationVersionRefAt("d"),
+  sql.raw("d.status"),
+);
+
 const buildCorpusIndexQuery = (
   body: SearchLegislationBody,
   match: "strict" | "relaxed" = "strict",
@@ -236,7 +247,10 @@ const buildCorpusIndexQuery = (
   if (body.documentType) {
     clauses.push(`document_type:${quoteCorpusValue(body.documentType)}`);
   }
-  if (body.status) {
+  // The index holds the stored status. Only a publisher statement is read
+  // from it; `current` and `historical` move with the date, so they are
+  // filtered when candidates are re-read (`legislationRequestFilters`).
+  if (body.status && !isLegislationWindowStatus(body.status)) {
     clauses.push(`status:${quoteCorpusValue(body.status)}`);
   }
   if (body.source) {
@@ -324,7 +338,7 @@ const legislationRequestFilters = (body: SearchLegislationBody): SQL[] => {
     filters.push(eq(legislationDocuments.documentType, body.documentType));
   }
   if (body.status) {
-    filters.push(eq(legislationDocuments.status, body.status));
+    filters.push(sql`${legislationDocumentStatusToday} = ${body.status}`);
   }
   if (body.source) {
     filters.push(eq(legislationDocuments.sourceId, body.source));
@@ -417,7 +431,7 @@ export const legislationWorkRepresentativesQuery = ({
         ${legislationDocuments.country} AS country,
         ${legislationDocuments.language} AS language,
         ${legislationDocuments.documentType} AS document_type,
-        ${legislationDocuments.status} AS status,
+        ${legislationDocumentStatusToday} AS status,
         ${legislationDocuments.effectiveDate}::text AS effective_date,
         ${legislationDocuments.versionValidFrom}::text AS version_valid_from,
         ${legislationDocuments.versionValidTo}::text AS version_valid_to,
@@ -517,7 +531,7 @@ export const legislationCandidateRowsStatement = (
       country: legislationDocuments.country,
       language: legislationDocuments.language,
       documentType: legislationDocuments.documentType,
-      statusValue: legislationDocuments.status,
+      statusValue: legislationDocumentStatusToday.as("status_value"),
       effectiveDate: legislationDocuments.effectiveDate,
       versionValidFrom: legislationDocuments.versionValidFrom,
       versionValidTo: legislationDocuments.versionValidTo,
@@ -796,7 +810,7 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
     const filters = sql`
     ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}
     ${body.documentType ? sql`AND d.document_type = ${body.documentType}` : sql``}
-    ${body.status ? sql`AND d.status = ${body.status}` : sql``}
+    ${body.status ? sql`AND ${statusTodayAtD} = ${body.status}` : sql``}
     ${body.source ? sql`AND d.source_id = ${body.source}` : sql``}
     ${body.language ? sql`AND d.language = ${body.language}` : sql``}
     ${body.dateFrom ? sql`AND d.effective_date >= ${body.dateFrom}` : sql``}
@@ -892,7 +906,7 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
       d.country,
       d.language,
       d.document_type,
-      d.status,
+      ${statusTodayAtD} AS status,
       d.effective_date::text AS effective_date,
       d.version_valid_from::text AS version_valid_from,
       d.version_valid_to::text AS version_valid_to,
@@ -1809,7 +1823,9 @@ export const searchLegislationHandler = async (
 
     stageAccumulator.settle();
     const serializationTiming = beginStage("response_serialization");
-    const response: Static<typeof searchLegislationSuccessResponseSchema> = {
+    const response: v.InferOutput<
+      typeof searchLegislationSuccessResponseSchema
+    > = {
       items: projectSearchHits(items, dependencies),
       nextCursor,
       paginationOutcome,

@@ -1,17 +1,13 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { compareCodeUnit } from "@stll/collation";
+import { selectPromotedRelease } from "./promoted-release-policy";
 
 const DEFAULT_MANIFEST_PATH = path.join(
   import.meta.dir,
   "../apps/landing/src/data/changelog-release-dates.json",
 );
-const STABLE_RELEASE_PATTERN = /^v\d+\.\d+\.\d+$/u;
-const RFC_3339_DATE_TIME_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-](\d{2}):(\d{2}))$/u;
-
 export class PromotedReleaseManifestError extends TaggedError(
   "PromotedReleaseManifestError",
 )<{
@@ -35,130 +31,29 @@ type PromotedReleaseError =
   | PromotedReleaseMissingError
   | PromotedReleaseAmbiguousError;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const parsePublicationTime = (value: string): number | null => {
-  const match = RFC_3339_DATE_TIME_PATTERN.exec(value);
-  if (!match) {
-    return null;
-  }
-  const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] =
-    match;
-  if (
-    year === undefined ||
-    month === undefined ||
-    day === undefined ||
-    hour === undefined ||
-    minute === undefined ||
-    second === undefined
-  ) {
-    return null;
-  }
-  if (
-    (offsetHour !== undefined && Number(offsetHour) > 23) ||
-    (offsetMinute !== undefined && Number(offsetMinute) > 59)
-  ) {
-    return null;
-  }
-
-  const calendarTime = new Date(0);
-  calendarTime.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
-  calendarTime.setUTCHours(Number(hour), Number(minute), Number(second), 0);
-  if (
-    calendarTime.toISOString().slice(0, 19) !==
-    `${year}-${month}-${day}T${hour}:${minute}:${second}`
-  ) {
-    return null;
-  }
-
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
 export const resolvePromotedRelease = (
   manifest: unknown,
 ): Result<string, PromotedReleaseError> => {
-  if (!isRecord(manifest)) {
-    return Result.err(
-      new PromotedReleaseManifestError({
-        message: "The release publication manifest must be an object.",
-      }),
-    );
-  }
-
-  const promoted: {
-    ref: string;
-    publishedAt: string;
-    publishedAtMs: number;
-  }[] = [];
-  for (const [ref, publishedAt] of Object.entries(manifest)) {
-    if (ref === "_note") {
-      continue;
-    }
-    if (!STABLE_RELEASE_PATTERN.test(ref)) {
+  const selected = selectPromotedRelease(manifest);
+  switch (selected.status) {
+    case "resolved":
+      return Result.ok(selected.ref);
+    case "invalid":
       return Result.err(
-        new PromotedReleaseManifestError({
-          message: `The release publication manifest contains an invalid stable release ref: ${ref}.`,
-        }),
+        new PromotedReleaseManifestError({ message: selected.message }),
       );
-    }
-    if (publishedAt === null) {
-      continue;
-    }
-    if (typeof publishedAt !== "string") {
+    case "missing":
       return Result.err(
-        new PromotedReleaseManifestError({
-          message: `The release publication manifest contains an invalid publication time for ${ref}.`,
-        }),
+        new PromotedReleaseMissingError({ message: selected.message }),
       );
-    }
-    const publishedAtMs = parsePublicationTime(publishedAt);
-    if (publishedAtMs === null) {
+    case "ambiguous":
       return Result.err(
-        new PromotedReleaseManifestError({
-          message: `The release publication manifest contains an invalid publication time for ${ref}.`,
-        }),
+        new PromotedReleaseAmbiguousError({ message: selected.message }),
       );
-    }
-    promoted.push({ ref, publishedAt, publishedAtMs });
+    default:
+      selected satisfies never;
+      return panic("Unhandled promotion selection");
   }
-
-  if (promoted.length === 0) {
-    return Result.err(
-      new PromotedReleaseMissingError({
-        message:
-          "The release publication manifest records no promoted release.",
-      }),
-    );
-  }
-
-  const ordered = promoted.toSorted(
-    (left, right) =>
-      right.publishedAtMs - left.publishedAtMs ||
-      compareCodeUnit(left.ref, right.ref),
-  );
-  const latest = ordered.at(0);
-  if (!latest) {
-    return Result.err(
-      new PromotedReleaseMissingError({
-        message:
-          "The release publication manifest records no promoted release.",
-      }),
-    );
-  }
-  const candidates = ordered.filter(
-    ({ publishedAtMs }) => publishedAtMs === latest.publishedAtMs,
-  );
-  if (candidates.length !== 1) {
-    return Result.err(
-      new PromotedReleaseAmbiguousError({
-        message: `The release publication manifest records multiple releases at ${latest.publishedAt}: ${candidates.map(({ ref }) => ref).join(", ")}.`,
-      }),
-    );
-  }
-
-  return Result.ok(latest.ref);
 };
 
 const run = async () => {

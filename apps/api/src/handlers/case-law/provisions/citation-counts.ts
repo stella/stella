@@ -1,6 +1,5 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
@@ -17,6 +16,7 @@ import {
   STATUTE_CITATION_COUNT_STATUS,
   STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { provisionAnchorLineageSql } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -25,12 +25,12 @@ import {
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
 
-export const statuteCitationCountsQuerySchema = t.Object({
+export const statuteCitationCountsQuerySchema = v.object({
   jurisdiction: tPublicLawCountry,
-  eli: t.String({ minLength: 1, maxLength: 512 }),
+  eli: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
 });
 
-type StatuteCitationCountsQuery = Static<
+type StatuteCitationCountsQuery = v.InferOutput<
   typeof statuteCitationCountsQuerySchema
 >;
 

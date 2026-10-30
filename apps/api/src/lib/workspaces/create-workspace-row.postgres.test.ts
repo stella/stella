@@ -19,6 +19,7 @@ import {
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -53,6 +54,10 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
     name: "Create matter fixture",
     slug: fixture.organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: fixture.organizationId,
+    now: new Date(),
   });
   await db.insert(user).values(
     [fixture.adminId, fixture.memberId].map((id) => ({

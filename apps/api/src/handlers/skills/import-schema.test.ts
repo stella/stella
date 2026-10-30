@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { importSkillsBodySchema } from "./import";
 
@@ -13,18 +13,16 @@ const item = {
 
 describe("skill batch import schema", () => {
   test("requires callers to choose an explicit scope", () => {
-    expect(Value.Check(importSkillsBodySchema, { items: [item] })).toBe(false);
-    expect(importSkillsBodySchema.properties.scope).not.toHaveProperty(
-      "default",
-    );
+    expect(v.is(importSkillsBodySchema, { items: [item] })).toBe(false);
+    expect(importSkillsBodySchema.entries.scope).not.toHaveProperty("default");
   });
 
   test("accepts both supported explicit scopes", () => {
+    expect(v.is(importSkillsBodySchema, { items: [item], scope: "team" })).toBe(
+      true,
+    );
     expect(
-      Value.Check(importSkillsBodySchema, { items: [item], scope: "team" }),
-    ).toBe(true);
-    expect(
-      Value.Check(importSkillsBodySchema, { items: [item], scope: "private" }),
+      v.is(importSkillsBodySchema, { items: [item], scope: "private" }),
     ).toBe(true);
   });
 });

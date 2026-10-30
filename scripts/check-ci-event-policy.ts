@@ -6,6 +6,7 @@ import {
   definitelyFalse,
   evaluate,
 } from "./github-expression";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const policySchema = v.object({
@@ -14,6 +15,7 @@ const policySchema = v.object({
     v.picklist([
       "pr-fast",
       "queue",
+      "armed",
       "main",
       "schema-pr",
       "pr-opt-in",
@@ -260,14 +262,10 @@ const checkCompilerProofPolicy = ({
 }: CheckCompilerProofPolicyOptions) => {
   const problems: string[] = [];
   const compilerProof = job.steps?.some((step) =>
-    /\b(?:check:typecheck-parity|typecheck-parity\.ts|stll-typecheck-parity|typecheck-command-probe(?:\.sh|\.ts))\b/u.test(
-      step.run ?? "",
-    ),
+    /\btypecheck-command-probe\.(?:sh|ts)\b/u.test(step.run ?? ""),
   );
   if (compilerProof && eventPolicy !== "dispatch-only") {
-    problems.push(
-      `${key}: compiler parity and probes require dispatch-only policy`,
-    );
+    problems.push(`${key}: compiler probes require dispatch-only policy`);
   }
   if (
     eventPolicy === "dispatch-only" &&
@@ -277,6 +275,43 @@ const checkCompilerProofPolicy = ({
     problems.push(
       `${key}: dispatch-only jobs require workflow_dispatch as the only trigger`,
     );
+  }
+  return problems;
+};
+
+// Queue-only suites a pull request runs once it is armed for merge: the one
+// ci-plan output decides, so no other path can run them on an unarmed pull
+// request.
+const checkArmedPolicy = ({
+  key,
+  job,
+  eventPolicy,
+  triggers,
+}: Pick<
+  CheckJobEventPolicyOptions,
+  "key" | "job" | "eventPolicy" | "triggers"
+>) => {
+  const problems: string[] = [];
+  if (eventPolicy !== "armed") {
+    return problems;
+  }
+  const condition =
+    typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+  if (!condition.includes(HEAVY_PROOF_GATE)) {
+    problems.push(`${key}: armed job must gate on ${HEAVY_PROOF_GATE}`);
+  }
+  for (const event of ["pull_request", "pull_request_target"]) {
+    if (
+      Object.hasOwn(triggers, event) &&
+      !definitelyFalse(condition, {
+        values: {
+          "github.event_name": event,
+          "needs.ci-plan.outputs.heavy_proof": "false",
+        },
+      })
+    ) {
+      problems.push(`${key}: armed job can run on an unarmed ${event}`);
+    }
   }
   return problems;
 };
@@ -303,38 +338,41 @@ const checkJobEventPolicy = ({
     }
     return [];
   }
-  if (eventPolicy === "pr-opt-in") {
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
-    if (
-      key === "ci.yml/service-suites" ||
-      key === "ci.yml/postgres-service-suites"
-    ) {
-      if (
-        !requiresPostgresPrSwitch({ key, condition, planOutputs }) ||
-        ["", "off"].some(
-          (value) =>
-            !definitelyFalse(
-              condition,
-              contextWithPlanOutputs({
-                outputs: planOutputs,
-                context: {
-                  values: {
-                    "github.event_name": "pull_request",
-                    "vars.CI_POSTGRES_PR_SELECTION": value,
-                    "needs.ci-plan.outputs.corpus_suites_required": "false",
-                  },
+  const condition =
+    typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+  if (
+    (key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites") &&
+    (!requiresPostgresPrSwitch({ key, condition, planOutputs }) ||
+      ["", "off"].some(
+        (value) =>
+          !definitelyFalse(
+            condition,
+            contextWithPlanOutputs({
+              outputs: planOutputs,
+              context: {
+                values: {
+                  "github.event_name": "pull_request",
+                  "vars.CI_POSTGRES_PR_SELECTION": value,
+                  "needs.ci-plan.outputs.corpus_suites_required": "false",
                 },
-              }),
-            ),
-        )
-      ) {
-        problems.push(
-          `${key}: Postgres PR suites must require the disabled-by-default switch`,
-        );
-      }
-      return problems;
-    }
+              },
+            }),
+          ),
+      ))
+  ) {
+    problems.push(
+      `${key}: Postgres PR suites must require the disabled-by-default switch`,
+    );
+  }
+  if (
+    eventPolicy === "pr-opt-in" &&
+    (key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites")
+  ) {
+    return problems;
+  }
+  if (eventPolicy === "pr-opt-in") {
     if (
       key !== "ci.yml/fix-tests-on-base" ||
       !condition.includes(
@@ -355,8 +393,6 @@ const checkJobEventPolicy = ({
     problems.push(`${key}: schema policy belongs to CI Checks`);
   }
   if (periodic) {
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
     const scopeValues = Object.fromEntries(
       Array.from(
         condition.matchAll(/needs\.ci-plan\.outputs\.(\w+_required)/gu),
@@ -373,6 +409,7 @@ const checkJobEventPolicy = ({
           "inputs.heavy_only": true,
           "inputs.pr_depth_only": false,
           "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.heavy_proof": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.trusted": "true",
         },
@@ -390,8 +427,6 @@ const checkJobEventPolicy = ({
     if (!Object.hasOwn(triggers, event)) {
       continue;
     }
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
     if (
       !definitelyFalse(condition, {
         values: { "github.event_name": event },
@@ -541,6 +576,12 @@ export const checkCiEventPolicies = ({
       }
       problems.push(
         ...checkCompilerProofPolicy({
+          key,
+          job,
+          eventPolicy,
+          triggers: workflow.on,
+        }),
+        ...checkArmedPolicy({
           key,
           job,
           eventPolicy,

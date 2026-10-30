@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 3,
+  "reason": "Better Auth database hooks abort only by throwing: a failed credential revocation during an email-code access reset must stop the sign-in, and a sign-in whose linked account an access reset removed must receive neither a session cookie nor a pending second-factor grant."
+}

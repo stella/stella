@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { vApiDate } from "./api-date";
+import { apiDateSchema } from "./api-date";
 
 export const desktopMatterSchema = v.strictObject({
   id: v.pipe(v.string(), v.maxLength(200)),
@@ -45,7 +45,7 @@ export type DesktopMatterCandidatesResponse = v.InferOutput<
 
 export const desktopTimeEntryBatchItemSchema = v.strictObject({
   matterId: v.pipe(v.string(), v.uuid()),
-  dateWorked: vApiDate,
+  dateWorked: apiDateSchema,
   timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   durationMinutes: v.pipe(
     v.number(),

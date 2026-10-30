@@ -1,45 +1,25 @@
-import Elysia from "elysia";
-
 import createExpense from "@/api/handlers/expenses/create";
 import deleteExpense from "@/api/handlers/expenses/delete";
 import readExpenses from "@/api/handlers/expenses/list";
 import updateExpense from "@/api/handlers/expenses/update";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
-export const expensesRoute = new Elysia({
-  prefix: "/expenses/:workspaceId",
-})
-  .use(
-    deploymentFeatureGate(() =>
-      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
-    ),
-  )
-  .use(featureAccessGate("time-billing"))
-  .use(workspaceAccessMacro)
-  .use(permissionMacro)
-  .guard({
-    validateWorkspaceAccess: true,
-  })
-  .get("/", readExpenses.handler, {
-    permissions: readExpenses.config.permissions,
-    accountAccess: readExpenses.config.accountAccess,
-    query: readExpenses.config.query,
-  })
-  .put("/", createExpense.handler, {
-    body: createExpense.config.body,
-    permissions: createExpense.config.permissions,
-    accountAccess: createExpense.config.accountAccess,
-  })
-  .patch("/", updateExpense.handler, {
-    body: updateExpense.config.body,
-    permissions: updateExpense.config.permissions,
-    accountAccess: updateExpense.config.accountAccess,
-  })
-  .delete("/", deleteExpense.handler, {
-    body: deleteExpense.config.body,
-    permissions: deleteExpense.config.permissions,
-    accountAccess: deleteExpense.config.accountAccess,
-  });
+export const expensesRoute = routes(
+  {
+    "/": {
+      GET: readExpenses,
+      PUT: createExpense,
+      PATCH: updateExpense,
+      DELETE: deleteExpense,
+    },
+  },
+  {
+    prefix: "/expenses/:workspaceId",
+    middleware: [
+      deploymentFeatureGate("FEATURE_TIME_BILLING"),
+      featureAccessGate("time-billing"),
+    ],
+  },
+);

@@ -14,6 +14,7 @@ import {
 } from "@/api/lib/chat/tool-output-degrade";
 import { containsUuid, maskUuids } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -1160,11 +1161,17 @@ export const projectForChat = <TPayload>({
       kind: "server-defect",
       message: PROJECTION_SCHEMA_FAILURE_MESSAGE,
     });
-    captureError(error, {
-      paths: parsed.error.issuePaths.join(", "),
-      source,
-      toolName,
-    });
+    captureError(
+      error,
+      handlerErrorContext(
+        `chat.projection.${source}.${toolName}.validateSchema`,
+        {
+          paths: parsed.error.issuePaths.join(", "),
+          source,
+          toolName,
+        },
+      ),
+    );
     return Result.err(error);
   }
 
@@ -1185,6 +1192,7 @@ export const projectForChat = <TPayload>({
     uuidViolations: [],
   };
   const projected = projectValue(ctx, schema, output, []);
+
   if (ctx.uuidViolations.length > 0) {
     reportToolOutputDegrade({
       defect: "unmapped_id",

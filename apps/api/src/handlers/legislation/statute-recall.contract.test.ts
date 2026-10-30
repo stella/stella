@@ -1,13 +1,12 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
-import Elysia from "elysia";
 import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -21,6 +20,8 @@ import {
 import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { searchLegislationSuccessResponseSchema } from "@/api/handlers/legislation/search-schema";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -36,7 +37,9 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { corpusFixtureIndexConfig } from "@/api/tests/helpers/corpus-fixture-index";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -133,6 +136,17 @@ const VERSIONS = v
     };
   });
 
+/** The public statute search route, served the way users reach it. */
+const serveStatuteSearch = (
+  definition: ReturnType<typeof createPublicStatuteSearch>,
+) =>
+  serveForTest(
+    createHttpApp({
+      routes: routes({ "/law/statutes/search": { GET: definition } }),
+      middleware: [errorBoundary],
+    }),
+  );
+
 const canonicalWorkEli = (eli: string) => {
   const normalized = normalizeEli(eli, {
     hosts: { cz: "https://www.e-sbirka.cz" },
@@ -217,7 +231,7 @@ test("the committed statute recall floor and nonempty coverage only increase", (
   // and names it; a local checkout resolves it from origin/main.
   const base =
     process.env["STATUTE_RECALL_BASE_REF"] ??
-    git(["merge-base", "origin/main", "HEAD"]);
+    treeBaseRevision({ repoRoot: process.cwd() });
   const previousPath = git([
     "ls-tree",
     "--full-tree",
@@ -450,23 +464,16 @@ describe.skipIf(!runEngineTests)(
               loadSearchConfigs: async () => [],
             }),
         );
-        const app = new Elysia().get(
-          "/law/statutes/search",
-          definition.handler,
-          {
-            query: definition.config.query,
-            response: definition.config.response,
-          },
-        );
+        await using app = serveStatuteSearch(definition);
         const url = new URL("http://localhost/law/statutes/search");
         url.searchParams.set("query", protectedRelaxedQuery.query);
         url.searchParams.set("country", "CZE");
         url.searchParams.set("limit", "10");
         const firstRead = engineReads.length;
-        const response = await app.handle(new Request(url.href));
+        const response = await app.fetch(new Request(url.href));
         expect(response.status).toBe(200);
         const body: unknown = await response.json();
-        if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
+        if (!v.is(searchLegislationSuccessResponseSchema, body)) {
           panic("Protected public statute query returned an invalid response");
         }
         const reads = engineReads.slice(firstRead);
@@ -514,24 +521,17 @@ describe.skipIf(!runEngineTests)(
               loadSearchConfigs: async () => [],
             }),
         );
-        const app = new Elysia().get(
-          "/law/statutes/search",
-          definition.handler,
-          {
-            query: definition.config.query,
-            response: definition.config.response,
-          },
-        );
+        await using app = serveStatuteSearch(definition);
         const rows = [];
         for (const fixture of fixtureQueries) {
           const url = new URL("http://localhost/law/statutes/search");
           url.searchParams.set("query", fixture.query);
           url.searchParams.set("country", "CZE");
           url.searchParams.set("limit", "10");
-          const response = await app.handle(new Request(url.href));
+          const response = await app.fetch(new Request(url.href));
           expect(response.status, fixture.id).toBe(200);
           const body: unknown = await response.json();
-          if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
+          if (!v.is(searchLegislationSuccessResponseSchema, body)) {
             panic("Public statute eval returned an invalid search response");
           }
           const expected = new Set(

@@ -242,11 +242,10 @@ type ShadowObservation = {
 };
 
 const recordRequestObservation = (
-  request: Request,
   sink: FailureSink,
   grading: FailureGrading,
 ): void => {
-  recordRequestFailure(request, {
+  recordRequestFailure({
     grade: grading.grade,
     reason: grading.reason,
     sink: sink.event,
@@ -286,7 +285,7 @@ export const observeShadow = ({
       identity: releaseFailureIdentity(evidence),
     });
     if (request !== undefined) {
-      recordRequestObservation(request, sink, grading);
+      recordRequestObservation(sink, grading);
     }
     return grading;
   });

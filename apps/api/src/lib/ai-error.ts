@@ -768,7 +768,7 @@ type AIErrorStatusBody = {
 };
 
 /**
- * Variant of `aiHandlerError` for handlers that build an Elysia
+ * Variant of `aiHandlerError` for handlers that build an HTTP core
  * `status()` response directly instead of returning `HandlerError`.
  * Returns `{ status, body }` so callers can spread it into
  * `status(status, body)`.

@@ -15,6 +15,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -108,6 +109,15 @@ beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  await Promise.all(
+    [organizationId, otherOrganizationId].map(
+      async (id) =>
+        await recordNewOrganizationAccessState(testDb, {
+          organizationId: id,
+          now: new Date(),
+        }),
+    ),
+  );
   await testDb.insert(member).values([
     {
       id: mintAuthProviderIdValue(),

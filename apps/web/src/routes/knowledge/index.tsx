@@ -4,6 +4,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { KnowledgeLandingSkeleton } from "@/features/knowledge/views/knowledge-landing-view";
+import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicKnowledgeLanding } from "@/routes/knowledge/-public/public-knowledge-landing";
 
@@ -14,12 +16,13 @@ const LazyMemberKnowledgeLanding = lazy(async () => {
   return { default: module.MemberKnowledgeLanding };
 });
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   /** An organization-only Knowledge page a visitor asked for. */
   from: v.fallback(v.optional(v.string()), undefined),
 });
 
 export const Route = createFileRoute("/knowledge/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
   component: KnowledgeLanding,
 });

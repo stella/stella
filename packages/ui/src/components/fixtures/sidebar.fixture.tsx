@@ -62,7 +62,14 @@ const SidebarFixture = () => (
     className={side === "right" ? "flex-row-reverse" : undefined}
     defaultOpen={false}
   >
-    <Sidebar collapsible="icon" side={side} variant={variant}>
+    <Sidebar
+      className="isolate"
+      collapsible="icon"
+      data-surface="matter"
+      side={side}
+      style={{ opacity: 0.9 }}
+      variant={variant}
+    >
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>

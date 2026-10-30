@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
   legalListGenerationCandidates,
@@ -10,8 +12,8 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -27,17 +29,21 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedLegalListGenerationCandidateId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
-  listId: tSafeId("legalList"),
-  runId: tSafeId("legalListGenerationRun"),
+  listId: resourceIdSchema("legalList"),
+  runId: resourceIdSchema("legalListGenerationRun"),
 });
-const querySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.legalListGenerationCandidatesMax,
-    }),
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.legalListGenerationCandidatesMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 const config = {
   contract: "patch",

@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -22,14 +22,15 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
-const requestQuery = t.Object({
-  code: t.Optional(t.String()),
-  state: t.Optional(t.String()),
-  error: t.Optional(t.String()),
+const requestQuery = v.object({
+  code: v.optional(v.string()),
+  state: v.optional(v.string()),
+  error: v.optional(v.string()),
 });
 
 const config = {
@@ -122,6 +123,7 @@ export const createSharepointOAuthCallback = (
           redirect({
             status: "error",
             reason: oauthCallbackFailureReason(error, {
+              scope: requireRequestExceptionScope(request),
               operation: "sharepoint_oauth_callback",
               organizationId: session.activeOrganizationId,
               request,

@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 type NativeToolDeployAvailabilityKey = readonly [
@@ -23,7 +23,7 @@ export const nativeToolDeployAvailabilityOptions = queryOptions({
       },
     );
 
-    return unwrapEden(response);
+    return unwrapApiResponse(response);
   },
   staleTime: ROUTE_QUERY_STALE_TIME_MS,
 });

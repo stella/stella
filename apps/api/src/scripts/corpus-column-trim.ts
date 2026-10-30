@@ -80,6 +80,7 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { corpusS3ObjectExists, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -367,7 +368,13 @@ const trimColumnRow = async ({
   } catch (error) {
     counts.failed += 1;
     counts.failedIds.push(row.id);
-    captureError(error, { decisionId: row.id, step: "corpusColumnTrim" });
+    captureError(
+      error,
+      handlerErrorContext("scripts.trimColumnRow", {
+        decisionId: row.id,
+        step: "corpusColumnTrim",
+      }),
+    );
   }
 };
 

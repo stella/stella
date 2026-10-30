@@ -1,4 +1,4 @@
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import { listDecisionCitationsQuerySchema } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
@@ -8,13 +8,14 @@ import {
 import type { DecisionCitationsRead } from "@/api/handlers/case-law/decisions/citation-passages";
 import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import { citationsResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
+import { status } from "@/api/http/status";
 import {
   ACCOUNT_ACCESS,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 
@@ -26,7 +27,7 @@ const config = {
   ),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
-  params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
   query: listDecisionCitationsQuerySchema,
 } satisfies PublicHandlerConfig;
 

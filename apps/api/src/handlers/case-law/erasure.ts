@@ -50,6 +50,15 @@ import {
   deleteRawKeys,
   RAW_KEY_OWNERSHIP,
 } from "@/api/lib/legal-search/raw-source-storage";
+import {
+  REMOVAL_SUPERSEDED_REASON,
+  supersededRemovalEvidence,
+} from "@/api/lib/legal-search/removal-evidence";
+import type {
+  RemovalEvidence,
+  RemovalSupersededReason,
+} from "@/api/lib/legal-search/removal-evidence";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 /** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
 const RAW_ERASE_TIMEOUT_MS = 60_000;
@@ -148,6 +157,7 @@ export const eraseCancelledIntentObjects = async ({
 };
 
 type RedactInput = {
+  evidence?: RemovalEvidence | undefined;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   /** Test seam; production deletes through the corpus bucket client. */
@@ -175,6 +185,7 @@ type LegacyRawErasure = Extract<
 >["legacy"];
 
 export type RedactCaseLawDecisionOutcome =
+  | { type: "superseded"; reason: RemovalSupersededReason }
   | { type: "not-found" }
   /**
    * Every store was scrubbed. `erasure` says how the corpus payloads were
@@ -287,6 +298,7 @@ type RedactionFence =
       decisions: FencedDecision[];
     }
   /** No such row, or none the projection knows: nothing to redact. */
+  | { type: "superseded"; reason: RemovalSupersededReason }
   | { type: "missing" }
   /** The fence itself failed, which says nothing about the row. */
   | { type: "lock-failed"; cause: unknown };
@@ -315,6 +327,7 @@ export const redactCaseLawDecision = async ({
   deleteCorpus = deleteCorpusDocument,
   sweepRaw = sweepCaseLawRawDecision,
   lockSource = lockActiveCorpusProjectionSourceTx,
+  evidence,
 }: RedactInput): Promise<
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
@@ -380,11 +393,39 @@ export const redactCaseLawDecision = async ({
         sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
         redactedAt: caseLawDecisions.redactedAt,
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
+        sourceObservedAt: caseLawDecisions.sourceObservedAt,
+        sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
       })
       .from(caseLawDecisions)
       .where(inArray(caseLawDecisions.id, lockedIds));
     if (decisions.length === 0) {
       return { type: "missing" };
+    }
+
+    if (evidence !== undefined) {
+      const requested = decisions.find(({ id }) => id === decisionId);
+      if (requested === undefined) {
+        return {
+          type: "superseded",
+          reason: REMOVAL_SUPERSEDED_REASON.IDENTITY_CHANGED,
+        };
+      }
+      const reason = supersededRemovalEvidence(evidence, requested);
+      if (reason !== null) {
+        return { type: "superseded", reason };
+      }
+      // An alias's absence cannot authorize the first redaction of another live canonical row.
+      if (
+        canonicalId !== decisionId &&
+        decisions.some(
+          ({ id, redactedAt }) => id === canonicalId && redactedAt === null,
+        )
+      ) {
+        return {
+          type: "superseded",
+          reason: REMOVAL_SUPERSEDED_REASON.CANONICAL_CHANGED,
+        };
+      }
     }
 
     const pendingFenceResults = [];
@@ -493,6 +534,8 @@ export const redactCaseLawDecision = async ({
   switch (fenced.type) {
     case "fenced":
       break;
+    case "superseded":
+      return Result.ok({ type: "superseded", reason: fenced.reason });
     case "missing":
       return Result.ok({ type: "not-found" });
     case "lock-failed":
@@ -554,7 +597,7 @@ const eraseFencedDecision = async ({
   deleteCorpus,
   sweepRaw,
 }: EraseFencedDecisionOptions): Promise<
-  Exclude<RedactCaseLawDecisionOutcome, { type: "not-found" }>
+  Exclude<RedactCaseLawDecisionOutcome, { type: "not-found" | "superseded" }>
 > => {
   const decisionId = decision.id;
 
@@ -588,10 +631,16 @@ const eraseFencedDecision = async ({
       deleteCorpus,
     });
     if (corpusErasure.type === "incomplete") {
-      captureError(corpusErasure.error, {
-        decisionId,
-        step: "redactCaseLawDecision.deleteCorpusDocument",
-      });
+      captureError(
+        corpusErasure.error,
+        handlerErrorContext(
+          "caselaw.redactCaseLawDecision.corpusErasure_error",
+          {
+            decisionId,
+            step: "redactCaseLawDecision.deleteCorpusDocument",
+          },
+        ),
+      );
       await recordFailedRedactionAudit({
         decisionId,
         error: corpusErasure.error,
@@ -614,10 +663,13 @@ const eraseFencedDecision = async ({
     deleteCorpus,
   });
   for (const { error } of incomplete) {
-    captureError(error, {
-      decisionId,
-      step: "redactCaseLawDecision.deleteReservedCorpusUpload",
-    });
+    captureError(
+      error,
+      handlerErrorContext("caselaw.redactCaseLawDecision", {
+        decisionId,
+        step: "redactCaseLawDecision.deleteReservedCorpusUpload",
+      }),
+    );
   }
   const intentCleanup = await Result.tryPromise({
     try: async () =>
@@ -628,10 +680,13 @@ const eraseFencedDecision = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(intentCleanup)) {
-    captureError(intentCleanup.error, {
-      decisionId,
-      step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
-    });
+    captureError(
+      intentCleanup.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.intentCleanup_error", {
+        decisionId,
+        step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
+      }),
+    );
   }
 
   // The publisher's own payloads and files carry the same text as the
@@ -674,10 +729,13 @@ const eraseFencedDecision = async ({
     return { type: "swept", legacyRaw: rawSwept.value.legacy };
   })();
   if (rawErasure.type === "incomplete") {
-    captureError(rawErasure.error, {
-      decisionId,
-      step: "redactCaseLawDecision.sweepSourceRaw",
-    });
+    captureError(
+      rawErasure.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.rawErasure_error", {
+        decisionId,
+        step: "redactCaseLawDecision.sweepSourceRaw",
+      }),
+    );
     await recordFailedRedactionAudit({
       decisionId,
       error: rawErasure.error,

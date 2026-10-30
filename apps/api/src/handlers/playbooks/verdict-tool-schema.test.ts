@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { playbookVerdictToolSchema } from "@/api/db/schema-validators";
 import type { PlaybookVerdictTool } from "@/api/db/schema-validators";
@@ -25,8 +25,8 @@ const verdictTool: PlaybookVerdictTool = {
 
 describe("playbookVerdictToolSchema — ResolvedTiers embedding", () => {
   test("accepts a verdict tool carrying resolved tiers and round-trips unchanged", () => {
-    expect(Value.Check(playbookVerdictToolSchema, verdictTool)).toBe(true);
-    expect(Value.Parse(playbookVerdictToolSchema, verdictTool)).toEqual(
+    expect(v.is(playbookVerdictToolSchema, verdictTool)).toBe(true);
+    expect(v.parse(playbookVerdictToolSchema, verdictTool)).toEqual(
       verdictTool,
     );
   });
@@ -36,13 +36,13 @@ describe("playbookVerdictToolSchema — ResolvedTiers embedding", () => {
       ...verdictTool,
       tiers: { fallbacks: [], acceptableRules: [], notAcceptableRules: [] },
     };
-    expect(Value.Check(playbookVerdictToolSchema, empty)).toBe(true);
+    expect(v.is(playbookVerdictToolSchema, empty)).toBe(true);
   });
 
   test("requires the tiers snapshot", () => {
     const { tiers: _tiers, ...withoutTiers } = verdictTool;
     void _tiers;
-    expect(Value.Check(playbookVerdictToolSchema, withoutTiers)).toBe(false);
+    expect(v.is(playbookVerdictToolSchema, withoutTiers)).toBe(false);
   });
 
   test("rejects a fallback with a negative rank", () => {
@@ -53,6 +53,6 @@ describe("playbookVerdictToolSchema — ResolvedTiers embedding", () => {
         fallbacks: [{ rank: -1, text: "Bad." }],
       },
     };
-    expect(Value.Check(playbookVerdictToolSchema, badRank)).toBe(false);
+    expect(v.is(playbookVerdictToolSchema, badRank)).toBe(false);
   });
 });

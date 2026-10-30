@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -113,7 +114,7 @@ const contextFor = ({
     query: {},
     recordAuditEvent: auditRecorderDouble(),
     request: new Request("https://example.test/v1/audit-logs"),
-    route: "/v1/audit-logs",
+    route: "/v1/audit-logs" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: PRINCIPAL.organizationId },
     set: { headers: {} },
@@ -289,8 +290,14 @@ describe("audit operation details follow verification enrolment", () => {
       test(`${operation} generated MCP and CLI dispatch preserve status for enrolment ${enrolled}`, async () => {
         const context = fixture();
         const endpoint = await CAPABILITY_DISPATCH["audit-logs.list"].load();
-        const result = await endpoint.default.handler(
-          asTestRaw<Parameters<typeof endpoint.default.handler>[0]>(context),
+        const handler = endpoint["default"];
+        const isRestHandler = (value: unknown): value is typeof readAuditLogs =>
+          value === readAuditLogs;
+        if (!isRestHandler(handler)) {
+          throw new TypeError("Audit capability must load the REST handler");
+        }
+        const result = await handler.handler(
+          asTestRaw<Parameters<typeof readAuditLogs.handler>[0]>(context),
         );
         const mapped = mapHandlerResult({
           id: "audit-logs.list",

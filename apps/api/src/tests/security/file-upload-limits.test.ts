@@ -1,99 +1,96 @@
 import { describe, expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
-import nodePath from "node:path";
+import * as v from "valibot";
 
-const HANDLERS_DIR = nodePath.join(import.meta.dir, "../../handlers");
-const FILE_SCHEMA_START = "t.File(";
+import { apiRoutes } from "@/api/api-routes";
+import { fileSchema } from "@/api/lib/custom-schema";
+import { isValibotSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
-const listTypeScriptFiles = async (dir: string): Promise<string[]> => {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const files: string[] = [];
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
-  for (const entry of entries) {
-    const path = nodePath.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listTypeScriptFiles(path)));
-      continue;
-    }
+const FILE_TYPES = new Set(["file", "blob"]);
 
-    if (entry.isFile() && entry.name.endsWith(".ts")) {
-      files.push(path);
-    }
+/** Child schemas a schema reads its input through. */
+const childSchemas = (schema: v.GenericSchema): unknown[] => {
+  const children: unknown[] = [];
+  if ("entries" in schema && isRecord(schema.entries)) {
+    children.push(...Object.values(schema.entries));
   }
+  if ("wrapped" in schema) {
+    children.push(schema.wrapped);
+  }
+  if ("item" in schema) {
+    children.push(schema.item);
+  }
+  if ("items" in schema && Array.isArray(schema.items)) {
+    children.push(...schema.items);
+  }
+  if ("rest" in schema) {
+    children.push(schema.rest);
+  }
+  if ("options" in schema && Array.isArray(schema.options)) {
+    children.push(...schema.options);
+  }
+  if ("value" in schema) {
+    children.push(schema.value);
+  }
+  return children.filter(isValibotSchema);
+};
 
-  return files;
+const hasMaxSize = (schema: v.GenericSchema): boolean =>
+  "pipe" in schema &&
+  Array.isArray(schema.pipe) &&
+  schema.pipe.some((item) => isRecord(item) && item["type"] === "max_size");
+
+/** Every file or blob schema a request schema reads, with whether it is capped. */
+const fileSchemasOf = (root: unknown): { readonly capped: boolean }[] => {
+  const found: { readonly capped: boolean }[] = [];
+  const seen = new Set<unknown>();
+  const visit = (schema: unknown): void => {
+    if (!isValibotSchema(schema) || seen.has(schema)) {
+      return;
+    }
+    seen.add(schema);
+    if (FILE_TYPES.has(schema.type)) {
+      found.push({ capped: hasMaxSize(schema) });
+    }
+    for (const child of childSchemas(schema)) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return found;
 };
 
 describe("file upload limits", () => {
-  test("handler file schemas declare an explicit maxSize", async () => {
-    const files = await listTypeScriptFiles(HANDLERS_DIR);
+  test("every served request file schema declares a maxSize", () => {
     const offenders: string[] = [];
-
-    for (const file of files) {
-      if (file.endsWith(".test.ts")) {
-        continue;
-      }
-
-      const source = await readFile(file, "utf-8");
-      for (const args of extractFileSchemaArgs(source)) {
-        if (!args.includes("maxSize")) {
-          offenders.push(file);
-          break;
+    let files = 0;
+    for (const { method, path, definition } of apiRoutes) {
+      const { body, query, params, headers } = definition.config;
+      for (const slot of [body, query, params, headers]) {
+        for (const file of fileSchemasOf(slot)) {
+          files += 1;
+          if (!file.capped) {
+            offenders.push(`${method} ${path}`);
+          }
         }
       }
     }
 
     expect(offenders).toEqual([]);
+    // The census reads the served routes, so it can never pass by finding no
+    // upload at all.
+    expect(files).toBeGreaterThan(0);
   });
 
-  test("extracts t.File args when options contain nested calls", () => {
-    expect(
-      extractFileSchemaArgs("const schema = t.File({ maxSize: getLimit() });"),
-    ).toEqual(["{ maxSize: getLimit() }"]);
+  test("finds an uncapped file nested in a body and accepts a capped one", () => {
+    const uncapped = v.object({
+      attachments: v.optional(v.array(v.object({ file: v.file() }))),
+    });
+    const capped = v.object({ file: fileSchema({ maxBytes: 1024 }) });
+
+    expect(fileSchemasOf(uncapped)).toEqual([{ capped: false }]);
+    expect(fileSchemasOf(capped)).toEqual([{ capped: true }]);
   });
 });
-
-const extractFileSchemaArgs = (source: string): string[] => {
-  const args: string[] = [];
-  let searchIndex = 0;
-
-  while (true) {
-    const startIndex = source.indexOf(FILE_SCHEMA_START, searchIndex);
-    if (startIndex === -1) {
-      return args;
-    }
-
-    const argsStartIndex = startIndex + FILE_SCHEMA_START.length;
-    const argsEndIndex = findClosingParen(source, argsStartIndex);
-    if (argsEndIndex === -1) {
-      args.push("");
-      return args;
-    }
-
-    args.push(source.slice(argsStartIndex, argsEndIndex));
-    searchIndex = argsEndIndex + 1;
-  }
-};
-
-const findClosingParen = (source: string, startIndex: number) => {
-  let depth = 1;
-
-  for (let index = startIndex; index < source.length; index += 1) {
-    const char = source.at(index);
-    if (char === "(") {
-      depth += 1;
-      continue;
-    }
-
-    if (char !== ")") {
-      continue;
-    }
-
-    depth -= 1;
-    if (depth === 0) {
-      return index;
-    }
-  }
-
-  return -1;
-};

@@ -21,8 +21,9 @@ export const roleAssignmentOptions = (
 
 export const inviteMemberSchema = (
   actorRole: OrganizationRoleName | undefined,
+  invalidEmail: string,
 ) =>
   v.strictObject({
-    email: emailSchema(),
+    email: emailSchema(invalidEmail),
     role: v.picklist(actorRole === undefined ? [] : assignableRoles(actorRole)),
   });

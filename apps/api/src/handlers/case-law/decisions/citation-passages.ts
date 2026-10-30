@@ -15,8 +15,8 @@
  */
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import type {
   CitationEvidenceIncompleteReason,
   CitationTextIncompleteReason,
@@ -25,7 +25,11 @@ import type {
 import { CITATION_EVIDENCE_INCOMPLETE_REASON } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
-import { findCitationPassage } from "@stll/legal-ast/citation-passage";
+import { declareFingerprintFields } from "@stll/errors";
+import {
+  classifiedCitationBlockIds,
+  findCitationPassage,
+} from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
 import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -37,7 +41,7 @@ import {
 } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
-import { captureError } from "@/api/lib/analytics/capture";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -53,14 +57,28 @@ import type {
 } from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import {
+  DECISION_ROW_AST_VERSION_CHANGED,
+  readCachedDecisionRowAst,
+} from "@/api/lib/case-law/decision-row-ast-cache";
+import { readDecisionSectionIndex } from "@/api/lib/case-law/decision-section-cache";
+import {
+  decisionPayloadKey,
+  readDecisionVersionedPayloads,
+} from "@/api/lib/case-law/decision-versioned-payload";
+import type {
+  DecisionPayloadColumn,
+  DecisionPayloadRead,
+} from "@/api/lib/case-law/decision-versioned-payload";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
-import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
+import { errorTag } from "@/api/lib/errors/utils";
+import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
-import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
+import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -101,11 +119,12 @@ type CitationEvidenceFields =
 
 export type CitationWithPassage = Omit<
   DecisionCitationRow,
-  "citationText" | "evidenceQuote"
+  "citationText" | "evidenceQuote" | "printedBy"
 > &
   CitationEvidenceFields & {
-    citationText: string | null;
     textIncompleteReason: CitationTextIncompleteReason | null;
+    citationText: string | null;
+    extractionWarnings: ExtractionWarnings;
     textWithheldReason: DecisionTextWithheldReason | null;
     /**
      * The citing block, or null where there is none to give: the source bars
@@ -150,7 +169,10 @@ type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
+  versionTimestamp: string;
   textEligibilityFingerprint: string;
+  extractionWarnings: ExtractionWarnings;
+  textWithheldReason: DecisionTextWithheldReason | null;
 };
 
 type PassageTextEligibility = {
@@ -194,25 +216,24 @@ const passageTextEligibilityGate = redistributableCaseLawSourceFor(
   caseLawSources.descriptor,
 );
 
-type ReadPassageSourcePointersOptions = {
-  tx: CaseLawPublicReadTransaction;
-  ids: readonly SafeId<"caseLawDecision">[];
-  countries: readonly string[];
-};
-
-const readPassageSourcePointers = async ({
-  tx,
-  ids,
-  countries,
-}: ReadPassageSourcePointersOptions): Promise<PassageSourcePointer[]> => {
+const readPassageSourcePointers = async (
+  tx: CaseLawPublicReadTransaction,
+  ids: readonly SafeId<"caseLawDecision">[],
+  countries: readonly string[],
+): Promise<PassageSourcePointer[]> => {
   if (ids.length === 0) {
     return [];
   }
   const rows = await tx
     .select({
+      extractionWarnings: publishedCaseLawDecisions.extractionWarnings,
       id: publishedCaseLawDecisions.id,
       astS3Key: publishedCaseLawDecisions.astS3Key,
       contentHash: publishedCaseLawDecisions.contentHash,
+      updatedAt: publishedCaseLawDecisions.updatedAt,
+      versionTimestamp: pgTimestampCursorValue(
+        publishedCaseLawDecisions.updatedAt,
+      ),
       ...passageTextEligibilityColumns,
     })
     .from(publishedCaseLawDecisions)
@@ -235,101 +256,19 @@ const readPassageSourcePointers = async ({
       country,
       published,
       redistributable,
-      descriptor,
       textRevisionFingerprint,
+      descriptor,
       ...row
     }) => ({
       ...row,
-      textEligibilityFingerprint: passageTextEligibility({
+      ...passageTextEligibility({
         country,
         published,
         redistributable,
-        descriptor,
         textRevisionFingerprint,
-      }).textEligibilityFingerprint,
+        descriptor,
+      }),
     }),
-  );
-};
-
-/**
- * What one group of citing decisions holds in its own columns, read outside
- * the gate's transaction.
- *
- * `documentAst` is the fallback for a canonical row whose object cannot be
- * read, and is the whole document under `corpusStorageMode: "off"`.
- * `sections` is the segmentation the citation extractor indexed and the
- * polarity classifier read, which is what lets a passage be anchored to the
- * mention the treatment came from.
- */
-type DecisionTextColumns = {
-  contentHash: string | null;
-  textEligibilityFingerprint: string;
-  textWithheldReason: DecisionTextWithheldReason | null;
-  documentAst: unknown;
-  sections: DecisionSection[] | null;
-};
-
-type ReadDecisionTextColumnsOptions = {
-  caseLawDb: CaseLawPublicReadDb;
-  ids: readonly SafeId<"caseLawDecision">[];
-  countries: readonly string[];
-};
-
-const readDecisionTextColumns = async ({
-  caseLawDb,
-  ids,
-  countries,
-}: ReadDecisionTextColumnsOptions): Promise<
-  Map<string, DecisionTextColumns>
-> => {
-  const rows = await caseLawDb(
-    async (tx) =>
-      await tx
-        .select({
-          id: publishedCaseLawDecisions.id,
-          documentAst: publishedCaseLawDecisions.documentAst,
-          contentHash: publishedCaseLawDecisions.contentHash,
-          ...passageTextEligibilityColumns,
-          sections: publishedCaseLawDecisions.sections,
-        })
-        .from(publishedCaseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-        )
-        .where(
-          and(
-            inArray(publishedCaseLawDecisions.id, [...ids]),
-            inArray(publishedCaseLawDecisions.country, [...countries]),
-            passageTextEligibilityGate,
-          ),
-        ),
-  );
-  return new Map(
-    rows.map(
-      ({
-        id,
-        country,
-        published,
-        redistributable,
-        descriptor,
-        textRevisionFingerprint,
-        ...columns
-      }) =>
-        [
-          String(id),
-          {
-            ...columns,
-            ...passageTextEligibility({
-              country,
-              published,
-              redistributable,
-              descriptor,
-              textRevisionFingerprint,
-            }),
-          },
-        ] as const,
-    ),
   );
 };
 
@@ -359,7 +298,7 @@ export type CitationPassageOptions = {
   ast: DocumentAst;
   citationText: string;
   /** The section the citation row was extracted from, when the row kept it. */
-  sectionText: string | undefined;
+  classifiedBlockIds?: readonly string[] | undefined;
   evidenceQuote?: string | null;
 };
 
@@ -374,13 +313,13 @@ export type CitationPassageOptions = {
 export const citationPassageIn = ({
   ast,
   citationText,
-  sectionText,
+  classifiedBlockIds,
   evidenceQuote,
 }: CitationPassageOptions): CitationPassage | null => {
   const match = findCitationPassage({
     blocks: ast.blocks,
     citationText,
-    sectionText,
+    classifiedBlockIds,
   });
   if (match === null) {
     return null;
@@ -424,6 +363,7 @@ export const citationPassageIn = ({
   };
 };
 
+/** A citing decision's text, as a passage read needs to see it. */
 /** A failed eligibility gate carries an error, never fallback decision text. */
 export class CitationTextGateError extends TaggedError(
   "CitationTextGateError",
@@ -431,100 +371,41 @@ export class CitationTextGateError extends TaggedError(
   message: string;
   reason: Exclude<CitationTextIncompleteReason, "absent_ast">;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
-export type CitationDecisionText =
-  | { type: "eligible"; ast: DocumentAst; sections: DecisionSection[] | null }
-  | { type: "withheld"; reason: DecisionTextWithheldReason }
-  | { type: "absent-ast" }
-  | { type: "gate-failed"; error: CitationTextGateError };
-
-type ReadCitationDecisionTextOptions = {
-  pointer: PassageSourcePointer;
-  columns: DecisionTextColumns | undefined;
-  readAst?: typeof readDecisionAnalysisAst;
-  readTombstones?: CorpusTombstoneReader;
+type DecisionText = {
+  ast: DocumentAst;
+  sections: Awaited<ReturnType<typeof readDecisionSectionIndex>>;
+  evidenceSections: DecisionSection[] | null;
 };
 
-/** Failed eligibility reads never retain sections as a fallback text source. */
-export const readCitationDecisionText = async ({
-  pointer,
-  columns,
-  readAst = readDecisionAnalysisAst,
-  readTombstones = readCorpusTombstones,
-}: ReadCitationDecisionTextOptions): Promise<CitationDecisionText> => {
-  if (columns !== undefined && columns.textWithheldReason !== null) {
-    return { type: "withheld", reason: columns.textWithheldReason };
-  }
-  if (
-    columns === undefined ||
-    columns.textEligibilityFingerprint !== pointer.textEligibilityFingerprint
-  ) {
-    return {
-      type: "gate-failed",
-      error: new CitationTextGateError({
-        message: "Citation decision text is missing or changed",
-        reason: columns === undefined ? "missing_text" : "text_changed",
-      }),
+const UNAVAILABLE_DECISION_TEXT = { type: "unavailable" } as const;
+
+type DecisionTextRead =
+  | typeof UNAVAILABLE_DECISION_TEXT
+  | {
+      type: "source";
+      extractionWarnings: ExtractionWarnings;
+      textWithheldReason: DecisionTextWithheldReason | null;
+      text: DecisionText | null;
     };
-  }
-  // Check denial before the AST reader can recover an object read with its
-  // database copy. The reader only fetches this pointer's AST location.
-  const locations = pointer.astS3Key === null ? [] : [pointer.astS3Key];
-  const tombstones = await Result.tryPromise({
-    try: async () => await readTombstones(locations),
-    catch: (cause) =>
-      new CitationTextGateError({
-        message: "Citation decision denial list could not be read",
-        reason: "gate_failed",
-        cause,
-      }),
-  });
-  if (Result.isError(tombstones)) {
-    return { type: "gate-failed", error: tombstones.error };
-  }
-  if (locations.some((location) => tombstones.value.has(location))) {
-    return {
-      type: "gate-failed",
-      error: new CitationTextGateError({
-        message: "Citation decision text has been erased",
-        reason: "gate_failed",
-      }),
-    };
-  }
-  const deniedLocations = Promise.resolve(tombstones.value);
-  const read = await Result.tryPromise(
-    async () =>
-      await readAst(
-        { ...pointer, documentAst: columns.documentAst },
-        async () => await deniedLocations,
-      ),
-  );
-  if (Result.isError(read)) {
-    return {
-      type: "gate-failed",
-      error: new CitationTextGateError({
-        message: "Citation decision text eligibility could not be read",
-        reason: "gate_failed",
-        cause: read.error,
-      }),
-    };
-  }
-  if (read.value === null) {
-    return { type: "absent-ast" };
-  }
-  return { type: "eligible", ast: read.value, sections: columns.sections };
-};
 
 /** The section a citation row was extracted from, when the row kept one. */
-const sectionTextAt = (
-  sections: DecisionSection[] | null,
+const sectionBlockIdsAt = (
+  { ast, sections }: DecisionText,
   sectionIndex: number | null,
-): string | undefined => {
+): readonly string[] | undefined => {
   if (sections === null || sectionIndex === null) {
     return undefined;
   }
-  return sections.find((section) => section.index === sectionIndex)?.text;
+  return classifiedCitationBlockIds(
+    ast,
+    sections.find((section) => section.index === sectionIndex)?.blockIndices,
+  );
 };
 
 /**
@@ -532,48 +413,235 @@ const sectionTextAt = (
  * the bound on bytes in flight: citation count does not bound document size,
  * so a page's decisions are never resolved together however many of them it
  * holds, and the group size is the concurrency. A document that cannot be
- * read costs its rows every text field, never the page: the decision identity
- * and treatment metadata remain available with an explicit incomplete reason.
+ * read costs its rows their passage, never the page: the citation and the
+ * decision it names are still the answer to what the court cited.
  */
-type ReadDecisionTextByDecisionOptions = {
+type DecisionTextGroupOptions = {
   caseLawDb: CaseLawPublicReadDb;
   pointers: readonly PassageSourcePointer[];
   countries: readonly string[];
 };
 
-const readDecisionTextByDecision = async ({
+const readDecisionTextGroup = async ({
   caseLawDb,
   pointers,
   countries,
-}: ReadDecisionTextByDecisionOptions): Promise<
-  Map<string, CitationDecisionText>
-> => {
-  const textByDecision = new Map<string, CitationDecisionText>();
-  for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
-    const columns = await readDecisionTextColumns({
-      caseLawDb,
-      ids: group.map((pointer) => pointer.id),
-      countries,
-    });
-    const entries = await Promise.all(
-      group.map(async (pointer) => {
-        const text = await readCitationDecisionText({
-          pointer,
-          columns: columns.get(String(pointer.id)),
-        });
-        if (text.type === "gate-failed") {
-          captureError(text.error, {
-            step: "case_law.citation_passage.text_gate",
-          });
-        }
-        return { id: pointer.id, text };
-      }),
+}: DecisionTextGroupOptions): Promise<Map<string, DecisionTextRead>> => {
+  const admissionMatches = async () => {
+    const fresh = await caseLawDb(
+      async (tx) =>
+        await readPassageSourcePointers(
+          tx,
+          pointers.map(({ id }) => id),
+          countries,
+        ),
     );
-    for (const entry of entries) {
-      textByDecision.set(String(entry.id), entry.text);
+    const freshById = new Map(fresh.map((pointer) => [pointer.id, pointer]));
+    const locations = pointers.flatMap(({ astS3Key }) =>
+      astS3Key === null ? [] : [astS3Key],
+    );
+    const tombstones = await readCorpusTombstones(locations);
+    return new Set(
+      pointers
+        .filter((pointer) => {
+          const current = freshById.get(pointer.id);
+          return (
+            current !== undefined &&
+            current.textWithheldReason === null &&
+            current.textEligibilityFingerprint ===
+              pointer.textEligibilityFingerprint &&
+            decisionPayloadKey(current) === decisionPayloadKey(pointer) &&
+            (pointer.astS3Key === null || !tombstones.has(pointer.astS3Key))
+          );
+        })
+        .map(({ id }) => id),
+    );
+  };
+  const before = await Result.tryPromise(admissionMatches);
+  if (Result.isError(before)) {
+    logger.warn("case_law.citation_passage.eligibility_unavailable", {
+      "error.type": errorTag(before.error),
+    });
+    return new Map(
+      pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
+    );
+  }
+  // Every lazy miss in this bounded group shares one version-qualified read.
+  // Storage-backed AST hits never start the Postgres AST read.
+  const payloadBatch = <K extends DecisionPayloadColumn>(column: K) => {
+    let pending: Promise<Map<string, DecisionPayloadRead<K>>> | undefined;
+    return async (pointer: PassageSourcePointer) => {
+      pending ??= caseLawDb(
+        async (tx) =>
+          await readDecisionVersionedPayloads({
+            tx,
+            versions: pointers.filter(
+              ({ textWithheldReason }) => textWithheldReason === null,
+            ),
+            column,
+          }),
+      );
+      return (
+        (await pending).get(pointer.id) ?? { kind: "version-changed" as const }
+      );
+    };
+  };
+  const readAst = payloadBatch("documentAst");
+  const readSections = payloadBatch("sections");
+  const changed = new Set<SafeId<"caseLawDecision">>();
+  const entries = await Promise.all(
+    pointers.map(async (pointer) => {
+      if (
+        pointer.textWithheldReason !== null ||
+        !before.value.has(pointer.id)
+      ) {
+        return null;
+      }
+      const onVersionChanged = () => {
+        changed.add(pointer.id);
+      };
+      const key = JSON.stringify([
+        decisionPayloadKey(pointer),
+        pointer.textEligibilityFingerprint,
+      ]);
+      const read = await Result.tryPromise(async () => {
+        const ast = await readDecisionAnalysisAst(
+          { ...pointer, documentAst: null },
+          readCorpusTombstones,
+          async () =>
+            await readCachedDecisionRowAst({
+              documentId: pointer.id,
+              key,
+              onVersionChanged,
+              read: async () => {
+                const result = await readAst(pointer);
+                return result.kind === "version-changed"
+                  ? DECISION_ROW_AST_VERSION_CHANGED
+                  : result.value;
+              },
+            }),
+        );
+        if (changed.has(pointer.id) || ast === null) {
+          return null;
+        }
+        const sections = await readDecisionSectionIndex({
+          key,
+          ast,
+          onVersionChanged,
+          readSections: async () => {
+            const result = await readSections(pointer);
+            return result.kind === "version-changed"
+              ? DECISION_ROW_AST_VERSION_CHANGED
+              : result.value;
+          },
+        });
+        const evidence = await readSections(pointer);
+        if (evidence.kind === "version-changed") {
+          onVersionChanged();
+          return null;
+        }
+        return changed.has(pointer.id)
+          ? null
+          : {
+              id: pointer.id,
+              text: { ast, sections, evidenceSections: evidence.value },
+            };
+      });
+      if (Result.isError(read)) {
+        logger.warn("case_law.citation_passage.ast_unavailable", {
+          "error.type": errorTag(read.error),
+        });
+        return { status: "unavailable" as const };
+      }
+      return read.value === null
+        ? null
+        : {
+            status: "found" as const,
+            ...read.value,
+            extractionWarnings: pointer.extractionWarnings,
+          };
+    }),
+  );
+  const textByDecision = new Map<string, DecisionTextRead>(
+    pointers.map(({ id, textWithheldReason, extractionWarnings }) => [
+      String(id),
+      {
+        type: "source" as const,
+        textWithheldReason,
+        extractionWarnings,
+        text: null,
+      },
+    ]),
+  );
+  for (const entry of entries) {
+    if (entry?.status === "found") {
+      textByDecision.set(entry.id, {
+        type: "source",
+        extractionWarnings: entry.extractionWarnings,
+        textWithheldReason: null,
+        text: entry.text,
+      });
+    }
+  }
+  const after = await Result.tryPromise(admissionMatches);
+  for (const pointer of pointers) {
+    if (
+      pointer.textWithheldReason === null &&
+      (changed.has(pointer.id) ||
+        !before.value.has(pointer.id) ||
+        Result.isError(after) ||
+        !after.value.has(pointer.id))
+    ) {
+      textByDecision.set(pointer.id, UNAVAILABLE_DECISION_TEXT);
     }
   }
   return textByDecision;
+};
+
+type CitationTextRead = {
+  citation: DecisionCitationRow;
+  citingId: string;
+  disposition: DecisionTextRead;
+};
+
+type ReadCitationTextsOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  pointers: readonly PassageSourcePointer[];
+  citations: readonly Omit<CitationTextRead, "disposition">[];
+  countries: readonly string[];
+};
+
+const readCitationTexts = async ({
+  caseLawDb,
+  pointers,
+  citations,
+  countries,
+}: ReadCitationTextsOptions): Promise<CitationTextRead[]> => {
+  const admitted: CitationTextRead[] = citations.map(
+    ({ citation, citingId }) => ({
+      citation,
+      citingId,
+      disposition: UNAVAILABLE_DECISION_TEXT,
+    }),
+  );
+  const textByDecision = new Map<string, DecisionTextRead>();
+  for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
+    const entries = await readDecisionTextGroup({
+      caseLawDb,
+      pointers: group,
+      countries,
+    });
+    for (const [id, text] of entries) {
+      textByDecision.set(id, text);
+    }
+  }
+  for (const entry of admitted) {
+    const disposition = textByDecision.get(entry.citingId);
+    if (disposition !== undefined) {
+      entry.disposition = disposition;
+    }
+  }
+  return admitted;
 };
 
 export type ReadDecisionCitationsOptions = {
@@ -620,7 +688,7 @@ export const prepareDecisionCitations = async ({
     },
     subject,
   });
-  if (page instanceof ElysiaCustomStatusResponse) {
+  if (page instanceof HttpStatusResponse) {
     const statusCode = statusCodeOf(page);
     if (statusCode === 422) {
       return { type: "doctrine_unavailable" as const };
@@ -632,23 +700,18 @@ export const prepareDecisionCitations = async ({
   }
   // Whose text holds the citing block: this decision for its own outgoing
   // citations, the citing decision for every incoming one.
-  const citingIds =
-    direction === "cites"
-      ? [decisionId]
-      : [
-          ...new Map(
-            page.items.flatMap((item) =>
-              item.decision === null
-                ? []
-                : [[String(item.decision.id), item.decision.id] as const],
-            ),
-          ).values(),
-        ];
-  const sources = await readPassageSourcePointers({
-    tx: subject.tx,
-    ids: citingIds,
-    countries: subject.countries,
-  });
+  const citingIds = [
+    ...new Map(
+      page.items.map(
+        (item) => [String(item.printedBy), item.printedBy] as const,
+      ),
+    ).values(),
+  ];
+  const sources = await readPassageSourcePointers(
+    subject.tx,
+    citingIds,
+    subject.countries,
+  );
   const [permission] = await subject.tx
     .select({
       available: sql<boolean>`${sql.join(
@@ -729,23 +792,45 @@ export const completeDecisionCitations = async ({
   ) {
     return gated;
   }
-  const textByDecision = await readDecisionTextByDecision({
+  const resolved = await readCitationTexts({
     caseLawDb,
     pointers: gated.sources,
     countries: gated.countries,
+    citations: gated.page.items.map((citation) => ({
+      citation,
+      citingId: String(citation.printedBy),
+    })),
   });
+  const textByDecision = new Map(
+    resolved.map(({ citingId, disposition }) => [citingId, disposition]),
+  );
   const evidenceByCitation = new Map(
     gated.evidence.type === "ready"
       ? gated.evidence.rows.map((row) => [String(row.id), row] as const)
       : [],
   );
   const items = gated.page.items.map((item): CitationWithPassage => {
-    const citingId =
-      gated.direction === "cites"
-        ? String(gated.resolvedDecisionId)
-        : String(item.decision?.id);
-    const text = textByDecision.get(citingId);
-    const textWithheldReason = text?.type === "withheld" ? text.reason : null;
+    const disposition = textByDecision.get(String(item.printedBy));
+    const textWithheldReason =
+      disposition?.type === "source" ? disposition.textWithheldReason : null;
+    let text: CitationDecisionText;
+    if (disposition?.type === "source" && disposition.text !== null) {
+      text = {
+        type: "eligible",
+        ast: disposition.text.ast,
+        sections: disposition.text.evidenceSections,
+      };
+    } else if (textWithheldReason !== null) {
+      text = { type: "withheld", reason: textWithheldReason };
+    } else {
+      text = {
+        type: "gate-failed",
+        error: new CitationTextGateError({
+          message: "Citation text admission changed or could not be read",
+          reason: "gate_failed",
+        }),
+      };
+    }
     const evidence =
       gated.evidence.type === "not-granted"
         ? null
@@ -781,9 +866,35 @@ export const completeDecisionCitations = async ({
               excerpt: textFields.evidenceExcerpt,
             },
           };
-    const { evidenceQuote: _evidenceQuote, ...citation } = item;
+    const {
+      evidenceQuote: _evidenceQuote,
+      printedBy: _printedBy,
+      ...citation
+    } = item;
+    let passage: CitationPassage | null = null;
+    if (
+      !(gated.evidence.type === "ready" && evidence === null) &&
+      disposition?.type === "source" &&
+      disposition.text !== null &&
+      textWithheldReason === null
+    ) {
+      passage = citationPassageIn({
+        ast: disposition.text.ast,
+        citationText: item.citationText,
+        classifiedBlockIds: sectionBlockIdsAt(
+          disposition.text,
+          item.sectionIndex,
+        ),
+        evidenceQuote:
+          item.doctrine === "distinguishes" || item.doctrine === "limits"
+            ? item.evidenceQuote
+            : null,
+      });
+    }
     return {
       ...citation,
+      extractionWarnings:
+        disposition?.type === "source" ? disposition.extractionWarnings : [],
       ...evidenceFields,
       citationText:
         gated.evidence.type === "ready" && evidence === null
@@ -791,10 +902,7 @@ export const completeDecisionCitations = async ({
           : textFields.citationText,
       textIncompleteReason: textFields.textIncompleteReason,
       textWithheldReason,
-      passage:
-        gated.evidence.type === "ready" && evidence === null
-          ? null
-          : textFields.passage,
+      passage,
     };
   });
 
@@ -857,38 +965,11 @@ export const polarityExcerptIn = ({
     .join(omission);
 };
 
-export const readGatedDecisionCitations = async ({
-  caseLawDb,
-  cursor,
-  decisionId,
-  direction,
-  doctrine,
-  polarity,
-  limit,
-  surface,
-}: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
-  const prepared = await withRedistributableSubject(
-    caseLawDb,
-    surface,
-    { kind: "id", id: decisionId },
-    async (subject) =>
-      await prepareDecisionCitations({
-        subject,
-        cursor,
-        direction,
-        ...(doctrine === undefined ? {} : { doctrine }),
-        ...(polarity === undefined ? {} : { polarity }),
-        limit,
-      }),
-  );
-  if (prepared === null) {
-    return null;
-  }
-  return await completeDecisionCitations({
-    caseLawDb,
-    prepared,
-  });
-};
+export type CitationDecisionText =
+  | { type: "eligible"; ast: DocumentAst; sections: DecisionSection[] | null }
+  | { type: "withheld"; reason: DecisionTextWithheldReason }
+  | { type: "absent-ast" }
+  | { type: "gate-failed"; error: CitationTextGateError };
 
 type CitationTextFieldsOptions = {
   text: CitationDecisionText | undefined;
@@ -904,7 +985,6 @@ export const citationTextFields = ({
   text,
   textWithheldReason,
   citationText,
-  sectionIndex,
   evidenceWindows,
   evidenceQuote = null,
 }: CitationTextFieldsOptions) => {
@@ -931,7 +1011,7 @@ export const citationTextFields = ({
         passage: citationPassageIn({
           ast: text.ast,
           citationText,
-          sectionText: sectionTextAt(text.sections, sectionIndex),
+
           evidenceQuote,
         }),
         evidenceExcerpt: polarityExcerptIn({
@@ -966,3 +1046,35 @@ export const citationTextFields = ({
       return panic("Unhandled citation decision text gate");
   }
 };
+
+export const readGatedDecisionCitations = defineWindowedRead(
+  "citation-passages",
+  async ({
+    caseLawDb,
+    cursor,
+    decisionId,
+    direction,
+    doctrine,
+    polarity,
+    limit,
+    surface,
+  }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
+    const prepared = await withRedistributableSubject(
+      caseLawDb,
+      surface,
+      { kind: "id", id: decisionId },
+      async (subject) =>
+        await prepareDecisionCitations({
+          subject,
+          cursor,
+          direction,
+          ...(doctrine === undefined ? {} : { doctrine }),
+          ...(polarity === undefined ? {} : { polarity }),
+          limit,
+        }),
+    );
+    return prepared === null
+      ? null
+      : await completeDecisionCitations({ caseLawDb, prepared });
+  },
+);

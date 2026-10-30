@@ -12,7 +12,7 @@ import {
 
 test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"eu-edps">().not.toExtend<RegisteredSoftLawAuthority>();
-  expectTypeOf<"de-bfdi">().not.toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"de-bfdi">().toExtend<RegisteredSoftLawAuthority>();
 });
 
 test("every registered adapter belongs to its authority; pending kinds are refused", () => {
@@ -45,7 +45,7 @@ test("every registered adapter belongs to its authority; pending kinds are refus
       } as const satisfies SoftLawMetadata;
       expect(
         validateSoftLawAuthorityMetadata(authority, metadata).isErr(),
-      ).toBe(true);
+      ).toBe(authority !== "de-bfdi" || kind !== "recommendation");
     }
   }
 });

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { startAnonymousUpgrade } from "@/api/lib/agent-auth";
@@ -13,9 +13,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
-  body: t.Object({
-    claim_token: t.String({ minLength: 1, maxLength: 256 }),
-    email: t.String({ format: "email", maxLength: 320 }),
+  body: v.object({
+    claim_token: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    email: v.pipe(v.string(), v.email(), v.maxLength(320)),
   }),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },

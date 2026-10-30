@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { BoeAPIError, BoeRequestError } from "@stll/boe";
+
+import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
@@ -29,6 +32,10 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  createTimeEntryHandlerMock.mockReset();
+});
 
 const createTimeEntryHandlerMock = mock();
 
@@ -261,6 +268,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
   test("internalFailureResult never echoes the internal error text", () => {
     const result = internalFailureResult(
       new Error(`unhandled: ${DB_INTERNAL_LEAK_TOKEN}`),
+      "mcp.result.failure",
     );
 
     const serialized = serializeToolResult(result);
@@ -287,7 +295,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
 // record as telemetry.
 describe("internalFailureResult preserves expected handler errors", () => {
   const EXPECTED_BUSINESS_CASES: {
-    status: HandlerErrorStatusCode;
+    status: Exclude<HandlerErrorStatusCode, 500 | 502 | 503>;
     code: McpErrorCode;
   }[] = [
     { status: 400, code: "validation_error" },
@@ -312,6 +320,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
             hint: "Correct the request and call the tool again.",
             retryable,
           }),
+          "mcp.result.failure",
         );
         expect(JSON.parse(envelopeText(result))).toEqual({
           error: {
@@ -336,6 +345,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
       const message = `curated business message for ${status}`;
       const result = internalFailureResult(
         new HandlerError({ status, message }),
+        "mcp.result.failure",
       );
 
       expectBusinessEnvelope(result, { code, message });
@@ -350,6 +360,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
         status: 500,
         message: `internal boom ${DB_INTERNAL_LEAK_TOKEN}`,
       }),
+      "mcp.result.failure",
     );
 
     expectInternalErrorEnvelope(result);
@@ -366,6 +377,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
         message: "ARES is temporarily unavailable",
         cause: new Error(DB_INTERNAL_LEAK_TOKEN),
       }),
+      "mcp.result.failure",
     );
 
     expect(JSON.parse(envelopeText(result))).toEqual({
@@ -395,6 +407,46 @@ describe("internalFailureResult preserves expected handler errors", () => {
       },
     ]);
     expect(JSON.stringify(logs.records)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
+  });
+  test("BOE outages reach the transient grading owner and caller failures stay actionable", () => {
+    for (const cause of [
+      new BoeAPIError({ message: DB_INTERNAL_LEAK_TOKEN, httpStatus: 502 }),
+      new BoeRequestError("https://example.test", DB_INTERNAL_LEAK_TOKEN),
+    ]) {
+      const result = internalFailureResult(
+        mapBoeError(cause),
+        "mcp.result.failure",
+      );
+      expect(JSON.parse(envelopeText(result)).error).toMatchObject({
+        code: "upstream_unavailable",
+        retryable: true,
+      });
+      expect(envelopeText(result)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
+    }
+    const rejected = internalFailureResult(
+      mapBoeError(
+        new BoeAPIError({ message: "Invalid filter", httpStatus: 422 }),
+      ),
+      "mcp.result.failure",
+    );
+    expect(JSON.parse(envelopeText(rejected)).error).toMatchObject({
+      code: "validation_error",
+      message: expect.stringContaining("Check the identifier and filters"),
+    });
+    expect(capturedExceptions()).toEqual([]);
+    flushFailureObservations();
+    expect(
+      logs.records.filter(({ message }) => message === "failure.observed"),
+    ).toMatchObject([
+      {
+        attributes: {
+          "failure.grade": "transient",
+          "failure.reason": "upstream_unavailable",
+          occurrences: 2,
+        },
+      },
+    ]);
+    expect(logs.at("ERROR")).toEqual([]);
   });
 });
 

@@ -1,0 +1,3 @@
+{
+  "add-column": "Nullable, default-free columns are catalog-only changes under a 5s lock_timeout."
+}

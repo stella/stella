@@ -1,6 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -8,20 +7,20 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { removeTaskAssignment } from "@/api/lib/tasks/assignment-membership";
 
-const removeAssigneeBodySchema = t.Object({
-  taskId: tSafeId("entity"),
-  userId: tUserId,
+const removeAssigneeBodySchema = v.object({
+  taskId: resourceIdSchema("entity"),
+  userId: userIdSchema,
 });
 
 export type RemoveAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof removeAssigneeBodySchema>;
+  body: v.InferOutput<typeof removeAssigneeBodySchema>;
 };
 
 // Shared task-assignee remove logic reused by the HTTP handler and the

@@ -69,6 +69,13 @@ export class ChatRenderErrorBoundary extends Component<
           message: CHAT_RENDER_SURFACES[surface],
           cause: error,
         }),
+        {
+          fingerprintKey: `ChatRenderErrorBoundary:${surface}`,
+          scope: {
+            type: "handler",
+            handlerId: `ChatRenderErrorBoundary:${surface}`,
+          },
+        },
       );
     });
   }

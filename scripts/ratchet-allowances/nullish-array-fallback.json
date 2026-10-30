@@ -1,0 +1,5 @@
+{
+  "metric": "nullish-array-fallback",
+  "delta": 6,
+  "reason": "The HTTP core replaces Elysia: the six fallbacks default optional inputs that are absent by contract (a route group's middleware option, a response's set-cookie list, and Valibot's optional issue path), not structural invariants."
+}

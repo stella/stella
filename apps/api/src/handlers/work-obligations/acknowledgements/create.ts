@@ -11,15 +11,18 @@ import { workObligationRealtimeUpdates } from "@/api/handlers/realtime-resource-
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
-const acknowledgeParams = workspaceParams({ entityId: tSafeId("entity") });
+const acknowledgeParams = workspaceParams({
+  entityId: resourceIdSchema("entity"),
+});
 
 const acknowledgeWorkObligation = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Acknowledge ownership of governed work assigned to the signed-in user.",
     permissions: { entity: ["update"] },

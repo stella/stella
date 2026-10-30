@@ -30,8 +30,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -64,6 +62,8 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { DOCTRINE_LABEL_DOMAIN } from "@/api/scripts/apply-reviewed-citation-labels-doctrine";
@@ -161,15 +161,17 @@ const ingest = async ({
     })),
     documentAst: EMPTY_AST,
   });
-  const result = await processDecision({
-    input,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-23T08:00:00.000Z"),
-    observationOrder,
-    refresh: DECISION_REFRESH.ALWAYS,
-    corpus,
-  });
+  const result = (
+    await processDecision({
+      input,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T08:00:00.000Z"),
+      observationOrder,
+      refresh: DECISION_REFRESH.ALWAYS,
+      corpus,
+    })
+  ).unwrap();
   expect(result.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 

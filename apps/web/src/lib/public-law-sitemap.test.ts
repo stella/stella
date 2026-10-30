@@ -16,6 +16,7 @@ import {
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
 import {
   isPublicLawPathIndexable,
+  PUBLIC_CRAWL_ASSETS,
   publicToolCrawlPaths,
 } from "@/public-crawl-policy";
 
@@ -46,8 +47,6 @@ const {
 } = await import("@/lib/public-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { ssrCacheClassHeaders } = await import("@/route-response-policy");
-const { isWorkspaceDocumentRoutePath } =
-  await import("@/components/workspaces/entity-utils");
 const { Route: robotsRoute, robotsHandlers } =
   await import("@/routes/robots[.]txt");
 
@@ -383,27 +382,30 @@ describe("public law sitemap", () => {
     });
 
     const response = createSitemapReadFailureResponse(error);
-    expect(response.status).toBe(429);
+    expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe(expected);
     expect(response.headers.get("Retry-After")).toMatch(/^[1-9][0-9]*$/u);
   });
 
-  test("a budget refusal rejects with a retryable busy error", async () => {
-    const fetchImpl = async () => new Response("busy", { status: 429 });
+  test.each([429, 503])(
+    "an upstream %s refusal rejects with a retryable busy error",
+    async (status) => {
+      const fetchImpl = async () => new Response("busy", { status });
 
-    const error = await rejectionOf(
-      fetchPublicSitemapDecisions({
-        fetchImpl,
-        shard: { bucket: "all", country: "cze", month: "05", year: "2026" },
-      }),
-    );
+      const error = await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: { bucket: "all", country: "cze", month: "05", year: "2026" },
+        }),
+      );
 
-    expect(SitemapUpstreamBusyError.is(error)).toBe(true);
-    expect(createSitemapReadFailureResponse(error).status).toBe(429);
-    expect(
-      createSitemapReadFailureResponse(error).headers.get("Retry-After"),
-    ).toBe("60");
-  });
+      expect(SitemapUpstreamBusyError.is(error)).toBe(true);
+      expect(createSitemapReadFailureResponse(error).status).toBe(503);
+      expect(
+        createSitemapReadFailureResponse(error).headers.get("Retry-After"),
+      ).toBe("60");
+    },
+  );
 
   test("fetches public sitemap shards from the public case-law API only", async () => {
     const requestedUrls: string[] = [];
@@ -516,6 +518,9 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/07.xml</loc>",
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
+    expect(xml).toMatch(
+      /<sitemap>\s*<loc>http:\/\/localhost:3000\/sitemaps\/law\.xml<\/loc>\s*<\/sitemap>/u,
+    );
     expect(xml).not.toContain("cursor=");
     expect(xml).not.toContain("/xaa/");
     expect(xml).not.toContain("workspace");
@@ -727,6 +732,24 @@ describe("public law sitemap", () => {
     ).toThrow("Public sitemap exceeded 5 bytes.");
   });
 
+  test("the default sitemap ceiling refuses more than fifty mebibytes", () => {
+    const protocolLimitBytes = 50 * 1024 * 1024;
+    const xml = " ".repeat(protocolLimitBytes + 1);
+    expect(() => assertPublicLawSitemapXmlWithinProtocolLimits(xml)).toThrow(
+      `Public sitemap exceeded ${protocolLimitBytes} bytes.`,
+    );
+  });
+
+  test("the sitemap byte ceiling counts UTF-8 bytes", () => {
+    const xml = "<url>č</url>";
+    expect(new TextEncoder().encode(xml).byteLength).toBeGreaterThan(
+      xml.length,
+    );
+    expect(() =>
+      assertPublicLawSitemapXmlWithinProtocolLimits(xml, xml.length),
+    ).toThrow(`Public sitemap exceeded ${xml.length} bytes.`);
+  });
+
   test("root sitemap indexes fail before exceeding the protocol byte limit", () => {
     expect(() =>
       createPublicLawSitemapIndexXml(
@@ -842,6 +865,7 @@ describe("public law sitemap", () => {
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
+      ...PUBLIC_CRAWL_ASSETS.map(({ path }) => `Allow: ${path}$`),
     ]);
     // A jurisdiction whose pages are not public stays behind Disallow: /.
     expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(
@@ -1004,14 +1028,13 @@ describe("public law sitemap", () => {
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
     );
 
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id/document"),
-    ).toBe(true);
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id"),
-    ).toBe(false);
+    // The document page comes from the route matches (see
+    // use-workspace-view-params.dom.test.tsx), read in beforeLoad.
     expect(source).toContain(
-      "const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname)",
+      "return { documentOnScreen: getCurrentWorkspaceDocument(matches) };",
+    );
+    expect(source).toContain(
+      "const isDocumentRoute = context.documentOnScreen !== undefined;",
     );
     expect(source).toContain("if (isDocumentRoute)");
     expect(source).toContain("timeEntrySummaryOptions(");

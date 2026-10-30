@@ -1,6 +1,7 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { status } from "@/api/http/status";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
@@ -19,10 +20,13 @@ const config = {
   contract: "patch",
   // A SET is a signed JWT delivered as application/secevent+jwt. We accept
   // the compact serialization as an opaque string and bound its size.
-  body: t.String({ minLength: 1, maxLength: 16_384 }),
+  body: v.pipe(v.string(), v.minLength(1), v.maxLength(16_384)),
+  bodyMode: "text",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
+  // RFC 8935: a SET receiver acknowledges with 202 Accepted and nothing else.
+  response: { 202: v.object({ accepted: v.literal(true) }) },
 } satisfies PublicHandlerConfig;
 
 const agentEventsHandler = createSafePublicHandler(
@@ -33,7 +37,7 @@ const agentEventsHandler = createSafePublicHandler(
     // against the issuer's JWKS, validate `iss`/`aud`/`events`, then act on
     // recognised event types (assertion revocation). Until then this is an
     // intentional no-op acknowledgement.
-    return Result.ok({ accepted: true });
+    return Result.ok(status(202, { accepted: true }));
   },
 );
 

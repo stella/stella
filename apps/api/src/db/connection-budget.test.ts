@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
+
+import {
+  type Expression,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { DEDICATED_CONNECTIONS_PER_PROCESS } from "@/api/db/dedicated-connection-slots";
 import { envBaseServerSchema } from "@/api/env-base-schema";
@@ -36,12 +42,8 @@ const apiModule = (file: string, specifier: string): string => {
 };
 
 const collectConstructors = (file: string, contents: string) => {
-  const source = ts.createSourceFile(
-    file,
-    contents,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const source = parseSource(file, contents);
+  const text = (node: Node) => contents.slice(node.start, node.end);
   const constructors = new Set<string>();
   const namespaces = new Map<string, string>();
   const drivers = new Set<string>();
@@ -59,125 +61,124 @@ const collectConstructors = (file: string, contents: string) => {
     importedConstructors.set(specifier, new Set([SQL_CLIENT_FACTORY]));
     return true;
   };
-  const clientModule = (expression: ts.Expression): string | undefined => {
-    if (
-      ts.isAwaitExpression(expression) ||
-      ts.isParenthesizedExpression(expression)
-    ) {
+  const clientModule = (expression: Expression): string | undefined => {
+    if (expression.type === "AwaitExpression") {
+      return clientModule(expression.argument);
+    }
+    if (expression.type === "ParenthesizedExpression") {
       return clientModule(expression.expression);
     }
-    if (!ts.isCallExpression(expression)) {
-      return undefined;
-    }
-    if (
-      expression.expression.kind !== ts.SyntaxKind.ImportKeyword &&
-      !(
-        ts.isIdentifier(expression.expression) &&
-        expression.expression.text === "require"
-      )
+    let name: Node | undefined;
+    if (expression.type === "ImportExpression") {
+      name = expression.source;
+    } else if (
+      expression.type === "CallExpression" &&
+      expression.callee.type === "Identifier" &&
+      expression.callee.name === "require"
     ) {
-      return undefined;
+      name = expression.arguments.at(0);
     }
-    const name = expression.arguments.at(0);
-    return name &&
-      ts.isStringLiteral(name) &&
-      (importedConstructors.has(name.text) ||
-        ownsClients(name.text) ||
-        name.text.startsWith("drizzle-orm/"))
-      ? name.text
+    return name?.type === "Literal" &&
+      typeof name.value === "string" &&
+      (importedConstructors.has(name.value) ||
+        ownsClients(name.value) ||
+        name.value.startsWith("drizzle-orm/"))
+      ? name.value
       : undefined;
   };
-  for (const statement of source.statements) {
+  for (const statement of source.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
+      statement.type !== "ImportDeclaration" ||
+      statement.specifiers.length === 0 ||
+      statement.importKind === "type"
     ) {
       continue;
     }
-    const clause = statement.importClause;
-    if (
-      clause === undefined ||
-      clause.phaseModifier === ts.SyntaxKind.TypeKeyword
-    ) {
-      continue;
-    }
-    const module = statement.moduleSpecifier.text;
+    const module = statement.source.value;
     ownsClients(module);
     const names = importedConstructors.get(module);
-    if (clause.name && names?.has("default")) {
-      constructors.add(clause.name.text);
-    }
-    const bindings = clause.namedBindings;
-    if (
-      bindings &&
-      ts.isNamespaceImport(bindings) &&
-      (names || module.startsWith("drizzle-orm/"))
-    ) {
-      namespaces.set(bindings.name.text, module);
-    }
-    if (bindings && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if (binding.isTypeOnly) {
-          continue;
+    for (const binding of statement.specifiers) {
+      if (binding.type === "ImportDefaultSpecifier") {
+        if (names?.has("default")) {
+          constructors.add(binding.local.name);
         }
-        const name = binding.propertyName?.text ?? binding.name.text;
+      } else if (binding.type === "ImportNamespaceSpecifier") {
+        if (names || module.startsWith("drizzle-orm/")) {
+          namespaces.set(binding.local.name, module);
+        }
+      } else if (binding.importKind !== "type") {
+        const name =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
         if (names?.has(name)) {
-          constructors.add(binding.name.text);
+          constructors.add(binding.local.name);
         }
         if (module.startsWith("drizzle-orm/") && name === "drizzle") {
-          drivers.add(binding.name.text);
+          drivers.add(binding.local.name);
         }
       }
     }
   }
   const record = (maximum: string) =>
     found.push({ file, constructor: found.length + 1, maximum });
-  const maximumOf = (options: ts.Expression | undefined): string => {
-    if (options === undefined || !ts.isObjectLiteralExpression(options)) {
+  const isAssignedProperty = (node: Node, name: string) =>
+    node.type === "Property" &&
+    node.kind === "init" &&
+    !node.method &&
+    !node.computed &&
+    node.key.type === "Identifier" &&
+    node.key.name === name;
+  const maximumOf = (options: Node | undefined): string => {
+    if (options?.type !== "ObjectExpression") {
       return "unknown";
     }
     const maximum = options.properties.findLast(
       (property) =>
-        ts.isPropertyAssignment(property) &&
-        property.name.getText(source) === "max",
+        property.type === "Property" &&
+        !property.shorthand &&
+        isAssignedProperty(property, "max"),
     );
-    if (maximum === undefined || !ts.isPropertyAssignment(maximum)) {
+    if (maximum?.type !== "Property") {
       return "unknown";
     }
-    const value = maximum.initializer;
-    if (ts.isNumericLiteral(value)) {
-      return `fixed:${value.text}`;
+    const value = maximum.value;
+    if (value.type === "Literal" && typeof value.value === "number") {
+      return `fixed:${value.value}`;
     }
-    if (ts.isIdentifier(value)) {
-      const constantMaximum = constants.get(value.text);
+    if (value.type === "Identifier") {
+      const constantMaximum = constants.get(value.name);
       if (constantMaximum !== undefined) {
         return `fixed:${constantMaximum}`;
       }
     }
     if (
-      ts.isPropertyAccessExpression(value) &&
-      value.expression.getText(source) === "envBase"
+      value.type === "MemberExpression" &&
+      !value.computed &&
+      text(value.object) === "envBase"
     ) {
-      return `configured:${value.name.text}`;
+      return `configured:${value.property.name}`;
     }
     return "unknown";
   };
-  const isConstructor = (callee: ts.Expression) => {
-    if (ts.isIdentifier(callee)) {
-      return constructors.has(callee.text);
+  const isConstructor = (callee: Expression) => {
+    if (callee.type === "Identifier") {
+      return constructors.has(callee.name);
     }
-    if (
-      !ts.isPropertyAccessExpression(callee) &&
-      !ts.isElementAccessExpression(callee)
-    ) {
+    if (callee.type !== "MemberExpression") {
       return false;
     }
-    const expression = callee.expression.getText(source);
+    const expression = text(callee.object);
     let member = "unknown";
-    if (ts.isPropertyAccessExpression(callee)) {
-      member = callee.name.text;
-    } else if (ts.isStringLiteral(callee.argumentExpression)) {
-      member = callee.argumentExpression.text;
+    if (callee.property.type === "PrivateIdentifier") {
+      member = `#${callee.property.name}`;
+    } else if (!callee.computed) {
+      member = callee.property.name;
+    } else if (
+      callee.property.type === "Literal" &&
+      typeof callee.property.value === "string"
+    ) {
+      member = callee.property.value;
     }
     if (
       (expression === "Bun" || expression === "globalThis.Bun") &&
@@ -185,122 +186,117 @@ const collectConstructors = (file: string, contents: string) => {
     ) {
       return true;
     }
-    const module =
-      namespaces.get(expression) ?? clientModule(callee.expression);
+    const module = namespaces.get(expression) ?? clientModule(callee.object);
     return (
       module !== undefined &&
       importedConstructors.get(module)?.has(member) === true
     );
   };
-  const isDriver = (callee: ts.Expression) => {
-    if (ts.isIdentifier(callee)) {
-      return drivers.has(callee.text);
+  const isDriver = (callee: Expression) => {
+    if (callee.type === "Identifier") {
+      return drivers.has(callee.name);
     }
-    if (!ts.isPropertyAccessExpression(callee)) {
+    if (callee.type !== "MemberExpression" || callee.computed) {
       return false;
     }
     const module =
-      namespaces.get(callee.expression.getText(source)) ??
-      clientModule(callee.expression);
+      namespaces.get(text(callee.object)) ?? clientModule(callee.object);
     return (
       module?.startsWith("drizzle-orm/") === true &&
-      callee.name.text === "drizzle"
+      callee.property.type === "Identifier" &&
+      callee.property.name === "drizzle"
     );
   };
-  const bindDynamicImports = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && node.initializer) {
-      const module = clientModule(node.initializer);
-      if (module !== undefined) {
-        if (ts.isIdentifier(node.name)) {
-          namespaces.set(node.name.text, module);
-          if (importedConstructors.get(module)?.has("default")) {
-            constructors.add(node.name.text);
-          }
-        }
-        if (ts.isObjectBindingPattern(node.name)) {
-          for (const element of node.name.elements) {
-            const name =
-              element.propertyName?.getText(source) ??
-              element.name.getText(source);
-            if (
-              ts.isIdentifier(element.name) &&
-              module.startsWith("drizzle-orm/") &&
-              name === "drizzle"
-            ) {
-              drivers.add(element.name.text);
-            }
-            if (
-              ts.isIdentifier(element.name) &&
-              importedConstructors
-                .get(module)
-                ?.has(
-                  element.propertyName?.getText(source) ?? element.name.text,
-                )
-            ) {
-              constructors.add(element.name.text);
-            }
-          }
-        }
+  walk(source.program, (node) => {
+    if (node.type !== "VariableDeclarator" || !node.init) {
+      return;
+    }
+    const module = clientModule(node.init);
+    if (module === undefined) {
+      return;
+    }
+    if (node.id.type === "Identifier") {
+      namespaces.set(node.id.name, module);
+      if (importedConstructors.get(module)?.has("default")) {
+        constructors.add(node.id.name);
       }
     }
-    ts.forEachChild(node, bindDynamicImports);
-  };
-  bindDynamicImports(source);
-  const bindAliases = (node: ts.Node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      isConstructor(node.initializer)
-    ) {
-      constructors.add(node.name.text);
+    if (node.id.type !== "ObjectPattern") {
+      return;
     }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      isDriver(node.initializer)
-    ) {
-      drivers.add(node.name.text);
-    }
-    ts.forEachChild(node, bindAliases);
-  };
-  bindAliases(source);
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      ts.isNumericLiteral(node.initializer)
-    ) {
-      constants.set(node.name.text, Number(node.initializer.text));
-    }
-    if (ts.isNewExpression(node) && isConstructor(node.expression)) {
-      record(maximumOf(node.arguments?.at(0)));
-    }
-    if (ts.isCallExpression(node)) {
-      if (isConstructor(node.expression)) {
-        record(maximumOf(node.arguments.at(0)));
-      }
-      if (isDriver(node.expression)) {
-        const options = node.arguments.at(0);
-        if (
-          !options ||
-          !ts.isObjectLiteralExpression(options) ||
-          !options.properties.some(
-            (property) =>
-              (ts.isPropertyAssignment(property) ||
-                ts.isShorthandPropertyAssignment(property)) &&
-              property.name.getText(source) === "client",
-          )
-        ) {
-          record("implicit-driver-client");
+    for (const element of node.id.properties) {
+      let target: Node;
+      let propertyName: string | undefined;
+      if (element.type === "RestElement") {
+        target = element.argument;
+      } else {
+        target =
+          element.value.type === "AssignmentPattern"
+            ? element.value.left
+            : element.value;
+        if (!element.shorthand) {
+          propertyName = element.computed
+            ? `[${text(element.key)}]`
+            : text(element.key);
         }
       }
+      if (target.type !== "Identifier") {
+        continue;
+      }
+      const name = propertyName ?? target.name;
+      if (module.startsWith("drizzle-orm/") && name === "drizzle") {
+        drivers.add(target.name);
+      }
+      if (importedConstructors.get(module)?.has(name)) {
+        constructors.add(target.name);
+      }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
+  walk(source.program, (node) => {
+    if (
+      node.type !== "VariableDeclarator" ||
+      node.id.type !== "Identifier" ||
+      !node.init
+    ) {
+      return;
+    }
+    if (isConstructor(node.init)) {
+      constructors.add(node.id.name);
+    }
+    if (isDriver(node.init)) {
+      drivers.add(node.id.name);
+    }
+  });
+  walk(source.program, (node) => {
+    if (
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init?.type === "Literal" &&
+      typeof node.init.value === "number"
+    ) {
+      constants.set(node.id.name, node.init.value);
+    }
+    if (node.type === "NewExpression" && isConstructor(node.callee)) {
+      record(maximumOf(node.arguments.at(0)));
+    }
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    if (isConstructor(node.callee)) {
+      record(maximumOf(node.arguments.at(0)));
+    }
+    if (isDriver(node.callee)) {
+      const options = node.arguments.at(0);
+      if (
+        options?.type !== "ObjectExpression" ||
+        !options.properties.some((property) =>
+          isAssignedProperty(property, "client"),
+        )
+      ) {
+        record("implicit-driver-client");
+      }
+    }
+  });
   return found;
 };
 
@@ -472,7 +468,8 @@ describe("database connection budget", () => {
     expect(shared.perProcess).toBe(
       DATABASE_POOL_DEFAULTS.DATABASE_ROOT_POOL_MAX +
         DATABASE_POOL_DEFAULTS.DATABASE_RLS_POOL_MAX +
-        DEDICATED_CONNECTIONS_PER_PROCESS,
+        DEDICATED_CONNECTIONS_PER_PROCESS +
+        1,
     );
   });
 });

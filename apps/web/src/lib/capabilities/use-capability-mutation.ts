@@ -4,10 +4,10 @@ import type { DefaultError, UseMutationOptions } from "@tanstack/react-query";
 import { toResourceName } from "@stll/api-contract";
 import type { ResourceRef } from "@stll/api-contract";
 
+import type { CapabilityId } from "@/lib/api";
 import { capabilityRequest } from "@/lib/capabilities/capability-request";
 import type { CapabilityRequest } from "@/lib/capabilities/capability-request";
 import { useScreenAction } from "@/lib/capabilities/screen-actions";
-import type { CapabilityId } from "@/lib/eden-client";
 
 type UseCapabilityMutationOptions<TData, TError, TVariables, TOnMutateResult> =
   Omit<

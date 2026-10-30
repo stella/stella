@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { workspaceAnonymizationTermsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -17,6 +17,6 @@ export const anonymizationTermsOptions = (workspaceId: string) =>
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["anonymization-terms"].get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });

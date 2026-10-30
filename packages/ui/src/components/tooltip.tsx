@@ -14,7 +14,26 @@ import { cn } from "../lib/utils";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
 
-const TooltipProvider = TooltipPrimitive.Provider;
+/**
+ * How long the pointer rests on a trigger before its tooltip opens. Base UI
+ * waits 600ms, which reads as lag on toolbars where the label is the only
+ * name a glyph has; 300ms still lets the pointer cross a row of triggers
+ * without flashing each one.
+ */
+const TOOLTIP_OPEN_DELAY_MS = 300;
+
+/**
+ * Shares one open delay across every tooltip below it. Once a tooltip has
+ * shown, the next one opens at once if the pointer reaches its trigger within
+ * Base UI's 400ms warm window (`timeout`), so scanning a toolbar does not wait
+ * on each glyph. A trigger's own `delay` still wins.
+ */
+const TooltipProvider = ({
+  delay = TOOLTIP_OPEN_DELAY_MS,
+  ...props
+}: TooltipPrimitive.Provider.Props) => (
+  <TooltipPrimitive.Provider delay={delay} {...props} />
+);
 
 const Tooltip = TooltipPrimitive.Root;
 
@@ -68,6 +87,7 @@ const TooltipPopup = ({
 );
 
 export {
+  TOOLTIP_OPEN_DELAY_MS,
   TooltipCreateHandle,
   TooltipProvider,
   Tooltip,

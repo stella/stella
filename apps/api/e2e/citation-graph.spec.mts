@@ -51,6 +51,7 @@ const citation = (
     evidenceIncompleteReason: null,
     polarityEvidence: null,
     citedPart: null,
+    extractionWarnings: [],
     polarity,
     doctrine: null,
     decision:
@@ -271,6 +272,7 @@ const mountGraph = async ({
                 result: toolResult({
                   status: "unavailable",
                   metadata: {
+                    extractionWarnings: [],
                     decisionId,
                     url: `https://stella.example/law/cze/cases/${decisionId}`,
                     caseNumber: "Fixture case",

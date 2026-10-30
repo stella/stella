@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
+  "pr-heavy-gate",
   "generated-sources",
   "desktop-rust-lint",
   "scan-engine-wasm-drift",
@@ -8,7 +9,6 @@ export const PILOT_FAST_ROOTS = [
   "ci-checks-policy",
   "ci-checks-rest",
   "ci-tests",
-  "pr-heavy-gate",
   "code-quality-api",
   "code-quality-api-cancel",
   "code-quality-web-rest",
@@ -22,9 +22,10 @@ export const PILOT_FAST_ROOTS = [
   "database-migrations-apply-fresh",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */
-export const PILOT_ALWAYS = ["ci-quick-checks"] as const;
+export const PILOT_ALWAYS = ["pr-heavy-gate"] as const;
 // Queue-only Docker checks remain deferred on PRs, including the pilot profile.
 export const PILOT_DEFERRED = [
+  "ci-quick-checks",
   "docker-checks",
   "ci-browser",
   "service-suites",

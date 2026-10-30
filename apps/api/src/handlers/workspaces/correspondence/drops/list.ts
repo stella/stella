@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { correspondenceDropLogs } from "@/api/db/schema";
 import {
@@ -8,7 +10,7 @@ import {
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -58,9 +60,18 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(t.Integer({ minimum: 1, maximum: MAX_PAGE_SIZE })),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(MAX_PAGE_SIZE),
+        ),
+      ),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 

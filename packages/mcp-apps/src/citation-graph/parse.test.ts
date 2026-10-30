@@ -14,6 +14,7 @@ const validCitation = {
   evidenceIncompleteReason: null,
   polarityEvidence: null,
   citedPart: null,
+  extractionWarnings: [],
   polarity: "unclassified",
   doctrine: null,
   decision: null,

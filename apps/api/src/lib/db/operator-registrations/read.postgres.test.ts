@@ -13,6 +13,7 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 import { parseRegistrationQuery } from "./input";
 import { readAuditedRegistrationPage } from "./read";
@@ -290,7 +291,8 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
                     query,
                   ),
               });
-              const response = await app.handle(
+              await using server = serveRoutesForTest(app);
+              const response = await server.fetch(
                 new Request(
                   `http://localhost/operator/registrations?since=${window.since}`,
                   { headers: { authorization: `Bearer ${secret}` } },

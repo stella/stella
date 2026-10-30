@@ -23,6 +23,7 @@ import {
   type ChangedFileScopeInput,
   computeChangedFileScope,
   DEFAULT_DETECTORS,
+  failClosedServiceSuites,
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { sourceImportClosure } from "./detect-route-smoke-changes";
@@ -38,6 +39,7 @@ type SelectorCase = {
   e2eLandingRequired?: string;
   event?: string;
   title?: string;
+  armed?: boolean;
 };
 const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
   cases.map((item) => {
@@ -50,6 +52,7 @@ const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
         suiteDepth: item.suiteDepth ?? "fast",
         heavyOnly: false,
         prTitle: item.title ?? "",
+        armed: item.armed ?? false,
       },
       {
         ...DEFAULT_DETECTORS,
@@ -141,6 +144,21 @@ test("documentation and landing detector failures widen their workflow scopes", 
     expect(deploy.e2e_landing_required).toBe("true");
     expect(deploy.landing_build_required).toBe("false");
   }
+});
+
+test("an armed pull request builds the landing at merge-group scope", () => {
+  const scope = (armed: boolean) =>
+    computeChangedFileScope(
+      {
+        ...detectorInput("pull_request"),
+        // A landing input outside e2e-landing, which builds the landing itself.
+        changedFiles: ["docs/changelog/v1.md"],
+        armed,
+      },
+      detectors({ landingBuild: () => false, landingDeploy: () => false }),
+    ).landing_build_required;
+  expect(scope(false)).toBe("false");
+  expect(scope(true)).toBe("true");
 });
 
 // The path list covers the landing's own tree; the deploy scope adds every
@@ -401,6 +419,11 @@ test("the generated-output guards run when their inputs change", () => {
   for (const file of [
     "scripts/check-published-exports.ts",
     "scripts/prepare-publish.ts",
+    "scripts/publish-declarations.ts",
+    "scripts/pack-reproducibly.sh",
+    "scripts/check-publish-reproducibility.sh",
+    "scripts/publish-packages.ts",
+    "scripts/generate-npm-release-jobs.ts",
     "scripts/publish-manifest.ts",
     "scripts/published-export-guards.ts",
   ]) {
@@ -447,6 +470,9 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
 test("dependency jobs follow dependency inputs and skip unrelated changes", () => {
   const dependencyInputs = [
     "scripts/dependency-audit.ts",
+    "scripts/dependency-audit-baseline.json",
+    "scripts/dependency-audit-assessment.ts",
+    "scripts/dependency-audit-acceptance.ts",
     "scripts/check-trusted-dependencies.ts",
     "scripts/retry.sh",
     "bun.lock",
@@ -545,6 +571,92 @@ test("migration detector skips only on a successful explicit false answer", () =
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("migration detector crashes fall back and emit a typed infrastructure annotation", () => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "migration-detector-"));
+  mkdirSync(nodePath.join(root, "scripts"));
+  writeFileSync(
+    nodePath.join(root, "scripts/detect-security-workflow-changes.sh"),
+    "printf '%s\\n' unknown\n",
+  );
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...values) => {
+    lines.push(values.join(" "));
+  };
+  try {
+    const scope = computeChangedFileScope({
+      ...detectorInput("pull_request"),
+      changedFiles: ["README.md"],
+      root,
+    });
+    expect(scope["database_migrations_required"]).toBe("true");
+    expect(lines.join("\n")).toContain(
+      'kind=infra class=scope-detector detector="migration change"',
+    );
+  } finally {
+    console.log = original;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("service suite scope without an API manifest uses checkout runner metadata", () => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "service-suite-scope-"));
+  const checkout = nodePath.resolve(import.meta.dirname, "..");
+  mkdirSync(nodePath.join(root, "apps/api"), { recursive: true });
+  mkdirSync(nodePath.join(root, "apps"), { recursive: true });
+  for (const entry of ["src", "scripts"]) {
+    symlinkSync(
+      nodePath.join(checkout, "apps/api", entry),
+      nodePath.join(root, "apps/api", entry),
+    );
+  }
+  symlinkSync(
+    nodePath.join(checkout, "apps/collab"),
+    nodePath.join(root, "apps/collab"),
+  );
+  symlinkSync(
+    nodePath.join(checkout, "packages"),
+    nodePath.join(root, "packages"),
+  );
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...values) => {
+    lines.push(values.join(" "));
+  };
+  try {
+    expect(failClosedServiceSuites(["README.md"], root)).toEqual({
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: false,
+      devSeed: false,
+    });
+    expect(lines.join("\n")).not.toContain("kind=infra class=scope-detector");
+  } finally {
+    console.log = original;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("service suite detector crashes fall back and emit a typed infrastructure annotation", () => {
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...values) => {
+    lines.push(values.join(" "));
+  };
+  try {
+    const plan = failClosedServiceSuites([], undefined, () => {
+      throw new Error("forced detector crash");
+    });
+    expect(Object.values(plan).every(Boolean)).toBe(true);
+    expect(lines.join("\n")).toContain(
+      'kind=infra class=scope-detector detector="service suite"',
+    );
+  } finally {
+    console.log = original;
   }
 });
 
@@ -689,7 +801,7 @@ test("a fix pull request that changes an API test plans the fix-tests-on-base ch
 
 const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
 
-test("a pull request builds the API image for arm64 unless it releases", () => {
+test("a pull request builds the API image for arm64 unless it releases or is armed", () => {
   const outputs = ["api_image_platforms"] as const;
   const expectations = drawPropertySamples(apiSourceSiblings, {
     numRuns: 10,
@@ -708,6 +820,15 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
         files,
         outputs,
         suiteDepth: "full",
+        platforms: ["linux/amd64", "linux/arm64"],
+        label,
+      },
+      // An armed pull request proves the image at merge-group scope.
+      {
+        files,
+        outputs,
+        suiteDepth: "fast",
+        armed: true,
         platforms: ["linux/amd64", "linux/arm64"],
         label,
       },

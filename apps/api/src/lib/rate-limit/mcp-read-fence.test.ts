@@ -122,9 +122,7 @@ describe("shared read windows", () => {
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
         expect(result.error.code).toBe(
-          reply === 0
-            ? "action_period_exhausted"
-            : "action_admission_unavailable",
+          reply === 0 ? "action_period_exhausted" : "limiter_store_unavailable",
         );
       }
     }
@@ -141,7 +139,7 @@ describe("shared read windows", () => {
     if (!Result.isError(failure)) {
       throw new TypeError("Expected closed read");
     }
-    expect(failure.error.code).toBe("action_admission_unavailable");
+    expect(failure.error.code).toBe("limiter_store_unavailable");
   });
 
   test("invalid bytes or policy fail closed before store access", async () => {
@@ -226,7 +224,7 @@ describe("shared read windows", () => {
     expect(calls).toBe(2);
     expect(Result.isError(outcome)).toBe(true);
     if (Result.isError(outcome)) {
-      expect(outcome.error.code).toBe("action_admission_unavailable");
+      expect(outcome.error.code).toBe("limiter_store_unavailable");
       expect(outcome.error.cause).toMatchObject({
         charge: { cause: { label: "mcp-read-fence" } },
         cancellation: {

@@ -12,7 +12,9 @@
     "./sleep": "./src/sleep.ts",
     "./event-loop": "./src/event-loop.ts",
     "./backoff-delay": "./src/backoff-delay.ts",
-    "./chunk": "./src/chunk.ts"
+    "./chunk": "./src/chunk.ts",
+    "./ttl-flight-cache": "./src/ttl-flight-cache.ts",
+    "./coalesced-drain": "./src/coalesced-drain.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

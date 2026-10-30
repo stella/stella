@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -35,10 +35,10 @@ test("stored decision summaries satisfy their wire bounds and projection is idem
     "stored decision summaries satisfy their wire bounds and projection is idempotent",
     fc.property(text, (raw) => {
       const input = summaryWithText(raw);
-      expect(Value.Check(decisionSummaryResponseSchema, input)).toBe(false);
+      expect(v.is(decisionSummaryResponseSchema, input)).toBe(false);
       const projected = projectDecisionSummary(input);
       expect(
-        Value.Errors(decisionSummaryResponseSchema, projected).First(),
+        v.safeParse(decisionSummaryResponseSchema, projected).issues,
       ).toBeUndefined();
       expect(projectDecisionSummary(projected)).toEqual(projected);
       expect(projected.citationCount).toBe(input.citationCount);

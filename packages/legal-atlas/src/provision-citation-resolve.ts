@@ -457,10 +457,14 @@ const renderCitation = (
   return `${parts.join(" ")} ${workIdentifier}`;
 };
 
-const renderAnchor = (
+/**
+ * The publisher anchor of a provision path, in the profile's scheme: one
+ * segment per named level, the same anchor a resolved citation carries.
+ */
+export const renderProvisionAnchor = (
   profile: JurisdictionProfile,
   resolved: ProvisionPath,
-) => {
+): string => {
   const { render, join } = profile.anchor;
   const segments = [
     render[resolved.unit](
@@ -522,7 +526,7 @@ const parseAnchor = (
     letter: subdivisions["letter"] ?? null,
     point: subdivisions["point"] ?? null,
   };
-  return renderAnchor(profile, path) === anchor ? path : null;
+  return renderProvisionAnchor(profile, path) === anchor ? path : null;
 };
 
 /**
@@ -653,9 +657,14 @@ const readSubdivisionPath = (
   }
 };
 
+type ActRefusal = Extract<
+  ProvisionCitationResolution,
+  { status: "no_act" | "ambiguous_act" }
+>;
+
 type ActResolution =
   | { kind: "work"; work: WorkIdentifier; unit: SectionUnit | undefined }
-  | { kind: "refused"; resolution: ProvisionCitationResolution };
+  | { kind: "refused"; resolution: ActRefusal };
 
 /**
  * The act the rest of the citation names: a gazette number outright, else
@@ -817,7 +826,145 @@ export const resolveProvisionCitation = ({
   return {
     status: "resolved",
     ...resolved,
-    anchor: renderAnchor(profile, resolved),
+    anchor: renderProvisionAnchor(profile, resolved),
     citation: renderCitation(profile, resolved, resolved.workIdentifier),
   };
+};
+
+type ActCitationResolution =
+  | { status: "resolved"; work: WorkIdentifier; workIdentifier: string }
+  /** `actName` is the words that name the act, any provision set aside. */
+  | { status: "no_act"; actName: string }
+  | Extract<ProvisionCitationResolution, { status: "ambiguous_act" }>;
+
+/** Brackets and separators around an act name once its provision is cut. */
+const LEADING_NAME_EDGES = new Set(["[", "(", ",", ";", ":"]);
+const TRAILING_NAME_EDGES = new Set(["]", ")", ",", ";", ":"]);
+const WHITESPACE = /^\s$/u;
+
+// A scan from each end rather than an anchored regex: alternating `+` runs
+// backtrack quadratically on a long run of separators.
+const trimNameEdges = (text: string): string => {
+  let start = 0;
+  let end = text.length;
+  while (
+    start < end &&
+    (LEADING_NAME_EDGES.has(text.charAt(start)) ||
+      WHITESPACE.test(text.charAt(start)))
+  ) {
+    start += 1;
+  }
+  while (
+    end > start &&
+    (TRAILING_NAME_EDGES.has(text.charAt(end - 1)) ||
+      WHITESPACE.test(text.charAt(end - 1)))
+  ) {
+    end -= 1;
+  }
+  return text.slice(start, end);
+};
+
+/**
+ * Where a version statement (`ve znění pozdějších předpisů`, `ve znění zákona
+ * č. …`, `ve znění účinném do …`) starts, or the text's end: the act's name
+ * comes before it, and a corpus lookup with it attached misses the name.
+ */
+const versionStatementStart = (
+  text: string,
+  { versionGrammar }: JurisdictionProfile,
+): number => {
+  const lower = text.toLowerCase();
+  let start = text.length;
+  for (const phrase of [
+    ...versionGrammar.currentVersionMarkers,
+    ...versionGrammar.amendmentPrefixes,
+    ...versionGrammar.dateStatements.map(({ prefix }) => prefix),
+  ]) {
+    const at = lower.indexOf(phrase.toLowerCase());
+    if (
+      at !== -1 &&
+      at < start &&
+      (at === 0 || /[\s,;(]/u.test(lower.charAt(at - 1)))
+    ) {
+      start = at;
+    }
+  }
+  return start;
+};
+
+const actNameOf = (text: string, profile: JurisdictionProfile) => {
+  const normalized = normalize(text);
+  return trimNameEdges(
+    normalized.slice(0, versionStatementStart(normalized, profile)),
+  );
+};
+
+/**
+ * The act a citation names, read as `resolveProvisionCitation` reads it: by
+ * gazette number, alias or title for the citing date. A provision printed
+ * with it (`§ 2 odst. 4 písm. b) zákona …`) is set aside, so a citation
+ * names its act with or without one.
+ */
+export const resolveActCitation = ({
+  text,
+  profile,
+  citedOn,
+}: ResolveOptions): ActCitationResolution => {
+  const resolver = compiledFor(profile);
+  const normalized = normalize(text);
+  const section = resolver.section.exec(normalized);
+  const before =
+    section === null ? normalized : normalized.slice(0, section.index);
+  const after =
+    section === null
+      ? ""
+      : normalized.slice(
+          readSubdivisionPath(
+            normalized,
+            section.index + section[0].length,
+            resolver,
+          ).end,
+        );
+  const act = resolveAct(`${before} ${after}`, resolver, profile, citedOn);
+  if (act.kind === "work") {
+    return {
+      status: "resolved",
+      work: act.work,
+      workIdentifier: formatWorkIdentifier(act.work),
+    };
+  }
+  switch (act.resolution.status) {
+    case "no_act": {
+      // An act's name follows the provision it is cited for (`§ 2 zákona
+      // o …`); what precedes it is a lead-in (`Z § 2 …`, `ustanovení § 2`).
+      const named = actNameOf(after, profile);
+      return {
+        status: "no_act",
+        actName: named === "" ? actNameOf(before, profile) : named,
+      };
+    }
+    case "ambiguous_act":
+      return act.resolution;
+    default:
+      act.resolution satisfies never;
+      return panic("Unknown act resolution");
+  }
+};
+
+/**
+ * The name with its head in the nominative (`zákona o obětech trestných
+ * činů` → `zákon o obětech trestných činů`), the form a stored title states;
+ * null when the name is not a head of the profile followed by more words.
+ */
+export const nominativeTitle = (
+  name: string,
+  profile: JurisdictionProfile,
+): string | null => {
+  const [head = "", ...words] = normalize(name).split(" ");
+  const lowered = head.toLowerCase();
+  const spec = profile.titleHeads.find(({ forms }) => forms.includes(lowered));
+  if (spec === undefined || words.length === 0) {
+    return null;
+  }
+  return [spec.nominative, ...words].join(" ");
 };

@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 import { entitiesKeys } from "./entities";
@@ -81,7 +81,7 @@ export const entityVersionsOptions = ({
           fetch: { signal },
         });
 
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
       return {
         versions: data.versions,
         olderCursor: data.olderCursor,
@@ -106,7 +106,7 @@ export const fetchOlderVersions = async ({
           : { before, filePropertyId: toSafeId<"property">(filePropertyId) },
     });
 
-  const data = unwrapEden(response);
+  const data = unwrapApiResponse(response);
 
   return {
     versions: data.versions,
@@ -152,7 +152,7 @@ export const fieldFileOptions = ({
         .field({ fieldId })
         .file.get({ fetch: { signal } });
 
-      const { file } = unwrapEden(response);
+      const { file } = unwrapApiResponse(response);
       if (file === null) {
         return { file: null };
       }

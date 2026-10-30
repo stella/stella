@@ -69,6 +69,7 @@ import {
   FOLIO_COLLAB_TOKEN_TTL_MS,
 } from "@/api/lib/folio-collab-room-contract";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   readS3ObjectIfPresent,
@@ -711,6 +712,13 @@ const recoverRefusedFolioSnapshot = async ({
             folioCollabRooms.yjsSnapshotRevision,
             snapshotPointer.yjsSnapshotRevision,
           ),
+          sql`EXISTS (
+            SELECT 1
+            FROM ${workspaces}
+            WHERE ${workspaces.id} = ${value.workspaceId}
+              AND ${workspaces.organizationId} = ${value.organizationId}
+              AND ${workspaces.status} = 'active'
+          )`,
         ) ?? panic("Snapshot recovery requires a room predicate"),
       options: {
         from: ["empty", "claimed", "seeded"],
@@ -847,6 +855,14 @@ export const loadFolioCollabSnapshot = async (
         })
         .from(folioCollabRooms)
         .innerJoin(
+          workspaces,
+          and(
+            eq(workspaces.id, folioCollabRooms.workspaceId),
+            eq(workspaces.organizationId, value.organizationId),
+            eq(workspaces.status, "active"),
+          ),
+        )
+        .innerJoin(
           entityVersions,
           and(
             eq(entityVersions.id, folioCollabRooms.baseVersionId),
@@ -949,9 +965,7 @@ export const loadFolioCollabSnapshot = async (
           snapshot: {
             generation: room.generation,
             loadOutcome: loaded.outcome,
-            snapshotBase64: Buffer.from(loaded.snapshotBytes).toString(
-              "base64",
-            ),
+            snapshotBase64: Buffer.from(loaded.snapshotBytes).toBase64(),
             snapshotRevision: room.yjsSnapshotRevision,
           },
           rawSnapshotSha256Hex: hashSha256Hex(snapshotBytes),
@@ -1124,10 +1138,13 @@ export const storeFolioCollabSnapshot = async ({
       }),
     );
     if (Result.isError(cleanup)) {
-      captureError(cleanup.error, {
-        roomId: value.roomId,
-        storageKey: nextKey,
-      });
+      captureError(
+        cleanup.error,
+        handlerErrorContext("lib.discardNewObject.cleanup_error", {
+          roomId: value.roomId,
+          storageKey: nextKey,
+        }),
+      );
     }
     await value
       .scopedDb(
@@ -1142,7 +1159,13 @@ export const storeFolioCollabSnapshot = async ({
           }),
       )
       .catch((error: unknown) => {
-        captureError(error, { roomId: value.roomId, storageKey: nextKey });
+        captureError(
+          error,
+          handlerErrorContext("lib.discardNewObject", {
+            roomId: value.roomId,
+            storageKey: nextKey,
+          }),
+        );
       });
   };
   const written = Result.flatten(

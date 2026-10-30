@@ -83,7 +83,7 @@ export const generateBBoxData = async ({
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(pdfData).toString("base64"),
+          value: Buffer.from(pdfData).toBase64(),
           mimeType: "application/pdf",
         },
       };

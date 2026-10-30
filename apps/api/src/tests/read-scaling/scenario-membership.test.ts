@@ -40,6 +40,18 @@ const readApi = (
   });
 
 describe("measured scaling scenario membership", () => {
+  test("a scenario naming the endpoint definition keeps the owner of the handler it replaced", () => {
+    const current = readApi(
+      apiSource.replace("handler: rows.handler", "definition: rows"),
+    );
+    expect(current).toEqual([
+      { kind: "api", name: "rows", handlerOwner: owner },
+    ]);
+    expect(
+      scenarioMembershipViolations({ base: readApi(apiSource), current }),
+    ).toEqual([]);
+  });
+
   test("a reasoned pending POST cannot replace an existing measured scenario", () => {
     const id = "POST /v1/rows";
     const ledger = {

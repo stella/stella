@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -187,9 +186,9 @@ describe("sort cap", () => {
     expect(() => parseViewLayout(oversizedLayout)).toThrow(
       `Invalid length: Expected <=${VIEW_SORTS_MAX} but received ${oversizedSorts.length}`,
     );
-    expect(Value.Check(tViewLayoutSchema, oversizedLayout)).toBe(false);
+    expect(v.is(tViewLayoutSchema, oversizedLayout)).toBe(false);
     expect(
-      Value.Check(tViewLayoutSchema, {
+      v.is(tViewLayoutSchema, {
         ...oversizedLayout,
         sorts: oversizedSorts.slice(0, VIEW_SORTS_MAX),
       }),
@@ -200,7 +199,7 @@ describe("sort cap", () => {
 describe("view template property validation", () => {
   test("accepts saved AI properties with empty prompts", () => {
     expect(
-      Value.Check(tViewTemplatePropertySchema, {
+      v.is(tViewTemplatePropertySchema, {
         version: 1,
         sourceId: "source_summary",
         name: "Summary",
@@ -213,7 +212,7 @@ describe("view template property validation", () => {
 
   test("accepts explicit role absence", () => {
     expect(
-      Value.Check(tViewTemplatePropertySchema, {
+      v.is(tViewTemplatePropertySchema, {
         version: 1,
         sourceId: "source_document_type",
         name: "Document Type",
@@ -226,8 +225,8 @@ describe("view template property validation", () => {
   });
 });
 
-// Property tests below assert that the two parallel schemas
-// (Valibot for internal parsing, TypeBox for the Elysia HTTP boundary) agree on
+// Property tests below assert that the two parallel schemas (the stored
+// schema for internal parsing, the wire schema for the HTTP boundary) agree on
 // every layout and filter shape. Drift between them lets payloads slip past the
 // route validator and fail at parseViewLayout, or vice versa.
 
@@ -414,21 +413,12 @@ const declaredLayoutKeys = new Set([
   "listId",
 ]);
 
-// Valibot 1.4.0's strictObject uses `key in this.entries` to detect extra keys,
-// which walks the prototype chain — so names like "valueOf"/"toString" are
-// silently treated as known and stripped from output. TypeBox correctly
-// rejects them. Excluding these names from the parity property keeps the
-// signal clean; the divergence is captured separately below.
-const objectPrototypeKeys = new Set(
-  Object.getOwnPropertyNames(Object.prototype),
-);
-
 describe("conditionNodeSchema — properties", () => {
-  test("Valibot and TypeBox agree on every well-formed condition node", () => {
+  test("the stored and wire schemas agree on every well-formed condition node", () => {
     fc.assert(
       fc.property(arbFilter, (filter) => {
         expect(v.is(conditionNodeSchema, filter)).toBe(true);
-        expect(Value.Check(tConditionNode, filter)).toBe(true);
+        expect(v.is(tConditionNode, filter)).toBe(true);
       }),
       propertyConfig(),
     );
@@ -436,11 +426,11 @@ describe("conditionNodeSchema — properties", () => {
 });
 
 describe("viewLayoutSchema — properties", () => {
-  test("Valibot and TypeBox agree on every well-formed layout", () => {
+  test("the stored and wire schemas agree on every well-formed layout", () => {
     fc.assert(
       fc.property(arbLayout, (layout) => {
         expect(v.is(viewLayoutSchema, layout)).toBe(true);
-        expect(Value.Check(tViewLayoutSchema, layout)).toBe(true);
+        expect(v.is(tViewLayoutSchema, layout)).toBe(true);
       }),
       propertyConfig(),
     );
@@ -455,27 +445,28 @@ describe("viewLayoutSchema — properties", () => {
     );
   });
 
-  test("both schemas reject layouts with an undeclared extra key", () => {
+  // Both contracts are closed: the stored schema and the wire schema refuse an
+  // undeclared key, so a request carrying one never reaches its handler.
+  test("an undeclared extra key is refused when stored and on the wire", () => {
     fc.assert(
       fc.property(
         arbLayout,
         fc
           .string({ minLength: 1, maxLength: 16 })
-          .filter(
-            (key) =>
-              !declaredLayoutKeys.has(key) && !objectPrototypeKeys.has(key),
-          ),
+          .filter((key) => !declaredLayoutKeys.has(key)),
         (layout, extraKey) => {
           const polluted = { ...layout, [extraKey]: "junk" };
           expect(v.is(viewLayoutSchema, polluted)).toBe(false);
-          expect(Value.Check(tViewLayoutSchema, polluted)).toBe(false);
+          expect(v.is(tViewLayoutSchema, polluted)).toBe(false);
         },
       ),
       propertyConfig(),
     );
   });
 
-  test("both schemas reject Object.prototype-named extra keys", () => {
+  // Valibot before 1.5 found extra keys with `key in entries`, which walks the
+  // prototype chain and let a key named like an Object.prototype member through.
+  test("an Object.prototype-named extra key is refused when stored and on the wire", () => {
     const polluted = {
       type: "kanban" as const,
       version: 1 as const,
@@ -487,7 +478,10 @@ describe("viewLayoutSchema — properties", () => {
       valueOf: "junk",
     };
     expect(v.is(viewLayoutSchema, polluted)).toBe(false);
-    expect(Value.Check(tViewLayoutSchema, polluted)).toBe(false);
+    expect(v.is(tViewLayoutSchema, polluted)).toBe(false);
+    const { valueOf: _extra, ...clean } = polluted;
+    expect(v.is(viewLayoutSchema, clean)).toBe(true);
+    expect(v.is(tViewLayoutSchema, clean)).toBe(true);
   });
 });
 
@@ -516,7 +510,7 @@ describe("view calculations", () => {
     expect(parseViewLayout(layout).calculations).toEqual([
       { propertyId: "fee", kind: "sum" },
     ]);
-    expect(Value.Check(tViewLayoutSchema, layout)).toBe(true);
+    expect(v.is(tViewLayoutSchema, layout)).toBe(true);
   });
 
   test("kanban group and subgroup properties round-trip", () => {
@@ -530,7 +524,7 @@ describe("view calculations", () => {
       groupByPropertyId: "status",
       subgroupByPropertyId: "assignee",
     });
-    expect(Value.Check(tViewLayoutSchema, layout)).toBe(true);
+    expect(v.is(tViewLayoutSchema, layout)).toBe(true);
   });
 
   test("a calculation the reducer does not implement is rejected", () => {

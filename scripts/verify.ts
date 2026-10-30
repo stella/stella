@@ -146,6 +146,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
     AFFECTED_FLAG: options.scope === "all" ? "" : "--affected",
     TURBO_SCM_BASE: options.base,
     RUNNER_TEMP: temporary,
+    GITHUB_WORKSPACE: repo,
     GITHUB_OUTPUT: path.join(temporary, "outputs"),
     GITHUB_ENV: path.join(temporary, "env"),
     GITHUB_STEP_SUMMARY: path.join(temporary, "summary"),
@@ -281,7 +282,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
       if (patch.exitCode !== 0) {
         throw new VerifyError("Unable to collect remote autofix changes");
       }
-      console.log(`STELLA_VERIFY_PATCH=${patch.stdout.toString("base64")}`);
+      console.log(`STELLA_VERIFY_PATCH=${patch.stdout.toBase64()}`);
     }
     return status;
   } finally {
