@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import { GUARD_ROLLOUTS } from "./guard-rollout-policy.ts";
@@ -32,15 +38,34 @@ test("diff scope excludes deletion hunks and includes every inserted line", () =
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = ".oxlint-plugins/__fixtures__";
-const fixtures = readdirSync(path.join(ROOT, FIXTURES), {
-  encoding: "utf-8",
-  recursive: true,
-})
-  .filter((name) => name.endsWith(".fixture.ts"))
-  .map((name) => {
-    const file = `${FIXTURES}/${name}`;
-    return { file, source: readFileSync(path.join(ROOT, file), "utf-8") };
-  });
+const readFixtures = (directory: string) =>
+  readdirSync(path.join(ROOT, directory), {
+    encoding: "utf-8",
+    recursive: true,
+  })
+    .filter((name) => /\.fixture\.tsx?$/u.test(name))
+    .map((name) => {
+      const file = `${directory}/${name}`;
+      return { file, source: readFileSync(path.join(ROOT, file), "utf-8") };
+    });
+
+const fixtures = readFixtures(FIXTURES);
+
+test("fixture discovery reads .fixture.tsx files", () => {
+  const directory = mkdtempSync(path.join(ROOT, ".fixture-discovery-"));
+  try {
+    writeFileSync(path.join(directory, "rule.fixture.tsx"), "tsx");
+    writeFileSync(path.join(directory, "rule.fixture.ts"), "ts");
+    writeFileSync(path.join(directory, "rule.ts"), "other");
+    expect(
+      readFixtures(path.basename(directory))
+        .map(({ source }) => source)
+        .toSorted(),
+    ).toEqual(["ts", "tsx"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 for (const { id: guard, rules = [] } of GUARD_ROLLOUTS) {
   for (const rule of rules) {
