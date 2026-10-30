@@ -189,8 +189,8 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
   },
   "dependencies": {
-    "@stll/folio-core": "catalog:",
     "@stll/agent-input": "workspace:*",
+    "@stll/folio-core": "catalog:",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",

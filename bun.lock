@@ -1125,6 +1125,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/agent-input": "workspace:*",
+        "@stll/folio-core": "catalog:",
         "@stll/sha256": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
