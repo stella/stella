@@ -79,6 +79,47 @@ const local = <LocalSelect>{short.map((option) => <LocalItem>{option}</LocalItem
   ).toEqual([]);
 });
 
+test("distinguishes same-named list bindings in separate components", async () => {
+  const longList = Array.from(
+    { length: 31 },
+    (_, index) => `"zone-${index}"`,
+  ).join(", ");
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+const LongPicker = () => {
+  const options = [${longList}];
+  return <Select>{options.map((option) => <SelectItem value={option}>{option}</SelectItem>)}</Select>;
+};
+const ShortPicker = () => {
+  const options = ["a", "b"];
+  return <Select>{options.map((option) => <SelectItem value={option}>{option}</SelectItem>)}</Select>;
+};`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([4]);
+});
+
+test("uses a shadowing list binding instead of an outer long list", async () => {
+  const longList = Array.from(
+    { length: 31 },
+    (_, index) => `"zone-${index}"`,
+  ).join(", ");
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+const options = [${longList}];
+const ShortPicker = () => {
+  const options = ["a", "b"];
+  return <Select>{options.map((option) => <SelectItem value={option}>{option}</SelectItem>)}</Select>;
+};`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([]);
+});
+
 test("accepts a list of exactly 30 explicit options", async () => {
   const options = Array.from(
     { length: 30 },

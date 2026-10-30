@@ -2,7 +2,7 @@
 // This rule detects direct lists and statically sized `.map` sources. It also
 // resolves exported literal arrays from local and `@/` modules.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -15,7 +15,9 @@ import {
   getImportLocalName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isStringLiteral,
+  resolveVariable,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
@@ -89,7 +91,7 @@ const staticArrayLength = (node: unknown): number | null => {
   return null;
 };
 
-const mappedListName = (node: unknown): string | null => {
+const mappedListIdentifier = (node: unknown): AstNode | null => {
   if (
     !isAstNode(node) ||
     node.type !== "CallExpression" ||
@@ -108,38 +110,8 @@ const mappedListName = (node: unknown): string | null => {
   return isAstNode(callee.object) &&
     callee.object.type === "Identifier" &&
     typeof callee.object.name === "string"
-    ? callee.object.name
+    ? callee.object
     : null;
-};
-
-const isMappedHelperCall = (
-  node: unknown,
-  helperNames: ReadonlySet<string>,
-): boolean => {
-  if (
-    !isAstNode(node) ||
-    node.type !== "CallExpression" ||
-    !isAstNode(node.callee)
-  ) {
-    return false;
-  }
-  const callee = node.callee;
-  if (
-    callee.type !== "MemberExpression" ||
-    !isAstNode(callee.property) ||
-    callee.property.name !== "map" ||
-    !isAstNode(callee.object)
-  ) {
-    return false;
-  }
-  const source = callee.object;
-  return (
-    source.type === "CallExpression" &&
-    isAstNode(source.callee) &&
-    source.callee.type === "Identifier" &&
-    typeof source.callee.name === "string" &&
-    helperNames.has(source.callee.name)
-  );
 };
 
 const isMappedStaticArray = (node: unknown): boolean => {
@@ -330,40 +302,66 @@ const isBoundedSlice = (node: AstNode): boolean => {
 
 const returnedExpressionReferencesLongList = (
   node: unknown,
-  names: ReadonlySet<string>,
+  context: Parameters<typeof resolveVariable>[0],
+  variables: ReadonlySet<Variable>,
 ): boolean => {
   if (!isAstNode(node) || isBoundedSlice(node)) {
     return false;
   }
-  if (isIdentifier(node)) {
-    return names.has(node.name);
+  if (isIdentifierReference(node)) {
+    const variable = resolveVariable(context, node);
+    return variable !== null && variables.has(variable);
   }
   return children(node).some((child) =>
-    returnedExpressionReferencesLongList(child, names),
+    returnedExpressionReferencesLongList(child, context, variables),
   );
 };
 
 const helperReturnsLongList = (
   body: unknown,
-  names: ReadonlySet<string>,
+  context: Parameters<typeof resolveVariable>[0],
+  variables: ReadonlySet<Variable>,
 ): boolean => {
   if (!isAstNode(body)) {
     return false;
   }
   if (body.type !== "BlockStatement") {
-    return returnedExpressionReferencesLongList(body, names);
+    return returnedExpressionReferencesLongList(body, context, variables);
   }
   let returnsLongList = false;
   walk(body, (node) => {
     if (
       node.type === "ReturnStatement" &&
-      returnedExpressionReferencesLongList(node.argument, names)
+      returnedExpressionReferencesLongList(node.argument, context, variables)
     ) {
       returnsLongList = true;
     }
   });
   return returnsLongList;
 };
+
+const identifierResolvesTo = (
+  context: Parameters<typeof resolveVariable>[0],
+  node: unknown,
+  variables: ReadonlySet<Variable>,
+): boolean => {
+  if (!isIdentifierReference(node)) {
+    return false;
+  }
+  const variable = resolveVariable(context, node);
+  return variable !== null && variables.has(variable);
+};
+
+const isMappedHelperCall = (
+  context: Parameters<typeof resolveVariable>[0],
+  node: AstNode,
+  helpers: ReadonlySet<Variable>,
+): boolean =>
+  isAstNode(node.callee) &&
+  node.callee.type === "MemberExpression" &&
+  isAstNode(node.callee.object) &&
+  node.callee.object.type === "CallExpression" &&
+  identifierResolvesTo(context, node.callee.object.callee, helpers);
 
 export default eslintCompatPlugin({
   meta: { name: "searchable-long-select" },
@@ -379,13 +377,13 @@ export default eslintCompatPlugin({
       createOnce(context) {
         let selectLocals = new Set<string>();
         let itemLocals = new Set<string>();
-        let longListLocals = new Set<string>();
-        let longListHelpers = new Set<string>();
+        let longListVariables = new Set<Variable>();
+        let longListHelpers = new Set<Variable>();
         return {
           Program(program) {
             selectLocals = new Set();
             itemLocals = new Set();
-            longListLocals = new Set();
+            longListVariables = new Set();
             longListHelpers = new Set();
             if (!isAstNode(program) || !Array.isArray(program.body)) {
               return;
@@ -421,7 +419,23 @@ export default eslintCompatPlugin({
             if (selectLocals.size === 0 && !hasNativeSelect) {
               return;
             }
-            longListLocals = importLocals(program, filenameForContext(context));
+            const importedLongLists = importLocals(
+              program,
+              filenameForContext(context),
+            );
+            walk(program, (inner) => {
+              if (
+                inner.type !== "ImportSpecifier" ||
+                !isIdentifierReference(inner.local) ||
+                !importedLongLists.has(inner.local.name)
+              ) {
+                return;
+              }
+              const variable = resolveVariable(context, inner.local);
+              if (variable !== null) {
+                longListVariables.add(variable);
+              }
+            });
             walk(program, (inner) => {
               if (
                 inner.type !== "VariableDeclaration" ||
@@ -439,14 +453,20 @@ export default eslintCompatPlugin({
                   continue;
                 }
                 const initializer = declaration.init;
+                const sourceVariable = isIdentifierReference(initializer)
+                  ? resolveVariable(context, initializer)
+                  : null;
                 if (
                   (staticArrayLength(initializer) ?? 0) > SELECT_THRESHOLD ||
-                  (isAstNode(initializer) &&
-                    initializer.type === "Identifier" &&
-                    typeof initializer.name === "string" &&
-                    longListLocals.has(initializer.name))
+                  (sourceVariable !== null &&
+                    longListVariables.has(sourceVariable))
                 ) {
-                  longListLocals.add(declaration.id.name);
+                  const variable = isIdentifierReference(declaration.id)
+                    ? resolveVariable(context, declaration.id)
+                    : null;
+                  if (variable !== null) {
+                    longListVariables.add(variable);
+                  }
                 }
               }
             });
@@ -456,9 +476,14 @@ export default eslintCompatPlugin({
                 isAstNode(inner.id) &&
                 inner.id.type === "Identifier" &&
                 typeof inner.id.name === "string" &&
-                helperReturnsLongList(inner.body, longListLocals)
+                helperReturnsLongList(inner.body, context, longListVariables)
               ) {
-                longListHelpers.add(inner.id.name);
+                const variable = isIdentifierReference(inner.id)
+                  ? resolveVariable(context, inner.id)
+                  : null;
+                if (variable !== null) {
+                  longListHelpers.add(variable);
+                }
               }
               if (
                 inner.type !== "VariableDeclarator" ||
@@ -472,9 +497,18 @@ export default eslintCompatPlugin({
               if (
                 (inner.init.type === "ArrowFunctionExpression" ||
                   inner.init.type === "FunctionExpression") &&
-                helperReturnsLongList(inner.init.body, longListLocals)
+                helperReturnsLongList(
+                  inner.init.body,
+                  context,
+                  longListVariables,
+                )
               ) {
-                longListHelpers.add(inner.id.name);
+                const variable = isIdentifierReference(inner.id)
+                  ? resolveVariable(context, inner.id)
+                  : null;
+                if (variable !== null) {
+                  longListHelpers.add(variable);
+                }
               }
             });
           },
@@ -497,9 +531,13 @@ export default eslintCompatPlugin({
             const mappedLongList = nestedNodes.some(
               (inner) =>
                 inner.type === "CallExpression" &&
-                (longListLocals.has(mappedListName(inner) ?? "") ||
+                (identifierResolvesTo(
+                  context,
+                  mappedListIdentifier(inner),
+                  longListVariables,
+                ) ||
                   isMappedStaticArray(inner) ||
-                  isMappedHelperCall(inner, longListHelpers)),
+                  isMappedHelperCall(context, inner, longListHelpers)),
             );
             if (itemCount > SELECT_THRESHOLD || mappedLongList) {
               context.report({ node, messageId: "longSelect" });
