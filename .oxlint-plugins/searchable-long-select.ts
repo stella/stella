@@ -4,7 +4,7 @@
 
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 import { panic } from "better-result";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseSync } from "oxc-parser";
 
@@ -24,6 +24,14 @@ import type { AstNode } from "./utils.ts";
 const SELECT_MODULE = "@stll/ui/select";
 const SELECT_THRESHOLD = 30;
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"];
+const TS_EXTENSION_SUBSTITUTES: Readonly<
+  Record<string, readonly string[] | undefined>
+> = {
+  ".js": [".ts", ".tsx"],
+  ".jsx": [".tsx"],
+  ".mjs": [".mts"],
+  ".cjs": [".cts"],
+};
 const ASSET_EXTENSIONS = new Set([
   ".json",
   ".css",
@@ -159,31 +167,33 @@ const importedModulePath = (
   } else {
     return null;
   }
-  const hasSourceExtension = SOURCE_EXTENSIONS.some((extension) =>
-    base.endsWith(extension),
-  );
   // An imported asset (JSON, styles, images) is not a list source module.
-  if (
-    !hasSourceExtension &&
-    (ASSET_EXTENSIONS.has(path.extname(base)) || existsSync(base))
-  ) {
+  if (ASSET_EXTENSIONS.has(path.extname(base))) {
     return null;
   }
-  const candidates = !hasSourceExtension
-    ? [
-        ...SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`),
-        ...SOURCE_EXTENSIONS.map((extension) =>
-          path.join(base, `index${extension}`),
-        ),
-      ]
-    : [base];
-  const resolved = candidates.find((candidate) => existsSync(candidate));
-  if (resolved === undefined) {
-    return panic(
-      `Unable to resolve local imported list source ${specifier} from ${filename}`,
-    );
-  }
-  return resolved;
+  const extension = path.extname(base);
+  // TypeScript resolves `./helper.js` to `helper.ts`; mirror that substitution.
+  const substituted = TS_EXTENSION_SUBSTITUTES[extension];
+  const withoutExtension =
+    substituted === undefined ? base : base.slice(0, -extension.length);
+  const candidates = [
+    base,
+    ...(substituted ?? []).map(
+      (candidate) => `${withoutExtension}${candidate}`,
+    ),
+    ...SOURCE_EXTENSIONS.map((candidate) => `${base}${candidate}`),
+    ...SOURCE_EXTENSIONS.map((candidate) =>
+      path.join(base, `index${candidate}`),
+    ),
+  ];
+  // A directory resolves through its index file, never as the module itself.
+  // An import this rule cannot resolve is not a list source: skipping it keeps
+  // one unusual import from aborting the lint of the whole file.
+  return (
+    candidates.find(
+      (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+    ) ?? null
+  );
 };
 
 const moduleLongListCache = new Map<string, ReadonlySet<string>>();
