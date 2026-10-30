@@ -125,11 +125,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 24,
+    version: 25,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read reporter and matched registry fields from captured publisher responses; missing historical captures require a re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {

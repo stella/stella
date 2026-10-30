@@ -732,26 +732,6 @@ export const caseLawDecisions = p.pgTable(
       .integer("document_fetch_attempts")
       .default(0)
       .notNull(),
-    /** NSS reporter entry number as published. */
-    nssReporterNumber: p.text(),
-    /** NSS reporter year as published. */
-    nssReporterYear: p.text(),
-    /** NSS reporter issue as published. */
-    nssReporterIssue: p.text(),
-    /** NSS keyword-search taxonomy code as published. */
-    nssKeywordSearchCode: p.text(),
-    /** Extended-chamber registry reference for the matched original. */
-    nssRegistryCaseNumber: p.text(),
-    /** Full published reference of the referring order. */
-    nssRegistryReferral: p.text(),
-    /** Referral date in the publisher’s original notation. */
-    nssRegistryReferralDate: p.text(),
-    /** Cases opposed in the extended-chamber proceeding, as published. */
-    nssRegistryAgainstCases: p.text(),
-    /** Publisher status of the extended-chamber proceeding. */
-    nssRegistryStatus: p.text(),
-    /** Publisher annotation of the extended-chamber proceeding. */
-    nssRegistryAnnotation: p.text(),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
     /** Algorithm version under which `sourceHash` was computed. */
@@ -831,6 +811,26 @@ export const caseLawDecisions = p.pgTable(
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
+    /** NSS reporter entry number as published. */
+    nssReporterNumber: p.text("nss_reporter_number"),
+    /** NSS reporter year as published. */
+    nssReporterYear: p.text("nss_reporter_year"),
+    /** NSS reporter issue as published. */
+    nssReporterIssue: p.text("nss_reporter_issue"),
+    /** NSS keyword-search taxonomy code as published. */
+    nssKeywordSearchCode: p.text("nss_keyword_search_code"),
+    /** Extended-chamber registry reference for the matched original. */
+    nssRegistryCaseNumber: p.text("nss_registry_case_number"),
+    /** Full published reference of the referring order. */
+    nssRegistryReferral: p.text("nss_registry_referral"),
+    /** Referral date in the publisher’s original notation. */
+    nssRegistryReferralDate: p.text("nss_registry_referral_date"),
+    /** Cases opposed in the extended-chamber proceeding, as published. */
+    nssRegistryAgainstCases: p.text("nss_registry_against_cases"),
+    /** Publisher status of the extended-chamber proceeding. */
+    nssRegistryStatus: p.text("nss_registry_status"),
+    /** Publisher annotation of the extended-chamber proceeding. */
+    nssRegistryAnnotation: p.text("nss_registry_annotation"),
   },
   (t) => [
     parsedSourceComplete(t),

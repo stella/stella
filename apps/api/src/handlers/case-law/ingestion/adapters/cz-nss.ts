@@ -2126,7 +2126,7 @@ const rowToResult = ({
       court,
       ...detailMetadataFields(detail),
       ...readNssRegistryMetadata({
-        html: rawParts[CZ_NSS_RAW_PART.REGISTRY],
+        html: content.recovery?.[CZ_NSS_RAW_PART.REGISTRY],
         reference: publishedCaseNumber,
       }),
       // The listing states an outcome for rows whose detail page does not.

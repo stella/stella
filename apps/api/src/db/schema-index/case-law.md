@@ -78,40 +78,40 @@ case_law_decisions.sheet_number                    varchar          null        
 case_law_decisions.document_fetch_requested_at     timestamptz      null              case-law.ts:729  Bookkeeping for sources that ingest metadata first and fetch the document later (see `ingestion/sk-document-backfill.ts`).
 case_law_decisions.document_fetch_attempted_at     timestamptz      null              case-law.ts:730
 case_law_decisions.document_fetch_attempts         integer          default,not null  case-law.ts:731
-case_law_decisions.nssReporterNumber               text             null              case-law.ts:736  NSS reporter entry number as published.
-case_law_decisions.nssReporterYear                 text             null              case-law.ts:738  NSS reporter year as published.
-case_law_decisions.nssReporterIssue                text             null              case-law.ts:740  NSS reporter issue as published.
-case_law_decisions.nssKeywordSearchCode            text             null              case-law.ts:742  NSS keyword-search taxonomy code as published.
-case_law_decisions.nssRegistryCaseNumber           text             null              case-law.ts:744  Extended-chamber registry reference for the matched original.
-case_law_decisions.nssRegistryReferral             text             null              case-law.ts:746  Full published reference of the referring order.
-case_law_decisions.nssRegistryReferralDate         text             null              case-law.ts:748  Referral date in the publisher’s original notation.
-case_law_decisions.nssRegistryAgainstCases         text             null              case-law.ts:750  Cases opposed in the extended-chamber proceeding, as published.
-case_law_decisions.nssRegistryStatus               text             null              case-law.ts:752  Publisher status of the extended-chamber proceeding.
-case_law_decisions.nssRegistryAnnotation           text             null              case-law.ts:754  Publisher annotation of the extended-chamber proceeding.
-case_law_decisions.metadata                        jsonb            default,null      case-law.ts:755
-case_law_decisions.source_hash                     varchar          null              case-law.ts:756
-case_law_decisions.source_hash_version             smallint         default,not null  case-law.ts:758  Algorithm version under which `sourceHash` was computed.
-case_law_decisions.parsed_source_hash              varchar          null              case-law.ts:760  Input fingerprint retained with the parse, not a guess for legacy output.
-case_law_decisions.parsed_source_hash_version      smallint         null              case-law.ts:761
-case_law_decisions.parsed_source_raw_s3_key        varchar          null              case-law.ts:763  Immutable raw object actually used for the stored parse.
-case_law_decisions.source_observed_at              timestamptz      null              case-law.ts:766
-case_law_decisions.source_observation_order        bigint           null              case-law.ts:767
-case_law_decisions.source_observation_hash         varchar          null              case-law.ts:770
-case_law_decisions.redacted_at                     timestamptz      null              case-law.ts:771
-case_law_decisions.corpus_mirror_status            varchar          default,not null  case-law.ts:772
-case_law_decisions.citation_authority              doublePrecision  default,not null  case-law.ts:787  Materialized citation-authority ranking signal: the ln(1 + weighted-citation-sum) value that `citationScore()` computes.
-case_law_decisions.citation_count                  integer          default,not null  case-law.ts:791
-case_law_decisions.citation_authority_computed_at  timestamptz      null              case-law.ts:796  Retired: the sweep no longer stamps rows it recomputes.
-case_law_decisions.text_s3_key                     varchar          null              case-law.ts:805  Object-storage keys for the canonical corpus payloads.
-case_law_decisions.normalized_s3_key               varchar          null              case-law.ts:806
-case_law_decisions.ast_s3_key                      varchar          null              case-law.ts:807
-case_law_decisions.content_hash                    varchar          null              case-law.ts:809  sha256 of the canonical payload; what object storage is keyed on.
-case_law_decisions.indexed_hash                    varchar          null              case-law.ts:815  Markers of the retired index projection.
-case_law_decisions.indexed_generation              varchar          null              case-law.ts:816
-case_law_decisions.indexed_at                      timestamptz      null              case-law.ts:817
-case_law_decisions.projection_epoch                bigint           default,not null  case-law.ts:823  Monotonic fence captured by final-generation projection intents.
-case_law_decisions.created_at                      timestamptz      default,not null  case-law.ts:827
-case_law_decisions.updated_at                      timestamptz      default,not null  case-law.ts:830
+case_law_decisions.metadata                        jsonb            default,null      case-law.ts:735
+case_law_decisions.source_hash                     varchar          null              case-law.ts:736
+case_law_decisions.source_hash_version             smallint         default,not null  case-law.ts:738  Algorithm version under which `sourceHash` was computed.
+case_law_decisions.parsed_source_hash              varchar          null              case-law.ts:740  Input fingerprint retained with the parse, not a guess for legacy output.
+case_law_decisions.parsed_source_hash_version      smallint         null              case-law.ts:741
+case_law_decisions.parsed_source_raw_s3_key        varchar          null              case-law.ts:743  Immutable raw object actually used for the stored parse.
+case_law_decisions.source_observed_at              timestamptz      null              case-law.ts:746
+case_law_decisions.source_observation_order        bigint           null              case-law.ts:747
+case_law_decisions.source_observation_hash         varchar          null              case-law.ts:750
+case_law_decisions.redacted_at                     timestamptz      null              case-law.ts:751
+case_law_decisions.corpus_mirror_status            varchar          default,not null  case-law.ts:752
+case_law_decisions.citation_authority              doublePrecision  default,not null  case-law.ts:767  Materialized citation-authority ranking signal: the ln(1 + weighted-citation-sum) value that `citationScore()` computes.
+case_law_decisions.citation_count                  integer          default,not null  case-law.ts:771
+case_law_decisions.citation_authority_computed_at  timestamptz      null              case-law.ts:776  Retired: the sweep no longer stamps rows it recomputes.
+case_law_decisions.text_s3_key                     varchar          null              case-law.ts:785  Object-storage keys for the canonical corpus payloads.
+case_law_decisions.normalized_s3_key               varchar          null              case-law.ts:786
+case_law_decisions.ast_s3_key                      varchar          null              case-law.ts:787
+case_law_decisions.content_hash                    varchar          null              case-law.ts:789  sha256 of the canonical payload; what object storage is keyed on.
+case_law_decisions.indexed_hash                    varchar          null              case-law.ts:795  Markers of the retired index projection.
+case_law_decisions.indexed_generation              varchar          null              case-law.ts:796
+case_law_decisions.indexed_at                      timestamptz      null              case-law.ts:797
+case_law_decisions.projection_epoch                bigint           default,not null  case-law.ts:803  Monotonic fence captured by final-generation projection intents.
+case_law_decisions.created_at                      timestamptz      default,not null  case-law.ts:807
+case_law_decisions.updated_at                      timestamptz      default,not null  case-law.ts:810
+case_law_decisions.nss_reporter_number             text             null              case-law.ts:815  NSS reporter entry number as published.
+case_law_decisions.nss_reporter_year               text             null              case-law.ts:817  NSS reporter year as published.
+case_law_decisions.nss_reporter_issue              text             null              case-law.ts:819  NSS reporter issue as published.
+case_law_decisions.nss_keyword_search_code         text             null              case-law.ts:821  NSS keyword-search taxonomy code as published.
+case_law_decisions.nss_registry_case_number        text             null              case-law.ts:823  Extended-chamber registry reference for the matched original.
+case_law_decisions.nss_registry_referral           text             null              case-law.ts:825  Full published reference of the referring order.
+case_law_decisions.nss_registry_referral_date      text             null              case-law.ts:827  Referral date in the publisher’s original notation.
+case_law_decisions.nss_registry_against_cases      text             null              case-law.ts:829  Cases opposed in the extended-chamber proceeding, as published.
+case_law_decisions.nss_registry_status             text             null              case-law.ts:831  Publisher status of the extended-chamber proceeding.
+case_law_decisions.nss_registry_annotation         text             null              case-law.ts:833  Publisher annotation of the extended-chamber proceeding.
 ```
 
 ## case_law_published_decisions · `publishedCaseLawDecisions` · case-law.ts:1167
@@ -150,40 +150,40 @@ case_law_published_decisions.sheet_number                    varchar          nu
 case_law_published_decisions.document_fetch_requested_at     timestamptz      null              case-law.ts:729  Bookkeeping for sources that ingest metadata first and fetch the document later (see `ingestion/sk-document-backfill.ts`).
 case_law_published_decisions.document_fetch_attempted_at     timestamptz      null              case-law.ts:730
 case_law_published_decisions.document_fetch_attempts         integer          default,not null  case-law.ts:731
-case_law_published_decisions.nssReporterNumber               text             null              case-law.ts:736  NSS reporter entry number as published.
-case_law_published_decisions.nssReporterYear                 text             null              case-law.ts:738  NSS reporter year as published.
-case_law_published_decisions.nssReporterIssue                text             null              case-law.ts:740  NSS reporter issue as published.
-case_law_published_decisions.nssKeywordSearchCode            text             null              case-law.ts:742  NSS keyword-search taxonomy code as published.
-case_law_published_decisions.nssRegistryCaseNumber           text             null              case-law.ts:744  Extended-chamber registry reference for the matched original.
-case_law_published_decisions.nssRegistryReferral             text             null              case-law.ts:746  Full published reference of the referring order.
-case_law_published_decisions.nssRegistryReferralDate         text             null              case-law.ts:748  Referral date in the publisher’s original notation.
-case_law_published_decisions.nssRegistryAgainstCases         text             null              case-law.ts:750  Cases opposed in the extended-chamber proceeding, as published.
-case_law_published_decisions.nssRegistryStatus               text             null              case-law.ts:752  Publisher status of the extended-chamber proceeding.
-case_law_published_decisions.nssRegistryAnnotation           text             null              case-law.ts:754  Publisher annotation of the extended-chamber proceeding.
-case_law_published_decisions.metadata                        jsonb            default,null      case-law.ts:755
-case_law_published_decisions.source_hash                     varchar          null              case-law.ts:756
-case_law_published_decisions.source_hash_version             smallint         default,not null  case-law.ts:758  Algorithm version under which `sourceHash` was computed.
-case_law_published_decisions.parsed_source_hash              varchar          null              case-law.ts:760  Input fingerprint retained with the parse, not a guess for legacy output.
-case_law_published_decisions.parsed_source_hash_version      smallint         null              case-law.ts:761
-case_law_published_decisions.parsed_source_raw_s3_key        varchar          null              case-law.ts:763  Immutable raw object actually used for the stored parse.
-case_law_published_decisions.source_observed_at              timestamptz      null              case-law.ts:766
-case_law_published_decisions.source_observation_order        bigint           null              case-law.ts:767
-case_law_published_decisions.source_observation_hash         varchar          null              case-law.ts:770
-case_law_published_decisions.redacted_at                     timestamptz      null              case-law.ts:771
-case_law_published_decisions.corpus_mirror_status            varchar          default,not null  case-law.ts:772
-case_law_published_decisions.citation_authority              doublePrecision  default,not null  case-law.ts:787  Materialized citation-authority ranking signal: the ln(1 + weighted-citation-sum) value that `citationScore()` computes.
-case_law_published_decisions.citation_count                  integer          default,not null  case-law.ts:791
-case_law_published_decisions.citation_authority_computed_at  timestamptz      null              case-law.ts:796  Retired: the sweep no longer stamps rows it recomputes.
-case_law_published_decisions.text_s3_key                     varchar          null              case-law.ts:805  Object-storage keys for the canonical corpus payloads.
-case_law_published_decisions.normalized_s3_key               varchar          null              case-law.ts:806
-case_law_published_decisions.ast_s3_key                      varchar          null              case-law.ts:807
-case_law_published_decisions.content_hash                    varchar          null              case-law.ts:809  sha256 of the canonical payload; what object storage is keyed on.
-case_law_published_decisions.indexed_hash                    varchar          null              case-law.ts:815  Markers of the retired index projection.
-case_law_published_decisions.indexed_generation              varchar          null              case-law.ts:816
-case_law_published_decisions.indexed_at                      timestamptz      null              case-law.ts:817
-case_law_published_decisions.projection_epoch                bigint           default,not null  case-law.ts:823  Monotonic fence captured by final-generation projection intents.
-case_law_published_decisions.created_at                      timestamptz      default,not null  case-law.ts:827
-case_law_published_decisions.updated_at                      timestamptz      default,not null  case-law.ts:830
+case_law_published_decisions.metadata                        jsonb            default,null      case-law.ts:735
+case_law_published_decisions.source_hash                     varchar          null              case-law.ts:736
+case_law_published_decisions.source_hash_version             smallint         default,not null  case-law.ts:738  Algorithm version under which `sourceHash` was computed.
+case_law_published_decisions.parsed_source_hash              varchar          null              case-law.ts:740  Input fingerprint retained with the parse, not a guess for legacy output.
+case_law_published_decisions.parsed_source_hash_version      smallint         null              case-law.ts:741
+case_law_published_decisions.parsed_source_raw_s3_key        varchar          null              case-law.ts:743  Immutable raw object actually used for the stored parse.
+case_law_published_decisions.source_observed_at              timestamptz      null              case-law.ts:746
+case_law_published_decisions.source_observation_order        bigint           null              case-law.ts:747
+case_law_published_decisions.source_observation_hash         varchar          null              case-law.ts:750
+case_law_published_decisions.redacted_at                     timestamptz      null              case-law.ts:751
+case_law_published_decisions.corpus_mirror_status            varchar          default,not null  case-law.ts:752
+case_law_published_decisions.citation_authority              doublePrecision  default,not null  case-law.ts:767  Materialized citation-authority ranking signal: the ln(1 + weighted-citation-sum) value that `citationScore()` computes.
+case_law_published_decisions.citation_count                  integer          default,not null  case-law.ts:771
+case_law_published_decisions.citation_authority_computed_at  timestamptz      null              case-law.ts:776  Retired: the sweep no longer stamps rows it recomputes.
+case_law_published_decisions.text_s3_key                     varchar          null              case-law.ts:785  Object-storage keys for the canonical corpus payloads.
+case_law_published_decisions.normalized_s3_key               varchar          null              case-law.ts:786
+case_law_published_decisions.ast_s3_key                      varchar          null              case-law.ts:787
+case_law_published_decisions.content_hash                    varchar          null              case-law.ts:789  sha256 of the canonical payload; what object storage is keyed on.
+case_law_published_decisions.indexed_hash                    varchar          null              case-law.ts:795  Markers of the retired index projection.
+case_law_published_decisions.indexed_generation              varchar          null              case-law.ts:796
+case_law_published_decisions.indexed_at                      timestamptz      null              case-law.ts:797
+case_law_published_decisions.projection_epoch                bigint           default,not null  case-law.ts:803  Monotonic fence captured by final-generation projection intents.
+case_law_published_decisions.created_at                      timestamptz      default,not null  case-law.ts:807
+case_law_published_decisions.updated_at                      timestamptz      default,not null  case-law.ts:810
+case_law_published_decisions.nss_reporter_number             text             null              case-law.ts:815  NSS reporter entry number as published.
+case_law_published_decisions.nss_reporter_year               text             null              case-law.ts:817  NSS reporter year as published.
+case_law_published_decisions.nss_reporter_issue              text             null              case-law.ts:819  NSS reporter issue as published.
+case_law_published_decisions.nss_keyword_search_code         text             null              case-law.ts:821  NSS keyword-search taxonomy code as published.
+case_law_published_decisions.nss_registry_case_number        text             null              case-law.ts:823  Extended-chamber registry reference for the matched original.
+case_law_published_decisions.nss_registry_referral           text             null              case-law.ts:825  Full published reference of the referring order.
+case_law_published_decisions.nss_registry_referral_date      text             null              case-law.ts:827  Referral date in the publisher’s original notation.
+case_law_published_decisions.nss_registry_against_cases      text             null              case-law.ts:829  Cases opposed in the extended-chamber proceeding, as published.
+case_law_published_decisions.nss_registry_status             text             null              case-law.ts:831  Publisher status of the extended-chamber proceeding.
+case_law_published_decisions.nss_registry_annotation         text             null              case-law.ts:833  Publisher annotation of the extended-chamber proceeding.
 ```
 
 ## case_law_unredacted_decisions · `unredactedCaseLawDecisions` · case-law.ts:1177
@@ -222,40 +222,40 @@ case_law_unredacted_decisions.sheet_number                    varchar          n
 case_law_unredacted_decisions.document_fetch_requested_at     timestamptz      null              case-law.ts:729  Bookkeeping for sources that ingest metadata first and fetch the document later (see `ingestion/sk-document-backfill.ts`).
 case_law_unredacted_decisions.document_fetch_attempted_at     timestamptz      null              case-law.ts:730
 case_law_unredacted_decisions.document_fetch_attempts         integer          default,not null  case-law.ts:731
-case_law_unredacted_decisions.nssReporterNumber               text             null              case-law.ts:736  NSS reporter entry number as published.
-case_law_unredacted_decisions.nssReporterYear                 text             null              case-law.ts:738  NSS reporter year as published.
-case_law_unredacted_decisions.nssReporterIssue                text             null              case-law.ts:740  NSS reporter issue as published.
-case_law_unredacted_decisions.nssKeywordSearchCode            text             null              case-law.ts:742  NSS keyword-search taxonomy code as published.
-case_law_unredacted_decisions.nssRegistryCaseNumber           text             null              case-law.ts:744  Extended-chamber registry reference for the matched original.
-case_law_unredacted_decisions.nssRegistryReferral             text             null              case-law.ts:746  Full published reference of the referring order.
-case_law_unredacted_decisions.nssRegistryReferralDate         text             null              case-law.ts:748  Referral date in the publisher’s original notation.
-case_law_unredacted_decisions.nssRegistryAgainstCases         text             null              case-law.ts:750  Cases opposed in the extended-chamber proceeding, as published.
-case_law_unredacted_decisions.nssRegistryStatus               text             null              case-law.ts:752  Publisher status of the extended-chamber proceeding.
-case_law_unredacted_decisions.nssRegistryAnnotation           text             null              case-law.ts:754  Publisher annotation of the extended-chamber proceeding.
-case_law_unredacted_decisions.metadata                        jsonb            default,null      case-law.ts:755
-case_law_unredacted_decisions.source_hash                     varchar          null              case-law.ts:756
-case_law_unredacted_decisions.source_hash_version             smallint         default,not null  case-law.ts:758  Algorithm version under which `sourceHash` was computed.
-case_law_unredacted_decisions.parsed_source_hash              varchar          null              case-law.ts:760  Input fingerprint retained with the parse, not a guess for legacy output.
-case_law_unredacted_decisions.parsed_source_hash_version      smallint         null              case-law.ts:761
-case_law_unredacted_decisions.parsed_source_raw_s3_key        varchar          null              case-law.ts:763  Immutable raw object actually used for the stored parse.
-case_law_unredacted_decisions.source_observed_at              timestamptz      null              case-law.ts:766
-case_law_unredacted_decisions.source_observation_order        bigint           null              case-law.ts:767
-case_law_unredacted_decisions.source_observation_hash         varchar          null              case-law.ts:770
-case_law_unredacted_decisions.redacted_at                     timestamptz      null              case-law.ts:771
-case_law_unredacted_decisions.corpus_mirror_status            varchar          default,not null  case-law.ts:772
-case_law_unredacted_decisions.citation_authority              doublePrecision  default,not null  case-law.ts:787  Materialized citation-authority ranking signal: the ln(1 + weighted-citation-sum) value that `citationScore()` computes.
-case_law_unredacted_decisions.citation_count                  integer          default,not null  case-law.ts:791
-case_law_unredacted_decisions.citation_authority_computed_at  timestamptz      null              case-law.ts:796  Retired: the sweep no longer stamps rows it recomputes.
-case_law_unredacted_decisions.text_s3_key                     varchar          null              case-law.ts:805  Object-storage keys for the canonical corpus payloads.
-case_law_unredacted_decisions.normalized_s3_key               varchar          null              case-law.ts:806
-case_law_unredacted_decisions.ast_s3_key                      varchar          null              case-law.ts:807
-case_law_unredacted_decisions.content_hash                    varchar          null              case-law.ts:809  sha256 of the canonical payload; what object storage is keyed on.
-case_law_unredacted_decisions.indexed_hash                    varchar          null              case-law.ts:815  Markers of the retired index projection.
-case_law_unredacted_decisions.indexed_generation              varchar          null              case-law.ts:816
-case_law_unredacted_decisions.indexed_at                      timestamptz      null              case-law.ts:817
-case_law_unredacted_decisions.projection_epoch                bigint           default,not null  case-law.ts:823  Monotonic fence captured by final-generation projection intents.
-case_law_unredacted_decisions.created_at                      timestamptz      default,not null  case-law.ts:827
-case_law_unredacted_decisions.updated_at                      timestamptz      default,not null  case-law.ts:830
+case_law_unredacted_decisions.metadata                        jsonb            default,null      case-law.ts:735
+case_law_unredacted_decisions.source_hash                     varchar          null              case-law.ts:736
+case_law_unredacted_decisions.source_hash_version             smallint         default,not null  case-law.ts:738  Algorithm version under which `sourceHash` was computed.
+case_law_unredacted_decisions.parsed_source_hash              varchar          null              case-law.ts:740  Input fingerprint retained with the parse, not a guess for legacy output.
+case_law_unredacted_decisions.parsed_source_hash_version      smallint         null              case-law.ts:741
+case_law_unredacted_decisions.parsed_source_raw_s3_key        varchar          null              case-law.ts:743  Immutable raw object actually used for the stored parse.
+case_law_unredacted_decisions.source_observed_at              timestamptz      null              case-law.ts:746
+case_law_unredacted_decisions.source_observation_order        bigint           null              case-law.ts:747
+case_law_unredacted_decisions.source_observation_hash         varchar          null              case-law.ts:750
+case_law_unredacted_decisions.redacted_at                     timestamptz      null              case-law.ts:751
+case_law_unredacted_decisions.corpus_mirror_status            varchar          default,not null  case-law.ts:752
+case_law_unredacted_decisions.citation_authority              doublePrecision  default,not null  case-law.ts:767  Materialized citation-authority ranking signal: the ln(1 + weighted-citation-sum) value that `citationScore()` computes.
+case_law_unredacted_decisions.citation_count                  integer          default,not null  case-law.ts:771
+case_law_unredacted_decisions.citation_authority_computed_at  timestamptz      null              case-law.ts:776  Retired: the sweep no longer stamps rows it recomputes.
+case_law_unredacted_decisions.text_s3_key                     varchar          null              case-law.ts:785  Object-storage keys for the canonical corpus payloads.
+case_law_unredacted_decisions.normalized_s3_key               varchar          null              case-law.ts:786
+case_law_unredacted_decisions.ast_s3_key                      varchar          null              case-law.ts:787
+case_law_unredacted_decisions.content_hash                    varchar          null              case-law.ts:789  sha256 of the canonical payload; what object storage is keyed on.
+case_law_unredacted_decisions.indexed_hash                    varchar          null              case-law.ts:795  Markers of the retired index projection.
+case_law_unredacted_decisions.indexed_generation              varchar          null              case-law.ts:796
+case_law_unredacted_decisions.indexed_at                      timestamptz      null              case-law.ts:797
+case_law_unredacted_decisions.projection_epoch                bigint           default,not null  case-law.ts:803  Monotonic fence captured by final-generation projection intents.
+case_law_unredacted_decisions.created_at                      timestamptz      default,not null  case-law.ts:807
+case_law_unredacted_decisions.updated_at                      timestamptz      default,not null  case-law.ts:810
+case_law_unredacted_decisions.nss_reporter_number             text             null              case-law.ts:815  NSS reporter entry number as published.
+case_law_unredacted_decisions.nss_reporter_year               text             null              case-law.ts:817  NSS reporter year as published.
+case_law_unredacted_decisions.nss_reporter_issue              text             null              case-law.ts:819  NSS reporter issue as published.
+case_law_unredacted_decisions.nss_keyword_search_code         text             null              case-law.ts:821  NSS keyword-search taxonomy code as published.
+case_law_unredacted_decisions.nss_registry_case_number        text             null              case-law.ts:823  Extended-chamber registry reference for the matched original.
+case_law_unredacted_decisions.nss_registry_referral           text             null              case-law.ts:825  Full published reference of the referring order.
+case_law_unredacted_decisions.nss_registry_referral_date      text             null              case-law.ts:827  Referral date in the publisher’s original notation.
+case_law_unredacted_decisions.nss_registry_against_cases      text             null              case-law.ts:829  Cases opposed in the extended-chamber proceeding, as published.
+case_law_unredacted_decisions.nss_registry_status             text             null              case-law.ts:831  Publisher status of the extended-chamber proceeding.
+case_law_unredacted_decisions.nss_registry_annotation         text             null              case-law.ts:833  Publisher annotation of the extended-chamber proceeding.
 ```
 
 ## case_law_decision_identifiers · `caseLawDecisionIdentifiers` · case-law.ts:1187 · rls

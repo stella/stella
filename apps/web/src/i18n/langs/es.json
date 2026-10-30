@@ -2084,8 +2084,6 @@
     "clearFilters": "Borrar filtros",
     "clearSearch": "Borrar búsqueda",
     "close": "Cerrar",
-    "closeAll": "Cerrar todo",
-    "closeOthers": "Cerrar otros",
     "columns": "Columnas",
     "comfortable": "Cómodo",
     "comingSoon": "Próximamente",
@@ -3674,6 +3672,9 @@
       "unsupportedVisualContent": "Este archivo contiene imágenes o gráficos vectoriales que no se pueden comprobar para detectar texto sensible. La exportación no está disponible.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
+    "closeAllTabs": "Cerrar {count, plural, one {# pestaña} other {las # pestañas}}",
+    "closeOtherTabs": "Cerrar {count, plural, one {la otra pestaña} other {las otras # pestañas}}",
+    "closeTab": "Cerrar <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Este es un archivo antiguo de {format}. Vuelve a guardarlo como {replacementExtension} para convertirlo.",
       "unsupportedEncoding": "Este documento usa la codificación {encoding}, que no es compatible, por lo que no se puede convertir.",
