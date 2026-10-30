@@ -63,23 +63,25 @@ describe("time entry policy at API write paths", () => {
         rateTables: { findMany: async () => [] },
       },
     });
-    const create = await Result.gen(() =>
-      prepareTimeEntryInsert({
-        safeDb,
-        policy: defaultPolicy,
-        canApprove: false,
-        workspaceId,
-        userId,
-        resolvedRate: null,
-        body: {
-          dateWorked: "2026-09-01",
-          timezoneId: "UTC",
-          durationMinutes: 7,
-          narrative: "Work",
-          billable: true,
-        },
-      }),
-    );
+    const create = await Result.gen(async function* () {
+      return Result.ok(
+        yield* prepareTimeEntryInsert({
+          safeDb,
+          policy: defaultPolicy,
+          canApprove: false,
+          workspaceId,
+          userId,
+          resolvedRate: null,
+          body: {
+            dateWorked: "2026-09-01",
+            timezoneId: "UTC",
+            durationMinutes: 7,
+            narrative: "Work",
+            billable: true,
+          },
+        }),
+      );
+    });
     const edit = await Result.gen(() =>
       updateTimeEntryHandler({
         safeDb,
@@ -98,23 +100,25 @@ describe("time entry policy at API write paths", () => {
         });
       }
     }
-    const nonBillable = await Result.gen(() =>
-      prepareTimeEntryInsert({
-        safeDb,
-        policy: defaultPolicy,
-        canApprove: false,
-        workspaceId,
-        userId,
-        resolvedRate: null,
-        body: {
-          dateWorked: "2026-09-01",
-          timezoneId: "UTC",
-          durationMinutes: 7,
-          narrative: "Work",
-          billable: false,
-        },
-      }),
-    );
+    const nonBillable = await Result.gen(async function* () {
+      return Result.ok(
+        yield* prepareTimeEntryInsert({
+          safeDb,
+          policy: defaultPolicy,
+          canApprove: false,
+          workspaceId,
+          userId,
+          resolvedRate: null,
+          body: {
+            dateWorked: "2026-09-01",
+            timezoneId: "UTC",
+            durationMinutes: 7,
+            narrative: "Work",
+            billable: false,
+          },
+        }),
+      );
+    });
     expect(Result.isOk(nonBillable)).toBe(true);
     if (Result.isOk(nonBillable)) {
       expect(nonBillable.value).toMatchObject({
