@@ -18,7 +18,13 @@ public class DocumentScannerModule: Module {
       VNDocumentCameraViewController.isSupported
     }
 
-    AsyncFunction("scan") { (promise: Promise) in
+    // A review's pages go into its own folder (`review` names it), so one
+    // review's discard leaves another's files alone.
+    AsyncFunction("scan") { (review: String, promise: Promise) in
+      guard let folder = ScanFiles.folder(of: review) else {
+        promise.reject("ERR_SCANNER_FAILED", "The scan has no review to go to.")
+        return
+      }
       guard VNDocumentCameraViewController.isSupported else {
         promise.reject("ERR_SCANNER_UNSUPPORTED", "This device has no document camera.")
         return
@@ -42,7 +48,7 @@ public class DocumentScannerModule: Module {
           // Encoding full pages takes a moment each; the camera is already
           // closing, so it happens off the main thread.
           DispatchQueue.global(qos: .userInitiated).async {
-            switch ScanFiles.write(images) {
+            switch ScanFiles.write(images, into: folder) {
             case .success(let pages):
               promise.resolve(pages.map { $0.record })
             case .failure(let failure):
@@ -61,8 +67,12 @@ public class DocumentScannerModule: Module {
     // Binds pages, in the order given and each turned clockwise by its
     // rotation, into one PDF named `name` (already ending in `.pdf`), which
     // is the name the share sheet and the files it saves to show.
-    AsyncFunction("buildPdf") { (name: String, pages: [PdfPageRecord]) throws -> [String: Any] in
-      switch ScanFiles.buildPdf(name: name, pages: pages) {
+    AsyncFunction("buildPdf") {
+      (review: String, name: String, pages: [PdfPageRecord]) throws -> [String: Any] in
+      guard let folder = ScanFiles.folder(of: review) else {
+        throw ScanFilesException("The scan has no review.")
+      }
+      switch ScanFiles.buildPdf(name: name, pages: pages, in: folder) {
       case .success(let file):
         return [
           "uri": file.url.absoluteString,
@@ -75,9 +85,11 @@ public class DocumentScannerModule: Module {
       }
     }
 
-    // Removes every page and PDF a scan wrote, once the person is done.
-    Function("discard") {
-      ScanFiles.discard()
+    // Removes every page and PDF a review's scans wrote, once the person is done.
+    Function("discard") { (review: String) in
+      if let folder = ScanFiles.folder(of: review) {
+        ScanFiles.discard(folder)
+      }
     }
   }
 }
@@ -119,20 +131,31 @@ private struct BuiltPdf {
   let sha256Hex: String
 }
 
-/// Where a scan's files live: one folder in the app's temporary files, so
-/// `discard` can remove all of them and nothing else.
+/// Where a scan's files live: a folder for each review in the app's
+/// temporary files, so `discard` can remove all of a review's files and
+/// nothing else.
 private enum ScanFiles {
   /// JPEG quality of a full page: legible print at a few hundred kilobytes.
   static let pageQuality: CGFloat = 0.6
   /// The longer side of a list thumbnail, in pixels.
   static let thumbnailSide: CGFloat = 240
 
-  static var folder: URL {
-    FileManager.default.temporaryDirectory.appendingPathComponent(
-      "document-scans", isDirectory: true)
+  /// The folder of the review `review` names, which must be a UUID, so it
+  /// can never name a path outside the scans.
+  static func folder(of review: String) -> URL? {
+    guard let id = UUID(uuidString: review) else {
+      return nil
+    }
+    return FileManager.default.temporaryDirectory
+      .appendingPathComponent("document-scans", isDirectory: true)
+      .appendingPathComponent(id.uuidString, isDirectory: true)
   }
 
-  static func write(_ images: [UIImage]) -> Result<[ScannedPage], ScanFilesException> {
+  /// Writes the pages into `folder`. A scan that fails removes what it
+  /// wrote, since no review shows those pages.
+  static func write(_ images: [UIImage], into folder: URL)
+    -> Result<[ScannedPage], ScanFilesException>
+  {
     guard (try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true))
       != nil
     else {
@@ -150,11 +173,17 @@ private enum ScanFiles {
           (try? data.write(to: url)) != nil,
           (try? small.write(to: thumbnailURL)) != nil
         else {
+          try? FileManager.default.removeItem(at: url)
+          try? FileManager.default.removeItem(at: thumbnailURL)
           return nil
         }
         return ScannedPage(url: url, thumbnailURL: thumbnailURL, size: data.count)
       }
       guard let scanned = written else {
+        for page in pages {
+          try? FileManager.default.removeItem(at: page.url)
+          try? FileManager.default.removeItem(at: page.thumbnailURL)
+        }
         return .failure(ScanFilesException("The scan could not be saved."))
       }
       pages.append(scanned)
@@ -167,7 +196,8 @@ private enum ScanFiles {
   /// Each page on an A4 sheet turned to its orientation, the image fitted
   /// inside. The JPEG goes into the PDF as it is, not encoded again, so the
   /// PDF is about the size of its pages together.
-  static func buildPdf(name: String, pages: [PdfPageRecord]) -> Result<BuiltPdf, ScanFilesException>
+  static func buildPdf(name: String, pages: [PdfPageRecord], in folder: URL)
+    -> Result<BuiltPdf, ScanFilesException>
   {
     guard !pages.isEmpty else {
       return .failure(ScanFilesException("There are no pages to save."))
@@ -213,7 +243,7 @@ private enum ScanFiles {
     url.resolvingSymlinksInPath().path.hasPrefix(folder.resolvingSymlinksInPath().path + "/")
   }
 
-  static func discard() {
+  static func discard(_ folder: URL) {
     try? FileManager.default.removeItem(at: folder)
   }
 
@@ -272,13 +302,21 @@ private enum ScanFiles {
   }
 
   /// A file name the system accepts: no folder separators or control
-  /// characters, not empty, and not longer than a file name may be.
+  /// characters, not empty, and not longer than a file name may be, counted
+  /// in UTF-8 bytes, since one character can take many.
   private static func fileName(_ name: String) -> String {
     let unsafe = CharacterSet(charactersIn: "/:\\").union(.controlCharacters)
     let cleaned = name.components(separatedBy: unsafe).joined(separator: "-")
       .trimmingCharacters(in: .whitespacesAndNewlines)
     let stem = cleaned.lowercased().hasSuffix(".pdf") ? String(cleaned.dropLast(4)) : cleaned
-    let trimmed = String(stem.prefix(200)).trimmingCharacters(in: .whitespacesAndNewlines)
+    var truncated = ""
+    for character in stem {
+      guard truncated.utf8.count + String(character).utf8.count <= 200 else {
+        break
+      }
+      truncated.append(character)
+    }
+    let trimmed = truncated.trimmingCharacters(in: .whitespacesAndNewlines)
     return "\(trimmed.isEmpty || trimmed.hasPrefix(".") ? "Scan" : trimmed).pdf"
   }
 }

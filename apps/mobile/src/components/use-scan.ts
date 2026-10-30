@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { randomUUID } from "expo-crypto";
 import { useRouter } from "expo-router";
 import { Alert } from "react-native";
 import { useTranslations } from "use-intl";
@@ -22,7 +23,9 @@ export const useScan = (
 
   return () => {
     void (async () => {
-      const scanned = await scanPages();
+      // The review's files go into a folder of their own.
+      const review = randomUUID();
+      const scanned = await scanPages(review);
       if (Result.isError(scanned)) {
         Alert.alert(t("failedTitle"), t("failed"));
         return;
@@ -30,17 +33,18 @@ export const useScan = (
       if (scanned.value === null) {
         return;
       }
-      const review = {
+      const screen = {
         pathname: "/scan",
         params: {
           pages: encodeScannedPages(scanned.value),
+          review,
           ...(matterId === undefined ? {} : { matterId }),
         },
       } as const;
       if (replacing) {
-        router.replace(review);
+        router.replace(screen);
       } else {
-        router.push(review);
+        router.push(screen);
       }
     })();
   };

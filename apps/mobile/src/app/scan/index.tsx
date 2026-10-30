@@ -1,7 +1,14 @@
 import { useState } from "react";
 
 import { Result } from "better-result";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { randomUUID } from "expo-crypto";
+import {
+  Stack,
+  useLocalSearchParams,
+  useNavigation,
+  usePreventRemove,
+  useRouter,
+} from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -40,7 +47,8 @@ import { useAppColors } from "@/theme";
  * the day it was scanned, then the pages in order, each one to remove, turn
  * or drag to another place, and under them a button to scan more pages and
  * the size the PDF will be. Share hands the PDF to the system's share sheet
- * (AirDrop, Mail, Files); Save puts it into a matter.
+ * (AirDrop, Mail, Files); Save puts it into a matter. While the PDF is
+ * being bound the pages hold still, so it is the PDF of the pages shown.
  */
 const ScanReviewScreen = () => {
   const t = useTranslations("scan");
@@ -48,7 +56,14 @@ const ScanReviewScreen = () => {
   const format = useFormatter();
   const colors = useAppColors();
   const router = useRouter();
-  const params = useLocalSearchParams<{ matterId?: string; pages?: string }>();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{
+    matterId?: string;
+    pages?: string;
+    review?: string;
+  }>();
+  // The folder this review's files go into; the first scan chose it.
+  const [review] = useState(() => params.review ?? randomUUID());
   const [scannedAt] = useState(epochMilliseconds);
   const day = format.dateTime(scannedAt, { dateStyle: "medium" });
   const [pages, setPages] = useState<readonly ReviewPage[]>(() =>
@@ -69,6 +84,7 @@ const ScanReviewScreen = () => {
   const [failure, setFailure] = useState<string | null>(null);
   /** What the screen waits for: the camera, or the PDF being bound. */
   const [busy, setBusy] = useState<"pdf" | "scan" | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const insets = useSafeAreaInsets();
   const size = sizeInUnits(totalSize(pages));
   const documentName = pdfName(name, defaultName);
@@ -80,6 +96,7 @@ const ScanReviewScreen = () => {
     setArmed(null);
     setBusy("pdf");
     const built = await buildPdf(
+      review,
       documentName,
       pages.map(({ rotation, uri }) => ({ rotation, uri })),
     );
@@ -131,7 +148,7 @@ const ScanReviewScreen = () => {
     setArmed(null);
     setBusy("scan");
     void (async () => {
-      const scanned = await scanPages();
+      const scanned = await scanPages(review);
       setBusy(null);
       if (Result.isError(scanned)) {
         Alert.alert(t("failedTitle"), t("failed"));
@@ -144,11 +161,32 @@ const ScanReviewScreen = () => {
     })();
   };
 
-  const close = () => {
+  /** A change to the pages, held back while the PDF is bound or a scan is saved. */
+  const edit = (
+    change: (current: readonly ReviewPage[]) => readonly ReviewPage[],
+  ) => {
+    if (busy === null) {
+      setPages(change);
+    }
+  };
+
+  // Every way out comes here, Close and a keyboard's Escape alike: it waits
+  // for a scan or PDF in progress, asks before it drops pages, and removes
+  // the review's files as it goes.
+  usePreventRemove(!leaving, ({ repeat }) => {
     const leave = () => {
-      discardScans();
-      router.back();
+      discardScans(review);
+      setLeaving(true);
+      repeat();
     };
+    if (!navigation.isFocused()) {
+      // Under the save sheet: its upload closes both, the pages saved.
+      leave();
+      return;
+    }
+    if (busy !== null) {
+      return;
+    }
     if (pages.length === 0) {
       leave();
       return;
@@ -157,13 +195,18 @@ const ScanReviewScreen = () => {
       { style: "cancel", text: t("keepEditing") },
       { onPress: leave, style: "destructive", text: t("discard") },
     ]);
-  };
+  });
 
   return (
     <>
       <Stack.Screen options={{ title: "" }} />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={close}>
+        <Stack.Toolbar.Button
+          disabled={busy !== null}
+          onPress={() => {
+            router.back();
+          }}
+        >
           {barGlyph("x")}
           <Stack.Toolbar.Label>{tabs("close")}</Stack.Toolbar.Label>
         </Stack.Toolbar.Button>
@@ -189,6 +232,7 @@ const ScanReviewScreen = () => {
               <Input
                 accessibilityLabel={t("name")}
                 className="flex-1"
+                editable={busy === null}
                 onChangeText={setName}
                 placeholder={t("name")}
                 returnKeyType="done"
@@ -217,17 +261,19 @@ const ScanReviewScreen = () => {
           ) : (
             <ScanPageList
               armed={armed}
-              onArm={setArmed}
+              onArm={(key) => {
+                setArmed(busy === null ? key : null);
+              }}
               onDragging={setDragging}
               onMove={(from, to) => {
-                setPages((current) => movePage(current, from, to));
+                edit((current) => movePage(current, from, to));
               }}
               onRemove={(key) => {
                 setArmed(null);
-                setPages((current) => removePage(current, key));
+                edit((current) => removePage(current, key));
               }}
               onRotate={(key) => {
-                setPages((current) => rotatePage(current, key));
+                edit((current) => rotatePage(current, key));
               }}
               pages={pages}
             />

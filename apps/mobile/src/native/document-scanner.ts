@@ -34,12 +34,13 @@ export type BuiltPdf = {
 type DocumentScannerModule = {
   readonly isSupported: () => boolean;
   /** Null when the person closed the camera without saving. */
-  readonly scan: () => Promise<readonly ScannedPage[] | null>;
+  readonly scan: (review: string) => Promise<readonly ScannedPage[] | null>;
   readonly buildPdf: (
+    review: string,
     name: string,
     pages: readonly PdfPage[],
   ) => Promise<BuiltPdf>;
-  readonly discard: () => void;
+  readonly discard: (review: string) => void;
 };
 
 // Absent on Android, the web and a client built before the scanner.
@@ -52,17 +53,18 @@ export const canScan = (): boolean => scanner?.isSupported() ?? false;
 /**
  * Opens the system document camera. It finds each page's edges and
  * straightens it as it captures; the pages come back as separate images, in
- * the order they were taken. Null when the person closed the camera without
- * saving.
+ * the order they were taken, into the files of `review`: a UUID that names
+ * the review they are for, so each review keeps its files apart from
+ * another's. Null when the person closed the camera without saving.
  */
-export const scanPages = async (): Promise<
-  Result<readonly ScannedPage[] | null, DocumentScannerError>
-> => {
+export const scanPages = async (
+  review: string,
+): Promise<Result<readonly ScannedPage[] | null, DocumentScannerError>> => {
   const native = scanner;
   return native === null
     ? Result.ok(null)
     : await Result.tryPromise({
-        try: async () => await native.scan(),
+        try: async () => await native.scan(review),
         catch: (cause) =>
           new DocumentScannerError({ message: "The scan failed", cause }),
       });
@@ -70,9 +72,11 @@ export const scanPages = async (): Promise<
 
 /**
  * Binds `pages`, in order, into one PDF whose file is called `name`, which
- * the share sheet shows and a saved copy keeps.
+ * the share sheet shows and a saved copy keeps. It goes with the files of
+ * `review`, whose pages they must be.
  */
 export const buildPdf = async (
+  review: string,
   name: string,
   pages: readonly PdfPage[],
 ): Promise<Result<BuiltPdf, DocumentScannerError>> => {
@@ -84,7 +88,7 @@ export const buildPdf = async (
         }),
       )
     : await Result.tryPromise({
-        try: async () => await native.buildPdf(name, pages),
+        try: async () => await native.buildPdf(review, name, pages),
         catch: (cause) =>
           new DocumentScannerError({
             message: "The PDF could not be made",
@@ -93,7 +97,7 @@ export const buildPdf = async (
       });
 };
 
-/** Removes every page and PDF the scanner wrote, once the person is done with them. */
-export const discardScans = (): void => {
-  scanner?.discard();
+/** Removes every page and PDF the scanner wrote for `review`, once the person is done with them. */
+export const discardScans = (review: string): void => {
+  scanner?.discard(review);
 };

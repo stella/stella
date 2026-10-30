@@ -1,7 +1,12 @@
 import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import {
+  Stack,
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
+} from "expo-router";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -15,7 +20,6 @@ import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import { discardScans } from "@/native/document-scanner";
 import { readFileProperty, uploadDocument } from "@/state/document-upload";
 import { listMatters } from "@/state/matters";
 import { sizeInUnits } from "@/state/scan-pages";
@@ -24,7 +28,8 @@ import { useAppColors } from "@/theme";
 /**
  * The reviewed scan, bound into a PDF, on its way into a matter: its name,
  * pages and size, and the matter it goes into, already chosen when the scan
- * began inside one. Upload adds it to the matter and closes the review too.
+ * began inside one. Upload adds it to the matter and closes the review too;
+ * the sheet stays open until the upload is done.
  */
 const SaveScanScreen = () => {
   const { state } = useSession();
@@ -39,6 +44,7 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
   const format = useFormatter();
   const colors = useAppColors();
   const router = useRouter();
+  const navigation = useNavigation();
   const { end } = useSession();
   const changed = useChanged();
   const params = useLocalSearchParams<{
@@ -92,10 +98,13 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
         });
       });
       if (Result.isOk(uploaded)) {
-        discardScans();
         changed("documents");
-        // This sheet and the review under it.
-        router.dismiss(2);
+        // This sheet and the review under it, which removes the scan's files
+        // as it closes. A sheet closed meanwhile, as Escape can, leaves the
+        // review as it is.
+        if (navigation.isFocused()) {
+          router.dismiss(2);
+        }
         return;
       }
       if (uploaded.error._tag === "SignedOutError") {
@@ -110,9 +119,12 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
     <>
       <Stack.Screen
         options={{
+          // An upload in progress keeps the sheet up until it is done.
+          gestureEnabled: !uploading,
           title: t("saveTitle"),
           unstable_headerLeftItems: () => [
             {
+              disabled: uploading,
               label: tabs("close"),
               onPress: () => {
                 router.back();
