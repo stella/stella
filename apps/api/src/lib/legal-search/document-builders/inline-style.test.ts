@@ -65,11 +65,13 @@ const readers = [
     property: "display",
     yes: "inline-block",
     no: "block",
-    positives: ["inline-block"],
+    positives: ["inline-block", "inline flow-root", "flow-root  inline"],
     negatives: [
       "inline",
       "block",
       "none",
+      "inline flow",
+      "block flow-root",
       "inline-blocked",
       "inline-block extra",
     ],
@@ -134,7 +136,7 @@ for (const { name, read, property, yes, no, positives, negatives } of readers) {
   });
 }
 
-test("invalid weights and font styles do not override valid declarations", () => {
+test("invalid declarations never override valid ones", () => {
   expect(
     inlineStyleIsBold(element("font-weight:bold; font-weight:600px!important")),
   ).toBe(true);
@@ -143,11 +145,38 @@ test("invalid weights and font styles do not override valid declarations", () =>
       element("font-style:italic; font-style:italics!important"),
     ),
   ).toBe(true);
+  expect(
+    inlineStyleIsInlineBlock(
+      element("display:inline-block; display:garbage!important"),
+    ),
+  ).toBe(true);
+  expect(
+    inlineStyleIsInlineBlock(
+      element("display:inline-block; display:inline inline!important"),
+    ),
+  ).toBe(true);
+  expect(
+    inlineStyleDeclaresProperty(
+      element("letter-spacing:garbage!important"),
+      "letter-spacing",
+    ),
+  ).toBe(false);
 });
 
-test("property presence accepts nonempty declarations rather than substrings", () => {
-  for (const property of ["letter-spacing", "-aw-headerfooter-type"]) {
-    for (const value of ["normal", "0", "header !IMPORTANT", "1px"]) {
+test("an oblique angle is italic", () => {
+  expect(inlineStyleIsItalic(element("font-style:oblique 10deg"))).toBe(true);
+  expect(
+    inlineStyleIsItalic(element("font-style:italic; font-style:oblique 10px")),
+  ).toBe(true);
+});
+
+test("property presence accepts valid declarations rather than substrings", () => {
+  const declaring = {
+    "letter-spacing": ["normal", "0", "1px", "-0.5PT !IMPORTANT", "initial"],
+    "-aw-headerfooter-type": ["header-primary", "footer !IMPORTANT"],
+  } as const;
+  for (const property of ["letter-spacing", "-aw-headerfooter-type"] as const) {
+    for (const value of declaring[property]) {
       expect(
         inlineStyleDeclaresProperty(
           element(`${property.toUpperCase()} \t: ${value};`),
@@ -251,6 +280,42 @@ describe("CSS-wide keywords", () => {
         nested(
           '<i id="target" style="font-style:normal; font-style:revert"></i>',
         ),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("relative weights", () => {
+  const bold = (parentStyle: string, ownStyle: string) =>
+    inlineStyleIsBold(
+      nested(
+        `<span style="${parentStyle}"><span id="target" style="${ownStyle}"></span></span>`,
+      ),
+    );
+
+  test("bolder steps up from the parent's computed weight", () => {
+    expect(bold("font-weight:100", "font-weight:bolder")).toBe(false);
+    expect(bold("font-weight:normal", "font-weight:bolder")).toBe(true);
+    expect(bold("font-weight:600", "font-weight:bolder")).toBe(true);
+  });
+
+  test("lighter steps down from the parent's computed weight", () => {
+    expect(bold("font-weight:900", "font-weight:lighter")).toBe(true);
+    expect(bold("font-weight:bold", "font-weight:lighter")).toBe(false);
+    expect(bold("font-weight:normal", "font-weight:lighter")).toBe(false);
+  });
+
+  test("a bold tag's default weight is bolder than its parent's", () => {
+    expect(
+      inlineStyleIsBold(
+        nested(
+          '<span style="font-weight:100"><b><span id="target" style="font-weight:inherit"></span></b></span>',
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      inlineStyleIsBold(
+        nested('<b><span id="target" style="font-weight:inherit"></span></b>'),
       ),
     ).toBe(true);
   });
