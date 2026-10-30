@@ -2776,15 +2776,17 @@ export const CASE_LAW_POPULATION_KINDS = [
   "pending-text",
 ] as const;
 
+const caseLawPopulationCountColumns = () => ({
+  kind: p.text({ enum: CASE_LAW_POPULATION_KINDS }).notNull(),
+  country: p.varchar({ length: 3 }).notNull(),
+  sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+  value: p.varchar({ length: 512 }).notNull(),
+  total: p.integer().notNull(),
+});
+
 export const caseLawPopulationCounts = p.pgTable(
   "case_law_population_counts",
-  {
-    kind: p.text({ enum: CASE_LAW_POPULATION_KINDS }).notNull(),
-    country: p.varchar({ length: 3 }).notNull(),
-    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
-    value: p.varchar({ length: 512 }).notNull(),
-    total: p.integer().notNull(),
-  },
+  caseLawPopulationCountColumns(),
   (t) => [
     p.primaryKey({
       name: "case_law_population_counts_pkey",
@@ -2814,6 +2816,48 @@ export const caseLawPopulationCounts = p.pgTable(
     }),
   ],
 );
+
+/** Append-only signed bucket changes; ingestion never locks the shared counters. */
+export const caseLawPopulationDeltas = p.pgTable(
+  "case_law_population_deltas",
+  {
+    id: p.bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    kind: p.text({ enum: CASE_LAW_POPULATION_KINDS }).notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    value: p.varchar({ length: 512 }).notNull(),
+    delta: p.integer().notNull(),
+  },
+  (t) => [
+    p.check("case_law_population_deltas_nonzero", sql`${t.delta} <> 0`),
+    p.check(
+      "case_law_population_deltas_kind_valid",
+      sql`${t.kind} IN (${sql.join(
+        CASE_LAW_POPULATION_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_population_deltas_source_kind_idx")
+      .on(t.sourceId, t.kind, t.value),
+    p.pgPolicy("case_law_population_delta_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_deltas'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_deltas'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (SELECT 1 FROM ${caseLawSources} AS population_source WHERE population_source.id = ${t.sourceId} AND ${redistributableCaseLawSourceFor(sql`population_source.descriptor`)})`,
+    }),
+  ],
+);
+
+/** Migration-owned invoker view: bounded pending deltas plus folded counts. */
+export const caseLawPopulationCountsLive = p
+  .pgView("case_law_population_counts_live", caseLawPopulationCountColumns())
+  .existing();
 
 const CASE_LAW_POPULATION_PUBLICATIONS = ["published", "unpublished"] as const;
 
@@ -2858,6 +2902,8 @@ export const caseLawPopulationProjections = p.pgTable(
   ],
 );
 
+const CASE_LAW_POPULATION_SEED_PHASES = ["scan", "fold", "complete"] as const;
+
 /** Durable strict-lower seed cursor, completed only after the bounded traversal ends. */
 export const caseLawPopulationSeedState = p.pgTable(
   "case_law_population_seed_state",
@@ -2865,10 +2911,20 @@ export const caseLawPopulationSeedState = p.pgTable(
     slot: p.integer().primaryKey(),
     cursor: safeUuid<"caseLawDecision">("cursor"),
     sourceId: safeUuid<"caseLawSource">("source_id"),
-    completed: p.boolean().notNull().default(false),
+    phase: p
+      .text({ enum: CASE_LAW_POPULATION_SEED_PHASES })
+      .notNull()
+      .default("scan"),
   },
   (t) => [
     p.check("case_law_population_seed_singleton", sql`${t.slot} = 0`),
+    p.check(
+      "case_law_population_seed_phase_valid",
+      sql`${t.phase} IN (${sql.join(
+        CASE_LAW_POPULATION_SEED_PHASES.map((phase) => sql`${phase}`),
+        sql`, `,
+      )})`,
+    ),
     p.pgPolicy("case_law_population_seed_owner_access", {
       for: "all",
       to: "public",

@@ -1577,7 +1577,8 @@ export const installPgliteCaseLawPopulationCounts = async (
       source.startsWith("CREATE TRIGGER") ||
       source.startsWith("REVOKE ALL ON FUNCTION") ||
       source.startsWith("GRANT EXECUTE ON FUNCTION") ||
-      source.startsWith("INSERT INTO public.case_law_population_seed_state")
+      source.startsWith("INSERT INTO public.case_law_population_seed_state") ||
+      source.startsWith("CREATE VIEW public.case_law_population_counts_live")
     );
   });
   for (const statement of statements) {

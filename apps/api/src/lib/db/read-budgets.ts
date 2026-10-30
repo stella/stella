@@ -59,9 +59,9 @@ export const READ_BUDGETS = {
   },
   "statement.caseLaw.coverageSources": {
     surface: "statement",
-    pages: 64,
+    pages: 512,
     reason:
-      "Four fixture sources each read maintained court buckets, two coverage-year endpoints and pending-text buckets: sixteen aggregate probes at three pages each, plus sixteen pages for source policy and singleton seed readiness, give 64 pages. Plans must never access case_law_decisions; corpus size does not change the maintained bucket population.",
+      "One joined live population scan reads at most 16,384 unfolded deltas in append order. At both 180,020 and 360,020 decisions, the measured statement reads 255 shared pages with that full backlog. The 512-page budget leaves 257 pages for wider court values, production-height indexes and source policy while rejecting corpus-dependent reads. The bounded overlay serves courts, year bounds and pending text together.",
   },
   "statement.caseLaw.euCompletionPage": {
     surface: "statement",

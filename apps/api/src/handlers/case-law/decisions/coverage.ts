@@ -9,7 +9,7 @@ import {
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
-  caseLawPopulationCounts,
+  caseLawPopulationCountsLive,
   caseLawSources,
   SOURCE_TOTAL_ORIGIN,
 } from "@/api/db/schema";
@@ -275,15 +275,6 @@ type CaseLawCoverageSourceRow = {
   publishedDecisions: number;
 };
 
-const coverageDecisionYearSql = (order: "ASC" | "DESC") => sql<number | null>`(
-  SELECT population.value::integer
-  FROM ${caseLawPopulationCounts} AS population
-  WHERE population.source_id = case_law_sources.id
-    AND population.kind = 'coverage-year'
-  ORDER BY population.value ${sql.raw(order)}
-  LIMIT 1
-)`;
-
 /**
  * Every redistributable court feed, with the freshness and completeness
  * bookkeeping a public page may state.
@@ -311,10 +302,13 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
         courts: sql<CoverageCourt[]>`coalesce((
           WITH population AS (
-            SELECT counts.value AS court, counts.total AS decisions
-            FROM ${caseLawPopulationCounts} AS counts
-            WHERE counts.source_id = case_law_sources.id
-              AND counts.kind = 'court'
+            SELECT court, decisions FROM jsonb_to_recordset(coalesce(
+              jsonb_agg(jsonb_build_object(
+                'court', ${caseLawPopulationCountsLive.value},
+                'decisions', ${caseLawPopulationCountsLive.total}
+              )) FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'court'),
+              '[]'::jsonb
+            )) AS counts(court text, decisions integer)
           ), normalized AS (
             SELECT nullif(btrim(court), '') AS court, decisions FROM population
           ), grouped AS (
@@ -335,19 +329,26 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
             ORDER BY decisions DESC, court ASC)
           FROM bounded
         ), '[]'::jsonb)`,
-        pendingTextCount: sql<number>`coalesce((
-          SELECT sum(counts.total)::integer
-          FROM ${caseLawPopulationCounts} AS counts
-          WHERE counts.source_id = case_law_sources.id
-            AND counts.kind = 'pending-text'
-        ), 0)`,
-        decisionYearFrom: coverageDecisionYearSql("ASC"),
-        decisionYearTo: coverageDecisionYearSql("DESC"),
+        pendingTextCount: sql<number>`coalesce(sum(${caseLawPopulationCountsLive.total})
+          FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'pending-text'), 0)::integer`,
+        decisionYearFrom: sql<
+          number | null
+        >`min(${caseLawPopulationCountsLive.value}::integer)
+          FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'coverage-year')`,
+        decisionYearTo: sql<
+          number | null
+        >`max(${caseLawPopulationCountsLive.value}::integer)
+          FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'coverage-year')`,
       })
       .from(caseLawSources)
+      .leftJoin(
+        caseLawPopulationCountsLive,
+        eq(caseLawPopulationCountsLive.sourceId, caseLawSources.id),
+      )
       .where(
         sql`${redistributableCaseLawSource} AND (SELECT public.assert_case_law_population_ready())`,
       )
+      .groupBy(caseLawSources.id)
       .orderBy(caseLawSources.adapterKey)
       .limit(CASE_LAW_SOURCE_ROWS_BOUND);
     return sources.map((source) => ({
@@ -923,14 +924,14 @@ export const computeCaseLawCoverageAnswer = async (
           caseLawDb(async (tx) => {
             const [row] = await tx
               .select({
-                courts: sql<number>`count(DISTINCT ${caseLawPopulationCounts.value})::integer`,
+                courts: sql<number>`count(DISTINCT ${caseLawPopulationCountsLive.value})::integer`,
               })
-              .from(caseLawPopulationCounts)
+              .from(caseLawPopulationCountsLive)
               .innerJoin(
                 caseLawSources,
-                eq(caseLawSources.id, caseLawPopulationCounts.sourceId),
-              ).where(sql`${caseLawPopulationCounts.kind} = 'court'
-                AND ${caseLawPopulationCounts.country} = ${country}
+                eq(caseLawSources.id, caseLawPopulationCountsLive.sourceId),
+              ).where(sql`${caseLawPopulationCountsLive.kind} = 'court'
+                AND ${caseLawPopulationCountsLive.country} = ${country}
                 AND ${redistributableCaseLawSource}`);
             return (
               row?.courts ??

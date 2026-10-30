@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
   caseLawDecisions,
-  caseLawPopulationCounts,
+  caseLawPopulationCountsLive,
   caseLawSources,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
@@ -19,6 +19,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { readCaseLawPopulationBucketCount } from "@/api/lib/case-law/population-counts";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
   publishedCaseLawDecisionFor,
@@ -29,7 +30,6 @@ import {
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
-import { refreshPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -100,7 +100,7 @@ const shapeRows = markerShapes.map((shape) => ({
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
-type RefreshDb = Parameters<typeof refreshPgFtsBrowseFacets>[0];
+type RefreshDb = Parameters<typeof readCaseLawPopulationBucketCount>[0];
 let refreshDb: RefreshDb;
 let caseLawDb: CaseLawPublicReadDb;
 
@@ -336,7 +336,7 @@ test(
     );
     expect(freshInstallFacets.court).toEqual([{ count: 2, value: COURT }]);
 
-    await refreshPgFtsBrowseFacets(refreshDb);
+    await readCaseLawPopulationBucketCount(refreshDb);
     const facets = await caseLawDb(
       async (tx) =>
         await readPgFtsBrowseFacets(tx, {
@@ -369,7 +369,8 @@ test(
     expect(revokedFacets).toEqual({ country: [], court: [], year: [] });
     const restrictedRows = await withPublicLawReaderRole(
       db,
-      async (readerDb) => await readerDb.select().from(caseLawPopulationCounts),
+      async (readerDb) =>
+        await readerDb.select().from(caseLawPopulationCountsLive),
     );
     expect(restrictedRows).toEqual([]);
     await db
@@ -446,7 +447,9 @@ test(
     await db
       .delete(caseLawDecisions)
       .where(eq(caseLawDecisions.sourceId, sourceId));
-    expect(await refreshPgFtsBrowseFacets(refreshDb)).toEqual({ buckets: 0 });
+    expect(await readCaseLawPopulationBucketCount(refreshDb)).toEqual({
+      buckets: 0,
+    });
     const facets = await caseLawDb(
       async (tx) =>
         await readPgFtsBrowseFacets(tx, {

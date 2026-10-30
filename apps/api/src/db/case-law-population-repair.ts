@@ -19,13 +19,16 @@ export const CASE_LAW_POPULATION_REPAIR = {
   readCompletion: async (connection) => {
     const row = (
       await connection.query(
-        `SELECT completed FROM public.case_law_population_seed_state WHERE slot = 0`,
+        `SELECT phase FROM public.case_law_population_seed_state WHERE slot = 0`,
       )
     ).at(0);
-    if (!isRecord(row) || typeof row["completed"] !== "boolean") {
+    if (
+      !isRecord(row) ||
+      !["scan", "fold", "complete"].includes(String(row["phase"]))
+    ) {
       return panic("Invalid case-law population seed state");
     }
-    if (row["completed"]) {
+    if (row["phase"] === "complete") {
       return { type: "complete" };
     }
     const reason = "Case-law population counts await bounded seeding";

@@ -253,6 +253,16 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
+    name: "case_law_population_deltas_source_kind_idx",
+    introducedBy: "20261030222000_case_law_population_counts",
+    tableName: "case_law_population_deltas",
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_population_deltas_source_kind_idx" ON public."case_law_population_deltas" USING btree ("source_id", "kind", "value")',
+    definitionBody:
+      "ON public.case_law_population_deltas USING btree (source_id, kind, value)",
+    isUnique: false,
+  },
+  {
     name: "case_law_population_projection_activity_idx",
     introducedBy: "20261030222000_case_law_population_counts",
     tableName: "case_law_population_projections",

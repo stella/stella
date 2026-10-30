@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 
-import { caseLawPopulationCounts, caseLawSources } from "@/api/db/schema";
+import { caseLawPopulationCountsLive, caseLawSources } from "@/api/db/schema";
 import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
@@ -32,59 +32,59 @@ export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
       sql`public.assert_case_law_population_ready()`,
       redistributableCaseLawSource,
       query.jurisdiction
-        ? eq(caseLawPopulationCounts.country, query.jurisdiction)
+        ? eq(caseLawPopulationCountsLive.country, query.jurisdiction)
         : undefined,
     );
 
     const countryRows = await tx
       .select({
-        value: caseLawPopulationCounts.value,
-        count: sql<number>`sum(${caseLawPopulationCounts.total})::int`,
+        value: caseLawPopulationCountsLive.value,
+        count: sql<number>`sum(${caseLawPopulationCountsLive.total})::int`,
       })
-      .from(caseLawPopulationCounts)
+      .from(caseLawPopulationCountsLive)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawPopulationCounts.sourceId),
+        eq(caseLawSources.id, caseLawPopulationCountsLive.sourceId),
       )
-      .where(and(scope, eq(caseLawPopulationCounts.kind, "country")))
-      .groupBy(caseLawPopulationCounts.value)
+      .where(and(scope, eq(caseLawPopulationCountsLive.kind, "country")))
+      .groupBy(caseLawPopulationCountsLive.value)
       .orderBy(
-        desc(sql`sum(${caseLawPopulationCounts.total})`),
-        desc(caseLawPopulationCounts.value),
+        desc(sql`sum(${caseLawPopulationCountsLive.total})`),
+        desc(caseLawPopulationCountsLive.value),
       )
       .limit(query.limit);
 
     const courtRows = await tx
       .select({
-        value: caseLawPopulationCounts.value,
-        count: sql<number>`sum(${caseLawPopulationCounts.total})::int`,
+        value: caseLawPopulationCountsLive.value,
+        count: sql<number>`sum(${caseLawPopulationCountsLive.total})::int`,
       })
-      .from(caseLawPopulationCounts)
+      .from(caseLawPopulationCountsLive)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawPopulationCounts.sourceId),
+        eq(caseLawSources.id, caseLawPopulationCountsLive.sourceId),
       )
-      .where(and(scope, eq(caseLawPopulationCounts.kind, "court")))
-      .groupBy(caseLawPopulationCounts.value)
+      .where(and(scope, eq(caseLawPopulationCountsLive.kind, "court")))
+      .groupBy(caseLawPopulationCountsLive.value)
       .orderBy(
-        desc(sql`sum(${caseLawPopulationCounts.total})`),
-        desc(caseLawPopulationCounts.value),
+        desc(sql`sum(${caseLawPopulationCountsLive.total})`),
+        desc(caseLawPopulationCountsLive.value),
       )
       .limit(query.limit);
 
     const yearRows = await tx
       .select({
-        value: caseLawPopulationCounts.value,
-        count: sql<number>`sum(${caseLawPopulationCounts.total})::int`,
+        value: caseLawPopulationCountsLive.value,
+        count: sql<number>`sum(${caseLawPopulationCountsLive.total})::int`,
       })
-      .from(caseLawPopulationCounts)
+      .from(caseLawPopulationCountsLive)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawPopulationCounts.sourceId),
+        eq(caseLawSources.id, caseLawPopulationCountsLive.sourceId),
       )
-      .where(and(scope, eq(caseLawPopulationCounts.kind, "year")))
-      .groupBy(caseLawPopulationCounts.value)
-      .orderBy(desc(caseLawPopulationCounts.value))
+      .where(and(scope, eq(caseLawPopulationCountsLive.kind, "year")))
+      .groupBy(caseLawPopulationCountsLive.value)
+      .orderBy(desc(caseLawPopulationCountsLive.value))
       .limit(query.limit);
 
     return {

@@ -11,6 +11,59 @@ CREATE TABLE public.case_law_population_counts (
   CONSTRAINT case_law_population_counts_total_positive CHECK (total > 0),
   CONSTRAINT case_law_population_counts_kind_valid CHECK (kind IN ('country', 'court', 'year', 'coverage-year', 'pending-text'))
 );--> statement-breakpoint
+CREATE TABLE public.case_law_population_deltas (
+  id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  kind text NOT NULL,
+  country varchar(3) NOT NULL,
+  source_id uuid NOT NULL,
+  value varchar(512) NOT NULL,
+  delta integer NOT NULL,
+  CONSTRAINT case_law_population_deltas_nonzero CHECK (delta <> 0),
+  CONSTRAINT case_law_population_deltas_kind_valid CHECK (kind IN ('country', 'court', 'year', 'coverage-year', 'pending-text'))
+);--> statement-breakpoint
+ALTER TABLE public.case_law_population_deltas ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.case_law_population_deltas FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY case_law_population_delta_owner_access ON public.case_law_population_deltas FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_deltas'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_deltas'::regclass));--> statement-breakpoint
+CREATE POLICY public_law_reader_access ON public.case_law_population_deltas FOR SELECT TO stella_public_law_reader
+  USING (EXISTS (SELECT 1 FROM public.case_law_sources s WHERE s.id = source_id
+    AND (s.descriptor IS NULL OR s.descriptor->>'allowsRedistribution' = 'true')));--> statement-breakpoint
+GRANT SELECT (id, kind, country, source_id, value, delta) ON public.case_law_population_deltas TO stella_public_law_reader;--> statement-breakpoint
+
+-- The bound counts the global queue before any policy filtering. A stalled
+-- fold refuses the read; it never turns a truncated queue into a false total.
+-- stella-migration-safety: reviewed security-definer - read-only bounded backlog assertion with fixed search path; exposes no queue rows or operational checkpoint
+CREATE FUNCTION public.assert_case_law_population_backlog_bounded()
+RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $function$
+BEGIN
+  IF (SELECT count(*) FROM (SELECT id FROM public.case_law_population_deltas ORDER BY id LIMIT 16385) bounded) > 16384 THEN
+    RAISE EXCEPTION 'Case-law population delta backlog exceeds the read limit' USING ERRCODE = '55000';
+  END IF;
+  RETURN true;
+END
+$function$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.assert_case_law_population_backlog_bounded() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.assert_case_law_population_backlog_bounded() TO stella_public_law_reader;--> statement-breakpoint
+
+CREATE VIEW public.case_law_population_counts_live WITH (security_invoker = true) AS
+WITH pending AS MATERIALIZED (
+  SELECT kind, country, source_id, value, delta
+  FROM public.case_law_population_deltas ORDER BY id LIMIT 16385
+)
+SELECT kind, country, source_id, value, sum(total)::integer AS total
+FROM (
+  SELECT kind, country, source_id, value, total FROM public.case_law_population_counts
+  UNION ALL
+  SELECT kind, country, source_id, value, delta AS total FROM pending
+) population
+WHERE (SELECT public.assert_case_law_population_backlog_bounded())
+GROUP BY kind, country, source_id, value
+HAVING sum(total) <> 0;--> statement-breakpoint
+GRANT SELECT (kind, country, source_id, value, total) ON public.case_law_population_counts_live TO stella_public_law_reader;--> statement-breakpoint
+
 CREATE TABLE public.case_law_population_projections (
   decision_id uuid PRIMARY KEY,
   source_id uuid NOT NULL,
@@ -26,7 +79,8 @@ CREATE TABLE public.case_law_population_seed_state (
   slot integer PRIMARY KEY CONSTRAINT case_law_population_seed_singleton CHECK (slot = 0),
   cursor uuid,
   source_id uuid,
-  completed boolean NOT NULL DEFAULT false
+  phase text NOT NULL DEFAULT 'scan',
+  CONSTRAINT case_law_population_seed_phase_valid CHECK (phase IN ('scan', 'fold', 'complete'))
 );--> statement-breakpoint
 INSERT INTO public.case_law_population_seed_state (slot) VALUES (0);--> statement-breakpoint
 ALTER TABLE public.case_law_population_counts ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -81,16 +135,14 @@ AS $function$
 $function$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.case_law_population_buckets(public.case_law_decisions) FROM PUBLIC;--> statement-breakpoint
 
--- Transition tables aggregate each statement once per key, so bulk ingestion
--- does not repeatedly rewrite the same source's hot court/country tuples.
--- stella-migration-safety: reviewed security-definer - trigger-only function with fixed search path and PUBLIC execute revoked; writes only derived public population counters
+-- Ingestion only appends grouped commutative deltas. It never locks a shared
+-- counter row, including across mixed upsert phases or repeated statements.
+-- stella-migration-safety: reviewed security-definer - trigger-only function with fixed search path and PUBLIC execute revoked; appends only derived public population deltas
 CREATE FUNCTION public.apply_case_law_population_projection()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  changes record;
-  previous_total integer;
   delta_sql text;
 BEGIN
   delta_sql := CASE TG_OP
@@ -98,30 +150,10 @@ BEGIN
     WHEN 'DELETE' THEN 'SELECT source_id, country, buckets, -1 AS delta FROM old_projections'
     WHEN 'UPDATE' THEN 'SELECT source_id, country, buckets, 1 AS delta FROM new_projections UNION ALL SELECT source_id, country, buckets, -1 AS delta FROM old_projections'
   END;
-  FOR changes IN EXECUTE
-    'SELECT b->>''kind'' AS kind, country, source_id, b->>''value'' AS value, sum(delta)::integer AS delta
+  EXECUTE 'INSERT INTO public.case_law_population_deltas (kind, country, source_id, value, delta)
+    SELECT b->>''kind'', country, source_id, b->>''value'', sum(delta)::integer
     FROM (' || delta_sql || ') projection_rows CROSS JOIN LATERAL jsonb_array_elements(projection_rows.buckets) b
-    GROUP BY b->>''kind'', country, source_id, b->>''value'' HAVING sum(delta) <> 0
-    ORDER BY b->>''kind'', country, source_id, b->>''value'''
-  LOOP
-    IF changes.delta > 0 THEN
-      INSERT INTO public.case_law_population_counts (kind, country, source_id, value, total)
-      VALUES (changes.kind, changes.country, changes.source_id, changes.value, changes.delta)
-      ON CONFLICT ON CONSTRAINT case_law_population_counts_pkey DO UPDATE
-      SET total = case_law_population_counts.total + EXCLUDED.total;
-    ELSE
-      SELECT total INTO STRICT previous_total FROM public.case_law_population_counts
-      WHERE kind = changes.kind AND country = changes.country AND source_id = changes.source_id AND value = changes.value
-      FOR UPDATE;
-      IF previous_total = -changes.delta THEN
-        DELETE FROM public.case_law_population_counts
-        WHERE kind = changes.kind AND country = changes.country AND source_id = changes.source_id AND value = changes.value;
-      ELSE
-        UPDATE public.case_law_population_counts SET total = total + changes.delta
-        WHERE kind = changes.kind AND country = changes.country AND source_id = changes.source_id AND value = changes.value;
-      END IF;
-    END IF;
-  END LOOP;
+    GROUP BY b->>''kind'', country, source_id, b->>''value'' HAVING sum(delta) <> 0';
   RETURN NULL;
 END
 $function$;--> statement-breakpoint
@@ -175,6 +207,63 @@ CREATE TRIGGER case_law_population_decision_delete
 AFTER DELETE ON public.case_law_decisions REFERENCING OLD TABLE AS old_decisions
 FOR EACH STATEMENT EXECUTE FUNCTION public.project_case_law_population_decision();--> statement-breakpoint
 
+-- One fold owner orders every counter key. Selected ids are a batch, never
+-- a commit watermark: uncommitted lower identities remain queued for later.
+CREATE FUNCTION public.fold_case_law_population_counts(batch_size integer)
+RETURNS TABLE(folded integer, done boolean)
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+AS $function$
+DECLARE
+  selected_ids bigint[];
+  folded_totals jsonb;
+BEGIN
+  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 2048 THEN RAISE EXCEPTION 'Invalid population fold batch size'; END IF;
+  IF NOT pg_try_advisory_xact_lock(hashtext('case-law-population-fold')) THEN
+    RETURN QUERY SELECT 0, false;
+    RETURN;
+  END IF;
+  SELECT array_agg(id) INTO selected_ids FROM (
+    SELECT id FROM public.case_law_population_deltas ORDER BY id LIMIT batch_size
+  ) batch;
+  IF selected_ids IS NULL THEN
+    RETURN QUERY SELECT 0, true;
+    RETURN;
+  END IF;
+  SELECT jsonb_agg(to_jsonb(next_total) ORDER BY kind, country, source_id, value)
+  INTO folded_totals
+  FROM (
+    SELECT changes.kind, changes.country, changes.source_id, changes.value,
+      coalesce(counts.total, 0) + changes.delta AS total
+    FROM (
+      SELECT kind, country, source_id, value, sum(delta)::integer AS delta
+      FROM public.case_law_population_deltas WHERE id = ANY(selected_ids)
+      GROUP BY kind, country, source_id, value HAVING sum(delta) <> 0
+    ) changes
+    LEFT JOIN public.case_law_population_counts counts USING (kind, country, source_id, value)
+  ) next_total;
+  IF folded_totals IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM jsonb_to_recordset(folded_totals)
+      AS totals(total integer) WHERE total < 0) THEN
+      RAISE EXCEPTION 'Case-law population fold would produce a negative count' USING ERRCODE = '22000';
+    END IF;
+    INSERT INTO public.case_law_population_counts (kind, country, source_id, value, total)
+    SELECT kind, country, source_id, value, total
+    FROM jsonb_to_recordset(folded_totals)
+      AS totals(kind text, country varchar(3), source_id uuid, value varchar(512), total integer)
+    WHERE total > 0 ORDER BY kind, country, source_id, value
+    ON CONFLICT ON CONSTRAINT case_law_population_counts_pkey DO UPDATE SET total = EXCLUDED.total;
+    DELETE FROM public.case_law_population_counts counts
+    USING jsonb_to_recordset(folded_totals)
+      AS totals(kind text, country varchar(3), source_id uuid, value varchar(512), total integer)
+    WHERE totals.total = 0 AND counts.kind = totals.kind AND counts.country = totals.country
+      AND counts.source_id = totals.source_id AND counts.value = totals.value;
+  END IF;
+  DELETE FROM public.case_law_population_deltas WHERE id = ANY(selected_ids);
+  RETURN QUERY SELECT cardinality(selected_ids), NOT EXISTS (SELECT 1 FROM public.case_law_population_deltas);
+END
+$function$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.fold_case_law_population_counts(integer) FROM PUBLIC;--> statement-breakpoint
+
 -- Lock decisions before projecting them, matching the write trigger's order.
 -- Inserts below the cursor are already projected by that same trigger.
 CREATE FUNCTION public.seed_case_law_population_counts(batch_size integer)
@@ -184,39 +273,43 @@ AS $function$
 DECLARE
   seed public.case_law_population_seed_state;
   batch_cursor uuid;
-  batch_count integer;
+  batch_count integer := 0;
+  fold_done boolean;
 BEGIN
-  IF batch_size < 1 OR batch_size > 2048 THEN RAISE EXCEPTION 'Invalid population seed batch size'; END IF;
+  IF batch_size IS NULL OR batch_size < 1 OR batch_size > 2048 THEN RAISE EXCEPTION 'Invalid population seed batch size'; END IF;
   SELECT * INTO STRICT seed FROM public.case_law_population_seed_state WHERE slot = 0 FOR UPDATE;
-  IF seed.completed THEN RETURN QUERY SELECT seed.cursor, 0, true; RETURN; END IF;
-  IF seed.source_id IS NULL THEN
-    SELECT id INTO seed.source_id FROM public.case_law_sources ORDER BY id LIMIT 1;
+  IF seed.phase = 'complete' THEN RETURN QUERY SELECT seed.cursor, 0, true; RETURN; END IF;
+  IF seed.phase = 'scan' THEN
     IF seed.source_id IS NULL THEN
-      UPDATE public.case_law_population_seed_state SET completed = true WHERE slot = 0;
-      RETURN QUERY SELECT seed.cursor, 0, true;
-      RETURN;
+      SELECT id INTO seed.source_id FROM public.case_law_sources ORDER BY id LIMIT 1;
+      IF seed.source_id IS NULL THEN seed.phase := 'fold'; END IF;
+    END IF;
+    IF seed.phase = 'scan' THEN
+      EXECUTE 'WITH batch AS MATERIALIZED (
+        SELECT d.* FROM public.case_law_decisions d WHERE d.source_id = $3 '
+        || CASE WHEN seed.cursor IS NULL THEN '' ELSE 'AND d.id > $2 ' END ||
+        'ORDER BY d.id LIMIT $1 FOR UPDATE OF d
+      ), projected AS (
+        INSERT INTO public.case_law_population_projections (decision_id, source_id, country, buckets, court, created_at, updated_at, publication)
+        SELECT b.id, b.source_id, b.country, public.case_law_population_buckets(b::public.case_law_decisions), b.court, b.created_at, b.updated_at,
+          CASE WHEN public.case_law_statute_citation_is_published(b.metadata, b.redacted_at) THEN ''published'' ELSE ''unpublished'' END FROM batch b
+        ON CONFLICT ON CONSTRAINT case_law_population_projections_pkey DO NOTHING
+      ) SELECT max(id::text)::uuid, count(*)::integer FROM batch'
+      INTO batch_cursor, batch_count USING batch_size, seed.cursor, seed.source_id;
+      IF batch_count = 0 THEN
+        SELECT id INTO seed.source_id FROM public.case_law_sources WHERE id > seed.source_id ORDER BY id LIMIT 1;
+        seed.cursor := NULL;
+        IF seed.source_id IS NULL THEN seed.phase := 'fold'; END IF;
+      ELSE
+        seed.cursor := batch_cursor;
+      END IF;
     END IF;
   END IF;
-  EXECUTE 'WITH batch AS MATERIALIZED (
-    SELECT d.* FROM public.case_law_decisions d WHERE d.source_id = $3 '
-    || CASE WHEN seed.cursor IS NULL THEN '' ELSE 'AND d.id > $2 ' END ||
-    'ORDER BY d.id LIMIT $1 FOR UPDATE OF d
-  ), projected AS (
-    INSERT INTO public.case_law_population_projections (decision_id, source_id, country, buckets, court, created_at, updated_at, publication)
-    SELECT b.id, b.source_id, b.country, public.case_law_population_buckets(b::public.case_law_decisions), b.court, b.created_at, b.updated_at,
-      CASE WHEN public.case_law_statute_citation_is_published(b.metadata, b.redacted_at) THEN ''published'' ELSE ''unpublished'' END FROM batch b
-    ON CONFLICT ON CONSTRAINT case_law_population_projections_pkey DO NOTHING
-  ) SELECT max(id::text)::uuid, count(*)::integer FROM batch'
-  INTO batch_cursor, batch_count USING batch_size, seed.cursor, seed.source_id;
-  IF batch_count = 0 THEN
-    SELECT id INTO seed.source_id FROM public.case_law_sources WHERE id > seed.source_id ORDER BY id LIMIT 1;
-    seed.cursor := NULL;
-  ELSE
-    seed.cursor := batch_cursor;
-  END IF;
+  SELECT result.done INTO STRICT fold_done FROM public.fold_case_law_population_counts(2048) result;
+  IF seed.phase = 'fold' AND fold_done THEN seed.phase := 'complete'; END IF;
   UPDATE public.case_law_population_seed_state s
-  SET cursor = seed.cursor, source_id = seed.source_id, completed = seed.source_id IS NULL WHERE slot = 0;
-  RETURN QUERY SELECT seed.cursor, batch_count, seed.source_id IS NULL;
+  SET cursor = seed.cursor, source_id = seed.source_id, phase = seed.phase WHERE slot = 0;
+  RETURN QUERY SELECT seed.cursor, batch_count, seed.phase = 'complete';
 END
 $function$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.seed_case_law_population_counts(integer) FROM PUBLIC;
@@ -228,10 +321,10 @@ RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  ready boolean;
+  phase text;
 BEGIN
-  SELECT completed INTO STRICT ready FROM public.case_law_population_seed_state WHERE slot = 0;
-  IF NOT ready THEN
+  SELECT seed.phase INTO STRICT phase FROM public.case_law_population_seed_state seed WHERE slot = 0;
+  IF phase <> 'complete' THEN
     RAISE EXCEPTION 'Case-law population counts are not seeded' USING ERRCODE = '55000';
   END IF;
   RETURN true;

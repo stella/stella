@@ -1,9 +1,11 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
@@ -11,6 +13,7 @@ import {
   caseLawCoverageSummaries,
   caseLawDecisions,
   caseLawPopulationCounts,
+  caseLawPopulationCountsLive,
   caseLawSources,
   publishedCaseLawDecisions,
   schedulerJobs,
@@ -27,6 +30,7 @@ import {
 } from "@/api/lib/decision-date-bounds-sql";
 import { storedObservationIsListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { logger } from "@/api/lib/observability/logger";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
   createCaseLawCoverageRefreshTask,
@@ -94,6 +98,56 @@ const assertFreshAggregation = async (
     ORDER BY kind, country, source_id, value`);
   const actual = await db
     .select()
+    .from(caseLawPopulationCountsLive)
+    .where(inArray(caseLawPopulationCountsLive.sourceId, [...sourceIds]))
+    .orderBy(
+      caseLawPopulationCountsLive.kind,
+      caseLawPopulationCountsLive.country,
+      caseLawPopulationCountsLive.sourceId,
+      caseLawPopulationCountsLive.value,
+    );
+  expect(actual).toEqual([...expected]);
+  return actual;
+};
+
+const populationDecisionRow = (
+  sourceId: SafeId<"caseLawSource">,
+  country: string,
+) => {
+  const id = createSafeId<"caseLawDecision">();
+  return {
+    id,
+    sourceId,
+    sourceDocumentId: id,
+    caseNumber: id,
+    country,
+    language: "cs",
+    court: "Overlapping court",
+    decisionDate: "2020-01-01",
+    fulltext: "Published fixture",
+  };
+};
+
+const foldPopulationCounts = async (db: GatedTestDb, namespace = "public") => {
+  let done = false;
+  while (!done) {
+    // db-await-in-loop: drain only bounded production delta-fold batches before checking the persisted owner.
+    const rows = await db.execute(
+      sql`SELECT * FROM ${sql.identifier(namespace)}.fold_case_law_population_counts(2048)`,
+    );
+    done = rows.at(0)?.["done"] === true;
+  }
+};
+
+const assertFoldedAggregation = async (
+  db: GatedTestDb,
+  sourceIds: readonly SafeId<"caseLawSource">[],
+  namespace = "public",
+) => {
+  await foldPopulationCounts(db, namespace);
+  const live = await assertFreshAggregation(db, sourceIds);
+  const persisted = await db
+    .select()
     .from(caseLawPopulationCounts)
     .where(inArray(caseLawPopulationCounts.sourceId, [...sourceIds]))
     .orderBy(
@@ -102,7 +156,43 @@ const assertFreshAggregation = async (
       caseLawPopulationCounts.sourceId,
       caseLawPopulationCounts.value,
     );
-  expect(actual).toEqual([...expected]);
+  expect(persisted).toEqual(live);
+};
+
+const createPopulationFixture = async (db: GatedTestDb, schemaName: string) => {
+  const schema = sql.identifier(schemaName);
+  await db.execute(sql`CREATE SCHEMA ${schema}`);
+  for (const name of ["case_law_sources", "case_law_decisions"]) {
+    // db-await-in-loop: clone the two canonical inputs while isolating unrelated corpus writers from the population lock-order proof.
+    await db.execute(
+      sql`CREATE TABLE ${schema}.${sql.identifier(name)} (LIKE public.${sql.identifier(name)} INCLUDING ALL)`,
+    );
+  }
+  await db.execute(sql`SET search_path TO ${schema}, public`);
+  const dialect = new PgDialect();
+  for (const view of [publishedCaseLawDecisions, unredactedCaseLawDecisions]) {
+    const config = getViewConfig(view);
+    // db-await-in-loop: install both production publication views over the isolated input table.
+    await db.execute(
+      sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query).sql)})`,
+    );
+  }
+  const migration = await Bun.file(
+    new URL(
+      "../../../../drizzle/20261030222000_case_law_population_counts/migration.sql",
+      import.meta.url,
+    ),
+  ).text();
+  const isolated = migration.replaceAll(
+    /\bpublic\.([a-z_]*case_law_population[a-z_]*|case_law_decisions|case_law_sources)\b/gu,
+    (match) => match.replace("public.", () => `"${schemaName}".`),
+  );
+  for (const statement of isolated.split("--> statement-breakpoint")) {
+    if (statement.trim() !== "") {
+      // db-await-in-loop: exercise the committed owner tables, views, policies and triggers without reproducing their SQL in the oracle.
+      await db.execute(sql.raw(statement));
+    }
+  }
 };
 
 describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
@@ -252,7 +342,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
                 .where(eq(caseLawPopulationCounts.sourceId, sourceId)),
             ).toEqual([]);
             await tx.execute(
-              sql`UPDATE public.case_law_population_seed_state SET source_id = NULL, cursor = NULL, completed = false WHERE slot = 0`,
+              sql`UPDATE public.case_law_population_seed_state SET source_id = NULL, cursor = NULL, phase = 'scan' WHERE slot = 0`,
             );
             const firstBatch = await tx.execute(
               sql`SELECT * FROM public.seed_case_law_population_counts(2)`,
@@ -326,7 +416,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
             sql`ALTER TABLE public.case_law_decisions ENABLE TRIGGER case_law_population_decision_write`,
           );
           await tx.execute(
-            sql`UPDATE public.case_law_population_seed_state SET source_id = NULL, cursor = NULL, completed = false WHERE slot = 0`,
+            sql`UPDATE public.case_law_population_seed_state SET source_id = NULL, cursor = NULL, phase = 'scan' WHERE slot = 0`,
           );
         });
         await Promise.all([
@@ -441,6 +531,10 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
           fulltext: "Stable text",
           decisionDate: "2020-01-01",
         });
+        await foldPopulationCounts(db);
+        const pendingBefore =
+          await db.execute(sql`SELECT id, kind, country, value, delta, xmin::text, ctid::text
+          FROM public.case_law_population_deltas WHERE source_id = ${sourceId} ORDER BY id`);
         const before =
           await db.execute(sql`SELECT kind, country, value, total, xmin::text, ctid::text
           FROM public.case_law_population_counts WHERE source_id = ${sourceId} ORDER BY kind, country, value`);
@@ -452,6 +546,10 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
           await db.execute(sql`SELECT kind, country, value, total, xmin::text, ctid::text
           FROM public.case_law_population_counts WHERE source_id = ${sourceId} ORDER BY kind, country, value`);
         expect([...after]).toEqual([...before]);
+        const pendingAfter =
+          await db.execute(sql`SELECT id, kind, country, value, delta, xmin::text, ctid::text
+          FROM public.case_law_population_deltas WHERE source_id = ${sourceId} ORDER BY id`);
+        expect([...pendingAfter]).toEqual([...pendingBefore]);
         await assertFreshAggregation(db, [sourceId]);
       } finally {
         await db
@@ -461,6 +559,225 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
       }
     });
   });
+
+  // timeout: PostgreSQL barriers overlap the update and insert phases before the server resolves lock dependencies.
+  test("mixed upsert phases across sources and countries commit without counter deadlocks", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("Mixed upsert proof requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const { db: firstWriter } = openClient({ max: 1 });
+      const { db: secondWriter } = openClient({ max: 1 });
+      const sourceIds = [
+        createSafeId<"caseLawSource">(),
+        createSafeId<"caseLawSource">(),
+      ];
+      const firstSource =
+        sourceIds.at(0) ?? panic("Missing first phase source");
+      const secondSource =
+        sourceIds.at(1) ?? panic("Missing second phase source");
+      const firstExisting = populationDecisionRow(firstSource, "CZE");
+      const secondExisting = populationDecisionRow(secondSource, "SVK");
+      const firstBatch = [
+        firstExisting,
+        populationDecisionRow(secondSource, "SVK"),
+      ];
+      const secondBatch = [
+        secondExisting,
+        populationDecisionRow(firstSource, "CZE"),
+      ];
+      const schemaName = `coverage_phase_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const schema = sql.identifier(schemaName);
+      await createPopulationFixture(db, schemaName);
+      await Promise.all(
+        [firstWriter, secondWriter].map(
+          async (writer) =>
+            await writer.execute(sql`SET search_path TO ${schema}, public`),
+        ),
+      );
+      await db.insert(caseLawSources).values(
+        sourceIds.map((id) => ({
+          id,
+          adapterKey: `coverage-phase-${id}`,
+          name: "Coverage phase fixture",
+        })),
+      );
+      try {
+        await db.insert(caseLawDecisions).values(
+          [firstExisting, secondExisting].map((row) => ({
+            ...row,
+            fulltext: null,
+            metadata: { _stellaPartialObservation: { isListingOnly: true } },
+          })),
+        );
+        await foldPopulationCounts(db, schemaName);
+        await db.execute(sql`CREATE FUNCTION ${schema}.pause_after_projection_update() RETURNS trigger
+          LANGUAGE plpgsql SET search_path = pg_catalog, public AS $function$
+          BEGIN
+            IF nullif(current_setting('stella.coverage_phase_gate', true), '') IS NOT NULL THEN
+              PERFORM pg_advisory_xact_lock(19054, current_setting('stella.coverage_phase_gate')::integer);
+            END IF;
+            RETURN NULL;
+          END $function$`);
+        await db.execute(sql`CREATE TRIGGER zz_coverage_phase_gate AFTER UPDATE ON ${schema}.case_law_population_projections
+          FOR EACH STATEMENT EXECUTE FUNCTION ${schema}.pause_after_projection_update()`);
+        await db.execute(
+          sql`SELECT pg_advisory_lock(19054, 1), pg_advisory_lock(19054, 2)`,
+        );
+        const run = (
+          writer: GatedTestDb,
+          gate: number,
+          rows: ReturnType<typeof populationDecisionRow>[],
+        ) =>
+          Result.tryPromise({
+            try: async () =>
+              await writer.transaction(async (tx) => {
+                await tx.execute(sql`SELECT set_config('statement_timeout', '10s', true), set_config('lock_timeout', '0', true),
+              set_config('stella.coverage_phase_gate', ${String(gate)}, true)`);
+                await tx
+                  .insert(caseLawDecisions)
+                  .values(rows)
+                  .onConflictDoUpdate({
+                    target: caseLawDecisions.id,
+                    set: { fulltext: "Published after conflict", metadata: {} },
+                  });
+              }),
+            catch: (cause: unknown) => cause,
+          });
+        const pending = [
+          run(firstWriter, 1, firstBatch),
+          run(secondWriter, 2, secondBatch),
+        ];
+        const barrier = await Result.tryPromise(
+          async () =>
+            await waitForExternalState({
+              description:
+                "both mixed upserts reached the projection update phase",
+              read: async () => {
+                const waiting =
+                  await db.execute(sql`SELECT count(*)::integer AS waiting FROM pg_locks
+              WHERE locktype = 'advisory' AND classid = 19054 AND objid IN (1, 2) AND NOT granted`);
+                return waiting.at(0)?.["waiting"] === 2;
+              },
+            }),
+        );
+        await db.execute(
+          sql`SELECT pg_advisory_unlock(19054, 1), pg_advisory_unlock(19054, 2)`,
+        );
+        const outcomes = await Promise.all(pending);
+        expect(
+          barrier.isOk(),
+          "Both writers must reach the catalog-observed phase barrier",
+        ).toBe(true);
+        const failures = outcomes.flatMap((outcome) =>
+          outcome.isErr() ? [getPgErrorCode(outcome.error)] : [],
+        );
+        expect(
+          failures,
+          `Mixed upsert SQLSTATEs: ${JSON.stringify(failures)}`,
+        ).toEqual([]);
+        await assertFreshAggregation(db, sourceIds);
+        await assertFoldedAggregation(db, sourceIds, schemaName);
+      } finally {
+        await db.execute(sql`SELECT pg_advisory_unlock_all()`);
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
+      }
+    });
+  }, 30_000);
+
+  // timeout: two real transactions retain their first statement's locks while crossing the second statement's source order.
+  test("opposite source order across transaction statements commits without counter deadlocks", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("Transaction source-order proof requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const { db: firstWriter } = openClient({ max: 1 });
+      const { db: secondWriter } = openClient({ max: 1 });
+      const sourceIds = [
+        createSafeId<"caseLawSource">(),
+        createSafeId<"caseLawSource">(),
+      ];
+      const firstSource =
+        sourceIds.at(0) ?? panic("Missing first transaction source");
+      const secondSource =
+        sourceIds.at(1) ?? panic("Missing second transaction source");
+      const schemaName = `coverage_order_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const schema = sql.identifier(schemaName);
+      await createPopulationFixture(db, schemaName);
+      await Promise.all(
+        [firstWriter, secondWriter].map(
+          async (writer) =>
+            await writer.execute(sql`SET search_path TO ${schema}, public`),
+        ),
+      );
+      await db.insert(caseLawSources).values(
+        sourceIds.map((id) => ({
+          id,
+          adapterKey: `coverage-order-${id}`,
+          name: "Coverage order fixture",
+        })),
+      );
+      const firstReady = Promise.withResolvers<undefined>();
+      const secondReady = Promise.withResolvers<undefined>();
+      const bothReady = Promise.all([firstReady.promise, secondReady.promise]);
+      const firstRows = [
+        populationDecisionRow(firstSource, "CZE"),
+        populationDecisionRow(secondSource, "SVK"),
+      ];
+      const secondRows = [
+        populationDecisionRow(secondSource, "SVK"),
+        populationDecisionRow(firstSource, "CZE"),
+      ];
+      try {
+        const run = (
+          writer: GatedTestDb,
+          rows: ReturnType<typeof populationDecisionRow>[],
+          ready: ReturnType<typeof Promise.withResolvers<undefined>>,
+        ) =>
+          Result.tryPromise({
+            try: async () =>
+              await writer.transaction(async (tx) => {
+                await tx.execute(
+                  sql`SELECT set_config('statement_timeout', '10s', true), set_config('lock_timeout', '0', true)`,
+                );
+                const first =
+                  rows.at(0) ?? panic("Missing first statement row");
+                const second =
+                  rows.at(1) ?? panic("Missing second statement row");
+                const written = await Result.tryPromise(
+                  async () => await tx.insert(caseLawDecisions).values(first),
+                );
+                ready.resolve(undefined);
+                if (written.isErr()) {
+                  return abortTransaction(written.error);
+                }
+                await bothReady;
+                await tx.insert(caseLawDecisions).values(second);
+              }),
+            catch: (cause: unknown) => cause,
+          });
+        const outcomes = await Promise.all([
+          run(firstWriter, firstRows, firstReady),
+          run(secondWriter, secondRows, secondReady),
+        ]);
+        const failures = outcomes.flatMap((outcome) =>
+          outcome.isErr() ? [getPgErrorCode(outcome.error)] : [],
+        );
+        expect(
+          failures,
+          `Opposite statement SQLSTATEs: ${JSON.stringify(failures)}`,
+        ).toEqual([]);
+        await assertFreshAggregation(db, sourceIds);
+        await assertFoldedAggregation(db, sourceIds, schemaName);
+      } finally {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
+      }
+    });
+  }, 30_000);
 
   // timeout: real PostgreSQL checks the aggregate after every generated transition.
   test(

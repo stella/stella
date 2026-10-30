@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { caseLawSitemapChanges, corpusIndexGenerations } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { CASE_LAW_POPULATION_FOLD_BATCH_LIMIT } from "@/api/lib/case-law/population-count-limits";
 import {
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
@@ -16,6 +17,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { isRecord } from "@/api/lib/type-guards";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -661,6 +663,30 @@ const replaceCoverageRefreshState = async (
 
 const COVERAGE_DECISION_ID_PREFIX = "01990000-00c3-7000-8000-";
 
+/** Read measurements start after fixture writes have reached the persisted owner. */
+const foldFixturePopulation = async (database: GatedTestDb) => {
+  let done = false;
+  while (!done) {
+    // db-await-in-loop: fixture preparation folds bounded batches before the measured read-only refresh.
+    const row = executedRows(
+      await database.execute(sql`
+      SELECT folded, done FROM public.fold_case_law_population_counts(${CASE_LAW_POPULATION_FOLD_BATCH_LIMIT})
+    `),
+    ).find(isRecord);
+    if (
+      !row ||
+      typeof row["folded"] !== "number" ||
+      typeof row["done"] !== "boolean"
+    ) {
+      return panic("Invalid fixture population fold result");
+    }
+    if (row["folded"] === 0 && !row["done"]) {
+      return panic("Fixture population fold owner is busy");
+    }
+    done = row["done"];
+  }
+};
+
 /**
  * The served sources' published decisions at the scenario's size, spread over
  * their facet courts and years, with the online coverage indexes production
@@ -721,6 +747,10 @@ const seedCoverageDecisions = async ({
   }
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_search_documents`);
+  await foldFixturePopulation(database);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_projections`);
 };
 
 /**

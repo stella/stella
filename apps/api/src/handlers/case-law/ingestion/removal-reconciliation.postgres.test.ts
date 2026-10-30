@@ -27,7 +27,7 @@ import {
   caseLawDecisionSupplements,
   caseLawIndexJobs,
   caseLawJudges,
-  caseLawPopulationCounts,
+  caseLawPopulationCountsLive,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawProvisionExtractionScopes,
@@ -603,8 +603,8 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         await db
           .select()
-          .from(caseLawPopulationCounts)
-          .where(eq(caseLawPopulationCounts.sourceId, sourceId)),
+          .from(caseLawPopulationCountsLive)
+          .where(eq(caseLawPopulationCountsLive.sourceId, sourceId)),
       ).not.toEqual([]);
       await db.insert(caseLawSourceArrivals).values({
         sourceId,
@@ -1020,9 +1020,9 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual([]);
       expect(
         await db
-          .select({ sourceId: caseLawPopulationCounts.sourceId })
-          .from(caseLawPopulationCounts)
-          .where(eq(caseLawPopulationCounts.sourceId, sourceId)),
+          .select({ sourceId: caseLawPopulationCountsLive.sourceId })
+          .from(caseLawPopulationCountsLive)
+          .where(eq(caseLawPopulationCountsLive.sourceId, sourceId)),
       ).toEqual([]);
       expect(
         await db
