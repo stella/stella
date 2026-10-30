@@ -34,3 +34,13 @@ export const missing = (value: string | null) => value ?? "—";
 export const _e = () => <span>—</span>;
 // A comment may say "draft — not sent".
 export const _d = () => <p>Draft: not sent</p>;
+
+// oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy
+export const _f = (a: string) => <p>{a}—</p>;
+// oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy
+export const _g = (b: string) => <p>—{b}</p>;
+// oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy
+export const _h = (a: string, b: string) => <p>{a} — {b}</p>;
+// oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy
+export const _i = (a: string) => <p>{a}{"—"}</p>;
+export const _j = () => <td>{"—"}</td>;

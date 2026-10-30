@@ -61,3 +61,76 @@ test("allows en dash ranges, entities outside JSX and comments", async () => {
     [],
   );
 });
+
+for (const marker of [
+  "—",
+  "&mdash;",
+  "&#8212;",
+  "&#x2014;",
+  "{'—'}",
+  "{`—`}",
+]) {
+  test(`rejects ${marker} beside rendered JSX siblings`, async () => {
+    const children = [
+      `{label}${marker}{name}`,
+      `{label}${marker}`,
+      `${marker}{name}`,
+      `before${marker}`,
+      `${marker}after`,
+    ];
+    const sources = children.flatMap((content) => [
+      `const p = <p>${content}</p>;`,
+      `const p = <>${content}</>;`,
+    ]);
+    const results = await Promise.all(sources.map((source) => lint(source)));
+    for (const result of results) {
+      expect(result).toEqual([1]);
+    }
+  });
+  test(`allows ${marker} as the sole rendered JSX content`, async () => {
+    expect(await lint(`const p = <td>${marker}</td>;`)).toEqual([]);
+    expect(
+      await lint(`const p = <td>  {/* marker */}${marker}  </td>;`),
+    ).toEqual([]);
+  });
+}
+
+test("rejects lone string markers used to compose copy", async () => {
+  const sources = [
+    'const title = left + "—" + right;',
+    'const title = "—" + right;',
+    "const title = left + `—`;",
+    'const title = ("—" as string) + right;',
+    'const title = parts.join("—");',
+    'const title = "—".concat(right);',
+    'const p = <p>{label}{name ?? "—"}</p>;',
+    'const p = <p>{ok ? "—" : name}{label}</p>;',
+    'const p = <p>{("—" satisfies string)}{label}</p>;',
+    'const p = <p>{(log(), "—")}{label}</p>;',
+    "const p = <p>{label} — {name}</p>;",
+    "const p = <p>{a}—</p>;",
+    "const p = <p>—{b}</p>;",
+    "const p = <p><>—</>{label}</p>;",
+    'const p = <input placeholder={"—" + label} />;',
+  ];
+  const results = await Promise.all(sources.map((source) => lint(source)));
+  for (const result of results) {
+    expect(result).toEqual([1]);
+  }
+});
+
+test("keeps sole-content markers local to their containing element", async () => {
+  const sources = [
+    "const p = <tr><td>—</td><td>{amount}</td></tr>;",
+    "const p = <tr><td>{'—'}</td><td>{amount}</td></tr>;",
+    'const p = <td>{ok ? "—" : value}</td>;',
+    'const p = <td>{value ?? "—"}</td>;',
+    'const p = <td>{("—" satisfies string)}</td>;',
+    'const p = <td>{("—")}</td>;',
+    "const p = <td><>—</></td>;",
+  ];
+  const results = await Promise.all(sources.map((source) => lint(source)));
+  for (const result of results) {
+    expect(result).toEqual([]);
+  }
+});

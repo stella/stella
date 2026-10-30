@@ -24,26 +24,104 @@
 // Flagged too, as a separator rather than a marker:
 //   {" — "}   parts.join(" — ")
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
-import { filenameForContext } from "./utils.ts";
+import { filenameForContext, TRANSPARENT_WRAPPERS } from "./utils.ts";
 
 const EM_DASH = "\u2014";
 const EM_DASH_ENTITY = /&(?:mdash|#8212|#x0*2014);/iu;
 
-// A string value must be exactly the glyph: `" — "` with spaces is a separator
-// between two pieces of copy, not a missing value. JSX text may carry the
-// surrounding layout whitespace.
 const EMPTY_CELL_MARKER = /^(?:\u2014|&mdash;|&#8212;|&#x0*2014;)$/iu;
-const EMPTY_CELL_TEXT = /^\s*(?:\u2014|&mdash;|&#8212;|&#x0*2014;)\s*$/iu;
 
 const containsEmDash = (raw: string | null | undefined): boolean =>
   raw !== null && raw !== undefined && raw.includes(EM_DASH);
 
-// The raw text between the quotes, so a lone marker is recognised whatever
-// quote character wraps it.
-const unquoted = (raw: string): string => raw.slice(1, -1);
+// Follow the complete value to its owner: a marker segment is not a marker
+// value when a template, concatenation or rendered sibling adds content.
+const isSoleMarkerContent = (node: ESTree.Node): boolean => {
+  let raw: string;
+  switch (node.type) {
+    case "Literal":
+      raw = (node.raw ?? "").slice(1, -1);
+      break;
+    case "TemplateElement":
+      raw = node.value.raw;
+      break;
+    case "JSXText":
+      raw = (node.raw ?? node.value).trim();
+      break;
+    default:
+      return false;
+  }
+  if (!EMPTY_CELL_MARKER.test(raw)) {
+    return false;
+  }
+  let content: ESTree.Node = node;
+  while (content.parent !== null) {
+    const current = content;
+    const parent = content.parent;
+    if (TRANSPARENT_WRAPPERS.has(parent.type)) {
+      content = parent;
+      continue;
+    }
+    switch (parent.type) {
+      case "TemplateLiteral":
+        if (parent.expressions.length !== 0) {
+          return false;
+        }
+        break;
+      case "JSXElement":
+      case "JSXFragment":
+        if (
+          !parent.children.every(
+            (child) =>
+              child === current ||
+              (child.type === "JSXText" && child.value.trim() === "") ||
+              (child.type === "JSXExpressionContainer" &&
+                child.expression.type === "JSXEmptyExpression"),
+          )
+        ) {
+          return false;
+        }
+        if (parent.type === "JSXElement") {
+          return true;
+        }
+        break;
+      case "ConditionalExpression":
+        if (parent.test === content) {
+          return false;
+        }
+        break;
+      case "LogicalExpression":
+        if (parent.operator === "&&" && parent.left === content) {
+          return false;
+        }
+        break;
+      case "SequenceExpression":
+        if (parent.expressions.at(-1) !== content) {
+          return false;
+        }
+        break;
+      case "JSXExpressionContainer":
+        break;
+      case "VariableDeclarator":
+      case "ReturnStatement":
+      case "ArrowFunctionExpression":
+      case "Property":
+      case "PropertyDefinition":
+      case "AssignmentPattern":
+      case "JSXAttribute":
+      case "ExpressionStatement":
+      case "ExportDefaultDeclaration":
+        return true;
+      default:
+        return false;
+    }
+    content = parent;
+  }
+  return true;
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-em-dash-copy" },
@@ -85,7 +163,7 @@ export default eslintCompatPlugin({
             // JSX attribute strings decode HTML entities like JSX text does.
             const decodesEntities = node.parent.type === "JSXAttribute";
             const raw = node.raw ?? "";
-            if (EMPTY_CELL_MARKER.test(unquoted(raw))) {
+            if (isSoleMarkerContent(node)) {
               return;
             }
             if (
@@ -98,11 +176,7 @@ export default eslintCompatPlugin({
           },
           TemplateElement(node) {
             const { raw } = node.value;
-            if (
-              node.parent.type === "TemplateLiteral" &&
-              node.parent.expressions.length === 0 &&
-              EMPTY_CELL_MARKER.test(raw)
-            ) {
+            if (isSoleMarkerContent(node)) {
               return;
             }
             if (containsEmDash(raw) && enforces(node)) {
@@ -111,7 +185,7 @@ export default eslintCompatPlugin({
           },
           JSXText(node) {
             const raw = node.raw ?? node.value;
-            if (EMPTY_CELL_TEXT.test(raw)) {
+            if (isSoleMarkerContent(node)) {
               return;
             }
             if (
