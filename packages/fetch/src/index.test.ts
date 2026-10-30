@@ -1,15 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 
 import { createFetchWithTimeout } from "./index";
-
-const waitForAbort = async (signal: AbortSignal): Promise<void> => {
-  if (signal.aborted) {
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    signal.addEventListener("abort", () => resolve(), { once: true });
-  });
-};
 
 describe("createFetchWithTimeout", () => {
   for (const code of [
@@ -34,6 +25,42 @@ describe("createFetchWithTimeout", () => {
       ).toBe(cause);
     });
   }
+
+  test("a numeric deadline hands back the transport's response unchanged", async () => {
+    const transportResponse = new Response("payload");
+    let received: RequestInit | undefined;
+    const request = createFetchWithTimeout(async (_input, init) => {
+      received = init;
+      return transportResponse;
+    });
+    const response = await request("https://example.com", { timeoutMs: 1000 });
+    expect(response).toBe(transportResponse);
+    expect(await response.text()).toBe("payload");
+    expect(received?.signal?.aborted).toBe(false);
+  });
+
+  test("a numeric deadline still bounds the whole exchange", async () => {
+    let signal: AbortSignal | null | undefined;
+    const request = createFetchWithTimeout(async (_input, init) => {
+      signal = init?.signal;
+      return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const reason: unknown = init.signal?.reason;
+          reject(
+            reason instanceof Error ? reason : new Error("Transport aborted"),
+          );
+        });
+      });
+    });
+    const outcome = await request("https://example.com", { timeoutMs: 5 }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(outcome instanceof DOMException ? outcome.name : outcome).toBe(
+      "TimeoutError",
+    );
+  });
 
   test("caller cancellation retains its original reason", async () => {
     const controller = new AbortController();
@@ -131,19 +158,24 @@ describe("createFetchWithTimeout", () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 
-  test("applies the required timeout", async () => {
+  test("clears the total timeout after a bodyless response completes", async () => {
+    jest.useFakeTimers();
     let capturedSignal: AbortSignal | null | undefined;
     const fetchWithTimeout = createFetchWithTimeout(async (_input, init) => {
       capturedSignal = init?.signal;
       return new Response(null, { status: 204 });
     });
 
-    await fetchWithTimeout("https://example.com/resource", { timeoutMs: 1 });
+    await fetchWithTimeout("https://example.com/resource", {
+      timeout: { type: "total", ms: 1 },
+    });
     if (!capturedSignal) {
       throw new Error("Missing fetch signal");
     }
-    await waitForAbort(capturedSignal);
+    jest.advanceTimersByTime(1);
 
-    expect(capturedSignal.aborted).toBe(true);
+    expect(capturedSignal.aborted).toBe(false);
+    expect(jest.getTimerCount()).toBe(0);
+    jest.useRealTimers();
   });
 });

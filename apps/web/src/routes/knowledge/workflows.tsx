@@ -23,7 +23,9 @@ import {
   flowsOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
+import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
+import { routePresentation } from "@/routes/-route-presentation";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
 import { FlowList } from "@/routes/knowledge/-components/flow-list";
@@ -39,12 +41,20 @@ type View =
   | { kind: "editor"; flowId: string | null; example?: FlowExampleKey };
 
 export const Route = createFileRoute("/knowledge/workflows")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.workflows",
+      to: "/knowledge/workflows",
+    }),
+  },
   beforeLoad: () => {
     if (!workflowsRouteAvailable()) {
       throw redirect({ to: "/knowledge" });
     }
   },
   component: GuardedWorkflowsPage,
+  head: () => ({ meta: [{ title: pageTitle("common.workflows") }] }),
 });
 
 const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];

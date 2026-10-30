@@ -11,9 +11,17 @@ Stable product tags (`vX.Y.Z`) build a production Chrome ZIP in the existing
 release workflow and attach `stella-extension-chrome-X.Y.Z.zip` to the GitHub
 release. The manifest version comes from the repository `VERSION`, verified
 against the tag; the packaged manifest must trust exactly the production
-origins. Prerelease tags do not produce a store package. Store submission is
-manual. Historical tags predating `scripts/release-zip.sh` skip the extension
-asset when rerun; tags supporting it must pass the packaging checks.
+origins. Prerelease tags do not produce a store package. Historical tags
+predating `scripts/release-zip.sh` skip the extension asset when rerun; tags
+supporting it must pass the packaging checks.
+
+Once the GitHub release is published, the `publish-chrome-extension` job
+submits that ZIP to the Chrome Web Store for review
+(`scripts/publish-store.ts`, Chrome Web Store API V2), and Chrome updates
+installed copies after approval. It signs in to Google without a stored key,
+from the `chrome-web-store` environment only. A rerun leaves a version that is
+already submitted or published alone, and a newer release replaces an older
+submission still in review. A store refusal fails that job, not the release.
 
 `bun --filter @stll/extension zip` builds the same ZIP locally. Development
 and staging builds use the product's numeric version too; `version_name`

@@ -338,7 +338,7 @@ for (const reply of [-1, 2, "invalid"]) {
       sleep: async () => {},
     });
     expect(await rejectionOf(slot.tryReserve())).toHaveProperty(
-      "message",
+      "cause.message",
       expect.stringContaining("publisher gate returned an invalid wait"),
     );
   });

@@ -19,6 +19,7 @@ import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { settingsNavSections } from "@/components/settings-shell/settings-nav";
+import { env } from "@/env";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -68,6 +69,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
       }),
     beta: betaFeaturesAvailable(),
     timeBilling,
+    usage: env.VITE_FEATURE_USAGE,
   });
 
   const activeItem = sections

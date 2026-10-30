@@ -17,6 +17,7 @@ import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 // The move flash is the reader's own `[data-highlight]` animation.
@@ -654,7 +655,10 @@ const VirtualCompareGroups = ({
       viewportRef={setScrollElement}
     >
       <article
-        className="reader-statute text-card-foreground mx-auto w-full px-4 pb-16 text-start md:px-8"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground mx-auto w-full px-4 pb-16 text-start md:px-8",
+        )}
         style={READER_STYLE}
       >
         {masthead === null ? null : (
@@ -992,7 +996,10 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
   return (
     <ScrollArea axis="vertical" className="min-h-0 flex-1">
       <article
-        className="reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 py-3 pb-16 text-start md:grid-cols-2 md:px-8"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 py-3 pb-16 text-start md:grid-cols-2 md:px-8",
+        )}
         style={READER_STYLE}
       >
         <div className="min-w-0">

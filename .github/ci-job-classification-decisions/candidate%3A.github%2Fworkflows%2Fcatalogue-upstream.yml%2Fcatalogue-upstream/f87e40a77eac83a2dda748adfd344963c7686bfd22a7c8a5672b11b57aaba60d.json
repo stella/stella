@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes refreshed catalogue upstream inputs as a signed-commit pull request.",
+  "reviewedDigest": "f87e40a77eac83a2dda748adfd344963c7686bfd22a7c8a5672b11b57aaba60d"
+}

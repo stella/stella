@@ -30,7 +30,7 @@ import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import {
@@ -393,8 +393,7 @@ export const AnonymizationDenyListCard = () => {
     const text = await file.text();
     const parsed = parseImport(text, file.name, pendingLabel);
     if (!parsed || parsed.length === 0) {
-      notifyUserError(
-        undefined,
+      notifyUserProblem(
         t("settings.organization.anonymization.importParseError"),
       );
       return;
