@@ -528,23 +528,31 @@ const readPage = (
       above?.y !== undefined &&
       line.y !== undefined &&
       above.y - line.y > blocks.linePitch * PARAGRAPH_SPACING_RATIO;
+    if (blocks === undefined) {
+      return { type: "text" as const, runs: runsOfLine(line), indented };
+    }
+    const previous = index === 0 ? blocks.carried : above;
+    const paragraph = {
+      previous,
+      line,
+      next: lines[index + 1],
+      rightEdge: blocks.rightEdge,
+      markers: blocks.markers ?? POINT_MARKERS,
+    };
+    const explicitOpening = opensBlockParagraph({
+      ...paragraph,
+      indented: false,
+    });
+    const continuation =
+      previous !== undefined &&
+      continuesSentence(previous, line, blocks.rightEdge);
     return {
       type: "text" as const,
       runs: runsOfLine(line),
       indented:
-        blocks === undefined
-          ? indented
-          : (spacedApart &&
-              above !== undefined &&
-              !continuesSentence(above, line, blocks.rightEdge)) ||
-            opensBlockParagraph({
-              previous: index === 0 ? blocks.carried : above,
-              line,
-              next: lines[index + 1],
-              indented,
-              rightEdge: blocks.rightEdge,
-              markers: blocks.markers ?? POINT_MARKERS,
-            }),
+        explicitOpening ||
+        (!continuation &&
+          (spacedApart || opensBlockParagraph({ ...paragraph, indented }))),
     };
   });
 };

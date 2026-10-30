@@ -706,9 +706,11 @@ test("a baseline reference at a wrapped line keeps its exact footnote target", (
   );
 });
 
-test.each([24, 30, 42])(
-  "a sentence continuation across a %s point gap stays in its paragraph",
-  async (gap) => {
+test.each(
+  [24, 30, 42].flatMap((gap) => [72, 108, 180].map((x) => ({ gap, x }))),
+)(
+  "a sentence continuation with layout %j stays in its paragraph",
+  async ({ gap, x }) => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
     for (const index of [0, 1, 2, 3, 4]) {
@@ -724,7 +726,7 @@ test.each([24, 30, 42])(
     const opening =
       "Organ antymonopolowy na podstawie zebranego w sprawie dowodu";
     page.drawText(opening, { x: 72, y: 600, size: 12 });
-    page.drawText("ustala stan sprawy.", { x: 72, y: 600 - gap, size: 12 });
+    page.drawText("ustala stan sprawy.", { x, y: 600 - gap, size: 12 });
     page.drawText("Nowy akapit opisuje inny fakt.", {
       x: 72,
       y: 570 - gap,
