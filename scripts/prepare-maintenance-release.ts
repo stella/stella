@@ -1328,12 +1328,14 @@ export const runCutGate: CutGateRunner = async (gate, context) => {
       command = gate.check.command;
       break;
     case "npm-publish-lag":
-      // The cut has no candidate yet: check the final it will increment.
+      // The cut has no candidate yet: the reference is the newest promoted
+      // final below the release it will cut, as at the tag.
       command = [
         "bun",
         "scripts/check-npm-publish-lag.ts",
-        "--ref",
-        context.previousFinalTag,
+        "--promoted-release-below",
+        nextPatchVersion(parseStableVersion(context.previousFinalTag.slice(1)))
+          .value,
       ];
       break;
     default:

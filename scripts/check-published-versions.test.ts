@@ -933,6 +933,7 @@ type RunLagCliOptions = {
   npmOutput?: string;
   npmError?: string;
   versionFile?: string;
+  dates?: string;
   tags?: readonly string[];
 };
 
@@ -942,6 +943,7 @@ const runLagCli = async ({
   npmOutput = '{"dist-tags":{"latest":"1.2.4"},"versions":["1.2.4"]}',
   npmError,
   versionFile = "1.2.4",
+  dates = '{"v1.0.0":"2026-01-01T00:00:00Z","v1.2.4":null}',
   tags = ["v9.0.0", "v1.2.4", "v1.2.4-rc.1", "v1.0.0"],
 }: RunLagCliOptions) => {
   const directory = await mkdtemp(path.join(tmpdir(), "publish-lag-cli-"));
@@ -950,7 +952,7 @@ const runLagCli = async ({
     const fakeNpm = path.join(directory, "npm");
     await Bun.write(
       fakeGit,
-      `#!${process.execPath}\nif (Bun.argv[2] === "tag") console.log(${JSON.stringify(tags.join("\n"))}); else if (Bun.argv[2] === "show" && Bun.argv[3].endsWith(":VERSION")) console.log(${JSON.stringify(versionFile)}); else console.log(${JSON.stringify(manifest)});\n`,
+      `#!${process.execPath}\nif (Bun.argv[2] === "tag") console.log(${JSON.stringify(tags.join("\n"))}); else if (Bun.argv[2] === "show" && Bun.argv[3].endsWith(":VERSION")) console.log(${JSON.stringify(versionFile)}); else if (Bun.argv[2] === "show" && Bun.argv[3].endsWith("changelog-release-dates.json")) console.log(${JSON.stringify(dates)}); else console.log(${JSON.stringify(manifest)});\n`,
     );
     await Bun.write(
       fakeNpm,
@@ -1029,7 +1031,7 @@ describe("release CLI output contract", () => {
       exit: 2,
       stdout: "",
       stderr:
-        "::error::npm-publish-lag: pass exactly one of --ref or --previous-release-of\n",
+        "::error::npm-publish-lag: pass exactly one of --ref, --previous-release-of or --promoted-release-below\n",
     });
     expect(
       await runLagCli({

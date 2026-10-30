@@ -314,7 +314,8 @@ describe("the maintenance cut checks the tag gates first", () => {
       const run = await runCut(root, {});
       expect(run.error).toBeNull();
       expect(run.npmFinalTags).toEqual(["v1.2.3"]);
-      expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
+      // The cut checks the newest promoted final below the release it cuts.
+      expect(run.npmArguments).toEqual(["--promoted-release-below", "1.2.4"]);
       expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
         "1.2.4\n",
       );

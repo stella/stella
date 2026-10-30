@@ -23,6 +23,13 @@
 //
 //   bun scripts/check-npm-publish-lag.ts --ref <git-ref> [--packages cli,ui]
 //   bun scripts/check-npm-publish-lag.ts --previous-release-of <git-ref>
+//   bun scripts/check-npm-publish-lag.ts --promoted-release-below <X.Y.Z>
+//
+// --previous-release-of and --promoted-release-below check the newest
+// PROMOTED final release below a version (promoted-release-policy.ts reads
+// the release publication manifest at the git ref / HEAD): a final tag that
+// never reached production never publishes its coupled CLI, so it cannot be
+// the reference. --ref checks exactly the ref it names.
 //     [--attempts 10 --interval-seconds 30]
 //
 // Exit codes: 0 every package is on npm, 1 a package lags, 2 bad arguments or
@@ -32,7 +39,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { STABLE_RELEASE_TAG } from "./promoted-release-policy";
+import { selectPromotedReleaseBelow } from "./promoted-release-policy";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -699,21 +706,6 @@ export const readPublishablePackages = ({
   });
 };
 
-/** The newest final tag, optionally bounded strictly below a release version. */
-export const newestStableTag = (
-  tags: readonly string[],
-  beforeVersion?: string,
-): string | undefined =>
-  tags
-    .filter(
-      (tag) =>
-        STABLE_RELEASE_TAG.test(tag) &&
-        (beforeVersion === undefined ||
-          Bun.semver.order(tag.slice(1), beforeVersion) < 0),
-    )
-    .toSorted((left, right) => Bun.semver.order(right.slice(1), left.slice(1)))
-    .at(0);
-
 type Attempt = {
   readonly attempts: number;
   readonly intervalMs: number;
@@ -799,6 +791,7 @@ const npmRegistryFetcher: RegistryFetcher = async (name) => {
 type Args = {
   readonly ref: string | undefined;
   readonly previousReleaseOf: string | undefined;
+  readonly promotedReleaseBelow: string | undefined;
   readonly packages: readonly string[] | undefined;
   readonly attempts: number;
   readonly intervalSeconds: number;
@@ -816,6 +809,7 @@ export const parseArgs = (argv: readonly string[]): Args => {
       ![
         "--ref",
         "--previous-release-of",
+        "--promoted-release-below",
         "--packages",
         "--attempts",
         "--interval-seconds",
@@ -827,8 +821,21 @@ export const parseArgs = (argv: readonly string[]): Args => {
   }
   const ref = values.get("--ref");
   const previousReleaseOf = values.get("--previous-release-of");
-  if ((ref === undefined) === (previousReleaseOf === undefined)) {
-    return fail("pass exactly one of --ref or --previous-release-of");
+  const promotedReleaseBelow = values.get("--promoted-release-below");
+  if (
+    [ref, previousReleaseOf, promotedReleaseBelow].filter(
+      (value) => value !== undefined,
+    ).length !== 1
+  ) {
+    return fail(
+      "pass exactly one of --ref, --previous-release-of or --promoted-release-below",
+    );
+  }
+  if (
+    promotedReleaseBelow !== undefined &&
+    !/^\d+\.\d+\.\d+$/u.test(promotedReleaseBelow)
+  ) {
+    return fail("--promoted-release-below must be X.Y.Z");
   }
   const packages = values
     .get("--packages")
@@ -849,13 +856,55 @@ export const parseArgs = (argv: readonly string[]): Args => {
     packages:
       packages !== undefined && packages.length > 0 ? packages : undefined,
     previousReleaseOf,
+    promotedReleaseBelow,
     ref,
   };
+};
+
+const RELEASE_DATES_PATH = "apps/landing/src/data/changelog-release-dates.json";
+
+/** The newest promoted final below a version, from the manifest at a ref. */
+const resolvePromotedRef = (
+  version: string,
+  manifestRef: string,
+  execute: typeof run,
+): string => {
+  const shown = execute([
+    "git",
+    "show",
+    `${manifestRef}:${RELEASE_DATES_PATH}`,
+  ]);
+  if (!shown.ok) {
+    return fail(
+      `cannot read ${RELEASE_DATES_PATH} at ${manifestRef}: ${shown.stderr.trim()}`,
+    );
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(shown.stdout);
+  } catch {
+    return fail(`${RELEASE_DATES_PATH} at ${manifestRef} is not valid JSON`);
+  }
+  const selection = selectPromotedReleaseBelow(manifest, version);
+  if (selection.status !== "resolved") {
+    return fail(selection.message);
+  }
+  const tags = execute(["git", "tag", "--list", "v*"]);
+  if (!tags.ok) {
+    return fail(`git tag --list failed: ${tags.stderr.trim()}`);
+  }
+  if (!tags.stdout.split("\n").some((tag) => tag.trim() === selection.ref)) {
+    return fail(`promoted release ${selection.ref} has no tag in this clone`);
+  }
+  return selection.ref;
 };
 
 export const resolveRef = (args: Args, execute = run): string => {
   if (args.ref !== undefined) {
     return args.ref;
+  }
+  if (args.promotedReleaseBelow !== undefined) {
+    return resolvePromotedRef(args.promotedReleaseBelow, "HEAD", execute);
   }
   const previousReleaseOf = args.previousReleaseOf ?? "HEAD";
   const versionFile = execute(["git", "show", `${previousReleaseOf}:VERSION`]);
@@ -868,19 +917,7 @@ export const resolveRef = (args: Args, execute = run): string => {
   if (!/^\d+\.\d+\.\d+$/u.test(version)) {
     return fail(`VERSION at ${previousReleaseOf} must be X.Y.Z`);
   }
-  const tags = execute(["git", "tag", "--list", "v*"]);
-  if (!tags.ok) {
-    return fail(`git tag --list failed: ${tags.stderr.trim()}`);
-  }
-  return (
-    newestStableTag(
-      tags.stdout.split("\n").map((tag) => tag.trim()),
-      version,
-    ) ??
-    fail(
-      `no final release tag is strictly lower than ${version} at ${previousReleaseOf}`,
-    )
-  );
+  return resolvePromotedRef(version, previousReleaseOf, execute);
 };
 
 const main = async (argv: readonly string[]): Promise<number> => {
