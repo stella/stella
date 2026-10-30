@@ -171,6 +171,85 @@ test("callback consumes its origin-scoped request nonce once", async () => {
   }
 });
 
+test("blocked popup completion refreshes once and consumes its redirect request", async () => {
+  const { broadcastMcpOAuthOutcome, subscribeToMcpConnectionRefresh } =
+    await import("./mcp-oauth-channel");
+  const OriginalBroadcastChannel = globalThis.BroadcastChannel;
+  const peers = new Set<BroadcastChannel>();
+  class RefreshOnlyBroadcastChannel extends OriginalBroadcastChannel {
+    constructor(name: string) {
+      super(name);
+      peers.add(this);
+    }
+    override postMessage(message: unknown): void {
+      if (this.name !== "mcp-oauth-refresh") {
+        return;
+      }
+      for (const peer of peers) {
+        if (peer !== this && peer.name === this.name) {
+          peer.dispatchEvent(
+            new NativeMessageEvent("message", { data: message }),
+          );
+        }
+      }
+    }
+    override close(): void {
+      peers.delete(this);
+      super.close();
+    }
+  }
+  globalThis.BroadcastChannel = RefreshOnlyBroadcastChannel;
+  const open = spyOn(window, "open").mockReturnValue(null);
+  const assign = spyOn(window.location, "assign").mockImplementation(() => {});
+  let refreshes = 0;
+  const unsubscribe = subscribeToMcpConnectionRefresh(() => {
+    refreshes += 1;
+  });
+  try {
+    expect(openMcpOAuthWindow("https://example.test/authorize")).toBe(
+      "redirected",
+    );
+    const storage = requireBrowserStorage("session").unwrap();
+    const nonce = storage.getItem(MCP_OAUTH_REQUEST_STORAGE_KEY);
+    expect(nonce).not.toBeNull();
+    if (nonce === null) {
+      throw new Error("Redirect request nonce was not stored");
+    }
+    const redirectKey = `${MCP_OAUTH_REQUEST_STORAGE_KEY}:${nonce}`;
+    expect(storage.getItem(redirectKey)).not.toBeNull();
+
+    broadcastMcpOAuthOutcome({ status: "connected" });
+
+    expect(refreshes).toBe(1);
+    expect(storage.getItem(redirectKey)).toBeNull();
+  } finally {
+    unsubscribe();
+    for (const peer of peers) {
+      peer.close();
+    }
+    assign.mockRestore();
+    open.mockRestore();
+    globalThis.BroadcastChannel = OriginalBroadcastChannel;
+  }
+});
+
+test("callback with a forged redirect nonce does not refresh connections", async () => {
+  const { broadcastMcpOAuthOutcome, subscribeToMcpConnectionRefresh } =
+    await import("./mcp-oauth-channel");
+  const storage = requireBrowserStorage("session").unwrap();
+  storage.setItem(MCP_OAUTH_REQUEST_STORAGE_KEY, createRandomValue());
+  let refreshes = 0;
+  const unsubscribe = subscribeToMcpConnectionRefresh(() => {
+    refreshes += 1;
+  });
+  try {
+    broadcastMcpOAuthOutcome({ status: "connected" });
+    expect(refreshes).toBe(0);
+  } finally {
+    unsubscribe();
+  }
+});
+
 test("authorization URL validation runs before opening a window", () => {
   const open = spyOn(window, "open").mockReturnValue(window);
   try {

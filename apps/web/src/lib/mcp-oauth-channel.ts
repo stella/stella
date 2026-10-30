@@ -20,6 +20,10 @@ const connectionRefreshSchema = v.strictObject({
   kind: v.literal(REFRESH_MESSAGE_KIND),
 });
 const REQUEST_TTL_MS = 10 * 60 * 1000;
+const REDIRECT_REQUEST_STORAGE_PREFIX = `${MCP_OAUTH_REQUEST_STORAGE_KEY}:`;
+const redirectRequestSchema = v.strictObject({
+  expiresAt: v.number(),
+});
 const outcomeEvents = new EventTarget();
 const OUTCOME_EVENT = "accepted-outcome";
 
@@ -128,10 +132,7 @@ export const openMcpOAuthWindow = (
       receipt.outcome.status === "connected" &&
       typeof BroadcastChannel !== "undefined"
     ) {
-      const refresh = new BroadcastChannel(REFRESH_CHANNEL_NAME);
-      const post = refresh.postMessage.bind(refresh);
-      post({ kind: REFRESH_MESSAGE_KIND });
-      refresh.close();
+      broadcastMcpConnectionRefresh();
     }
   });
   const expiry = window.setTimeout(unsubscribe, REQUEST_TTL_MS);
@@ -154,6 +155,21 @@ export const openMcpOAuthWindow = (
   }
   if (popup) {
     return "opened";
+  }
+  const redirectStored = requireBrowserStorage("session").andThen((storage) =>
+    Result.try(() =>
+      storage.setItem(
+        `${REDIRECT_REQUEST_STORAGE_PREFIX}${request.nonce}`,
+        JSON.stringify({
+          expiresAt: Temporal.Now.instant().epochMilliseconds + REQUEST_TTL_MS,
+        }),
+      ),
+    ),
+  );
+  if (redirectStored.isErr()) {
+    unsubscribe();
+    window.clearTimeout(expiry);
+    return "invalid";
   }
   window.location.assign(authorizeHref);
   return "redirected";
@@ -204,6 +220,11 @@ export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
     return;
   }
   const message = { kind: MESSAGE_KIND, nonce: stored.value, ...outcome };
+  const completedRedirect = consumeRedirectRequest(stored.value);
+
+  if (completedRedirect && outcome.status === "connected") {
+    broadcastMcpConnectionRefresh();
+  }
 
   // Prefer BroadcastChannel (covers same-origin tabs even when COOP
   // severs `window.opener`). Fall back to `opener.postMessage` only
@@ -232,6 +253,42 @@ export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
   } catch {
     // Cross-origin opener property access can throw SecurityError.
   }
+}
+
+function consumeRedirectRequest(nonce: string): boolean {
+  const stored = requireBrowserStorage("session").andThen((storage) =>
+    Result.try(() => {
+      const key = `${REDIRECT_REQUEST_STORAGE_PREFIX}${nonce}`;
+      const value = storage.getItem(key);
+      storage.removeItem(key);
+      return value;
+    }),
+  );
+  if (stored.isErr() || !stored.value) {
+    return false;
+  }
+  const serialized = stored.value;
+  const parsed = Result.try(() => {
+    const value: unknown = JSON.parse(serialized);
+    return value;
+  }).andThen((value) => {
+    const result = v.safeParse(redirectRequestSchema, value);
+    return result.success ? Result.ok(result.output) : Result.err(undefined);
+  });
+  return (
+    parsed.isOk() &&
+    Temporal.Now.instant().epochMilliseconds < parsed.value.expiresAt
+  );
+}
+
+function broadcastMcpConnectionRefresh(): void {
+  if (typeof BroadcastChannel === "undefined") {
+    return;
+  }
+  const refresh = new BroadcastChannel(REFRESH_CHANNEL_NAME);
+  const post = refresh.postMessage.bind(refresh);
+  post({ kind: REFRESH_MESSAGE_KIND });
+  refresh.close();
 }
 
 function subscribeToRawMcpOAuthOutcome(
