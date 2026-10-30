@@ -2180,7 +2180,8 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The contracts and single-file bundles are derived before use, never
         # committed. Build them from source, check the bundle budgets, and fail
-        # when an output is missing, empty, or tracked again.
+        # when an output is missing or tracked again. Per-app CSS may be empty
+        # when all of its styles are shared with the runtime.
         run: |
           (cd apps/api && bun run generate:mcp-app-contracts)
           (cd packages/mcp-apps && bun run build)
@@ -2201,7 +2202,10 @@ jobs:
             packages/mcp-apps/src/generated/runtime.js.txt
           )
           for output in "${outputs[@]}"; do
-            test -s "$output" || { echo "::error::$output was not generated"; exit 1; }
+            case "$output" in
+              packages/mcp-apps/src/*/generated/app.css.txt) test -f "$output" ;;
+              *) test -s "$output" ;;
+            esac || { echo "::error::$output was not generated"; exit 1; }
           done
           bun scripts/check-mcp-generated-tracking.ts
 

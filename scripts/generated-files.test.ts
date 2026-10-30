@@ -1040,6 +1040,7 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   );
   expect(bundle).not.toContain("git diff --exit-code");
   expect(bundle).toContain('test -s "$output"');
+  expect(bundle).toContain('test -f "$output"');
   expect(bundle).toContain("bun scripts/check-mcp-generated-tracking.ts");
   const preparation = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
@@ -1486,5 +1487,34 @@ test("a CLI registry change plans the MCP app bundles it reads", () => {
   ]) {
     expect(ids).toContain(prerequisite);
     expect(ids.indexOf(prerequisite)).toBeLessThan(ids.indexOf("cli-registry"));
+  }
+});
+
+test("MCP output guard accepts empty shared CSS fragments and rejects absent or empty required artifacts", async () => {
+  const directory = await mkdtemp(nodePath.join(tmpdir(), "mcp-output-guard-"));
+  try {
+    const run = ciGeneratedStepRun("MCP app derived outputs guard");
+    const loop = run.slice(
+      run.indexOf("for output in "),
+      run.indexOf("bun scripts/check-mcp-generated-tracking.ts"),
+    );
+    const generated = "packages/mcp-apps/src/citation-graph/generated";
+    await mkdir(nodePath.join(directory, generated), { recursive: true });
+    const css = `${generated}/app.css.txt`;
+    const html = `${generated}/app.html.txt`;
+    await writeFile(nodePath.join(directory, css), "");
+    await writeFile(nodePath.join(directory, html), "<html></html>");
+    const check = () =>
+      Bun.spawnSync(["bash", "-c", `outputs=("${css}" "${html}")\n${loop}`], {
+        cwd: directory,
+      });
+    expect(check().exitCode).toBe(0);
+    await writeFile(nodePath.join(directory, html), "");
+    expect(check().exitCode).not.toBe(0);
+    await writeFile(nodePath.join(directory, html), "<html></html>");
+    await rm(nodePath.join(directory, css));
+    expect(check().exitCode).not.toBe(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });

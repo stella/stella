@@ -26,7 +26,7 @@ import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
-import { CI_GENERATED_OUTPUTS } from "./generated-files";
+import { CI_GENERATED_OUTPUTS, GENERATORS } from "./generated-files";
 import {
   DELEGATED_CHECKS_ENV,
   UNCHANGED_CHECKS_ENV,
@@ -1174,6 +1174,30 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (step.name === "MCP app derived outputs guard") {
+    let run = v.parse(v.string(), fields.run);
+    const declaredOutputs = GENERATORS.filter(
+      ({ id }) => id === "mcp-app-contracts" || id === "mcp-app-bundles",
+    ).flatMap(({ outputs }) => outputs);
+    const additions = declaredOutputs
+      .filter((output) => !run.includes(`  ${output}\n`))
+      .toSorted();
+    if (additions.length > 0) {
+      const anchor = "  packages/mcp-apps/src/*/generated/app.html.txt\n";
+      expect(run).toContain(anchor);
+      run = run.replace(
+        anchor,
+        () => `${anchor}${additions.map((output) => `  ${output}\n`).join("")}`,
+      );
+    }
+    // Shared styles can leave a valid per-app CSS fragment empty. Every
+    // other artifact retains the original nonempty-file requirement.
+    run = run.replace(
+      '  test -s "$output" || { echo "::error::$output was not generated"; exit 1; }',
+      '  case "$output" in\n    packages/mcp-apps/src/*/generated/app.css.txt) test -f "$output" ;;\n    *) test -s "$output" ;;\n  esac || { echo "::error::$output was not generated"; exit 1; }',
+    );
+    return { ...step, run };
+  }
   if (step.name === "CLI sharded registry and derived runtime guard") {
     const run = v.parse(v.string(), fields.run);
     const continuation = " \\";
