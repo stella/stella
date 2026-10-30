@@ -3,6 +3,8 @@ import { afterAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { createTestState } from "@stll/test-state";
+
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { schedulerJobs } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -10,7 +12,6 @@ import { logger } from "@/api/lib/observability/logger";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -36,7 +37,7 @@ state.beforeAll(async () => {
     [SOURCE_ID],
   );
 });
-afterAll(async () => await client?.close());
+afterAll(async () => await client.close());
 beforeEach(async () => {
   await client.exec(
     "DELETE FROM case_law_decisions; DELETE FROM database_backfill_states; DELETE FROM system_audit_runs; DELETE FROM scheduler_jobs",

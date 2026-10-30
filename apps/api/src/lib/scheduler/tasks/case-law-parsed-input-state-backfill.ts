@@ -54,10 +54,10 @@ export const createCaseLawParsedInputStateBackfill =
         "scheduler.case_law_parsed_input_state_backfill_disabled",
         {},
       );
-      return;
+      return Result.ok();
     }
     if (job.payload?.["completed"] === true) {
-      return;
+      return Result.ok();
     }
     signal.throwIfAborted();
     const leaseToken =
@@ -147,7 +147,7 @@ export const createCaseLawParsedInputStateBackfill =
               : { heldSince: settled.error.heldSince }),
           }),
         );
-        return;
+        return Result.ok();
       }
       return Result.err(
         new SchedulerTaskFailure({
@@ -167,4 +167,5 @@ export const createCaseLawParsedInputStateBackfill =
         ),
       );
     }
+    return Result.ok();
   };

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -24,17 +24,17 @@ const rolledBack = async (
   db: GatedTestDb,
   work: (tx: Transaction) => Promise<void>,
 ): Promise<void> => {
-  const outcome = await Result.tryPromise(
-    async () =>
+  const outcome = await Result.tryPromise({
+    try: async () =>
       await db.transaction(async (tx) => {
         await work(tx);
         tx.rollback();
       }),
-  );
-  expect(Result.isError(outcome)).toBe(true);
-  if (Result.isError(outcome)) {
-    expect(String(outcome.error)).toContain("Rollback");
-  }
+    catch: (error) => error,
+  });
+  expect(
+    outcome.isErr() && outcome.error instanceof TransactionRollbackError,
+  ).toBe(true);
 };
 
 const insertSource = async (tx: Transaction) => {

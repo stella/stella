@@ -98,6 +98,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "parsedSourceHash",
   "parsedSourceHashVersion",
   "parsedSourceRawS3Key",
+  "parsedInputState",
   "sourceObservedAt",
   "sourceObservationOrder",
   "sourceObservationHash",
