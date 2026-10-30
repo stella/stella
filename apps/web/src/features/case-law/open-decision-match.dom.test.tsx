@@ -2,12 +2,18 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
+import {
   DEFAULT_SEARCH_EXCERPT,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   type SearchPageReach,
 } from "@stll/api-contract/search";
 
+import type { api } from "@/lib/api";
+import type { PublicLawData } from "@/lib/public-law-api";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
@@ -21,6 +27,10 @@ const ECLI = "ECLI:CZ:NS:2019:25.CDO.1234.2019.1";
  * The search answering an ECLI with the one decision that carries it, no
  * cursor after it, and the given word on whether its scan reached the page.
  */
+type DecisionSearchResponse = PublicLawData<
+  typeof api.case.decisions.search.post
+>;
+
 const installSearch = (pageReach: SearchPageReach) => {
   globalThis.fetch = Object.assign(
     async () =>
@@ -41,9 +51,19 @@ const installSearch = (pageReach: SearchPageReach) => {
             languageAlternates: [],
             decisionDate: "2019-05-01",
             decisionType: "rozsudek",
+            decisionTypeKind: null,
             sourceUrl: null,
-            headnote: null,
+            headnote: {
+              type: TEXT_FIELD_TYPE.ABSENT,
+              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+            },
             headline: null,
+            keywords: null,
+            textWithheldReason: null,
+            textAvailability: "available",
+            citationAuthority: 0,
+            matchingPassages: 1,
+            match: "all_terms",
             anchorId: null,
             citationCount: 0,
             createdAt: "2026-01-01T00:00:00.000Z",
@@ -54,9 +74,10 @@ const installSearch = (pageReach: SearchPageReach) => {
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         pageReach,
         total: { type: "exact", count: 1 },
+        relaxedHitCount: 0,
         queryUsed: ECLI,
         warnings: [],
-      }),
+      } satisfies DecisionSearchResponse),
     { preconnect: () => undefined },
   );
 };
