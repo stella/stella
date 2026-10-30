@@ -1,9 +1,9 @@
+import { BULLMQ_QUEUE_HOSTS } from "../apps/api/src/bullmq-queue-hosts";
 import {
   DEPLOY_ENV_CONTRACT,
   DEPLOY_TASK_ADDRESSES,
   DEPLOY_WORKER_HOSTS,
 } from "../apps/api/src/deploy-env-contract";
-import { BULLMQ_QUEUE_HOSTS } from "../apps/api/src/lib/bullmq-queue-hosts";
 
 // Runs from a bare checkout in the promote job, which holds release
 // credentials: built-in modules only, so no dependency install is needed.

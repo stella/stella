@@ -465,7 +465,7 @@
       "@stll/portable-path",
       "apps/api/src/db-components.ts",
       "apps/api/src/deploy-env-contract.ts",
-      "apps/api/src/lib/bullmq-queue-hosts.ts",
+      "apps/api/src/bullmq-queue-hosts.ts",
       "scripts/**",
       ".github/workflows/**",
       ".github/actions/setup-playwright/**",

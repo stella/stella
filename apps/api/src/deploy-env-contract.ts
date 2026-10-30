@@ -1,5 +1,5 @@
+import type { BullMqWorkerHost } from "./bullmq-queue-hosts";
 import { DATABASE_COMPONENT_KEYS } from "./db-components";
-import type { BullMqWorkerHost } from "./lib/bullmq-queue-hosts";
 
 const DEPLOY_TASK = {
   api: "api",

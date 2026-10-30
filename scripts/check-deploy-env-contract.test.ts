@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { BULLMQ_QUEUE_HOSTS } from "../apps/api/src/bullmq-queue-hosts";
 import {
   DEPLOY_ENV_CONTRACT,
   DEPLOY_TASK_ADDRESSES,
   DEPLOY_WORKER_HOSTS,
 } from "../apps/api/src/deploy-env-contract";
-import { BULLMQ_QUEUE_HOSTS } from "../apps/api/src/lib/bullmq-queue-hosts";
 import { checkDeployEnvContract } from "./check-deploy-env-contract";
 import { ENV_CATALOG, ENV_OWNER, ENV_REQUIREMENT } from "./env-catalog";
 

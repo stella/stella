@@ -2,13 +2,13 @@ import { Result, TaggedError } from "better-result";
 import { Job, Queue, UnrecoverableError, Worker } from "bullmq";
 import type { JobProgress, QueueOptions, WorkerListener } from "bullmq";
 
-import type { rootDb } from "@/api/db/root";
-import { captureError } from "@/api/lib/analytics/capture";
-import { BULLMQ_QUEUE_HOSTS } from "@/api/lib/bullmq-queue-hosts";
+import { BULLMQ_QUEUE_HOSTS } from "@/api/bullmq-queue-hosts";
 import type {
   BullMqQueueName,
   BullMqWorkerHost,
-} from "@/api/lib/bullmq-queue-hosts";
+} from "@/api/bullmq-queue-hosts";
+import type { rootDb } from "@/api/db/root";
+import { captureError } from "@/api/lib/analytics/capture";
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
