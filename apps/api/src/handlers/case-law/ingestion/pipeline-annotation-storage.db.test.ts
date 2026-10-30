@@ -871,7 +871,7 @@ test.each([inlineCorpus, packedCorpus])(
     const documentId = createSafeId<"caseLawDecision">();
     const ast = sourceAst(documentId, "Decision text.");
     const first = ast.blocks.at(0);
-    if (first === undefined) {
+    if (first === undefined || first.type !== "paragraph") {
       expect.unreachable("Fixture contains a paragraph");
     }
     ast.blocks.push({ ...first, id: "p2", anchorId: "p2", role: "apparatus" });
@@ -982,13 +982,16 @@ test("a pending mirror replay removes unreadable structure while retaining store
     })
   ).unwrap();
   const block = decision.documentAst.blocks.at(0);
-  if (block === undefined) {
+  if (block === undefined || block.type !== "paragraph") {
     expect.unreachable("Fixture has a paragraph");
   }
-  const invalid = {
-    ...sourceAst(documentId, "Decision text."),
-    blocks: [block, { ...block, id: "p2", anchorId: "p2", role: "apparatus" }],
-  };
+  const invalid = sourceAst(documentId, "Decision text.");
+  invalid.blocks.push({
+    ...block,
+    id: "p2",
+    anchorId: "p2",
+    role: "apparatus",
+  });
   expect(isDocumentAst(invalid)).toBe(false);
   await db
     .update(caseLawDecisions)

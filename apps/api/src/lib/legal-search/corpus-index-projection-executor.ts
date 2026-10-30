@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { type InferOk, panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 

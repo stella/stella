@@ -20,10 +20,11 @@ test.each([null, "", " \n"])(
   (fallbackText) => {
     const prepared = prepareCorpusAst({ ast: malformed, fallbackText });
     expect(prepared.isErr()).toBe(true);
-    if (Result.isOk(prepared)) {
-      return expect.unreachable("Invalid structure without text is rejected");
+    if (prepared.isErr()) {
+      expect(prepared.error).toBeInstanceOf(StoredCorpusValidationError);
+      return;
     }
-    expect(prepared.error).toBeInstanceOf(StoredCorpusValidationError);
+    return expect.unreachable("Invalid structure without text is rejected");
   },
 );
 

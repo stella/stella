@@ -818,7 +818,44 @@ test("invalid structure without text is rejected before reservation or transfer"
   const { transferred, transfer } = recordingTransfer();
   const batch = openCorpusPackBatch({ scopedDb, transfer });
   const entry = entryFor(FIRST_DECISION_ID, " \n", settled);
-  entry.payload.ast = { version: "invalid", blocks: [] };
+  entry.payload.ast = {
+    version: 1,
+    source: {
+      system: "synthetic",
+      documentId: "synthetic",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "body",
+        anchorId: "body",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Decision text." }],
+        plainText: "Decision text.",
+      },
+      {
+        id: "late-head-matter",
+        anchorId: "late-head-matter",
+        type: "paragraph",
+        role: "apparatus",
+        inlines: [{ type: "text", text: "Publisher metadata." }],
+        plainText: "Publisher metadata.",
+      },
+    ],
+  };
+  expect(
+    v.safeParse(persistedDocumentAstSchema, entry.payload.ast).success,
+  ).toBe(false);
   const queued = batch.enqueue(entry);
   expect(queued.isErr()).toBe(true);
   if (queued.isOk()) {
