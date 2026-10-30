@@ -1411,7 +1411,9 @@ export const parsePlDecisionContent = (
       CLERK_MARK_RE.test(block.plainText) ||
       (sawTerminalSignature && CLERK_INITIALS_RE.test(block.plainText))
     ) {
-      block.role = "apparatus";
+      // The clerk's mark is printed after the decision: a publisher note,
+      // never head matter, which only precedes the body.
+      block.role = "publisher-note";
       continue;
     }
     break;
