@@ -2668,6 +2668,17 @@ export const tryLockCaseLawSitemapMonth = async ({
     })
   ).status === "locked";
 
+/** Lock and read the singleton sitemap discovery cursor in its short transaction. */
+export const lockCaseLawSitemapRefreshCursor = async (tx: ExecuteTransaction) =>
+  executedRows(
+    await tx.execute(sql`
+      SELECT last_country, last_year, last_month
+      FROM case_law_sitemap_refresh_cursor
+      WHERE slot = 0
+      FOR UPDATE
+    `),
+  );
+
 /** Lock decision rows in stable order before reading mutation preconditions. */
 export const lockCaseLawDecisionRows = async ({
   tx,

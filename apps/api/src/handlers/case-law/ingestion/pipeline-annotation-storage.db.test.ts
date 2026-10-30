@@ -15,7 +15,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CITATION_SCOPE_METADATA_KEY,
@@ -37,6 +36,7 @@ import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -131,29 +131,31 @@ test.each(["SVK", "CZE"])(
   "%s rejects invalid opinion scopes before storing their envelope",
   async (country) => {
     const documentId = createSafeId<"caseLawDecision">();
-    const failed = await Result.tryPromise({
-      try: async () =>
-        await processDecision({
-          input: plainTextIngestionResult({
-            ...input(documentId),
-            country,
-            courtId: undefined,
-            citationScopes: [
-              {
-                opinionId: "majority",
-                blockIds: ["missing-block"],
-                boundaries: "proven",
-              },
-            ],
+    const failed = (
+      await Result.tryPromise({
+        try: async () =>
+          await processDecision({
+            input: plainTextIngestionResult({
+              ...input(documentId),
+              country,
+              courtId: undefined,
+              citationScopes: [
+                {
+                  opinionId: "majority",
+                  blockIds: ["missing-block"],
+                  boundaries: "proven",
+                },
+              ],
+            }),
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-09-27T12:00:00.000Z"),
+            observationOrder: 1n,
+            corpus: inlineCorpus,
           }),
-          sourceId,
-          scopedDb,
-          observedAt: new Date("2026-09-27T12:00:00.000Z"),
-          observationOrder: 1n,
-          corpus: inlineCorpus,
-        }),
-      catch: (cause) => cause,
-    });
+        catch: (cause) => cause,
+      })
+    ).andThen((outcome) => outcome);
     if (!Result.isError(failed)) {
       expect.unreachable(
         "A missing block must reject the incoming scope envelope",
@@ -337,15 +339,17 @@ test.each([
   "persists annotated AST and verified scope through %s",
   async (_name, corpus) => {
     const documentId = createSafeId<"caseLawDecision">();
-    const outcome = await processDecision({
-      input: input(documentId),
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-09-27T12:00:00.000Z"),
-      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-      corpus,
-    });
+    const outcome = (
+      await processDecision({
+        input: input(documentId),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-09-27T12:00:00.000Z"),
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus,
+      })
+    ).unwrap();
     expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 
     const row =
@@ -414,21 +418,23 @@ test.each([
 
     if (corpus.mode === "canonical") {
       const { citationScopes: _scopes, ...withoutScopes } = input(documentId);
-      const refreshed = await processDecision({
-        input: {
-          ...withoutScopes,
-          rawHash: `raw-${documentId}-refresh`,
-          fulltext: undefined,
-          documentAst: {},
-          metadata: { refreshed: true },
-        },
-        observationOrder: 2n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-09-27T12:00:01.000Z"),
-        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-        corpus,
-      });
+      const refreshed = (
+        await processDecision({
+          input: {
+            ...withoutScopes,
+            rawHash: `raw-${documentId}-refresh`,
+            fulltext: undefined,
+            documentAst: {},
+            metadata: { refreshed: true },
+          },
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-09-27T12:00:01.000Z"),
+          refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+          corpus,
+        })
+      ).unwrap();
       expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
       const after =
         (
@@ -471,15 +477,17 @@ test("a changed document and its replay retain annotations without graph rows", 
     rawHash: `${first.rawHash}-changed`,
   });
   for (const [order, observation] of [first, changed, changed].entries()) {
-    const outcome = await processDecision({
-      input: observation,
-      observationOrder: BigInt(order + 1),
-      sourceId,
-      scopedDb,
-      observedAt: new Date(`2026-09-27T12:00:0${order}.000Z`),
-      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-      corpus: inlineCorpus,
-    });
+    const outcome = (
+      await processDecision({
+        input: observation,
+        observationOrder: BigInt(order + 1),
+        sourceId,
+        scopedDb,
+        observedAt: new Date(`2026-09-27T12:00:0${order}.000Z`),
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus: inlineCorpus,
+      })
+    ).unwrap();
     expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   }
 
@@ -522,15 +530,17 @@ test("a changed document and its replay retain annotations without graph rows", 
 test("a metadata-only refresh preserves the stored AST and its scope envelope", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const first = input(documentId);
-  const initial = await processDecision({
-    input: first,
-    observationOrder: 1n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-27T12:00:00.000Z"),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus: inlineCorpus,
-  });
+  const initial = (
+    await processDecision({
+      input: first,
+      observationOrder: 1n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-27T12:00:00.000Z"),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   expect(initial.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   const before =
     (
@@ -545,21 +555,23 @@ test("a metadata-only refresh preserves the stored AST and its scope envelope", 
     ).at(0) ?? expect.unreachable();
 
   const { citationScopes: _scopes, ...withoutScopes } = first;
-  const refreshed = await processDecision({
-    input: {
-      ...withoutScopes,
-      rawHash: `${first.rawHash}-refresh`,
-      fulltext: undefined,
-      documentAst: {},
-      metadata: { refreshed: true },
-    },
-    observationOrder: 2n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-27T12:00:01.000Z"),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus: inlineCorpus,
-  });
+  const refreshed = (
+    await processDecision({
+      input: {
+        ...withoutScopes,
+        rawHash: `${first.rawHash}-refresh`,
+        fulltext: undefined,
+        documentAst: {},
+        metadata: { refreshed: true },
+      },
+      observationOrder: 2n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-27T12:00:01.000Z"),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   const after =
     (
@@ -593,15 +605,17 @@ test("a metadata-only refresh preserves the stored AST and its scope envelope", 
 test("a metadata-only refresh rejects a stored scope whose AST hash is stale", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const first = input(documentId);
-  await processDecision({
-    input: first,
-    observationOrder: 1n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-27T12:00:00.000Z"),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus: inlineCorpus,
-  });
+  (
+    await processDecision({
+      input: first,
+      observationOrder: 1n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-27T12:00:00.000Z"),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   const before =
     (
       await db
@@ -645,7 +659,7 @@ test("a metadata-only refresh rejects a stored scope whose AST hash is stale", a
     refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
     corpus: inlineCorpus,
   }).then(
-    () => null,
+    (outcome) => (outcome.isErr() ? outcome.error : null),
     (error: unknown) => error,
   );
   expect(rejection).toMatchObject({
@@ -671,15 +685,17 @@ test("a metadata refresh retries when a full document wins before the row lock",
     fulltext: undefined,
     documentAst: {},
   };
-  await processDecision({
-    input: listing,
-    observationOrder: 1n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-27T12:00:00.000Z"),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus: inlineCorpus,
-  });
+  (
+    await processDecision({
+      input: listing,
+      observationOrder: 1n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-27T12:00:00.000Z"),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   const stored =
     (
       await db
@@ -687,7 +703,7 @@ test("a metadata refresh retries when a full document wins before the row lock",
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.sourceDocumentId, documentId))
     ).at(0) ?? expect.unreachable();
-  const sanitized = sanitizeResult(full);
+  const sanitized = sanitizeResult(full).unwrap();
   if (!isDocumentAst(sanitized.documentAst)) {
     throw new Error("Winner fixture must have a sanitized AST");
   }
@@ -715,19 +731,21 @@ test("a metadata refresh retries when a full document wins before the row lock",
       .where(eq(caseLawDecisions.id, stored.id));
   });
 
-  const refreshed = await processDecision({
-    input: {
-      ...listing,
-      rawHash: `${full.rawHash}-refresh`,
-      metadata: { refreshed: true },
-    },
-    observationOrder: 2n,
-    sourceId,
-    scopedDb: racing,
-    observedAt: new Date("2026-09-27T12:00:01.000Z"),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus: inlineCorpus,
-  });
+  const refreshed = (
+    await processDecision({
+      input: {
+        ...listing,
+        rawHash: `${full.rawHash}-refresh`,
+        metadata: { refreshed: true },
+      },
+      observationOrder: 2n,
+      sourceId,
+      scopedDb: racing,
+      observedAt: new Date("2026-09-27T12:00:01.000Z"),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   expect(published).toBe(true);
   expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   const after =
@@ -758,15 +776,17 @@ test("a metadata refresh retries when a full document wins before the row lock",
 test("a metadata refresh retries when a document wins before the scope read", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const first = input(documentId);
-  await processDecision({
-    input: first,
-    observationOrder: 1n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-27T12:00:00.000Z"),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus: inlineCorpus,
-  });
+  (
+    await processDecision({
+      input: first,
+      observationOrder: 1n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-27T12:00:00.000Z"),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   const stored =
     (
       await db
@@ -778,7 +798,7 @@ test("a metadata refresh retries when a document wins before the scope read", as
         .where(eq(caseLawDecisions.sourceDocumentId, documentId))
     ).at(0) ?? expect.unreachable();
   const winning = input(documentId, `${sourceText} See 410 U.S. 113.`);
-  const sanitized = sanitizeResult(winning);
+  const sanitized = sanitizeResult(winning).unwrap();
   if (!isDocumentAst(sanitized.documentAst)) {
     throw new Error("Winner fixture must have a sanitized AST");
   }
@@ -809,21 +829,23 @@ test("a metadata refresh retries when a document wins before the scope read", as
       .where(eq(caseLawDecisions.id, stored.id));
   });
   const { citationScopes: _scopes, ...withoutScopes } = first;
-  const refreshed = await processDecision({
-    input: {
-      ...withoutScopes,
-      rawHash: `${first.rawHash}-refresh`,
-      fulltext: undefined,
-      documentAst: {},
-      metadata: { refreshed: true },
-    },
-    observationOrder: 2n,
-    sourceId,
-    scopedDb: racing,
-    observedAt: new Date("2026-09-27T12:00:01.000Z"),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus: inlineCorpus,
-  });
+  const refreshed = (
+    await processDecision({
+      input: {
+        ...withoutScopes,
+        rawHash: `${first.rawHash}-refresh`,
+        fulltext: undefined,
+        documentAst: {},
+        metadata: { refreshed: true },
+      },
+      observationOrder: 2n,
+      sourceId,
+      scopedDb: racing,
+      observedAt: new Date("2026-09-27T12:00:01.000Z"),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   expect(published).toBe(true);
   expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   const after =
@@ -849,24 +871,27 @@ test.each([inlineCorpus, packedCorpus])(
     const documentId = createSafeId<"caseLawDecision">();
     const ast = sourceAst(documentId, "Decision text.");
     const first = ast.blocks.at(0);
-    if (first === undefined) {
+    if (first?.type !== "paragraph") {
       expect.unreachable("Fixture contains a paragraph");
     }
-    ast.blocks.push({ ...first, id: "p2" });
+    ast.blocks.push({ ...first, id: "p2", anchorId: "p2", role: "apparatus" });
+    expect(isDocumentAst(ast)).toBe(false);
     const report = spyOn(logger, "error");
     try {
-      const outcome = await processDecision({
-        input: plainTextIngestionResult({
-          ...input(documentId, "Decision text."),
-          parserVersion: 37,
-          documentAst: ast,
-        }),
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-10-26T10:00:00Z"),
-        observationOrder: 1n,
-        corpus,
-      });
+      const outcome = (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...input(documentId, "Decision text."),
+            parserVersion: 37,
+            documentAst: ast,
+          }),
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-10-26T10:00:00Z"),
+          observationOrder: 1n,
+          corpus,
+        })
+      ).unwrap();
       expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
       expect(report).toHaveBeenCalledWith(
         "case_law.ingestion.ast_schema_rejected",
@@ -874,7 +899,7 @@ test.each([inlineCorpus, packedCorpus])(
           source: "test",
           parserVersion: 37,
           checks: expect.arrayContaining([
-            "Block ids and anchorIds must be unique",
+            "Head matter must precede the decision body",
           ]),
           "error.type": "IngestedAstRejectedError",
         }),
@@ -924,14 +949,16 @@ test.each([inlineCorpus, packedCorpus])(
 test("the pipeline stores a reader-valid AST unchanged", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const decision = input(documentId, "Decision text.");
-  await processDecision({
-    input: decision,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-10-26T10:00:00Z"),
-    observationOrder: 1n,
-    corpus: inlineCorpus,
-  });
+  (
+    await processDecision({
+      input: decision,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-10-26T10:00:00Z"),
+      observationOrder: 1n,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   const row = (
     await db
       .select()
@@ -944,22 +971,28 @@ test("the pipeline stores a reader-valid AST unchanged", async () => {
 test("a pending mirror replay removes unreadable structure while retaining stored text", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const decision = input(documentId, "Decision text.");
-  await processDecision({
-    input: decision,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-10-26T10:00:00Z"),
-    observationOrder: 1n,
-    corpus: inlineCorpus,
-  });
+  (
+    await processDecision({
+      input: decision,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-10-26T10:00:00Z"),
+      observationOrder: 1n,
+      corpus: inlineCorpus,
+    })
+  ).unwrap();
   const block = decision.documentAst.blocks.at(0);
-  if (block === undefined) {
+  if (block?.type !== "paragraph") {
     expect.unreachable("Fixture has a paragraph");
   }
-  const invalid = {
-    ...sourceAst(documentId, "Decision text."),
-    blocks: [block, { ...block, id: "p2" }],
-  };
+  const invalid = sourceAst(documentId, "Decision text.");
+  invalid.blocks.push({
+    ...block,
+    id: "p2",
+    anchorId: "p2",
+    role: "apparatus",
+  });
+  expect(isDocumentAst(invalid)).toBe(false);
   await db
     .update(caseLawDecisions)
     .set({
@@ -968,21 +1001,23 @@ test("a pending mirror replay removes unreadable structure while retaining store
       parserVersion: 37,
     })
     .where(eq(caseLawDecisions.sourceDocumentId, documentId));
-  await processDecision({
-    input: plainTextIngestionResult({
-      ...decision,
-      rawHash: `refresh-${documentId}`,
-      fulltext: undefined,
-      documentAst: {},
-      citationScopes: undefined,
-    }),
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-10-26T10:01:00Z"),
-    observationOrder: 2n,
-    corpus: inlineCorpus,
-    refresh: DECISION_REFRESH.ALWAYS,
-  });
+  (
+    await processDecision({
+      input: plainTextIngestionResult({
+        ...decision,
+        rawHash: `refresh-${documentId}`,
+        fulltext: undefined,
+        documentAst: {},
+        citationScopes: undefined,
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-10-26T10:01:00Z"),
+      observationOrder: 2n,
+      corpus: inlineCorpus,
+      refresh: DECISION_REFRESH.ALWAYS,
+    })
+  ).unwrap();
   const row = (
     await db
       .select()
@@ -991,21 +1026,23 @@ test("a pending mirror replay removes unreadable structure while retaining store
   ).at(0);
   expect(row?.fulltext).toBe("Decision text.");
   expect(row?.documentAst).toEqual({});
-  const refreshed = await processDecision({
-    input: plainTextIngestionResult({
-      ...decision,
-      rawHash: `second-refresh-${documentId}`,
-      fulltext: undefined,
-      documentAst: {},
-      citationScopes: undefined,
-    }),
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-10-26T10:02:00Z"),
-    observationOrder: 3n,
-    corpus: inlineCorpus,
-    refresh: DECISION_REFRESH.ALWAYS,
-  });
+  const refreshed = (
+    await processDecision({
+      input: plainTextIngestionResult({
+        ...decision,
+        rawHash: `second-refresh-${documentId}`,
+        fulltext: undefined,
+        documentAst: {},
+        citationScopes: undefined,
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-10-26T10:02:00Z"),
+      observationOrder: 3n,
+      corpus: inlineCorpus,
+      refresh: DECISION_REFRESH.ALWAYS,
+    })
+  ).unwrap();
   expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   expect(row?.metadata?.[CITATION_SCOPE_METADATA_KEY]).toBeUndefined();
   const afterRefresh = (

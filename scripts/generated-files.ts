@@ -215,6 +215,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/infosoud/client.ts",
     "apps/api/src/lib/infosoud/result.ts",
     "apps/api/src/lib/lists/column-error-codes.ts",
+    "apps/api/src/lib/lists/review-decision-maps.ts",
+    "apps/api/src/lib/lists/source-decision-history.ts",
     "apps/api/src/lib/lists/source-locator.ts",
     "apps/api/src/lib/lists/verification/*",
     "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts",

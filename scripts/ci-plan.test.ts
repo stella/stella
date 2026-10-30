@@ -2476,7 +2476,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
           expect(selected).toEqual(lintPlatforms);
           expect(selected.at(0)).toEqual({
             os: "macos",
-            runner: "macos-14",
+            runner: "macos-15",
             target: "aarch64-apple-darwin",
           });
           expect(selected.at(1)).toEqual({

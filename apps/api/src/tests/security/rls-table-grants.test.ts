@@ -161,6 +161,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
   "chat_thread_names",
   "chat_message_revisions",
   "document_review_finding_decisions",
+  "legal_list_item_source_decisions",
 ]);
 
 // Audit trails the request role may only append to: INSERT, nothing else.
@@ -219,6 +220,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
   "case_law_sitemap_changes",
+  "case_law_sitemap_drain_progress",
+  "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
   // Removal generations are owner/ingestion-only, beside shard staging counts.
   "case_law_sitemap_country_generations",
