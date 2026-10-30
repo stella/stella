@@ -1565,12 +1565,15 @@ jobs:
           repositories: stella-infra
           permission-contents: read
 
+      # Run inside the main checkout: Bun reads bunfig.toml (preloads) from its
+      # working directory, and the release tree must never configure the check.
       - name: Refuse a deploy whose queues have no consumer container
         timeout-minutes: 5
+        working-directory: .trusted-main
         env:
           GH_TOKEN: ${{ steps.contract-token.outputs.token }}
           DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY: ${{ github.repository_owner }}/stella-infra
-        run: bun --no-install .trusted-main/scripts/check-deploy-env-contract.ts
+        run: bun --no-install --no-env-file scripts/check-deploy-env-contract.ts
 
       - name: Promote to production
         # Waits for the infra promote, online migrations included: only the
