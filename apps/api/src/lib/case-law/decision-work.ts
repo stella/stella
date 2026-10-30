@@ -56,6 +56,7 @@ import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
+import { outerColumnReference } from "@/api/lib/db/outer-column-reference";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -313,8 +314,14 @@ type CanonicalWorkCitationOptions = {
 export const canonicalWorkCitationSql = ({
   direction,
   workIds,
-  row,
+  row: inputRow,
 }: CanonicalWorkCitationOptions): SQL<boolean> => {
+  const row = {
+    citingDecisionId: outerColumnReference(inputRow.citingDecisionId),
+    citedDecisionId: outerColumnReference(inputRow.citedDecisionId),
+    kind: outerColumnReference(inputRow.kind),
+    citationText: outerColumnReference(inputRow.citationText),
+  } satisfies CitationIdentityColumns;
   switch (direction) {
     case "incoming":
       return sql<boolean>`NOT EXISTS (

@@ -1610,6 +1610,16 @@ test("citation digests apply each printing manifestation's source policy", async
   ]);
   await db.insert(caseLawCitations).values([
     {
+      citingDecisionId: allowedId,
+      citationText: "allowed-reference",
+      kind: CITATION_KIND.PRECEDENT,
+    },
+    {
+      citingDecisionId: restrictedId,
+      citationText: "allowed-reference",
+      kind: CITATION_KIND.PRECEDENT,
+    },
+    {
       citingDecisionId: restrictedId,
       citationText: "restricted-reference",
       kind: CITATION_KIND.PRECEDENT,
@@ -1620,7 +1630,15 @@ test("citation digests apply each printing manifestation's source policy", async
     decisionId: allowedId,
     surface: "search",
   });
-  expect(digest?.cites).toHaveLength(1);
+  expect(digest?.cites).toHaveLength(2);
+  expect(digest?.cites).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        citationText: "allowed-reference",
+        textWithheldReason: null,
+      }),
+    ]),
+  );
   expect(digest?.cites).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
