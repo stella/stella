@@ -28,6 +28,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "audit_logs.changes",
   "cell_metadata.metadata",
   "chat_messages.content",
+  "request_idempotency_receipts.response_body",
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
   "chat_run_logs.reference_summary",
@@ -503,6 +504,10 @@ const RETAINED_MEMBER_COLUMNS = {
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
   "billing_draft_user_settings.user_id":
     "Organization-wide consent and preferences remain for the person's other matters; organization removal deletes them.",
+  "request_idempotency_receipts.user_id":
+    "Organization-owned request coordination: retain through the bounded replay window so retries in other matters remain single-execution. Replay still passes the route's current authorization; organization removal clears the rows and account deletion cascades.",
+  "request_idempotency_receipts.response_body":
+    "Historical response cache, not membership or write authority. Current route authorization gates replay; organization removal erases the cache, while retention bounds matter-removal history without reopening creates in other matters.",
   "mcp_web_handoff.user_id":
     "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":
