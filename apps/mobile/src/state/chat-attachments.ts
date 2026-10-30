@@ -121,7 +121,7 @@ export const admitPickedFiles = ({
 
 /** The bytes a base64 payload holds. */
 export const base64Bytes = (payload: string): number => {
-  const padding = payload.length - payload.replace(/=+$/u, "").length;
+  const padding = payload.endsWith("==") ? 2 : Number(payload.endsWith("="));
   return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
 };
 

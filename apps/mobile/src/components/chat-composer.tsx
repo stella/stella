@@ -166,48 +166,29 @@ function useNoticeText(
 ): string | undefined {
   const t = useTranslations("chat");
   const scanT = useTranslations("scan");
-  switch (notice) {
-    case "unsupported": {
-      return t("unsupportedFileType");
-    }
-    case "too-large": {
-      return t("fileTooLarge", {
+  if (notice !== undefined) {
+    const noticeText = {
+      unsupported: t("unsupportedFileType"),
+      "too-large": t("fileTooLarge", {
         maxSize: scanT("megabytes", { size: CHAT_CONTEXT_FILE_MAX_MEGABYTES }),
-      });
-    }
-    case "too-many": {
-      return t("maxAttachmentsReached", { count: CHAT_FILES_PER_MESSAGE });
-    }
-    case "read-failed": {
-      return t("uploadFailed");
-    }
-    case "pick-failed": {
-      return t("pickFailed");
-    }
-    case "scan-failed": {
-      return scanT("failed");
-    }
-    case "pdf-failed": {
-      return scanT("pdfFailed");
-    }
-    case undefined: {
-      break;
-    }
+      }),
+      "too-many": t("maxAttachmentsReached", { count: CHAT_FILES_PER_MESSAGE }),
+      "read-failed": t("uploadFailed"),
+      "pick-failed": t("pickFailed"),
+      "scan-failed": scanT("failed"),
+      "pdf-failed": scanT("pdfFailed"),
+    } as const satisfies Record<AttachmentNotice, string>;
+    return noticeText[notice];
   }
-  switch (sendError) {
-    case "failed": {
-      return t("sendFailed");
-    }
-    case "file-refused": {
-      return t("sendFileRefused");
-    }
-    case "file-not-anonymizable": {
-      return t("sendFileNotAnonymizable");
-    }
-    case undefined: {
-      return undefined;
-    }
+  if (sendError !== undefined) {
+    const sendErrorText = {
+      failed: t("sendFailed"),
+      "file-refused": t("sendFileRefused"),
+      "file-not-anonymizable": t("sendFileNotAnonymizable"),
+    } as const satisfies Record<SendRefusal, string>;
+    return sendErrorText[sendError];
   }
+  return undefined;
 }
 
 /** A file in the composer: its size once read, or where it stands. */

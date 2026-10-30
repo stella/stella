@@ -5,6 +5,7 @@ import { Text } from "@stll/ui/text";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { MarkdownView } from "@/components/markdown-view";
+import type { SentFile } from "@/state/chat-attachments";
 import type { ChatEntry } from "@/state/chat-messages";
 
 /**
@@ -25,11 +26,10 @@ export const ChatMessage = ({
   if (entry.role === "user") {
     return (
       <View className="items-end gap-1.5">
-        {entry.files.map((file, index) => (
+        {keyedFiles(entry.files).map(({ file, key }) => (
           <ChatAttachmentChip
             status={uploading ? "busy" : "idle"}
-            // oxlint-disable-next-line react/no-array-index-key -- two files may share a name; a message's files never reorder.
-            key={`${index}:${file.name}`}
+            key={key}
             mimeType={file.mimeType}
             name={file.name}
           />
@@ -59,3 +59,13 @@ export const ChatMessage = ({
     </View>
   );
 };
+
+/** Each file with a key that tells apart two files of the same name. */
+function keyedFiles(files: readonly SentFile[]) {
+  const seen = new Map<string, number>();
+  return files.map((file) => {
+    const earlier = seen.get(file.name) ?? 0;
+    seen.set(file.name, earlier + 1);
+    return { file, key: `${file.name}#${String(earlier)}` };
+  });
+}
