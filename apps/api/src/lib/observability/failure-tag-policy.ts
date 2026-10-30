@@ -270,6 +270,7 @@ export const TAGGED_FAILURE_REASON = {
   LegislationCorpusReadError: "tagged_failure",
   LegislationFacetsError: "tagged_failure",
   LegislationShelfError: "tagged_failure",
+  LinkRecallPayloadError: "tagged_failure",
   ListReplacementError: "tagged_failure",
   ListVerificationAccessRevokedError: "tagged_failure",
   ListVerificationReconcileError: "tagged_failure",
