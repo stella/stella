@@ -132,6 +132,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/case/decisions/:decisionId/summary": "crud",
   "GET /v1/case/decisions/by-slug/:slug": "crud",
   "GET /v1/case/decisions/facets": "crud",
+  "GET /v1/case/decisions/filter-validation": "crud",
   "GET /v1/case/decisions/latest": "crud",
   "GET /v1/case/decisions/status": "crud",
   "GET /v1/case/judges/:judgeId/portrait": "crud",
