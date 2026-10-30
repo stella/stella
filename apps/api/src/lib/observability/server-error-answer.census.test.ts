@@ -78,6 +78,10 @@ const COMPUTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     PUBLIC_COUNTRY_UNAVAILABLE_STATUS:
       "the contract's country refusal, a 404 (PUBLIC_COUNTRY_UNAVAILABLE_STATUS)",
   },
+  "src/lib/idempotency/request-receipts.ts": {
+    "claim.status":
+      "replays a stored receipt; only 2xx answers are completed as receipts",
+  },
   "src/lib/mcp-upstream/connections.ts": {
     "response.value.status":
       "re-wraps a connector's upstream answer the caller reads, never served",
