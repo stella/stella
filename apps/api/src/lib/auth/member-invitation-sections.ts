@@ -13,15 +13,21 @@ const FULL_ORGANIZATION_PATH = "/organization/get-full-organization";
 
 // Better Auth remains the owner of membership authorization and the read.
 // Its untyped after-hook response is narrowed before applying the shared rule.
-const filterMemberInvitations = (returned: unknown, now: Date) => {
+type FilteredInvitations =
+  { type: "unchanged" } | { type: "filtered"; body: Record<string, unknown> };
+
+const filterMemberInvitations = (
+  returned: unknown,
+  now: Date,
+): FilteredInvitations => {
   if (!isRecord(returned) || !("invitations" in returned)) {
-    return returned;
+    return { type: "unchanged" };
   }
   const invitations = returned["invitations"];
   if (!isUnknownArray(invitations)) {
     return panic("Full organization response must contain invitations");
   }
-  return {
+  const body: Record<string, unknown> = {
     ...returned,
     invitations: invitations.filter((invitation) => {
       if (!isRecord(invitation)) {
@@ -40,6 +46,7 @@ const filterMemberInvitations = (returned: unknown, now: Date) => {
       );
     }),
   };
+  return { type: "filtered", body };
 };
 
 export const createMemberInvitationSectionsPlugin = (
@@ -53,12 +60,20 @@ export const createMemberInvitationSectionsPlugin = (
         {
           matcher: ({ path }) => path === FULL_ORGANIZATION_PATH,
           handler: middleware(async (ctx) => {
-            const returned: unknown = ctx.context.returned;
-            const filtered = filterMemberInvitations(returned, now());
-            if (filtered === returned) {
-              return;
+            const filtered = filterMemberInvitations(
+              ctx.context.returned,
+              now(),
+            );
+            switch (filtered.type) {
+              case "unchanged":
+                return;
+              case "filtered":
+                return await ctx.json(filtered.body);
+              default: {
+                filtered satisfies never;
+                return panic("Unhandled invitation filter result");
+              }
             }
-            return await ctx.json(filtered);
           }),
         },
       ],
