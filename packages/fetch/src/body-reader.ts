@@ -56,6 +56,10 @@ export async function* iterateBodyWithIdleDeadline(
   let byteLength = 0;
   try {
     for (;;) {
+      if (signal?.aborted === true) {
+        exitReason = signal.reason;
+      }
+      signal?.throwIfAborted();
       const deadline = new AbortController();
       const timeoutError = new DOMException(
         "Response body stalled",
