@@ -15,6 +15,7 @@ import transitionInvoice from "@/api/handlers/invoices/transition";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { recordInvoicePayment } from "@/api/lib/billing/invoice-payments";
+import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -289,7 +290,14 @@ test("Slovak persistence converges when the seed is replayed", async () => {
     .update(timeEntries)
     .set({ status: "approved", approvedByUserId: ids.userA1, approvedAt: now })
     .where(eq(timeEntries.id, submitted.id));
-  const later = buildSlovakFirmSeed(new Date("2026-11-06T10:15:00Z"));
+  const later = buildSlovakFirmSeed(new Date("2027-02-05T10:15:00Z"));
+  const discardedInvoice = later.invoiceRows.find(
+    ({ status }) => status === "sent",
+  );
+  if (discardedInvoice === undefined || discardedInvoice.finalizedAt === null) {
+    return panic("Slovak replay fixture requires an issued invoice");
+  }
+  expect(discardedInvoice.invoiceNumber).not.toBe(originalIssued.invoiceNumber);
   expect(later.today).not.toBe(untouched.dateWorked);
   await testDb.transaction(async (tx) =>
     persistSlovakFirmSeed(tx, { fixture: later, primaryUserId: ids.userA1 }),
@@ -311,6 +319,24 @@ test("Slovak persistence converges when the seed is replayed", async () => {
   expect(retainedInvoice?.invoiceDate).toBe(originalIssued.invoiceDate);
   expect(retainedInvoice?.finalizedAt).toEqual(originalIssued.finalizedAt);
   expect(retainedInvoice?.invoiceNumber).toBe(originalIssued.invoiceNumber);
+  const allocations = await testDb.query.numberSeriesAllocations.findMany({
+    where: { organizationId: { eq: fixture.organizationId } },
+  });
+  expect(allocations.map(({ number }) => number)).toEqual([
+    originalIssued.invoiceNumber,
+  ]);
+  expect(allocations.at(0)?.issuedAt).toEqual(originalIssued.finalizedAt);
+  const counters = await testDb.query.numberSeriesCounters.findMany({
+    where: { organizationId: { eq: fixture.organizationId } },
+  });
+  expect(counters).toHaveLength(1);
+  expect(counters.map(({ periodKey }) => periodKey)).not.toContain(
+    toNumberPatternScopeKey({
+      pattern: "SK-{YYYY}-{SEQ}",
+      now: discardedInvoice.finalizedAt,
+      timeZone: "UTC",
+    }),
+  );
   const draft = fixture.invoiceRows.find(({ status }) => status === "draft");
   expect(draft).toBeDefined();
   if (

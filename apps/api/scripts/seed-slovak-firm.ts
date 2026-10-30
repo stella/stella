@@ -195,15 +195,23 @@ const persistSlovakBillingRecords = async (
   }
   for (const invoice of fixture.invoiceRows) {
     await tx.insert(invoices).values(invoice).onConflictDoNothing();
-    if (invoice.invoiceNumber && invoice.finalizedAt) {
+    const persistedInvoice =
+      (await tx.query.invoices.findFirst({
+        where: {
+          id: { eq: invoice.id },
+          organizationId: { eq: organizationId },
+        },
+        columns: { invoiceNumber: true, finalizedAt: true },
+      })) ?? panic("Missing persisted Slovak seed invoice");
+    if (persistedInvoice.invoiceNumber && persistedInvoice.finalizedAt) {
       await tx
         .insert(numberSeriesAllocations)
         .values({
           organizationId,
           seriesId,
           documentType: "invoice",
-          number: invoice.invoiceNumber,
-          issuedAt: invoice.finalizedAt,
+          number: persistedInvoice.invoiceNumber,
+          issuedAt: persistedInvoice.finalizedAt,
         })
         .onConflictDoNothing();
       await tx
@@ -213,7 +221,7 @@ const persistSlovakBillingRecords = async (
           seriesId,
           periodKey: toNumberPatternScopeKey({
             pattern: "SK-{YYYY}-{SEQ}",
-            now: invoice.finalizedAt,
+            now: persistedInvoice.finalizedAt,
             timeZone: "UTC",
           }),
           lastValue: 1,
