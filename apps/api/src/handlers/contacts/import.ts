@@ -8,6 +8,7 @@ import {
   contacts,
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
+import { mintContactId } from "@/api/handlers/contacts/contact-id";
 import {
   contactImportSkipReason,
   importedTaxIdentifiers,
@@ -35,12 +36,11 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-// The reviewed row plus the caller-generated id. The field set itself lives in
-// `contact-import-schema.ts`, shared with the validate handler.
-const importContactRowSchema = v.intersect([
-  v.object({ id: resourceIdSchema("contact") }),
-  contactImportCandidateSchema,
-]);
+// The field set lives in `contact-import-schema.ts`, shared with the validate
+// handler. The strict boundary rejects caller-selected persisted identifiers.
+export const importContactRowSchema = v.strictObject(
+  contactImportCandidateSchema.entries,
+);
 
 const importContactsBodySchema = v.object({
   importRequestId: resourceIdSchema("contactImportRequest"),
@@ -60,6 +60,15 @@ type ValidatedImportRow = {
   /** Normalized digits under `br_cpf_cnpj`; null when no scheme dedupes. */
   dedupeTaxId: string | null;
 };
+
+export const contactIdCollisionCondition = (
+  organizationId: SafeId<"organization">,
+  candidateIds: SafeId<"contact">[],
+) =>
+  and(
+    eq(contacts.organizationId, organizationId),
+    inArray(contacts.id, candidateIds),
+  ) ?? panic("Contact collision condition is empty");
 
 const config = {
   contract: "patch",
@@ -109,15 +118,14 @@ const importContacts = createSafeRootHandler(
 
         const validatedRows: ValidatedImportRow[] = [];
         const resultByIndex = new Map<number, ImportResultRow>();
-        const seenContactIds = new Set<SafeId<"contact">>();
         const seenTaxIds = new Set<string>();
 
         const validatedBatch = validateContactImportCandidates({
-          candidates: body.rows.map(({ id: _, ...candidate }) => candidate),
+          candidates: body.rows,
           rowNumbers: body.rows.map((_, index) => index + 1),
           taxIdScheme: body.taxIdScheme,
         });
-        for (const [index, { id }] of body.rows.entries()) {
+        for (const [index] of body.rows.entries()) {
           const { contact, issues } =
             validatedBatch.at(index) ??
             panic("Contact import validation omitted a row");
@@ -126,14 +134,6 @@ const importContacts = createSafeRootHandler(
               index,
               status: "skipped",
               reason: contactImportSkipReason(issues),
-            });
-            continue;
-          }
-          if (seenContactIds.has(id)) {
-            resultByIndex.set(index, {
-              index,
-              status: "skipped",
-              reason: "duplicate_contact_id",
             });
             continue;
           }
@@ -150,11 +150,15 @@ const importContacts = createSafeRootHandler(
             continue;
           }
 
-          seenContactIds.add(id);
           if (dedupeTaxId !== null) {
             seenTaxIds.add(dedupeTaxId);
           }
-          validatedRows.push({ index, id, contact, dedupeTaxId });
+          validatedRows.push({
+            index,
+            id: mintContactId(),
+            contact,
+            dedupeTaxId,
+          });
         }
 
         const candidateIds = validatedRows.map(({ id }) => id);
@@ -164,7 +168,9 @@ const importContacts = createSafeRootHandler(
             : await tx
                 .select({ id: contacts.id })
                 .from(contacts)
-                .where(inArray(contacts.id, candidateIds));
+                .where(
+                  contactIdCollisionCondition(organizationId, candidateIds),
+                );
         const existingIdSet = new Set(existingIds.map(({ id }) => id));
 
         const candidateTaxIds = validatedRows.flatMap(({ dedupeTaxId }) =>

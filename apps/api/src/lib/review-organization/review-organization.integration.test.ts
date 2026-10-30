@@ -323,7 +323,6 @@ beforeAll(async () => {
       userId: otherUserId,
       recordAuditEvent: foreign.recorderFor(null),
       body: {
-        id: fixture.foreignContactId,
         type: "organization",
         displayName: "Foreign client",
         organizationName: "Foreign client",
@@ -331,6 +330,9 @@ beforeAll(async () => {
     }),
   );
   expect(Result.isOk(contact)).toBe(true);
+  if (Result.isOk(contact)) {
+    fixture.foreignContactId = contact.value.id;
+  }
   const matter = await Result.gen(() =>
     createWorkspaceHandler({
       userEmail: OTHER_EMAIL,
@@ -903,7 +905,7 @@ describe("review organization seed and reset", () => {
 
   test("reset removes what the reviewer added, reseeds, and leaves other organizations alone", async () => {
     const actor = actorFor(fixture.reviewOrgId, fixture.reviewUserId);
-    const extraContactId = createSafeId<"contact">();
+    let extraContactId = createSafeId<"contact">();
     const extraMatterId = createSafeId<"workspace">();
     const contact = await Result.gen(() =>
       createContactHandler({
@@ -912,7 +914,6 @@ describe("review organization seed and reset", () => {
         userId: fixture.reviewUserId,
         recordAuditEvent: actor.recorderFor(null),
         body: {
-          id: extraContactId,
           type: "person",
           displayName: "Added by reviewer",
           firstName: "Added",
@@ -921,6 +922,9 @@ describe("review organization seed and reset", () => {
       }),
     );
     expect(Result.isOk(contact)).toBe(true);
+    if (Result.isOk(contact)) {
+      extraContactId = contact.value.id;
+    }
     const matter = await Result.gen(() =>
       createWorkspaceHandler({
         userEmail: REVIEW_EMAIL,
