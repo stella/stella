@@ -121,8 +121,15 @@ export const admitPickedFiles = ({
 
 /** The bytes a base64 payload holds. */
 export const base64Bytes = (payload: string): number => {
-  const padding = payload.endsWith("==") ? 2 : Number(payload.endsWith("="));
-  return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
+  const whole = Math.floor((payload.length * 3) / 4);
+  // Each trailing "=" stands for one byte the last group does not carry.
+  if (payload.endsWith("==")) {
+    return Math.max(0, whole - 2);
+  }
+  if (payload.endsWith("=")) {
+    return Math.max(0, whole - 1);
+  }
+  return whole;
 };
 
 /**
