@@ -25,6 +25,7 @@ import { Separator } from "@stll/ui/separator";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -348,11 +349,11 @@ const GeneralPane = ({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
+            <TruncatedText className="text-sm font-medium" render={<p />}>
               {linkedAccount?.name?.trim() ||
                 linkedAccount?.email ||
                 t("stellaDesktop")}
-            </p>
+            </TruncatedText>
           </div>
           <span
             className={cn(

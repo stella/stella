@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -45,21 +46,28 @@ export const ClipboardCardPreview = ({
   const rendersHtml =
     item.type === "formattedText" && format === "original" && !query;
   const previewClassName = cn(
-    "text-foreground line-clamp-8 text-sm leading-5 text-pretty wrap-break-word",
+    "text-foreground text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
     rendersHtml
       ? "clipboard-html [&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
       : "whitespace-pre-wrap tab-4",
   );
+  // The card opens the whole clip, so a clamped preview shows no hint.
   if (rendersHtml) {
     return (
-      <div
+      <TruncatedText
         className={previewClassName}
-        dangerouslySetInnerHTML={{
-          // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
-          __html: item.html,
-        }}
-        dir="auto"
+        hint={false}
+        lines={8}
+        render={
+          <div
+            dangerouslySetInnerHTML={{
+              // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
+              __html: item.html,
+            }}
+            dir="auto"
+          />
+        }
       />
     );
   }
@@ -67,7 +75,12 @@ export const ClipboardCardPreview = ({
     const searchPreview = clipboardSearchPreviewText(item, query);
     const highlightedText = highlightClipboardText(searchPreview.text, query);
     return (
-      <div className={previewClassName} dir="auto">
+      <TruncatedText
+        className={previewClassName}
+        hint={false}
+        lines={8}
+        render={<div dir="auto" />}
+      >
         {searchPreview.truncated ? (
           <span aria-hidden="true" className="text-muted-foreground">
             {"… "}
@@ -82,12 +95,17 @@ export const ClipboardCardPreview = ({
             <span key={segment.start}>{segment.text}</span>
           ),
         )}
-      </div>
+      </TruncatedText>
     );
   }
   return (
-    <div className={previewClassName} dir="auto">
+    <TruncatedText
+      className={previewClassName}
+      hint={false}
+      lines={8}
+      render={<div dir="auto" />}
+    >
       {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
-    </div>
+    </TruncatedText>
   );
 };

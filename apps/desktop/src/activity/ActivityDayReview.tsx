@@ -25,6 +25,7 @@ import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { DesktopMessages } from "../i18n/index";
 import { calendarDate, timedSegments } from "./activity-logic";
@@ -797,11 +798,11 @@ const Evidence = ({
               appIdentifier={identifier}
               sourceAppVisuals={snapshot.sourceAppVisuals}
             />
-            <bdi className="min-w-0 truncate">
+            <TruncatedText render={<bdi />}>
               {details.length > 0
                 ? details.slice(0, EVIDENCE_DETAIL_LIMIT).join(" · ")
                 : name}
-            </bdi>
+            </TruncatedText>
             {hidden > 0 ? (
               <Tooltip>
                 <TooltipTrigger

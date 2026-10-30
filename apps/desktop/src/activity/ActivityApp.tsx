@@ -46,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
 import type { DesktopMessages } from "../i18n/index";
@@ -707,7 +708,9 @@ const AppTotals = ({
               appIdentifier={app.identifier}
               sourceAppVisuals={sourceAppVisuals}
             />
-            <bdi className="min-w-0 flex-1 truncate text-sm">{app.name}</bdi>
+            <TruncatedText className="flex-1 text-sm" render={<bdi />}>
+              {app.name}
+            </TruncatedText>
             <span className="text-muted-foreground text-sm tabular-nums">
               {sampleDuration?.identifier === app.identifier ? (
                 <span className="inline-grid">
@@ -900,7 +903,7 @@ const ActivitySettings = ({
                     appIdentifier={app.identifier}
                     sourceAppVisuals={snapshot.sourceAppVisuals}
                   />
-                  <bdi className="truncate">{app.name}</bdi>
+                  <TruncatedText render={<bdi />}>{app.name}</TruncatedText>
                 </span>
                 <AppDetailCaptureButton
                   app={app}

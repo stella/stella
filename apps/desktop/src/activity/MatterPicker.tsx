@@ -12,6 +12,7 @@ import { MatterIcon } from "@stll/ui/matter-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 export const MatterPicker = ({
   candidates,
@@ -114,7 +115,7 @@ export const MatterPicker = ({
                 }}
               >
                 <MatterIcon matter={matter} className="size-4" />
-                <bdi className="min-w-0 truncate">{matter.name}</bdi>
+                <TruncatedText render={<bdi />}>{matter.name}</TruncatedText>
                 <span className="text-muted-foreground text-xs">
                   {matter.reference}
                 </span>
