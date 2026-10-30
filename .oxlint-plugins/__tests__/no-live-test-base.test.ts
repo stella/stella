@@ -110,3 +110,15 @@ export default createTestBasePlugin((options) => guardEnforcesLine({
     }
   });
 }
+
+test("command assertions and explicit Git stubs do not read a checkout baseline", async () => {
+  expect(
+    await lint(
+      [
+        'expect(["git", "rev-parse", "origin/main"]).toEqual(expected);',
+        'expect(calls).toContainEqual(["git", "rev-parse", "origin/main^{commit}"]);',
+        'Bun.spawnSync(["git", "rev-parse", "--verify", "--quiet", "origin/main^{commit}"], { env: { ...process.env, PATH: stubPath } });',
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});

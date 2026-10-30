@@ -1,10 +1,10 @@
 /**
  * Test baselines use treeBaseRevision, never a moving remote tip. Recognizes
- * argv arrays passed to spawners/local wrappers and git-named wrappers. A
+ * argv arrays passed to spawners, run wrappers and git-named wrappers. A
  * missing cwd means the checkout; an explicit cwd is checked only when its
  * initializer derives from import.meta or process.cwd(). Fixture directories
  * (mkdtemp, parameters, and their aliases) need no exemptions. Arbitrary shell
- * strings, interprocedural cwd forwarding and dynamically built argv are outside
+ * strings, explicit PATH overrides, interprocedural cwd forwarding and dynamically built argv are outside
  * this syntactic check.
  */
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
@@ -32,6 +32,14 @@ const CHECKOUT_PATH_CALLS = new Set([
   "URL",
 ]);
 const SPAWN_CALLS = new Set(["spawn", "spawnSync", "execFile", "execFileSync"]);
+
+const COMMAND_CALLS = new Set([
+  ...SPAWN_CALLS,
+  "run",
+  "runSync",
+  "exec",
+  "execSync",
+]);
 
 const parts = (value: unknown): string[] => {
   const node = unwrapExpression(value);
@@ -130,6 +138,27 @@ const cwdProperty = (value: unknown): AstNode | null => {
   return null;
 };
 
+// An explicit executable search path may select a fixture's Git stub.
+const overridesGitPath = (value: unknown): boolean => {
+  const node = unwrapExpression(value);
+  if (node?.type !== "ObjectExpression" || !Array.isArray(node.properties)) {
+    return false;
+  }
+  return node.properties.some((property) => {
+    if (!isAstNode(property) || getPropertyName(property.key) !== "env") {
+      return false;
+    }
+    const env = unwrapExpression(property.value);
+    return (
+      env?.type === "ObjectExpression" &&
+      Array.isArray(env.properties) &&
+      env.properties.some(
+        (entry) => isAstNode(entry) && getPropertyName(entry.key) === "PATH",
+      )
+    );
+  });
+};
+
 export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
   eslintCompatPlugin({
     meta: { name: "no-live-test-base" },
@@ -175,6 +204,9 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
               if (!enabled) {
                 return;
               }
+              if (node.arguments.some(overridesGitPath)) {
+                return;
+              }
               const argv = node.arguments.flatMap(parts);
               if (!argv.some((arg) => /^origin\/main(?:[:.^~]|$)/u.test(arg))) {
                 return;
@@ -188,6 +220,12 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
                     : null;
               const gitWrapper =
                 typeof name === "string" && /git$/iu.test(name);
+              if (
+                typeof name !== "string" ||
+                (!gitWrapper && !COMMAND_CALLS.has(name))
+              ) {
+                return;
+              }
               if (!argv.includes("git") && !gitWrapper) {
                 return;
               }
