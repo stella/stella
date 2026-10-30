@@ -70,6 +70,14 @@
 //   nested suites, but not sibling suites. A spy must be created in a
 //   `beforeEach` (never at module scope) and an enclosing `afterEach` must call
 //   `mock.restore()`: restoring a spy detaches it for the rest of the file.
+//
+// no-wait-for-under-fake-timers
+//   Testing Library's retrying queries advance Jest's fake clock by their poll
+//   interval. A test whose assertion becomes true through asynchronous work can
+//   therefore race its own application timeout. Tests drive the fake clock in
+//   `act`, then use a synchronous query/assertion. The rule follows fake-timer
+//   installation in a test callback and in enclosing `beforeEach` callbacks;
+//   an earlier real-timer restoration in the test makes later waits valid.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -972,6 +980,162 @@ const closesSharedDatabaseClient = (
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
+    "no-wait-for-under-fake-timers": {
+      meta: {
+        type: "problem",
+        messages: {
+          fakeTimerWait:
+            "Testing Library retries advance fake timers and can fire application timeouts. Drive the clock explicitly inside `act`, then assert synchronously.",
+        },
+      },
+      createOnce(context) {
+        const fakeTimerCalls: AstNode[] = [];
+        const realTimerCalls: AstNode[] = [];
+        const waits: AstNode[] = [];
+        const beforeEachCallbacks: AstNode[] = [];
+
+        const callbackOf = (node: AstNode) => {
+          const args = Array.isArray(node.arguments) ? node.arguments : [];
+          return args.find(
+            (argument): argument is AstNode =>
+              isAstNode(argument) &&
+              (argument.type === "ArrowFunctionExpression" ||
+                argument.type === "FunctionExpression"),
+          );
+        };
+        const containingFunction = (node: AstNode) => {
+          let current: unknown = node.parent;
+          while (isAstNode(current)) {
+            if (
+              current.type === "ArrowFunctionExpression" ||
+              current.type === "FunctionExpression"
+            ) {
+              return current;
+            }
+            current = current.parent;
+          }
+          return null;
+        };
+        const startsBefore = (candidate: AstNode, node: AstNode) =>
+          candidate.range[0] < node.range[0];
+        const isInside = (node: AstNode, container: AstNode) =>
+          container.range[0] <= node.range[0] &&
+          node.range[1] <= container.range[1];
+        const lastBefore = (
+          calls: readonly AstNode[],
+          node: AstNode,
+          container: AstNode,
+        ) =>
+          calls.findLast(
+            (call) => isInside(call, container) && startsBefore(call, node),
+          );
+        const startsAfter = (
+          left: AstNode | undefined,
+          right: AstNode | undefined,
+        ) =>
+          left !== undefined &&
+          (right === undefined || left.range[0] > right.range[0]);
+
+        return {
+          before() {
+            fakeTimerCalls.length = 0;
+            realTimerCalls.length = 0;
+            waits.length = 0;
+            beforeEachCallbacks.length = 0;
+            return /(?:useFakeTimers|waitFor|findBy)/u.test(
+              context.sourceCode.text,
+            );
+          },
+          CallExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
+            const property = memberPropertyName(node.callee);
+            const calleeName = getPropertyName(node.callee) ?? property;
+            if (property === "useFakeTimers") {
+              fakeTimerCalls.push(node);
+              return;
+            }
+            if (
+              property === "useRealTimers" ||
+              calleeName === "restoreRealTimers"
+            ) {
+              realTimerCalls.push(node);
+              return;
+            }
+            if (calleeName === "beforeEach") {
+              const callback = callbackOf(node);
+              if (callback !== undefined) {
+                beforeEachCallbacks.push(callback);
+              }
+              return;
+            }
+            if (
+              calleeName === "waitFor" ||
+              calleeName === "waitForElementToBeRemoved" ||
+              (typeof calleeName === "string" &&
+                /^findBy[A-Z]/u.test(calleeName))
+            ) {
+              waits.push(node);
+            }
+          },
+          "Program:exit"() {
+            for (const wait of waits) {
+              const callback = containingFunction(wait);
+              if (callback === null) {
+                continue;
+              }
+              const inheritedFakeTimers = beforeEachCallbacks.some(
+                (hookCallback) => {
+                  const fake = fakeTimerCalls.findLast((call) =>
+                    isInside(call, hookCallback),
+                  );
+                  const real = realTimerCalls.findLast((call) =>
+                    isInside(call, hookCallback),
+                  );
+                  const suiteCallback = containingFunction(hookCallback);
+                  return (
+                    startsAfter(fake, real) &&
+                    (suiteCallback === null || isInside(wait, suiteCallback))
+                  );
+                },
+              );
+              const fake = lastBefore(fakeTimerCalls, wait, callback);
+              const real = lastBefore(realTimerCalls, wait, callback);
+              const precedingText = context.sourceCode.text.slice(
+                callback.range[0],
+                wait.range[0],
+              );
+              const restoredInCallback =
+                Math.max(
+                  precedingText.lastIndexOf("restoreRealTimers("),
+                  precedingText.lastIndexOf("useRealTimers("),
+                ) > precedingText.lastIndexOf("useFakeTimers(") ||
+                Math.max(
+                  context.sourceCode.text.lastIndexOf(
+                    "restoreRealTimers(",
+                    wait.range[0],
+                  ),
+                  context.sourceCode.text.lastIndexOf(
+                    "useRealTimers(",
+                    wait.range[0],
+                  ),
+                ) >
+                  context.sourceCode.text.lastIndexOf(
+                    "useFakeTimers(",
+                    wait.range[0],
+                  );
+              if (
+                (startsAfter(fake, real) && !restoredInCallback) ||
+                (inheritedFakeTimers && !restoredInCallback)
+              ) {
+                context.report({ node: wait, messageId: "fakeTimerWait" });
+              }
+            }
+          },
+        };
+      },
+    },
     "require-module-mock-reset": {
       meta: {
         type: "problem",
