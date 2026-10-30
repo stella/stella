@@ -127,7 +127,7 @@ export type EcjNoticeFacts = {
 };
 
 /** One language expression of the work, as the notice embeds it. */
-export type EcjWorkExpression = {
+type EcjWorkExpression = {
   /** The language authority code as the Office states it (`DEU`). */
   language: string;
   /** Manifestation types the expression is published in, sorted. */

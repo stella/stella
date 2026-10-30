@@ -28,6 +28,8 @@
 
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type { EcjCelexVariant } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 
 /** A listed month, `YYYY-MM`; the unit of progress. */
@@ -45,8 +47,11 @@ export const previousEcjBackfillMonth = (
   if (groups === undefined) {
     return panic(`Not a backfill month: ${month}`);
   }
-  const year = Number(groups["year"]);
-  const index = Number(groups["month"]);
+  // The pattern admits only four-digit years and months 01-12.
+  const year = parseIntegerToken(groups["year"], { sign: "unsigned" }).unwrap();
+  const index = parseIntegerToken(groups["month"], {
+    sign: "unsigned",
+  }).unwrap();
   return index === 1
     ? `${String(year - 1).padStart(4, "0")}-12`
     : `${String(year).padStart(4, "0")}-${String(index - 1).padStart(2, "0")}`;
@@ -69,7 +74,7 @@ export type EcjBackfillJournalEntry = {
   reason?: string;
 };
 
-export type EcjLanguageBackfillSeams = {
+type EcjLanguageBackfillSeams = {
   /** Every variant the publisher lists for one month. Throws on failure. */
   listMonth: (month: EcjBackfillMonth) => Promise<readonly EcjCelexVariant[]>;
   /** The stored identity of a variant, as the ingest keys it. */
