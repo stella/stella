@@ -8,7 +8,7 @@ import { CourtName } from "@stll/decision-reader/court-name";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { TextMark } from "@stll/ui/text-mark";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionChip } from "@/components/legal-reader/cited-decision-link";
@@ -121,16 +121,11 @@ export const CitingDecisionItem = ({
             <Tooltip>
               {/* Why it leads, on hover, the way the older-version fact
                   below explains itself. */}
-              <TooltipTrigger
-                render={
-                  <button
-                    className="text-foreground decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs font-medium underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
-                    type="button"
-                  />
-                }
-              >
-                {t("statutes.leadingDecision")}
-              </TooltipTrigger>
+              <TooltipFactTrigger>
+                <span className="text-foreground font-medium">
+                  {t("statutes.leadingDecision")}
+                </span>
+              </TooltipFactTrigger>
               <TooltipPopup>
                 {t("statutes.leadingDecisionsExplanation")}
               </TooltipPopup>
@@ -155,16 +150,11 @@ export const CitingDecisionItem = ({
             <Tooltip>
               {/* A fact about the citation, read like the facts beside it:
                   inline text whose dotted rule says there is more on hover. */}
-              <TooltipTrigger
-                render={
-                  <button
-                    className="text-foreground-strong-muted decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
-                    type="button"
-                  />
-                }
-              >
-                {t("statutes.citingDecisionOlderVersion")}
-              </TooltipTrigger>
+              <TooltipFactTrigger>
+                <span className="text-foreground-strong-muted">
+                  {t("statutes.citingDecisionOlderVersion")}
+                </span>
+              </TooltipFactTrigger>
               <TooltipPopup>
                 <div className="flex flex-col gap-1">
                   <ProvisionVersionBasisLabel basis={decision.versionBasis} />

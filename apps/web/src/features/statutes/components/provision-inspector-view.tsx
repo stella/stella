@@ -429,18 +429,22 @@ const ProvisionVersionBar = ({
 
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1.5 ps-2">
-      <span
-        aria-label={statusLabel}
-        className="flex shrink-0 items-center"
-        role="img"
-        title={statusLabel}
+      <Tooltip
+        content={statusLabel}
+        render={
+          <span
+            aria-label={statusLabel}
+            className="flex shrink-0 items-center"
+            role="img"
+          />
+        }
       >
         <StatuteStatusDot
           expression={selectedVersion}
           status={selectedVersion.status}
           validFrom={selectedVersion.versionValidFrom}
         />
-      </span>
+      </Tooltip>
       {versions.length > 1 ? (
         <StatuteVersionMenu
           currentVersionId={selectedVersion.id}
