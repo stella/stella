@@ -15,6 +15,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
 import { createAnnotationBodySchema } from "@/api/lib/legal-search/reader-annotations/schema";
+import { PUBLIC_LAW_ANNOTATION_PLACEMENT } from "@/api/lib/legal-search/reader-annotations/target";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -219,6 +220,7 @@ const createWithoutContext = async (
       organizationId,
       recordAuditEvent: async () => await Promise.resolve(),
       replayIdentity: "spans",
+      placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
       safeDb: asTestRaw<SafeDb>(
         createMembershipSafeDb(testDb, {
           organizationId,
