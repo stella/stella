@@ -1346,6 +1346,7 @@
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
     "activity": {
+      "newerVersion": "Šis saturs tiek rādīts jaunākā versijā.",
       "review": "Pārskatīšanas atjauninājums"
     },
     "aiPrompt": "AI ziņojuma lauks",

@@ -1346,6 +1346,7 @@
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
     "activity": {
+      "newerVersion": "Tento obsah se zobrazí v novější verzi.",
       "review": "Informace o revizi"
     },
     "aiPrompt": "Pole pro zprávu AI",
