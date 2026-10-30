@@ -6,6 +6,8 @@
 export const QUERY_PERF_TABLE_SIZES = {
   // The court registry: patterns per country, read whole into the weight cache.
   case_law_court_weights: "small",
+  // One row per source, keyed by source_id.
+  case_law_source_arrivals: "small",
   case_law_sources: "small",
   corpus_index_generations: "small",
   corpus_index_jurisdiction_serving: "small",
