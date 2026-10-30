@@ -449,7 +449,7 @@ const BODY_LINES = [
   "Body text sets the ordinary font size of the decision for the reader.",
   "Further running text keeps the body type the most common one here.",
   "And one more line of running text in the ordinary body type follows.",
-];
+] as const;
 
 /** A letter-size PDF of the given pages, each a body of running text plus `extra`. */
 const builtPdf = async (pages: readonly (readonly Drawn[])[]) => {
