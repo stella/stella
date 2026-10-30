@@ -62,6 +62,7 @@ import {
 } from "../helpers/smoke-route-coverage";
 import {
   type RouteExpectation,
+  scaleSmokeRouteDef,
   SMOKE_ROUTE_DEFS,
   type SmokeRouteDef,
   type SmokeWorld,
@@ -337,6 +338,7 @@ const declareRouteSmokeGroup = ({
     // browser/world/results it closes over are group-scoped and assigned once in
     // beforeAll.
     const declareRouteTest = (def: SmokeRouteDef) => {
+      const scaleDef = scaleSmokeRouteDef(def);
       test(def.template, async () => {
         // timeout: three sequential worlds budget the former 60s route allowance for each navigation.
         test.setTimeout(180_000);
@@ -353,15 +355,15 @@ const declareRouteSmokeGroup = ({
           browser: browserForPages,
           results: smallScaleResults,
           renderResults: smallRenderResults,
-          route: resolveRoute(def, worlds.small),
+          route: resolveRoute(scaleDef, worlds.small),
         });
         await smokeRoute({
           browser: browserForPages,
           results: scaleResults,
           renderResults: largeRenderResults,
-          route: resolveRoute(def, worlds.large),
+          route: resolveRoute(scaleDef, worlds.large),
         });
-        const key = networkBaselineKey(def);
+        const key = networkBaselineKey(scaleDef);
         const small = smallScaleResults.get(key);
         const large = scaleResults.get(key);
         const smallRenders = smallRenderResults.get(key);
@@ -546,7 +548,7 @@ const declareRouteSmokeGroup = ({
         return joined;
       };
       const problems = routeScaleCensus({
-        routes: defs.map(networkBaselineKey),
+        routes: defs.map(scaleSmokeRouteDef).map(networkBaselineKey),
         small: measurements(smallScaleResults, smallRenderResults),
         large: measurements(scaleResults, largeRenderResults),
         ledger: SCALE_LEDGER,
@@ -578,7 +580,9 @@ test("route coverage matches the authenticated route tree", async () => {
     routeScaleLedgerAdditions(),
     "route scale allowances only shrink",
   ).toEqual([]);
-  const routeKeys = new Set(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
+  const routeKeys = new Set(
+    SMOKE_ROUTE_DEFS.map(scaleSmokeRouteDef).map(networkBaselineKey),
+  );
   expect(
     SCALE_LEDGER.filter(({ route }) => !routeKeys.has(route)),
     "scale allowances reference smoke routes",
