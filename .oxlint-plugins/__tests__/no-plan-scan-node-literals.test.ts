@@ -54,4 +54,13 @@ test("accepts helper-owned fixtures and unrelated strings", async () => {
       },
     ),
   ).toEqual([]);
+  expect(
+    await lintSingleRule(
+      "no-plan-scan-node-literals",
+      'const type = "Bitmap Heap Scan";',
+      {
+        sourcePath: "apps/api/src/tests/query-perf/measurement.test.ts",
+      },
+    ),
+  ).toEqual([]);
 });

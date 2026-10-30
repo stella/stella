@@ -10,6 +10,12 @@ const SCAN_NODE_TYPES = new Set([
 ]);
 const FIXTURE =
   ".oxlint-plugins/__fixtures__/no-plan-scan-node-literals.fixture.ts";
+// Unit tests of the plan helpers themselves build synthetic plan trees, so
+// they name node types; every consumer asserts through the helpers.
+const PLAN_HELPER_TESTS = [
+  "/apps/api/src/tests/query-plans/plan-walker.test.ts",
+  "/apps/api/src/tests/query-perf/measurement.test.ts",
+];
 
 export default eslintCompatPlugin({
   meta: { name: "no-plan-scan-node-literals" },
@@ -29,8 +35,8 @@ export default eslintCompatPlugin({
             filename.endsWith(FIXTURE) ||
             (filename.includes("apps/api/") &&
               filename.endsWith(".test.ts") &&
-              !filename.endsWith(
-                "/apps/api/src/tests/query-plans/plan-walker.test.ts",
+              !PLAN_HELPER_TESTS.some((helperTest) =>
+                filename.endsWith(helperTest),
               ))
           );
         };

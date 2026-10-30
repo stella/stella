@@ -150,7 +150,6 @@ test("an index-only filter returns only the covering scan of an index scanned tw
     "Node Type": "Index Only Scan",
     "Relation Name": "links",
     "Index Name": "links_subtree_idx",
-    "Heap Fetches": 0,
   };
   const heapReading = {
     "Node Type": "Index Scan",
