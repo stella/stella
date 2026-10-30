@@ -4,6 +4,7 @@ import noDirectDecisionIdentifierColumnWrite from "./guard-rollouts/no-direct-de
 import noDynamicKeyInOperator from "./guard-rollouts/no-dynamic-key-in-operator.ts";
 import noGlobalFetchReplacement from "./guard-rollouts/no-global-fetch-replacement.ts";
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
+import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
 import trackedSymlinks from "./guard-rollouts/tracked-symlinks.ts";
 import workerDatabaseLoginPosture from "./guard-rollouts/worker-database-login-posture.ts";
@@ -15,6 +16,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-dynamic-key-in-operator": noDynamicKeyInOperator,
   "no-global-fetch-replacement": noGlobalFetchReplacement,
   "no-inert-autofocus": noInertAutofocus,
+  "no-parser-inline-flatten": noParserInlineFlatten,
   "portable-path": portablePath,
   "tracked-symlinks": trackedSymlinks,
   "worker-database-login-posture": workerDatabaseLoginPosture,

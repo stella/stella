@@ -422,7 +422,6 @@ pub struct ActivityDaySnapshot {
   drafted_entries: Vec<ActivityDraftedEntry>,
   manual_assignments: Vec<ActivityManualAssignment>,
   pending_batch: Option<ActivityPendingBatch>,
-  pub(crate) time_billing_enabled: bool,
 }
 
 #[derive(Deserialize)]
@@ -2291,7 +2290,6 @@ impl ActivityManager {
       manual_assignments,
       pending_batch,
       drafted_entries,
-      time_billing_enabled: false,
     }
   }
 }

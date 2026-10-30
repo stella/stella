@@ -7,10 +7,9 @@ import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/a
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 
-const REQUIRED_FEATURE_IDS = [
-  "activity-timeline",
-  "time-billing",
-] as const satisfies readonly DesktopFeatureId[];
+// The activity timeline requires time billing in the feature registry, so
+// this one decision covers both.
+const REQUIRED_FEATURE_ID = "activity-timeline" satisfies DesktopFeatureId;
 
 export const authorizeDesktopTimeEntries = async (
   request: Request,
@@ -20,11 +19,7 @@ export const authorizeDesktopTimeEntries = async (
     const account = yield* Result.await(authorizeAccount(request));
     const safeDb = safeDbFromScoped(account.scopedDb);
     const snapshot = account.featureAccessSnapshot;
-    if (
-      REQUIRED_FEATURE_IDS.some(
-        (featureId) => !isFeatureEnabled(snapshot, featureId, account),
-      )
-    ) {
+    if (!isFeatureEnabled(snapshot, REQUIRED_FEATURE_ID, account)) {
       return Result.err(
         new HandlerError({
           status: 403,

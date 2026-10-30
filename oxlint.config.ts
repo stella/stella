@@ -2078,6 +2078,7 @@ const config = defineConfig({
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
+    "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
@@ -5975,6 +5976,17 @@ const config = defineConfig({
           "error",
           { entries: enforcedOwnershipEntries },
         ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-inline-flatten.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-parser-inline-flatten/no-parser-inline-flatten": "error",
       },
     },
     {

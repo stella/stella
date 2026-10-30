@@ -5055,6 +5055,8 @@
       "desktopCardConnectedTitle": "stella desktop is linked",
       "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.",
       "desktopCardMissingTitle": "stella desktop isn't linked yet",
+      "desktopCardOpeningDetail": "Linking this computer to <bdi>{identity}</bdi> on {host}. If your browser asks, allow it to open stella desktop.",
+      "desktopCardOpeningTitle": "Opening stella desktop...",
       "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.",
       "desktopCardOutdatedTitle": "stella desktop needs an update",
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.",
@@ -5074,6 +5076,7 @@
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
       "desktopInstallTitle": "Install and open",
       "desktopInstallWindowsStep": "Run the installer and follow the prompts.",
+      "desktopOpenApp": "Open stella desktop",
       "desktopPrivacyDescription": "Clipboard history is encrypted and stored on this device.",
       "desktopPrivacyTitle": "Private by default",
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.",
@@ -6533,6 +6536,14 @@
           "started": "Started a review of"
         },
         "empty": "No activity in this matter yet.",
+        "fields": {
+          "dueDate": "due date",
+          "parentFolder": "parent folder",
+          "priority": "priority",
+          "property": "property",
+          "schedule": "schedule",
+          "sortOrder": "order"
+        },
         "filterLabel": "Filter activity",
         "filters": {
           "all": "All activity",
@@ -6582,6 +6593,7 @@
           "translation": "translation"
         },
         "title": "Matter activity",
+        "updatedFields": "Updated {fields}",
         "views": {
           "list": "List view",
           "timeline": "Timeline view"
