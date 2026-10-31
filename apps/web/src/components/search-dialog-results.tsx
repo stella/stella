@@ -131,7 +131,8 @@ export const SearchSummaryItem = ({
       <CapabilityAction action={{ capability: "ai" }} surface="control">
         {(capabilityProps) => (
           <Button
-            className="mb-2 h-auto w-full items-start justify-start gap-3 rounded-md px-2.5 py-2.5 text-start whitespace-normal sm:h-auto"
+            layout="wrap"
+            className="mb-2 w-full gap-3 rounded-md px-2.5 py-2.5"
             disabled={isPending}
             onClick={onClick}
             variant={isError ? "destructive-outline" : "outline"}

@@ -48,6 +48,7 @@ type DraggableHeaderCellProps<TRow extends TableRowData> = {
   expandedColumnId: string | null;
   onToggleSelectAll: () => void;
   selectAllState: SelectAllState;
+  selectAllLabel?: string | undefined;
   /** Replaces the column's own header content, e.g. a section's add-column trigger. */
   headerTrigger?: ReactNode;
 };
@@ -59,6 +60,7 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
   expandedColumnId,
   onToggleSelectAll,
   selectAllState,
+  selectAllLabel,
   headerTrigger,
 }: DraggableHeaderCellProps<TRow>) => {
   const headerRef = useRef<HTMLDivElement>(null);
@@ -150,7 +152,11 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
     // numbers alone, so there is nothing for a select-all to act on.
     headerContent =
       header.table.options.enableRowSelection === false ? null : (
-        <SelectAllHeader onToggle={onToggleSelectAll} state={selectAllState} />
+        <SelectAllHeader
+          label={selectAllLabel}
+          onToggle={onToggleSelectAll}
+          state={selectAllState}
+        />
       );
   } else if (!header.isPlaceholder) {
     headerContent = flexRender(
@@ -220,16 +226,17 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
 };
 
 type SelectAllHeaderProps = {
+  label?: string | undefined;
   state: SelectAllState;
   onToggle: () => void;
 };
 
-const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
+const SelectAllHeader = ({ label, state, onToggle }: SelectAllHeaderProps) => {
   const t = useTranslations();
   return (
     <div className="flex items-center justify-center">
       <Checkbox
-        aria-label={t("common.selectAll")}
+        aria-label={label ?? t("common.selectAll")}
         checked={state.checked}
         data-select-all-state={state.key}
         indeterminate={state.indeterminate}

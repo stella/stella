@@ -569,7 +569,7 @@ const SidebarGroupLabel = ({
   return (
     <Comp
       className={cn(
-        "text-sidebar-foreground/70 ring-sidebar-ring flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium outline-hidden transition-[margin,opacity] duration-200 ease-in-out focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "text-sidebar-foreground ring-sidebar-ring flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium outline-hidden transition-[margin,opacity] duration-200 ease-in-out focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         "group-data-[collapsible=icon]:hidden",
         className,
       )}
@@ -860,6 +860,7 @@ const SidebarMenuSubItem = ({
   <li
     className={cn("group/menu-sub-item relative", className)}
     data-sidebar="menu-sub-item"
+    data-context-menu-target=""
     data-slot="sidebar-menu-sub-item"
     {...props}
   />

@@ -70,8 +70,12 @@ const Textarea = ({
               inline
                 ? cn(INLINE_FIELD_CLASS_NAME, "resize-none")
                 : cn(
-                    "min-h-17.5 w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] py-[calc(--spacing(1.5)-1px)] outline-none max-sm:min-h-20.5",
+                    "w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] py-[calc(--spacing(1.5)-1px)] outline-none",
                     TEXTAREA_SIZE_CLASS_NAMES[controlSize],
+                    // A floor for a field that grows; a fixed field's
+                    // height is its rows'.
+                    fieldSizing === "content" &&
+                      TEXTAREA_FLOOR_CLASS_NAMES[controlSize],
                   ),
               fieldSizing === "content"
                 ? "field-sizing-content"
@@ -89,9 +93,15 @@ const Textarea = ({
 
 const TEXTAREA_SIZE_CLASS_NAMES = {
   [CONTROL_SIZE.sm]:
-    "min-h-16.5 px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)] max-sm:min-h-19.5",
+    "px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)]",
   [CONTROL_SIZE.default]: undefined,
-  [CONTROL_SIZE.lg]: "min-h-18.5 py-[calc(--spacing(2)-1px)] max-sm:min-h-21.5",
+  [CONTROL_SIZE.lg]: "py-[calc(--spacing(2)-1px)]",
 } as const satisfies Record<ControlSize, string | undefined>;
+
+const TEXTAREA_FLOOR_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]: "min-h-16.5 max-sm:min-h-19.5",
+  [CONTROL_SIZE.default]: "min-h-17.5 max-sm:min-h-20.5",
+  [CONTROL_SIZE.lg]: "min-h-18.5 max-sm:min-h-21.5",
+} as const satisfies Record<ControlSize, string>;
 
 export { Textarea, type TextareaProps };
