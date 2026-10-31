@@ -8,7 +8,7 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import { decisionAnalysisSchema } from "@stll/legal-ast/analysis";
-import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import { documentAstSchema } from "@stll/legal-ast/document-ast";
 import scenes from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
 
 import {
@@ -130,7 +130,7 @@ const seedCorpusAnalyses = async () => {
             row.caseNumber === fixture.case_number &&
             row.language === fixture.language,
         ) ?? panic(`Marketing decision is missing: ${scene.caseNumber}`);
-      const ast = v.parse(persistedDocumentAstSchema, fixture.document_ast);
+      const ast = v.parse(documentAstSchema, fixture.document_ast);
       const highlight =
         ast.blocks.find((block) => block.anchorId === scene.highlightAnchor) ??
         panic(`Marketing highlight anchor is missing: ${scene.caseNumber}`);
