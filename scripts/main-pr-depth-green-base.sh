@@ -12,7 +12,7 @@ set -euo pipefail
 
 : "${REPOSITORY:?}" "${SHA:?}"
 gh_retry=${GH_RETRY:-"$(dirname "$0")/gh-retry.sh"}
-depth=${GREEN_BASE_DEPTH:-20}
+readonly depth=20
 runs_prefix="https://github.com/$REPOSITORY/actions/runs/"
 
 # The status must link to a completed, successful scheduled run of this
