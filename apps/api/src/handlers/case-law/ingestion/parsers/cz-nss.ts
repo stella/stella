@@ -27,7 +27,7 @@
 
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
-import { isComment, isText } from "domhandler";
+import { isComment, isTag, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
@@ -48,6 +48,7 @@ import type {
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { inlineStyleDeclaresProperty } from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
@@ -461,9 +462,13 @@ const styledBlockChunk = (
     plainText,
     centered: style.includes("text-align:center"),
     bold: boldText.length > 0 && boldText.length >= plainText.length * 0.7,
-    letterSpacing:
-      style.includes("letter-spacing") ||
-      $el.find("span[style*='letter-spacing']").length > 0,
+    letterSpacing: $el
+      .find("span")
+      .addBack()
+      .toArray()
+      .some(
+        (el) => isTag(el) && inlineStyleDeclaresProperty(el, "letter-spacing"),
+      ),
     fontSize: parseFontSize(style),
     paragraphLayout: paragraphLayoutOf(style),
     kind: "paragraph",
@@ -484,7 +489,10 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 
   // Skip the first-page header div (Aspose artifact)
   const body = $("body");
-  body.find("div[style*='-aw-headerfooter-type']").remove();
+  body
+    .find("div")
+    .filter((_, el) => inlineStyleDeclaresProperty(el, "-aw-headerfooter-type"))
+    .remove();
 
   const blockSelector =
     "p, ol, ul, table, div, blockquote, h1, h2, h3, h4, h5, h6";
