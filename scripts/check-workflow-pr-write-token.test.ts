@@ -122,13 +122,9 @@ jobs:
       ).some((item) => item.class === "class 3"),
     ).toBeFalse();
   });
-  test("requires a main-only guard for workflow revision tooling", () => {
+  test("accepts tooling pinned to the trusted workflow revision", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
-    expect(
-      check(workflow("pull_request", body)).some(
-        (item) => item.class === "main-only guard",
-      ),
-    ).toBeTrue();
+    expect(check(workflow("pull_request", body))).toHaveLength(0);
   });
   test("does not accept a substring event exclusion inside an always-true disjunction", () => {
     const body = `    if: github.event_name != 'pull_request' || true

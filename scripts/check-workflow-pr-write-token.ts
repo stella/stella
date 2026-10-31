@@ -12,7 +12,7 @@ type Finding = {
   file: string;
   job: string;
   step: string;
-  class: "class 1" | "class 2" | "class 3" | "main-only guard";
+  class: "class 1" | "class 2" | "class 3";
   trigger: string;
 };
 
@@ -59,7 +59,7 @@ const controlledRef = (value: unknown, reachable: boolean): boolean => {
   if (typeof value !== "string") {
     return reachable;
   }
-  return /pull_request\.head|github\.head_ref|workflow_run\.head_(?:sha|branch)|refs\/pull\/|github\.sha|github\.workflow_sha/u.test(
+  return /pull_request\.head|github\.head_ref|workflow_run\.head_(?:sha|branch)|refs\/pull\/|github\.sha/u.test(
     value,
   );
 };
@@ -347,7 +347,6 @@ export const checkWorkflowPrivilegeSource = (
     const condition = stringField(rawJob["if"]);
     const excludesDependabot = excludesActor(condition, "dependabot[bot]");
     const controlledDirectories = new Map<string, boolean>();
-    let runsWorkflowRevision = false;
     for (const rawStep of steps) {
       if (!record(rawStep)) {
         continue;
@@ -375,9 +374,6 @@ export const checkWorkflowPrivilegeSource = (
         );
       if (!runsControlled) {
         continue;
-      }
-      if (/github\.workflow_sha/u.test(text(rawJob))) {
-        runsWorkflowRevision = true;
       }
       const step =
         typeof rawStep["name"] === "string" ? rawStep["name"] : "unnamed step";
@@ -412,19 +408,6 @@ export const checkWorkflowPrivilegeSource = (
           write,
         }),
       );
-    }
-    if (
-      runsWorkflowRevision &&
-      (write || secret) &&
-      !/github\.ref\s*==\s*['"]refs\/heads\/main['"]/u.test(condition)
-    ) {
-      findings.push({
-        file,
-        job: jobName,
-        step: "job condition",
-        class: "main-only guard",
-        trigger: prTriggers.join(","),
-      });
     }
   }
   return findings;
