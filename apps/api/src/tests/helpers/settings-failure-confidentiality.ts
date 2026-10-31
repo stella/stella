@@ -298,6 +298,7 @@ const assertReturnedAllowlist = (returned: unknown): void => {
           "status",
           "stepUp",
           "usage",
+          "workspaceId",
         ].toSorted(compareKeys),
       );
       // Every serialized field (error, hint, issues, ...) must equal the
