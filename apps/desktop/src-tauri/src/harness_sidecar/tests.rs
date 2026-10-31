@@ -1029,7 +1029,7 @@ mod stand_in {
           attached: HashSet::new(),
         };
         for point in message["resume"].as_array().cloned().unwrap_or_default() {
-          resume(&mut held, &mut connection, &point, "hello").await;
+          resume(&held, &mut connection, &point, "hello").await;
         }
         held.current = Some(connection);
         continue;
@@ -1038,6 +1038,7 @@ mod stand_in {
         return;
       }
       command(&mut held, &message).await;
+      drop(held);
     }
     let mut held = state.lock().await;
     if held.current.as_ref().map(|current| current.id) == Some(id) {
@@ -1055,7 +1056,7 @@ mod stand_in {
   }
 
   async fn resume(
-    held: &mut State,
+    held: &State,
     connection: &mut Connection,
     point: &Value,
     message_type: &str,
