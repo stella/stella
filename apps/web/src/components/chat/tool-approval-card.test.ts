@@ -21,7 +21,7 @@ describe("automatic tool approval", () => {
   });
 
   test.each([
-    "delete_matter",
+    "delete_contact",
     "update_organization_settings",
     SUGGEST_CHANGES_TOOL_NAME,
   ] as const)(

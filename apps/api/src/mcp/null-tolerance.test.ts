@@ -312,8 +312,8 @@ describe("capability executors read explicit null on plain optional fields as om
     omitted: Record<string, unknown>;
   }[] = [
     {
-      label: "time-entries.csv.export query.status",
-      capability: "time-entries.csv.export",
+      label: "time-entries.list query.status",
+      capability: "time-entries.list",
       withNull: { params: { matterId: "ws_1" }, query: { status: null } },
       omitted: { params: { matterId: "ws_1" }, query: {} },
     },

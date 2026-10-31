@@ -218,21 +218,43 @@ server says so in two standard forms:
   the same metadata. Hosts that read tool-level challenges offer to reconnect
   in place; hosts that ignore `_meta` still show the envelope's `hint`.
 
-## Destructive-op confirm guardrail
+## Agent access
 
 `annotations.destructiveHint` tells clients that a tool can change existing
-stored data, including updates and deletions. It does not require a server
-confirmation gate: reversible updates may declare the hint without a
-`destructiveBehavior` or a `confirm` input.
+stored data, including updates and deletions. It is a client hint only.
 
-`destructiveBehavior` declares the server confirmation policy. The `always`
-behavior (used by the `delete_*` tools) requires `confirm: true` on every call;
-`input-discriminator` requires it only for the declared actions. These tools
-advertise a `confirm` boolean (`confirmProp()`). The gate in
-`handleMcpToolCall` returns `confirmation_required` before dispatch when
-confirmation is required and absent. Catalog-dispatched capabilities resolve
-their confirmation policy from the selected target; upstream servers own their
-operation-specific confirmation protocol.
+Who may run an operation when an agent calls it is its agent access
+(`agent-access.ts`), one of:
+
+- `open`: any agent call runs.
+- `caller-confirms`: the call needs `confirm: true`, which the client sends
+  after asking its person; such tools advertise a `confirm` boolean
+  (`confirmProp()`). An agent run has no person to ask, so for it these become
+  `person-approves`.
+- `person-approves`: a person approves the call inside stella. The in-app chat
+  asks through its approval step; MCP and CLI calls are refused with
+  `person_approval_required`.
+- `person-only`: no agent call runs (`person_only`). The tool stays listed so
+  a model can tell the user where to do it.
+
+Every write tool and every catalog capability is classified in two total maps
+inside `agent-access.ts`; a new one fails typecheck until it is classified.
+An open write names why it is open (`OPEN_READ` is for reads only). The
+suite derives what a capability must be from its catalog metadata: reads stay
+open outside a typed exception list, and a capability whose handler declares
+a `personApprovedEffect` (it changes a compliance control, records a person's
+review or approval, or exports many records), or a write with an `approve` or
+`review` permission or in the anonymization domain, must be `person-approves`.
+The maps are private: `decideAgentCall` (dispatch, chat) and
+`describeAgentAccess` (listings, the CLI registry export) read them through one
+resolver, and `agent-access.test.ts` asserts no other module gates on
+confirmation. Listings append a sentence to each `person-approves` or
+`person-only` description. Agent access is decided once the caller is known to
+hold the operation's grant, so a role without it still reads
+`permission_denied`. A missing confirmation is reported after the call's
+references resolve; every other refusal comes before the handler runs.
+Upstream connector tools are outside this map: their servers own their own
+confirmation protocol.
 
 ## Feedback pipeline
 
@@ -245,11 +267,10 @@ same bytes (`feedback-tools.test.ts` pins that round trip). Both carry scope
 `stella:feedback`, are excluded from the anonymized surface, and are not
 projected into the in-app chat, which has its own feedback UI.
 
-`submit_feedback` declares `destructiveBehavior: { type: "outbound" }`. It
-deletes nothing, so `destructiveHint` stays false, but the transport gate in
-`tools.ts` refuses it without `confirm: true` exactly as it refuses a delete, and
-the refusal says what is about to be sent. The generated CLI leaf gets the same
-`--yes` pre-approval a destructive leaf gets.
+`submit_feedback`'s agent access is `caller-confirms` with reason `outbound`:
+the transport refuses it without `confirm: true` exactly as it refuses a
+delete, and the refusal says what is about to be sent. The generated CLI leaf
+gets the same `--yes` pre-approval a destructive leaf gets.
 
 `stella://reference/feedback-workflow` (`feedback-workflow-reference.ts`) is the
 agent-facing procedure: when a report is worth filing, what it must never

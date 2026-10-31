@@ -56,6 +56,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33232
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 32907
       }
     ],
     "anthropic/extended": [
@@ -114,6 +118,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33722
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 33396
       }
     ],
     "bedrock/default": [
@@ -168,6 +176,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33487
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 33156
       }
     ],
     "bedrock/extended": [
@@ -222,6 +234,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33975
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 33644
       }
     ],
     "google/default": [
@@ -272,6 +288,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 32597
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 32271
       }
     ],
     "google/extended": [
@@ -318,6 +338,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33075
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 32749
       }
     ],
     "mistral/default": [
@@ -372,6 +396,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34781
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34417
       }
     ],
     "mistral/extended": [
@@ -426,6 +454,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35307
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34943
       }
     ],
     "openai/default": [
@@ -480,6 +512,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34363
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34005
       }
     ],
     "openai/extended": [
@@ -534,6 +570,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34878
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34519
       }
     ],
     "openrouter-anthropic/default": [
@@ -588,6 +628,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34609
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34257
       }
     ],
     "openrouter-anthropic/extended": [
@@ -642,6 +686,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35120
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34769
       }
     ],
     "openrouter/default": [
@@ -696,6 +744,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34609
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34257
       }
     ],
     "openrouter/extended": [
@@ -750,6 +802,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35120
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34769
       }
     ]
   },

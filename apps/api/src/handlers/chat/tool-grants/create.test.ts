@@ -1,12 +1,26 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { MCP_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import { CHAT_TOOL_GRANT_SCOPES } from "@stll/api-contract/chat-tool-grants";
+
 import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { AGENT_ACCESS_KIND, describeAgentAccess } from "@/api/mcp/agent-access";
+import { MODEL_VISIBLE_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const personApprovedTools = MODEL_VISIBLE_MCP_TOOL_DEFINITIONS.filter(
+  (tool) =>
+    Object.hasOwn(MCP_CHAT_TOOL_POLICY_KINDS, tool.name) &&
+    describeAgentAccess({
+      target: { type: "tool", name: tool.name, access: tool.access },
+      context: {},
+    }).access.kind === AGENT_ACCESS_KIND.personApproves,
+);
 
 const threadId = "00000000-0000-4000-8000-000000000010";
 const connectorId = "00000000-0000-4000-8000-000000000001";
@@ -160,4 +174,24 @@ test("an external tool that matches no connected connector stays per-call", asyn
     code: 409,
   });
   expect(fixture.inserted).toEqual([]);
+});
+
+test("person-approved tools refuse standing grants in every scope before database access", async () => {
+  expect(personApprovedTools.map(({ name }) => name)).toContain(
+    "add_matter_member",
+  );
+  for (const { name: toolName } of personApprovedTools) {
+    for (const scope of CHAT_TOOL_GRANT_SCOPES) {
+      const fixture = setup({
+        body: { scope, threadId, toolName },
+        reads: [[{ id: threadId }]],
+      });
+      expect(
+        await createChatToolGrant.handler(fixture.context),
+        toolName,
+      ).toMatchObject({ code: 409 });
+      expect(fixture.reads(), toolName).toBe(0);
+      expect(fixture.inserted, toolName).toEqual([]);
+    }
+  }
 });

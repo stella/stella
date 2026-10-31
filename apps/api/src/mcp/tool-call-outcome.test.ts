@@ -40,6 +40,7 @@ import {
   untypedToolDataResult,
 } from "@/api/mcp/tool-utils";
 import {
+  agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -80,6 +81,7 @@ const contextFor = () =>
   });
 
 const createArgs = {
+  confirm: true,
   matter_id: MATTER_ID,
   date_worked: "2024-01-01",
   timezone_id: "Europe/Prague",
@@ -248,13 +250,13 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     expectOutcome({ tool: "save_time_entry", outcome: "tool_error" });
   });
 
-  test("confirmation refusal emits a tool error before execution", async () => {
+  test("person-only refusal emits a tool error before execution", async () => {
     const result = await handleMcpToolCall({
       toolName: "delete_matter",
       args: { matter_id: MATTER_ID },
       context: contextFor(),
     });
-    expect(JSON.stringify(result)).toContain("confirmation_required");
+    expect(JSON.stringify(result)).toContain("person_only");
     expectOutcome({ tool: "delete_matter", outcome: "tool_error" });
   });
   test("unknown client names are grouped without leaking the name", async () => {
@@ -539,6 +541,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
       const captured: unknown[] = [];
       const handler = createMcpHttpRequestHandler({
         actionSizePolicy: () => Result.ok(undefined),
+        agentAccessRefusal,
         authenticateMcpRequest: async () =>
           Result.ok({
             organizationId: context.organizationId,

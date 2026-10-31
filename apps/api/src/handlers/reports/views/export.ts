@@ -43,6 +43,7 @@ import {
 import { enqueueReportExport } from "@/api/lib/report-export-enqueue";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const config = {
   contract: "patch",
@@ -51,6 +52,7 @@ const config = {
   description:
     "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
   permissions: { workspace: ["read"], entity: ["create"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     reason: "reporting_export",

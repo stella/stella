@@ -212,42 +212,19 @@ export type McpToolAccessBranch =
       accountAccess: AccountAccess;
     };
 
-export type McpToolDestructiveBehavior =
-  | { type: "always" }
-  | {
-      type: "input-discriminator";
-      property: string;
-      destructiveValues: readonly string[];
-    }
-  | { type: "capability-catalog" }
-  | { type: "upstream" };
-
 /**
- * A call that sends workspace-authored content outside the workspace. It
- * is irreversible in the sense that matters to a human: the content is gone
- * from their control once it lands, so `destructiveHint` is true. The transport
- * gate treats it exactly like a destructive call and refuses without
- * `confirm: true`; `reason` is what the refusal tells the model it is about to
- * do.
+ * `destructiveHint` is the client hint only. Who may run a write tool when an
+ * agent calls it is its agent access (`agent-access.ts`), the one gate the
+ * transport reads.
  */
-type McpToolOutboundBehavior = { type: "outbound"; reason: string };
-
-/** Every behavior the transport confirmation gate reads. */
-type McpToolConfirmationBehavior =
-  McpToolDestructiveBehavior | McpToolOutboundBehavior;
-
 type McpToolDestructiveBranch =
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
-      destructiveBehavior?: undefined;
       /** Why a broader update grant does not imply this handler modifies data. */
       nonDestructiveReason?: string;
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: true };
-      // Updating existing data needs the client hint even when the server
-      // requires no irreversible-action confirmation.
-      destructiveBehavior?: McpToolConfirmationBehavior;
       nonDestructiveReason?: never;
     };
 

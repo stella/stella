@@ -29,6 +29,7 @@ import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import {
+  agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -83,6 +84,7 @@ const context: McpRequestResources = {
 };
 
 const handler = createMcpHttpRequestHandler({
+  agentAccessRefusal,
   authenticateMcpRequest: async () =>
     await Promise.resolve(
       Result.ok({ organizationId, scopes: [...scopes], userId }),

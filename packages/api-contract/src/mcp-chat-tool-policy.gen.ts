@@ -8,7 +8,6 @@ export const MCP_CHAT_TOOL_POLICY_KINDS = {
   "delete_document": "mutation",
   "set_field_value": "mutation",
   "save_matter": "mutation",
-  "delete_matter": "mutation",
   "save_contact": "mutation",
   "delete_contact": "mutation",
   "save_task": "mutation",
@@ -36,7 +35,6 @@ export const MCP_CHAT_TOOL_GRANT_POLICIES = {
   "delete_document": "approve-once",
   "set_field_value": "approve-once",
   "save_matter": "approve-once",
-  "delete_matter": "approve-once",
   "save_contact": "approve-once",
   "delete_contact": "approve-once",
   "save_task": "approve-once",
@@ -51,7 +49,7 @@ export const MCP_CHAT_TOOL_GRANT_POLICIES = {
   "delete_reader_annotation": "approve-once",
   "save_time_entry": "approve-once",
   "delete_time_entry": "approve-once",
-  "add_matter_member": "grantable",
+  "add_matter_member": "approve-once",
   "remove_matter_member": "approve-once",
   "update_organization_settings": "approve-once"
 } as const;

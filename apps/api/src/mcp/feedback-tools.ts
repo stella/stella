@@ -374,10 +374,12 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
     accountAccess: "standard",
     permissions: { type: "all", permissions: { workspace: ["read"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: {
-      type: "outbound",
-      reason:
+    annotationReasons: {
+      readOnlyHint: "Submit feedback changes state or starts stateful work.",
+      destructiveHint:
         "submit_feedback sends this report to the stella maintainers and may publish it as an issue.",
+      openWorldHint:
+        "Submit feedback can access public or external entities outside the private workspace.",
     },
     name: "submit_feedback",
     scope: "stella:feedback",

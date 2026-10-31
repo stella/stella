@@ -820,10 +820,7 @@ export const defineValibotMcpTool = <
     destructiveHintReason = `${subject} does not change state.`;
   }
   if (annotations.destructiveHint) {
-    destructiveHintReason =
-      toolDefinition.destructiveBehavior?.type === "outbound"
-        ? toolDefinition.destructiveBehavior.reason
-        : `${subject} can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.`;
+    destructiveHintReason = `${subject} can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.`;
   }
   return {
     ...toolDefinition,

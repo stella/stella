@@ -21,6 +21,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 /**
  * Neutralize a user-controlled value for a LEDES 1998B field. The format is
@@ -253,6 +254,7 @@ const config = {
     "when an included entry has no effective rate, or when the selection " +
     "spans more than one currency, which the format cannot represent.",
   permissions: { timeEntry: ["approve"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     readClass: "tenant",

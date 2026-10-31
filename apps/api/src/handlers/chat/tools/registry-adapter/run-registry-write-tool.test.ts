@@ -24,10 +24,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import { buildMcpContextFromChat } from "./mcp-chat-context";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateRefs } from "./ref-mediation";
-import {
-  applyChatApprovalConfirmation,
-  runRegistryWriteTool,
-} from "./run-registry-write-tool";
+import { runRegistryWriteTool } from "./run-registry-write-tool";
 
 // The real capture path runs; only the sink is in memory, and installing per
 // test clears its repeat-suppression window.
@@ -124,7 +121,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
   test("keeps sandbox operations independent of account growth checks", async () => {
     for (const toolName of [
       "save_matter",
-      "delete_matter",
+      "delete_contact",
       "link_matter_contact",
       "delete_time_entry",
     ] as const) {
@@ -352,20 +349,18 @@ describe("runRegistryWriteTool (orchestration)", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
-  test("injects confirm for approved chat member removals", () => {
-    expect(
-      applyChatApprovalConfirmation({
-        args: {
-          matter_id: WS_UUID,
-          user_id: "user_2",
-        },
-        toolName: "remove_matter_member",
-      }),
-    ).toEqual({
-      matter_id: WS_UUID,
-      user_id: "user_2",
-      confirm: true,
+  test("keeps person-only writes off the chat surface", async () => {
+    const result = await runRegistryWriteTool({
+      args: { matter_id: WS_UUID },
+      context: buildContext(),
+      refRegistry: createChatRefRegistry(),
+      toolName: "delete_matter",
     });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toContain("not available in chat");
+    }
   });
 });
 

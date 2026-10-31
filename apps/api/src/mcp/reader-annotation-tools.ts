@@ -769,7 +769,6 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       permissions: { legalReaderAnnotation: ["delete"] },
     },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     name: "delete_reader_annotation",
     scope: "stella:knowledge_write",
   }),

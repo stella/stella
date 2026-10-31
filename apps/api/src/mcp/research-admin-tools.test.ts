@@ -15,7 +15,7 @@ import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
+import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
@@ -361,12 +361,11 @@ describe("matter membership and organization settings", () => {
     }
   });
 
-  test("only member removal accepts a replacement and confirmation", async () => {
+  test("only member removal accepts a replacement", async () => {
     const args = {
       matter_id: WORKSPACE_ID,
       user_id: "user_2",
       reassign_to: "user_3",
-      confirm: true,
     };
     expect(
       errorText(
@@ -384,12 +383,6 @@ describe("matter membership and organization settings", () => {
         }),
       ),
     ).toContain("Matter not found or not accessible");
-    const definitions: readonly McpToolDefinition[] =
-      DEFAULT_MCP_TOOL_DEFINITIONS;
-    expect(
-      definitions.find((tool) => tool.name === "remove_matter_member")
-        ?.destructiveBehavior,
-    ).toEqual({ type: "always" });
   });
 
   test("settings reject empty updates, unpaired numbering, and member fields", async () => {

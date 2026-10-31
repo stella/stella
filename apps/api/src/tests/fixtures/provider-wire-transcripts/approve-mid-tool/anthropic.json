@@ -139,10 +139,6 @@
               "cache_control": null
             },
             {
-              "name": "delete_matter",
-              "cache_control": null
-            },
-            {
               "name": "save_contact",
               "cache_control": null
             },
@@ -374,10 +370,6 @@
             },
             {
               "name": "save_matter",
-              "cache_control": null
-            },
-            {
-              "name": "delete_matter",
               "cache_control": null
             },
             {
@@ -632,10 +624,6 @@
             },
             {
               "name": "save_matter",
-              "cache_control": null
-            },
-            {
-              "name": "delete_matter",
               "cache_control": null
             },
             {

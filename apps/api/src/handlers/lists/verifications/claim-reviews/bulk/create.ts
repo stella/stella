@@ -28,6 +28,7 @@ import {
   needsAttention,
   reviewedView,
 } from "@/api/lib/lists/verification/review-fold";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const bodySchema = v.object({
   runId: resourceIdSchema("legalListVerificationRun"),
@@ -51,6 +52,7 @@ const config = {
     "the review of every claim that was marked.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  personApprovedEffect: PERSON_APPROVED_EFFECT.recordsAttestation,
   mcp: {
     type: "capability",
     reason: "document_processing",

@@ -370,6 +370,9 @@ describe("agent workflow capability census", () => {
         confirm: false,
       });
       expect(errorOf(response).code, entry.id).toBe("confirmation_required");
+      expect(errorOf(response).message, entry.id).not.toMatch(
+        /irreversible|destructive/iu,
+      );
       const unavailable = await invoke({
         capability,
         input: VALID_INPUT[capability],
@@ -378,7 +381,9 @@ describe("agent workflow capability census", () => {
           toolConfirmation: TOOL_CONFIRMATION.unavailable,
         },
       });
-      expect(errorOf(unavailable).code, entry.id).toBe("permission_denied");
+      expect(errorOf(unavailable).code, entry.id).toBe(
+        "person_approval_required",
+      );
       if (entry.id.startsWith("memories.")) {
         expect(entry.scope).toBe("stella:memory_write");
         expect(

@@ -163,7 +163,7 @@ describe("generateRouteMap: structure", () => {
   test("destructive tools hide the boolean `confirm` gate from generated flags", () => {
     // The reserved --yes flow owns confirmation; the executor injects
     // `confirm: true`, so no redundant --confirm flag is generated.
-    const del = findLeaf(tree, ["matter", "delete"]);
+    const del = findLeaf(tree, ["task", "delete"]);
     expect(del?.destructive).toBe(true);
     expect(flagFor(del ?? errorSpec(), "--confirm")).toBeUndefined();
     // `confirm` still lives in the input schema (reachable via --input, and it
@@ -265,18 +265,18 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     expect(read?.confirmPassthrough).toBeUndefined();
   });
 
-  test("membership and settings commands hide the reserved confirmation flag", () => {
-    // The reserved --yes flow owns the member-removal confirmation.
+  test("membership and settings commands carry no confirmation input", () => {
+    // A person approves member removal inside stella; an agent cannot
+    // confirm it, so neither the flags nor the input schema offer `confirm`.
     for (const leaf of [add, remove, settings]) {
       expect(flagFor(leaf ?? errorSpec(), "--confirm")).toBeUndefined();
+      const properties = leaf?.inputSchema["properties"];
+      expect(
+        typeof properties === "object" &&
+          properties !== null &&
+          "confirm" in properties,
+      ).toBe(false);
     }
-    // Member removal still accepts confirmation in its input schema.
-    const properties = remove?.inputSchema["properties"];
-    expect(
-      typeof properties === "object" &&
-        properties !== null &&
-        "confirm" in properties,
-    ).toBe(true);
   });
 
   test("a required-enum that is a plain filter does NOT split", () => {

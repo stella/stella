@@ -17,6 +17,7 @@ import {
   WORK_OBLIGATION_TRANSITION_ACTION,
   WORK_OBLIGATION_TRANSITION_ACTIONS,
 } from "@/api/lib/work-obligations/transitions";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const transitionParams = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -34,6 +35,7 @@ const transitionWorkObligation = createSafeHandler(
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     realtime: workObligationRealtimeUpdates,
+    personApprovedEffect: PERSON_APPROVED_EFFECT.recordsAttestation,
     mcp: {
       type: "capability",
       reason: "workflow_orchestration",

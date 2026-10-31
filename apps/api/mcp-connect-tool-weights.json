@@ -81,17 +81,17 @@
       "name": "delete_document",
       "nameChars": 15,
       "descriptionChars": 216,
-      "inputSchemaChars": 458,
-      "totalChars": 689,
-      "estimatedTokens": 268
+      "inputSchemaChars": 295,
+      "totalChars": 526,
+      "estimatedTokens": 200
     },
     {
       "name": "delete_matter",
       "nameChars": 13,
       "descriptionChars": 167,
-      "inputSchemaChars": 331,
-      "totalChars": 511,
-      "estimatedTokens": 198
+      "inputSchemaChars": 168,
+      "totalChars": 348,
+      "estimatedTokens": 130
     },
     {
       "name": "delete_reader_annotation",
@@ -424,10 +424,10 @@
     {
       "name": "remove_matter_member",
       "nameChars": 20,
-      "descriptionChars": 125,
-      "inputSchemaChars": 423,
-      "totalChars": 568,
-      "estimatedTokens": 225
+      "descriptionChars": 84,
+      "inputSchemaChars": 352,
+      "totalChars": 456,
+      "estimatedTokens": 182
     },
     {
       "name": "resolve_case_law_decision",
@@ -521,9 +521,9 @@
       "name": "save_time_entry",
       "nameChars": 15,
       "descriptionChars": 480,
-      "inputSchemaChars": 2017,
-      "totalChars": 2512,
-      "estimatedTokens": 1006
+      "inputSchemaChars": 2130,
+      "totalChars": 2625,
+      "estimatedTokens": 1053
     },
     {
       "name": "search",
@@ -616,14 +616,14 @@
     {
       "name": "write_capability",
       "nameChars": 16,
-      "descriptionChars": 444,
+      "descriptionChars": 503,
       "inputSchemaChars": 1075,
-      "totalChars": 1535,
-      "estimatedTokens": 602
+      "totalChars": 1594,
+      "estimatedTokens": 621
     }
   ],
   "totals": {
-    "characters": 127340,
-    "estimatedTokens": 50496
+    "characters": 127074,
+    "estimatedTokens": 50383
   }
 }

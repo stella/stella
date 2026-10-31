@@ -65,6 +65,8 @@ const PUBLIC_CORPUS =
   "reads the public legal corpus (case law, legislation), not seeded here";
 const UPSTREAM = "calls an upstream publisher or registry over HTTP";
 const OBJECT_STORAGE = "reads or writes DOCX files in object storage";
+const PERSON_GATED =
+  "needs a person's approval in stella, so dispatch refuses an MCP call before its handler runs";
 
 const TOOL_COVERAGE = {
   search: excluded(SEARCH_INDEX),
@@ -82,7 +84,7 @@ const TOOL_COVERAGE = {
   open_case_law_decision: excluded(PUBLIC_CORPUS),
   read_case_law_decision_blocks: excluded(PUBLIC_CORPUS),
   preview_cited_provision: excluded(PUBLIC_CORPUS),
-  set_practice_jurisdictions: RUN,
+  set_practice_jurisdictions: excluded(PERSON_GATED),
   search_legislation: excluded(PUBLIC_CORPUS),
   read_statute: excluded(PUBLIC_CORPUS),
   read_statute_provisions: excluded(PUBLIC_CORPUS),
@@ -99,7 +101,7 @@ const TOOL_COVERAGE = {
   list_documents: RUN,
   read_document: RUN,
   save_document: RUN,
-  delete_document: RUN,
+  delete_document: excluded(PERSON_GATED),
   set_field_value: excluded(
     "a fresh matter holds only the file property, which set_field_value refuses; a text property is created through write_capability",
   ),
@@ -144,9 +146,9 @@ const TOOL_COVERAGE = {
   list_invoices: RUN,
   get_usage: RUN,
   list_audit_log: RUN,
-  add_matter_member: RUN,
-  remove_matter_member: RUN,
-  update_organization_settings: RUN,
+  add_matter_member: excluded(PERSON_GATED),
+  remove_matter_member: excluded(PERSON_GATED),
+  update_organization_settings: excluded(PERSON_GATED),
   mint_web_handoff: excluded(
     "requires an OAuth consent context; covered by the handoff service tests",
   ),
@@ -253,6 +255,7 @@ const STEPS: readonly Step[] = [
   {
     tool: "save_time_entry",
     args: (s) => ({
+      confirm: true,
       matter_id: required(s.matterId, "matter"),
       date_worked: today(),
       timezone_id: "UTC",
@@ -322,31 +325,6 @@ const STEPS: readonly Step[] = [
   },
   { tool: "list_templates", args: () => ({}) },
   {
-    tool: "set_practice_jurisdictions",
-    args: () => ({ jurisdictions: [{ country_code: "CZ", is_primary: true }] }),
-  },
-  {
-    tool: "add_matter_member",
-    args: (s) => ({
-      matter_id: required(s.matterId, "matter"),
-      user_id: s.additionalMemberUserId,
-    }),
-  },
-  {
-    tool: "remove_matter_member",
-    args: (s) => ({
-      matter_id: required(s.matterId, "matter"),
-      user_id: s.additionalMemberUserId,
-      confirm: true,
-    }),
-  },
-  {
-    tool: "update_organization_settings",
-    args: () => ({
-      time_narrative_required: false,
-    }),
-  },
-  {
     tool: "prepare_feedback",
     args: () => ({
       kind: "bug",
@@ -371,13 +349,6 @@ const STEPS: readonly Step[] = [
   {
     tool: "delete_task",
     args: (s) => ({ task_id: required(s.taskId, "task"), confirm: true }),
-  },
-  {
-    tool: "delete_document",
-    args: (s) => ({
-      entity_id: required(s.documentId, "document"),
-      confirm: true,
-    }),
   },
   {
     tool: "delete_clause",

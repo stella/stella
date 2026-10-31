@@ -65,8 +65,6 @@ import {
 } from "@/api/mcp/error-codes";
 import type { CheckedOutput } from "@/api/mcp/output-excess-keys";
 import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
-import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
-import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
   InternalToolErrorResult,
   InternalToolResult,
@@ -417,9 +415,8 @@ export const enumProp = (description: string, values: readonly string[]) =>
   ({ type: "string", enum: values, description }) as const;
 
 /**
- * Boolean input for a server confirmation gate declared by
- * `destructiveBehavior`. `handleMcpToolCall` requires `confirm === true` when
- * that behavior selects an irreversible operation or outbound send;
+ * Boolean input for a tool whose agent access is `caller-confirms`
+ * (`agent-access.ts`): `handleMcpToolCall` requires `confirm === true` for it;
  * `destructiveHint` alone does not require confirmation. Set it only after a
  * human has approved the selected operation. Pass a custom `description` for
  * outbound sends or an operation-specific confirmation reason.
@@ -1291,22 +1288,3 @@ export const normalizeTextField = ({
 
   return value.length > 0 ? value : fallback;
 };
-
-/**
- * The refusal for a confirmation-gated call from a session that cannot
- * confirm, or null when the session may proceed to the usual `confirm` check.
- */
-export const confirmationUnavailableResult = ({
-  toolConfirmation = TOOL_CONFIRMATION.caller,
-  subject,
-}: {
-  toolConfirmation?: ToolConfirmation | undefined;
-  subject: string;
-}): InternalToolErrorResult | null =>
-  toolConfirmation === TOOL_CONFIRMATION.unavailable
-    ? structuredErrorResult({
-        code: "permission_denied",
-        message: `${subject} needs a person's confirmation and is not available in agent runs`,
-        hint: "Describe the change in your reply so the user can make it in stella; do not retry it from this run.",
-      })
-    : null;

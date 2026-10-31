@@ -107,6 +107,8 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   feature_disabled: EXIT_CODES.featureDisabled,
   not_found: EXIT_CODES.notFound,
   confirmation_required: EXIT_CODES.aborted,
+  person_approval_required: EXIT_CODES.permissionDenied,
+  person_only: EXIT_CODES.permissionDenied,
   permission_denied: EXIT_CODES.permissionDenied,
   usage_limited: EXIT_CODES.usageLimited,
   conflict: EXIT_CODES.conflict,

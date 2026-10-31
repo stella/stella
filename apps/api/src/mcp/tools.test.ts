@@ -11401,7 +11401,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // the cross-field schema rejects it before touching the database.
   test("save_time_entry rejects an update with no changes", async () => {
     const result = await handleMcpToolCall({
-      args: { time_entry_id: TIME_ENTRY_ID },
+      args: { time_entry_id: TIME_ENTRY_ID, confirm: true },
       context: createBillingContext(),
       toolName: "save_time_entry",
     });
@@ -11544,10 +11544,41 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
-  // --- Destructive-op confirm guardrail --------------------------------
+  // --- Agent access -----------------------------------------------------
 
-  // Confirmation is resolved from each registry definition before dispatch.
-  test("delete_document refuses to run without confirm: true", async () => {
+  // Each tool's agent access is resolved before dispatch (`agent-access.ts`).
+  test("delete_task refuses to run without confirm: true", async () => {
+    const taskId = "00000000-0000-4000-8000-0000000e0001";
+    const result = await handleMcpToolCall({
+      args: { task_id: taskId },
+      context: createContext({ scopedDb: createScopedDb([{ id: taskId }]) }),
+      toolName: "delete_task",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "confirmation_required",
+      message:
+        "delete_task is an irreversible operation and was called without confirmation",
+      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+    });
+  });
+
+  test("delete_task clears the confirm gate when confirm is true", async () => {
+    // confirm: true clears the guardrail; the call proceeds to the handler,
+    // which 404s the unknown entity, proving the gate no longer short-circuits.
+    const result = await handleMcpToolCall({
+      args: {
+        task_id: "00000000-0000-4000-8000-0000000e0404",
+        confirm: true,
+      },
+      context: createContext(),
+      toolName: "delete_task",
+    });
+
+    expect(validationEnvelope(result)["code"]).toBe("not_found");
+  });
+
+  test("delete_document needs a person's approval in stella", async () => {
     const result = await handleMcpToolCall({
       args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext(),
@@ -11555,45 +11586,29 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expectErrorEnvelope(result, {
-      code: "confirmation_required",
+      code: "person_approval_required",
       message:
-        "delete_document is an irreversible operation and was called without confirmation",
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+        "delete_document needs a person's approval in stella and cannot run from this client",
+      hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
     });
   });
 
-  test("delete_document clears the confirm gate when confirm is true", async () => {
-    // confirm: true clears the guardrail; the call proceeds to the handler,
-    // which 404s the unknown entity — proving the gate no longer short-circuits
-    // and that the handler tolerates the extra confirm arg.
-    const result = await handleMcpToolCall({
-      args: {
-        entity_id: "00000000-0000-4000-8000-0000000e0404",
-        confirm: true,
-      },
-      context: createContext(),
-      toolName: "delete_document",
-    });
-
-    expectErrorEnvelope(result, {
-      code: "not_found",
-      message: "Document not found or not accessible",
-    });
-  });
-
-  test("organization settings reach validation without confirmation", async () => {
+  test("organization settings need a person's approval in stella", async () => {
     const result = await handleMcpToolCall({
       args: {},
       context: createContext(),
       toolName: "update_organization_settings",
     });
 
-    const error = validationEnvelope(result);
-    expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe("Provide at least one setting to change");
+    expectErrorEnvelope(result, {
+      code: "person_approval_required",
+      message:
+        "update_organization_settings needs a person's approval in stella and cannot run from this client",
+      hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
+    });
   });
 
-  test("member removal requires human confirmation", async () => {
+  test("member removal needs a person's approval in stella", async () => {
     const result = await handleMcpToolCall({
       args: {
         matter_id: "00000000-0000-4000-8000-0000000e0001",
@@ -11604,27 +11619,10 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expectErrorEnvelope(result, {
-      code: "confirmation_required",
+      code: "person_approval_required",
       message:
-        "remove_matter_member is an irreversible operation and was called without confirmation",
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
-    });
-  });
-
-  test("confirmed member removal reaches the handler", async () => {
-    const result = await handleMcpToolCall({
-      args: {
-        matter_id: "00000000-0000-4000-8000-0000000e0404",
-        user_id: "user_2",
-        confirm: true,
-      },
-      context: createContext(),
-      toolName: "remove_matter_member",
-    });
-
-    expectErrorEnvelope(result, {
-      code: "not_found",
-      message: "Matter not found or not accessible",
+        "remove_matter_member needs a person's approval in stella and cannot run from this client",
+      hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
     });
   });
 

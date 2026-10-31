@@ -10,6 +10,7 @@ import {
   includeSanctionsContact,
 } from "@/api/lib/lists/sanctions/monitoring-opt-out";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 export default createSafeRootHandler(
   {
@@ -19,6 +20,7 @@ export default createSafeRootHandler(
     description:
       "Set a contact to included or excluded from sanctions monitoring. Excluding hides active hits and preserves history. Including queues a re-screen; read contacts.sanctions.get for its eventual result. Firm-level disablement still applies. Changes are audited.",
     permissions: { contact: ["update"] },
+    personApprovedEffect: PERSON_APPROVED_EFFECT.changesControl,
     mcp: {
       type: "capability",
       reason: "contact_directory",

@@ -28,6 +28,11 @@ import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import {
+  AGENT_CALL_SURFACE,
+  decideAgentCall,
+  finalAgentRefusal,
+} from "@/api/mcp/agent-access";
 import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { MCP_MODES, type McpMode } from "@/api/mcp/constants";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
@@ -722,13 +727,59 @@ const callOutcome = async ({
   role: MemberRole;
   tool: string;
 }): Promise<{ outcome: CallOutcome; code: string | null }> => {
-  const call = { args, context: mcpContextFor(role), mode, toolName: tool };
+  const context = mcpContextFor(role);
+  const call = { args, context, mode, toolName: tool };
+  const definition = writeTools.find(
+    (candidate) => candidate.definition.name === tool,
+  )?.definition;
+  if (definition === undefined) {
+    throw new Error(`Unknown write tool ${tool}`);
+  }
+  const authorized =
+    restExpectation(tool, role) ??
+    isMemberAuthorizedForMcpTool(sessionMemberRole(role), definition);
+  const agentRefusal = finalAgentRefusal(
+    decideAgentCall({
+      target: { type: "tool", name: tool, access: definition.access },
+      context,
+      surface: AGENT_CALL_SURFACE.mcp,
+      subject: tool,
+      confirmed: false,
+    }),
+  );
+  const expectedCode = authorized ? agentRefusal?.code : "permission_denied";
   const code = errorCodeOf(await callMcpToolOverHttp(call));
-  expect({ tool, role, mode, code }).toEqual({
+  const directCode = errorCodeOf(await handleMcpToolCall(call));
+  if (expectedCode !== undefined) {
+    expect({ tool, role, mode, http: code }).toEqual({
+      tool,
+      role,
+      mode,
+      http: expectedCode,
+    });
+  } else {
+    expect({
+      tool,
+      role,
+      mode,
+      httpPermissionDenied: code === "permission_denied",
+    }).toEqual({
+      tool,
+      role,
+      mode,
+      httpPermissionDenied: false,
+    });
+  }
+  expect({
     tool,
     role,
     mode,
-    code: errorCodeOf(await handleMcpToolCall(call)),
+    directPermissionDenied: directCode === "permission_denied",
+  }).toEqual({
+    tool,
+    role,
+    mode,
+    directPermissionDenied: !authorized,
   });
   return {
     code,

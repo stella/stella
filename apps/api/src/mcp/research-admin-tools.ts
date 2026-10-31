@@ -735,9 +735,6 @@ const removeMatterMemberArgsSchema = nullAsAbsent(
         v.description("Reassign work to this member; omit to unassign"),
       ),
     ),
-    confirm: v.optional(
-      v.pipe(v.boolean(), v.description("True after human approval")),
-    ),
   }),
 );
 
@@ -858,7 +855,7 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "remove_matter_member",
   description:
-    "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it.",
   inputSchema: removeMatterMemberArgsSchema,
   annotations: {
     title: "Remove matter member",
@@ -871,7 +868,6 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   accountAccess: "standard",
   permissions: { type: "all", permissions: { workspace: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
-  destructiveBehavior: { type: "always" },
   scope: "stella:admin_write",
 });
 

@@ -404,27 +404,27 @@ describe("write tool permissions", () => {
 });
 
 describe("chat write tools re-read the member's role when they run", () => {
-  const deleteMatter = {
-    args: { matter_id: "matter_1", confirm: true },
+  const removeMember = {
+    args: { matter_id: "matter_1", user_id: "user_2" },
     registeredRole: "owner",
-    tool: "delete_matter",
+    tool: "remove_matter_member",
   } as const;
 
   test("a role downgraded after registration is refused at execution", async () => {
     const failure = await chatExecutionFailure({
-      ...deleteMatter,
+      ...removeMember,
       currentRole: "intern",
     });
     expect(failure).toBeInstanceOf(ChatToolError);
     expect(failure).toMatchObject({
       kind: "unavailable",
-      message: "Your member role does not permit delete_matter.",
+      message: "Your member role does not permit remove_matter_member.",
     });
   });
 
   test("a member removed after registration is refused at execution", async () => {
     const failure = await chatExecutionFailure({
-      ...deleteMatter,
+      ...removeMember,
       currentRole: null,
     });
     expect(failure).toBeInstanceOf(ChatToolError);
@@ -436,13 +436,13 @@ describe("chat write tools re-read the member's role when they run", () => {
 
   test("an unchanged role passes the gate and reaches the tool", async () => {
     const failure = await chatExecutionFailure({
-      ...deleteMatter,
+      ...removeMember,
       currentRole: "owner",
     });
     // The matter is not in this caller's scope, so the tool itself answers;
     // the point is that the role gate let it through.
     expect(failure).not.toMatchObject({
-      message: "Your member role does not permit delete_matter.",
+      message: "Your member role does not permit remove_matter_member.",
     });
     expect(failure).not.toMatchObject({
       message: "You are no longer a member of this organization.",
@@ -647,7 +647,6 @@ describe("write tools whose input selects the operation", () => {
     const document = await handleMcpToolCall({
       args: {
         entity_id: "00000000-0000-4000-8000-000000000001",
-        confirm: true,
       },
       context: updateOnly,
       toolName: "delete_document",
@@ -660,7 +659,6 @@ describe("write tools whose input selects the operation", () => {
       args: {
         entity_id: "00000000-0000-4000-8000-000000000001",
         version_id: "00000000-0000-4000-8000-000000000002",
-        confirm: true,
       },
       context: updateOnly,
       toolName: "delete_document",

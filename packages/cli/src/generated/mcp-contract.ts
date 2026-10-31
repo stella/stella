@@ -73,6 +73,8 @@ export const MCP_ERROR_CODES = [
   "feature_disabled",
   "not_found",
   "confirmation_required",
+  "person_approval_required",
+  "person_only",
   "permission_denied",
   "usage_limited",
   "conflict",

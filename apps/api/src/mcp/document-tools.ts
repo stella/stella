@@ -2090,15 +2090,6 @@ const deleteDocumentArgsSchema = nullAsAbsent(
     version_id: v.optional(
       uuidInputSchema("Delete only this version instead of the whole document"),
     ),
-    confirm: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Must be true to run this irreversible operation. Set it only after a " +
-            "human user has explicitly approved the deletion.",
-        ),
-      ),
-    ),
   }),
 );
 
@@ -2586,7 +2577,6 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       absent: { operation: "delete", permissions: { entity: ["delete"] } },
     }),
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     name: "delete_document",
     scope: "stella:documents_write",
   }),

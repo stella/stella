@@ -2353,7 +2353,6 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     accountAccess: "sandbox",
     permissions: { type: "all", permissions: { clause: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     name: "delete_clause",
     scope: "stella:knowledge_write",
   }),

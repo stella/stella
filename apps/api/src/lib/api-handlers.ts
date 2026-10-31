@@ -150,6 +150,7 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
+import type { PersonApprovedEffect } from "@/api/mcp/person-approved-effect";
 import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -447,6 +448,16 @@ type ContentDeliveryDisposition = {
   contentDelivery?: ContentDelivery;
 };
 
+/**
+ * An effect beyond what `permissions` says that only a person may authorize
+ * (see `mcp/person-approved-effect.ts`). The capability catalog carries it,
+ * and the agent-access census requires the capability to be
+ * `person-approves`. Omit it when the operation has none of these effects.
+ */
+type PersonApprovedEffectDisposition = {
+  personApprovedEffect?: PersonApprovedEffect;
+};
+
 /** The request and response schemas a handler config declares. */
 type InputSchema = RouteConfig;
 
@@ -454,6 +465,7 @@ export type HandlerConfig = InputSchema &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
+  PersonApprovedEffectDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     permissions: PermissionInput;
@@ -580,6 +592,7 @@ export type SessionHandlerConfig = InputSchema &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
+  PersonApprovedEffectDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;

@@ -39,6 +39,7 @@ import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
+  agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -331,6 +332,7 @@ for (const kind of [
     const { context, scopedDb } = contextFor(kind);
     const handler = createMcpHttpRequestHandler({
       actionSizePolicy: () => Result.ok(undefined),
+      agentAccessRefusal,
       authenticateMcpRequest: async () =>
         Result.ok({
           organizationId: context.organizationId,

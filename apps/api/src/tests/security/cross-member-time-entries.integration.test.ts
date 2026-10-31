@@ -1421,7 +1421,11 @@ const mcpOperations: McpOperation[] = [
   {
     name: "save_time_entry update",
     toolName: "save_time_entry",
-    args: (id) => ({ time_entry_id: id, narrative: "Rewritten over MCP" }),
+    args: (id) => ({
+      time_entry_id: id,
+      narrative: "Rewritten over MCP",
+      confirm: true,
+    }),
     expectApplied: async (id) => {
       expect(await readEntry(id)).toMatchObject({
         narrative: "Rewritten over MCP",

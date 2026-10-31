@@ -29,6 +29,7 @@ import {
   namespaceMcpToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { AGENT_ACCESS_KIND, describeAgentAccess } from "@/api/mcp/agent-access";
 import { MCP_MODES } from "@/api/mcp/constants";
 import {
   DYNAMIC_TOOL_FAMILY_POLICIES,
@@ -43,6 +44,7 @@ import {
   getStaticMcpToolOutputContract,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type {
   McpToolDefinition,
   RuntimeMcpToolOutputContract,
@@ -845,16 +847,20 @@ describe("projected chat write approvals", () => {
     }
   });
 
-  test("no confirmation-gated or account-control tool is covered by a stored grant", () => {
+  test("no person-approved, confirmation-gated or account-control tool is covered by a stored grant", () => {
+    const requiresFreshApproval = (tool: (typeof defaultTools)[number]) =>
+      describeAgentAccess({
+        target: { type: "tool", name: tool.name, access: tool.access },
+        context: { toolConfirmation: TOOL_CONFIRMATION.caller },
+      }).access.kind !== AGENT_ACCESS_KIND.open;
     const freshApprovalTools = defaultTools.filter(
       (tool) =>
-        tool.destructiveBehavior !== undefined ||
+        requiresFreshApproval(tool) ||
+        tool.annotations.destructiveHint ||
         (tool.access === "write" &&
           tool.accountAccess === ACCOUNT_ACCESS.accountControl),
     );
-    expect(
-      freshApprovalTools.some((tool) => tool.destructiveBehavior !== undefined),
-    ).toBe(true);
+    expect(freshApprovalTools.some(requiresFreshApproval)).toBe(true);
     const grantable = freshApprovalTools
       .filter(
         (tool) =>
@@ -1411,32 +1417,50 @@ describe("destructive write-tool behavior", () => {
     }
   });
 
-  test("an irreversible outbound send is advertised as destructive", () => {
-    const offenders = defaultTools
-      .filter(
-        (tool) =>
-          tool.destructiveBehavior?.type === "outbound" &&
-          !tool.annotations.destructiveHint,
-      )
-      .map((tool) => tool.name);
-    expect(offenders).toEqual([]);
+  const callerAccess = (tool: (typeof defaultTools)[number]) =>
+    describeAgentAccess({
+      target: { type: "tool", name: tool.name, access: tool.access },
+      context: { toolConfirmation: TOOL_CONFIRMATION.caller },
+    }).access;
+
+  test("a tool the caller confirms is advertised as destructive and takes confirm", () => {
+    const confirmed = defaultTools.filter(
+      (tool) => callerAccess(tool).kind === AGENT_ACCESS_KIND.callerConfirms,
+    );
+    expect(confirmed.length).toBeGreaterThan(0);
+    for (const tool of confirmed) {
+      expect(tool.annotations.destructiveHint).toBe(true);
+      expect(Object.keys(getInputProperties(tool))).toContain("confirm");
+    }
   });
 
-  test("an outbound tool states what it sends, and advertises confirm", () => {
-    const outbound = defaultTools.filter(
-      (tool) => tool.destructiveBehavior?.type === "outbound",
-    );
+  test("a tool a person runs or approves does not ask for confirm", () => {
+    const personGated = defaultTools.filter((tool) => {
+      const { kind } = callerAccess(tool);
+      return (
+        kind === AGENT_ACCESS_KIND.personApproves ||
+        kind === AGENT_ACCESS_KIND.personOnly
+      );
+    });
+    expect(personGated.length).toBeGreaterThan(0);
+    for (const tool of personGated) {
+      expect(Object.keys(getInputProperties(tool))).not.toContain("confirm");
+    }
+  });
+
+  test("an outbound tool states what it sends", () => {
+    const outbound = defaultTools.flatMap((tool) => {
+      const access = callerAccess(tool);
+      return access.kind === AGENT_ACCESS_KIND.callerConfirms &&
+        access.reason === "outbound"
+        ? [{ tool, sends: access.sends }]
+        : [];
+    });
     expect(outbound.length).toBeGreaterThan(0);
 
-    for (const tool of outbound) {
-      const behavior = tool.destructiveBehavior;
-      expect(behavior?.type === "outbound" ? behavior.reason : "").toContain(
-        tool.name,
-      );
-      if (behavior?.type === "outbound") {
-        expect(tool.annotationReasons.destructiveHint).toBe(behavior.reason);
-      }
-      expect(Object.keys(getInputProperties(tool))).toContain("confirm");
+    for (const { tool, sends } of outbound) {
+      expect(sends).toContain(tool.name);
+      expect(tool.annotationReasons.destructiveHint).toBe(sends);
       // The refusal names `confirm: true`; a description that never mentions
       // it leaves a model to discover the gate by being refused.
       expect(tool.description).toContain("confirm: true");

@@ -537,15 +537,6 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 const deleteMatterArgsSchema = nullAsAbsent(
   v.strictObject({
     matter_id: uuidInputSchema("Matter ID to delete"),
-    confirm: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Must be true to run this irreversible operation. Set it only after a " +
-            "human user has explicitly approved the deletion.",
-        ),
-      ),
-    ),
   }),
 );
 
@@ -2508,7 +2499,6 @@ export const MATTER_TOOL_DEFINITIONS = [
     accountAccess: "sandbox",
     permissions: { type: "all", permissions: { workspace: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     name: "delete_matter",
     scope: "stella:matters_write",
   }),
@@ -2593,7 +2583,6 @@ export const MATTER_TOOL_DEFINITIONS = [
     accountAccess: "sandbox",
     permissions: { type: "all", permissions: { contact: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     name: "delete_contact",
     scope: "stella:contacts_write",
   }),
@@ -2754,7 +2743,6 @@ export const MATTER_TOOL_DEFINITIONS = [
     accountAccess: "sandbox",
     permissions: { type: "all", permissions: { entity: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     name: "delete_task",
     scope: "stella:matters_write",
   }),

@@ -26,6 +26,13 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
+import {
+  AGENT_CALL_SURFACE,
+  decideAgentCall,
+  finalAgentRefusal,
+} from "@/api/mcp/agent-access";
+import type { AgentCallRefusal } from "@/api/mcp/agent-access";
+import { invokedCapabilityAgentRefusal } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -67,7 +74,6 @@ import type {
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
-  confirmationUnavailableResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   internalFailureResult,
@@ -130,62 +136,6 @@ export const findUndeclaredArguments = ({
       ),
     }));
   return undeclared.length === 0 ? undefined : { declared, undeclared };
-};
-
-/**
- * Whether this call needs `confirm: true`, and what to tell a model that
- * omitted it. One switch, not two: the decision and the refusal it produces
- * cannot describe different operations.
- */
-type TransportConfirmation =
-  { required: false } | { required: true; message: string; hint: string };
-
-const NO_CONFIRMATION: TransportConfirmation = { required: false };
-
-const irreversibleConfirmation = (toolName: string): TransportConfirmation => ({
-  required: true,
-  message: `${toolName} is an irreversible operation and was called without confirmation`,
-  hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
-});
-
-const transportConfirmation = (
-  definition: McpToolDefinition,
-  args: Record<string, unknown>,
-): TransportConfirmation => {
-  const behavior = definition.destructiveBehavior;
-  if (behavior === undefined) {
-    return NO_CONFIRMATION;
-  }
-
-  switch (behavior.type) {
-    case "always":
-      return irreversibleConfirmation(definition.name);
-    case "outbound":
-      return {
-        required: true,
-        message: `${definition.name} sends data outside this workspace and was called without confirmation`,
-        hint: `${behavior.reason} Show the human user exactly what will be sent, get their approval, then retry with confirm: true.`,
-      };
-    case "input-discriminator": {
-      const value = args[behavior.property];
-      return typeof value === "string" &&
-        behavior.destructiveValues.includes(value)
-        ? irreversibleConfirmation(definition.name)
-        : NO_CONFIRMATION;
-    }
-    case "capability-catalog":
-      // The handler resolves the selected capability from the canonical
-      // catalog, then applies its target-specific confirmation gate.
-      return NO_CONFIRMATION;
-    case "upstream":
-      // Dynamic connector tools are executed by their owning MCP server. Its
-      // advertised risk remains visible to clients, while the upstream server
-      // owns any operation-specific confirmation protocol.
-      return NO_CONFIRMATION;
-    default:
-      behavior satisfies never;
-      return panic("Unhandled MCP confirmation behavior");
-  }
 };
 
 const undeclaredArgumentMessage = ({ key, suggestion }: UndeclaredArgument) =>
@@ -334,6 +284,44 @@ const featureUnavailableToolResult = ({
       code: "unknown_tool",
       message: `Unknown tool: ${toolName}`,
       hint: "Call tools/list for the tools available to this session.",
+    }),
+  );
+};
+
+/**
+ * The final agent-access refusal for a tool call, answered before action
+ * admission so a call a person must run or approve neither spends the action
+ * budget nor gets an admission refusal instead. Capability executors answer
+ * for the capability they select. Dispatch decides again and reports a
+ * missing confirmation once the call's references resolve.
+ */
+export const agentAccessRefusal = async ({
+  args,
+  context,
+  mode,
+  toolName,
+}: Omit<McpToolCallArgs, "dependencies">): Promise<AgentCallRefusal | null> => {
+  if (
+    toolName === MCP_CAPABILITY_EXECUTORS.read ||
+    toolName === MCP_CAPABILITY_EXECUTORS.write
+  ) {
+    return await invokedCapabilityAgentRefusal({
+      args,
+      context,
+      access: toolName === MCP_CAPABILITY_EXECUTORS.read ? "read" : "write",
+    });
+  }
+  const staticTool = getStaticMcpToolDefinition(toolName, mode);
+  if (staticTool === undefined) {
+    return null;
+  }
+  return finalAgentRefusal(
+    decideAgentCall({
+      target: { type: "tool", name: toolName, access: staticTool.access },
+      context,
+      surface: AGENT_CALL_SURFACE.mcp,
+      subject: toolName,
+      confirmed: args["confirm"] === true,
     }),
   );
 };
@@ -589,6 +577,25 @@ const dispatchMcpToolCall = async ({
     return serializeForSurface(structuredErrorResult(authorization.refusal));
   }
   const authorizedContext = authorization.context;
+
+  // Agent access, once the caller is known to hold the operation's grant: what
+  // a person must run or approve is refused here, before the handler or any
+  // reference lookup. A missing confirmation is reported below, once the
+  // call's references resolve, so it never answers for a resource the caller
+  // cannot see. Capability-catalog tools defer to the capability their call
+  // selects (`capability-tools.ts`).
+  const decision = decideAgentCall({
+    target: { type: "tool", name: toolName, access: staticTool.access },
+    context: authorizedContext,
+    surface: AGENT_CALL_SURFACE.mcp,
+    subject: toolName,
+    confirmed: normalizedArgs["confirm"] === true,
+  });
+  const finalRefusal = finalAgentRefusal(decision);
+  if (finalRefusal !== null) {
+    return serializeForSurface(structuredErrorResult(finalRefusal));
+  }
+
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler) {
     return serializeForSurface(unknownToolResult(toolName));
@@ -618,36 +625,14 @@ const dispatchMcpToolCall = async ({
             return serializeForSurface(referenceRefusal);
           }
 
-          // Resolve confirmation from the registry's canonical behavior.
-          // Capability-catalog and upstream tools defer the final decision to their
-          // owning dispatch boundary because the selected target determines risk.
-          const confirmation = transportConfirmation(
-            staticTool,
-            normalizedArgs,
-          );
-          const requiresConfirmation = confirmation.required;
-          const unconfirmable = confirmation.required
-            ? confirmationUnavailableResult({
-                toolConfirmation: context.toolConfirmation,
-                subject: toolName,
-              })
-            : null;
-          if (unconfirmable !== null) {
-            return serializeForSurface(unconfirmable);
+          // Reference visibility precedes the deferred confirmation refusal.
+          if (decision.type === "refuse") {
+            return serializeForSurface(structuredErrorResult(decision.refusal));
           }
-          if (confirmation.required && normalizedArgs["confirm"] !== true) {
-            return serializeForSurface(
-              structuredErrorResult({
-                code: "confirmation_required",
-                message: confirmation.message,
-                hint: confirmation.hint,
-              }),
-            );
-          }
-
-          const executionContext = requiresConfirmation
-            ? bindApprovedMcpAuditContext(authorizedContext)
-            : authorizedContext;
+          const executionContext =
+            decision.approval === "confirmed"
+              ? bindApprovedMcpAuditContext(authorizedContext)
+              : authorizedContext;
           const response = await handler({
             args: normalizedArgs,
             context: executionContext,

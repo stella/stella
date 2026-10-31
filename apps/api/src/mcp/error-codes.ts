@@ -27,6 +27,13 @@ export const MCP_ERROR_CODES = [
   /** A destructive operation needs `confirm: true` after human approval. */
   "confirmation_required",
   /**
+   * The operation needs a person's approval inside stella; an MCP or CLI call
+   * cannot supply it, and retrying with `confirm: true` does not help.
+   */
+  "person_approval_required",
+  /** Only a person can perform the operation; agent calls are always refused. */
+  "person_only",
+  /**
    * The caller is authenticated and holds the required scope, but the member
    * role lacks permission for the operation (or workspace access was denied).
    * Maps a backing handler's 401/403 through the generic capability path; the

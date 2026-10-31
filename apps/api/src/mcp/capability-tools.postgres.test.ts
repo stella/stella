@@ -12,6 +12,8 @@ import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import requestPersonalDataExport from "@/api/handlers/account-exports/create";
+import personalDataExportDownloadLink from "@/api/handlers/account-exports/download/get";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -97,11 +99,11 @@ describe.skipIf(!postgresTestsEnabled)(
 
     beforeAll(async () => {
       await rootDb.insert(user).values([
-        { id: userId, name: "Export caller", email: `${userId}@test.local` },
+        { id: userId, name: "Export caller", email: `${userId}@example.test` },
         {
           id: otherUserId,
           name: "Other export caller",
-          email: `${otherUserId}@test.local`,
+          email: `${otherUserId}@example.test`,
         },
       ]);
       await rootDb.insert(organization).values({
@@ -159,7 +161,7 @@ describe.skipIf(!postgresTestsEnabled)(
             promptCachingEnabled: false,
           }),
         },
-        userEmail: `${userId}@test.local`,
+        userEmail: `${userId}@example.test`,
         userId,
       });
     });
@@ -173,10 +175,44 @@ describe.skipIf(!postgresTestsEnabled)(
         .where(inArray(accountExports.userId, [userId, otherUserId]));
     });
 
-    test("dispatches every export capability to its real handler with account ownership and schema-safe output", async () => {
-      const created = await invoke(context, "account-exports.create");
-      expect(created.isError).not.toBe(true);
-      const createdPayload = parsePayload(created);
+    const downloadContext = (exportId: string) =>
+      asTestRaw<Parameters<typeof personalDataExportDownloadLink.handler>[0]>({
+        user: { id: userId, email: `${userId}@example.test` },
+        params: { exportId },
+        request: new Request(
+          `http://localhost/v1/me/data-exports/${exportId}/download-link`,
+        ),
+        route: "/v1/me/data-exports/:exportId/download-link",
+        set: { headers: {} },
+      });
+
+    test("MCP requires human approval for export creation and bulk downloads", async () => {
+      for (const { capability, input } of [
+        { capability: "account-exports.create", input: {} },
+        {
+          capability: "account-exports.download.get",
+          input: { params: { exportId: EXPORT_ID } },
+        },
+      ]) {
+        const result = await invoke(context, capability, input);
+        expect(result.isError).toBe(true);
+        expect(parsePayload(result)).toMatchObject({
+          error: { code: "person_approval_required" },
+        });
+      }
+    });
+
+    test("session handlers retain export schema and ownership checks while MCP dispatches status reads", async () => {
+      const createdPayload = await requestPersonalDataExport.handler(
+        asTestRaw<Parameters<typeof requestPersonalDataExport.handler>[0]>({
+          user: { id: userId, email: `${userId}@example.test` },
+          request: new Request("http://localhost/v1/me/data-exports", {
+            method: "POST",
+          }),
+          route: "/v1/me/data-exports",
+          set: { headers: {} },
+        }),
+      );
       expect(v.safeParse(createSchema, createdPayload).success).toBe(true);
       expect(createdPayload).toMatchObject({
         id: EXPORT_ID,
@@ -228,11 +264,9 @@ describe.skipIf(!postgresTestsEnabled)(
             eq(accountExports.userId, userId),
           ),
         );
-      const download = await invoke(context, "account-exports.download.get", {
-        params: { exportId: EXPORT_ID },
-      });
-      expect(download.isError).not.toBe(true);
-      const downloadPayload = parsePayload(download);
+      const downloadPayload = await personalDataExportDownloadLink.handler(
+        downloadContext(EXPORT_ID),
+      );
       expect(v.safeParse(downloadSchema, downloadPayload).success).toBe(true);
       expect(downloadPayload).toEqual({
         id: EXPORT_ID,
@@ -259,26 +293,15 @@ describe.skipIf(!postgresTestsEnabled)(
             eq(accountExports.userId, otherUserId),
           ),
         );
-      const otherDownload = await invoke(
-        context,
-        "account-exports.download.get",
-        {
-          params: { exportId: OTHER_EXPORT_ID },
-        },
+      const otherDownload = await personalDataExportDownloadLink.handler(
+        downloadContext(OTHER_EXPORT_ID),
       );
-      expect(otherDownload.isError).toBe(true);
-      expect(parsePayload(otherDownload)).toEqual({
-        error: {
-          code: "not_found",
+      expect(otherDownload).toMatchObject({
+        code: 404,
+        response: {
+          code: "account_export_download_unavailable",
           message: "Export is unavailable or expired.",
           hint: "Poll account-exports.status.get while building; call account-exports.create if failed or expired.",
-          issues: [
-            {
-              code: "account_export_download_unavailable",
-              message: "Export is unavailable or expired.",
-              path: "",
-            },
-          ],
         },
       });
     });

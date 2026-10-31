@@ -28,6 +28,11 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { pickDefined } from "@/api/lib/pick-defined";
+import {
+  AGENT_ACCESS_KIND,
+  describeAgentAccess,
+  describeForAgents,
+} from "@/api/mcp/agent-access";
 import { connectToolWeights } from "@/api/mcp/connect-tool-weights";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
@@ -44,6 +49,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
@@ -51,6 +57,9 @@ import {
 } from "@/api/mcp/tool-types";
 
 type StaticMcpToolDefinition = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
+
+// The CLI runs as the person it acts for, so it relays their confirmation.
+const CLI_AGENT_CONTEXT = { toolConfirmation: TOOL_CONFIRMATION.caller };
 
 const deriveCliAnnotation = (
   tool: McpToolDefinition & { name: StaticMcpToolDefinition["name"] },
@@ -60,49 +69,18 @@ const deriveCliAnnotation = (
     ...declared,
     ...pickDefined(tool, ["feature", "featureId"]),
   };
-  const behavior =
-    "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
-  if (behavior === undefined || behavior.type === "always") {
-    return annotation;
-  }
-
-  if (behavior.type === "capability-catalog" || behavior.type === "outbound") {
-    // The leaf prompts before it runs, and `--yes` pre-approves: a catalog
-    // target decides its own risk at dispatch, and an outbound call is refused
-    // by the same server-side gate a destructive one is.
-    return { ...annotation, confirmPassthrough: true };
-  }
-
-  if (behavior.type === "upstream") {
-    return panic(
-      `${tool.name} static CLI metadata cannot use upstream behavior`,
-    );
-  }
-
-  const discriminator = annotation.discriminator;
-  if (discriminator === undefined || discriminator.prop !== behavior.property) {
-    return panic(
-      `${tool.name} CLI metadata must discriminate on ${behavior.property}`,
-    );
-  }
-
-  return {
-    ...annotation,
-    discriminator: {
-      ...discriminator,
-      subcommands: Object.fromEntries(
-        Object.entries(discriminator.subcommands).map(([value, subcommand]) => [
-          value,
-          {
-            ...subcommand,
-            destructive: behavior.destructiveValues.some(
-              (destructiveValue) => destructiveValue === value,
-            ),
-          },
-        ]),
-      ),
-    },
-  };
+  const { access } = describeAgentAccess({
+    target: { type: "tool", name: tool.name, access: tool.access },
+    context: CLI_AGENT_CONTEXT,
+  });
+  // The leaf prompts before it runs, and `--yes` pre-approves: a catalog
+  // target decides its own access at dispatch, and an outbound send is
+  // refused without confirmation exactly as a delete is.
+  return access.kind === "per-capability" ||
+    (access.kind === AGENT_ACCESS_KIND.callerConfirms &&
+      access.reason === "outbound")
+    ? { ...annotation, confirmPassthrough: true }
+    : annotation;
 };
 
 // The tools/list wire fields plus build-time CLI metadata.
@@ -119,7 +97,13 @@ for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
   listings.push({
     cli: deriveCliAnnotation(tool),
     name: tool.name,
-    description: tool.description,
+    // As tools/list serves it to the CLI: generated help must not advertise
+    // a command the server refuses.
+    description: describeForAgents({
+      target: { type: "tool", name: tool.name, access: tool.access },
+      context: CLI_AGENT_CONTEXT,
+      description: tool.description,
+    }),
     inputSchema: tool.inputSchema,
     annotations: tool.annotations,
   });
@@ -142,9 +126,33 @@ const connectWeightPath = new URL(
 );
 await Bun.write(
   connectWeightPath,
-  `${JSON.stringify(connectToolWeights(listings), null, 2)}\n`,
+  `${JSON.stringify(connectToolWeights(DEFAULT_MCP_TOOL_DEFINITIONS), null, 2)}\n`,
 );
 process.stderr.write(`Wrote ${connectWeightPath.pathname}\n`);
+
+const projectChatGrantPolicy = (
+  tool: Extract<StaticMcpToolDefinition, { access: "write" }>,
+): "approve-once" | "grantable" => {
+  const { access } = describeAgentAccess({
+    target: { type: "tool", name: tool.name, access: tool.access },
+    context: CLI_AGENT_CONTEXT,
+  });
+  switch (access.kind) {
+    case AGENT_ACCESS_KIND.personApproves:
+    case AGENT_ACCESS_KIND.personOnly:
+    case AGENT_ACCESS_KIND.callerConfirms:
+    case "per-capability":
+      return "approve-once";
+    case AGENT_ACCESS_KIND.open:
+      return tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
+        tool.annotations.destructiveHint
+        ? "approve-once"
+        : "grantable";
+    default:
+      access satisfies never;
+      return panic("Unhandled projected tool agent access");
+  }
+};
 
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
@@ -158,12 +166,7 @@ for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   }
 
   projectedChatPolicyKinds[tool.name] = "mutation";
-  // Account-control changes need fresh consent even when they are reversible.
-  projectedChatGrantPolicies[tool.name] =
-    tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
-    tool.annotations.destructiveHint
-      ? "approve-once"
-      : "grantable";
+  projectedChatGrantPolicies[tool.name] = projectChatGrantPolicy(tool);
 }
 
 const generatedChatPolicyPath = new URL(

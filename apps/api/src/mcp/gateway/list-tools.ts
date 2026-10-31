@@ -101,7 +101,6 @@ const externalMcpToolAccess = ({
         destructiveHint: false;
         readOnlyHint: true;
       };
-      destructiveBehavior?: undefined;
     }
   | {
       access: "write";
@@ -109,7 +108,6 @@ const externalMcpToolAccess = ({
         destructiveHint: true;
         readOnlyHint: false;
       };
-      destructiveBehavior: { type: "upstream" };
       permissions: McpWriteToolPermissions;
       accountAccess: "account-control";
     } =>
@@ -135,7 +133,6 @@ const externalMcpToolAccess = ({
           openWorldHint: true,
           readOnlyHint: false,
         },
-        destructiveBehavior: { type: "upstream" },
         permissions: {
           type: "delegated",
           reason:

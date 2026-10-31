@@ -33,6 +33,7 @@ import {
   buildXlsxExport,
 } from "@/api/lib/views/table-export";
 import type { ExportLinkContext } from "@/api/lib/views/table-export";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 // Postgres caps bound parameters per statement; chunk the justification
@@ -49,6 +50,7 @@ const config = {
     "bytes; views.list describes a view but never its rows.",
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     readClass: "tenant",

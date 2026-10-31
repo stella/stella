@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/legal-resolve/scope";
 import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
+import { describeForAgents } from "@/api/mcp/agent-access";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestResources } from "@/api/mcp/context";
 import {
@@ -15,7 +16,6 @@ import {
   projectMcpFeatureInput,
 } from "@/api/mcp/feature-access";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
-import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
@@ -26,19 +26,26 @@ import {
 } from "@/api/mcp/write-tool-authority";
 
 /**
- * A session that cannot confirm is not offered tools that always need
- * confirmation. Discriminator tools stay listed: their other actions run
- * without it, and dispatch refuses only the confirmation-gated ones.
+ * Agents are offered every tool they may ask about, including ones a person
+ * must run or approve, so a model can point the user to them. Such a tool's
+ * description ends with its agent-access sentence; dispatch refuses the call.
  */
-const isStaticToolAvailableToConfirmation = (
+const withAgentAccessNote = (
   context: McpRequestResources,
   definition: McpToolDefinition,
-): boolean => {
-  if (context.toolConfirmation !== TOOL_CONFIRMATION.unavailable) {
-    return true;
-  }
-  const behavior = definition.destructiveBehavior?.type;
-  return behavior !== "always" && behavior !== "outbound";
+): McpToolDefinition => {
+  const description = describeForAgents({
+    target: {
+      type: "tool",
+      name: definition.name,
+      access: definition.access,
+    },
+    context,
+    description: definition.description,
+  });
+  return description === definition.description
+    ? definition
+    : { ...definition, description };
 };
 
 /**
@@ -170,10 +177,10 @@ const narrowBusinessRegistryTool = (
 
 /**
  * The static tools one session is offered: granted by its scopes, enabled on
- * this deployment, visible to its member role, confirmable by its client, and
- * (on the default surface) narrowed to the business registers its organization
- * can reach. `tools/list` serves these, and a skill is offered over MCP only
- * when every tool it requires is among them. Host discovery omits `audience`
+ * this deployment, visible to its member role, described with their agent
+ * access, and (on the default surface) narrowed to the business registers its
+ * organization can reach. `tools/list` serves these, and a skill is offered
+ * over MCP only when every tool it requires is among them. Host discovery omits `audience`
  * so app-only definitions reach hosts with their visibility metadata; model
  * consumers select `audience: "model"`. Audience is never an authorization grant.
  *
@@ -213,9 +220,9 @@ export const listOfferedStaticMcpToolDefinitions = ({
           featureId: definition.featureId,
         }) &&
         isMcpToolFeatureEnabled(definition.feature) &&
-        isStaticToolVisibleToRole(context, definition) &&
-        isStaticToolAvailableToConfirmation(context, definition),
-    );
+        isStaticToolVisibleToRole(context, definition),
+    )
+    .map((definition) => withAgentAccessNote(context, definition));
   return mode === "default"
     ? narrowBusinessRegistryTool(enabledRegistrySlugs, staticDefinitions)
     : staticDefinitions;

@@ -21,6 +21,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const exportQuerySchema = v.object({
   format: v.optional(v.picklist(["csv", "json"])),
@@ -37,6 +38,7 @@ const config = {
   description:
     "Export the contact directory as a bounded CSV or versioned JSON download.",
   permissions: { workspace: ["read"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     readClass: "tenant",

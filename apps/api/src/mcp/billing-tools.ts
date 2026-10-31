@@ -880,6 +880,14 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
 const saveTimeEntryArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
+      confirm: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Set true only after the human user approves saving this time entry.",
+          ),
+        ),
+      ),
       time_entry_id: v.optional(
         uuidInputSchema("Time entry ID to update; omit to create"),
       ),
@@ -1821,7 +1829,6 @@ export const BILLING_TOOL_DEFINITIONS = [
     accountAccess: "sandbox",
     permissions: { type: "all", permissions: { timeEntry: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     feature: "FEATURE_TIME_BILLING",
     featureId: "time-billing",
     name: "delete_time_entry",

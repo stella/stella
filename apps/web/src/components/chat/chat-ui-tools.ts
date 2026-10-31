@@ -253,7 +253,6 @@ const CHAT_TOOL_TITLE_KEYS = {
   delete_clause: "chat.tool.delete_clause",
   delete_contact: "chat.tool.delete_contact",
   delete_document: "chat.tool.delete_document",
-  delete_matter: "chat.tool.delete_matter",
   delete_reader_annotation: "chat.tool.delete_reader_annotation",
   delete_task: "chat.tool.delete_task",
   delete_time_entry: "chat.tool.delete_time_entry",
@@ -331,6 +330,9 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   // Split into create_template and configure_template_fields; persisted
   // threads still carry its calls and should not render as an unknown tool.
   save_template: "chat.tool.save_template",
+  // Deleting a matter is no longer offered in chat (a person does it in the
+  // app); persisted threads still carry its calls.
+  delete_matter: "chat.tool.delete_matter",
   // Retired hand-rolled code-execution tools, replaced by the code-mode
   // execute_typescript / discover_tools pair. Kept so historical threads that
   // reference them still render a recognisable label.
@@ -441,7 +443,6 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   delete_clause: true,
   delete_contact: true,
   delete_document: true,
-  delete_matter: true,
   delete_reader_annotation: true,
   delete_task: true,
   delete_time_entry: true,
@@ -495,6 +496,7 @@ const RETIRED_REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   ares_lookup_company: false,
   ares_search_companies: false,
   compare_versions: false,
+  delete_matter: true,
   "describe-stella-api": false,
   "describe-stella-function": false,
   edit_workspace_document: false,

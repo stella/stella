@@ -1357,10 +1357,10 @@ export const STELLA_TOOL_DEFINITIONS = [
 ] as const satisfies readonly McpToolDefinition[];
 
 const buildOnboardingNextStep = () =>
-  `This organization has no practice jurisdictions yet. Call ` +
-  `${SET_PRACTICE_JURISDICTIONS_TOOL} with \`jurisdictions: [{ country_code, ` +
-  `is_primary }]\` to enable jurisdiction-aware tools, or have the user ` +
-  `complete onboarding at ${getAppBaseUrl()}.`;
+  `This organization has no practice jurisdictions yet, so ` +
+  `jurisdiction-aware tools are limited. Ask the user to complete ` +
+  `onboarding at ${getAppBaseUrl()}: ${SET_PRACTICE_JURISDICTIONS_TOOL} ` +
+  `changes organization settings, which needs a person's approval in stella.`;
 
 /**
  * The onboarding step an empty result carries as its `nextStep` while the

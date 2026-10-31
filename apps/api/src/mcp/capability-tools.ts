@@ -57,6 +57,16 @@ import {
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
+import {
+  AGENT_CALL_SURFACE,
+  decideAgentCall,
+  describeAgentAccess,
+  finalAgentRefusal,
+} from "@/api/mcp/agent-access";
+import type {
+  AgentCallDecision,
+  AgentCallRefusal,
+} from "@/api/mcp/agent-access";
 import { capabilityHandlerContext } from "@/api/mcp/capability-context";
 import type { CapabilityHandlerContext } from "@/api/mcp/capability-context";
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
@@ -85,13 +95,14 @@ import {
   normalizeInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { plainRecord } from "@/api/mcp/input-schemas";
+import { isPersonApprovedEffect } from "@/api/mcp/person-approved-effect";
+import type { PersonApprovedEffect } from "@/api/mcp/person-approved-effect";
 import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
   withPublicFieldNames,
 } from "@/api/mcp/public-field-names";
-import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -102,7 +113,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
-  confirmationUnavailableResult,
   cursorInput,
   DEFAULT_LIST_LIMIT,
   didYouMean,
@@ -155,6 +165,8 @@ type CatalogEntry = {
   readClass?: McpReadClass;
   destructive: boolean;
   confirmation?: "required";
+  /** The handler's declared effect that only a person may authorize. */
+  personApprovedEffect?: PersonApprovedEffect;
   scope: string;
   additionalScopes?: readonly string[];
   /**
@@ -293,6 +305,8 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   typeof value["destructive"] === "boolean" &&
   (value["confirmation"] === undefined ||
     value["confirmation"] === "required") &&
+  (value["personApprovedEffect"] === undefined ||
+    isPersonApprovedEffect(value["personApprovedEffect"])) &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
     (Array.isArray(value["additionalScopes"]) &&
@@ -1061,15 +1075,10 @@ const listCapabilitiesHandler: McpToolHandler<
   // Feature-gated entries whose flag is off are not advertised, matching how
   // the static tools/list hides gated-off tools (describe/invoke also refuse
   // them, closing the guess-the-id bypass).
-  // A session that cannot confirm is not offered destructive capabilities;
-  // invoke refuses them for it as well.
-  const confirmable =
-    context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
   const matching = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       capabilityFeatureEnabled(entry, context) &&
-      (confirmable || !requiresCapabilityConfirmation(entry)) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access),
   );
@@ -1119,10 +1128,7 @@ const listCapabilitiesHandler: McpToolHandler<
       items: page.map((entry) => ({
         id: entry.id,
         summary: scopeMcpDescriptorProse(summarizeEntry(entry), hiddenIds),
-        description:
-          entry.description === undefined
-            ? null
-            : scopeMcpDescriptorProse(entry.description, hiddenIds),
+        description: describeCapability({ entry, context, hiddenIds }),
         access: entry.access,
         destructive: entry.destructive,
         confirmation: requiresCapabilityConfirmation(entry)
@@ -1138,6 +1144,33 @@ const listCapabilitiesHandler: McpToolHandler<
     }),
     textFields: [],
   });
+};
+
+/**
+ * A capability's description as agents read it, followed by the agent-access
+ * sentence when agents cannot run it unchanged.
+ */
+const describeCapability = ({
+  entry,
+  context,
+  hiddenIds,
+}: {
+  entry: CatalogEntry;
+  context: McpRequestContext;
+  hiddenIds: ReturnType<typeof hiddenMcpDescriptorIds>;
+}): string | null => {
+  const description =
+    entry.description === undefined
+      ? null
+      : scopeMcpDescriptorProse(entry.description, hiddenIds);
+  const { note } = describeAgentAccess({
+    target: { type: "capability", id: entry.id },
+    context,
+  });
+  if (note === null) {
+    return description;
+  }
+  return description === null ? note : `${description} ${note}`;
 };
 
 const accessLabel = (entry: CatalogEntry): string =>
@@ -1221,7 +1254,7 @@ const decodeCapabilityCursor = (
 
 const notFoundWithHint = async (
   id: string,
-  context: AuthorizedMcpRequestContext,
+  context: McpRequestContext,
 ): Promise<InternalToolErrorResult> =>
   notFoundResult(
     `No capability with id "${id}"`,
@@ -1244,7 +1277,7 @@ const featureDisabledResult = (
 
 const hintForUnknownId = async (
   id: string,
-  context: AuthorizedMcpRequestContext,
+  context: McpRequestContext,
 ): Promise<string> => {
   const suggestions = closestToolNames(
     id,
@@ -1397,10 +1430,7 @@ const describeCapabilityHandler: McpToolHandler<
   return structuredEgressPlan({
     payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
       id: entry.id,
-      description:
-        entry.description === undefined
-          ? null
-          : scopeMcpDescriptorProse(entry.description, hiddenIds),
+      description: describeCapability({ entry, context, hiddenIds }),
       domain: capabilityDomain(entry.id),
       access: entry.access,
       destructive: entry.destructive,
@@ -1887,6 +1917,194 @@ export const invokedCapabilityConsumesServices = async ({
   });
 };
 
+const decideCapabilityCall = ({
+  id,
+  context,
+  confirmed,
+}: {
+  id: string;
+  context: McpRequestContext;
+  confirmed: boolean;
+}): AgentCallDecision =>
+  decideAgentCall({
+    target: { type: "capability", id },
+    context,
+    surface: AGENT_CALL_SURFACE.mcp,
+    subject: `Capability "${id}"`,
+    confirmed,
+  });
+
+type CapabilityGate =
+  | { type: "refused"; result: McpToolResponse }
+  | {
+      type: "passed";
+      decision: AgentCallDecision;
+      endpoint: EndpointDefinition;
+      entry: CatalogEntry;
+    };
+
+/**
+ * The gates a capability call passes before agent access, in dispatch order.
+ * Dispatch and the pre-admission refusal share them, so an early agent-access
+ * refusal never answers for a call dispatch refuses first.
+ */
+const capabilityGate = async ({
+  id,
+  access,
+  context,
+  confirmed,
+}: {
+  id: string;
+  access: keyof typeof MCP_CAPABILITY_EXECUTORS;
+  context: McpRequestContext;
+  confirmed: boolean;
+}): Promise<CapabilityGate> => {
+  const refused = (result: McpToolResponse) =>
+    ({ type: "refused", result }) as const;
+  const entry = (await getCatalogById()).get(id);
+
+  // 1. Unknown id -> not_found with a closest-id hint.
+  if (!entry) {
+    return refused(await notFoundWithHint(id, context));
+  }
+
+  // 2. Caller admission precedes deployment availability for discovery parity.
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return refused(await notFoundWithHint(id, context));
+  }
+  if (!contextFeatureEnabled(entry.feature, context)) {
+    return refused(featureDisabledResult(entry.feature));
+  }
+
+  if (entry.access !== access) {
+    return refused(
+      structuredErrorResult({
+        code: "validation_error",
+        message: `Capability "${id}" requires the ${entry.access} executor`,
+        hint: `Call ${MCP_CAPABILITY_EXECUTORS[entry.access]} with the same capability and input.`,
+      }),
+    );
+  }
+
+  // 3. Disposition / fidelity. token/public capabilities self-authorize from a
+  // body/param token and are not reachable through the generic path; a waived
+  // capability's handler needs response plumbing the synthesized context drops.
+  if (entry.handlerKind === "token" || entry.handlerKind === "public") {
+    return refused(
+      notFoundResult(
+        `Capability "${id}" is not invokable through capability executors`,
+        "This operation authorizes itself differently; use its dedicated surface.",
+      ),
+    );
+  }
+  const waiver = (
+    context.testDependencies?.contextFidelityWaivers ?? CONTEXT_FIDELITY_WAIVERS
+  ).get(id);
+  if (waiver !== undefined) {
+    return refused(
+      structuredErrorResult({
+        code: "feature_disabled",
+        message: `Capability "${id}" cannot run through capability executors: ${waiver}`,
+        hint: "Perform this operation in the stella app, which has the required request context.",
+      }),
+    );
+  }
+  // File transport. A file response cannot be serialized, and a REQUIRED file
+  // input cannot be supplied (a plain string passes `format: "binary"`
+  // validation and reaches a handler expecting a `File`), so refuse
+  // pre-execution — before validateOnly too, which would otherwise report
+  // `valid: true` for an un-runnable input. A runtime backstop in
+  // mapHandlerResult still catches any file value that slips past. The refusal
+  // names the alternative transport instead of stopping at "not available".
+  const transportBlock = transportRefusal(id, entry.transport);
+  if (transportBlock !== null) {
+    return refused(transportBlock);
+  }
+
+  const loaded = await loadEndpointGuarded({
+    id,
+    toolName: MCP_CAPABILITY_EXECUTORS[access],
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
+  if (!loaded.ok) {
+    return refused(loaded.result);
+  }
+
+  // 4. Member grant: use the live endpoint's route permission, so capability
+  // dispatch cannot drift from HTTP route access. This deliberately precedes
+  // OAuth consent and agent-access policy: permission_denied wins for callers
+  // whose role cannot perform the operation.
+  const permissions = loaded.endpoint.config.permissions;
+  if (
+    permissions !== undefined &&
+    !hasEffectiveAuthority(context, permissions)
+  ) {
+    return refused(
+      structuredErrorResult({
+        code: "permission_denied",
+        message: `Your member role does not permit capability "${id}"`,
+      }),
+    );
+  }
+
+  // 5. Scopes: the session must hold every scope in the capability catalog. Read
+  // capabilities now resolve to a read scope (see the exporter's access-keyed
+  // resolution), so a `stella:read` grant reaches them directly.
+  const requiredScopes = requiredScopesOf(entry);
+  const missingScope = requiredScopes.find(
+    (scope) => !context.grantedScopes.includes(scope),
+  );
+  if (missingScope !== undefined) {
+    return refused(
+      structuredErrorResult({
+        code: "missing_scope",
+        message: `Insufficient permissions. Capability "${id}" requires scope: ${missingScope}`,
+        hint: oauthScopeRecoveryHint({
+          grantedScopes: context.grantedScopes,
+          missingScope,
+          requiredScopes,
+        }),
+      }),
+    );
+  }
+  // 6. Agent access is last in the common authorization gate, after both forms
+  // of caller authority above.
+  return {
+    type: "passed",
+    decision: decideCapabilityCall({ id, context, confirmed }),
+    endpoint: loaded.endpoint,
+    entry,
+  };
+};
+
+/**
+ * The final agent-access refusal for the capability an executor call selects,
+ * answered before action admission so a call a person must run or approve
+ * neither spends the action budget nor gets an admission refusal instead.
+ * `null` for calls dispatch reports itself: invalid arguments, any refusal of
+ * the earlier gates, and missing confirmations.
+ */
+export const invokedCapabilityAgentRefusal = async ({
+  args,
+  context,
+  access,
+}: CapabilityServiceClassificationOptions): Promise<AgentCallRefusal | null> => {
+  const parsed = v.safeParse(CAPABILITY_ARGUMENT_SCHEMAS[access], args);
+  if (!parsed.success) {
+    return null;
+  }
+  const gate = await capabilityGate({
+    id: parsed.output.capability,
+    access,
+    context,
+    confirmed: "confirm" in parsed.output && parsed.output.confirm === true,
+  });
+  if (gate.type === "refused") {
+    return null;
+  }
+  return finalAgentRefusal(gate.decision);
+};
+
 type InvokeCapabilityOptions = {
   args: Record<string, unknown>;
   context: AuthorizedMcpRequestContext;
@@ -1917,87 +2135,25 @@ const invokeCapabilityHandler = async ({
   } = parsed.output;
   const confirm = "confirm" in parsed.output && parsed.output.confirm === true;
 
-  const entry = (await getCatalogById()).get(id);
+  // 1-6. Resolve the endpoint, then enforce its member grant, OAuth scopes,
+  // and agent-access policy in that order.
+  const gate = await capabilityGate({
+    id,
+    access,
+    context,
+    confirmed: confirm,
+  });
+  if (gate.type === "refused") {
+    return gate.result;
+  }
+  const { decision, endpoint, entry } = gate;
 
-  // 1. Unknown id -> not_found with a closest-id hint.
-  if (!entry) {
-    return notFoundWithHint(id, context);
-  }
-
-  // 2. Caller admission precedes deployment availability for discovery parity.
-  if (!capabilityFeatureEnabled(entry, context)) {
-    return notFoundWithHint(id, context);
-  }
-  if (!contextFeatureEnabled(entry.feature, context)) {
-    return featureDisabledResult(entry.feature);
-  }
-
-  if (entry.access !== access) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: `Capability "${id}" requires the ${entry.access} executor`,
-      hint: `Call ${MCP_CAPABILITY_EXECUTORS[entry.access]} with the same capability and input.`,
-    });
-  }
-
-  // 3. Disposition / fidelity. token/public capabilities self-authorize from a
-  // body/param token and are not reachable through the generic path; a waived
-  // capability's handler needs response plumbing the synthesized context drops.
-  if (entry.handlerKind === "token" || entry.handlerKind === "public") {
-    return notFoundResult(
-      `Capability "${id}" is not invokable through capability executors`,
-      "This operation authorizes itself differently; use its dedicated surface.",
-    );
-  }
-  const waiver = (
-    context.testDependencies?.contextFidelityWaivers ?? CONTEXT_FIDELITY_WAIVERS
-  ).get(id);
-  if (waiver !== undefined) {
-    return structuredErrorResult({
-      code: "feature_disabled",
-      message: `Capability "${id}" cannot run through capability executors: ${waiver}`,
-      hint: "Perform this operation in the stella app, which has the required request context.",
-    });
-  }
-  // File transport. A file response cannot be serialized, and a REQUIRED file
-  // input cannot be supplied (a plain string passes `format: "binary"`
-  // validation and reaches a handler expecting a `File`), so refuse
-  // pre-execution — before validateOnly too, which would otherwise report
-  // `valid: true` for an un-runnable input. A runtime backstop in
-  // mapHandlerResult still catches any file value that slips past. The refusal
-  // names the alternative transport instead of stopping at "not available".
-  const transportBlock = transportRefusal(id, entry.transport);
-  if (transportBlock !== null) {
-    return transportBlock;
-  }
-
-  // 4. Scopes: the session must hold every scope in the capability catalog. Read
-  // capabilities now resolve to a read scope (see the exporter's access-keyed
-  // resolution), so a `stella:read` grant reaches them directly.
-  const requiredScopes = requiredScopesOf(entry);
-  const missingScope = requiredScopes.find(
-    (scope) => !context.grantedScopes.includes(scope),
-  );
-  if (missingScope !== undefined) {
-    return structuredErrorResult({
-      code: "missing_scope",
-      message: `Insufficient permissions. Capability "${id}" requires scope: ${missingScope}`,
-      hint: oauthScopeRecoveryHint({
-        grantedScopes: context.grantedScopes,
-        missingScope,
-        requiredScopes,
-      }),
-    });
-  }
-
-  const unconfirmable = requiresCapabilityConfirmation(entry)
-    ? confirmationUnavailableResult({
-        toolConfirmation: context.toolConfirmation,
-        subject: `Capability "${id}"`,
-      })
-    : null;
-  if (unconfirmable !== null) {
-    return unconfirmable;
+  // 6. Agent access. A missing confirmation is reported only after the
+  // target resolves (`capabilityReferenceRefusal`), so it never answers for a
+  // resource the caller cannot see; every other refusal is final here.
+  const finalRefusal = finalAgentRefusal(decision);
+  if (finalRefusal !== null) {
+    return structuredErrorResult(finalRefusal);
   }
   const input: InvokeInput = {
     body: rawInput?.body,
@@ -2020,14 +2176,16 @@ const invokeCapabilityHandler = async ({
       { type: "handler", handlerId: `mcp.capability.${entry.id}` },
       async () =>
         await executeInvoke({
-          context: requiresCapabilityConfirmation(entry)
-            ? bindApprovedMcpAuditContext(context)
-            : context,
+          context:
+            decision.type === "allow" && decision.approval === "confirmed"
+              ? bindApprovedMcpAuditContext(context)
+              : context,
           entry,
+          endpoint,
           id,
           input,
           validateOnly,
-          confirm,
+          decision,
         }),
     );
   } catch (error) {
@@ -2067,8 +2225,8 @@ const invokeCapabilityHandler = async ({
  * - Scope recheck (server-core missing_scope): the transport already gates the
  *   executor tool itself; gate 4 rechecks the per-capability catalog
  *   scope against the session's grants.
- * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
- *   per-capability `destructive` flag.
+ * - Agent access (tools.ts `decideAgentCall`): gate 5, the capability's own
+ *   agent access through the same resolver.
  * - Workspace access (per-tool `ensureActiveWorkspace` bridging): gate 7
  *   mirrors the route's `workspaceStatus` (archived admitted per that flag).
  * - Member permissions + usage preflight: run inside the safe-handler wrapper
@@ -2244,16 +2402,14 @@ const capabilityReferenceRefusal = async ({
   body,
   params,
   query,
-  entry,
-  confirm,
+  decision,
 }: {
   context: AuthorizedMcpRequestContext;
   config: EndpointConfig;
   body: unknown;
   params: unknown;
   query: unknown;
-  entry: Pick<CatalogEntry, "id" | "destructive" | "confirmation">;
-  confirm: boolean | undefined;
+  decision: AgentCallDecision;
 }) => {
   if (
     !(await resourcesAreVisible({
@@ -2268,13 +2424,9 @@ const capabilityReferenceRefusal = async ({
     return notFoundResult("Not found");
   }
 
-  // 5. Per-capability confirmation gate.
-  if (requiresCapabilityConfirmation(entry) && confirm !== true) {
-    return structuredErrorResult({
-      code: "confirmation_required",
-      message: `Capability "${entry.id}" requires confirmation and was called without it`,
-      hint: "Confirm this operation with the human user, then retry with confirm: true.",
-    });
+  // 5. The deferred confirmation refusal from the agent-access decision.
+  if (decision.type === "refuse") {
+    return structuredErrorResult(decision.refusal);
   }
 
   return null;
@@ -2295,29 +2447,21 @@ const capabilityPermissionDenied = (id: string) =>
 
 const executeInvoke = async ({
   context,
+  endpoint,
   entry,
   id,
   input: publicInput,
   validateOnly,
-  confirm,
+  decision,
 }: {
   context: AuthorizedMcpRequestContext;
+  endpoint: EndpointDefinition;
   entry: CatalogEntry;
   id: string;
   input: InvokeInput;
   validateOnly: boolean;
-  confirm: boolean | undefined;
+  decision: AgentCallDecision;
 }): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded({
-    id,
-    toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
-    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
-  });
-  if (!loaded.ok) {
-    return loaded.result;
-  }
-  const endpoint = loaded.endpoint;
-
   const isWorkspace = entry.handlerKind === "workspace";
   const validated = await validateInvokeInput({
     config: endpoint.config,
@@ -2349,8 +2493,7 @@ const executeInvoke = async ({
     body: validatedBody,
     params: validatedParams,
     query: validatedQuery,
-    entry,
-    confirm,
+    decision,
   });
   if (referenceRefusal !== null) {
     return referenceRefusal;
@@ -2431,13 +2574,10 @@ const executeInvoke = async ({
     });
   }
 
-  // 9. Purpose authority. The safe wrapper checks the member role on its own,
-  // but only the role: a machine API key's permission set lives on the MCP
-  // session, so this executor is the one place the two can be ANDed: for the
-  // config's grant (static authority, above) and for the purpose's grant here,
-  // which depends on the validated request and the stored row. It runs on both
-  // paths and before the limiter below, so a caller who may not perform the
-  // capability is refused without consuming anyone else's budget.
+  // 9. Purpose-dependent authority. The endpoint's own permission was already
+  // checked by capabilityGate before OAuth and agent-access policy. A purpose
+  // grant can only be derived after input validation, so enforce that additional
+  // grant here before rate limiting and execution.
   if (
     purposeRequirement !== null &&
     !hasEffectiveAuthority(context, purposeRequirement.permission)
@@ -2651,7 +2791,6 @@ const CAPABILITY_TOOL_DEFINITIONS = [
         "The selected capability's endpoint permissions and purpose requirements are checked before its dispatch.",
     },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "capability-catalog" },
     scope: "stella:read",
     description:
       "Write one capability by id. Take a write id from list_capabilities or " +
@@ -2659,7 +2798,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "matter-scoped capabilities take input.params.matterId. " +
       "Required scopes and member permissions are checked per capability. " +
       "Set validate_only: true to check input without running it; " +
-      "Capabilities declaring confirmation require confirm: true after human approval. " +
+      "destructive capabilities require confirm: true after human approval, " +
+      "and a capability whose description says it needs a person is refused. " +
       "Read capabilities must use read_capability.",
     inputSchema: writeCapabilityArgsSchema,
   }),
