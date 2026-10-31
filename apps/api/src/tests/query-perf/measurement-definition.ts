@@ -16,6 +16,7 @@ export type TenantStatementMeasurement = {
 export type CorpusStatementMeasurement = {
   budgetId: ReadBudgetId;
   build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
+  read?: (tx: TransactionOf<GatedTestDb>) => Promise<unknown[]>;
   expectedRows: number;
   ownerDeadlineMs: number | undefined;
 };
@@ -23,6 +24,12 @@ export type ScheduledJobScenario =
   { type: "case-law"; served: ServedCaseLaw } | RequestReceiptScenario;
 export type ScheduledJobMeasurement = {
   prepare?: typeof seedSitemapReadBudget;
+  /**
+   * Whether the run did the job's work, read before `prepare` restores the
+   * fixture. A governed job the load governor held issues only its bookkeeping,
+   * and its statements would pass a budget without measuring the work.
+   */
+  executed?: (database: GatedTestDb) => Promise<boolean>;
   task: string;
   scenarios: readonly {
     size: ScheduledJobScenario;

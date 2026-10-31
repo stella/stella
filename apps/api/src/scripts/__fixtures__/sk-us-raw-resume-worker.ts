@@ -3,7 +3,7 @@ import { appendFileSync } from "node:fs";
 import { open, readFile } from "node:fs/promises";
 import * as v from "valibot";
 
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,

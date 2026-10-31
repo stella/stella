@@ -91,6 +91,16 @@ export const queryOrganizationFencedRepairBatch = async ({
 }: OrganizationFencedRepairBatchOptions) =>
   await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
+/** Native online repairs serialize a maintenance checkpoint inside their batch transaction. */
+export const lockBackfillCheckpoint = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+  name: string,
+) =>
+  await connection.query(
+    "SELECT cursor AS last_country FROM public.database_backfill_states WHERE name = $1 FOR UPDATE",
+    [name],
+  );
+
 type InvoiceRepairBatchOptions = {
   connection: Pick<OnlineMigrationConnection, "query">;
   predicate: string;
@@ -2352,6 +2362,17 @@ export const tryLockCaseLawSitemapMonth = async ({
       tx,
     })
   ).status === "locked";
+
+/** Lock and read the singleton sitemap discovery cursor in its short transaction. */
+export const lockCaseLawSitemapRefreshCursor = async (tx: ExecuteTransaction) =>
+  executedRows(
+    await tx.execute(sql`
+      SELECT last_country, last_year, last_month
+      FROM case_law_sitemap_refresh_cursor
+      WHERE slot = 0
+      FOR UPDATE
+    `),
+  );
 
 /** Lock decision rows in stable order before reading mutation preconditions. */
 export const lockCaseLawDecisionRows = async ({

@@ -67,6 +67,15 @@ const DECISION_TYPE_KIND_LABEL_KEYS = {
   other: "caseLaw.decisionTypes.other",
 } as const satisfies Record<DecisionTypeKind, TranslationKey>;
 
+type DecisionTypeKindLabelKey =
+  (typeof DECISION_TYPE_KIND_LABEL_KEYS)[DecisionTypeKind];
+
+/** The localized label shared by every surface that draws a normalized kind. */
+export const decisionTypeKindLabel = (
+  kind: DecisionTypeKind,
+  t: (key: DecisionTypeKindLabelKey) => string,
+): string => t(DECISION_TYPE_KIND_LABEL_KEYS[kind]);
+
 /** A type facet bucket as the search reports it: a kind and its count. */
 export type DecisionTypeFacetBucket = {
   value: DecisionTypeKind;
@@ -77,7 +86,7 @@ export type DecisionTypeFacetBucket = {
 type DecisionTypeSectionBucket = {
   value: string;
   /** Null only for a selection that names no kind: a link's own value. */
-  labelKey: (typeof DECISION_TYPE_KIND_LABEL_KEYS)[DecisionTypeKind] | null;
+  kind: DecisionTypeKind | null;
   count: number | null;
 };
 
@@ -95,7 +104,7 @@ export const decisionTypeSectionBuckets = (
   const listed: DecisionTypeSectionBucket[] = buckets.map(
     ({ value, count }) => ({
       value,
-      labelKey: DECISION_TYPE_KIND_LABEL_KEYS[value],
+      kind: value,
       count,
     }),
   );
@@ -108,9 +117,7 @@ export const decisionTypeSectionBuckets = (
   return [
     {
       value: selectedValue,
-      labelKey: isDecisionTypeKind(selectedValue)
-        ? DECISION_TYPE_KIND_LABEL_KEYS[selectedValue]
-        : null,
+      kind: isDecisionTypeKind(selectedValue) ? selectedValue : null,
       count: null,
     },
     ...listed,

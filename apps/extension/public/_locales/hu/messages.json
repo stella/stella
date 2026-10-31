@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "A webhely-hozzáférés ki van kapcsolva. Egyszeri engedéllyel stella használhatja azokat a webhelyeket, ahová bejelentkeztél."
-  },
-  "accessReady": {
-    "message": "Kész. stella külön lapot használhat, miközben bejelentkezve maradsz a webhelyeken."
-  },
   "accessUpdateFailed": {
     "message": "A Chrome nem tudta módosítani a webhely-hozzáférést."
   },
-  "adoptTab": {
-    "message": "Ezt a lapot használja a stella"
-  },
   "adoptUnsupported": {
     "message": "A stellával csak nyilvános HTTPS-oldalak használhatók."
-  },
-  "adoptedTab": {
-    "message": "A stella mostantól olvashatja a(z) $ORIGIN$ oldalt ezen a lapon. Kérdezzen rá a csevegésben.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Webhely-hozzáférés ellenőrzése…"
-  },
-  "connectTab": {
-    "message": "Jelenlegi stella-lap csatlakoztatása"
-  },
-  "controllerReady": {
-    "message": "Csatlakoztatva: $ORIGIN$. Minden műveletet továbbra is jóvá kell hagyni a stellában.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Lap leválasztása"
   },
   "downloadKept": {
     "message": "Letöltések, amelyek befejeződtek, miközben a stella egy lapot vezérelt, és megmaradtak: $COUNT$. Megnyitás előtt ellenőrizze, honnan származnak.",
@@ -72,13 +38,68 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Minden webhely engedélyezése"
+  "unsupportedTab": {
+    "message": "Nyisson meg egy stella alkalmazáslapot, majd próbálja újra."
+  },
+  "connectionPurpose": {
+    "message": "Ha a csevegésben kéri, a stella külön lapon nyithat meg és olvashat webhelyeket az Ön bejelentkezéseivel."
+  },
+  "statusConnected": {
+    "message": "Csatlakoztatva: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Nincs csatlakoztatva"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Webhely-hozzáférés szükséges"
+  },
+  "statusOpenStella": {
+    "message": "A csatlakozáshoz nyissa meg a stellát"
+  },
+  "statusTabHandedOver": {
+    "message": "A lap átadva a stellának: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Hozzáférés engedélyezése és csatlakozás"
+  },
+  "allowWebsiteAccess": {
+    "message": "Webhely-hozzáférés engedélyezése"
+  },
+  "connectTab": {
+    "message": "A stella lap csatlakoztatása"
+  },
+  "adoptTab": {
+    "message": "A lap használata a stellával"
+  },
+  "disconnectTab": {
+    "message": "Leválasztás"
+  },
+  "disconnectDescription": {
+    "message": "A stella nem használja tovább a csatlakoztatott lapot."
   },
   "revokeAccess": {
     "message": "Webhely-hozzáférés eltávolítása"
   },
-  "unsupportedTab": {
-    "message": "Nyisson meg egy stella alkalmazáslapot, majd próbálja újra."
+  "revokeDescription": {
+    "message": "Megszünteti a webhelyek megnyitásának és olvasásának engedélyét."
+  },
+  "checkingAccess": {
+    "message": "Kapcsolat ellenőrzése…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Egy másik stella-lap van csatlakoztatva"
+  },
+  "connectTabInstead": {
+    "message": "Inkább ezt a stella-lapot csatlakoztasd"
   }
 }

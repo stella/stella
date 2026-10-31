@@ -44,7 +44,10 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
 type DeclaredJobReads = {
   id: string;
   task: string;
-  reads: { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  reads:
+    | { budget: ScheduledJobReadBudgetId; governance?: "load-governed" }
+    | "load-governed"
+    | "unmeasured";
 };
 
 /**

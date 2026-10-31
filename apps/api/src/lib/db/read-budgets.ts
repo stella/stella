@@ -41,12 +41,19 @@ export const UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING = 20_000;
  *
  * - `{ budget }`: measured per run on the corpus fixture; the run must read
  *   at most the budget, and the same pages at twice the corpus size.
+ * - `{ budget, governance: "load-governed" }`: every batch runs under the
+ *   shared load governor and the whole run also stays within its budget.
  * - `"load-governed"`: every batch runs under the shared load governor.
  * - `"unmeasured"`: a job registered before read budgets, listed with its
  *   reason in `read-budgets-unmeasured.json`; that ledger only shrinks.
  */
 export type ScheduledJobReads =
-  { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  | {
+      budget: ScheduledJobReadBudgetId;
+      governance?: "load-governed";
+    }
+  | "load-governed"
+  | "unmeasured";
 
 /** The budgets each MCP tool's hot statements are measured against. */
 export const MCP_TOOL_READ_BUDGETS = { ...mcpToolReadBudgets } as const;
