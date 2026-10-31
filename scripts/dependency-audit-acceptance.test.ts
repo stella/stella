@@ -7,6 +7,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { createTestState } from "@stll/test-state";
 
 import {
+  addQuarantineExclusion,
   type Advisory,
   AuditCommandError,
   type Baseline,
@@ -537,6 +538,98 @@ describe("remediation verifies the resolver result", () => {
       ),
     ).toMatchObject({ message: "registry unavailable" });
   });
+
+  test("a later resolver error reverts every previously applied package", async () => {
+    const first = {
+      ...assessment,
+      affectedPaths: ["pkg"],
+      copies: [{ path: "pkg", version: "1.4.0" }],
+      resolutionPaths: [],
+    } satisfies AdvisoryAssessment;
+    const second = {
+      ...first,
+      advisory: { ...first.advisory, package: "second" },
+      affectedPaths: ["second"],
+      copies: [{ path: "second", version: "1.4.0" }],
+      resolutionPaths: [],
+    } satisfies AdvisoryAssessment;
+    let firstReverted = false;
+    let calls = 0;
+
+    expect(
+      await rejectionOf(
+        verifyDependencyAuditRemediation({
+          assessments: [first, second],
+          now,
+          resolve: async () => {
+            calls += 1;
+            if (calls === 2) {
+              throw new TypeError("second resolver failed");
+            }
+            return {
+              assessments: [],
+              beforeLockfile: JSON.stringify({ packages: {} }),
+              afterLockfile: JSON.stringify({ packages: {} }),
+              revert: async () => {
+                firstReverted = true;
+              },
+            };
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "second resolver failed" });
+    expect(firstReverted).toBe(true);
+  });
+});
+
+test("a shared copy retains every parent-qualified resolution", () => {
+  const shared = {
+    advisory: currentAdvisory,
+    disposition: {
+      status: "fix_available",
+      installableVersions: ["1.4.1"],
+      quarantinedVersions: [],
+    },
+    acceptance: undefined,
+    affectedPaths: ["example"],
+    copies: [{ path: "example", version: "1.4.0" }],
+    resolutionPaths: [
+      {
+        copyPath: "example",
+        resolution: "one/example",
+        requirement: "^1.4.0",
+        repositoryResolution: true,
+      },
+      {
+        copyPath: "example",
+        resolution: "two/example",
+        requirement: "^1.4.0",
+        repositoryResolution: true,
+      },
+    ],
+    action: "test action",
+  } satisfies AdvisoryAssessment;
+
+  const plan = planDependencyAuditRemediation({
+    assessments: [shared],
+    now: new Date(),
+  });
+  expect([...plan.pins]).toEqual([
+    ["one/example", "1.4.1"],
+    ["two/example", "1.4.1"],
+  ]);
+});
+
+test("adding the first quarantine exclusion keeps the array end outside its comment", () => {
+  expect(
+    addQuarantineExclusion(
+      "minimumReleaseAgeExcludes = [] # temporary exceptions\n",
+      '  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z',
+    ),
+  ).toBe(`minimumReleaseAgeExcludes = [
+  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z
+] # temporary exceptions
+`);
 });
 
 test("package-wide pins preserve differently named scoped packages", () => {

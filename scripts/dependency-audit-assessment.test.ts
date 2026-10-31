@@ -613,6 +613,49 @@ test("a repository resolution can move an exact parent pin to a quarantined patc
   expect(result?.disposition.status).toBe("fix_in_quarantine");
 });
 
+test("a root override cannot move to a quarantined patch", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: { example: ["example@1.4.0", "", {}] },
+    }),
+    manifest: { overrides: { example: "1.4.0" } },
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [{ version: "1.4.1", installableSince: "2026-11-01T00:00:00.000Z" }],
+      ],
+    ]),
+  });
+  expect(result?.disposition.status).toBe("pinned_resolution_blocked");
+});
+
+test("the quarantine action names the lowest release that fixes the advisory", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: { example: ["example@1.4.0", "", {}] },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [
+          { version: "1.4.2", installableSince: "2026-11-02T00:00:00.000Z" },
+          { version: "1.4.1", installableSince: "2026-11-01T00:00:00.000Z" },
+        ],
+      ],
+    ]),
+  });
+  expect(result?.action).toContain(
+    "quarantine-expires: 2026-11-01T00:00:00.000Z, then pin 1.4.1",
+  );
+});
+
 test("an advisory without any patched release remains upstream blocked", () => {
   const [result] = assessAdvisories({
     advisories: [{ ...sdk, package: "example", vulnerableVersions: "*" }],

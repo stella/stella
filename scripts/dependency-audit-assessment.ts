@@ -104,18 +104,18 @@ const selectDisposition = ({
   pins,
   quarantinedByVersion,
 }: SelectDispositionOptions): AuditDisposition => {
-  const quarantinedPatches = selectableVersions.flatMap((version) => {
-    const release = quarantinedByVersion.get(version);
-    return release === undefined ? [] : [release];
-  });
+  const quarantinedPatches = selectableVersions
+    .flatMap((version) => {
+      const release = quarantinedByVersion.get(version);
+      return release === undefined ? [] : [release];
+    })
+    .toSorted((left, right) => Bun.semver.order(left.version, right.version));
   const installablePatches = selectableVersions.filter(
     (version) => !quarantinedByVersion.has(version),
   );
   const onlyMovableResolutionPins =
     pins.size > 0 &&
-    [...pins].every((pin) =>
-      /package\.json (?:resolutions|overrides)\./u.test(pin),
-    );
+    [...pins].every((pin) => /package\.json resolutions\./u.test(pin));
   const quarantinedPatch = quarantinedPatches.at(0);
   if (
     quarantinedPatch !== undefined &&
@@ -693,8 +693,12 @@ const dispositionAction = (disposition: AuditDisposition): string => {
   switch (disposition.status) {
     case "fix_available":
       return `Update the lockfile to a patched release: ${disposition.installableVersions.slice(-3).join(", ")}`;
-    case "fix_in_quarantine":
-      return `Temporarily add ${disposition.package} to minimumReleaseAgeExcludes with # quarantine-expires: ${disposition.quarantinedVersions.at(0)?.installableSince ?? panic("Missing quarantined patch")}, then pin ${disposition.quarantinedVersions.at(0)?.version ?? panic("Missing quarantined patch")}`;
+    case "fix_in_quarantine": {
+      const lowestFix =
+        disposition.quarantinedVersions.at(0) ??
+        panic("Missing quarantined patch");
+      return `Temporarily add ${disposition.package} to minimumReleaseAgeExcludes with # quarantine-expires: ${lowestFix.installableSince}, then pin ${lowestFix.version}`;
+    }
     case "pinned_resolution_blocked":
       return `Lift ${disposition.pins.join("; ")}; patched releases: ${disposition.patchedVersions.slice(-3).join(", ")}${disposition.blockers.length > 0 ? `; then upgrade the blocking parent: ${disposition.blockers.join("; ")}` : ""}`;
     case "upstream_blocked":

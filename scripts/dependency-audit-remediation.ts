@@ -206,23 +206,21 @@ export const planDependencyAuditRemediation = ({
           assessmentCopies.map((copy) => [copy.path, copy] as const),
         ),
       );
-      const resolutionPaths = new Map(
-        group.flatMap(({ resolutionPaths: assessmentPaths }) =>
-          assessmentPaths.map((path) => [path.copyPath, path] as const),
-        ),
+      const resolutionPaths = group.flatMap(
+        ({ resolutionPaths: assessmentPaths }) => assessmentPaths,
       );
       const everyCopyIsVulnerable = [...copies].every(([path]) =>
         affectedCopies.has(path),
       );
       const packageWideIsValid =
         everyCopyIsVulnerable &&
-        [...resolutionPaths.values()].every(
+        resolutionPaths.every(
           ({ repositoryResolution }) => repositoryResolution !== true,
         ) &&
-        [...resolutionPaths.values()].every(({ requirement }) =>
+        resolutionPaths.every(({ requirement }) =>
           accepts(selected, requirement),
         );
-      const scopedPaths = [...resolutionPaths.values()].filter(({ copyPath }) =>
+      const scopedPaths = resolutionPaths.filter(({ copyPath }) =>
         affectedCopies.has(copyPath),
       );
       const scopedWriteIsValid =
@@ -418,84 +416,95 @@ export const verifyDependencyAuditRemediation = async ({
     [];
   const acceptanceDrafts: BaselineEntry[] = [];
   const initial = new Set(assessments.map(advisoryKey));
+  const appliedReverts: (() => Promise<void>)[] = [];
 
-  for (const group of Map.groupBy(
-    assessments,
-    ({ advisory }) => advisory.package,
-  ).values()) {
-    const proposal = planDependencyAuditRemediation({
-      assessments: group,
-      now,
-    });
-    if (proposal.pins.size === 0) {
-      acceptanceDrafts.push(...proposal.acceptanceDrafts);
-      continue;
-    }
+  try {
+    for (const group of Map.groupBy(
+      assessments,
+      ({ advisory }) => advisory.package,
+    ).values()) {
+      const proposal = planDependencyAuditRemediation({
+        assessments: group,
+        now,
+      });
+      if (proposal.pins.size === 0) {
+        acceptanceDrafts.push(...proposal.acceptanceDrafts);
+        continue;
+      }
 
-    const resolved = await resolve(proposal);
-    const remaining = new Set(resolved.assessments.map(advisoryKey));
-    const targets = new Set(
-      group
-        .filter(
-          ({ disposition }) =>
-            disposition.status === "fix_available" ||
-            disposition.status === "fix_in_quarantine",
-        )
-        .map(advisoryKey),
-    );
-    const targetRemains = [...targets].some((key) => remaining.has(key));
-    const introducedAdvisory = [...remaining].some((key) => !initial.has(key));
-    const lockfileChangesAreSafe = changedCopiesAreSafe({
-      beforeLockfile: resolved.beforeLockfile,
-      afterLockfile: resolved.afterLockfile,
-      targetedCopies: new Set(
-        group.flatMap(({ affectedPaths }) => affectedPaths),
-      ),
-      requirements: new Map(
-        group.flatMap(({ resolutionPaths }) =>
-          resolutionPaths.map(
-            ({ copyPath }) =>
-              [
-                copyPath,
-                resolutionPaths
-                  .filter((path) => path.copyPath === copyPath)
-                  .map(({ requirement }) => requirement),
-              ] as const,
-          ),
-        ),
-      ),
-      plannedResolutions: new Map(
-        group.flatMap(({ resolutionPaths }) =>
-          resolutionPaths.flatMap(
-            ({ copyPath, repositoryResolution, resolution }) => {
-              if (repositoryResolution !== true) {
-                return [];
-              }
-              const planned = proposal.pins.get(resolution);
-              return planned === undefined
-                ? []
-                : ([[copyPath, planned]] as const);
-            },
-          ),
-        ),
-      ),
-    });
-    if (targetRemains || introducedAdvisory || !lockfileChangesAreSafe) {
-      await resolved.revert();
-      acceptanceDrafts.push(
-        ...group.flatMap((assessment) =>
-          assessment.acceptance === undefined
-            ? [acceptanceDraft(assessment, now)]
-            : [],
-        ),
+      const resolved = await resolve(proposal);
+      const remaining = new Set(resolved.assessments.map(advisoryKey));
+      const targets = new Set(
+        group
+          .filter(
+            ({ disposition }) =>
+              disposition.status === "fix_available" ||
+              disposition.status === "fix_in_quarantine",
+          )
+          .map(advisoryKey),
       );
-      continue;
-    }
+      const targetRemains = [...targets].some((key) => remaining.has(key));
+      const introducedAdvisory = [...remaining].some(
+        (key) => !initial.has(key),
+      );
+      const lockfileChangesAreSafe = changedCopiesAreSafe({
+        beforeLockfile: resolved.beforeLockfile,
+        afterLockfile: resolved.afterLockfile,
+        targetedCopies: new Set(
+          group.flatMap(({ affectedPaths }) => affectedPaths),
+        ),
+        requirements: new Map(
+          group.flatMap(({ resolutionPaths }) =>
+            resolutionPaths.map(
+              ({ copyPath }) =>
+                [
+                  copyPath,
+                  resolutionPaths
+                    .filter((path) => path.copyPath === copyPath)
+                    .map(({ requirement }) => requirement),
+                ] as const,
+            ),
+          ),
+        ),
+        plannedResolutions: new Map(
+          group.flatMap(({ resolutionPaths }) =>
+            resolutionPaths.flatMap(
+              ({ copyPath, repositoryResolution, resolution }) => {
+                if (repositoryResolution !== true) {
+                  return [];
+                }
+                const planned = proposal.pins.get(resolution);
+                return planned === undefined
+                  ? []
+                  : ([[copyPath, planned]] as const);
+              },
+            ),
+          ),
+        ),
+      });
+      if (targetRemains || introducedAdvisory || !lockfileChangesAreSafe) {
+        await resolved.revert();
+        acceptanceDrafts.push(
+          ...group.flatMap((assessment) =>
+            assessment.acceptance === undefined
+              ? [acceptanceDraft(assessment, now)]
+              : [],
+          ),
+        );
+        continue;
+      }
 
-    for (const [name, version] of proposal.pins) {
-      pins.set(name, version);
+      appliedReverts.push(resolved.revert);
+      for (const [name, version] of proposal.pins) {
+        pins.set(name, version);
+      }
+      quarantineExclusions.push(...proposal.quarantineExclusions);
     }
-    quarantineExclusions.push(...proposal.quarantineExclusions);
+  } catch (error) {
+    await Promise.all(
+      appliedReverts.toReversed().map(async (revert) => revert()),
+    );
+    throw error;
   }
 
   return { pins, quarantineExclusions, acceptanceDrafts };

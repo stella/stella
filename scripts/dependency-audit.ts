@@ -457,14 +457,29 @@ const applyRemediationProposal = async (
     for (const exclusion of plan.quarantineExclusions) {
       const entry = `  "${exclusion.package}", # quarantine-expires: ${exclusion.quarantineExpires}`;
       if (!bunfig.includes(`"${exclusion.package}"`)) {
-        bunfig = bunfig.replace(
-          "minimumReleaseAgeExcludes = [",
-          () => `minimumReleaseAgeExcludes = [\n${entry}`,
-        );
+        bunfig = addQuarantineExclusion(bunfig, entry);
       }
     }
     await Bun.write(bunfigPath, bunfig);
   }
+};
+
+export const addQuarantineExclusion = (
+  bunfig: string,
+  entry: string,
+): string => {
+  const empty = /^(\s*minimumReleaseAgeExcludes\s*=\s*)\[\s*\](\s*(?:#.*)?)$/mu;
+  if (empty.test(bunfig)) {
+    return bunfig.replace(
+      empty,
+      (_, prefix: string, comment: string) =>
+        `${prefix}[\n${entry}\n]${comment}`,
+    );
+  }
+  return bunfig.replace(
+    "minimumReleaseAgeExcludes = [",
+    () => `minimumReleaseAgeExcludes = [\n${entry}`,
+  );
 };
 
 const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
