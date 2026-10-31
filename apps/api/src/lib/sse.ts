@@ -873,6 +873,18 @@ const dispatchRedisMessage = (message: string): void => {
   if (!parsed) {
     return;
   }
+  if (parsed.scope === "mcp-tool-projection") {
+    if (parsed.originInstanceId !== INSTANCE_ID) {
+      mcpToolProjectionDeliveryHandler?.({
+        organizationId: brandPersistedOrganizationId(parsed.id),
+        userId:
+          parsed.userId === undefined
+            ? undefined
+            : brandPersistedUserId(parsed.userId),
+      });
+    }
+    return;
+  }
   if (parsed.scope === "user-access-revoked") {
     const userId = brandPersistedUserId(parsed.id);
     const organizationId = brandPersistedOrganizationId(parsed.organizationId);
@@ -1090,6 +1102,43 @@ export const broadcastToOrganization = (
       if (!deliveredLocally) {
         broadcastLocalToOrganization(organizationId, event);
       }
+    });
+};
+
+// ── MCP tool projections ────────────────────────────────
+//
+// Live MCP sessions are held by the replica that serves their stream. The
+// tool-freshness module registers a handler here so a projection change
+// written on another replica reprojects this replica's sessions too.
+
+type McpToolProjectionChange = {
+  organizationId: SafeId<"organization">;
+  userId?: SafeId<"user"> | undefined;
+};
+
+let mcpToolProjectionDeliveryHandler:
+  ((change: McpToolProjectionChange) => void) | null = null;
+
+/** Register this replica's handler for projection changes made elsewhere. */
+export const registerMcpToolProjectionDelivery = (
+  handler: (change: McpToolProjectionChange) => void,
+): void => {
+  mcpToolProjectionDeliveryHandler = handler;
+};
+
+/**
+ * Announce a projection change to the other replicas. The caller reprojects
+ * its own sessions; its looped-back copy is ignored.
+ */
+export const announceMcpToolProjectionChange = (
+  change: McpToolProjectionChange,
+): void => {
+  activePublisher()
+    .publishMcpToolProjectionChange(change, { originInstanceId: INSTANCE_ID })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
 };
 

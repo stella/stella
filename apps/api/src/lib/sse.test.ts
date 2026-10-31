@@ -20,6 +20,7 @@ import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type {
   broadcast as Broadcast,
+  registerMcpToolProjectionDelivery as RegisterMcpToolProjectionDelivery,
   revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
   SseSessionLivenessReader,
   startSse as StartSse,
@@ -28,6 +29,7 @@ import type {
 } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
+  INSTANCE_ID,
   SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
@@ -40,8 +42,14 @@ beforeEach(async () => {
   const clientsBeforeImport = createdClients.length;
   const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
   const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
-  ({ broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
-    await import("@/api/lib/sse"));
+  ({
+    broadcast,
+    registerMcpToolProjectionDelivery,
+    revokeWorkspaceSseAccess,
+    startSse,
+    stopSse,
+    subscribe,
+  } = await import("@/api/lib/sse"));
   clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
   redisClientsCreatedDuringImport =
     createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
@@ -158,6 +166,7 @@ let setIntervalSpy: Mock<typeof globalThis.setInterval>;
 let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
 let broadcast: typeof Broadcast;
+let registerMcpToolProjectionDelivery: typeof RegisterMcpToolProjectionDelivery;
 let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
 let startSse: typeof StartSse;
 let stopSse: typeof StopSse;
@@ -324,6 +333,43 @@ const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
  *  An omitted delay is 0, as the timer itself reads it. */
 const startedIntervals = () =>
   setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
+
+describe("MCP tool projection changes", () => {
+  test("a change from another replica reaches this replica and its own echo does not", async () => {
+    createdClients.length = 0;
+    const delivered: unknown[] = [];
+    registerMcpToolProjectionDelivery((change) => {
+      delivered.push(change);
+    });
+    startTestSse();
+    await settlePendingWork();
+    try {
+      const deliver = createdClients[0]?.messageHandler;
+      expect(deliver).toBeFunction();
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: "api:another-replica",
+          scope: "mcp-tool-projection",
+          userId: "user_1",
+        }),
+      );
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: INSTANCE_ID,
+          scope: "mcp-tool-projection",
+        }),
+      );
+      expect(delivered).toEqual([
+        { organizationId: "org_1", userId: "user_1" },
+      ]);
+    } finally {
+      stopSse();
+      await settlePendingWork();
+    }
+  });
+});
 
 describe("startSse / stopSse lifecycle", () => {
   test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {
