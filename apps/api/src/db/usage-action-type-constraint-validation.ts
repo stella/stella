@@ -11,7 +11,7 @@ export const USAGE_ACTION_TYPE_CONSTRAINTS = [
 ] as const satisfies readonly OnlineConstraintValidation[];
 
 export const USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION = {
-  introducedBy: "20261031030947_transcription_usage_action",
+  introducedBy: "20261031040957_transcription_usage_action",
   name: CONSTRAINT_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

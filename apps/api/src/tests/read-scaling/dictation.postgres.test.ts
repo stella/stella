@@ -6,6 +6,7 @@ import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
+import { createTestState } from "@stll/test-state";
 
 import { auditLogs, usageAllocations, usageEvents } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -22,7 +23,6 @@ import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { dictationScalingScenario, seedDictationScaling } from "./dictation";
 import { writeScalingViolations } from "./measurement";
