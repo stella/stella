@@ -173,6 +173,51 @@ describe("export ZIP writer", () => {
   });
 
   test.each([
+    "/etc/passwd",
+    "C:/Windows/notes.txt",
+    "matters/../../escape.txt",
+    "..",
+    "matters\\escape.txt",
+    "",
+  ])(
+    "refuses an entry name that is not contained in the archive: %p",
+    async (name) => {
+      const rejection = await rejectionOf(
+        collect([
+          {
+            name,
+            modifiedAt: MODIFIED_AT,
+            source: {
+              type: "bytes" as const,
+              data: text("a"),
+              compression: ZIP_COMPRESSION.STORE,
+            },
+          },
+        ]),
+      );
+      expect(rejection).toBeInstanceOf(Error);
+      expect(rejection).toMatchObject({
+        message: `Unsafe ZIP entry name: ${name}`,
+      });
+    },
+  );
+
+  test("keeps contained names with dots in a segment", async () => {
+    const archive = await collect([
+      {
+        name: "matters/v1..2/notes..final.txt",
+        modifiedAt: MODIFIED_AT,
+        source: {
+          type: "bytes" as const,
+          data: text("a"),
+          compression: ZIP_COMPRESSION.STORE,
+        },
+      },
+    ]);
+    expect(archive.byteLength).toBeGreaterThan(0);
+  });
+
+  test.each([
     { first: "ß.pdf", second: "ẞ.pdf" },
     { first: "Σ.pdf", second: "ς.pdf" },
     { first: "Smlouva č. 1.pdf", second: "Smlouva c\u030c. 1.pdf" },

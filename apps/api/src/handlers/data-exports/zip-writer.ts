@@ -187,6 +187,16 @@ const encodeName = (name: string): Uint8Array => {
   return nameBytes;
 };
 
+// The path allocator only produces relative, forward-slash names without parent
+// segments. The writer still refuses any other name, so an entry that would
+// extract outside the archive root can never be written.
+const isContainedEntryName = (name: string): boolean =>
+  name.length > 0 &&
+  !name.startsWith("/") &&
+  !name.includes("\\") &&
+  !/^[A-Za-z]:/u.test(name) &&
+  !name.split("/").includes("..");
+
 const deflate = promisify(deflateRaw);
 
 const encodeBytesEntry = async (
@@ -394,6 +404,9 @@ export const writeZip = async function* (
   const names = new Set<string>();
   let offset = 0;
   for await (const entry of entries) {
+    if (!isContainedEntryName(entry.name)) {
+      panic(`Unsafe ZIP entry name: ${entry.name}`);
+    }
     const nameKey = archivePathKey(entry.name);
     if (names.has(nameKey)) {
       panic(`Duplicate ZIP entry name: ${entry.name}`);
