@@ -4,9 +4,11 @@
 //! never stops a run; the app reconnects and picks up where it stopped.
 //!
 //! Each sidecar version has its own folder, `<holder_root>/<version>/`
-//! (0700): the holder's socket (a named pipe on Windows), the secret a
-//! connection presents first, its log and, for a bundled build, the copy of
-//! the binary it runs from, so an update never replaces a running binary.
+//! (0700): the secret a connection presents first, the holder's log and, for
+//! a bundled build, the copy of the binary it runs from, so an update never
+//! replaces a running binary. Its socket sits in a short per-user runtime
+//! folder instead (a named pipe on Windows); `endpoint.rs` decides the path
+//! and passes it to the holder.
 //!
 //! One supervisor task owns every connection. It connects to the holder of
 //! the bundled version, or starts it detached and connects; it reconnects
@@ -30,6 +32,7 @@
 // tests drive the supervisor.
 #![allow(dead_code, reason = "the desktop runner's harness host calls this")]
 
+mod endpoint;
 mod protocol;
 #[cfg(all(test, unix))]
 mod tests;
@@ -47,6 +50,8 @@ use tokio::io::{
 };
 use tokio::sync::{mpsc, oneshot};
 
+pub(crate) use endpoint::EndpointError;
+use endpoint::Endpoints;
 pub(crate) use protocol::{HarnessProbe, HeldRun, ProbeOutcome, SidecarRunStart};
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, Rejection,
@@ -67,7 +72,6 @@ const RUN_OUTPUT_QUEUE: usize = 256;
 const LINK_EVENT_QUEUE: usize = 256;
 /// What the sidecar is named next to the app executable in a bundle.
 const BUNDLED_NAME: &str = "stella-agent-sidecar";
-const SOCKET_FILE: &str = "holder.sock";
 const SECRET_FILE: &str = "holder.secret";
 /// The variable a source build reads its version from (`env.ts`).
 const VERSION_VARIABLE: &str = "STELLA_SIDECAR_VERSION";
@@ -165,6 +169,9 @@ pub(crate) struct SidecarSettings {
   pub(crate) launch: SidecarLaunch,
   /// `<app data>/agent-holder`; each sidecar version has a folder below it.
   pub(crate) holder_root: PathBuf,
+  /// Where holder sockets go; `None` in the app, which uses the user's
+  /// runtime folder. Either must be private to the user. Unused on Windows.
+  pub(crate) socket_dir: Option<PathBuf>,
   /// The bundled sidecar's version, which names its folder.
   pub(crate) sidecar_version: String,
   pub(crate) app_version: String,
@@ -256,9 +263,15 @@ impl HarnessSidecar {
   pub(crate) fn spawn(settings: SidecarSettings) -> Self {
     let (controls, receiver) = mpsc::channel(COMMAND_QUEUE);
     let (link_events, events) = mpsc::channel(LINK_EVENT_QUEUE);
+    let endpoints =
+      Endpoints::resolve(&settings.holder_root, settings.socket_dir.as_deref());
+    if let Err(error) = &endpoints {
+      tracing::error!(target: LOG_TARGET, ?error, "no usable harness holder endpoint");
+    }
     tokio::spawn(
       Supervisor {
         settings,
+        endpoints,
         controls: receiver,
         link_events,
         events,
@@ -470,21 +483,6 @@ pub(crate) fn harness_report(
   }
 }
 
-/// The holder's endpoint in its folder.
-#[cfg(unix)]
-fn endpoint(dir: &Path) -> OsString {
-  dir.join(SOCKET_FILE).into_os_string()
-}
-
-/// A named pipe per folder: the folder is per user and per version.
-#[cfg(windows)]
-fn endpoint(dir: &Path) -> OsString {
-  use sha2::{Digest, Sha256};
-  let digest = Sha256::digest(dir.as_os_str().as_encoded_bytes());
-  let name = hex::encode(&digest[..16]);
-  OsString::from(format!(r"\\.\pipe\stella-agent-holder-{name}"))
-}
-
 trait HolderStream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 impl<T: AsyncRead + AsyncWrite + Send + Sync + Unpin> HolderStream for T {}
 type Stream = Box<dyn HolderStream>;
@@ -497,6 +495,8 @@ enum OpenError {
   Failed,
   /// The holder speaks another protocol.
   Incompatible,
+  /// No endpoint can be used: see [`EndpointError`].
+  NoEndpoint,
 }
 
 #[cfg(unix)]
@@ -598,6 +598,7 @@ fn spawn_holder(
   launch: &SidecarLaunch,
   program: &Path,
   dir: &Path,
+  endpoint: &OsStr,
   version: &str,
 ) -> std::io::Result<()> {
   let mut command = tokio::process::Command::new(program);
@@ -606,7 +607,7 @@ fn spawn_holder(
     .arg("--dir")
     .arg(dir)
     .arg("--endpoint")
-    .arg(endpoint(dir))
+    .arg(endpoint)
     .envs(launch.env.iter().map(|(name, value)| (name, value)))
     .env(VERSION_VARIABLE, version)
     .stdin(Stdio::null())
@@ -703,6 +704,8 @@ struct Run {
 
 struct Supervisor {
   settings: SidecarSettings,
+  /// Where holders listen; an error leaves every holder unreachable.
+  endpoints: Result<Endpoints, EndpointError>,
   controls: mpsc::Receiver<Control>,
   link_events: mpsc::Sender<Event>,
   events: mpsc::Receiver<Event>,
@@ -746,6 +749,19 @@ impl Supervisor {
     }
   }
 
+  /// The endpoint of the holder whose folder is `dir`.
+  fn endpoint(&self, dir: &Path) -> Result<OsString, OpenError> {
+    self
+      .endpoints
+      .as_ref()
+      .map_err(|_unresolved| OpenError::NoEndpoint)?
+      .of(dir)
+      .map_err(|error| {
+        tracing::error!(target: LOG_TARGET, ?error, "a harness holder endpoint cannot be used");
+        OpenError::NoEndpoint
+      })
+  }
+
   fn current_dir(&self) -> PathBuf {
     self
       .settings
@@ -781,7 +797,7 @@ impl Supervisor {
         }
         Err(OpenError::Gone) => remove_holder_dir(&dir),
         // A holder this app cannot speak to exits once it is idle.
-        Err(OpenError::Failed | OpenError::Incompatible) => {}
+        Err(OpenError::Failed | OpenError::Incompatible | OpenError::NoEndpoint) => {}
       }
     }
   }
@@ -804,7 +820,7 @@ impl Supervisor {
 
   /// Connect and complete the handshake, resuming this supervisor's runs.
   async fn open(&self, dir: &Path) -> Result<Opened, OpenError> {
-    let stream = connect(&endpoint(dir)).await?;
+    let stream = connect(&self.endpoint(dir)?).await?;
     let secret = read_secret(dir).ok_or(OpenError::Failed)?;
     let (read, mut writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(read);
@@ -905,9 +921,13 @@ impl Supervisor {
         tracing::error!(target: LOG_TARGET, "the harness holder speaks another protocol");
         return None;
       }
+      Err(OpenError::NoEndpoint) => return None,
       Err(OpenError::Gone | OpenError::Failed) => {}
     }
-    if let Err(error) = self.start_holder(&dir) {
+    let Ok(endpoint) = self.endpoint(&dir) else {
+      return None;
+    };
+    if let Err(error) = self.start_holder(&dir, &endpoint) {
       tracing::error!(target: LOG_TARGET, kind = ?error.kind(), "harness holder did not start");
       return None;
     }
@@ -923,7 +943,7 @@ impl Supervisor {
           self.attach(dir.clone(), opened, LinkRole::Current);
           return Some(dir);
         }
-        Err(OpenError::Incompatible) => return None,
+        Err(OpenError::Incompatible | OpenError::NoEndpoint) => return None,
         Err(OpenError::Gone | OpenError::Failed) if Instant::now() < deadline => {
           tokio::time::sleep(START_POLL).await;
         }
@@ -935,13 +955,14 @@ impl Supervisor {
     }
   }
 
-  fn start_holder(&self, dir: &Path) -> std::io::Result<()> {
+  fn start_holder(&self, dir: &Path, endpoint: &OsStr) -> std::io::Result<()> {
     private_dir(dir)?;
     let program = installed_program(&self.settings.launch, dir)?;
     spawn_holder(
       &self.settings.launch,
       &program,
       dir,
+      endpoint,
       &self.settings.sidecar_version,
     )
   }
@@ -1092,7 +1113,7 @@ impl Supervisor {
           }
           return;
         }
-        Err(OpenError::Gone | OpenError::Incompatible) => break,
+        Err(OpenError::Gone | OpenError::Incompatible | OpenError::NoEndpoint) => break,
         Err(OpenError::Failed) => {
           tokio::time::sleep(self.settings.backoff.delay(attempt)).await;
         }

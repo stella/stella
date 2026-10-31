@@ -23,8 +23,8 @@ import { bundledHarnessCompatibility } from "../harness/compatibility";
 import {
   HOLDER_LOG_FILE,
   HOLDER_SECRET_FILE,
-  HOLDER_SOCKET_FILE,
   startHolderServer,
+  SUN_PATH_BYTES,
 } from "./holder-server";
 import {
   SIDECAR_PROTOCOL,
@@ -95,7 +95,7 @@ const place = (): Place => {
   return {
     root,
     dir,
-    endpoint: path.join(dir, HOLDER_SOCKET_FILE),
+    endpoint: path.join(root, "stella-holder-1.4.0.sock"),
     fakeLog,
     secret: () => readFileSync(path.join(dir, HOLDER_SECRET_FILE), "utf-8"),
     received: () =>
@@ -419,6 +419,35 @@ describe("harness holder over its socket", () => {
     const holder = await spawnHolder(at);
     expect(await holder.exited).toBe(1);
     expect(existsSync(at.endpoint)).toBe(false);
+  });
+
+  test("refuses a socket path that does not fit the platform's limit", async () => {
+    const at = place();
+    const fits = path.join(
+      at.root,
+      "s".repeat(SUN_PATH_BYTES - 1 - Buffer.byteLength(`${at.root}/`)),
+    );
+    expect(Buffer.byteLength(fits)).toBe(SUN_PATH_BYTES - 1);
+    const endpoint = `${fits}x`;
+    const holder = await spawnHolder({ ...at, endpoint });
+    expect(await holder.exited).toBe(1);
+    expect(existsSync(endpoint)).toBe(false);
+    expect(existsSync(path.join(at.dir, HOLDER_SECRET_FILE))).toBe(false);
+    expect(at.log()).toContain(
+      `endpoint_too_long: The socket path is ${SUN_PATH_BYTES} bytes`,
+    );
+  });
+
+  test("refuses a socket folder other users can reach", async () => {
+    const at = place();
+    const shared = path.join(at.root, "shared");
+    mkdirSync(shared, { mode: 0o755 });
+    chmodSync(shared, 0o755);
+    const endpoint = path.join(shared, "stella-holder-1.4.0.sock");
+    const holder = await spawnHolder({ ...at, endpoint });
+    expect(await holder.exited).toBe(1);
+    expect(existsSync(endpoint)).toBe(false);
+    expect(at.log()).toContain("insecure_endpoint");
   });
 
   test("probes the harness's version, capabilities and visible models", async () => {

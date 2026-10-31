@@ -36,10 +36,11 @@ struct Fixture {
 
 impl Fixture {
   fn new() -> Self {
-    // Short: a Unix socket path must fit in about 100 bytes.
+    // The fixture's root is also its socket folder: short and private.
     let id = uuid::Uuid::new_v4().simple().to_string();
     let root = std::env::temp_dir().join(format!("sh-{}", &id[..8]));
     fs::create_dir_all(&root).unwrap();
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
     let script = root.join("stand-in");
     let exe = std::env::current_exe().unwrap();
     fs::write(
@@ -62,10 +63,20 @@ impl Fixture {
     self.root.join("stand-in.log")
   }
 
+  /// The socket of a holder version.
+  fn endpoint(&self, version: &str) -> PathBuf {
+    endpoint::socket_path(&self.root, version).unwrap()
+  }
+
+  fn endpoint_of(&self, holder_dir: &Path) -> PathBuf {
+    self.endpoint(&holder_dir.file_name().unwrap().to_string_lossy())
+  }
+
   fn settings_for(&self, version: &str, launch: SidecarLaunch) -> SidecarSettings {
     SidecarSettings {
       launch: launch.env("FAKE_SIDECAR_LOG", self.log()),
       holder_root: self.holders(),
+      socket_dir: Some(self.root.clone()),
       sidecar_version: version.to_owned(),
       app_version: "1.4.0".to_owned(),
       api_origin: "https://api.example.test".to_owned(),
@@ -118,7 +129,7 @@ impl Drop for Fixture {
         continue;
       };
       if let Ok(mut socket) =
-        std::os::unix::net::UnixStream::connect(dir.join(SOCKET_FILE))
+        std::os::unix::net::UnixStream::connect(self.endpoint_of(&dir))
       {
         let hello = json!({
           "type": "hello",
@@ -350,7 +361,7 @@ fn runs_outlive_the_supervisor_and_resume_in_the_next_one() {
     // What quitting the app does: the handle goes, nothing is sent.
     drop(first);
     // The holder still answers once the old supervisor let go.
-    let endpoint = fixture.holders().join(VERSION).join(SOCKET_FILE);
+    let endpoint = fixture.endpoint(VERSION);
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert!(endpoint.exists());
 
@@ -408,7 +419,7 @@ fn a_dropped_connection_resumes_after_the_last_delivered_message() {
     // resumes after `seq` 1, so nothing arrives twice.
     let dir = fixture.holders().join(VERSION);
     let mut intruder =
-      std::os::unix::net::UnixStream::connect(dir.join(SOCKET_FILE)).unwrap();
+      std::os::unix::net::UnixStream::connect(fixture.endpoint(VERSION)).unwrap();
     let hello = json!({
       "type": "hello",
       "protocol": SIDECAR_PROTOCOL,
@@ -480,7 +491,7 @@ fn a_new_version_drains_the_old_holder_and_removes_its_folder() {
       !old_dir.exists()
     })
     .await;
-    assert!(fixture.holders().join(VERSION).join(SOCKET_FILE).exists());
+    assert!(fixture.endpoint(VERSION).exists());
     new.shutdown().await;
   });
   assert_eq!(fixture.starts(), 2);
@@ -544,7 +555,7 @@ fn shutdown_stops_the_runs_the_holder_and_the_supervisor() {
     );
   });
   assert_eq!(fixture.starts(), 1);
-  assert!(!fixture.holders().join(VERSION).join(SOCKET_FILE).exists());
+  assert!(!fixture.endpoint(VERSION).exists());
 }
 
 #[test]
@@ -580,6 +591,53 @@ fn a_holder_folder_other_users_can_reach_is_refused() {
     assert_eq!(finish(&mut outputs).await, vec![ended(RunOutcome::Failed)]);
     sidecar.shutdown().await;
   });
+  assert_eq!(fixture.starts(), 0);
+}
+
+/// Starts a run against settings whose socket folder is `socket_dir`.
+fn run_with_socket_dir(
+  fixture: &Fixture,
+  socket_dir: PathBuf,
+) -> Vec<SidecarRunOutput> {
+  let mut outputs = Vec::new();
+  with_children(async {
+    let mut settings = fixture.settings_for(VERSION, fixture.stand_in());
+    settings.socket_dir = Some(socket_dir);
+    let sidecar = HarnessSidecar::spawn(settings);
+    let mut run = sidecar.start_run(run_start("gpt-test")).unwrap();
+    outputs = finish(&mut run).await;
+    sidecar.shutdown().await;
+  });
+  outputs
+}
+
+#[test]
+fn a_socket_folder_other_users_can_reach_is_refused() {
+  let fixture = Fixture::new();
+  let open = fixture.root.join("sockets");
+  fs::create_dir_all(&open).unwrap();
+  fs::set_permissions(&open, fs::Permissions::from_mode(0o755)).unwrap();
+  assert_eq!(
+    run_with_socket_dir(&fixture, open),
+    vec![ended(RunOutcome::Failed)]
+  );
+  assert_eq!(fixture.starts(), 0);
+}
+
+#[test]
+fn a_socket_path_over_the_platform_limit_is_never_used() {
+  let fixture = Fixture::new();
+  let long = fixture.root.join("d".repeat(endpoint::SUN_PATH_BYTES));
+  fs::create_dir_all(&long).unwrap();
+  fs::set_permissions(&long, fs::Permissions::from_mode(0o700)).unwrap();
+  assert!(matches!(
+    endpoint::socket_path(&long, VERSION),
+    Err(EndpointError::TooLong { .. })
+  ));
+  assert_eq!(
+    run_with_socket_dir(&fixture, long),
+    vec![ended(RunOutcome::Failed)]
+  );
   assert_eq!(fixture.starts(), 0);
 }
 

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   renameSync,
   rmSync,
@@ -17,30 +18,37 @@ import { Holder, type HolderOptions, type HolderPeer } from "./holder";
 import { SIDECAR_MAX_LINE_BYTES } from "./protocol";
 
 /**
- * The holder's transport and files. Everything lives in one folder per
- * sidecar version, which the desktop finds again after a restart:
+ * The holder's transport and files. One folder per sidecar version, which
+ * the desktop finds again after a restart, holds:
  *
- * - `holder.sock`: the Unix socket (Windows: the named pipe the desktop
- *   names in `endpoint`);
  * - `holder.secret`: 32 random bytes as hex, mode 0600, written after the
  *   holder owns the endpoint; a desktop presents it in `hello`;
  * - `holder.log`: the holder's log, rotated once at `MAX_LOG_BYTES`.
  *
- * On Unix the folder must belong to the user and be closed to group and
- * others (0700), so only the user reaches the socket and the secret. On
- * Windows the per-user app data folder carries the same restriction.
+ * The endpoint is the path the desktop passes, never derived here: a Unix
+ * socket in the user's short runtime folder (Windows: a named pipe). A
+ * socket path must fit `sun_path`, so a longer one is refused rather than
+ * shortened.
+ *
+ * On Unix the version folder and the socket's folder must belong to the
+ * user and be closed to group and others (0700), so only the user reaches
+ * the socket and the secret. On Windows the per-user app data folder
+ * carries the same restriction.
  */
 
-export const HOLDER_SOCKET_FILE = "holder.sock";
 export const HOLDER_SECRET_FILE = "holder.secret";
 export const HOLDER_LOG_FILE = "holder.log";
 
 const MAX_LOG_BYTES = 1024 * 1024;
 const SECRET_BYTES = 32;
 const IS_WINDOWS = process.platform === "win32";
+/** `sun_path` bytes, its terminating NUL included. */
+export const SUN_PATH_BYTES = process.platform === "linux" ? 108 : 104;
 
 export type HolderStartError =
   | { reason: "insecure_dir"; message: string }
+  | { reason: "endpoint_too_long"; message: string }
+  | { reason: "insecure_endpoint"; message: string }
   | { reason: "already_running"; message: string }
   | { reason: "listen_failed"; message: string };
 
@@ -50,8 +58,42 @@ export type HolderServerOptions = Omit<
 > & {
   /** The version's folder, `<app data>/agent-holder/<version>`. */
   dir: string;
-  /** The socket path, or the named pipe on Windows. */
+  /** The socket path, or the named pipe on Windows, as the desktop chose. */
   endpoint: string;
+};
+
+/** Whether a folder is the user's alone: not a symlink, mode 0700 or less. */
+const isPrivate = (dir: string) => {
+  const stat = lstatSync(dir, { throwIfNoEntry: false });
+  // The low six mode bits are the group's and others' permissions.
+  return (
+    stat !== undefined &&
+    stat.isDirectory() &&
+    stat.uid === process.getuid?.() &&
+    stat.mode % 0o100 === 0
+  );
+};
+
+/** Refuse a socket path that does not fit or sits in a shared folder. */
+const usableEndpoint = (endpoint: string): Result<void, HolderStartError> => {
+  if (IS_WINDOWS) {
+    return Result.ok();
+  }
+  const bytes = Buffer.byteLength(endpoint);
+  const limit = SUN_PATH_BYTES - 1;
+  if (bytes > limit) {
+    return Result.err({
+      reason: "endpoint_too_long",
+      message: `The socket path is ${bytes} bytes; at most ${limit} fit.`,
+    });
+  }
+  if (!isPrivate(path.dirname(endpoint))) {
+    return Result.err({
+      reason: "insecure_endpoint",
+      message: "The socket folder is not private to this user.",
+    });
+  }
+  return Result.ok();
 };
 
 export type HolderServer = {
@@ -66,14 +108,7 @@ const privateDir = (dir: string): Result<void, HolderStartError> => {
   if (IS_WINDOWS) {
     return Result.ok();
   }
-  const stat = statSync(dir);
-  // The low six mode bits are the group's and others' permissions.
-  const groupOrOthers = stat.mode % 0o100;
-  if (
-    !stat.isDirectory() ||
-    stat.uid !== process.getuid?.() ||
-    groupOrOthers !== 0
-  ) {
+  if (!isPrivate(dir)) {
     return Result.err({
       reason: "insecure_dir",
       message: "The holder folder is not private to this user.",
@@ -198,6 +233,13 @@ export const startHolderServer = async (
     return folder;
   }
   const log = fileLog(dir);
+  const endpointCheck = usableEndpoint(endpoint);
+  if (Result.isError(endpointCheck)) {
+    log(
+      `did not start: ${endpointCheck.error.reason}: ${endpointCheck.error.message}`,
+    );
+    return endpointCheck;
+  }
   const server = net.createServer();
   const owned = await own(server, endpoint);
   if (Result.isError(owned)) {
