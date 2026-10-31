@@ -35,6 +35,7 @@ import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -516,11 +517,23 @@ test("a withdrawal stays committed and answers revoked when reading the settings
   ).toBe(200);
   const failingView = async () =>
     await Promise.reject(new Error("Settings view unavailable"));
+  const logs = installRecordingLogger();
 
   const withdrawn = await callSettings(
     { ...A1_IN_A, readView: failingView },
     { type: "withdraw_consent" },
   );
+
+  logs.restore();
+  expect(
+    logs.records
+      .filter(
+        ({ message }) => message === "billing_draft_settings.view_read_failed",
+      )
+      .map(({ attributes }) => attributes),
+  ).toMatchObject([
+    { change: "withdraw_consent", "error.type": "UnhandledException" },
+  ]);
 
   expect(withdrawn.status).toBe(200);
   const answer = v.parse(
@@ -534,13 +547,25 @@ test("a withdrawal stays committed and answers revoked when reading the settings
   expect(settingsOf((await callSettings(A1_IN_A)).body).revision).toBe(
     answer.revision,
   );
-  // Any other change answers the read's failure; its write is committed.
+  // Any other change answers its committed row too, so the client's next
+  // change carries the current revision instead of meeting a 409.
   const regranted = await callSettings(
     { ...A1_IN_A, readView: failingView },
     { type: "grant_consent", revision: answer.revision },
   );
-  expect(regranted.status).toBe(500);
+  expect(regranted.status).toBe(200);
+  const granted = v.parse(
+    desktopBillingDraftSettingsUpdateResponseSchema,
+    regranted.body,
+  );
+  expect(granted).toMatchObject({ consent: "granted", effectiveMode: "off" });
   expect((await rowOf(ids.orgA, ids.userA1))?.consentAt).toBeInstanceOf(Date);
+  const preferred = await callSettings(A1_IN_A, {
+    type: "set_preference",
+    revision: granted.revision,
+    preference: "Next change on the answered revision",
+  });
+  expect(preferred.status).toBe(200);
 });
 
 test("the effective mode follows the organization's switch and its firm guideline file", async () => {

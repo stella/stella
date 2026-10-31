@@ -32,7 +32,9 @@ import {
   timestampCasTokenText,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { projectionPayload } from "@/api/lib/projection-totality";
 
 import {
@@ -326,16 +328,24 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
               own,
             }),
         );
-        if (view.isErr() && body.type !== "withdraw_consent") {
-          return Result.err(view.error);
+        // The change is committed whatever this read does, so the answer
+        // always names the committed row and its revision: a client retrying
+        // with the old revision would only meet a 409. Without the view the
+        // drafting the caller gets is unknown and answers `off` until the
+        // next read names it.
+        if (view.isErr()) {
+          logger.warn("billing_draft_settings.view_read_failed", {
+            change: body.type,
+            "error.type": errorTag(view.error),
+          });
         }
-        // A committed withdrawal still answers as one: nothing is drafted for
-        // a member without consent, whatever the organization allows.
         const settings = view.isOk()
           ? view.value
           : {
               effectiveMode: "off" as const,
-              consent: "revoked" as const,
+              consent: own.consentAt
+                ? ("granted" as const)
+                : ("revoked" as const),
               preference: own.preference,
             };
         return Result.ok(
