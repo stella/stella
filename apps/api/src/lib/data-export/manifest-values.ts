@@ -23,6 +23,6 @@ export const dataExportArchivePathSchema = v.pipe(
     maxSegmentBytes: DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
   }),
   v.description(
-    "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment.",
+    `Path inside the part's ZIP archive, \`/\`-separated, NFC-normalised; at most ${DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES} UTF-8 bytes total and ${DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES} UTF-8 bytes per segment.`,
   ),
 );
