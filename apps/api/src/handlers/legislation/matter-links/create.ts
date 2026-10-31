@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { agentInputNormalization } from "@stll/agent-input";
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import { linkProvisionsToMatter } from "@/api/handlers/legislation/matter-links/link-writes";
 import { status } from "@/api/http/status";
@@ -18,7 +19,7 @@ import { workspaceResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 export const legislationMatterLinkItemSchema = v.strictObject({
   statuteId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
   provisionId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
-  version: v.pipe(v.string(), v.isoDate()),
+  version: apiDateSchema,
   jurisdiction: v.pipe(
     tPublicLawCountry,
     v.metadata(
