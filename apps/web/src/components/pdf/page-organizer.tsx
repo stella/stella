@@ -794,18 +794,24 @@ const LoadedPDFPageOrganizer = ({
     sourceDocument.pages.size > MAX_PAGE_EDITOR_PAGES ||
     originalBytes.byteLength > MAX_PAGE_EDITOR_SOURCE_BYTES;
 
-  useMountEffect(() => () => {
-    isMountedRef.current = false;
-    operationOwner.revoke();
-    abortRef.current?.abort();
-    uploadOwnerRef.current.cancelCurrent();
-    cleanScanAbortRef.current?.abort();
-    for (const document of addedSourceDocumentsRef.current) {
-      detached(
-        destroyPDFDocument(document),
-        "pdf-page-organizer.destroy-added-source",
-      );
-    }
+  // React can unmount and remount effects while keeping this state (StrictMode
+  // in development), so the setup re-arms what the cleanup revokes.
+  useMountEffect(() => {
+    isMountedRef.current = true;
+    operationOwner.activate();
+    return () => {
+      isMountedRef.current = false;
+      operationOwner.revoke();
+      abortRef.current?.abort();
+      uploadOwnerRef.current.cancelCurrent();
+      cleanScanAbortRef.current?.abort();
+      for (const document of addedSourceDocumentsRef.current) {
+        detached(
+          destroyPDFDocument(document),
+          "pdf-page-organizer.destroy-added-source",
+        );
+      }
+    };
   });
 
   const dispatch = (action: Parameters<typeof reducePageOrganizer>[1]) => {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { EntityVersionUploadResult } from "@/lib/files/upload-entity-version";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -253,4 +254,46 @@ test("a receipt is single-use and bound to its request and upload owner", () => 
     ),
   ).toBeNull();
   expect(commits).toEqual(["file-bound"]);
+});
+
+test("an upload result with its own type still becomes a committable receipt", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const uploadOwner = createPageOrganizerUploadOwner();
+  const request = operationOwner.beginRequest(operationOwner.operation);
+  const pending = uploadOwner.begin(request);
+  const uploaded = {
+    type: "uploaded",
+    ...receipt("uploaded"),
+  } satisfies EntityVersionUploadResult;
+
+  const provisional = uploadOwner.prepareCompletion(pending, uploaded);
+
+  expect(provisional).toMatchObject({
+    type: "provisional",
+    fileId: "file-uploaded",
+  });
+  if (provisional.type !== "provisional") {
+    throw new Error("Expected the uploaded result to be provisional");
+  }
+  expect(uploadOwner.commit(provisional)).toMatchObject({
+    type: "completed",
+    entityVersionId: "version-uploaded",
+    fileId: "file-uploaded",
+  });
+});
+
+test("a remounted owner accepts new requests but not ones from before the remount", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const stale = operationOwner.beginRequest(operationOwner.operation);
+  const staleUpload = new AbortController();
+  operationOwner.ownController(stale, staleUpload);
+
+  operationOwner.revoke();
+  operationOwner.activate();
+  const fresh = operationOwner.beginRequest(operationOwner.operation);
+
+  expect(staleUpload.signal.aborted).toBe(true);
+  expect(operationOwner.isCurrent(stale)).toBe(false);
+  expect(operationOwner.isLive(operationOwner.operation)).toBe(true);
+  expect(operationOwner.isCurrent(fresh)).toBe(true);
 });

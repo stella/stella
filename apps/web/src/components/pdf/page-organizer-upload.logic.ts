@@ -92,6 +92,10 @@ export function createPageOrganizerOperationOwner() {
         controllers.delete(request.requestId);
       }
     },
+    /** Re-arms the owner when its component mounts again with the same state. */
+    activate(): void {
+      live = true;
+    },
     revoke(): void {
       live = false;
       for (const requestId of controllers.keys()) {
@@ -178,12 +182,15 @@ export function createPageOrganizerUploadOwner() {
           ? current
           : { type: "superseded", uploadId: pending.uploadId };
       }
+      // Copy the receipt fields by name: the upload result also carries its
+      // own `type`, and spreading it would overwrite this state's tag.
       const provisional = {
         type: "provisional",
         uploadId: pending.uploadId,
         request: pending.request,
         owner,
-        ...receipt,
+        entityVersionId: receipt.entityVersionId,
+        fileId: receipt.fileId,
       } as const;
       current = provisional;
       return provisional;
