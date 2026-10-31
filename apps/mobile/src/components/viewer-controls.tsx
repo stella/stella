@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,12 +18,14 @@ import type { ViewerAppearance } from "@/components/document-viewer/zoom";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useAppColors } from "@/theme";
 
+type GlyphName = ComponentProps<typeof LucideGlyphs>["name"];
+
 /** The glyph that shows each appearance on its button. */
 const APPEARANCE_GLYPHS = {
   system: "sun-moon",
   light: "sun",
   dark: "moon",
-} as const satisfies Record<ViewerAppearance, string>;
+} as const satisfies Record<ViewerAppearance, GlyphName>;
 
 /**
  * The bar floating over a document: − and + walk the zoom steps, the level
@@ -120,7 +124,7 @@ const ControlButton = ({
   onPress,
 }: {
   disabled?: boolean;
-  glyph: string;
+  glyph: GlyphName;
   label: string;
   onPress: () => void;
 }) => {
