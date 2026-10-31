@@ -1440,6 +1440,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           try {
             await holder.held;
             const result = await runMigrations({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
               connection,
               databaseUrl: scratchUrl,
               ebs: DISABLED_EBS,
@@ -1503,6 +1504,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const rejection = await rejectionOf(
               async () =>
                 await runMigrations({
+                  onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                   connection,
                   databaseUrl: scratchUrl,
                   ebs: DISABLED_EBS,
