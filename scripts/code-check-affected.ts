@@ -491,7 +491,19 @@ type Options = {
   skipFullFallback: boolean;
 };
 
-const parseArgs = (args: readonly string[]): Options => {
+// A missing value or the next flag is never an option's value.
+const optionValue = (
+  argv: Iterator<string, undefined>,
+  flag: string,
+): string => {
+  const { value } = argv.next();
+  if (value === undefined || value.startsWith("--")) {
+    return panic(`${flag} requires a value`);
+  }
+  return value;
+};
+
+export const parseArgs = (args: readonly string[]): Options => {
   let leg: CodeCheckLeg | undefined;
   let base: string | null = null;
   let greenBase: string | undefined;
@@ -522,16 +534,12 @@ const parseArgs = (args: readonly string[]): Options => {
       continue;
     }
     if (argument === "--base") {
-      const value = argv.next().value;
-      if (value === undefined) {
-        panic("--base requires a git ref");
-      }
-      base = value;
+      base = optionValue(argv, argument);
       continue;
     }
     if (argument === "--green-base") {
       // An empty value is a valid request: no green commit is known.
-      greenBase = argv.next().value ?? panic("--green-base requires a value");
+      greenBase = optionValue(argv, argument);
       continue;
     }
     panic(`Unknown argument: ${argument}`);

@@ -36,6 +36,7 @@ import {
   lintAllTrace,
   matchedLintAllInputs,
   memoryLimitBytes,
+  parseArgs,
   planCheck,
   planFullCheck,
   planningCommandTimeout,
@@ -2429,6 +2430,19 @@ describe("main's code check compares with the last green commit", () => {
     expect(result.exitCode, result.stderr.toString()).toBe(0);
     return result.stdout.toString().trim();
   };
+
+  test("a base option never takes the next flag as its value", () => {
+    for (const flag of ["--base", "--green-base"]) {
+      expect(() => parseArgs([flag, "--dry-run"])).toThrow(
+        `${flag} requires a value`,
+      );
+      expect(() => parseArgs([flag])).toThrow(`${flag} requires a value`);
+    }
+    expect(parseArgs(["--green-base", "", "--dry-run"])).toMatchObject({
+      greenBase: "",
+      dryRun: true,
+    });
+  });
 
   test("a green ancestor scopes the check; anything else checks every file", () => {
     const root = mkdtempSync(path.join(tmpdir(), "green-base-"));
