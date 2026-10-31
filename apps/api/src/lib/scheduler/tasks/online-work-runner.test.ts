@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { onlineWorkState } from "@/api/db/schema";
+import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -676,9 +677,23 @@ describe("online work runner", () => {
     harness.walkOf(FIRST).reject(new Error("deterministic failure"));
     await harness.settle();
 
-    expect(await harness.tick(new Date(START.getTime() + 30_000))).toEqual({
-      type: "idle",
-    });
+    // Held by a failed prerequisite, the runner reports the wait, not idle.
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      expect(await harness.tick(new Date(START.getTime() + 30_000))).toEqual({
+        type: "waiting",
+        name: SECOND,
+        prerequisite: FIRST,
+      });
+      expect(warn.mock.calls).toEqual([
+        [
+          "scheduler.online_work_waiting",
+          { "online_work.step": SECOND, "online_work.prerequisite": FIRST },
+        ],
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
     expect(harness.claims).toEqual([FIRST]);
 
     const retry = new Date(START.getTime() + 61_000);

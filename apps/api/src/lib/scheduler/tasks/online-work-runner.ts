@@ -55,7 +55,9 @@ type OnlineWorkRunnerOutcome =
   | { type: "idle" }
   | { type: "skipped" }
   | { type: "building"; name: OnlineWorkName }
-  | { type: "started"; name: OnlineWorkName };
+  | { type: "started"; name: OnlineWorkName }
+  /** The unit is held by a prerequisite whose last attempt failed. */
+  | { type: "waiting"; name: OnlineWorkName; prerequisite: OnlineWorkName };
 
 export type OnlineWorkStateSnapshot = {
   name: string;
@@ -184,16 +186,32 @@ export const createOnlineWorkRunner = ({
 }: OnlineWorkRunnerDependencies) => {
   let build: BuildState = IDLE_BUILD;
   // A prerequisite is done once every migrate run builds it, or once this
-  // runner finalized it; until then its dependents are not claimed.
+  // runner finalized it; until then its dependents are not claimed. A unit
+  // without prerequisites is absent from the map.
   const prerequisitesDone = (
     name: OnlineWorkName,
     stateByName: ReadonlyMap<string, OnlineWorkStateSnapshot>,
-  ) =>
-    (dependencies.get(name) ?? []).every(
-      (dependency) =>
-        isMigrateReady(lifecycle[dependency]) ||
-        stateByName.get(dependency)?.state === "finalized",
-    );
+  ): boolean =>
+    dependencies
+      .get(name)
+      ?.every(
+        (dependency) =>
+          isMigrateReady(lifecycle[dependency]) ||
+          stateByName.get(dependency)?.state === "finalized",
+      ) ?? true;
+  // A prerequisite that failed holds its dependents until a retry finalizes
+  // it; the tick reports that wait rather than an idle runner.
+  const failedPrerequisite = (
+    name: OnlineWorkName,
+    stateByName: ReadonlyMap<string, OnlineWorkStateSnapshot>,
+  ): OnlineWorkName | undefined =>
+    dependencies
+      .get(name)
+      ?.find(
+        (dependency) =>
+          !isMigrateReady(lifecycle[dependency]) &&
+          stateByName.get(dependency)?.state === "failed",
+      );
   const pending = names.filter((name) => {
     const entry = lifecycle[name];
     switch (entry.state) {
@@ -269,6 +287,27 @@ export const createOnlineWorkRunner = ({
     }
   };
 
+  const waitingOrIdle = (
+    stateByName: ReadonlyMap<string, OnlineWorkStateSnapshot>,
+    now: Date,
+  ): OnlineWorkRunnerOutcome => {
+    const held = pending.flatMap((name) => {
+      const prerequisite = isEligibleForAttempt(stateByName.get(name), now)
+        ? failedPrerequisite(name, stateByName)
+        : undefined;
+      return prerequisite === undefined ? [] : [{ name, prerequisite }];
+    });
+    const first = held.at(0);
+    if (first === undefined) {
+      return IDLE;
+    }
+    logger.warn("scheduler.online_work_waiting", {
+      "online_work.step": first.name,
+      "online_work.prerequisite": first.prerequisite,
+    });
+    return { type: "waiting", ...first };
+  };
+
   /** `now` is the tick's own time: it dates the claim. */
   const tick: OnlineWorkRunnerTick = async (now) => {
     if (build.type === "building") {
@@ -285,7 +324,7 @@ export const createOnlineWorkRunner = ({
         prerequisitesDone(candidate, stateByName),
     );
     if (name === undefined) {
-      return Result.ok(IDLE);
+      return Result.ok(waitingOrIdle(stateByName, now));
     }
     const claimed = await claim({ name, lifecycle });
     switch (claimed.type) {
