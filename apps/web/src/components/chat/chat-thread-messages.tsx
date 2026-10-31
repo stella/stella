@@ -58,7 +58,10 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
-import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
+import {
+  ChatMessageActionsButton,
+  ChatMessageActionsScope,
+} from "@/components/chat/chat-message-actions-menu";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import {
@@ -111,7 +114,6 @@ import {
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
-import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -353,126 +355,147 @@ export const ChatThreadMessages = ({
   // Rendered per message in both the flat and sticky layouts, so the message
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
-  const renderMessageNode = (message: ChatUIMessage, index: number) => (
-    <ChatRenderErrorBoundary
-      fallback={<MessageRenderFallback message={message} />}
-      key={message.id}
-      resetOn={message.parts}
-      surface="chat-message"
-    >
-      <Message
-        className={cn(
-          "transition-opacity duration-200",
-          approvalPendingMessageId &&
-            approvalPendingMessageId !== message.id &&
-            "opacity-40",
-        )}
-        from={message.role}
-        data-chat-message-id={message.id}
+  const renderMessageNode = (message: ChatUIMessage, index: number) => {
+    // Only an answer offers message actions. Its whole box, gaps between its
+    // parts included, is the right-click target for what its "…" opens.
+    const canFork =
+      CHAT_MESSAGE_RENDER_POLICY[message.role] === "assistant" &&
+      canForkAssistantMessage({
+        isGenerating: generationActive,
+        messageId: message.id,
+        messages,
+      });
+    return (
+      <ChatRenderErrorBoundary
+        fallback={<MessageRenderFallback message={message} />}
+        key={message.id}
+        resetOn={message.parts}
+        surface="chat-message"
       >
-        <MessageContent
+        <Message
           className={cn(
-            message.parts.some(
-              (part) =>
-                part.type === "ui-resource" &&
-                uiResourceRenderer(part.resource.mimeType) ===
-                  "generated-visual",
-            ) && "w-full",
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
           )}
+          from={message.role}
+          data-chat-message-id={message.id}
         >
-          <MessageBodyRender
-            render={() => {
-              const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
-              switch (policy) {
-                case "activity":
-                  return renderActivityMessage(message.parts);
-                case "assistant":
-                  return (
-                    <ChatAnswerDecisionProvider
-                      message={message}
-                      isAwaitingUser={awaitedAssistantMessageId === message.id}
-                    >
-                      <AssistantMessageParts
-                        activeFileName={activeFileName}
-                        activeOrganizationId={activeOrganizationId}
-                        assistantTextDensity={assistantTextDensity}
-                        isAwaitingUser={
-                          awaitedAssistantMessageId === message.id
-                        }
-                        isGenerating={generationActive}
-                        isLatestAssistantMessage={
-                          message.id === retryableAssistantMessageId
-                        }
-                        message={message}
-                        onAskUserEditAndRerun={onAskUserEditAndRerun}
-                        onAskUserEditingChange={onAskUserEditingChange}
-                        onAskUserSubmit={onAskUserSubmit}
-                        onCreateDocumentResolve={onCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-                        onOpenCreatedDocument={onOpenCreatedDocument}
-                        onOpenPlaybook={onOpenPlaybook}
-                        shouldShowToolCalls={shouldShowToolCalls}
-                        streamdownComponents={streamdownComponents}
-                        workspaceId={workspaceId}
-                        threadRef={threadRef}
-                      />
-                      <ChatTurnDuration timing={message.metadata?.turnTiming} />
-                      <div
-                        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                        data-chat-answer-footer
-                        data-chat-copy-exclude
-                      >
-                        <AssistantMessageActions
-                          exportArtifact={findCreateDocumentArtifactForMessage(
-                            messages,
-                            index,
-                          )}
-                          canFork={canForkAssistantMessage({
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          canRetry={canRetryAssistantMessage({
-                            error,
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          contextMatterIds={branchSource?.contextMatterIds}
+          <ChatMessageActionsScope
+            canExport={getMessageText(message) !== ""}
+            canFork={canFork}
+            contextMatterIds={branchSource?.contextMatterIds}
+            exportArtifact={
+              canFork
+                ? findCreateDocumentArtifactForMessage(messages, index)
+                : null
+            }
+            message={message}
+            threadRef={threadRef}
+          >
+            <MessageContent
+              className={cn(
+                message.parts.some(
+                  (part) =>
+                    part.type === "ui-resource" &&
+                    uiResourceRenderer(part.resource.mimeType) ===
+                      "generated-visual",
+                ) && "w-full",
+              )}
+            >
+              <MessageBodyRender
+                render={() => {
+                  const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
+                  switch (policy) {
+                    case "activity":
+                      return renderActivityMessage(message.parts);
+                    case "assistant":
+                      return (
+                        <ChatAnswerDecisionProvider
                           message={message}
-                          onResend={onResend}
-                          threadRef={threadRef}
-                        />
-                        <AssistantAnswerMetadata
-                          message={message}
-                          workspaceId={workspaceId}
-                          threadId={threadRef?.threadId}
-                          disabled={
-                            generationActive || !!awaitedAssistantMessageId
+                          isAwaitingUser={
+                            awaitedAssistantMessageId === message.id
                           }
-                          onAnswerEdited={onAnswerEdited}
+                        >
+                          <AssistantMessageParts
+                            activeFileName={activeFileName}
+                            activeOrganizationId={activeOrganizationId}
+                            assistantTextDensity={assistantTextDensity}
+                            isAwaitingUser={
+                              awaitedAssistantMessageId === message.id
+                            }
+                            isGenerating={generationActive}
+                            isLatestAssistantMessage={
+                              message.id === retryableAssistantMessageId
+                            }
+                            message={message}
+                            onAskUserEditAndRerun={onAskUserEditAndRerun}
+                            onAskUserEditingChange={onAskUserEditingChange}
+                            onAskUserSubmit={onAskUserSubmit}
+                            onCreateDocumentResolve={onCreateDocumentResolve}
+                            onOpenCreateDocumentDraft={
+                              onOpenCreateDocumentDraft
+                            }
+                            onOpenCreatedDocument={onOpenCreatedDocument}
+                            onOpenPlaybook={onOpenPlaybook}
+                            shouldShowToolCalls={shouldShowToolCalls}
+                            streamdownComponents={streamdownComponents}
+                            workspaceId={workspaceId}
+                            threadRef={threadRef}
+                          />
+                          <ChatTurnDuration
+                            timing={message.metadata?.turnTiming}
+                          />
+                          <div
+                            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                            data-chat-answer-footer
+                            data-chat-copy-exclude
+                          >
+                            <AssistantMessageActions
+                              canFork={canFork}
+                              canRetry={canRetryAssistantMessage({
+                                error,
+                                isGenerating: generationActive,
+                                messageId: message.id,
+                                messages,
+                              })}
+                              message={message}
+                              onResend={onResend}
+                              threadRef={threadRef}
+                            />
+                            <AssistantAnswerMetadata
+                              message={message}
+                              workspaceId={workspaceId}
+                              threadId={threadRef?.threadId}
+                              disabled={
+                                generationActive || !!awaitedAssistantMessageId
+                              }
+                              onAnswerEdited={onAnswerEdited}
+                            />
+                          </div>
+                        </ChatAnswerDecisionProvider>
+                      );
+                    case "text":
+                      return (
+                        <TextMessageParts
+                          message={message}
+                          messages={messages}
+                          index={index}
                         />
-                      </div>
-                    </ChatAnswerDecisionProvider>
-                  );
-                case "text":
-                  return (
-                    <TextMessageParts
-                      message={message}
-                      messages={messages}
-                      index={index}
-                    />
-                  );
-                default:
-                  policy satisfies never;
-                  return panic("Unhandled chat message render policy");
-              }
-            }}
-          />
-        </MessageContent>
-      </Message>
-    </ChatRenderErrorBoundary>
-  );
+                      );
+                    default:
+                      policy satisfies never;
+                      return panic("Unhandled chat message render policy");
+                  }
+                }}
+              />
+            </MessageContent>
+          </ChatMessageActionsScope>
+        </Message>
+      </ChatRenderErrorBoundary>
+    );
+  };
 
   return (
     // Sent messages persist a same-matter mention without its matter; the
@@ -1251,8 +1274,6 @@ const getMessageText = (message: PersistedChatMessage) => {
 const AssistantMessageActions = ({
   canFork: forkOffered,
   canRetry: retryOffered,
-  contextMatterIds,
-  exportArtifact,
   message,
   onResend,
   threadRef,
@@ -1261,9 +1282,6 @@ const AssistantMessageActions = ({
   canFork: boolean;
   /** `canRetryAssistantMessage`. */
   canRetry: boolean;
-  /** The chat's matter scope, which a fork opened in the inspector keeps. */
-  contextMatterIds?: readonly string[] | undefined;
-  exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
@@ -1315,16 +1333,7 @@ const AssistantMessageActions = ({
           {t("common.retry")}
         </Button>
       )}
-      {threadRef && forkOffered && (
-        <ChatMessageActionsMenu
-          canExport={Boolean(text)}
-          canFork={canFork}
-          contextMatterIds={contextMatterIds}
-          exportArtifact={exportArtifact}
-          message={message}
-          threadRef={threadRef}
-        />
-      )}
+      {canFork && <ChatMessageActionsButton />}
     </div>
   );
 };

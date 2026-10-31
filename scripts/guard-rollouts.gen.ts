@@ -8,6 +8,7 @@ import noGlobalTestingLibraryScreen from "./guard-rollouts/no-global-testing-lib
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
 import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
 import noPlanScanNodeLiterals from "./guard-rollouts/no-plan-scan-node-literals.ts";
+import noRawContextMenu from "./guard-rollouts/no-raw-context-menu.ts";
 import noWaitForUnderFakeTimers from "./guard-rollouts/no-wait-for-under-fake-timers.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
 import semanticControls from "./guard-rollouts/semantic-controls.ts";
@@ -26,6 +27,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-inert-autofocus": noInertAutofocus,
   "no-parser-inline-flatten": noParserInlineFlatten,
   "no-plan-scan-node-literals": noPlanScanNodeLiterals,
+  "no-raw-context-menu": noRawContextMenu,
   "no-wait-for-under-fake-timers": noWaitForUnderFakeTimers,
   "portable-path": portablePath,
   "semantic-controls": semanticControls,

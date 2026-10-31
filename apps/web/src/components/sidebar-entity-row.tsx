@@ -5,13 +5,11 @@ import { useTranslations } from "use-intl";
 
 import { ENTITY_NAME_MAX_LENGTH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { type EntityAction, EntityActions } from "@stll/ui/entity-actions";
 import { PenLineIcon, Trash2Icon } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
-import { MenuItem } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
-import { contextMenuBelongsTo } from "@/components/context-menu-target";
-import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { MatterActivityRow } from "@/components/matter-activity-row";
 import { SidebarMenuSubItem } from "@/components/sidebar";
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -61,28 +59,27 @@ export const SidebarEntityRow = ({
       );
     },
   });
-  const menu = useAnchoredMenu({
-    returnFocus,
-    children: (
-      <>
-        {canRename && (
-          <MenuItem onClick={() => rename.startEditing()}>
-            <PenLineIcon />
-            {t("common.rename")}
-          </MenuItem>
-        )}
-        {canDelete && (
-          <MenuItem
-            onClick={() => onDelete(returnFocus.current)}
-            variant="destructive"
-          >
-            <Trash2Icon />
-            {t("common.delete")}
-          </MenuItem>
-        )}
-      </>
-    ),
-  });
+  const actions: EntityAction[] = [
+    ...(canRename
+      ? [
+          {
+            icon: <PenLineIcon />,
+            label: t("common.rename"),
+            onClick: () => rename.startEditing(),
+          },
+        ]
+      : []),
+    ...(canDelete
+      ? [
+          {
+            icon: <Trash2Icon />,
+            label: t("common.delete"),
+            onClick: () => onDelete(returnFocus.current),
+            variant: "destructive" as const,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <SidebarMenuSubItem data-context-menu-target={entityId}>
@@ -101,31 +98,21 @@ export const SidebarEntityRow = ({
           {rename.state.error && <span role="alert">{rename.state.error}</span>}
         </div>
       ) : (
-        <MatterActivityRow>
-          <Button
-            data-entity-id={entityId}
-            data-entity-kind={entityKind}
-            onClick={containedEventHandler(onOpen)}
-            onContextMenu={containedEventHandler((event) => {
-              if (
-                !contextMenuBelongsTo(event, { id: entityId, kind: entityKind })
-              ) {
-                return;
-              }
-              if (canRename || canDelete) {
-                menu.openAt(event);
-              }
-            })}
-            onKeyDown={canRename || canDelete ? menu.onKeyDown : undefined}
-            ref={returnFocus}
-            size="sm"
-            variant="ghost"
-          >
-            {children}
-          </Button>
-        </MatterActivityRow>
+        <EntityActions actions={actions} label={t("common.actions")}>
+          <MatterActivityRow>
+            <Button
+              data-entity-id={entityId}
+              data-entity-kind={entityKind}
+              onClick={containedEventHandler(onOpen)}
+              ref={returnFocus}
+              size="sm"
+              variant="ghost"
+            >
+              {children}
+            </Button>
+          </MatterActivityRow>
+        </EntityActions>
       )}
-      {menu.element}
     </SidebarMenuSubItem>
   );
 };

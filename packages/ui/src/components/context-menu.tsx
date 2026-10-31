@@ -69,13 +69,29 @@ export const ContextMenu = ({
         {children}
       </ContextMenuPrimitive.Trigger>
       <MenuPopup data-slot="context-menu-popup">
-        {actions.map((action) => (
-          <ContextMenuActionItem action={action} key={action.label} />
-        ))}
+        <ContextMenuActionItems actions={actions} />
       </MenuPopup>
     </ContextMenuPrimitive.Root>
   );
 };
+
+/**
+ * The items of one action list, inside a menu popup. `ContextMenu` and
+ * `EntityActions` (`@stll/ui/entity-actions`) both render their lists
+ * through it, so a right-click menu and an object's "…" menu built from
+ * the same list hold the same items.
+ */
+export const ContextMenuActionItems = ({
+  actions,
+}: {
+  actions: readonly ContextMenuAction[];
+}) => (
+  <>
+    {actions.map((action) => (
+      <ContextMenuActionItem action={action} key={action.label} />
+    ))}
+  </>
+);
 
 const ContextMenuActionItem = ({ action }: { action: ContextMenuAction }) => {
   const separator = action.separatorBefore ? <MenuSeparator /> : null;

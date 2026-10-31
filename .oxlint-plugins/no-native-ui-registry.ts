@@ -192,6 +192,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "directional-icon": noNative("mirrors an icon under a right-to-left UI"),
   "document-identity-badge": noNative("a domain badge for a document"),
   "document-identity-badge.logic": notComponent("badge formatting helpers"),
+  "entity-actions": owned(
+    "no-raw-context-menu/no-raw-context-menu",
+    "hand-written contextmenu handlers are reported there",
+  ),
   field: owned(
     nativeRuleId("label"),
     "Field pairs a Label with a control; the native label is the label rule's",
@@ -253,6 +257,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   "menu-section": owned(
     nativeRuleId("menu"),
     "a labelled group inside Menu; native menus are the menu rule's",
+  ),
+  "native-context-menu": notComponent(
+    "decides when a right-click keeps the native menu",
   ),
   "number-input": native("NumberInput from @stll/ui/number-input", {
     roles: ["spinbutton"],
