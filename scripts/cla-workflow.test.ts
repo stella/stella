@@ -222,7 +222,7 @@ const fixture = ({
         return { data: user };
       }
       if (route.includes("/memberships/")) {
-        expect(this.token).toBe("store-fixture");
+        expect(this.token).toBe("cla-app-fixture");
         if (membershipError) {
           throw new FixtureApiError({
             status: membershipError,
@@ -236,7 +236,7 @@ const fixture = ({
         return { data: membership };
       }
       if (route.includes("/contents/")) {
-        expect(this.token).toBe("store-fixture");
+        expect(this.token).toBe("cla-app-fixture");
         expect(params["owner"]).toBe("stella");
         expect(params["repo"]).toBe("cla");
         expect(params["path"]).toBe("signatures/cla.json");
@@ -297,7 +297,9 @@ const fixture = ({
         );
         return { data: {} };
       }
-      expect(this.token).toBe("base-fixture");
+      expect(this.token).toBe(
+        route.includes("/check-runs") ? "cla-app-fixture" : "base-fixture",
+      );
       expect(params["owner"]).toBe("stella");
       expect(params["repo"]).toBe("stella");
       if (route.endsWith("/pulls/{pull_number}")) {
@@ -584,9 +586,7 @@ const fixture = ({
       },
       process: {
         env: {
-          ...(credentials["store_required"] === "false"
-            ? {}
-            : { CLA_STORE_TOKEN: "store-fixture" }),
+          CLA_APP_TOKEN: "cla-app-fixture",
           CLA_PULL_REQUESTS: credentials["pull_requests"],
         },
       },
@@ -632,6 +632,33 @@ const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
   );
 
 describe("contributor signature workflow", () => {
+  test("CLA app suite receives checks instead of skipped github-actions suite 111_159_303_653", async () => {
+    const skippedSuite = {
+      id: 111_159_303_653,
+      app: { slug: "github-actions" },
+      conclusion: "skipped",
+      checkRuns: [{ name: "resolve", conclusion: "skipped" }],
+    };
+    expect(
+      skippedSuite.checkRuns.every(
+        ({ conclusion }) => conclusion === "skipped",
+      ),
+    ).toBe(true);
+
+    const run = fixture();
+    await run.execute();
+    const checkRequests = run.requests.filter(({ route }) =>
+      route.includes("/check-runs"),
+    );
+    expect(checkRequests.length).toBeGreaterThan(0);
+    expect(
+      checkRequests.every(({ token }) => token === "cla-app-fixture"),
+    ).toBe(true);
+    expect(checkRequests.every(({ token }) => token !== "base-fixture")).toBe(
+      true,
+    );
+  });
+
   test.each(["signed", "member"])(
     "unsigned opener cannot reuse fully signed or exempt commits (%s)",
     async (kind) => {
@@ -1160,7 +1187,7 @@ describe("contributor signature workflow", () => {
     expect(run.errors).toEqual([]);
     expect(lastOutput(run, "cla").conclusion).toBe("success");
     expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
-    expect(run.requests.some(({ token }) => token === "store-fixture")).toBe(
+    expect(run.requests.some(({ route }) => route.includes("/contents/"))).toBe(
       false,
     );
     expect(
@@ -1221,7 +1248,7 @@ describe("contributor signature workflow", () => {
     expect(run.errors).toEqual([]);
     expect(lastOutput(run, "cla").conclusion).toBe("success");
     expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
-    expect(run.requests.some(({ token }) => token === "store-fixture")).toBe(
+    expect(run.requests.some(({ route }) => route.includes("/contents/"))).toBe(
       false,
     );
   });
@@ -1990,9 +2017,15 @@ describe("contributor signature workflow", () => {
     expect(credentialsSource).not.toMatch(
       /\b(?:eval|require|exec|spawn)\s*\(/u,
     );
-    expect(steps.at(1)?.if).toBe(
-      "steps.credentials.outputs.store_required == 'true'",
-    );
+    expect(steps.at(1)?.if).toBeUndefined();
+    expect(steps.at(1)?.with).toMatchObject({
+      "app-id": 2_871_141,
+      owner: "stella",
+      "permission-checks": "write",
+      "permission-contents": "write",
+      "permission-members": "read",
+    });
+    expect(steps.at(1)?.with["repositories"]).toBe("cla\nstella\n");
     expect(scriptStep?.if).toBe(
       `\${{ !cancelled() && steps.credentials.outcome == 'success' }}`,
     );
@@ -2001,7 +2034,6 @@ describe("contributor signature workflow", () => {
     );
     expect(workflow.permissions).toEqual({
       contents: "read",
-      checks: "write",
       issues: "write",
       "pull-requests": "read",
     });
