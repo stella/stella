@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 const searchFacets = createSafeRootHandler(
   {
     contract: "patch",
+    access: "read",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
