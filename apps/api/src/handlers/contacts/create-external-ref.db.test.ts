@@ -15,6 +15,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -60,15 +61,20 @@ const createTenant = async (name: string): Promise<Tenant> => {
   return { organizationId, userId };
 };
 
+type CreateContext = Parameters<typeof createContact.handler>[0];
+
 const createVia = async (tenant: Tenant, body: CreateContactBody) => {
-  const scopedDb = createScopedDb(
-    markRlsDatabase(db),
-    [],
-    tenant.organizationId,
-    tenant.userId,
+  // The test database is PGlite; the route types its handle for Bun SQL.
+  const scopedDb = asTestRaw<CreateContext["scopedDb"]>(
+    createScopedDb(
+      markRlsDatabase(db),
+      [],
+      tenant.organizationId,
+      tenant.userId,
+    ),
   );
   return await createContact.handler(
-    createTestHandlerContext<Parameters<typeof createContact.handler>[0]>({
+    createTestHandlerContext<CreateContext>({
       scopedDb,
       safeDb: safeDbFromScoped(scopedDb),
       audit: auditRecorderDouble(),
@@ -147,11 +153,9 @@ describe("contact create by external ref", () => {
       })
       .from(contacts)
       .where(eq(contacts.id, ownId));
-    expect(stored).toEqual({
-      organizationId: caller.organizationId,
-      externalSource: ref.source,
-      externalId: ref.id,
-    });
+    expect(stored?.organizationId).toBe(caller.organizationId);
+    expect(stored?.externalSource).toBe(ref.source);
+    expect(stored?.externalId).toBe(ref.id);
 
     // A second create of the same ref is refused, naming only the caller's
     // own contact.
