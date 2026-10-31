@@ -270,26 +270,44 @@ const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
 const TEMPLATE_SIDEBAR_KEYS = ["a", "b", "c", "d", "e"];
 const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 
+/**
+ * Which chrome a loaded list renders: the member library's category sidebar,
+ * mobile filter row and toolbar, or the public catalogue's bare list.
+ */
+export const TEMPLATE_LIST_LAYOUT = {
+  library: "library",
+  catalogue: "catalogue",
+} as const;
+type TemplateListLayout =
+  (typeof TEMPLATE_LIST_LAYOUT)[keyof typeof TEMPLATE_LIST_LAYOUT];
+
 // Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
 // pane with count/new-template toolbar and divided rows) so the page keeps its
 // shape while templates load; only the values fade in.
-export const TemplateListSkeleton = () => {
+export const TemplateListSkeleton = ({
+  layout,
+}: {
+  layout: TemplateListLayout;
+}) => {
   const density = readTemplateDensity();
+  const hasLibraryChrome = layout === TEMPLATE_LIST_LAYOUT.library;
   const t = useTranslations();
   return (
     <div
       aria-hidden="true"
       className="flex min-h-0 flex-1 flex-col md:flex-row"
     >
-      <div className="hidden w-48 shrink-0 flex-col md:flex">
-        <nav className="flex-1 space-y-1 p-2">
-          <Skeleton className="h-7 w-full rounded-md" />
-          <div className="my-1 border-t" />
-          {TEMPLATE_SIDEBAR_KEYS.map((key) => (
-            <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
-          ))}
-        </nav>
-      </div>
+      {hasLibraryChrome && (
+        <div className="hidden w-48 shrink-0 flex-col md:flex">
+          <nav className="flex-1 space-y-1 p-2">
+            <Skeleton className="h-7 w-full rounded-md" />
+            <div className="my-1 border-t" />
+            {TEMPLATE_SIDEBAR_KEYS.map((key) => (
+              <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
+            ))}
+          </nav>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col md:border-s">
         <div className={TEMPLATE_TOOLBAR_CLASS}>
@@ -301,15 +319,17 @@ export const TemplateListSkeleton = () => {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Skeleton className="h-8 w-16 rounded-md" />
-            <Skeleton className="h-8 w-32 rounded-md" />
+            {hasLibraryChrome && <Skeleton className="h-8 w-32 rounded-md" />}
           </div>
         </div>
 
-        <div className="border-b px-3 py-2 md:hidden">
-          <div className="flex gap-1 pb-0.5">
-            <Skeleton className="h-8 w-32" />
+        {hasLibraryChrome && (
+          <div className="border-b px-3 py-2 md:hidden">
+            <div className="flex gap-1 pb-0.5">
+              <Skeleton className="h-8 w-32" />
+            </div>
           </div>
-        </div>
+        )}
         <ul className="flex-1 divide-y overflow-y-auto">
           {TEMPLATE_ROW_KEYS.map((key) => (
             <li
@@ -350,7 +370,15 @@ export const TemplateLibraryView = (props: TemplateListViewProps) => {
   const t = useTranslations();
 
   if (props.source.status === "loading") {
-    return <TemplateListSkeleton />;
+    return (
+      <TemplateListSkeleton
+        layout={
+          props.sidebar === undefined
+            ? TEMPLATE_LIST_LAYOUT.catalogue
+            : TEMPLATE_LIST_LAYOUT.library
+        }
+      />
+    );
   }
   if (props.source.status === "error") {
     return (
