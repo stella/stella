@@ -896,6 +896,7 @@
       "billableHours": "Fakturovatelné hodiny",
       "billableShare": "Podíl fakturovatelného času",
       "change": "Změna: {value}",
+      "changePoints": "Změna v procentních bodech: {value}",
       "collapse": "Sbalit {name}",
       "empty": "Zaznamenávejte čas, aby se přehled naplnil.",
       "expand": "Rozbalit {name}",
@@ -904,6 +905,7 @@
       "period": "Období",
       "privacy": "Tento přehled zahrnuje pouze zaznamenané časové záznamy. Aktivita na počítači zůstává v zařízení.",
       "title": "Přehled času týmu",
+      "tooManyCells": "Přehled je příliš velký, aby se zde zobrazil. Zkraťte období, zobrazte ve sloupcích týdny nebo měsíce, nebo jej exportujte do CSV.",
       "total": "Celkem",
       "unbilledValue": "Nevyfakturovaná fakturovatelná částka"
     },

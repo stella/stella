@@ -15,11 +15,8 @@ import {
   ReportPage,
 } from "./_protected.time_.report/-components/report-page";
 import { timeReportOptions } from "./_protected.time_.report/-components/report-query";
-import {
-  type ReportSearch,
-  reportSearchSchema,
-} from "./_protected.time_.report/-components/report-search";
-import { reportRange } from "./_protected.time_.report/-components/report.logic";
+import { reportSearchSchema } from "./_protected.time_.report/-components/report-search";
+import { resolveReportSearch } from "./_protected.time_.report/-components/report.logic";
 
 const TimeReportRoute = () => {
   const search = Route.useSearch({ select: (value) => value });
@@ -31,41 +28,24 @@ const TimeReportRoute = () => {
     }),
   });
   const navigate = Route.useNavigate();
+  const { filter, period } = resolveReportSearch(
+    search,
+    Temporal.Now.plainDateISO(timezoneId).toString(),
+  );
   return (
     <ReportPage
       organizationId={organizationId}
       userId={userId}
-      filter={resolveFilter(
-        search,
-        Temporal.Now.plainDateISO(timezoneId).toString(),
-      )}
-      period={search.period ?? "week"}
-      onChange={(filter, period) =>
+      filter={filter}
+      period={period}
+      onChange={(next, nextPeriod) =>
         detached(
-          navigate({ search: { ...filter, period } }),
+          navigate({ search: { ...next, period: nextPeriod } }),
           "time-report.navigate",
         )
       }
     />
   );
-};
-
-const resolveFilter = (search: ReportSearch, today: string) => {
-  const period = search.period ?? "week";
-  const custom =
-    search.from &&
-    search.to &&
-    search.from <= search.to &&
-    Temporal.PlainDate.from(search.from).until(
-      Temporal.PlainDate.from(search.to),
-    ).days < 366
-      ? { from: search.from, to: search.to }
-      : undefined;
-  return {
-    ...reportRange(period, search.from ?? today, custom),
-    groupBy: search.groupBy ?? "member",
-    bucket: search.bucket ?? (period === "week" ? "day" : "week"),
-  } as const;
 };
 
 export const Route = createFileRoute("/_protected/time_/report")({
@@ -106,10 +86,10 @@ export const Route = createFileRoute("/_protected/time_/report")({
       timeReportOptions(
         context.user.activeOrganizationId,
         context.user.id,
-        resolveFilter(
+        resolveReportSearch(
           deps,
           Temporal.Now.plainDateISO(context.user.timezoneId).toString(),
-        ),
+        ).filter,
       ),
     );
   },

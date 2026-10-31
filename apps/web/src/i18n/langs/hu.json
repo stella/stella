@@ -896,6 +896,7 @@
       "billableHours": "Számlázható órák",
       "billableShare": "Számlázható arány",
       "change": "Változás: {value}",
+      "changePoints": "Változás százalékpontban: {value}",
       "collapse": "{name} összecsukása",
       "empty": "Rögzítsen időt a jelentés kitöltéséhez.",
       "expand": "{name} kibontása",
@@ -904,6 +905,7 @@
       "period": "Időszak",
       "privacy": "Ez a jelentés csak a rögzített időbejegyzéseket használja. Az asztali tevékenység minden eszközön helyben marad.",
       "title": "Csapatmunkaidő-jelentés",
+      "tooManyCells": "A jelentés túl nagy ahhoz, hogy itt megjelenjen. Rövidítse le az időszakot, jelenítsen meg heteket vagy hónapokat oszlopként, vagy exportálja CSV-be.",
       "total": "Összesen",
       "unbilledValue": "Ki nem számlázott számlázható érték"
     },

@@ -3,7 +3,10 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import type { TimeEntryReport } from "@stll/api-contract/time-entry-report";
+import type {
+  TimeEntryReport,
+  TimeEntryReportRow,
+} from "@stll/api-contract/time-entry-report";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
@@ -28,8 +31,11 @@ import type { ReportFilter } from "./report-query";
 import {
   approvalCellSearch,
   buildPivot,
+  isInternalReportRow,
   pivotCsv,
+  REPORT_GRID_CELL_LIMIT,
   reportColumns,
+  reportCsvRows,
 } from "./report.logic";
 
 export const ReportTable = ({
@@ -50,31 +56,37 @@ export const ReportTable = ({
   );
   const hours = (minutes: number) =>
     format.number(minutes / 60, { maximumFractionDigits: 2 });
-  const label = (name: string | null) => name ?? t(REPORT_LABELS.unassigned);
+  const label = (row: TimeEntryReportRow) =>
+    row.rowName ??
+    t(
+      isInternalReportRow(row)
+        ? REPORT_LABELS.internal
+        : REPORT_LABELS.unassigned,
+    );
   const columnLabels = columns.map((column) =>
     format.dateTime(plainDateEpoch(column), SHORT_DATE),
   );
+  // Past this size the grid would stall the page; the CSV holds every cell.
+  const gridFits = visible.length * columns.length <= REPORT_GRID_CELL_LIMIT;
   const exportCsv = () =>
     downloadFile(
       new Blob(
         [
-          pivotCsv([
-            [
-              t(REPORT_LABELS[filter.groupBy]),
-              ...columnLabels,
-              t(REPORT_LABELS.total),
-            ],
-            ...visible.map(({ row, cells, total }) => [
-              label(row.rowName),
-              ...columns.map((column) => hours(cells.get(column) ?? 0)),
-              hours(total),
-            ]),
-            [
-              t(REPORT_LABELS.total),
-              ...columns.map((column) => hours(pivot.totals.get(column) ?? 0)),
-              hours(pivot.total),
-            ],
-          ]),
+          pivotCsv(
+            reportCsvRows({
+              pivot,
+              visible,
+              columns,
+              text: {
+                group: t(REPORT_LABELS[filter.groupBy]),
+                matter: t(REPORT_LABELS.matter),
+                total: t(REPORT_LABELS.total),
+                columns: columnLabels,
+                label,
+                hours,
+              },
+            }),
+          ),
         ],
         { type: "text/csv;charset=utf-8" },
       ),
@@ -112,7 +124,14 @@ export const ReportTable = ({
                 ))}
               </TableRow>
             ))}
-          {visible.map(({ row, cells, total }) => (
+          {!gridFits && (
+            <TableRow>
+              <TableCell colSpan={columns.length + 2}>
+                {t(REPORT_LABELS.tooManyCells)}
+              </TableCell>
+            </TableRow>
+          )}
+          {(gridFits ? visible : []).map(({ row, cells, total }) => (
             <TableRow key={row.rowId}>
               <TableCell>
                 <div className="flex min-w-0 items-center gap-2">
@@ -125,7 +144,7 @@ export const ReportTable = ({
                         REPORT_LABELS[
                           expanded.has(row.rowId) ? "collapse" : "expand"
                         ],
-                        { name: label(row.rowName) },
+                        { name: label(row) },
                       )}
                       onClick={() =>
                         setExpanded((current) => {
@@ -144,23 +163,31 @@ export const ReportTable = ({
                       {expanded.has(row.rowId) ? "−" : "+"}
                     </Button>
                   )}
-                  <TruncatedText>{label(row.rowName)}</TruncatedText>
+                  <TruncatedText>{label(row)}</TruncatedText>
                 </div>
               </TableCell>
-              {columns.map((column) => (
-                <TableCell key={column}>
-                  <Link
-                    className="tabular-nums underline underline-offset-4"
-                    to="/time/approvals"
-                    search={approvalCellSearch(
-                      row,
-                      column < filter.from ? filter.from : column,
+              {columns.map((column) => {
+                const minutes = cells.get(column) ?? 0;
+                const search =
+                  minutes === 0
+                    ? null
+                    : approvalCellSearch(row, column, filter);
+                return (
+                  <TableCell key={column}>
+                    {search === null ? (
+                      <span className="tabular-nums">{hours(minutes)}</span>
+                    ) : (
+                      <Link
+                        className="tabular-nums underline underline-offset-4"
+                        to="/time/approvals"
+                        search={search}
+                      >
+                        {hours(minutes)}
+                      </Link>
                     )}
-                  >
-                    {hours(cells.get(column) ?? 0)}
-                  </Link>
-                </TableCell>
-              ))}
+                  </TableCell>
+                );
+              })}
               <TableCell>
                 <span className="font-medium tabular-nums">{hours(total)}</span>
               </TableCell>

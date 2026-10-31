@@ -896,6 +896,7 @@
       "billableHours": "Apmaksājamās stundas",
       "billableShare": "Apmaksājamā laika daļa",
       "change": "Izmaiņas: {value}",
+      "changePoints": "Izmaiņas procentpunktos: {value}",
       "collapse": "Sakļaut {name}",
       "empty": "Reģistrējiet laiku, lai aizpildītu šo pārskatu.",
       "expand": "Izvērst {name}",
@@ -904,6 +905,7 @@
       "period": "Periods",
       "privacy": "Šajā pārskatā tiek izmantoti tikai reģistrētie laika ieraksti. Darbības dati datorā paliek katrā ierīcē.",
       "title": "Komandas laika pārskats",
+      "tooManyCells": "Šis pārskats ir pārāk liels, lai to parādītu šeit. Saīsiniet periodu, rādiet kolonnās nedēļas vai mēnešus vai eksportējiet to CSV formātā.",
       "total": "Kopā",
       "unbilledValue": "Neizrakstītā apmaksājamā summa"
     },

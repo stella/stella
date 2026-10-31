@@ -2,10 +2,13 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { TimeEntryReport } from "@stll/api-contract/time-entry-report";
+import { TIME_ENTRY_REPORT_INTERNAL_ROW_ID } from "@stll/api-contract/time-entry-report";
 
 import arabic from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import type { ReportFilter } from "./report-query";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/time/report" });
 const { act } = await import("react");
@@ -65,9 +68,16 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
+const WEEK = {
+  from: "2026-10-26",
+  to: "2026-11-01",
+  groupBy: "member",
+  bucket: "day",
+} satisfies ReportFilter;
 const mount = async (
   locale: "en" | "ar" = "en",
   value: TimeEntryReport = data,
+  filter: ReportFilter = WEEK,
 ) => {
   const root = createRootRoute();
   const route = createRoute({
@@ -85,12 +95,7 @@ const mount = async (
         >
           <ReportLayout
             data={value}
-            filter={{
-              from: "2026-10-26",
-              to: "2026-11-01",
-              groupBy: "member",
-              bucket: "day",
-            }}
+            filter={filter}
             period="week"
             onChange={() => undefined}
           />
@@ -169,4 +174,62 @@ test("renders the Arabic catalog and localized numeric cells", async () => {
     screen.getByRole("heading", { name: arabic.billing.timeReport.title }),
   ).toBeTruthy();
   expect(screen.getByRole("table").textContent).toContain("٣");
+});
+
+test("labels the billable share change in percentage points", async () => {
+  await mount();
+  expect(
+    screen.getByRole("region", { name: "Billable share" }).textContent,
+  ).toContain("Change in percentage points: 33.33");
+  expect(
+    screen.getByRole("region", { name: "Billable hours" }).textContent,
+  ).toContain("Change: 1");
+});
+
+test("names internal work and links only cells the approvals week can scope", async () => {
+  const internal = {
+    rowId: TIME_ENTRY_REPORT_INTERNAL_ROW_ID,
+    rowName: null,
+    memberId: null,
+    matterId: null,
+    parentId: null,
+    bucket: "2026-10-01",
+    minutes: 60,
+  };
+  const client = {
+    ...internal,
+    rowId: "00000000-0000-4000-8000-000000000002",
+    rowName: "Harbour client",
+  };
+  await mount(
+    "en",
+    { ...data, rows: [client, internal] },
+    {
+      ...WEEK,
+      groupBy: "client",
+      bucket: "month",
+    },
+  );
+  const table = screen.getByRole("table");
+  expect(within(table).getByRole("row", { name: /^Internal/u })).toBeTruthy();
+  expect(within(table).queryAllByRole("link")).toEqual([]);
+});
+
+test("offers the CSV instead of a grid too large to render", async () => {
+  const rows = Array.from({ length: 2900 }, (_, index) => ({
+    rowId: `member-${index}`,
+    rowName: `Member ${index}`,
+    memberId: `member-${index}`,
+    matterId: null,
+    parentId: null,
+    bucket: "2026-10-26",
+    minutes: 60,
+  }));
+  await mount("en", { ...data, rows });
+  const table = screen.getByRole("table");
+  expect(table.textContent).toContain(messages.billing.timeReport.tooManyCells);
+  expect(within(table).queryByRole("row", { name: /Member 1/u })).toBeNull();
+  expect(
+    screen.getByRole("button", { name: messages.workspaces.views.exportCsv }),
+  ).toBeTruthy();
 });

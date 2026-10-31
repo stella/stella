@@ -68,12 +68,19 @@ export const ReportSummary = ({
                   : number(metricValue(key, data.summary.current))}
               </p>
               <p className="text-muted-foreground text-xs tabular-nums">
-                {t(REPORT_LABELS.change, {
-                  value: number(
-                    metricValue(key, data.summary.current) -
-                      metricValue(key, data.summary.previous),
-                  ),
-                })}
+                {/* The share moves on a 0 to 100 scale: its change reads in
+                    percentage points, not as a relative percentage. */}
+                {t(
+                  REPORT_LABELS[
+                    key === "billableShare" ? "changePoints" : "change"
+                  ],
+                  {
+                    value: number(
+                      metricValue(key, data.summary.current) -
+                        metricValue(key, data.summary.previous),
+                    ),
+                  },
+                )}
               </p>
             </>
           )}

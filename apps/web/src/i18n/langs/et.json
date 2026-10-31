@@ -896,6 +896,7 @@
       "billableHours": "Arveldatavad tunnid",
       "billableShare": "Arveldatava aja osakaal",
       "change": "Muutus: {value}",
+      "changePoints": "Muutus protsendipunktides: {value}",
       "collapse": "Ahenda {name}",
       "empty": "Lisa aega, et see aruanne täituks.",
       "expand": "Laienda {name}",
@@ -904,6 +905,7 @@
       "period": "Periood",
       "privacy": "See aruanne kasutab ainult salvestatud ajakirjeid. Töölaua tegevus jääb igasse seadmesse.",
       "title": "Meeskonna ajaülevaade",
+      "tooManyCells": "See aruanne on siin kuvamiseks liiga suur. Lühenda vahemikku, kuva veergudena nädalaid või kuid või ekspordi see CSV-failina.",
       "total": "Kokku",
       "unbilledValue": "Arveldamata arveldatav väärtus"
     },

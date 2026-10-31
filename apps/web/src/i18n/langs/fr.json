@@ -896,6 +896,7 @@
       "billableHours": "Heures facturables",
       "billableShare": "Part facturable",
       "change": "Variation : {value}",
+      "changePoints": "Variation en points de pourcentage : {value}",
       "collapse": "Réduire {name}",
       "empty": "Saisissez du temps pour remplir ce rapport.",
       "expand": "Développer {name}",
@@ -904,6 +905,7 @@
       "period": "Période",
       "privacy": "Ce rapport utilise uniquement les saisies de temps enregistrées. L’activité sur ordinateur reste sur chaque appareil.",
       "title": "Rapport de temps de l’équipe",
+      "tooManyCells": "Ce rapport est trop volumineux pour être affiché ici. Raccourcissez la période, affichez les semaines ou les mois en colonnes, ou exportez-le en CSV.",
       "total": "Total général",
       "unbilledValue": "Valeur facturable non facturée"
     },

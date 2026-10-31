@@ -896,6 +896,7 @@
       "billableHours": "Godziny podlegające rozliczeniu",
       "billableShare": "Udział godzin podlegających rozliczeniu",
       "change": "Zmiana: {value}",
+      "changePoints": "Zmiana w punktach procentowych: {value}",
       "collapse": "Zwiń {name}",
       "empty": "Rejestruj czas, aby wypełnić ten raport.",
       "expand": "Rozwiń {name}",
@@ -904,6 +905,7 @@
       "period": "Okres",
       "privacy": "Ten raport obejmuje tylko zarejestrowane wpisy czasu. Aktywność na komputerze pozostaje na każdym urządzeniu.",
       "title": "Raport czasu zespołu",
+      "tooManyCells": "Ten raport jest zbyt duży, aby go tu wyświetlić. Skróć zakres, pokaż tygodnie lub miesiące jako kolumny albo wyeksportuj go do CSV.",
       "total": "Razem",
       "unbilledValue": "Nierozliczona wartość godzin podlegających rozliczeniu"
     },

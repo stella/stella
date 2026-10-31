@@ -896,6 +896,7 @@
       "billableHours": "Apmokestinamos valandos",
       "billableShare": "Apmokestinamo laiko dalis",
       "change": "Pokytis: {value}",
+      "changePoints": "Pokytis procentiniais punktais: {value}",
       "collapse": "Sutraukti {name}",
       "empty": "Registruokite laiką, kad ši ataskaita būtų užpildyta.",
       "expand": "Išskleisti {name}",
@@ -904,6 +905,7 @@
       "period": "Laikotarpis",
       "privacy": "Šioje ataskaitoje naudojami tik užregistruoti laiko įrašai. Kompiuterio veikla lieka kiekviename įrenginyje.",
       "title": "Komandos darbo laiko ataskaita",
+      "tooManyCells": "Ši ataskaita per didelė, kad būtų rodoma čia. Sutrumpinkite laikotarpį, stulpeliuose rodykite savaites arba mėnesius arba eksportuokite ją į CSV.",
       "total": "Iš viso",
       "unbilledValue": "Neišrašyta apmokėtina suma"
     },

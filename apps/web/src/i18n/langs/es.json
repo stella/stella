@@ -896,6 +896,7 @@
       "billableHours": "Horas facturables",
       "billableShare": "Porcentaje facturable",
       "change": "Cambio: {value}",
+      "changePoints": "Cambio en puntos porcentuales: {value}",
       "collapse": "Contraer {name}",
       "empty": "Registra tiempo para completar este informe.",
       "expand": "Expandir {name}",
@@ -904,6 +905,7 @@
       "period": "Periodo",
       "privacy": "Este informe solo utiliza registros de tiempo guardados. La actividad del escritorio permanece en cada dispositivo.",
       "title": "Informe de tiempo del equipo",
+      "tooManyCells": "Este informe es demasiado grande para mostrarlo aquí. Acorta el intervalo, muestra semanas o meses como columnas o expórtalo como CSV.",
       "total": "Total general",
       "unbilledValue": "Valor facturable sin facturar"
     },

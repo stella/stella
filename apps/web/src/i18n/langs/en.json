@@ -896,6 +896,7 @@
       "billableHours": "Billable hours",
       "billableShare": "Billable share",
       "change": "Change: {value}",
+      "changePoints": "Change in percentage points: {value}",
       "collapse": "Collapse {name}",
       "empty": "Record time to fill this report.",
       "expand": "Expand {name}",
@@ -904,6 +905,7 @@
       "period": "Period",
       "privacy": "This report uses recorded time entries only. Desktop activity stays on each device.",
       "title": "Team time report",
+      "tooManyCells": "This report is too large to show here. Shorten the range or show weeks or months as columns, or export it as CSV.",
       "total": "Total",
       "unbilledValue": "Unbilled billable value"
     },
