@@ -792,13 +792,13 @@ jobs:
       - name: Require all release jobs to complete
         env:
           NEEDS: ${{ toJSON(needs) }}
+        # The verdict is computed before it is read, so an unreadable needs
+        # record fails the job instead of reading as "nothing failed".
         run: |
-          failed=0
-          while IFS=$'\t' read -r job result; do
-            echo "::error::Required desktop release job $job ended $result"
-            failed=1
-          done < <(jq -r '
-            .resolve.outputs as $release
+          set -euo pipefail
+          unfinished=$(jq -nr '
+            input
+            | .resolve.outputs as $release
             | to_entries[]
             | select(.key != "resolve")
             | select(if $release.should_build == "true" then
@@ -807,4 +807,10 @@ jobs:
               else .key == "carry-forward" and $release.channel == "prod" end)
             | select(.value.result != "success")
             | [.key, .value.result] | @tsv' <<< "$NEEDS")
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            [[ -n "$job" ]] || continue
+            echo "::error::Required desktop release job $job ended $result"
+            failed=1
+          done <<< "$unfinished"
           exit "$failed"
