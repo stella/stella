@@ -10,9 +10,12 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   changedPaths,
   descendantPids,
+  knipBudgetAffected,
   parsePrePushArgs,
   PRE_PUSH_EXIT,
   prePushCommands,
@@ -44,11 +47,12 @@ describe("pre-push affected checks", () => {
     ).toEqual(["scripts/ci-plan.test.ts", "scripts/ratchet.test.ts"]);
   });
 
-  test("generates first, then runs the affected code check, then script tests", () => {
+  test("generates first, then runs the affected code check, script tests and the dead-export budget", () => {
     expect(
       prePushCommands({
         base: "origin/main",
         scriptTests: ["scripts/a.test.ts"],
+        knipBudget: true,
       }),
     ).toEqual([
       ["bun", "run", "generate"],
@@ -60,13 +64,47 @@ describe("pre-push affected checks", () => {
         "--skip-full-fallback",
       ],
       ["bun", "test", "--timeout", "35000", "scripts/a.test.ts"],
+      ["bun", "run", "check:knip-exports"],
     ]);
   });
 
-  test("runs no test command when no root script test is affected", () => {
+  test("runs no test or budget command when neither is affected", () => {
     expect(
-      prePushCommands({ base: "origin/main", scriptTests: [] }),
+      prePushCommands({
+        base: "origin/main",
+        scriptTests: [],
+        knipBudget: false,
+      }),
     ).toHaveLength(2);
+  });
+
+  test("any source, manifest or budget change runs the dead-export budget", () => {
+    for (const file of [
+      "apps/web/src/components/inspector/inspector-store-types.ts",
+      "apps/web/src/routes/index.tsx",
+      "packages/cli/bin/stella.mjs",
+      "scripts/tool.cjs",
+      "apps/api/package.json",
+      "package.json",
+      "knip.json",
+      "scripts/knip-exports-baseline.json",
+    ]) {
+      expect(knipBudgetAffected([file])).toBe(true);
+    }
+    // A deleted caller can leave an export unused: deletions are in the
+    // changed paths too, so they count like any other source change.
+    expect(knipBudgetAffected(["README.md", "apps/web/src/old.ts"])).toBe(true);
+  });
+
+  test("documentation, styles and data alone skip the dead-export budget", () => {
+    expect(
+      knipBudgetAffected([
+        "README.md",
+        "apps/web/src/styles.css",
+        "apps/api/src/fixtures/sample.json",
+        ".github/workflows/ci.yml",
+      ]),
+    ).toBe(false);
   });
 
   test("a missing base ref means the checks could not run, not that they failed", () => {
@@ -168,11 +206,11 @@ describe("pre-push affected checks", () => {
           .trim();
         return state !== "" && !state.startsWith("Z");
       };
-      const settled = Date.now() + 5000;
-      while (running() && Date.now() < settled) {
-        await Bun.sleep(50);
-      }
-      expect(running()).toBe(false);
+      await waitForExternalState({
+        description: `grandchild ${String(grandchild)} stops running`,
+        intervalMs: 50,
+        read: () => !running(),
+      });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

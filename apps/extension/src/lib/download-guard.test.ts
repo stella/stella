@@ -8,8 +8,8 @@ import {
   downloadOwner,
   holdDownloadForJudgement,
   judgeDownload,
-  recordDownloadNotice,
   loadDownloadScope,
+  recordDownloadNotice,
   setDownloadScope,
   takeDownloadNotices,
 } from "./download-guard";

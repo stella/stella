@@ -2,7 +2,7 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 type AnswerRevisionHistoryOptions = Parameters<
@@ -16,7 +16,7 @@ export const answerRevisionHistoryOptions = (
     queryKey: chatKeys.answerHistory(input),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId: input.threadId })
           .messages({ messageId: input.messageId })

@@ -11,8 +11,8 @@ import {
 } from "./evaluate";
 import {
   BUILTIN_FIELDS,
-  COMPARE_OPS,
   type Combinator,
+  COMPARE_OPS,
   type ConditionNode,
   conditionNodeSchema,
   type Operand,

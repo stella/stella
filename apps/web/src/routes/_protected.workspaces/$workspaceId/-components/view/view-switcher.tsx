@@ -24,7 +24,7 @@ import {
   BookmarkIcon,
   BookmarkPlusIcon,
   CalendarIcon,
-  CopyIcon,
+  DuplicateIcon,
   FileCheckIcon,
   FolderTreeIcon,
   GanttChartIcon,
@@ -63,8 +63,8 @@ import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceView } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import {
   useConvertView,
@@ -176,7 +176,7 @@ export const ViewSwitcher = ({
   const direction = useI18nStore((state) => getLangDir(state.lang));
   const avtEnabled = useCallerFeatureEnabled(CALLER_FEATURE.verification);
   const allViewsQuery = useQuery(viewsOptions(workspaceId));
-  const allViewsView = useQueryView(allViewsQuery);
+  const allViewsView = queryView(allViewsQuery);
   const allViews = allViewsView.type === "items" ? allViewsView.items : [];
   const views = switcherViews(allViews, avtEnabled);
   const createView = useCreateView(workspaceId);
@@ -239,10 +239,9 @@ export const ViewSwitcher = ({
               icon: layoutIcons[layoutType],
               label: t(LAYOUT_LABEL_KEYS[layoutType]),
               onSelect: () => {
-                const viewId = createUuid();
                 createView.mutate(
                   {
-                    id: viewId,
+                    id: createUuid(),
                     // A layout a matter holds once comes back under its
                     // default name, which the API re-localizes per reader.
                     // Others get "New {layout}": `layoutType` lets each
@@ -257,8 +256,8 @@ export const ViewSwitcher = ({
                     layout: defaultLayouts[layoutType],
                   },
                   {
-                    onSuccess: () => {
-                      onViewChange(viewId);
+                    onSuccess: (view) => {
+                      onViewChange(view.id);
                     },
                     onError: (error) => {
                       notifyUserError(error, t("errors.failedToCreateView"));
@@ -531,10 +530,9 @@ const useViewActionsMenu = ({
   const hasActions = canUpdateView || canCreateView || canDeleteView;
 
   const handleDuplicate = (view: WorkspaceView) => {
-    const newId = createUuid();
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: t("workspaces.views.copySuffix", {
           name: view.name,
         }),
@@ -575,7 +573,7 @@ const useViewActionsMenu = ({
         )}
         {canCreateView && !isSingleViewLayout(layout.type) && (
           <MenuItem onClick={() => handleDuplicate(view)}>
-            <CopyIcon />
+            <DuplicateIcon />
             {t("common.duplicate")}
           </MenuItem>
         )}

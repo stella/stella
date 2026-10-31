@@ -11,11 +11,11 @@ import {
   MAX_QUARANTINE_DAYS,
   parseRegistry,
   quarantineDigest,
+  type QuarantineEntry,
   REGISTRY_FILE,
   REPOSITORY_ROOT,
   serializeRegistry,
   splitTestId,
-  type QuarantineEntry,
 } from "./flaky-test-quarantine";
 
 const committed = readFileSync(

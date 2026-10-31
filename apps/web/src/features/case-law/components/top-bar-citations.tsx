@@ -22,7 +22,7 @@ import { decisionCitationSummaryOptions } from "@/features/case-law/queries/cita
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /**
  * The reception of the decision on the main view, in the title row: the
@@ -56,7 +56,7 @@ export const TopBarCitationsFor = ({
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow();
-  const summaryView = useQueryView(
+  const summaryView = queryView(
     useQuery(decisionCitationSummaryOptions(decision.id)),
   );
   // Prefetched without blocking the route: known on one side of hydration

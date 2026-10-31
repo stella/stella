@@ -1,4 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
+import { Result } from "better-result";
 
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
@@ -19,7 +20,9 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 //   message making it with nothing in between;
 // - every result answers a call of the message right before it;
 // - a message's thinking comes before its text and calls, and every thinking
-//   block that must be signed carries its signature.
+//   block that must be signed carries its signature;
+// - a call's arguments, where a format sends them as text, are a JSON
+//   object: a provider takes nothing else as a call's input.
 
 /** The wire formats the supported provider adapters send. */
 export const PROVIDER_WIRE_FORMATS = [
@@ -105,6 +108,27 @@ const unreadable = (at: number, what: string): Finding => ({
   problem: `the check cannot read ${what}`,
 });
 
+/** A finding when a call's argument text is not a JSON object. */
+const argumentsFinding = (
+  at: number,
+  toolCallId: string | null,
+  text: unknown,
+): Finding[] => {
+  const parsed =
+    typeof text === "string"
+      ? Result.try((): unknown => JSON.parse(text))
+      : null;
+  return parsed !== null && Result.isOk(parsed) && isRecord(parsed.value)
+    ? []
+    : [
+        {
+          message: at,
+          problem: "a tool call's arguments are not a JSON object",
+          ...(toolCallId === null ? {} : { toolCallId }),
+        },
+      ];
+};
+
 /** Builds an assistant entry from its blocks, in order. */
 const assistantEntry = (
   at: number,
@@ -153,6 +177,11 @@ const projectModelMessages = (
         entries.push({ at, results: [message.toolCallId], role: "results" });
         continue;
       case "assistant": {
+        for (const call of message.toolCalls ?? []) {
+          findings.push(
+            ...argumentsFinding(at, call.id, call.function.arguments),
+          );
+        }
         const hasContent =
           message.content !== null &&
           message.content !== "" &&
@@ -216,6 +245,17 @@ const projectOpenAIChat = (body: unknown): Projection => {
         if (ids.includes(null)) {
           findings.push(unreadable(at, "a tool call with no id"));
         }
+        for (const call of calls) {
+          findings.push(
+            ...argumentsFinding(
+              at,
+              stringField(call, "id"),
+              isRecord(call) && isRecord(call["function"])
+                ? call["function"]["arguments"]
+                : undefined,
+            ),
+          );
+        }
         entries.push(
           assistantEntry(at, [
             ...((typeof content === "string" && content !== "") ||
@@ -277,6 +317,15 @@ const projectOpenAIResponses = (body: unknown): Projection => {
         continue;
       }
       if (pairing === "") {
+        if (type === "function_call") {
+          findings.push(
+            ...argumentsFinding(
+              at,
+              id,
+              isRecord(item) ? item["arguments"] : undefined,
+            ),
+          );
+        }
         addBlock(at, { id, type: "call" });
         continue;
       }

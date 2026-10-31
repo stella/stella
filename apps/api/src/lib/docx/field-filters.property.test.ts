@@ -29,10 +29,10 @@ import {
 import { fieldMetaFromFilters } from "./field-filters";
 import {
   DATE_FORMAT_STYLES,
+  type FieldMeta,
   isFieldMeta,
   LOOKUP_REGISTRIES,
   SMALLEST_MAXIMUM,
-  type FieldMeta,
 } from "./types";
 
 // Text an author or an agent puts in a label, a hint or a prompt. Quotes,

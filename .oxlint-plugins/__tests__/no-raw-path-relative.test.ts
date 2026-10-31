@@ -1,10 +1,86 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import config from "../../oxlint.config.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const lint = async (source: string, sourcePath = "scripts/path-consumer.ts") =>
   await lintSingleRule("no-raw-path-relative", source, { sourcePath });
+
+const MULTILINE_RELATIVE = [
+  'import path from "node:path";',
+  "const relative = path.relative(",
+  "  root,",
+  "  file,",
+  ");",
+].join("\n");
+
+for (const { name, now, changedLines, diagnostics } of [
+  {
+    name: "unchanged during rollout",
+    now: "2026-10-14",
+    changedLines: [],
+    diagnostics: [],
+  },
+  {
+    name: "changed inside the call during rollout",
+    now: "2026-10-14",
+    changedLines: [4],
+    diagnostics: [2],
+  },
+  {
+    name: "unchanged after rollout expiry",
+    now: "2026-10-21",
+    changedLines: [],
+    diagnostics: [2],
+  },
+]) {
+  test(`multiline raw relative call: ${name}`, async () => {
+    const directory = await mkdtemp(
+      path.join(tmpdir(), "portable-path-rollout-"),
+    );
+    const wrapper = path.join(directory, "plugin.ts");
+    const plugin = path.resolve(
+      import.meta.dirname,
+      "../no-raw-path-relative.ts",
+    );
+    const scope = path.resolve(
+      import.meta.dirname,
+      "../../scripts/guard-rollouts.ts",
+    );
+    const portablePath = path.resolve(
+      import.meta.dirname,
+      "../../packages/portable-path/src/index.ts",
+    );
+    const repository = path.resolve(import.meta.dirname, "../..");
+    // Inject clock and diff inputs; oxlint still executes the production detector and scope helper.
+    await Bun.write(
+      wrapper,
+      `import { createPortablePathPlugin } from ${JSON.stringify(plugin)};
+import { guardEnforcesLine } from ${JSON.stringify(scope)};
+import { repoRelativePath } from ${JSON.stringify(portablePath)};
+export default createPortablePathPlugin((options) => guardEnforcesLine({
+  ...options,
+  rollouts: [{ id: "portable-path", type: "changed-lines", expiresAt: "2026-10-20T00:00:00.000Z", check: ["bun", "scripts/check-fixture.ts"] }],
+  now: new Date(${JSON.stringify(now)}),
+  changedLines: new Map([[repoRelativePath(${JSON.stringify(repository)}, options.file), new Set(${JSON.stringify(changedLines)})]]),
+}));
+`,
+    );
+    try {
+      expect(
+        await lintSingleRule("no-raw-path-relative", MULTILINE_RELATIVE, {
+          sourcePath: "scripts/path-consumer.ts",
+          pluginPath: wrapper,
+        }),
+      ).toEqual(diagnostics);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
 
 test("reports raw relative calls through identifiers", async () => {
   expect(
@@ -50,17 +126,28 @@ test("only the published loader is exempt in the repository configuration", asyn
     (override) => override.rules !== undefined && rule in override.rules,
   );
   const source = 'import path from "node:path";\npath.relative(root, file);';
-  for (const [sourcePath, expectedLine] of [
-    ["packages/start-runtime/src/local-module-loader.ts", null],
-    ["packages/start-runtime/src/another-loader.ts", 2],
-    ["packages/start-runtime/src/nested/local-module-loader.ts", 2],
-  ] as const) {
-    expect(
-      await lintSingleRule("no-raw-path-relative", source, {
-        sourcePath,
-        overrides,
-        cwd: "scratch",
-      }),
-    ).toEqual(expectedLine === null ? [] : [expectedLine]);
-  }
+  const results = await Promise.all(
+    (
+      [
+        ["packages/start-runtime/src/local-module-loader.ts", null],
+        ["packages/start-runtime/src/another-loader.ts", 2],
+        ["packages/start-runtime/src/nested/local-module-loader.ts", 2],
+      ] as const
+    ).map(async (lintCase, index) => {
+      const [sourcePath, expectedLine] = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule("no-raw-path-relative", source, {
+          sourcePath,
+          overrides,
+          cwd: "scratch",
+        }),
+        expected: expectedLine === null ? [] : [expectedLine],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });

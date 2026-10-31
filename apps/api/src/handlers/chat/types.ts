@@ -8,9 +8,9 @@ import type {
 } from "@tanstack/ai/client";
 
 import type {
-  TanStackAIProvider,
   ReasoningEffort,
   ReasoningProvenance,
+  TanStackAIProvider,
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
@@ -42,11 +42,11 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type {
-  PersistedJsonObject,
-  PersistedToolProviderMetadata,
-  PersistedToolCallPart,
-  PersistedToolResultPart,
   persistedChatMessageContentV3Proof,
+  PersistedJsonObject,
+  PersistedToolCallPart,
+  PersistedToolProviderMetadata,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
@@ -106,8 +106,7 @@ export type ChatAttachmentMetadata = {
 };
 
 export type ChatAttachmentPart =
-  | ImagePart<ChatAttachmentMetadata>
-  | DocumentPart<ChatAttachmentMetadata>;
+  ImagePart<ChatAttachmentMetadata> | DocumentPart<ChatAttachmentMetadata>;
 
 type SdkChatPart = MessagePart<ChatClientTools>;
 export type ChatTanStackPart =

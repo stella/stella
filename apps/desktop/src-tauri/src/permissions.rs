@@ -131,7 +131,9 @@ pub fn snapshot(app: &AppHandle) -> PermissionsSnapshot {
 async fn snapshot_off_thread(app: AppHandle) -> Result<PermissionsSnapshot, String> {
   tauri::async_runtime::spawn_blocking(move || snapshot(&app))
     .await
-    .map_err(|_| "permission status could not be read".to_string())
+    .map_err(crate::logging::with_cause_logged(
+      "permission status could not be read",
+    ))
 }
 
 #[cfg(target_os = "macos")]
@@ -275,7 +277,15 @@ pub const ACCESSIBILITY_SETTINGS_URL: &str =
 pub fn open_settings(app: &AppHandle, permission: Permission) -> Result<(), String> {
   let url = settings_url(app, permission)
     .ok_or_else(|| "this permission has no settings page here".to_string())?;
-  opener::open(url).map_err(|_| "system settings could not be opened".to_string())
+  opener::open(url)
+    .map_err(crate::logging::with_cause_logged(
+      "system settings could not be opened",
+    ))
+    .inspect(|()| {
+      if permission == Permission::Accessibility {
+        crate::accessibility_guide::show(app);
+      }
+    })
 }
 
 /// Asks the OS where it can ask, and otherwise opens the settings page.
@@ -315,7 +325,9 @@ pub async fn permissions_request(
   let request_app = app.clone();
   tauri::async_runtime::spawn_blocking(move || request(&request_app, permission))
     .await
-    .map_err(|_| "permission request could not run".to_string())??;
+    .map_err(crate::logging::with_cause_logged(
+      "permission request could not run",
+    ))??;
   snapshot_off_thread(app).await
 }
 

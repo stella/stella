@@ -7,12 +7,12 @@ import {
   readAuthorizedMemberRole,
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
-import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { capabilityHandlerContext } from "@/api/mcp/capability-context";
 import {
   hasEffectiveAuthority,
   mcpMemberAuthority,
 } from "@/api/mcp/effective-authority";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Authority state is private, so equality is checked on what it exposes.
@@ -60,9 +60,9 @@ describe("MCP member authority", () => {
 
 describe("the context a capability handler receives", () => {
   const contextWith = (
-    credentialPermissions: McpRequestContext["credentialPermissions"],
+    credentialPermissions: AuthorizedMcpRequestContext["credentialPermissions"],
   ) =>
-    asTestRaw<McpRequestContext>({
+    asTestRaw<AuthorizedMcpRequestContext>({
       testDependencies: {
         loadOrgSettingsForAuth: mock(async () => ({
           orgAIConfig: null,
@@ -87,10 +87,10 @@ describe("the context a capability handler receives", () => {
       recordAuditEvent: async () => undefined,
     });
 
-  const synthesize = async (
-    credentialPermissions: McpRequestContext["credentialPermissions"],
+  const handlerContext = async (
+    credentialPermissions: AuthorizedMcpRequestContext["credentialPermissions"],
   ) =>
-    await synthesizeCapabilityContext({
+    await capabilityHandlerContext({
       capabilityId: "views.create",
       context: contextWith(credentialPermissions),
       input: { body: {}, params: {}, query: {} },
@@ -101,18 +101,18 @@ describe("the context a capability handler receives", () => {
   // Every handler-level decision reads this field, so carrying the credential
   // here is what keeps a narrowed key narrow inside compound handlers.
   test("carries a narrowed credential's own set", async () => {
-    const synthesized = await synthesize({ view: ["create"] });
+    const handlerCtx = await handlerContext({ view: ["create"] });
 
-    expect(shape(readAuthorizedMemberRole(synthesized))).toEqual({
+    expect(shape(readAuthorizedMemberRole(handlerCtx))).toEqual({
       role: "owner",
       credentialPermissions: { view: ["create"] },
     });
   });
 
   test("carries a session credential when the credential has no set", async () => {
-    const synthesized = await synthesize(undefined);
+    const handlerCtx = await handlerContext(undefined);
 
-    expect(shape(readAuthorizedMemberRole(synthesized))).toEqual({
+    expect(shape(readAuthorizedMemberRole(handlerCtx))).toEqual({
       role: "owner",
       credentialPermissions: undefined,
     });

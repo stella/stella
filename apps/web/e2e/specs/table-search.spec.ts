@@ -6,9 +6,9 @@ import { apiPut, apiStatus, apiUploadDocx } from "../helpers/api";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =

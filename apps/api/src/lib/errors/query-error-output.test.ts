@@ -5,8 +5,8 @@ import { inspect } from "node:util";
 import {
   createDevErrorLogger,
   errorOutputLogger,
-  QUERY_ERROR_OUTPUT_FIELDS,
   printError,
+  QUERY_ERROR_OUTPUT_FIELDS,
   sanitizeErrorForOutput,
 } from "@stll/errors";
 
@@ -16,9 +16,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import {
   connectionErrorFields,
   errorFingerprint,
-  unredactedErrorFields,
   serializeDevError,
+  unredactedErrorFields,
 } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   installRecordingAnalytics,
@@ -125,11 +126,14 @@ test("query error output excludes parameter values through logger and captureErr
   };
   try {
     const error = queryFailure();
-    captureError(error, {
-      params: SECRETS.join(","),
-      query: error.query,
-      toolName: "list_matters",
-    });
+    captureError(
+      error,
+      handlerErrorContext("errors.capture", {
+        params: SECRETS.join(","),
+        query: error.query,
+        toolName: "list_matters",
+      }),
+    );
     logger.error("query.failed", {
       ...errorFingerprint(error),
       ...unredactedErrorFields(error),
@@ -214,7 +218,7 @@ test("every error output sink drops fields from the shared query policy", () => 
     });
     devLog(error, { ...payload, nested: payload });
     printError(payload);
-    captureError(error, payload);
+    captureError(error, handlerErrorContext("errors.capture", payload));
     for (const level of ["debug", "info", "warn", "error"] as const) {
       logger[level]("query.failed", payload);
     }
@@ -266,7 +270,7 @@ test("output sinks exclude query text present only in an ordinary error stack", 
     });
     devLog(error);
     printError(error);
-    captureError(error);
+    captureError(error, handlerErrorContext("errors.capture"));
     logger.error("query.failed", unredactedErrorFields(error));
     expect(analytics.exceptions()).toHaveLength(1);
     expect(logs.records).toHaveLength(1);
@@ -333,7 +337,10 @@ test("output sinks redact query markers in a nested payload", () => {
         scenario.payload,
         error,
       );
-      captureError(error, { diagnostic: marker });
+      captureError(
+        error,
+        handlerErrorContext("errors.capture", { diagnostic: marker }),
+      );
       logger.error(`Diagnostic ${marker}`, {
         diagnostic: scenario.payload,
         failure: error,

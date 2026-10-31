@@ -2,6 +2,9 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
+
+import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -14,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { zstdDecompressToString } from "@/api/lib/compression";
 import { reconcileCaseLawCorpusUploadIntents } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
@@ -703,4 +707,74 @@ test("in the object layout one failed write costs only its own decision", async 
     type: "failed",
     error: failure,
   });
+});
+
+test("pack enqueue retains text while discarding an unreadable AST", async () => {
+  const settled: SettledWrite[] = [];
+  const { transferred, transfer } = recordingTransfer();
+  const batch = openCorpusPackBatch({ scopedDb, transfer });
+  const entry = entryFor(
+    FIRST_DECISION_ID,
+    "Synthetic retained decision.",
+    settled,
+  );
+  entry.payload.ast = {
+    version: 1,
+    source: {
+      system: "synthetic",
+      documentId: "synthetic",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "p1",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+      {
+        id: "p2",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+    ],
+  };
+  expect(
+    v.safeParse(persistedDocumentAstSchema, entry.payload.ast).success,
+  ).toBe(false);
+  batch.enqueue(entry);
+  const outcomes = unwrapOutcomes(await batch.flush());
+  expect(outcomes.get(FIRST_DECISION_ID)).toEqual({ type: "settled" });
+  const pack = transferred.at(0) ?? expect.unreachable();
+  const footer = await decodePackFooter(pack.bytes);
+  if (Result.isError(footer)) {
+    throw footer.error;
+  }
+  const stored: Record<string, unknown> = {};
+  for (const member of footer.value.members) {
+    const decoded = zstdDecompressToString(
+      pack.bytes.subarray(member.offset, member.offset + member.length),
+    );
+    stored[member.kind] =
+      member.kind === "text" ? decoded : JSON.parse(decoded);
+  }
+  expect(stored).toEqual({
+    text: "Synthetic retained decision.",
+    sections: entry.payload.sections,
+    ast: {},
+  });
+  expect(settled).toHaveLength(1);
 });

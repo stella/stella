@@ -1,28 +1,25 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
-import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
+import { jsonObjectSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillByIdLogic } from "@/api/lib/templates/fill-by-id-logic";
 import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
-const fillByIdBodySchema = t.Object({
-  values: tJsonObject,
-  // Per-fill clause edits (e.g. an AI tweak made in the fill form), keyed by
-  // the slot patch key (`@clause:Name`). When present, the override body is
-  // inserted for that slot instead of the linked clause's resolved body.
-  clauseOverrides: t.Optional(t.Record(t.String(), clauseBodySchema)),
+const fillByIdBodySchema = v.object({
+  values: jsonObjectSchema,
+  clauseOverrides: v.exactOptional(v.record(v.string(), clauseBodySchema)),
 });
 
-const fillByIdQuerySchema = t.Object({
-  format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
+const fillByIdQuerySchema = v.object({
+  format: v.exactOptional(v.picklist(["docx", "pdf"])),
 });
 
-const fillByIdParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const fillByIdParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 const config = {

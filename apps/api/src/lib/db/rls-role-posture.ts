@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
 export type ApplicationRlsRolePosture = {
@@ -92,7 +93,11 @@ type DatabaseLoginRefusal =
 
 export class DatabaseLoginPostureError extends TaggedError(
   "DatabaseLoginPostureError",
-)<{ message: string; reason: DatabaseLoginRefusal }> {}
+)<{ message: string; reason: DatabaseLoginRefusal }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type DatabaseLoginPostureOptions = {
   posture: DatabaseLoginPosture | undefined;

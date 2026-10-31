@@ -6,8 +6,8 @@ import path from "node:path";
 
 import { createTemplatePackCatalogue } from "@stll/template-packs";
 import {
-  fixtureTemplatePackContentRoot,
   FIXTURE_TEMPLATE_PACKS,
+  fixtureTemplatePackContentRoot,
 } from "@stll/template-packs/fixtures";
 import type { GeneratedTemplatePack } from "@stll/template-packs/schema";
 

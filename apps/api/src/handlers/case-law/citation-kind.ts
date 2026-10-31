@@ -21,6 +21,10 @@ import {
   polishAdministrativeDocketOf,
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
+import {
+  CITATION_PREFIX_SOURCE,
+  stripCitationPrefix,
+} from "@stll/legal-ast/citation-prefix";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { hungarianCitationForm } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -50,6 +54,8 @@ const AUTHORITY_REGISTRIES = new Set([
   "tdo",
   "odo",
   "nd",
+  // Supreme Court insolvency review, including grand-panel decisions.
+  "nsčr",
   // The criminal register for a complaint for breach of law ("stížnost pro
   // porušení zákona", 7 Tz 62/90), which only the Supreme Court decides and
   // which it publishes. Its numbers are old (the remedy predates the 1993
@@ -170,7 +176,7 @@ const HUNGARIAN_AUTHORITY_REGISTRIES = new Set([
 const isAuthorityByRegistry = (citationText: string): boolean => {
   const hungarian = hungarianCitationForm(citationText);
   if (hungarian === null) {
-    const caseNumber = withoutPrefix(citationText);
+    const caseNumber = stripCitationPrefix(citationText);
     if (
       polishAdministrativeDocketOf(caseNumber) !== null ||
       isPolishConstitutionalDocket(caseNumber) ||
@@ -207,7 +213,7 @@ const isAuthorityByRegistry = (citationText: string): boolean => {
  * onto this side of the tie.
  */
 const PROCEDURAL_CUE =
-  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v|v\s+konan[íi]\s+veden[oe]m|veden[eé]j\s+\p{L}+\s+s[úu]dom\s+pod|postupom\s+(?:okresn|krajsk|najvyšš)|a\s+takto\s+rozhodol|zaskarżon|od\s+wyroku/iu;
+  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|řízen[íi]\s+veden\p{Ll}*\s+pod|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v|v\s+konan[íi]\s+veden[oe]m|veden[eé]j\s+\p{L}+\s+s[úu]dom\s+pod|postupom\s+(?:okresn|krajsk|najvyšš)|a\s+takto\s+rozhodol|zaskarżon|od\s+wyroku/iu;
 
 /**
  * Phrases that mark an authority being invoked. `srov.` (compare) and
@@ -239,18 +245,49 @@ const PROCEDURAL_CUE =
 const PRECEDENT_CUE =
   /srov\.|srovnej|viz\s|judikat|ust[áa]len|pr[áa]vn[íi]\s+n[áa]zor|dovodil|vyslovil|kon[sš]tatoval|st[áa]l[áa]\s+praxe|ve\s+sv[ée]m\s+rozhodnut|n[áa]lez\p{Ll}*\s+[ÚU]stavn|pouk[áa]z\p{Ll}*\s+(?:i\s+)?na\s+(?:\p{L}+\s+){0,2}(?:usnesen|rozhodnut|rozsudek|rozsudok|n[áa]lez|stanovisk|judik)|porov\.|pozri|obdobne|vo\s+svojom\s+rozhodnut|v\s+s[úu]lade\s+s|por\.|zob\.|tak\s+też|podobnie|zgodnie\s+z|w\s+wyroku\s+z\s+dnia|w\s+uchwale|ugruntowan|utrwalon/iu;
 
-/**
- * Drop the citation prefix so the registry token is first. Spelled out
- * per language rather than matched generically: `sygn. akt` carries one
- * dot and `sp. zn.` two, and a pattern loose enough for both also eats
- * the registry it is meant to expose.
- */
-const withoutPrefix = (text: string): string =>
-  text
-    .replace(/^\s*sp\.\s*zn\.:?\s*/iu, "")
-    .replace(/^\s*[čc]\.\s*j\.:?\s*/iu, "")
-    .replace(/^\s*sygn\.\s*:?\s*(?:akt\.?:?\s+)?/iu, "")
-    .trim();
+const sentenceSegmenter = new Intl.Segmenter("und", {
+  granularity: "sentence",
+});
+const citationPrefixes = new RegExp(CITATION_PREFIX_SOURCE, "giu");
+const pointingCues = new RegExp(PRECEDENT_CUE.source, "giu");
+const maskPeriods = (text: string): string => text.replaceAll(".", "·");
+
+/** Keep legal abbreviations and docket punctuation from becoming boundaries. */
+const citingSentence = (citationText: string, context: string): string => {
+  const text = normalizeUnicode(context, "NFC");
+  const printed = normalizeUnicode(citationText, "NFC");
+  const bare = stripCitationPrefix(printed);
+  const exactStart = text.indexOf(printed);
+  const start = exactStart === -1 ? text.indexOf(bare) : exactStart;
+  // Some callers supply an already isolated sentence without its number.
+  if (start === -1) {
+    return text;
+  }
+  const length = exactStart === -1 ? bare.length : printed.length;
+  const end = start + length;
+  const masked = (
+    text.slice(0, start) +
+    maskPeriods(text.slice(start, end)) +
+    text.slice(end)
+  )
+    .replace(citationPrefixes, maskPeriods)
+    .replace(pointingCues, maskPeriods)
+    .replace(/(?<![\d/])\d{1,2}\.(?=\s+\d)/gu, maskPeriods)
+    .replace(/\b(?:např|odst|Sb|rozh|obč|r)\./giu, maskPeriods);
+  // Masking preserves UTF-16 offsets; return the original wording for cues.
+  for (const sentence of sentenceSegmenter.segment(masked)) {
+    if (
+      sentence.index <= start &&
+      sentence.index + sentence.segment.length >= end
+    ) {
+      return text.slice(
+        sentence.index,
+        sentence.index + sentence.segment.length,
+      );
+    }
+  }
+  return panic("Located citation has no containing sentence");
+};
 
 /**
  * The registry token of a case number: `21 Cdo 1234/2020` -> `cdo`.
@@ -329,6 +366,19 @@ export type CitationKindVerdict = {
   evidence: CitationKindEvidence;
 };
 
+const contextSignals = (context: string | null) => ({
+  procedural: context !== null && PROCEDURAL_CUE.test(context),
+  precedent: context !== null && PRECEDENT_CUE.test(context),
+});
+
+/** Shared diagnostics for offline review; keep cue and registry rules here. */
+export const citationKindSignals = (input: ClassifyCitationInput) => ({
+  ...contextSignals(input.context),
+  registryKind: isAuthorityByRegistry(input.citationText)
+    ? CITATION_KIND.PRECEDENT
+    : CITATION_KIND.PROCEDURAL,
+});
+
 /**
  * Classification with the reason attached.
  *
@@ -357,8 +407,9 @@ export const classifyCitationVerdict = ({
   }
 
   if (context !== null) {
-    const procedural = PROCEDURAL_CUE.test(context);
-    const precedent = PRECEDENT_CUE.test(context);
+    const { procedural, precedent } = contextSignals(
+      citingSentence(citationText, context),
+    );
     if (procedural !== precedent) {
       return {
         kind: procedural ? CITATION_KIND.PROCEDURAL : CITATION_KIND.PRECEDENT,

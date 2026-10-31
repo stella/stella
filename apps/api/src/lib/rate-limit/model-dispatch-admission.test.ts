@@ -1,7 +1,15 @@
 import { describe, expect, mock, test } from "bun:test";
-import ts from "typescript6";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import {
+  isObjectLiteralProperty,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -48,46 +56,73 @@ type ModelDispatchScan = {
   violations: string[];
 };
 
-const propertyName = (name: ts.PropertyName) =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+const propertyName = (property: ObjectProperty) => {
+  if (property.computed) {
+    return undefined;
+  }
+  if (property.key.type === "Identifier") {
+    return property.key.name;
+  }
+  return property.key.type === "Literal" &&
+    typeof property.key.value === "string"
+    ? property.key.value
+    : undefined;
+};
 
-const declaresProperty = (
-  literal: ts.ObjectLiteralExpression,
-  name: string,
-): boolean =>
+const declaresProperty = (literal: ObjectExpression, name: string): boolean =>
   literal.properties.some(
     (property) =>
-      (ts.isPropertyAssignment(property) &&
-        propertyName(property.name) === name) ||
-      (ts.isShorthandPropertyAssignment(property) &&
-        property.name.text === name),
+      property.type === "Property" &&
+      !property.method &&
+      property.kind === "init" &&
+      propertyName(property) === name,
   );
 
 /** The dispatch entry point an expression names, through local aliases. */
 const dispatchNamed = (
-  expression: ts.Expression,
+  expression: Node,
   names: ReadonlyMap<string, string>,
 ): string | undefined => {
-  if (ts.isParenthesizedExpression(expression)) {
+  if (
+    expression.type === "ParenthesizedExpression" ||
+    expression.type === "ChainExpression"
+  ) {
     return dispatchNamed(expression.expression, names);
   }
-  if (ts.isIdentifier(expression)) {
-    return names.get(expression.text);
+  if (expression.type === "Identifier") {
+    return names.get(expression.name);
   }
   // `dependencies.resolveModel`, where a dependency object maps the
   // property to an entry point.
-  if (ts.isPropertyAccessExpression(expression)) {
-    return names.get(`.${expression.name.text}`);
+  if (
+    expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.property.type === "Identifier"
+  ) {
+    return names.get(`.${expression.property.name}`);
   }
   // `deps.generate ?? generateTanStackObjectForTask`: the fallback names it.
-  if (
-    ts.isBinaryExpression(expression) &&
-    expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
-  ) {
+  if (expression.type === "LogicalExpression" && expression.operator === "??") {
     return dispatchNamed(expression.right, names);
   }
   return undefined;
 };
+
+/** Local names a module imports `importNames` from `specifier` under. */
+const importedNames = (
+  parsed: ParsedSource,
+  specifier: string,
+  importNames: ReadonlySet<string>,
+) =>
+  parsed.module.staticImports
+    .filter(({ moduleRequest }) => moduleRequest.value === specifier)
+    .flatMap(({ entries }) =>
+      entries.flatMap(({ importName, localName }) =>
+        importName.name !== null && importNames.has(importName.name)
+          ? [{ imported: importName.name, local: localName.value }]
+          : [],
+      ),
+    );
 
 /**
  * Every call that dispatches a model in one source file, and each that does
@@ -103,87 +138,75 @@ const scanModelDispatches = (
   file: string,
   source: string,
 ): ModelDispatchScan => {
-  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const tree = parseSource(file, source);
   const names = new Map<string, string>();
-  for (const statement of tree.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== DISPATCH_MODULE
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const binding of bindings.elements) {
-      const imported = (binding.propertyName ?? binding.name).text;
-      if (DISPATCH_ENTRY_POINTS.has(imported)) {
-        names.set(binding.name.text, imported);
-      }
-    }
+  for (const { imported, local } of importedNames(
+    tree,
+    DISPATCH_MODULE,
+    DISPATCH_ENTRY_POINTS,
+  )) {
+    names.set(local, imported);
   }
 
   // Injected defaults and fallbacks: `generate = generateTanStack…` and
   // `const generate = deps.generate ?? generateTanStack…`.
-  const collectAliases = (node: ts.Node): void => {
-    if (
-      (ts.isBindingElement(node) || ts.isParameter(node)) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      const named = dispatchNamed(node.initializer, names);
+  walk(tree.program, (node, ancestors) => {
+    if (node.type === "AssignmentPattern" && node.left.type === "Identifier") {
+      const named = dispatchNamed(node.right, names);
       if (named !== undefined) {
-        names.set(node.name.text, named);
+        names.set(node.left.name, named);
       }
     }
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init
     ) {
-      const named = dispatchNamed(node.initializer, names);
+      const named = dispatchNamed(node.init, names);
       if (named !== undefined) {
-        names.set(node.name.text, named);
+        names.set(node.id.name, named);
       }
     }
-    if (ts.isPropertyAssignment(node)) {
-      const property = propertyName(node.name);
-      const named = dispatchNamed(node.initializer, names);
-      if (property !== undefined && named !== undefined) {
-        names.set(`.${property}`, named);
+    if (
+      isObjectLiteralProperty(node, ancestors.at(-1)) &&
+      !node.method &&
+      node.kind === "init"
+    ) {
+      if (node.shorthand) {
+        const named =
+          node.key.type === "Identifier" ? names.get(node.key.name) : undefined;
+        if (named !== undefined && node.key.type === "Identifier") {
+          names.set(`.${node.key.name}`, named);
+        }
+      } else {
+        const property = propertyName(node);
+        const named = dispatchNamed(node.value, names);
+        if (property !== undefined && named !== undefined) {
+          names.set(`.${property}`, named);
+        }
       }
     }
-    if (ts.isShorthandPropertyAssignment(node)) {
-      const named = names.get(node.name.text);
-      if (named !== undefined) {
-        names.set(`.${node.name.text}`, named);
-      }
-    }
-    ts.forEachChild(node, collectAliases);
-  };
-  collectAliases(tree);
+  });
 
   const sites: ModelDispatchSite[] = [];
   const violations: string[] = [];
   let configuredAdmissionCalls = 0;
   const configured = { declaresAdmission: false };
-  const lineOf = (node: ts.Node) =>
-    tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+  const lineOf = (node: Node) => tree.locate(node.start).line;
 
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const via = dispatchNamed(node.expression, names);
+  walk(tree.program, (node, ancestors) => {
+    if (node.type === "CallExpression") {
+      const via = dispatchNamed(node.callee, names);
       if (via !== undefined) {
         const line = lineOf(node);
         sites.push({ file, line, via });
         const options = node.arguments.at(0);
         if (
-          options !== undefined &&
-          ts.isObjectLiteralExpression(options) &&
+          options?.type === "ObjectExpression" &&
           !declaresProperty(options, "admission") &&
-          !options.properties.some(ts.isSpreadAssignment)
+          !options.properties.some(
+            (property) => property.type === "SpreadElement",
+          )
         ) {
           violations.push(
             `${file}:${String(line)}: ${via} dispatches without an admission`,
@@ -191,14 +214,14 @@ const scanModelDispatches = (
         }
       }
       if (
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "configuredModelAdmission"
+        node.callee.type === "Identifier" &&
+        node.callee.name === "configuredModelAdmission"
       ) {
         configuredAdmissionCalls += 1;
       }
       if (
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "requireChatToolModelAdmission" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "requireChatToolModelAdmission" &&
         !file.startsWith(CHAT_TOOLS_PREFIX)
       ) {
         violations.push(
@@ -207,16 +230,17 @@ const scanModelDispatches = (
       }
     }
     if (
-      ts.isPropertyAssignment(node) &&
-      propertyName(node.name) === "actionAdmission" &&
-      ts.isObjectLiteralExpression(node.initializer) &&
-      declaresProperty(node.initializer, "actionKind")
+      isObjectLiteralProperty(node, ancestors.at(-1)) &&
+      !node.shorthand &&
+      !node.method &&
+      node.kind === "init" &&
+      propertyName(node) === "actionAdmission" &&
+      node.value.type === "ObjectExpression" &&
+      declaresProperty(node.value, "actionKind")
     ) {
       configured.declaresAdmission = true;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
 
   if (configuredAdmissionCalls > 0 && !configured.declaresAdmission) {
     violations.push(
@@ -267,27 +291,11 @@ const RAW_CHAT_RUNTIME_OWNERS = {
 };
 
 const importsRawChatRuntime = (file: string, source: string): boolean =>
-  ts
-    .createSourceFile(file, source, ts.ScriptTarget.Latest, true)
-    .statements.some((statement) => {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !== RAW_CHAT_RUNTIME
-      ) {
-        return false;
-      }
-      const bindings = statement.importClause?.namedBindings;
-      return (
-        bindings !== undefined &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.some((binding) =>
-          RAW_CHAT_ENTRY_POINTS.has(
-            (binding.propertyName ?? binding.name).text,
-          ),
-        )
-      );
-    });
+  importedNames(
+    parseSource(file, source),
+    RAW_CHAT_RUNTIME,
+    RAW_CHAT_ENTRY_POINTS,
+  ).length > 0;
 
 describe("model dispatch admission guard", () => {
   test("flags a dispatch without an admission however it names the entry point", () => {
@@ -405,22 +413,15 @@ describe("action kind registry", () => {
       if (file === "lib/rate-limit/action-kinds.ts") {
         continue;
       }
-      const tree = ts.createSourceFile(
-        file,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      const visit = (node: ts.Node): void => {
+      walk(parseSource(file, source).program, (node) => {
         if (
-          ts.isStringLiteral(node) &&
-          Object.hasOwn(ACTION_KINDS, node.text)
+          node.type === "Literal" &&
+          typeof node.value === "string" &&
+          Object.hasOwn(ACTION_KINDS, node.value)
         ) {
-          referenced.add(node.text);
+          referenced.add(node.value);
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(tree);
+      });
     }
     // Kickoff and background kinds of queued work are named through the
     // registry's own maps.
@@ -496,7 +497,7 @@ describe("minted model tier", () => {
       signal: new AbortController().signal,
       run: async (admission) => await Promise.resolve(admission.modelTier),
     });
-    expect(modelTier).toBe(MANAGED_MODEL_TIER.standard);
+    expect(modelTier.unwrap()).toBe(MANAGED_MODEL_TIER.standard);
     expect(scopedDb).not.toHaveBeenCalled();
   });
 

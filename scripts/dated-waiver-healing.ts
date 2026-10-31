@@ -15,10 +15,10 @@ import * as v from "valibot";
 
 import {
   createPrivateTaskSink,
-  probeSourceFingerprint,
-  waiverKey,
   type FixEvidence,
+  probeSourceFingerprint,
   type RemovalAssessment,
+  waiverKey,
 } from "./dated-waiver-fix-task";
 import {
   createProbeBudget,
@@ -30,19 +30,28 @@ import {
   githubRequest,
   listRemovalProposals,
   orphanRemovalProposals,
-  type RemovalProposal,
   type PublishedRemoval,
   publishRemoval,
+  type RemovalProposal,
+  RENEWAL_BRANCH,
+  renewalProposalOpen,
   retireRemoval,
   validateRemovalModules,
 } from "./dated-waiver-publish";
+import {
+  planDocRenewal,
+  renderRenewalEvidence,
+  type RenewalPlan,
+  type RenewalRecord,
+} from "./dated-waiver-renewal";
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
+  type DatedWaiver,
   DAY_MS,
+  DOC_SOURCE_FILE,
   dueWaivers,
   expiryInstant,
   loadWaivers,
-  type DatedWaiver,
 } from "./dated-waivers";
 
 const OUTPUT_LIMIT = 24_000;
@@ -57,7 +66,9 @@ export type HealingEntry = {
   outcome:
     | { status: "expired" | "unavailable" }
     | {
-        status: "green" | "red";
+        // absent: a documentation waiver whose every sample confirmed that
+        // its llms.txt is still missing, so the waiver can be renewed.
+        status: "green" | "red" | "absent";
         evidence: FixEvidence;
         files: Record<string, string>;
         baseFiles: Record<string, string>;
@@ -105,10 +116,13 @@ const FAILURE_STAGES = {
   openRemoval: "openRemoval",
   resolveFixTask: "resolveFixTask",
   armRemoval: "armRemoval",
+  renewal: "renewal",
 } as const satisfies Record<
-  keyof HealingActions | "probe" | "evidence",
+  keyof HealingActions | "probe" | "evidence" | "renewal",
   string
 >;
+// Renewal is one proposal per run, so its failures carry one fixed key.
+export const RENEWAL_FAILURE_KEY = "evidence-renewal";
 export type HealingFailure = {
   key: string;
   stage: keyof typeof FAILURE_STAGES;
@@ -163,6 +177,14 @@ const healEntry = async ({
         outcome.evidence.attempts !== entry.probe.attempts)
     ) {
       panic("Removal requires all declared probes to pass");
+    }
+    if (
+      outcome.status === "absent" &&
+      (entry.kind !== "no-llms-txt" ||
+        outcome.evidence.passed !== 0 ||
+        outcome.evidence.attempts !== entry.probe.attempts)
+    ) {
+      panic("Renewal requires every declared probe to confirm absence");
     }
     return at;
   });
@@ -248,6 +270,10 @@ const healEntry = async ({
       await findAndAlert();
       await effect("retireRemoval", async () => actions.retireRemoval(entry));
       return;
+    // The run's single renewal proposal carries this entry; see applyHealing.
+    case "absent":
+      await effect("retireRemoval", async () => actions.retireRemoval(entry));
+      return;
     case "expired":
       return;
     default:
@@ -264,12 +290,66 @@ type ApplyHealingOptions = {
     discover: () => Promise<readonly RemovalProposal[]>;
     retire: (proposal: RemovalProposal) => Promise<void>;
   };
+  renewal?: {
+    publish: (
+      records: readonly RenewalRecord[],
+      now: Date,
+    ) => Promise<PublishedRemoval | undefined>;
+    retire: () => Promise<void>;
+  };
+};
+
+// Entries the run may renew: confirmed absent on every sample, valid
+// evidence, and not yet lapsed when publication starts.
+export const renewalRecords = (
+  entries: readonly HealingEntry[],
+  now: Date,
+): RenewalRecord[] =>
+  entries.flatMap(({ entry, outcome }) =>
+    outcome.status === "absent" &&
+    entry.kind === "no-llms-txt" &&
+    outcome.evidence.passed === 0 &&
+    outcome.evidence.attempts === entry.probe.attempts &&
+    now.getTime() < Date.parse(expiryInstant(entry.expiresAt))
+      ? [{ entry, evidence: outcome.evidence }]
+      : [],
+  );
+
+// Documentation waivers and their dependencies are public owner data, so the
+// signal names them; it never carries captured probe output.
+export const renewalSignal = ({
+  dates,
+  renewed,
+  held,
+}: Pick<RenewalPlan, "dates" | "renewed" | "held">) => ({
+  signal: "dated-waiver-renewal",
+  expiresAt: dates.expiresAt,
+  renew: renewed.map(({ id }) => id),
+  held: held.map(({ id }) => id),
+});
+
+// What publication would renew, printed by the read-only probe phase so a
+// dispatched dry run shows the planned change without a write token.
+const renewalPreview = (entries: readonly HealingEntry[], now: Date) => {
+  const records = renewalRecords(entries, now);
+  if (records.length === 0) {
+    return { renew: [], held: [] };
+  }
+  const plan = Result.try(() =>
+    planDocRenewal({
+      source: readFileSync(path.join(root, DOC_SOURCE_FILE), "utf-8"),
+      absent: records.map(({ entry }) => entry),
+      now,
+    }),
+  );
+  return Result.isOk(plan) ? renewalSignal(plan.value) : "unavailable";
 };
 export const applyHealing = async ({
   report,
   actions,
   now,
   reconciliation,
+  renewal,
 }: ApplyHealingOptions): Promise<void> => {
   const failures: HealingFailure[] = report.failures.map((failure) => ({
     ...failure,
@@ -286,6 +366,7 @@ export const applyHealing = async ({
       case "expired":
       case "unavailable":
       case "red":
+      case "absent":
         pending.push(record);
         break;
       case "green":
@@ -307,6 +388,44 @@ export const applyHealing = async ({
         stage: "evidence",
         cause: completed.error,
       });
+    }
+  }
+  if (renewal) {
+    const renewable = renewalRecords(report.entries, now);
+    // With nothing to renew, an earlier renewal proposal is superseded.
+    const published = await Result.tryPromise(async () => {
+      if (renewable.length > 0) {
+        return renewal.publish(renewable, now);
+      }
+      await renewal.retire();
+      return undefined;
+    });
+    if (Result.isError(published)) {
+      failures.push({
+        key: RENEWAL_FAILURE_KEY,
+        stage: "renewal",
+        cause: published.error,
+      });
+    } else if (published.value !== undefined) {
+      const proposal = published.value;
+      const armed = await Result.tryPromise(async () =>
+        actions.armRemoval(proposal),
+      );
+      if (Result.isError(armed)) {
+        failures.push({
+          key: RENEWAL_FAILURE_KEY,
+          stage: "armRemoval",
+          cause: armed.error,
+        });
+        const retired = await Result.tryPromise(renewal.retire);
+        if (Result.isError(retired)) {
+          failures.push({
+            key: RENEWAL_FAILURE_KEY,
+            stage: "renewal",
+            cause: retired.error,
+          });
+        }
+      }
     }
   }
   if (reconciliation) {
@@ -542,7 +661,7 @@ const probeEntry = async ({
     const baseFiles = Object.fromEntries(
       changes.map(({ source, before }) => [source, before]),
     );
-    validateRemovalModules(files);
+    await validateRemovalModules(files);
     for (const { source, after } of changes) {
       writeFileSync(path.join(checkout, source), after);
     }
@@ -689,7 +808,7 @@ export const readReport = async (
         v.variant("status", [
           v.object({ status: v.picklist(["expired", "unavailable"]) }),
           v.object({
-            status: v.picklist(["green", "red"]),
+            status: v.picklist(["green", "red", "absent"]),
             evidence: v.object({
               attempts: v.number(),
               passed: v.number(),
@@ -713,6 +832,7 @@ export const readReport = async (
           return { entry: owner, outcome: result };
         case "green":
         case "red":
+        case "absent":
           break;
         default:
           result satisfies never;
@@ -847,44 +967,40 @@ export const disarmRemoval = async (
   }
 };
 
-type ArmRemovalUnlessHeldOptions = {
-  removal: PublishedRemoval;
-  mergeHold: string | undefined;
-  run?: typeof runRemovalMerge;
-};
-
-export const armRemovalUnlessHeld = async ({
-  removal,
-  mergeHold,
-  run = runRemovalMerge,
-}: ArmRemovalUnlessHeldOptions) => {
-  if (mergeHold) {
-    return { signal: "dated-waiver-held", pr: removal.number } as const;
-  }
-  return armRemoval(removal, run);
-};
-
 export const renderHealingFailureSignal = (error: HealingRunError) => ({
   signal: "dated-waiver-failed",
   failures: error.failures.map(({ key, stage }) => ({ key, stage })),
 });
 
+// Open proposals a run may have to retire even when no entry is due.
+export type PendingProposals = {
+  orphans: readonly RemovalProposal[];
+  renewalOpen: boolean;
+};
+const NO_PENDING_PROPOSALS: PendingProposals = {
+  orphans: [],
+  renewalOpen: false,
+};
+
 export const healingWriteNeeded = (
   report: HealingReport,
-  orphanProposals: readonly RemovalProposal[] = [],
+  pending: PendingProposals = NO_PENDING_PROPOSALS,
 ) =>
   report.entries.length > 0 ||
   report.failures.length > 0 ||
-  orphanProposals.length > 0;
+  pending.orphans.length > 0 ||
+  pending.renewalOpen;
 
-const discoverOrphanRemovals = async (inventory: readonly DatedWaiver[]) =>
-  orphanRemovalProposals(
+export const discoverPendingProposals = async (
+  inventory: readonly DatedWaiver[],
+  request: typeof githubRequest = githubRequest,
+): Promise<PendingProposals> => ({
+  orphans: orphanRemovalProposals(
     inventory,
-    await listRemovalProposals({
-      repo: "stella/stella",
-      request: githubRequest,
-    }),
-  );
+    await listRemovalProposals({ repo: "stella/stella", request }),
+  ),
+  renewalOpen: await renewalProposalOpen({ repo: "stella/stella", request }),
+});
 
 const main = async (): Promise<void> => {
   const fileIndex = process.argv.indexOf("--evidence");
@@ -934,25 +1050,28 @@ const main = async (): Promise<void> => {
     // Discovery uses the read-only workflow token and the full inventory, even
     // when no entries are due. A failed discovery remains a recorded run failure.
     const discovered = await Result.tryPromise(async () =>
-      discoverOrphanRemovals(inventory),
+      discoverPendingProposals(inventory),
     );
     if (Result.isError(discovered)) {
       report.failures.push({ key: "evidence-0", stage: "evidence" });
     }
-    const orphans = Result.isOk(discovered) ? discovered.value : [];
+    const pending = Result.isOk(discovered)
+      ? discovered.value
+      : NO_PENDING_PROPOSALS;
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify(report), { mode: 0o600 });
     const output = process.env["GITHUB_OUTPUT"];
     if (output) {
       appendFileSync(
         output,
-        `write_needed=${healingWriteNeeded(report, orphans)}\n`,
+        `write_needed=${healingWriteNeeded(report, pending)}\n`,
       );
     }
     console.log(
       JSON.stringify({
         signal: "dated-waiver-probed",
         entries: report.entries.length,
+        renewal: renewalPreview(report.entries, now),
       }),
     );
     return;
@@ -968,7 +1087,7 @@ const main = async (): Promise<void> => {
   // Re-read proposals on the write path: runner evidence never supplies branch
   // names or authority to retire a proposal.
   const discovered = await Result.tryPromise(async () =>
-    discoverOrphanRemovals(inventory),
+    discoverPendingProposals(inventory),
   );
   if (
     Result.isOk(discovered) &&
@@ -984,14 +1103,50 @@ const main = async (): Promise<void> => {
     repo: privateRepo,
     request: githubRequest,
   });
+  const retireRenewal = async () =>
+    retireRemoval({
+      branch: RENEWAL_BRANCH,
+      repo: "stella/stella",
+      request: githubRequest,
+      disarm: disarmRemoval,
+    });
   await applyHealing({
     report,
     now: new Date(),
+    renewal: {
+      publish: async (records, now) => {
+        const plan = planDocRenewal({
+          source: readFileSync(path.join(root, DOC_SOURCE_FILE), "utf-8"),
+          absent: records.map(({ entry }) => entry),
+          now,
+        });
+        console.log(JSON.stringify(renewalSignal(plan)));
+        if (plan.renewed.length === 0) {
+          await retireRenewal();
+          return undefined;
+        }
+        const renewed = new Set(plan.renewed);
+        return publishRemoval({
+          branch: RENEWAL_BRANCH,
+          baseSha: report.sha,
+          baseFiles: plan.baseFiles,
+          files: plan.files,
+          body: renderRenewalEvidence(
+            records.filter(({ entry }) => renewed.has(entry)),
+            plan.dates,
+          ),
+          repo: process.env["GITHUB_REPOSITORY"],
+          request: githubRequest,
+          disarmExisting: disarmRemoval,
+        });
+      },
+      retire: retireRenewal,
+    },
     reconciliation: {
       discover: async () =>
         await (Result.isError(discovered)
           ? Promise.reject(discovered.error)
-          : Promise.resolve(discovered.value)),
+          : Promise.resolve(discovered.value.orphans)),
       retire: async ({ branch }) =>
         retireRemoval({
           branch,
@@ -1021,14 +1176,7 @@ const main = async (): Promise<void> => {
           disarm: disarmRemoval,
         }),
       armRemoval: async (removal) => {
-        console.log(
-          JSON.stringify(
-            await armRemovalUnlessHeld({
-              removal,
-              mergeHold: process.env["MERGE_HOLD"],
-            }),
-          ),
-        );
+        console.log(JSON.stringify(await armRemoval(removal)));
       },
     },
   });

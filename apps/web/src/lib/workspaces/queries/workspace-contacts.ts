@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { workspaceContactsQueryRoot } from "@/lib/resource-query-roots.logic";
 
 const workspaceContactsKeys = {
@@ -16,6 +16,6 @@ export const workspaceContactsOptions = (workspaceId: string) =>
         .workspaces({ workspaceId })
         .contacts.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });

@@ -1,4 +1,5 @@
 // parser-output-unchanged: Citation tuples state their existing one-item minimum for schema publication; accepted values are identical.
+// parser-output-unchanged: Legislation citations are a new inline variant that no decision parser writes; existing citations validate as before.
 import * as v from "valibot";
 
 import {
@@ -69,6 +70,45 @@ export type InlineCitationPin = {
 };
 
 /**
+ * The legislation series an act is numbered in. EU acts share one series per
+ * form, numbered within a year; a Czech act is numbered within its year in
+ * the Collection of Laws (Sbírka zákonů) whatever its form.
+ */
+export const LEGISLATION_SERIES = [
+  "eu-regulation",
+  "eu-directive",
+  "eu-decision",
+  "cz-sb",
+] as const;
+
+export type LegislationSeries = (typeof LEGISLATION_SERIES)[number];
+
+/**
+ * Which act a printed reference names, as read from the text or its link.
+ *
+ * Year and number are the act's own numbering, never a database id, so a
+ * reader resolves them against the legislation corpus rather than trusting a
+ * guess. `appliedVersion` is the date of the consolidated version the
+ * reference names, and is present only when the reference states one (a
+ * consolidated CELEX, an ELI or a Collection link carrying a date); a bare
+ * act number says nothing about which version the author read.
+ */
+export type InlineLegislationTarget = {
+  status: "legislation";
+  series: LegislationSeries;
+  year: number;
+  number: number;
+  appliedVersion?: { date: string } | undefined;
+};
+
+type InlineCitationFields = {
+  type: "citation";
+  cite: string;
+  href?: string | undefined;
+  children: Inline[];
+};
+
+/**
  * A reference to another authority, as the publisher printed it.
  *
  * `cite` is the printed citation itself, kept out of the character axis
@@ -76,14 +116,21 @@ export type InlineCitationPin = {
  * children, and the citator reads `cite` from the rendered element. A
  * `href` is present only when the publisher linked the reference.
  */
-export type InlineCitation = {
-  type: "citation";
-  cite: string;
-  href?: string | undefined;
-  children: Inline[];
+export type InlineDecisionCitation = InlineCitationFields & {
   target?: InlineCitationTarget | undefined;
   pin?: InlineCitationPin | undefined;
 };
+
+/**
+ * A reference to an act. It carries no `pin`: a pin locates pages and
+ * paragraphs of a decision, and an act's provisions are not either.
+ */
+export type InlineLegislationCitation = InlineCitationFields & {
+  target: InlineLegislationTarget;
+  pin?: undefined;
+};
+
+export type InlineCitation = InlineDecisionCitation | InlineLegislationCitation;
 
 /**
  * A reporter page boundary at this exact point in the text. Contributes
@@ -211,6 +258,34 @@ const citationFieldEntries = {
   pin: v.optional(citationPinSchema),
 };
 
+const actNumberSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
+
+const legislationTargetSchema: v.GenericSchema<InlineLegislationTarget> =
+  v.strictObject({
+    status: v.literal("legislation"),
+    series: v.picklist(LEGISLATION_SERIES),
+    year: v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999)),
+    number: actNumberSchema,
+    appliedVersion: v.optional(
+      v.strictObject({
+        date: v.pipe(v.string(), v.regex(/^\d{4}-\d{2}-\d{2}$/u)),
+      }),
+    ),
+  });
+
+/**
+ * A legislation citation's fields: its own variant entry rather than a
+ * fourth decision target, because it declares no `pin`. Like every inline
+ * object, the reader drops a key it does not declare, so a pin never reaches
+ * a parsed legislation citation.
+ */
+const legislationCitationFieldEntries = {
+  type: v.literal("citation"),
+  cite: v.pipe(v.string(), v.nonEmpty()),
+  href: v.optional(v.string()),
+  target: legislationTargetSchema,
+};
+
 export const inlineSchema: v.GenericSchema<Inline> = v.variant("type", [
   v.object({
     type: v.literal("text"),
@@ -228,6 +303,10 @@ export const inlineSchema: v.GenericSchema<Inline> = v.variant("type", [
     children: inlineChildrenSchema,
   }),
   v.object({ ...citationFieldEntries, children: inlineChildrenSchema }),
+  v.object({
+    ...legislationCitationFieldEntries,
+    children: inlineChildrenSchema,
+  }),
   v.object({ type: v.literal("line-break") }),
   v.object({
     type: v.literal("page-anchor"),
@@ -347,6 +426,10 @@ const persistedInlineSchema: v.GenericSchema<unknown, DegradedInline> = v.union(
       }),
       v.object({
         ...citationFieldEntries,
+        children: v.lazy(() => persistedInlineArraySchema),
+      }),
+      v.object({
+        ...legislationCitationFieldEntries,
         children: v.lazy(() => persistedInlineArraySchema),
       }),
       v.object({ type: v.literal("line-break") }),

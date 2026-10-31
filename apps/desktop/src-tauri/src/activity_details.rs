@@ -152,8 +152,11 @@ pub fn request_permission() {
 pub fn open_accessibility_settings() -> Result<(), String> {
   #[cfg(target_os = "macos")]
   {
-    opener::open(crate::permissions::ACCESSIBILITY_SETTINGS_URL)
-      .map_err(|_| "activity accessibility settings could not be opened".to_string())
+    opener::open(crate::permissions::ACCESSIBILITY_SETTINGS_URL).map_err(
+      crate::logging::with_cause_logged(
+        "activity accessibility settings could not be opened",
+      ),
+    )
   }
   #[cfg(not(target_os = "macos"))]
   Err("activity accessibility settings are unavailable".to_string())

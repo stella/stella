@@ -19,16 +19,17 @@ import {
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
-import { LastUsedSignInFrame } from "./last-used-sign-in";
+import { LastUsedFieldBadge } from "./last-used-sign-in";
 import { SIGN_IN_METHOD, signInMethodVariant } from "./sign-in-panel.logic";
 import type { SignInMethod } from "./sign-in-panel.logic";
 
-const passwordFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-});
+const passwordFormSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+    password: v.string(),
+  });
 
 /** The slice of a form field a single text input binds to. */
 type TextFieldBinding = {
@@ -41,13 +42,16 @@ type TextFieldBinding = {
 export const EmailCredentialField = ({
   autoFocus,
   field,
+  lastUsed,
 }: {
   autoFocus: boolean;
   field: TextFieldBinding;
+  /** This form's method is the one this browser signed in with last. */
+  lastUsed: boolean;
 }) => {
   const t = useTranslations();
   return (
-    <Field name={field.name}>
+    <Field className="relative" name={field.name}>
       <Input
         autoComplete="email"
         autoFocus={autoFocus}
@@ -58,6 +62,7 @@ export const EmailCredentialField = ({
         type="email"
         value={field.state.value}
       />
+      {lastUsed && <LastUsedFieldBadge />}
       <FieldError />
     </Field>
   );
@@ -108,7 +113,7 @@ export const PasswordSignInForm = ({
   const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: passwordFormSchema,
+      schema: passwordFormSchema(t("validation.invalidEmail")),
       defaultValues: { email: "", password: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -119,7 +124,13 @@ export const PasswordSignInForm = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "PasswordSignInForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "PasswordSignInForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
@@ -130,6 +141,7 @@ export const PasswordSignInForm = ({
         // pending a second factor; send them to the same challenge page the
         // email-OTP flow uses instead of treating this as a completed sign-in.
         if (isTwoFactorRedirect(data)) {
+          await invalidateSession.mutateAsync();
           await navigate({
             to: "/auth/two-factor",
             search: { redirectTo },
@@ -162,7 +174,11 @@ export const PasswordSignInForm = ({
     >
       <form.Field name="email">
         {(field) => (
-          <EmailCredentialField autoFocus={autoFocus} field={field} />
+          <EmailCredentialField
+            autoFocus={autoFocus}
+            field={field}
+            lastUsed={lastUsed === SIGN_IN_METHOD.password}
+          />
         )}
       </form.Field>
       <form.Field name="password">
@@ -183,28 +199,23 @@ export const PasswordSignInForm = ({
         })}
       >
         {({ isSubmitting, canSubmit, email, password }) => (
-          <LastUsedSignInFrame lastUsed={lastUsed === SIGN_IN_METHOD.password}>
-            {(describedBy) => (
-              <Button
-                aria-describedby={describedBy}
-                className="w-full"
-                disabled={
-                  !canSubmit ||
-                  email.trim().length === 0 ||
-                  password.trim().length === 0
-                }
-                loading={isSubmitting}
-                type="submit"
-                variant={signInMethodVariant({
-                  method: SIGN_IN_METHOD.password,
-                  lastUsed,
-                  fallback: "default",
-                })}
-              >
-                {t("auth.signInWithPassword")}
-              </Button>
-            )}
-          </LastUsedSignInFrame>
+          <Button
+            className="w-full"
+            disabled={
+              !canSubmit ||
+              email.trim().length === 0 ||
+              password.trim().length === 0
+            }
+            loading={isSubmitting}
+            type="submit"
+            variant={signInMethodVariant({
+              method: SIGN_IN_METHOD.password,
+              lastUsed,
+              fallback: "default",
+            })}
+          >
+            {t("auth.signInWithPassword")}
+          </Button>
         )}
       </form.Subscribe>
     </Form>

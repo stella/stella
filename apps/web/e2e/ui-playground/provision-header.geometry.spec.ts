@@ -6,13 +6,18 @@
  * product's own header with a label naming three cited parts at widths from
  * a roomy card down to one narrower than the row's fixed parts. At every
  * width: the row is one line, the open button lies inside the card and is
- * what a click at its centre hits, the label gives way only once the act's
- * title is gone, and the date is cut only once the label is gone. Every
+ * what a click at its centre hits, the date gives way only once the act's
+ * title is gone, and the label is cut only once the date is gone. Every
  * project runs it, so it holds right to left (`ar`) as well.
  */
 
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 const SECTION = '[data-playground-section="provision-header"]';
 const BENCH_WIDTHS = [72, 120, 180, 240, 300, 360, 440, 560, 720];
@@ -28,15 +33,17 @@ type HeaderGeometry = {
   actWidth: number;
   buttonHit: boolean;
   buttonInside: boolean;
-  dateClipped: boolean;
+  /** Whether the date is cut, and how much of it is left. */
+  dateTruncated: boolean;
+  dateWidth: number;
   labelTitle: string | null;
   labelTruncated: boolean;
-  labelWidth: number;
   oneRow: boolean;
 };
 
-const readGeometry = async (page: Page): Promise<HeaderGeometry[]> =>
-  page.evaluate(
+const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
+  await waitForStableGeometry(page, page.locator(SECTION));
+  return await page.evaluate(
     ({ sectionSelector, tolerance }) => {
       const part = (section: Element, slot: string): HTMLElement => {
         const element = section.querySelector(`[data-slot="${slot}"]`);
@@ -60,8 +67,6 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> =>
         }
         const card = section.getBoundingClientRect();
         const box = button.getBoundingClientRect();
-        const inSummary = summary.getBoundingClientRect();
-        const dateBox = date.getBoundingClientRect();
         const hit = document.elementFromPoint(
           box.left + box.width / 2,
           box.top + box.height / 2,
@@ -75,12 +80,10 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> =>
             box.width > 0 &&
             box.left >= card.left - tolerance &&
             box.right <= card.right + tolerance,
-          dateClipped:
-            dateBox.left < inSummary.left - tolerance ||
-            dateBox.right > inSummary.right + tolerance,
+          dateTruncated: date.scrollWidth > date.clientWidth,
+          dateWidth: date.getBoundingClientRect().width,
           labelTitle: label.getAttribute("title"),
           labelTruncated: label.scrollWidth > label.clientWidth,
-          labelWidth: label.getBoundingClientRect().width,
           oneRow:
             header.getBoundingClientRect().height <= box.height + tolerance &&
             summary.scrollHeight <= summary.clientHeight + tolerance,
@@ -89,8 +92,77 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> =>
     },
     { sectionSelector: SECTION, tolerance: TOLERANCE_PX },
   );
+};
 
-test("the header keeps one row and its open button, and gives way act first, then label, then date", async ({
+test("header measurements wait for a moving button inside a fixed section", async ({
+  page,
+}) => {
+  await page.goto("/dev?visual=provision-header", {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page.locator(SECTION)).toHaveCount(BENCH_WIDTHS.length);
+  const section = page.locator(SECTION).first();
+  const button = section.locator('[data-slot="provision-card-header"] button');
+  await expect(button).toBeVisible();
+  const before = await readGeometry(page);
+  expect(before.at(0)?.buttonInside).toBe(true);
+  const sectionBefore = await section.evaluate((element) =>
+    element.getBoundingClientRect().toJSON(),
+  );
+  const animationId = "geometry-header-button-motion";
+  await button.evaluate(
+    (element, { id, sectionSelector }) => {
+      const parent = element.closest(sectionSelector);
+      if (parent === null) {
+        throw new Error("Provision button has no bench section");
+      }
+      const card = parent.getBoundingClientRect();
+      const target = element.getBoundingClientRect();
+      const nearestEdgeIsLeft =
+        target.left - card.left < card.right - target.right;
+      const distance = nearestEdgeIsLeft
+        ? card.left - target.right - 1
+        : card.right - target.left + 1;
+      const motion = element.animate(
+        [
+          { transform: "translateX(0px)" },
+          { transform: `translateX(${distance}px)` },
+        ],
+        // The delay holds the button still while the animation already runs,
+        // as a pending start does on a slow frame.
+        { delay: 500, duration: 1000, easing: "linear", fill: "forwards" },
+      );
+      motion.id = id;
+    },
+    { id: animationId, sectionSelector: SECTION },
+  );
+  try {
+    const after = await readGeometry(page);
+    expect(
+      await button.evaluate(
+        (element, id) =>
+          element.getAnimations().find((motion) => motion.id === id)?.playState,
+        animationId,
+      ),
+    ).toBe("finished");
+    expect(
+      await section.evaluate((element) =>
+        element.getBoundingClientRect().toJSON(),
+      ),
+    ).toEqual(sectionBefore);
+    expect(after.at(0)?.buttonInside).toBe(false);
+  } finally {
+    await button.evaluate((element, id) => {
+      for (const motion of element.getAnimations()) {
+        if (motion.id === id) {
+          motion.cancel();
+        }
+      }
+    }, animationId);
+  }
+});
+
+test("the header keeps one row and its open button, and gives way act first, then date, then label", async ({
   page,
 }) => {
   await page.goto("/dev?visual=provision-header", { waitUntil: "commit" });
@@ -117,16 +189,16 @@ test("the header keeps one row and its open button, and gives way act first, the
     expect(header.labelTitle, `${at} the label keeps its full text`).toBe(
       BENCH_LABEL,
     );
-    if (header.labelTruncated) {
+    if (header.dateTruncated) {
       expect(
         header.actWidth,
-        `${at} the label gives way only once the act's title is gone`,
+        `${at} the date gives way only once the act's title is gone`,
       ).toBeLessThanOrEqual(TOLERANCE_PX);
     }
-    if (header.dateClipped) {
+    if (header.labelTruncated) {
       expect(
-        header.labelWidth,
-        `${at} the date is cut only once the label is gone`,
+        header.dateWidth,
+        `${at} the label is cut only once the date is gone`,
       ).toBeLessThanOrEqual(TOLERANCE_PX);
     }
   }
@@ -134,7 +206,10 @@ test("the header keeps one row and its open button, and gives way act first, the
   // A vacuous pass is the failure mode to rule out: the bench must reach
   // every stage, or the order above was never under test.
   expect(
-    headers.some((header) => !header.actTruncated && !header.labelTruncated),
+    headers.some(
+      (header) =>
+        !header.actTruncated && !header.dateTruncated && !header.labelTruncated,
+    ),
     "some width shows the whole header",
   ).toBe(true);
   expect(
@@ -142,12 +217,21 @@ test("the header keeps one row and its open button, and gives way act first, the
       (header) =>
         header.actTruncated &&
         header.actWidth > TOLERANCE_PX &&
-        !header.labelTruncated,
+        !header.dateTruncated,
     ),
     "some width cuts only the act's title",
   ).toBe(true);
   expect(
-    headers.some((header) => header.labelTruncated && !header.dateClipped),
-    "some width cuts the label and keeps the date",
+    headers.some(
+      (header) =>
+        header.dateTruncated &&
+        header.dateWidth > TOLERANCE_PX &&
+        !header.labelTruncated,
+    ),
+    "some width cuts the date and keeps the whole label",
+  ).toBe(true);
+  expect(
+    headers.some((header) => header.labelTruncated),
+    "some width is narrower than the label alone",
   ).toBe(true);
 });

@@ -1,4 +1,6 @@
 import type { ErrorReference } from "@/lib/analytics/error-reference";
+import { routeExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import type {
   Analytics,
   RouteErrorLifecycleProperties,
@@ -52,6 +54,7 @@ export const createRouteErrorLifecycleController = (
   };
   let loaded: Promise<RouteErrorLifecycleController | undefined> | undefined;
   let capturedReference: ErrorReference | undefined;
+  let caughtRouteTemplate: string | undefined;
   const load = async () => {
     if (!loaded) {
       const initial = snapshot;
@@ -61,8 +64,15 @@ export const createRouteErrorLifecycleController = (
         )
         .catch((error: unknown) => {
           analytics.captureError(error, {
-            operation: "route-error.load",
-            type: "detached",
+            fingerprintKey: "createRouteErrorLifecycleController.load:failure",
+            scope: {
+              type: "handler",
+              handlerId: "createRouteErrorLifecycleController.load:failure",
+            },
+            context: {
+              operation: "route-error.load",
+              type: "detached",
+            },
           });
           return undefined;
         });
@@ -71,8 +81,17 @@ export const createRouteErrorLifecycleController = (
   };
   const captureDispatchError = (error: unknown) => {
     analytics.captureError(error, {
-      operation: "route-error.dispatch",
-      type: "detached",
+      fingerprintKey:
+        "createRouteErrorLifecycleController.captureDispatchError:failure",
+      scope: {
+        type: "handler",
+        handlerId:
+          "createRouteErrorLifecycleController.captureDispatchError:failure",
+      },
+      context: {
+        operation: "route-error.dispatch",
+        type: "detached",
+      },
     });
   };
   const run = async (
@@ -94,12 +113,14 @@ export const createRouteErrorLifecycleController = (
 
   return {
     caught: (routeTemplate) => {
+      caughtRouteTemplate = routeTemplate;
       detached(
         run((controller) => controller.caught(routeTemplate)),
         "route-error.caught",
       );
     },
     routeResolved: (routeTemplate) => {
+      caughtRouteTemplate = undefined;
       snapshot = { ...snapshot, routeTemplate };
       runIfLoaded((controller) => controller.routeResolved(routeTemplate));
     },
@@ -110,9 +131,21 @@ export const createRouteErrorLifecycleController = (
     shown: (options) => {
       if (capturedReference !== options.reference) {
         capturedReference = options.reference;
-        analytics.captureError(options.error, {
-          reference: options.reference,
-          type: "recovery",
+        reportErrorOnce(options.error, (error) => {
+          analytics.captureError(error, {
+            fingerprintKey: routeExceptionFingerprintKey(
+              caughtRouteTemplate ?? snapshot.routeTemplate,
+            ),
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: caughtRouteTemplate ?? snapshot.routeTemplate,
+            },
+            context: {
+              reference: options.reference,
+              type: "recovery",
+            },
+          });
         });
       }
       detached(

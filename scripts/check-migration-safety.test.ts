@@ -6,7 +6,11 @@ import path from "node:path";
 
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
-import { checkMigrationSources } from "./check-migration-safety";
+import {
+  checkMigrationSources,
+  parseMigrationStatements,
+  reviewedMigrationStatements,
+} from "./check-migration-safety";
 
 type CheckerResult = {
   exitCode: number | null;
@@ -131,7 +135,8 @@ describe("check-migration-safety", () => {
           SET lock_timeout = '1s';
           SET statement_timeout = '10min';
           COMMIT;
-          CREATE INDEX CONCURRENTLY IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
+          CREATE TABLE "review_marks" ("status" text);
+          CREATE INDEX IF NOT EXISTS "review_marks_status_idx" ON "review_marks" ("status");
           BEGIN;
         `),
       );
@@ -176,6 +181,122 @@ describe("check-migration-safety", () => {
     });
   });
 
+  describe("uniqueness contract steps", () => {
+    it("flags a unique index added to an existing table", () => {
+      expectFinding(
+        runChecker(
+          `CREATE UNIQUE INDEX "documents_external_id_unique" ON "documents" ("external_id");`,
+        ),
+        "add-unique-constraint",
+      );
+    });
+
+    const addedUniquenessContracts = [
+      `ALTER TABLE documents ADD UNIQUE NULLS NOT DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE INITIALLY DEFERRED NOT VALID;`,
+      `ALTER TABLE documents ADD PRIMARY KEY NULLS DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE;`,
+      `ALTER TABLE documents ADD EXCLUDE USING gist (validity WITH &&) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE NOT VALID;`,
+      `ALTER TABLE documents ADD CONSTRAINT documents_external_id_unique UNIQUE USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD PRIMARY KEY USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD COLUMN external_id text PRIMARY KEY;`,
+      `ALTER TABLE documents ADD external_id text UNIQUE;`,
+      `ALTER TABLE documents ADD COLUMN IF NOT EXISTS external_id text CONSTRAINT documents_external_id_key UNIQUE;`,
+      `ALTER TABLE documents ADD IF NOT EXISTS external_id text CONSTRAINT documents_external_id_pkey PRIMARY KEY;`,
+      `AlTeR TaBlE "legal"."Documents" ADD CONSTRAINT "External Id Key" UNIQUE ("External Id");`,
+    ];
+
+    it.each(addedUniquenessContracts)(
+      "flags an added table uniqueness contract: %s",
+      (sql) => {
+        expectFinding(runChecker(sql), "add-unique-constraint");
+      },
+    );
+
+    it.each(addedUniquenessContracts)(
+      "allows an added uniqueness contract on a table created in the migration: %s",
+      (sql) => {
+        const qualified = sql.includes('"legal"."Documents"');
+        const create = qualified
+          ? `CREATE TABLE "legal"."Documents" (seed text);`
+          : `CREATE TABLE documents (seed text);`;
+
+        expectClean(runChecker(`${create}\n${sql}`));
+      },
+    );
+
+    it("flags a uniqueness contract in the second ALTER TABLE action", () => {
+      expectFinding(
+        runChecker(`
+          ALTER TABLE "legal"."Documents"
+            ADD COLUMN "status" text,
+            ADD COLUMN IF NOT EXISTS "External Id" text UNIQUE;
+        `),
+        "add-unique-constraint",
+      );
+    });
+
+    it("allows the same SQL in the pending-contract registry", () => {
+      const [result] = checkMigrationSources([
+        {
+          file: "apps/api/src/lib/db/pending-contract-migrations/20261015060000_case_law_decisions_base_table_contract.sql",
+          source: `${TIMEOUTS}CREATE UNIQUE INDEX "documents_external_id_unique" ON "documents" ("external_id");`,
+        },
+      ]);
+
+      expect(result?.guardedFindings).toEqual([]);
+      expect(result?.invariantFindings).toEqual([]);
+      expect(result?.acknowledgementErrors).toEqual([]);
+    });
+
+    it("allows inline uniqueness on a table created in the migration", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_aliases" (
+            "id" uuid PRIMARY KEY,
+            "alias" text UNIQUE
+          );
+        `),
+      );
+    });
+
+    it("allows a unique index on a table created in the migration", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_aliases" ("alias" text);
+          CREATE UNIQUE INDEX "document_aliases_alias_unique"
+            ON "document_aliases" ("alias");
+        `),
+      );
+    });
+
+    it("recognises concurrently and quoted identifiers", () => {
+      const result = runChecker(`
+        CREATE UNIQUE INDEX CONCURRENTLY "Document External Id Unique"
+          ON "Legal Documents" ("External Id");
+      `);
+
+      expectFinding(result, "add-unique-constraint");
+      expect(result.stderr).toContain("[pre-deploy-concurrent-index]");
+    });
+
+    it("requires typed writer names in an acknowledgement", () => {
+      const result = runChecker(`
+        -- stella-migration-safety: reviewed add-unique-constraint - application code already checks this
+        ALTER TABLE "documents"
+          ADD CONSTRAINT "documents_external_id_unique" UNIQUE ("external_id");
+      `);
+
+      expectFinding(result, "invalid-uniqueness-writers");
+
+      expectClean(
+        runChecker(`
+          -- stella-migration-safety: reviewed add-unique-constraint - writers: createDocument, importDocuments; both reject duplicate external identifiers
+          ALTER TABLE "documents"
+            ADD CONSTRAINT "documents_external_id_unique" UNIQUE ("external_id");
+        `),
+      );
+    });
+  });
+
   describe("unbounded-update", () => {
     it("flags a full-table UPDATE with no WHERE clause", () => {
       expectFinding(
@@ -195,11 +316,12 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows an UPDATE bounded by a WHERE clause", () => {
-      expectClean(
+    it("rejects an UPDATE bounded by a WHERE clause in pre-deploy", () => {
+      expectFinding(
         runChecker(
           `UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2;`,
         ),
+        "pre-deploy-update",
       );
     });
 
@@ -237,14 +359,15 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows a WHERE-bounded UPDATE inside a data-modifying CTE", () => {
-      expectClean(
+    it("rejects a WHERE-bounded UPDATE inside a data-modifying CTE", () => {
+      expectFinding(
         runChecker(`
           WITH "u" AS (
             UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2 RETURNING "id"
           )
           SELECT count(*) FROM "u";
         `),
+        "pre-deploy-update",
       );
     });
 
@@ -291,13 +414,178 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows a FROM-join UPDATE bounded by a top-level WHERE", () => {
-      expectClean(
+    it("rejects a FROM-join UPDATE bounded by a top-level WHERE", () => {
+      expectFinding(
         runChecker(`
           UPDATE "documents" AS d
           SET "workspace_id" = w."id"
           FROM "workspaces" AS w
           WHERE d."workspace_slug" = w."slug";
+        `),
+        "pre-deploy-update",
+      );
+    });
+  });
+
+  describe("expand-only pre-deploy migrations", () => {
+    it("treats UPDATE as a privilege or trigger event, not a row update, before ON, OF, OR or a column list", () => {
+      for (const sql of [
+        `GRANT SELECT, INSERT, UPDATE ON TABLE "time_daily_targets" TO stella;`,
+        `GRANT UPDATE ("status") ON "documents" TO stella;`,
+        `REVOKE UPDATE ON "documents" FROM stella;`,
+        `CREATE TRIGGER "documents_touch" AFTER INSERT OR UPDATE OF "status" ON "documents" FOR EACH ROW EXECUTE FUNCTION touch();`,
+        `CREATE TRIGGER "documents_touch" AFTER UPDATE OR INSERT ON "documents" FOR EACH ROW EXECUTE FUNCTION touch();`,
+        `CREATE TRIGGER "documents_guard" BEFORE INSERT OR UPDATE OR DELETE ON "documents" FOR EACH ROW EXECUTE FUNCTION guard();`,
+      ]) {
+        const result = runChecker(sql);
+        expect(result.stdout + result.stderr, sql).not.toContain(
+          "pre-deploy-update",
+        );
+      }
+      // A real UPDATE in the same migration is still refused.
+      expectFinding(
+        runChecker(
+          `GRANT UPDATE ON "documents" TO stella;\nUPDATE "documents" SET "status" = 'ready';`,
+        ),
+        "pre-deploy-update",
+      );
+    });
+
+    it("rejects every operation owned by the online phase", () => {
+      const refused = [
+        [
+          `CREATE INDEX CONCURRENTLY "documents_status_idx" ON "documents" ("status");`,
+          "pre-deploy-concurrent-index",
+        ],
+        [
+          `CREATE UNIQUE INDEX CONCURRENTLY "documents_slug_idx" ON "documents" ("slug");`,
+          "pre-deploy-concurrent-index",
+        ],
+        [
+          `ALTER TABLE "documents" VALIDATE CONSTRAINT "documents_owner_fk";`,
+          "pre-deploy-validate-constraint",
+        ],
+        [
+          `UPDATE "documents" SET "status" = 'ready' WHERE "status" = 'new';`,
+          "pre-deploy-update",
+        ],
+        [
+          `UPDATE "audit"."documents" SET "status" = 'ready' WHERE "id" = 1;`,
+          "pre-deploy-update",
+        ],
+        [
+          `INSERT INTO "documents_v2" ("id") SELECT "id" FROM "documents";`,
+          "pre-deploy-row-copy",
+        ],
+        [
+          `MERGE INTO "documents_v2" AS t USING "documents" AS s ON t."id" = s."id" WHEN NOT MATCHED THEN INSERT ("id") VALUES (s."id");`,
+          "pre-deploy-row-copy",
+        ],
+        [
+          `CREATE TABLE "documents_copy" AS SELECT * FROM "documents";`,
+          "pre-deploy-row-copy",
+        ],
+        [
+          `SELECT * INTO "documents_copy" FROM "documents";`,
+          "pre-deploy-row-copy",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'SELECT * INTO documents_copy FROM documents'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `CREATE MATERIALIZED VIEW "document_totals" AS SELECT count(*) FROM "documents";`,
+          "pre-deploy-row-copy",
+        ],
+        [`REFRESH MATERIALIZED VIEW "document_totals";`, "pre-deploy-row-copy"],
+        [
+          `DO $$ BEGIN EXECUTE 'UPDATE documents SET status = ''ready'' WHERE id = 1'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE format('UPDATE %I SET status = %L', 'documents', 'ready'); END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE format('INSERT INTO %I (id) SELECT id FROM documents', 'documents_v2'); END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'CREATE TABLE documents_copy AS SELECT * FROM documents'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'CREATE MATERIALIZED VIEW document_totals AS SELECT count(*) FROM documents'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'REFRESH MATERIALIZED VIEW document_totals'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'UPDATE ' || quote_ident('documents') || ' SET status = ''ready'''; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ DECLARE command text := 'UPDATE documents SET status = ''ready'''; BEGIN EXECUTE command; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'ALTER TABLE documents VALIDATE CONSTRAINT documents_owner_fk'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP; END $$;`,
+          "pre-deploy-row-loop",
+        ],
+        [
+          `CREATE FUNCTION copy_documents() RETURNS void LANGUAGE plpgsql AS $$ BEGIN FOR item IN SELECT id FROM documents LOOP INSERT INTO documents_v2 (id) VALUES (item.id); END LOOP; END $$;`,
+          "pre-deploy-row-loop",
+        ],
+      ] as const;
+
+      for (const [sql, ruleId] of refused) {
+        expectFinding(runChecker(sql), ruleId);
+      }
+    });
+
+    it("allows additive DDL and fixed seed rows", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_states" ("id" bigint PRIMARY KEY, "slug" text);
+          ALTER TABLE "documents" ADD COLUMN "state_id" bigint;
+          ALTER TABLE "documents" ADD CONSTRAINT "documents_state_fk"
+            FOREIGN KEY ("state_id") REFERENCES "document_states" ("id") NOT VALID;
+          CREATE INDEX "document_states_slug_idx" ON "document_states" ("slug");
+          INSERT INTO "document_states" ("id", "slug") VALUES (1, 'ready'), (2, 'archived');
+        `),
+      );
+    });
+
+    it("allows empty copies and dynamic DDL", () => {
+      for (const sql of [
+        `CREATE TABLE "documents_shape" AS SELECT * FROM "documents" WITH NO DATA;`,
+        `CREATE MATERIALIZED VIEW "document_totals" AS SELECT count(*) FROM "documents" WITH NO DATA;`,
+        `DO $$ BEGIN EXECUTE 'ALTER TABLE documents ADD COLUMN state text'; END $$;`,
+        `DO $$ DECLARE total bigint; BEGIN SELECT count(*) INTO total FROM pg_class; RAISE NOTICE '%', total; END $$;`,
+        `DO $$ BEGIN EXECUTE 'GRANT SELECT, UPDATE ON documents TO stella'; END $$;`,
+        `DO $$ BEGIN EXECUTE 'CREATE TABLE documents_shape AS SELECT * FROM documents WITH NO DATA'; END $$;`,
+      ]) {
+        const result = runChecker(sql);
+        expect(result.stdout + result.stderr, sql).not.toMatch(
+          /pre-deploy-(?:row-copy|dynamic-sql|update)/u,
+        );
+      }
+    });
+
+    it("ignores refused syntax in comments, literals and identifiers", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "CREATE INDEX CONCURRENTLY" (
+            "ALTER TABLE x VALIDATE CONSTRAINT y" text DEFAULT 'UPDATE documents SET x = 1',
+            "INSERT INTO x SELECT y FROM z" text
+          );
+          -- DO $$ BEGIN FOR row IN SELECT * FROM documents LOOP END LOOP; END $$;
         `),
       );
     });
@@ -392,7 +680,7 @@ describe("check-migration-safety", () => {
       expectClean(
         runChecker(`
           DROP INDEX CONCURRENTLY IF EXISTS "documents_status_idx";
-          CREATE INDEX CONCURRENTLY IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
+          CREATE INDEX IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
         `),
       );
     });
@@ -519,11 +807,59 @@ describe("check-migration-safety", () => {
   });
 
   describe("acknowledgements", () => {
+    it.each([" ", "\n", "\n  "])(
+      "a function header owns its review independently of body layout (%j)",
+      (separator) => {
+        const sql = `-- stella-migration-safety: reviewed security-definer - Reviewed fixed read-only helper privileges
+CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$${separator}SELECT 1;${separator}$$;`;
+        const statements = parseMigrationStatements(sql);
+        const header = statements.findIndex(
+          (statement) =>
+            statement.enclosingLine === undefined &&
+            statement.text.includes("SECURITY DEFINER"),
+        );
+        expect(header).toBeGreaterThanOrEqual(0);
+        expect(
+          statements.some((statement) => statement.enclosingLine !== undefined),
+        ).toBe(true);
+        expect(findingsIn(sql)).toEqual([]);
+        expect(reviewedMigrationStatements(sql).get(header)).toEqual(
+          new Set(["security-definer"]),
+        );
+      },
+    );
+
+    it("a review inside a function body cannot approve its header", () => {
+      const sql = `CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$
+-- stella-migration-safety: reviewed security-definer - This marker belongs only inside the body
+SELECT 1;
+$$;`;
+      expect(findingsIn(sql).map(({ ruleId }) => ruleId)).toContain(
+        "security-definer",
+      );
+    });
+
+    it("a nested statement retains its own preceding review", () => {
+      const sql = `DO $$
+-- stella-migration-safety: reviewed drop-object - Remove the retired table after the contract step
+BEGIN DROP TABLE retired; END
+$$;`;
+      expect(findingsIn(sql)).toEqual([]);
+    });
+
+    it("an enclosing review cannot approve a different nested rule", () => {
+      const sql = `-- stella-migration-safety: reviewed unbounded-update - Reviewed small bounded maintenance operation
+DO $$ BEGIN UPDATE probe SET title = 'updated'; DROP TABLE retired; END $$;`;
+      const rules = findingsIn(sql).map(({ ruleId }) => ruleId);
+      expect(rules).not.toContain("unbounded-update");
+      expect(rules).toContain("drop-object");
+    });
+
     it("clears a finding when the acknowledgement names its rule", () => {
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed unbounded-update - table has under ten rows
-          UPDATE "documents" SET "status" = 'archived';
+          -- stella-migration-safety: reviewed delete-data - table has under ten rows
+          DELETE FROM "documents";
         `),
       );
     });
@@ -563,12 +899,12 @@ describe("check-migration-safety", () => {
     it("lets an acknowledgement above a DO block cover its inner statements", () => {
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed unbounded-update - guarded by the row
+          -- stella-migration-safety: reviewed delete-data - guarded by the row
           -- count check inside the block
           DO $$
           BEGIN
             IF (SELECT count(*) FROM "documents") < 100 THEN
-              UPDATE "documents" SET "status" = 'archived';
+              DELETE FROM "documents";
             END IF;
           END
           $$;
@@ -791,13 +1127,14 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows the same statements against an unregistered table", () => {
-      expectClean(
+    it("rejects UPDATE against an unregistered table in pre-deploy", () => {
+      expectFinding(
         runChecker(`
           UPDATE "case_law_polarity_rules"
              SET "source" = 'retired'
            WHERE "pattern" = 'x';
         `),
+        "pre-deploy-update",
       );
     });
 
@@ -997,12 +1334,10 @@ describe("check-migration-safety", () => {
           ALTER TABLE "practice_areas" ADD COLUMN "seen_at" timestamptz DEFAULT clock_timestamp();
           ALTER TABLE "practice_areas" ALTER COLUMN "updated_at" SET DEFAULT current_timestamp;
           INSERT INTO "practice_areas" ("id", "slug", "created_at") VALUES (DEFAULT, 'corporate', DEFAULT);
-          UPDATE "practice_areas" SET "updated_at" = DEFAULT WHERE "slug" = 'corporate';
           -- stella-migration-safety: reviewed delete-data - expired rows only, the sweeper deletes them anyway
           DELETE FROM "verification" WHERE "expires_at" < now();
           -- UPDATE "practice_areas" SET "updated_at" = now();
           INSERT INTO "audit_notes" ("body") VALUES ('set at now() by random()');
-          UPDATE "practice_areas" SET "now" = 'x' WHERE "slug" = 'corporate';
           CREATE OR REPLACE FUNCTION touch_practice_area() RETURNS trigger AS $$
           BEGIN
             UPDATE "practice_areas" SET "updated_at" = now() WHERE "id" = NEW."id";

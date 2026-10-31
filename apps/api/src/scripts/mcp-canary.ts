@@ -50,6 +50,8 @@ const STREAM_OPEN_OBSERVATION_MS = 100;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
+const CLIENT_METADATA_BYTE_CAP = 64 * 1024;
+const MAX_RETRY_AFTER_SECONDS = 60;
 
 const PROBE_STATUS = {
   failed: "failed",
@@ -57,6 +59,8 @@ const PROBE_STATUS = {
   passed: "passed",
   skipped: "skipped",
   notApplicable: "not_applicable",
+  rateLimited: "rate_limited",
+  upstream: "upstream",
 } as const;
 
 type ProbeStatus = (typeof PROBE_STATUS)[keyof typeof PROBE_STATUS];
@@ -79,6 +83,104 @@ const failed = (name: string, detail: string): ProbeResult => ({
   status: PROBE_STATUS.failed,
   detail,
 });
+
+const upstream = (name: string, detail: string): ProbeResult => ({
+  name,
+  status: PROBE_STATUS.upstream,
+  detail,
+});
+
+class CanaryRateLimitError extends TaggedError("CanaryRateLimitError")<{
+  message: string;
+}> {}
+
+// Retry-After is either delay-seconds or an HTTP-date (IMF-fixdate).
+const HTTP_DATE =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/u;
+const HTTP_DATE_MONTHS = new Map(
+  [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ].map((name, index) => [name, index + 1] as const),
+);
+
+const httpDateEpochMilliseconds = (value: string): number | undefined => {
+  const match = HTTP_DATE.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  const [, day, monthName, year, hour, minute, second] = match;
+  const month =
+    monthName === undefined ? undefined : HTTP_DATE_MONTHS.get(monthName);
+  if (month === undefined) {
+    return undefined;
+  }
+  const instant = Result.try(() =>
+    Temporal.PlainDateTime.from({
+      year: Number(year),
+      month,
+      day: Number(day),
+      hour: Number(hour),
+      minute: Number(minute),
+      second: Number(second),
+    })
+      .toZonedDateTime("UTC")
+      .toInstant(),
+  );
+  return instant.isOk() ? instant.value.epochMilliseconds : undefined;
+};
+
+const retryAfterMilliseconds = (value: string | null): number | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  if (/^\d+$/u.test(value)) {
+    return Number(value) * 1000;
+  }
+  const epochMilliseconds = httpDateEpochMilliseconds(value);
+  return epochMilliseconds === undefined
+    ? undefined
+    : Math.max(0, epochMilliseconds - Temporal.Now.instant().epochMilliseconds);
+};
+
+const fetchWithRateLimitRetry = async (
+  name: string,
+  fetcher: CanaryFetcher,
+  input: Parameters<CanaryFetcher>[0],
+  init: Parameters<CanaryFetcher>[1],
+): Promise<Response> => {
+  let response = await fetcher(input, init);
+  if (response.status !== 429) {
+    return response;
+  }
+  const waitMs = retryAfterMilliseconds(response.headers.get("Retry-After"));
+  if (waitMs === undefined || waitMs > MAX_RETRY_AFTER_SECONDS * 1000) {
+    await response.body?.cancel();
+    throw new CanaryRateLimitError({
+      message: `${name} rate limited; Retry-After exceeds 60 seconds or is invalid`,
+    });
+  }
+  await response.body?.cancel();
+  await Bun.sleep(waitMs);
+  response = await fetcher(input, init);
+  if (response.status === 429) {
+    await response.body?.cancel();
+    throw new CanaryRateLimitError({
+      message: `${name} remained rate limited after one retry`,
+    });
+  }
+  return response;
+};
 
 const describeProbeFailure = (
   error: unknown,
@@ -107,6 +209,9 @@ export const runNamedProbe = async (
   try {
     return await operation();
   } catch (error) {
+    if (error instanceof CanaryRateLimitError) {
+      return { name, status: PROBE_STATUS.rateLimited, detail: error.message };
+    }
     return failed(name, describeProbeFailure(error));
   }
 };
@@ -704,8 +809,11 @@ export const runAuthenticatedProbes = async (
   );
 
 export const summarize = (results: readonly ProbeResult[]) => ({
-  failed: results.filter((result) => result.status === PROBE_STATUS.failed)
-    .length,
+  failed: results.filter(
+    (result) =>
+      result.status === PROBE_STATUS.failed ||
+      result.status === PROBE_STATUS.rateLimited,
+  ).length,
   skipped: results.filter((result) => result.status === PROBE_STATUS.skipped)
     .length,
 });
@@ -716,6 +824,8 @@ const PROBE_ICONS = {
   [PROBE_STATUS.passed]: "PASS",
   [PROBE_STATUS.skipped]: "SKIP",
   [PROBE_STATUS.notApplicable]: "N/A",
+  [PROBE_STATUS.rateLimited]: "RATE_LIMITED",
+  [PROBE_STATUS.upstream]: "UPSTREAM",
 } as const satisfies Record<ProbeStatus, string>;
 
 const authorizationMetadataSchema = v.object({
@@ -756,6 +866,48 @@ export const CANARY_CLIENT_IDS = [
 const CANARY_SCOPE = MCP_DEFAULT_RESOURCE_SCOPES.filter(
   (scope) => scope === "stella:search" || scope === "stella:read",
 ).join(" ");
+
+const readBoundedJsonObjectBody = async (
+  body: ReadableStream<Uint8Array>,
+): Promise<Record<string, unknown> | undefined> => {
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for await (const chunk of body) {
+    length += chunk.byteLength;
+    if (length > CLIENT_METADATA_BYTE_CAP) {
+      return undefined;
+    }
+    chunks.push(chunk);
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const parsed = Result.try((): unknown =>
+    JSON.parse(new TextDecoder().decode(bytes)),
+  );
+  return parsed.isOk() && v.is(v.record(v.string(), v.unknown()), parsed.value)
+    ? parsed.value
+    : undefined;
+};
+
+const readBoundedJsonObject = async (
+  response: Response,
+): Promise<Record<string, unknown> | undefined> => {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > CLIENT_METADATA_BYTE_CAP
+  ) {
+    await response.body?.cancel();
+    return undefined;
+  }
+  return response.body
+    ? await readBoundedJsonObjectBody(response.body)
+    : undefined;
+};
 
 type AuthorizeResponseOptions = {
   response: Response;
@@ -895,9 +1047,63 @@ export const runOAuthJourneys = async (
     );
   }
   const authorizationEndpoint = endpoint;
+  const clientMetadataFetcher =
+    fetcher === deploymentFetcher ? fetchWithTimeout : fetcher;
   for (const clientId of clients) {
+    if (CANARY_CLIENT_IDS.some((knownClientId) => knownClientId === clientId)) {
+      const metadataName = `client metadata ${clientId}`;
+      const metadataResult = await runNamedProbe(metadataName, async () => {
+        // A third-party host that cannot be reached is an upstream state,
+        // never a canary failure; rate limiting keeps its own result.
+        const attempt = await Result.tryPromise(async () => {
+          const response = await fetchWithRateLimitRetry(
+            metadataName,
+            clientMetadataFetcher,
+            clientId,
+            {
+              headers: { accept: "application/json" },
+              method: "GET",
+              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            },
+          );
+          if (!response.ok) {
+            await response.body?.cancel();
+            return upstream(
+              metadataName,
+              `client metadata unavailable upstream (HTTP ${String(response.status)})`,
+            );
+          }
+          if (!(await readBoundedJsonObject(response))) {
+            return upstream(
+              metadataName,
+              "client metadata unavailable upstream (invalid JSON document)",
+            );
+          }
+          return passed(metadataName, "client metadata available upstream");
+        });
+        if (Result.isOk(attempt)) {
+          return attempt.value;
+        }
+        if (CanaryRateLimitError.is(attempt.error.cause)) {
+          throw attempt.error.cause;
+        }
+        return upstream(
+          metadataName,
+          "client metadata unavailable upstream (unreachable)",
+        );
+      });
+      results.push(metadataResult);
+      if (metadataResult.status !== PROBE_STATUS.passed) {
+        continue;
+      }
+    }
+    let authorizeFailed = false;
     for (const redirectUri of LOOPBACK_REDIRECTS) {
       const name = `authorize ${clientId} -> ${redirectUri}`;
+      if (authorizeFailed) {
+        results.push(skipped(name, "an earlier authorize variant failed"));
+        continue;
+      }
       results.push(
         await runNamedProbe(name, async () => {
           if (!authorizationEndpoint) {
@@ -908,7 +1114,10 @@ export const runOAuthJourneys = async (
           }
           const url = new URL(authorizationEndpoint);
           const challenge = canaryPkceChallenge(
-            randomBytes(32).toString("base64url"),
+            randomBytes(32).toBase64({
+              alphabet: "base64url",
+              omitPadding: true,
+            }),
           );
           url.search = new URLSearchParams({
             client_id: clientId,
@@ -920,7 +1129,7 @@ export const runOAuthJourneys = async (
             state: Bun.randomUUIDv7(),
             resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
           }).toString();
-          const response = await fetcher(url, {
+          const response = await fetchWithRateLimitRetry(name, fetcher, url, {
             method: "GET",
             redirect: "manual",
             timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
@@ -935,6 +1144,7 @@ export const runOAuthJourneys = async (
           return result;
         }),
       );
+      authorizeFailed = results.at(-1)?.status !== PROBE_STATUS.passed;
     }
   }
   return results;
@@ -1097,7 +1307,7 @@ export const runDesktopProbe = async (
         };
         const redeemHandoff = async (key?: string) => {
           const correlationId = Bun.randomUUIDv7();
-          const verifier = randomBytes(32).toString("hex");
+          const verifier = randomBytes(32).toHex();
           const grant = await fetcher(
             new URL("/v1/desktop-registry/grant", baseUrl),
             {
@@ -1273,7 +1483,7 @@ export const runStagingCredentialJourneys = async (
         }
         sessionCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
         const minted = await readProbeResponse(
-          await fetcher(new URL("/v1/api-keys/", baseUrl), {
+          await fetcher(new URL("/v1/api-keys", baseUrl), {
             method: "POST",
             headers: {
               cookie: sessionCookie,
@@ -1416,8 +1626,8 @@ class ReviewJourneyError extends TaggedError("ReviewJourneyError")<{
   message: string;
 }> {}
 
-/** Only known machine codes are printable; an arbitrary server string may
- * contain a credential. Response messages and tool content never enter logs.
+/** Machine codes are public identifiers. Response messages and tool content
+ * never enter logs.
  */
 const reviewEnvelopeCode = (body: unknown): string => {
   const envelope = v.safeParse(
@@ -1440,6 +1650,8 @@ const reviewEnvelopeCode = (body: unknown): string => {
   } else {
     code = envelope.output.code;
   }
+  // The code comes from a response body: only known public codes are logged
+  // verbatim; anything else could carry secrets, so only its length is kept.
   if (typeof code === "number") {
     return [-32_700, -32_600, -32_601, -32_602, -32_603].includes(code)
       ? String(code)
@@ -1455,7 +1667,7 @@ const reviewEnvelopeCode = (body: unknown): string => {
       "TOO_MANY_REQUESTS",
     ].includes(code)
     ? code
-    : "unrecognized";
+    : `unrecognized (redacted, ${String(code.length)} chars)`;
 };
 
 const reviewToolPayload = (body: unknown): unknown => {
@@ -1579,11 +1791,16 @@ const createReviewJourneyContext = (
     }
     headers.set("origin", new URL(frontendUrl).origin);
     const started = performance.now();
-    const response = await targetFetch(url, {
-      ...init,
-      headers,
-      timeout: { type: "idle", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
-    });
+    const response = await fetchWithRateLimitRetry(
+      `${journey}: ${state.step}`,
+      targetFetch,
+      url,
+      {
+        ...init,
+        headers,
+        timeout: { type: "idle", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
+      },
+    );
     const responseCookies = cookies.get(origin) ?? new Map<string, string>();
     for (const cookie of response.headers.getSetCookie()) {
       const pair = cookie.split(";").at(0);
@@ -1696,6 +1913,11 @@ const signInReviewAccount = async ({
       body: JSON.stringify({ email, password }),
     },
   );
+  // Reviewers have only the password: a second step (an emailed code, a
+  // verification or two-factor challenge) would strand them at sign-in.
+  if (v.is(v.object({ twoFactorRedirect: v.literal(true) }), signedIn)) {
+    reject("expected the password alone to sign in, without a second step");
+  }
   if (
     !v.is(
       v.object({ user: v.object({ email: v.literal(email) }) }),
@@ -1767,8 +1989,14 @@ const authorizeReviewOAuth = async (
   const { baseUrl, state, complete, request } = context;
   const reject: (assertion: string) => never = context.reject;
   state.step = "authorize";
-  const verifier = randomBytes(32).toString("base64url");
-  const stateValue = randomBytes(32).toString("base64url");
+  const verifier = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
+  const stateValue = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
   state.callback = createReviewCallback(stateValue);
   const clientId = new URL(CLI_CLIENT_METADATA_PATH, baseUrl).toString();
   const authorize = new URL(metadata.authorization_endpoint);
@@ -2147,13 +2375,16 @@ export const runReviewAccountJourney = async (
   });
   if (outcome.isErr()) {
     const error = outcome.error;
+    const name = reviewJourneyName(state.step);
     results.push(
-      failed(
-        reviewJourneyName(state.step),
-        error instanceof ReviewJourneyError
-          ? error.message
-          : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
-      ),
+      error instanceof CanaryRateLimitError
+        ? { name, status: PROBE_STATUS.rateLimited, detail: error.message }
+        : failed(
+            name,
+            error instanceof ReviewJourneyError
+              ? error.message
+              : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
+          ),
     );
   }
   await state.callback?.close();
@@ -2620,6 +2851,12 @@ const run = async () => {
   }
 
   const { failed: failures, skipped: skips } = summarize(results);
+  const upstreamFailures = results.filter(
+    (result) => result.status === PROBE_STATUS.upstream,
+  ).length;
+  console.log(
+    `[mcp-canary] summary: ${String(failures)} failed, ${String(upstreamFailures)} upstream, ${String(skips)} skipped`,
+  );
   if (skips > 0) {
     console.log(
       `[mcp-canary] ${String(skips)} probe(s) skipped: journey coverage is incomplete; configure the named credentials.`,

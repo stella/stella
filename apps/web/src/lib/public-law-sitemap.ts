@@ -31,6 +31,7 @@ import {
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 import {
   assertSitemapXmlWithinProtocolLimits,
+  createSitemapUpstreamBusyError,
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
   TOOLS_SITEMAP_PATH,
@@ -180,10 +181,15 @@ export const fetchPublicSitemapShards = async ({
 }: FetchSitemapShardsOptions = {}): Promise<SitemapShard[]> => {
   const response = await fetchImpl(apiUrl("/case/sitemap/shards"), { signal });
   if (!response.ok) {
-    throw new ClientOperationError({
-      action: "fetchPublicCaseLawSitemapShards",
-      message: `Failed to fetch public case-law sitemap shards: ${response.status}`,
-    });
+    throw response.status === 429
+      ? createSitemapUpstreamBusyError({
+          action: "fetchPublicCaseLawSitemapShards",
+          response,
+        })
+      : new ClientOperationError({
+          action: "fetchPublicCaseLawSitemapShards",
+          message: `Failed to fetch public case-law sitemap shards: ${response.status}`,
+        });
   }
 
   const parseResult = v.safeParse(
@@ -219,13 +225,18 @@ export const fetchPublicSitemapDecisions = async ({
       ? null
       : await fetchImpl(url, { signal });
   if (response === null || !response.ok) {
-    throw new ClientOperationError({
-      action: "fetchPublicCaseLawSitemap",
-      message:
-        response === null
-          ? "The case-law sitemap shard is not published."
-          : `Failed to fetch public case-law sitemap data: ${response.status}`,
-    });
+    throw response?.status === 429
+      ? createSitemapUpstreamBusyError({
+          action: "fetchPublicCaseLawSitemap",
+          response,
+        })
+      : new ClientOperationError({
+          action: "fetchPublicCaseLawSitemap",
+          message:
+            response === null
+              ? "The case-law sitemap shard is not published."
+              : `Failed to fetch public case-law sitemap data: ${response.status}`,
+        });
   }
 
   const parseResult = v.safeParse(

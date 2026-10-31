@@ -67,7 +67,8 @@ test("only a refused AI export offers an explicit fallback preserving request fi
               name: messages.workspaces.views.reportExport.withoutAiSummaries,
             });
             expect(fallback !== null).toBe(
-              code === ACTION_ADMISSION_CODES.notEnabled &&
+              (code === ACTION_ADMISSION_CODES.notEnabled ||
+                code === ACTION_ADMISSION_CODES.featureDisabled) &&
                 aiNarrative === true,
             );
             if (fallback) {

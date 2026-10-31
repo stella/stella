@@ -25,8 +25,12 @@ const trackedFiles = (): readonly string[] => {
 // The list cannot be derived, so this is what stops it from going stale: a new
 // producer's baseline is committed like any other file, and it lands here.
 test("every committed baseline file is enumerated", () => {
-  const committed = trackedFiles().filter((file) =>
-    TRACKED_BASELINE.test(file),
+  const committed = trackedFiles().filter(
+    (file) =>
+      TRACKED_BASELINE.test(file) &&
+      // Per-job classification decisions are named after their job (a job
+      // called `network-baseline-record` is no baseline).
+      !file.startsWith(".github/ci-job-classification-decisions/"),
   );
 
   expect(committed.length).toBeGreaterThan(0);

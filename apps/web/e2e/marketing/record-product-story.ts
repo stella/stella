@@ -17,6 +17,7 @@ import {
 } from "@stll/api-contract/professional-use";
 import { repoRelativePath } from "@stll/portable-path";
 
+import { seedSidebarState } from "../helpers/sidebar-state";
 import {
   anchorMarketingAgentFinalTurn,
   getMarketingAgentThreadId,
@@ -1474,15 +1475,12 @@ const createRecordingContext = async ({
     viewport,
   });
   await context.addCookies(cookies);
-  await context.addInitScript(
-    ({ nextCollapsedSidebar, nextTheme }) => {
-      localStorage.setItem("theme", nextTheme);
-      if (nextCollapsedSidebar) {
-        localStorage.setItem("sidebar_state", "collapsed");
-      }
-    },
-    { nextCollapsedSidebar: collapsedSidebar, nextTheme: theme },
-  );
+  if (collapsedSidebar) {
+    await seedSidebarState({ baseURL: WEB_URL, context, state: "collapsed" });
+  }
+  await context.addInitScript((nextTheme) => {
+    localStorage.setItem("theme", nextTheme);
+  }, theme);
   if (cursor === "visible") {
     await context.addInitScript(installCursorOverlay, CURSOR_OVERLAY_ID);
   }

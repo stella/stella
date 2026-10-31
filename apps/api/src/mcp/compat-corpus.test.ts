@@ -19,19 +19,20 @@ import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
   corpusCountryQuotas,
-  readCompatStatute,
   rankCorpusCountries,
+  readCompatStatute,
   resolveCompatCorpusCountries,
 } from "@/api/mcp/compat-corpus";
 import { LAW_COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -102,10 +103,14 @@ const statuteHit = {
 const createContext = ({
   practiceJurisdictions = null,
   searchProvider = () => ({ search: searchProviderSearchMock }),
+  contentReadFails = false,
+  workspaceReadFails = false,
 }: {
+  contentReadFails?: boolean;
   practiceJurisdictions?: { countryCode: string; isPrimary: boolean }[] | null;
   searchProvider?: () => unknown;
-} = {}): McpRequestContext => {
+  workspaceReadFails?: boolean;
+} = {}): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
       organizationSettings: {
@@ -116,7 +121,65 @@ const createContext = ({
               : { practiceJurisdictions },
           ),
       },
+      extractedContent: {
+        findMany: async () =>
+          contentReadFails
+            ? await Promise.reject(new Error("content read failed"))
+            : [
+                {
+                  entityId: ENTITY_ID,
+                  workspaceId: WORKSPACE_ID,
+                  ciphertext: "unused",
+                  iv: "unused",
+                  charCount: 1,
+                  language: null,
+                  extractedAt: new Date("2026-01-02"),
+                  sourceEntityVersionId: "version_1",
+                  sourceFieldId: "field_1",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: "a".repeat(64),
+                  ocrRunId: null,
+                  entity: {
+                    name: "SPA",
+                    workspaceId: WORKSPACE_ID,
+                    workspace: { status: "active" },
+                    currentVersion: {
+                      id: "version_1",
+                      createdAt: new Date("2026-01-01"),
+                      deletedAt: null,
+                      fields: [
+                        {
+                          id: "field_1",
+                          content: {
+                            type: "file",
+                            version: 1,
+                            id: "file_1",
+                            fileName: "SPA.pdf",
+                            mimeType: "application/pdf",
+                            sizeBytes: 1,
+                            encrypted: false,
+                            sha256Hex: "a".repeat(64),
+                            pdfFileId: "pdf_1",
+                          },
+                        },
+                      ],
+                    },
+                    versions: [{ id: "version_1" }],
+                  },
+                },
+              ],
+      },
     },
+    selectDistinct: () => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: async () =>
+            workspaceReadFails
+              ? await Promise.reject(new Error("workspace read failed"))
+              : await Promise.resolve([{ id: WORKSPACE_ID }]),
+        }),
+      }),
+    }),
     select: () => ({
       from: () => ({
         innerJoin: () => ({
@@ -135,7 +198,7 @@ const createContext = ({
     }),
   });
 
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
     accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
@@ -163,7 +226,7 @@ const createContext = ({
     },
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 type CompatPayload = {
@@ -185,7 +248,7 @@ const run = async ({
   mode = "default",
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   handler: McpToolHandler;
   mode?: McpMode;
 }): Promise<CompatPayload> => {
@@ -257,11 +320,19 @@ beforeEach(() => {
       }),
   );
   searchLegislationHandlerMock.mockReset();
-  searchLegislationHandlerMock.mockResolvedValue({
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-    items: [statuteHit],
-    nextCursor: null,
-  });
+  // Likewise each country's statute request returns only that country's statutes.
+  searchLegislationHandlerMock.mockImplementation(
+    async (input: unknown) =>
+      await Promise.resolve({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        items:
+          asTestRaw<{ jurisdiction: string }>(input).jurisdiction ===
+          statuteHit.country
+            ? [statuteHit]
+            : [],
+        nextCursor: null,
+      }),
+  );
   readGatedDecisionMock.mockReset();
   readGatedDecisionMock.mockResolvedValue({
     ...decisionHit,
@@ -752,6 +823,70 @@ describe("compat search reaching the public corpus", () => {
 
       expect(payload.error?.code).toBe("validation_error");
       expect(payload.error?.issues?.at(0)?.path).toBe("cursor");
+    });
+  });
+});
+
+describe("compat matter reads when the workspace check fails", () => {
+  test("compat search answers with the internal failure envelope", async () => {
+    await withCorpus(async () => {
+      searchProviderSearchMock.mockResolvedValue({
+        hits: [
+          { entityId: ENTITY_ID, workspaceId: WORKSPACE_ID, title: "SPA" },
+        ],
+        nextCursor: null,
+      });
+      const response = await COMPAT_TOOL_HANDLERS.search({
+        args: { query: "promlčení" },
+        context: createContext({ workspaceReadFails: true }),
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        error: { code: "internal_error" },
+      });
+    });
+  });
+
+  test("compat fetch answers with the internal failure envelope", async () => {
+    const response = await COMPAT_TOOL_HANDLERS.fetch({
+      args: { id: ENTITY_ID },
+      context: createContext({ workspaceReadFails: true }),
+    });
+    expect(response).toMatchObject({
+      status: "error",
+      error: { code: "internal_error" },
+    });
+  });
+});
+
+describe("compat matter reads when the content read fails", () => {
+  test("compat search answers with the internal failure envelope", async () => {
+    await withCorpus(async () => {
+      searchProviderSearchMock.mockResolvedValue({
+        hits: [
+          { entityId: ENTITY_ID, workspaceId: WORKSPACE_ID, title: "SPA" },
+        ],
+        nextCursor: null,
+      });
+      const response = await COMPAT_TOOL_HANDLERS.search({
+        args: { query: "promlčení" },
+        context: createContext({ contentReadFails: true }),
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        error: { code: "internal_error" },
+      });
+    });
+  });
+
+  test("compat fetch answers with the internal failure envelope", async () => {
+    const response = await COMPAT_TOOL_HANDLERS.fetch({
+      args: { id: ENTITY_ID },
+      context: createContext({ contentReadFails: true }),
+    });
+    expect(response).toMatchObject({
+      status: "error",
+      error: { code: "internal_error" },
     });
   });
 });

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  INGESTION_STOP_KIND,
   INGESTION_STOP_DISPOSITION,
+  INGESTION_STOP_KIND,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty } from "@stll/property-testing";

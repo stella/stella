@@ -1,9 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import { e2eRunnerInputs } from "./e2e-runner-inputs";
 import {
   listE2eSpecs,
   selectE2eSpecs,
@@ -36,7 +43,9 @@ const fixture = () => {
 
 describe("e2e spec shard selection", () => {
   test("full depth delegates distribution to both Playwright shards", () => {
-    expect(allE2eMatrix()).toEqual({ shard: [1, 2, "network-baseline"] });
+    expect(allE2eMatrix()).toEqual({
+      shard: [1, 2, 3, 4, "network-baseline"],
+    });
   });
 
   test.each(["a", "b"])("a changed spec %s runs in one PR leg", (name) => {
@@ -219,9 +228,10 @@ test.each(["globalSetup", "globalTeardown"] as const)(
         hook === "globalSetup" ? "global-setup.ts" : "global-teardown.ts";
       write(
         "apps/web/e2e/playwright.config.ts",
-        `export default { testDir: "./specs", ${hook}: "./${hookFile}" };\n`,
+        `export const hook = "./${hookFile}"; export default { testDir: "./specs", ${hook}: hook };\n`,
       );
       write(`apps/web/e2e/${hookFile}`, 'import "./helpers/only-a";\n');
+      expect(e2eRunnerInputs(root)).toContain(`apps/web/e2e/${hookFile}`);
       expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
         {
           status: "full",
@@ -234,6 +244,29 @@ test.each(["globalSetup", "globalTeardown"] as const)(
     }
   },
 );
+
+test("runner inputs are invariant under a symlinked repository root", () => {
+  const { root, write } = fixture();
+  const aliases = mkdtempSync(path.join(tmpdir(), "e2e-runner-alias-"));
+  const alias = path.join(aliases, "repo");
+  try {
+    write("apps/web/e2e/global-setup.ts", "export default () => {};\n");
+    write(
+      "apps/web/e2e/playwright.config.ts",
+      'export default { globalSetup: "./global-setup.ts" };\n',
+    );
+    symlinkSync(root, alias, "dir");
+    const expected = [
+      "apps/web/e2e/playwright.config.ts",
+      "apps/web/e2e/global-setup.ts",
+    ];
+    expect(e2eRunnerInputs(root)).toEqual(expected);
+    expect(e2eRunnerInputs(alias)).toEqual(expected);
+  } finally {
+    rmSync(aliases, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("a transitive global hook import outside e2e selects every shard", () => {
   const { root, write } = fixture();

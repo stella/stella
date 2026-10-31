@@ -7,38 +7,38 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
+  type CaseLawPublicReadDb,
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
-  type CaseLawPublicReadDb,
 } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
-  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
+  caseLawCorpusServingGeneration,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  readCorpusIndexSearchPage,
   type CorpusCandidateRankingInput,
+  readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";

@@ -1,21 +1,21 @@
 import {
   CLAIM_ANCHOR_TYPES,
   CLAIM_FRAMINGS,
+  CLAIM_REVIEW_EVENT_KINDS,
   CLAIM_STATE,
   CLAIM_STATES,
   CLAIM_TYPES,
+  SCORED_CLAIM_STATES,
   VERIFICATION_LIMITS,
-  CLAIM_REVIEW_EVENT_KINDS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
   VERIFICATION_RUN_ERROR_CODES,
   VERIFICATION_RUN_STATUSES,
-  SCORED_CLAIM_STATES,
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAnchor,
   ClaimRef,
-  RecordConflict,
   ClaimReviewEventPayload,
+  RecordConflict,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
@@ -29,6 +29,7 @@ import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   jsonb,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -39,7 +40,6 @@ import {
   timestamptz,
   user,
   workspaceCheck,
-  orgPolicies,
   wsOrganizationPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,

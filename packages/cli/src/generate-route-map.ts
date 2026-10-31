@@ -205,9 +205,10 @@ const enumValues = (schema: PropSchema): readonly string[] | undefined => {
   }
   const literals: string[] = [];
   for (const branch of branches) {
+    // A string `const` implies its type, so a branch may leave `type` out.
     if (
       !isRecordSchema(branch) ||
-      branch["type"] !== "string" ||
+      (branch["type"] !== undefined && branch["type"] !== "string") ||
       typeof branch["const"] !== "string"
     ) {
       return undefined;
@@ -385,7 +386,7 @@ const classifyObject = (
 /**
  * The schema's own `description`, as a spreadable field. Present on a curated
  * tool's hand-written property schema and on any handler-config property given
- * an Elysia `t.X({ description })`; both reach the generator as plain JSON
+ * a `v.description(...)`; both reach the generator as plain JSON
  * Schema, so one helper covers the tool tree and the capability tree alike.
  */
 const descriptionField = (schema: PropSchema): { description?: string } => {

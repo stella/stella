@@ -27,13 +27,14 @@ import {
   EmailViewerWithAI,
 } from "@/components/inspector/email-html-viewer";
 import type { EmailChatMode } from "@/components/inspector/email-html-viewer.logic";
+import type { DownloadRendition } from "@/components/inspector/file-download-service.logic";
 import { TabFacetBar } from "@/components/inspector/file-facets";
 import type { Facet } from "@/components/inspector/file-facets";
 import { FileTabFacetContent } from "@/components/inspector/file-tab-facet-content";
 import { FileTabFullView } from "@/components/inspector/file-tab-full-view";
 import {
   BackToPeekButton,
-  FileTabHeaderActions,
+  fileTabHeaderActions,
   getFileTabHeaderProps,
   MoveToMainButton,
 } from "@/components/inspector/file-tab-header";
@@ -63,6 +64,10 @@ import type { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
 
 type FileTabPanelProps = {
   activeId: string | null;
@@ -129,24 +134,30 @@ const pulseChatInputForReview = (facet: Facet, entityId: string): void => {
 const getFileTabEditorState = ({
   canUpdateEntity,
   desktopEditFileType,
+  downloadRenditions,
   editingDocxTabId,
   entityData,
   filePropertyId,
   isNativeDocxDisplay,
+  isOfficeDisplay,
   isPdfDisplay,
+  readsDocumentInInspector,
   tab,
 }: {
   canUpdateEntity: boolean;
   desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
+  downloadRenditions: readonly DownloadRendition[];
   editingDocxTabId: string | null;
   entityData:
-    | { fields: { id: string; propertyId?: string | undefined }[] }
-    | undefined;
+    { fields: { id: string; propertyId?: string | undefined }[] } | undefined;
   filePropertyId: string | undefined;
   isNativeDocxDisplay: boolean;
+  isOfficeDisplay: boolean;
   isPdfDisplay: boolean;
+  readsDocumentInInspector: boolean;
   tab: FileTabPanelProps["tab"];
 }) => {
+  const isMetadataLaneExpanded = (tab.metadataLane ?? "closed") === "expanded";
   const isEditingNativeDocx =
     isNativeDocxDisplay &&
     editingDocxTabId === tab.id &&
@@ -162,25 +173,37 @@ const getFileTabEditorState = ({
     entityData?.fields.some(
       (field) => field.id === tab.id && field.propertyId === filePropertyId,
     ) === true;
+  const desktopEditTarget =
+    canUpdateEntity &&
+    desktopEditFileType !== null &&
+    filePropertyId !== undefined &&
+    isCurrentFileField
+      ? { fileType: desktopEditFileType, propertyId: filePropertyId }
+      : null;
   return {
-    desktopEditTarget:
-      canUpdateEntity &&
-      desktopEditFileType !== null &&
-      filePropertyId !== undefined &&
-      isCurrentFileField
-        ? { fileType: desktopEditFileType, propertyId: filePropertyId }
-        : null,
+    desktopEditTarget,
     isCollaboratingNativeDocx,
     isEditingNativeDocx,
-    isMetadataLaneExpanded: (tab.metadataLane ?? "closed") === "expanded",
-    pdfSignTarget: resolvePdfSignTarget({
-      canUpdateEntity,
-      entityId: tab.entityId,
-      file: isPdfDisplay
-        ? { fieldId: tab.id, mimeType: PDF_MIME, propertyId: filePropertyId }
-        : null,
-      isCurrentVersion: isCurrentFileField,
-      workspaceId: tab.workspaceId,
+    isMetadataLaneExpanded,
+    sharedHeaderActions: fileTabHeaderActions({
+      desktopEditTarget,
+      downloadRenditions,
+      // Full view means the route renders this same file in the main view,
+      // whose toolbar carries download and sign, except for Office files
+      // (their viewer has no toolbar) and the swapped arrangement (the main
+      // view shows the review).
+      mainViewHasFileActions:
+        isMetadataLaneExpanded && !readsDocumentInInspector && !isOfficeDisplay,
+      pdfSignTarget: resolvePdfSignTarget({
+        canUpdateEntity,
+        entityId: tab.entityId,
+        file: isPdfDisplay
+          ? { fieldId: tab.id, mimeType: PDF_MIME, propertyId: filePropertyId }
+          : null,
+        isCurrentVersion: isCurrentFileField,
+        workspaceId: tab.workspaceId,
+      }),
+      tab,
     }),
   };
 };
@@ -294,6 +317,7 @@ export const FileTabPanel = ({
     isEmailViewerActive: display.isEmailViewerActive,
     isPdfDisplay,
     minimized,
+    needsConversionStatus: display.needsConversionStatus,
     needsPropertyResolution: display.needsPropertyResolution,
     tab,
   });
@@ -347,15 +371,18 @@ export const FileTabPanel = ({
     isCollaboratingNativeDocx,
     isEditingNativeDocx,
     isMetadataLaneExpanded,
-    pdfSignTarget,
+    sharedHeaderActions,
   } = getFileTabEditorState({
     canUpdateEntity,
     desktopEditFileType,
+    downloadRenditions: entity.downloadRenditions,
     editingDocxTabId,
     entityData: entity.query.data,
     filePropertyId,
     isNativeDocxDisplay,
+    isOfficeDisplay,
     isPdfDisplay,
+    readsDocumentInInspector,
     tab,
   });
 
@@ -448,18 +475,18 @@ export const FileTabPanel = ({
         }
         header={
           <InspectorTabHeader
-            actions={
-              <FileTabHeaderActions
-                desktopEditTarget={desktopEditTarget}
-                downloadRenditions={entity.downloadRenditions}
-                pdfSignTarget={pdfSignTarget}
-                tab={tab}
-              >
-                <BackToPeekButton
-                  onMinimize={() => handleMinimizeFromFullView(tab)}
-                />
-              </FileTabHeaderActions>
-            }
+            actions={[
+              ...sharedHeaderActions,
+              {
+                id: "back-to-peek",
+                requires: [REQUIREMENT.sidePanel],
+                render: () => (
+                  <BackToPeekButton
+                    onMinimize={() => handleMinimizeFromFullView(tab)}
+                  />
+                ),
+              },
+            ]}
             {...tabHeader}
           />
         }
@@ -474,6 +501,21 @@ export const FileTabPanel = ({
   }
 
   const sidepeekFacet = tab.facet ?? "preview";
+  const sidepeekHeaderActions = [...sharedHeaderActions];
+  if (isPreviewFacet && editExit !== false) {
+    sidepeekHeaderActions.push({
+      id: "edit-exit",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => editExit,
+    });
+  }
+  if (canOpenFullView) {
+    sidepeekHeaderActions.push({
+      id: "move-to-main",
+      requires: [REQUIREMENT.sidePanel],
+      render: () => <MoveToMainButton onOpenFullView={handleOpenFullView} />,
+    });
+  }
   return (
     <FileTabSidepeek
       email={
@@ -503,22 +545,7 @@ export const FileTabPanel = ({
         />
       }
       header={
-        <InspectorTabHeader
-          actions={
-            <FileTabHeaderActions
-              desktopEditTarget={desktopEditTarget}
-              downloadRenditions={entity.downloadRenditions}
-              pdfSignTarget={pdfSignTarget}
-              tab={tab}
-            >
-              {isPreviewFacet && editExit}
-              {canOpenFullView && (
-                <MoveToMainButton onOpenFullView={handleOpenFullView} />
-              )}
-            </FileTabHeaderActions>
-          }
-          {...tabHeader}
-        />
+        <InspectorTabHeader actions={sidepeekHeaderActions} {...tabHeader} />
       }
       isActive={isActive}
       key={renderId}

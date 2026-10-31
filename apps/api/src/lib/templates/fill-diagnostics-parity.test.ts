@@ -57,8 +57,9 @@ import type {
   FillTemplateResult,
   FillTemplateWithDocxResult,
 } from "@/api/lib/templates/template-fill-service";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -371,7 +372,7 @@ const chatVerdict = async (
 const mcpContext = (
   sources: ServiceSources,
   rows: Record<string, unknown>[],
-): McpRequestContext => {
+): AuthorizedMcpRequestContext => {
   const filled = async () =>
     await Promise.resolve({
       templateName: "Template",
@@ -381,7 +382,7 @@ const mcpContext = (
       ...sources,
     });
   const { scopedDb, safeDb } = createScopedDbMock(recordingTx(rows));
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set(),
     accessibleWorkspaceStatusById: new Map(),
@@ -400,7 +401,7 @@ const mcpContext = (
       fillStoredTemplateWithText: filled,
       fillStoredTemplateWithTextStrict: filled,
     },
-  };
+  });
 };
 
 const mcpVerdict = async (

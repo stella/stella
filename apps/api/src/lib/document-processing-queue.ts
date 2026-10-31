@@ -3,8 +3,8 @@ import {
   and,
   asc,
   eq,
-  gte,
   gt,
+  gte,
   inArray,
   isNotNull,
   isNull,
@@ -17,13 +17,14 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
 } from "@stll/errors";
+import type { ExceptionScope } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -64,9 +65,9 @@ import {
 } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_PROCESSING_QUEUE_NAME,
+  type DocumentProcessingJobData,
   enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
-  type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
 import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
@@ -90,8 +91,8 @@ import {
   ownsPromotedManualOcrClaim,
   requiresOcrPolicy,
   SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
-  SEARCHABLE_PDF_FAILURE_CODE,
   SEARCH_INDEX_FAILURE_CODE,
+  SEARCHABLE_PDF_FAILURE_CODE,
   shouldPreserveCurrentProjection,
 } from "@/api/lib/document-processing-queue-policy";
 import type { CurrentDocumentSource } from "@/api/lib/document-processing-queue-policy";
@@ -99,19 +100,20 @@ import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-r
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
 import {
   claimDocumentProcessingAttempt,
-  failDocumentProcessingAttempt,
-  failExhaustedQueuedRun,
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   documentProcessingSleepMs,
+  failDocumentProcessingAttempt,
+  failExhaustedQueuedRun,
 } from "@/api/lib/document-processing-retry";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
-  writeOrganizationFile,
   type FileUsageInput,
   type OrganizationFileUsageError,
+  writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isLocalDocumentOcrConfigured,
@@ -146,12 +148,9 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
 export const RECONCILE_BATCH_SIZE = 100;
-const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
+const OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
+export const NATIVE_CONTENT_SEARCH_BOUND_MS = 2 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
-const QUEUED_OCR_SELECTION = {
-  ALL_DUE: "all-due",
-  SCHEDULED_RETRIES: "scheduled-retries",
-} as const;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
@@ -361,9 +360,7 @@ const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
   claimToken: string,
   cancellationCode:
-    | "policy_disabled"
-    | "source_superseded"
-    | "workspace_unavailable",
+    "policy_disabled" | "source_superseded" | "workspace_unavailable",
 ): Promise<boolean> => {
   const cancelled = await database
     .update(documentProcessingRuns)
@@ -539,10 +536,7 @@ const readCurrentDocumentSource = async ({
 };
 
 type OcrProjectionPersistenceOutcome =
-  | "persisted"
-  | "preserved"
-  | "source_cancelled"
-  | "stale_claim";
+  "persisted" | "preserved" | "source_cancelled" | "stale_claim";
 
 const lockOcrProjectionSource = async (
   tx: RootTransaction,
@@ -847,7 +841,13 @@ const completeDocumentProcessingRun = async ({
       });
     });
     if (Result.isError(enqueued)) {
-      captureError(enqueued.error, { runId: run.id });
+      captureError(
+        enqueued.error,
+        handlerErrorContext(
+          "lib.completeDocumentProcessingRun.enqueued_error",
+          { runId: run.id },
+        ),
+      );
       logger.error("document_processing.deadline_scout_enqueue_failed", {
         "error.type": errorTag(enqueued.error),
         runId: run.id,
@@ -1324,17 +1324,21 @@ const errorCode = (error: unknown): string => {
 };
 
 type ReportDocumentProcessingRunFailureOptions = {
+  scope: ExceptionScope;
+  fingerprintKey: `documentProcessing.${string}`;
   error: unknown;
   failureCode: string;
   runId: SafeId<"documentProcessingRun">;
 };
 
 const reportDocumentProcessingRunFailure = ({
+  scope,
+  fingerprintKey,
   error,
   failureCode,
   runId,
 }: ReportDocumentProcessingRunFailureOptions): void => {
-  captureError(error, { runId });
+  captureError(error, { scope, fingerprintKey, context: { runId } });
   logger.error(
     "document_processing.run_failed",
     sanitizeErrorAttributesForOutput({
@@ -1397,7 +1401,16 @@ export const markRunFailed = async ({
     );
     return "settled";
   }
-  reportDocumentProcessingRunFailure({ error, failureCode, runId: run.id });
+  reportDocumentProcessingRunFailure({
+    scope: {
+      type: "handler",
+      handlerId: "documentProcessing.settleRunFailure",
+    },
+    fingerprintKey: "documentProcessing.settleRunFailure",
+    error,
+    failureCode,
+    runId: run.id,
+  });
   return "settled";
 };
 
@@ -1783,7 +1796,12 @@ export const tryEnqueueDocumentProcessingRun = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureEnqueueError(result.error, { runId });
+    captureEnqueueError(
+      result.error,
+      handlerErrorContext("tryEnqueueDocumentProcessingRun.result_error", {
+        runId,
+      }),
+    );
     return { runId, status: "failed" };
   }
   return { runId, status: "enqueued" };
@@ -1975,7 +1993,13 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   });
   for (const result of results) {
     if (Result.isError(result)) {
-      captureError(result.error, { operation: "deadline-scout-dispatch" });
+      captureError(
+        result.error,
+        handlerErrorContext(
+          "lib.recoverDocumentDeadlineScoutDispatches.result_error",
+          { operation: "deadline-scout-dispatch" },
+        ),
+      );
     }
   }
 
@@ -2200,18 +2224,21 @@ const updateQueuedRunSchedule = async ({
     );
 };
 
+type DocumentProcessingDispatchSelection = {
+  kind: "native-extraction" | "ocr" | "any";
+  scheduledRetriesOnly: boolean;
+};
+
 export const dispatchQueuedDocumentProcessingRuns = async ({
   database,
   enqueue = enqueueDocumentProcessingRun,
   limit = RECONCILE_BATCH_SIZE,
-  selection = QUEUED_OCR_SELECTION.ALL_DUE,
+  selection,
 }: {
   database: typeof rootDb;
   enqueue?: typeof enqueueDocumentProcessingRun;
   limit?: number;
-  selection?:
-    | typeof QUEUED_OCR_SELECTION.ALL_DUE
-    | typeof QUEUED_OCR_SELECTION.SCHEDULED_RETRIES;
+  selection: DocumentProcessingDispatchSelection;
 }): Promise<{
   attempted: number;
   hasMore: boolean;
@@ -2219,11 +2246,17 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
 }> => {
   const now = new Date();
   const runs = await database
-    .select({ id: documentProcessingRuns.id })
+    .select({
+      id: documentProcessingRuns.id,
+      kind: documentProcessingRuns.kind,
+    })
     .from(documentProcessingRuns)
     .where(
       and(
         eq(documentProcessingRuns.status, "queued"),
+        selection.kind === "any"
+          ? undefined
+          : eq(documentProcessingRuns.kind, selection.kind),
         lt(
           documentProcessingRuns.attemptCount,
           DOCUMENT_PROCESSING_MAX_ATTEMPTS,
@@ -2232,7 +2265,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
           isNull(documentProcessingRuns.nextDeliveryAt),
           lte(documentProcessingRuns.nextDeliveryAt, now),
         ),
-        selection === QUEUED_OCR_SELECTION.SCHEDULED_RETRIES
+        selection.scheduledRetriesOnly
           ? isNotNull(documentProcessingRuns.nextAttemptAt)
           : undefined,
         or(
@@ -2249,17 +2282,22 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
     .limit(limit);
 
   const attempts = await Promise.all(
-    runs.map(
-      async ({ id }) =>
-        await tryEnqueueDocumentProcessingRun({ enqueue, runId: id }),
-    ),
+    runs.map(async ({ id, kind }) => ({
+      ...(await tryEnqueueDocumentProcessingRun({ enqueue, runId: id })),
+      kind,
+    })),
   );
-  const enqueuedIds: SafeId<"documentProcessingRun">[] = [];
+  const enqueuedNativeExtractionIds: SafeId<"documentProcessingRun">[] = [];
+  const enqueuedOcrIds: SafeId<"documentProcessingRun">[] = [];
   const failedIds: SafeId<"documentProcessingRun">[] = [];
   for (const attempt of attempts) {
     switch (attempt.status) {
       case "enqueued":
-        enqueuedIds.push(attempt.runId);
+        if (attempt.kind === "native-extraction") {
+          enqueuedNativeExtractionIds.push(attempt.runId);
+        } else {
+          enqueuedOcrIds.push(attempt.runId);
+        }
         break;
       case "failed":
         failedIds.push(attempt.runId);
@@ -2273,8 +2311,14 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   const updatedAt = new Date();
   await updateQueuedRunSchedule({
     database,
-    delayMs: ENQUEUE_VISIBILITY_TIMEOUT_MS,
-    runIds: enqueuedIds,
+    delayMs: NATIVE_CONTENT_SEARCH_BOUND_MS,
+    runIds: enqueuedNativeExtractionIds,
+    updatedAt,
+  });
+  await updateQueuedRunSchedule({
+    database,
+    delayMs: OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS,
+    runIds: enqueuedOcrIds,
     updatedAt,
   });
   await updateQueuedRunSchedule({
@@ -2318,7 +2362,7 @@ const dispatchScheduledDocumentProcessingRetries = async (
     await dispatchQueuedDocumentProcessingRuns({
       database: dependencies.database,
       enqueue: dependencies.enqueueDocumentProcessingRun,
-      selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+      selection: { kind: "any", scheduledRetriesOnly: true },
     });
   return resolveScheduledDeliveryBatch({
     attempted,
@@ -2373,6 +2417,11 @@ const recoverRetryableOcrFailures = async (
         message: outcome.errorMessage,
       });
       reportDocumentProcessingRunFailure({
+        scope: {
+          type: "handler",
+          handlerId: "documentProcessing.reconcileFailedRun",
+        },
+        fingerprintKey: "documentProcessing.reconcileFailedRun",
         error,
         failureCode: outcome.errorCode,
         runId: run.id,
@@ -2516,7 +2565,13 @@ const recoverFailedSearchIndex = async (
   await runSearchIndexReplayAttempt({
     indexEntity: async () => await dependencies.indexEntity(entityId),
     onFailure: async (error) => {
-      captureError(error, { entityId, runId: id });
+      captureError(
+        error,
+        handlerErrorContext("lib.recoverFailedSearchIndex", {
+          entityId,
+          runId: id,
+        }),
+      );
       const safeError = sanitizeErrorForOutput(error);
       await failDocumentProcessingAttempt({
         database: dependencies.database,
@@ -3103,7 +3158,10 @@ export const handleDocumentProcessingReconcilePhaseFailure = (
     });
     return;
   }
-  captureError(error, { phase });
+  captureError(
+    error,
+    handlerErrorContext(`documentProcessing.reconcile.${phase}`, { phase }),
+  );
   logger.error("document_processing.reconcile_phase_failed", {
     ...errorSystemFields(error),
     phase,
@@ -3154,7 +3212,10 @@ const reconcileDocumentProcessing = async ({
         "error.type": errorTag(error),
       });
     } else {
-      captureError(error);
+      captureError(
+        error,
+        handlerErrorContext("lib.reconcileDocumentProcessing"),
+      );
       logger.error(
         "document_processing.reconcile_failed",
         errorSystemFields(error),
@@ -3215,7 +3276,9 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
         return undefined;
       }
       if (ocrConfigured) {
-        readiness = startDocumentOcrWorkerReadiness();
+        readiness = startDocumentOcrWorkerReadiness(
+          envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
+        );
       }
       return undefined;
     }),

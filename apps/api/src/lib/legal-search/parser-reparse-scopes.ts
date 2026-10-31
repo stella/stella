@@ -109,213 +109,251 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 13,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NS]: {
-    version: 18,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NSS]: {
-    version: 20,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.CZ_US]: {
-    version: 25,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.SK_COURTS]: {
     version: 16,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_NS]: {
+    version: 21,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_NSS]: {
+    version: 25,
+    scope: {
+      type: "all",
+      reason:
+        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_US]: {
+    version: 32,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.SK_COURTS]: {
+    version: 20,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 11,
+    version: 17,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 13,
+    version: 18,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 6,
+    version: 11,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 6,
+    version: 12,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 7,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_NSA]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 12,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_COURTS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VFGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VWGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_LVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_ASYLGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UBAS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UVS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VERG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UMSE]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BKS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 9,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.EU_ECJ]: {
-    version: 15,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.HU_BHGY]: {
-    version: 19,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_UODO]: {
-    version: 12,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_UOKIK]: {
     version: 10,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NSA]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NCOURT]: {
+    version: 19,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_COURTS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VFGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VWGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BVWG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_LVWG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_ASYLGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UBAS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UVS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VERG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UMSE]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BKS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.AT_FINDOK]: {
+    version: 11,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.EU_ECJ]: {
+    version: 18,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.UK_FCL]: {
+    version: 4,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.HU_BHGY]: {
+    version: 22,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIS]: {
+    version: 12,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UODO]: {
+    version: 15,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UOKIK]: {
+    version: 13,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 2,
+    version: 6,
     scope: {
       type: "all",
-      reason: "the source's first parser; there are no stored rows to narrow",
+      reason:
+        "Re-read font-run segmentation after the shared PDF style mapping changed; Czech output remains plain text and footnote links, with no independent feature storage.",
     },
   },
 } as const satisfies ParserVersionScopes<

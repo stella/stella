@@ -81,16 +81,19 @@ const Select = <Value, Multiple extends boolean | undefined = false>({
 
 const SelectTrigger = ({
   className,
+  align = "center",
   size = CONTROL_SIZE.default,
   children,
   ...props
 }: SelectPrimitive.Trigger.Props & {
   size?: ControlSize;
+  align?: "start" | "center";
 }) => (
   <SelectPrimitive.Trigger
     className={cn(
       FIELD_TRIGGER_CLASS_NAME,
       SELECT_TRIGGER_SIZE_CLASS_NAMES[size],
+      align === "start" && "justify-start",
       className,
     )}
     data-slot="select-trigger"

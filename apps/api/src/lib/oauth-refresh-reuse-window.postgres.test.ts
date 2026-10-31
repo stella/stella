@@ -28,6 +28,8 @@ import {
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 
+import rootManifest from "../../../../package.json" with { type: "json" };
+
 const CLIENT_AUTH_METHODS = ["client_secret_post", "none"] as const;
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -70,7 +72,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     }
   });
   beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
+    expect(provider.version).toBe(
+      rootManifest.catalog["@better-auth/oauth-provider"],
+    );
     expect(provider.options.refreshTokenReuseInterval).toBe(30);
   });
   afterEach(() => {
@@ -79,8 +83,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
 
   const fixture = async (
     tokenEndpointAuthMethod:
-      | "client_secret_post"
-      | "none" = "client_secret_post",
+      "client_secret_post" | "none" = "client_secret_post",
   ) => {
     const browser = await signInHuman(
       `rotation-${Bun.randomUUIDv7()}@example.test`,

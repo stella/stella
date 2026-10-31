@@ -16,7 +16,7 @@
 import { panic } from "better-result";
 
 import { nextMacrotask } from "@stll/concurrency/event-loop";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 
@@ -115,8 +115,7 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
  * unexpanded query, so they page against each other consistently.
  */
 export type ExpansionDictionaryIdentity =
-  | { contentHash: string; type: "dictionary" }
-  | { type: "none" };
+  { contentHash: string; type: "dictionary" } | { type: "none" };
 
 /**
  * Serialized `none`. A sha256 hex string is 64 characters, so this can never

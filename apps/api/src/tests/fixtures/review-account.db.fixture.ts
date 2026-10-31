@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const email = process.env["APP_REVIEW_ACCOUNT_EMAIL"];
 const organizationId = process.env["APP_REVIEW_ORGANIZATION_ID"];
 
@@ -14,6 +16,7 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { rootDb } = await import("@/api/db/root");
   const { user, organization, verification, oauthResource } =
     await import("@/api/db/auth-schema");
+  const { userProfessionalUseAcceptances } = await import("@/api/db/schema");
   const { getBetterAuthOAuthResources } =
     await import("@/api/lib/oauth-resource-policy");
   const { getAuthEndpointUrl } = await import("@/api/lib/auth/auth-paths");
@@ -46,13 +49,13 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     if (stored.allowedScopes === null) {
       return panic("Configured OAuth resource has no allowed scopes");
     }
-    return { ...stored, allowedScopes: stored.allowedScopes.toSorted() };
+    return { ...stored, allowedScopes: stored.allowedScopes.toSorted(compareCodeUnit) };
   });
   expect(storedResources).toHaveLength(configuredResources.length);
   for (const resource of configuredResources) {
     expect(normalizedResources).toContainEqual({
       ...resource,
-      allowedScopes: resource.allowedScopes.toSorted(),
+      allowedScopes: resource.allowedScopes.toSorted(compareCodeUnit),
       disabled: false,
     });
   }
@@ -191,6 +194,13 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         where: { organizationId: { eq: organizationId } },
       }),
     ).toEqual(memberships);
+    const firstAcceptances = await rootDb
+      .select()
+      .from(userProfessionalUseAcceptances)
+      .where(eq(userProfessionalUseAcceptances.userId, created.id));
+    expect(firstAcceptances.map((row) => row.source)).toEqual([
+      "operator_provisioning",
+    ]);
 
     await runCommand("set-password", password);
     const accounts = await context.internalAdapter.findAccounts(created.id);
@@ -226,6 +236,12 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         where: { organizationId: { eq: organizationId } },
       }),
     ).toEqual(memberships);
+    expect(
+      await rootDb
+        .select()
+        .from(userProfessionalUseAcceptances)
+        .where(eq(userProfessionalUseAcceptances.userId, created.id)),
+    ).toEqual(firstAcceptances);
     expect(await context.internalAdapter.findAccounts(created.id)).toEqual(
       accounts,
     );

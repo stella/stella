@@ -8,13 +8,14 @@ import {
   countryCodeOf,
   czechVatBandOf,
   effectiveVatRateBps,
+  exportMattersOf,
   invoiceDescriptionOf,
+  type InvoiceExportLine,
+  type InvoiceExportRecord,
   quantityText,
   splitCzechAccountNumber,
   streetOf,
   variableSymbolOf,
-  type InvoiceExportLine,
-  type InvoiceExportRecord,
 } from "./record";
 import { el, text, XML_DECLARATION } from "./xml";
 
@@ -125,7 +126,13 @@ const invoice = (record: InvoiceExportRecord): string => {
           : "",
         text(
           "inv:text",
-          clip(description ?? `${record.matter.name} ${record.number}`, 240),
+          clip(
+            description ??
+              `${exportMattersOf(record)
+                .map((matter) => matter.name)
+                .join(", ")} ${record.number}`,
+            240,
+          ),
         ),
         el(
           "inv:partnerIdentity",

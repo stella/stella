@@ -1,0 +1,1 @@
+{"border-input/40":{"valid":true,"declarations":[["","border-color","color-mix(in oklab, var(--input) 40%, transparent)"]],"values":{"color-mix(in oklab, var(--input) 40%, transparent)":{"p":["--input"],"f":[],"u":false}}},"max-w-[16rem]":{"valid":true,"declarations":[["","max-width","16rem"]],"values":{"16rem":{"p":[],"f":[],"u":false}}}}

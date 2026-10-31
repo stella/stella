@@ -28,41 +28,72 @@ describe.serial("worker hosts require the database login posture check", () => {
   });
 
   test("requires completion before creating the host", async () => {
-    for (const body of [
-      'async function start(db) { host("api", { db }, mode, []); }',
-      'async function start(db) { check(db); host("api", { db }, mode, []); }',
-      'async function start(db) { host("api", { db }, mode, []); await check(db); }',
-    ]) {
-      expect(await lint(body)).toEqual([3]);
-    }
+    const results = await Promise.all(
+      [
+        'async function start(db) { host("api", { db }, mode, []); }',
+        'async function start(db) { check(db); host("api", { db }, mode, []); }',
+        'async function start(db) { host("api", { db }, mode, []); await check(db); }',
+      ].map(async (lintCase, index) => {
+        const body = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(body),
+          expected: [3],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("requires an unconditional check in the host's block", async () => {
-    for (const checkStatement of [
-      "if (enabled) { await check(db); }",
-      "const later = async () => { await check(db); };",
-      "try { await check(db); } catch (error) { report(error); }",
-    ]) {
-      expect(
-        await lint(
-          `async function start(db) { ${checkStatement} host("api", { db }, mode, []); }`,
-        ),
-      ).toEqual([3]);
-    }
+    const results = await Promise.all(
+      [
+        "if (enabled) { await check(db); }",
+        "const later = async () => { await check(db); };",
+        "try { await check(db); } catch (error) { report(error); }",
+      ].map(async (lintCase, index) => {
+        const checkStatement = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(
+            `async function start(db) { ${checkStatement} host("api", { db }, mode, []); }`,
+          ),
+          expected: [3],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("requires the checked binding to remain the host's database", async () => {
-    for (const body of [
-      'async function start(db, other) { await check(other); host("api", { db }, mode, []); }',
-      'async function start(db) { await check(db); db = connect(); host("api", { db }, mode, []); }',
-      'async function start(db) { await check(db); { const db = connect(); host("api", { db }, mode, []); } }',
-      'async function start(db) { await check(db); host("api", context, mode, []); }',
-      'async function start(db) { await check(db); host("api", { db, ...context }, mode, []); }',
-      'async function start(db, other) { await check(db); host("api", { db, db: other }, mode, []); }',
-      'async function start(db) { host.call(null, "api", { db }, mode, []); }',
-    ]) {
-      expect(await lint(body)).toEqual([3]);
-    }
+    const results = await Promise.all(
+      [
+        'async function start(db, other) { await check(other); host("api", { db }, mode, []); }',
+        'async function start(db) { await check(db); db = connect(); host("api", { db }, mode, []); }',
+        'async function start(db) { await check(db); { const db = connect(); host("api", { db }, mode, []); } }',
+        'async function start(db) { await check(db); host("api", context, mode, []); }',
+        'async function start(db) { await check(db); host("api", { db, ...context }, mode, []); }',
+        'async function start(db, other) { await check(db); host("api", { db, db: other }, mode, []); }',
+        'async function start(db) { host.call(null, "api", { db }, mode, []); }',
+      ].map(async (lintCase, index) => {
+        const body = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(body),
+          expected: [3],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("resolves imports rather than trusting matching names", async () => {
@@ -84,13 +115,24 @@ describe.serial("worker hosts require the database login posture check", () => {
   });
 
   test("requires explicit property names in the host context", async () => {
-    for (const body of [
-      'async function start(db, key, other) { await check(db); host("api", { db, [key]: other }, mode, []); }',
-      'async function start(db, other) { const key = "db"; await check(db); host("api", { db, [key]: other }, mode, []); }',
-      'async function start(db, other) { await check(db); host("api", { db, ["db"]: other }, mode, []); }',
-    ]) {
-      expect(await lint(body)).toEqual([3]);
-    }
+    const results = await Promise.all(
+      [
+        'async function start(db, key, other) { await check(db); host("api", { db, [key]: other }, mode, []); }',
+        'async function start(db, other) { const key = "db"; await check(db); host("api", { db, [key]: other }, mode, []); }',
+        'async function start(db, other) { await check(db); host("api", { db, ["db"]: other }, mode, []); }',
+      ].map(async (lintCase, index) => {
+        const body = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(body),
+          expected: [3],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("allows isolated worker host test fixtures", async () => {

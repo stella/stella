@@ -4,8 +4,8 @@ import path from "node:path";
 
 import {
   batchModuleMockTests,
-  readModuleMockMetadata,
   type ModuleMockTest,
+  readModuleMockMetadata,
 } from "../src/tests/module-mock-batching";
 import {
   classifyTestBatch,

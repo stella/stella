@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtemp,
-  readFile,
   readdir,
+  readFile,
   rm,
   stat,
   writeFile,

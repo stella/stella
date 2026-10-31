@@ -1,16 +1,20 @@
-import { describe, expect, expectTypeOf, test } from "bun:test";
-import { Elysia, t } from "elysia";
+import { afterAll, describe, expect, expectTypeOf, test } from "bun:test";
+import * as v from "valibot";
 
 import { PROPERTY_CONTENT_TYPES } from "@stll/api-contract";
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import {
-  fieldContentSchema,
-  propertyContentTypeSchema,
   type AiExtractablePropertyContent,
+  fieldContentSchema,
   type PropertyContent,
   type PropertyContentType,
+  propertyContentTypeSchema,
 } from "@/api/db/schema-validators";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 /**
  * A workspace field's currency is normalized where it is written, not where it
@@ -22,28 +26,39 @@ import {
  * from being two currencies to anything that groups or compares the raw
  * string, with nothing left to migrate.
  *
- * Driven through Elysia rather than through the handler: a handler test builds
- * its own body object and never runs the schema, so it could not tell a
- * transform that fires from one that does not.
+ * Driven through a served route rather than through the handler: a handler
+ * test builds its own body object and never runs the schema, so it could not
+ * tell a transform that fires from one that does not.
  */
 
-const storedValue = async (payload: unknown): Promise<unknown> => {
-  let received: unknown = null;
-  const app = new Elysia().post(
-    "/value",
-    ({ body: { value } }) => {
-      received = value;
-      return "ok";
-    },
-    { body: t.Object({ value: fieldContentSchema }) },
-  );
-  const response = await app.handle(
-    new Request("http://localhost/value", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ value: payload }),
+let received: unknown = null;
+const server = serveForTest(
+  createHttpApp({
+    middleware: [],
+    routes: routes({
+      "/value": {
+        POST: defineEndpoint.public(
+          { body: v.object({ value: fieldContentSchema }) },
+          ({ body: { value } }) => {
+            received = value;
+            return "ok";
+          },
+        ),
+      },
     }),
-  );
+  }),
+);
+afterAll(async () => {
+  await server.stop();
+});
+
+const storedValue = async (payload: unknown): Promise<unknown> => {
+  received = null;
+  const response = await server.fetch("http://localhost/value", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value: payload }),
+  });
   expect(response.status).toBe(200);
   return received;
 };
@@ -82,6 +97,40 @@ test("an upper-case code passes through unchanged", async () => {
   ).toEqual({ version: 1, type: "money", amountCents: 1500, currency: "KWD" });
 });
 
+test.each([
+  { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
+  {
+    kind: "unsupported_reference",
+    format: "text/html",
+    element: "x-thing",
+    attribute: "src",
+  },
+  { kind: "legacy_format", replacementExtension: ".xlsx" },
+  { kind: "unsupported_encoding", encoding: "windows-1252" },
+] as const)(
+  "a conversion refusal is preserved in file state",
+  async (refusal) => {
+    const value = {
+      version: 1,
+      type: "file",
+      id: "00000000-0000-4000-8000-000000000000",
+      fileName: "brief.doc",
+      mimeType: "application/msword",
+      sizeBytes: 10,
+      encrypted: false,
+      sha256Hex: "0".repeat(64),
+      pdfFileId: null,
+      pdfDerivative: {
+        status: "failed",
+        reason: "processing",
+        conversionRefusal: refusal,
+      },
+    };
+
+    expect(await storedValue(value)).toEqual(value);
+  },
+);
+
 describe("property content types", () => {
   test("the extractable subset is the property union minus the hand-entered kinds", () => {
     // The AI-extractable union is now its own schema rather than a type-level
@@ -104,13 +153,18 @@ describe("property content types", () => {
       (typeof PROPERTY_CONTENT_TYPES)[number]
     >();
     expect(
-      propertyContentTypeSchema.anyOf.map((member) => member.const),
+      propertyContentTypeSchema.options.map((member) => member.literal),
     ).toEqual([...PROPERTY_CONTENT_TYPES]);
   });
 
   test("omitting the field is rejected rather than defaulted", () => {
-    // `t.UnionEnum` would advertise a default of the first member, which turns
-    // a request that forgot `contentType` into a silent "file" column.
-    expect(propertyContentTypeSchema).not.toHaveProperty("default");
+    // A default of the first member would turn a request that forgot
+    // `contentType` into a silent "file" column.
+    const request = v.object({ contentType: propertyContentTypeSchema });
+    const decoded = v.safeParse(request, {});
+    expect(decoded.success).toBe(false);
+    expect(decoded.issues?.map((issue) => v.getDotPath(issue))).toEqual([
+      "contentType",
+    ]);
   });
 });

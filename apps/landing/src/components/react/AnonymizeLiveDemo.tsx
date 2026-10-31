@@ -153,8 +153,7 @@ export const PRECOMPUTED_SAMPLE_MATCHES = [
 export type Matcher = typeof AhoCorasick;
 
 let cachedSegmentMatcher:
-  | { key: string; Matcher: Matcher; matcher: AhoCorasick }
-  | undefined;
+  { key: string; Matcher: Matcher; matcher: AhoCorasick } | undefined;
 
 const segmentMatcher = (Matcher: Matcher, originals: string[]): AhoCorasick => {
   const key = JSON.stringify(originals);

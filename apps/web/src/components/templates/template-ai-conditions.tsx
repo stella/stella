@@ -38,7 +38,7 @@ import { api } from "@/lib/api";
 import { optionalReadonlyArray } from "@/lib/arrays";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { STALE_TIME } from "@/lib/consts";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -259,7 +259,7 @@ type DecideConditionsOptionsInput = QueryOptionsInput<
 const requestConditionDecisions =
   (key: DecideConditionsKey, values: Record<string, unknown>) =>
   async ({ signal }: { signal: AbortSignal }) =>
-    unwrapEden(
+    unwrapApiResponse(
       await api
         .templates({ templateId: toSafeId<"template">(key.templateId) })
         ["decide-conditions"].post({ values }, { fetch: { signal } }),

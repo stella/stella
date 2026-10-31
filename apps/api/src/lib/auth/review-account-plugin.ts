@@ -15,10 +15,10 @@ import {
   isReviewAccountBodyEmailPath,
   isReviewAccountEmail,
   readReviewAccountOrganizationTargets,
-  REVIEW_ACCOUNT_OPERATION,
-  REVIEW_ACCOUNT_REFUSAL_MESSAGE,
   resolveReviewAccountBodyEmailOperation,
   resolveReviewAccountSessionOperation,
+  REVIEW_ACCOUNT_OPERATION,
+  REVIEW_ACCOUNT_REFUSAL_MESSAGE,
 } from "@/api/lib/auth/review-account-policy";
 import type {
   ReviewAccountConfig,
@@ -234,9 +234,7 @@ export const createReviewAccountDatabaseHooks = (
     account: { userId: string; providerId: string },
     // Absent outside a request (the operator command), where it is allowed.
     context:
-      | { context: Pick<AuthContext, "internalAdapter"> }
-      | null
-      | undefined,
+      { context: Pick<AuthContext, "internalAdapter"> } | null | undefined,
   ): Promise<undefined> => {
     if (
       config.email === undefined ||

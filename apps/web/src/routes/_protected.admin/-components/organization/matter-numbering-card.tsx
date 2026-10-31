@@ -20,12 +20,12 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
@@ -47,7 +47,7 @@ export const MatterNumberingCard = () => {
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
@@ -98,7 +98,7 @@ const MatterNumberingCardBody = ({
       debouncedPadding,
     ],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].preview.post(
           {
             matterNumberPattern: debouncedPattern,
@@ -108,14 +108,18 @@ const MatterNumberingCardBody = ({
         ),
       ),
   });
-  const previewView = useQueryView(previewQuery);
+  const previewView = queryView(previewQuery);
   const previewData =
     previewView.type === "items" ? previewView.items : undefined;
   const preview = previewData?.preview ?? null;
 
   const numberingToggle = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.numberingToggle.useSettingsMutation",
+    },
     mutationFn: async (enabled: boolean) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].post({
           matterNumberingEnabled: enabled,
         }),
@@ -126,8 +130,12 @@ const MatterNumberingCardBody = ({
   });
 
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.updateMutation.useSettingsMutation",
+    },
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].post({
           matterNumberPattern: pattern,
           matterNumberPadding: padding,

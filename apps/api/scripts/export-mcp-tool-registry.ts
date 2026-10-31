@@ -28,6 +28,7 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { connectToolWeights } from "@/api/mcp/connect-tool-weights";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -39,7 +40,10 @@ import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
+} from "@/api/mcp/static-tool-definitions";
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
@@ -132,10 +136,20 @@ process.stderr.write(
   `Wrote ${listings.length} tool listings to ${snapshotPath.pathname}\n`,
 );
 
+const connectWeightPath = new URL(
+  "../mcp-connect-tool-weights.json",
+  import.meta.url,
+);
+await Bun.write(
+  connectWeightPath,
+  `${JSON.stringify(connectToolWeights(listings), null, 2)}\n`,
+);
+process.stderr.write(`Wrote ${connectWeightPath.pathname}\n`);
+
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
   {};
-for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   if (
     tool.access !== "write" ||
     !WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable
@@ -173,7 +187,7 @@ type ResourceListing = {
 };
 
 const resourceListings: ResourceListing[] = [];
-for (const resource of listMcpResources("default")) {
+for (const resource of await listMcpResources("default")) {
   const listing: ResourceListing = { uri: resource.uri, name: resource.name };
   if (resource.title !== undefined) {
     listing.title = resource.title;
@@ -282,11 +296,3 @@ export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
 `,
 );
 process.stderr.write(`Wrote ${mcpContractOutputPath.pathname}\n`);
-
-// The registry transitively pulls in `@/api/lib/sse.ts`, which opens a
-// Redis subscriber connection at import time (for cross-instance SSE
-// broadcast) and never unrefs it. That's correct for the long-running API
-// process but leaves this one-off script's event loop open indefinitely.
-// The export is done at this point, so exit explicitly instead of waiting
-// on a handle this script never needed.
-process.exit(0);

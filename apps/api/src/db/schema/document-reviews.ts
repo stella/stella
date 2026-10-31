@@ -1,13 +1,16 @@
 import { sql } from "drizzle-orm";
 
+import { REVIEW_DECISION } from "@stll/api-contract/review-decision";
+import type { ReviewDecision } from "@stll/api-contract/review-decision";
+
 import { REVIEW_SKIPPED_MAX } from "@/api/lib/document-review/contract";
 import type {
   ReviewParty,
   ReviewSkippedTerm,
 } from "@/api/lib/document-review/contract";
 import {
-  DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_APPLICATION_STATUS,
+  DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_DECISION,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_FINDING_FLAGS,
@@ -39,8 +42,10 @@ import {
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  stella,
   timestamptz,
   user,
+  workspaceCheck,
   wsOrganizationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -62,6 +67,7 @@ const PIN_PROVENANCE_SQL_VALUES = quoted(PLAYBOOK_PIN_PROVENANCES);
 const OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES);
 
 const DECISION_SQL_VALUES = quoted(DOCUMENT_REVIEW_DECISIONS);
+const REVIEW_DECISION_SQL_VALUES = quoted(REVIEW_DECISION);
 const FINDING_FLAG_SQL_VALUES = quoted(DOCUMENT_REVIEW_FINDING_FLAGS);
 const APPLICATION_STATUS_SQL_VALUES = quoted(
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
@@ -363,6 +369,69 @@ export const documentReviewFindings = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("document_review_findings", { columns: table }),
+  ],
+);
+
+/** Immutable reviewer decisions. The finding row remains the current-state
+ * projection; these rows preserve every transition, including reopening. */
+export const documentReviewFindingDecisions = p.pgTable(
+  "document_review_finding_decisions",
+  {
+    id: pUuid<"documentReviewFindingDecision">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    findingId: safeUuid<"documentReviewFinding">("finding_id").notNull(),
+    decision: p.text("decision").$type<ReviewDecision | null>(),
+    reason: p.text("reason"),
+    actorId: p
+      .text("actor_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    // Named here: the derived name is longer than Postgres keeps.
+    p
+      .foreignKey({
+        name: "document_review_finding_decisions_finding_fk",
+        columns: [table.findingId],
+        foreignColumns: [documentReviewFindings.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("document_review_finding_decisions_finding_created_idx")
+      .on(table.findingId, table.createdAt),
+    p.check(
+      "document_review_finding_decisions_decision_check",
+      sql`${table.decision} IS NULL OR ${table.decision} IN (${REVIEW_DECISION_SQL_VALUES})`,
+    ),
+    p.check(
+      "document_review_finding_decisions_reason_length_check",
+      sql`${table.reason} IS NULL OR char_length(${table.reason}) <= 2000`,
+    ),
+    p.pgPolicy("document_review_finding_decisions_workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("document_review_finding_decisions_workspace_insert", {
+      for: "insert",
+      to: stella,
+      // The foreign key checks only the finding's id: the finding must also
+      // be in the event's workspace, or one workspace could write another's
+      // history. Outer columns are named by table, since both have them.
+      withCheck: sql`(${workspaceCheck}) AND EXISTS (
+        SELECT 1 FROM public.document_review_findings decided_finding
+        WHERE decided_finding.id = document_review_finding_decisions.finding_id
+          AND decided_finding.workspace_id = document_review_finding_decisions.workspace_id
+      )`,
+    }),
+    p.pgPolicy("document_review_finding_decisions_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.document_review_finding_decisions'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.document_review_finding_decisions'::regclass)`,
+    }),
   ],
 );
 

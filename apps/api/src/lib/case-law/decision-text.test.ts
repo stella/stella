@@ -6,13 +6,12 @@ import {
   DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
-  TEXT_ABSENCE_REASONS,
   type DecisionTextFieldKey,
+  TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   checkedDecisionMetadata,
@@ -25,6 +24,7 @@ import {
   splitStoredDecisionTextMetadata,
   storeDecisionTextFields,
   storeTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   MAX_METADATA_URL_DIAGNOSTICS,

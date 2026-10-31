@@ -1,0 +1,255 @@
+{
+  "format": 1,
+  "scenario": "deny-write-tool",
+  "provider": "google",
+  "model": "gemini-3.8-flash",
+  "entries": [
+    {
+      "type": "expect_outbound",
+      "label": "ask",
+      "request": {
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "parts": [
+                {
+                  "text": "Delete the draft"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "serviceTier": "standard",
+          "systemInstruction": {
+            "parts": [
+              {
+                "text": "[system prompt]"
+              }
+            ],
+            "role": "user"
+          },
+          "safetySettings": [
+            {
+              "category": "HARM_CATEGORY_HARASSMENT",
+              "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+              "category": "HARM_CATEGORY_HATE_SPEECH",
+              "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+              "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+              "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+              "threshold": "BLOCK_ONLY_HIGH"
+            }
+          ],
+          "tools": [
+            {
+              "functionDeclarations": [
+                "ask-user",
+                "request_secret",
+                "use_connector_secret",
+                "list_connectable_connectors",
+                "connect_connector",
+                "execute_typescript",
+                "discover_tools",
+                "load-skill",
+                "read-skill-resource",
+                "counterparty_check",
+                "update-entity-fields",
+                "list_templates",
+                "describe_template",
+                "fill_template",
+                "suggest_template_fields",
+                "search-chat-history",
+                "expand-chat-history",
+                "search-past-chats",
+                "create-document",
+                "review_folder_consistency",
+                "set_practice_jurisdictions",
+                "create_template",
+                "configure_template_fields",
+                "save_document",
+                "delete_document",
+                "set_field_value",
+                "save_matter",
+                "delete_matter",
+                "save_contact",
+                "delete_contact",
+                "save_task",
+                "delete_task",
+                "link_matter_contact",
+                "save_clause",
+                "delete_clause",
+                "save_playbook",
+                "run_playbook",
+                "create_reader_annotation",
+                "update_reader_annotation",
+                "delete_reader_annotation",
+                "add_matter_member",
+                "remove_matter_member",
+                "update_organization_settings",
+                "mcp__external__delete",
+                "spawn_subagents"
+              ]
+            }
+          ],
+          "generationConfig": {
+            "maxOutputTokens": 65536,
+            "thinkingConfig": {
+              "includeThoughts": false,
+              "thinkingLevel": "LOW"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "tool-call"
+    },
+    {
+      "type": "expect_outbound",
+      "label": "after-denial",
+      "request": {
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "parts": [
+                {
+                  "text": "Delete the draft"
+                }
+              ],
+              "role": "user"
+            },
+            {
+              "parts": [
+                {
+                  "functionCall": {
+                    "args": {
+                      "name": "draft"
+                    },
+                    "id": "[id-1]",
+                    "name": "mcp__external__delete"
+                  },
+                  "thoughtSignature": "[signature-1]"
+                }
+              ],
+              "role": "model"
+            },
+            {
+              "parts": [
+                {
+                  "functionResponse": {
+                    "id": "[id-1]",
+                    "name": "mcp__external__delete",
+                    "response": {
+                      "content": "{\"error\":\"User declined tool execution\"}"
+                    }
+                  }
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "serviceTier": "standard",
+          "systemInstruction": {
+            "parts": [
+              {
+                "text": "[system prompt]"
+              }
+            ],
+            "role": "user"
+          },
+          "safetySettings": [
+            {
+              "category": "HARM_CATEGORY_HARASSMENT",
+              "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+              "category": "HARM_CATEGORY_HATE_SPEECH",
+              "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+              "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+              "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+              "threshold": "BLOCK_ONLY_HIGH"
+            }
+          ],
+          "tools": [
+            {
+              "functionDeclarations": [
+                "ask-user",
+                "request_secret",
+                "use_connector_secret",
+                "list_connectable_connectors",
+                "connect_connector",
+                "execute_typescript",
+                "discover_tools",
+                "load-skill",
+                "read-skill-resource",
+                "counterparty_check",
+                "update-entity-fields",
+                "list_templates",
+                "describe_template",
+                "fill_template",
+                "suggest_template_fields",
+                "search-chat-history",
+                "expand-chat-history",
+                "search-past-chats",
+                "create-document",
+                "review_folder_consistency",
+                "set_practice_jurisdictions",
+                "create_template",
+                "configure_template_fields",
+                "save_document",
+                "delete_document",
+                "set_field_value",
+                "save_matter",
+                "delete_matter",
+                "save_contact",
+                "delete_contact",
+                "save_task",
+                "delete_task",
+                "link_matter_contact",
+                "save_clause",
+                "delete_clause",
+                "save_playbook",
+                "run_playbook",
+                "create_reader_annotation",
+                "update_reader_annotation",
+                "delete_reader_annotation",
+                "add_matter_member",
+                "remove_matter_member",
+                "update_organization_settings",
+                "mcp__external__delete",
+                "spawn_subagents"
+              ]
+            }
+          ],
+          "generationConfig": {
+            "maxOutputTokens": 65536
+          }
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -60,6 +61,10 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
     name: "Test Org",
     slug: organizationId,
     createdAt: ASOF,
+  });
+  await recordNewOrganizationAccessState(tx, {
+    organizationId,
+    now: new Date(),
   });
   await tx.insert(user).values({
     id: userId,

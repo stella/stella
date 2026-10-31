@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { SKILL_INVOCATION } from "@/api/lib/agent-skills/invocation";
 
@@ -7,7 +7,7 @@ import { SKILL_INVOCATION } from "@/api/lib/agent-skills/invocation";
  * absent optional field stays absent instead of coercing to the first member.
  */
 export const tSkillInvocation = () =>
-  t.Union([
-    t.Literal(SKILL_INVOCATION.auto),
-    t.Literal(SKILL_INVOCATION.manual),
+  v.union([
+    v.literal(SKILL_INVOCATION.auto),
+    v.literal(SKILL_INVOCATION.manual),
   ]);

@@ -1,10 +1,10 @@
 // @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { Worker } from "node:worker_threads";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
@@ -22,6 +22,7 @@ import {
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import { createHttpApp } from "@/api/http/app";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
@@ -46,7 +47,7 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
-import { recordingMatcherWorker } from "@/api/lib/lists/sanctions/test-fixtures/recording-matcher-worker";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -55,8 +56,29 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+/** The public sanctions route on a real port behind the error boundary. */
+const servePublicSanctions = (
+  options: Parameters<typeof createPublicSanctionsRoute>[0],
+) =>
+  serveForTest(
+    createHttpApp({
+      routes: createPublicSanctionsRoute(options),
+      middleware: [errorBoundary],
+    }),
+  );
+
+/** A public answer, checked against the route's own 200 schema. */
+const publicAnswer = (value: unknown) => {
+  const parsed = v.safeParse(publicSanctionsResponseSchema[200], value);
+  expect(parsed.issues).toBeUndefined();
+  return parsed.success
+    ? parsed.output
+    : panic("Public sanctions answer broke its schema");
+};
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const VERIFIED_AT = new Date("2026-09-20T08:00:00Z");
@@ -65,6 +87,10 @@ const STALE_NOW = new Date("2026-09-23T08:00:00Z");
 const MANY_MATCHES = SANCTIONS_MATCH_LIMIT + 5;
 const BENCHMARK_ENTRY_COUNT = 20_000;
 const INSERT_BATCH_SIZE = 100;
+const INCOMPLETE_SCAN_ENTRY_COUNT = 100;
+// Candidate traversal and alignment charge more than 80 work units per alias.
+const INCOMPLETE_SCAN_WORK_LIMIT = INCOMPLETE_SCAN_ENTRY_COUNT * 80;
+const INCOMPLETE_SCAN_NAME = "Bounded Scan Target";
 
 const pools = new Set<ReturnType<typeof createSanctionsMatcherPool>>();
 const benchmarkPool = () => {
@@ -331,7 +357,7 @@ const assertParity = async ({
   const analytics = installRecordingAnalytics();
   const logger = installRecordingLogger();
   const context = new InMemoryRateLimitContext();
-  const route = createPublicSanctionsRoute({
+  await using route = servePublicSanctions({
     db: publicDb,
     now,
     screen: publicScreen,
@@ -346,7 +372,7 @@ const assertParity = async ({
   try {
     const response =
       publicResponse ??
-      (await route.handle(
+      (await route.fetch(
         new Request("http://localhost/sanctions/search", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -354,13 +380,7 @@ const assertParity = async ({
         }),
       ));
     expect(response.status).toBe(200);
-    const body = Value.Decode(
-      publicSanctionsResponseSchema[200],
-      await response.json(),
-    );
-    expect([...Value.Errors(publicSanctionsResponseSchema[200], body)]).toEqual(
-      [],
-    );
+    const body = publicAnswer(await response.json());
     expect(JSON.stringify(body)).not.toContain("UnmatchedPrivateIdentityQxzv");
     if (publicResponse === undefined) {
       expect(JSON.stringify(analytics.events)).not.toContain(
@@ -489,7 +509,7 @@ describe("public sanctions search parity", () => {
       const publicScreen = createPublicSanctionsScreening({
         pool: benchmarkPool(),
       });
-      const route = createPublicSanctionsRoute({
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
         screen: publicScreen,
@@ -503,7 +523,7 @@ describe("public sanctions search parity", () => {
       await db.execute(sql`REVOKE SELECT (content_hash, payload)
         ON sanctions_entry_payloads FROM stella_public_sanctions_reader`);
       const search = async () =>
-        await route.handle(
+        await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -875,7 +895,7 @@ describe("public sanctions search parity", () => {
               await screenSanctionsSubject({ ...props, indexCache: cache })
           : publicScreen;
       const context = new InMemoryRateLimitContext();
-      const route = createPublicSanctionsRoute({
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
         screen,
@@ -887,7 +907,7 @@ describe("public sanctions search parity", () => {
         },
       });
       const search = async (firstName: string, lastName: string) => {
-        const response = await route.handle(
+        const response = await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -897,13 +917,7 @@ describe("public sanctions search parity", () => {
           }),
         );
         expect(response.status).toBe(200);
-        const body = Value.Decode(
-          publicSanctionsResponseSchema[200],
-          await response.json(),
-        );
-        expect([
-          ...Value.Errors(publicSanctionsResponseSchema[200], body),
-        ]).toEqual([]);
+        const body = publicAnswer(await response.json());
         return body;
       };
       const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
@@ -1103,7 +1117,7 @@ describe("public sanctions search parity", () => {
           },
         }),
       );
-      const partialAliases = Array.from({ length: 100 }, (_, index) =>
+      const completeAliases = Array.from({ length: 100 }, (_, index) =>
         entry({
           source: "eu",
           sourceId: `partial-${index}`,
@@ -1113,7 +1127,20 @@ describe("public sanctions search parity", () => {
           },
         }),
       );
-      await seedEntries("eu", [...costly, ...partialAliases]);
+      const incompleteScanAliases = Array.from(
+        { length: INCOMPLETE_SCAN_ENTRY_COUNT },
+        (_, index) =>
+          entry({
+            source: "ch",
+            sourceId: `incomplete-${index}`,
+            overrides: {
+              entityType: "person",
+              names: [{ name: INCOMPLETE_SCAN_NAME, quality: "weak" }],
+            },
+          }),
+      );
+      await seedEntries("eu", [...costly, ...completeAliases]);
+      await seedEntries("ch", incompleteScanAliases);
       await db
         .update(sanctionsEditions)
         .set({
@@ -1121,9 +1148,15 @@ describe("public sanctions search parity", () => {
             entriesFor("eu").length +
             BENCHMARK_ENTRY_COUNT +
             costly.length +
-            partialAliases.length,
+            completeAliases.length,
         })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
+      await db
+        .update(sanctionsEditions)
+        .set({
+          entryCount: entriesFor("ch").length + incompleteScanAliases.length,
+        })
+        .where(eq(sanctionsEditions.id, activeEdition("ch")));
       const inputDigests = new Map<SanctionsSource, string>();
       const digest = (lists: Parameters<typeof buildScreeningIndex>[0]) => {
         const inputHash = createSha256();
@@ -1140,10 +1173,60 @@ describe("public sanctions search parity", () => {
         }
         return inputHash.digest("hex");
       };
-      const recorded = recordingMatcherWorker();
+      const recorded = {
+        work: {
+          entryBatches: 0,
+          entries: 0,
+          maximumBatchEntries: 0,
+          screenings: 0,
+          indexes: 0,
+        },
+      };
+      const createWorker = () => {
+        const worker = new Worker(
+          new URL(
+            "../../lib/lists/sanctions/sanctions-matcher-worker.ts",
+            import.meta.url,
+          ),
+        );
+        const postMessage = worker.postMessage.bind(worker);
+        spyOn(worker, "postMessage").mockImplementation(
+          (message: SanctionsMatcherMessage, transferList) => {
+            switch (message.type) {
+              case "entries":
+                recorded.work.entryBatches += 1;
+                recorded.work.entries += message.entries.length;
+                recorded.work.maximumBatchEntries = Math.max(
+                  recorded.work.maximumBatchEntries,
+                  message.entries.length,
+                );
+                break;
+              case "index":
+                recorded.work.indexes += 1;
+                break;
+              case "screen":
+                recorded.work.screenings += 1;
+                break;
+              default: {
+                message satisfies never;
+                panic("Unexpected matcher message");
+              }
+            }
+            postMessage(
+              message.type === "screen" &&
+                message.source === "ch" &&
+                message.query.name === INCOMPLETE_SCAN_NAME
+                ? { ...message, maxWork: INCOMPLETE_SCAN_WORK_LIMIT }
+                : message,
+              transferList,
+            );
+          },
+        );
+        return worker;
+      };
       const pool = createSanctionsMatcherPool({
         deadlineMs: 10_000,
-        createWorker: recorded.createWorker,
+        createWorker,
       });
       pools.add(pool);
       const context = new InMemoryRateLimitContext();
@@ -1169,7 +1252,7 @@ describe("public sanctions search parity", () => {
           return entries;
         },
       });
-      const route = createPublicSanctionsRoute({
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
         screen: publicScreen,
@@ -1181,7 +1264,7 @@ describe("public sanctions search parity", () => {
         },
       });
       const run = async () =>
-        await route.handle(
+        await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -1230,7 +1313,7 @@ describe("public sanctions search parity", () => {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ subject: { type: "organization", name } }),
             });
-          expect((await route.handle(adversarialRequest())).status).toBe(200);
+          expect((await route.fetch(adversarialRequest())).status).toBe(200);
           const before = { ...recorded.work };
           const began = performance.now();
           let lastTick = began;
@@ -1243,7 +1326,7 @@ describe("public sanctions search parity", () => {
             ticks += 1;
           }, 1);
           try {
-            const response = await route.handle(adversarialRequest());
+            const response = await route.fetch(adversarialRequest());
             expect(response.status).toBe(200);
             maximumTurnMs = Math.max(
               maximumTurnMs,
@@ -1285,13 +1368,18 @@ describe("public sanctions search parity", () => {
           },
           { type: "organization", name: costlyName, companyId: null },
           { type: "organization", name: "Mohammed Ali", companyId: null },
+          {
+            type: "organization",
+            name: INCOMPLETE_SCAN_NAME,
+            companyId: null,
+          },
         ] as const satisfies readonly NameSubject[];
         const publicResponses = new Map<string, Response>();
         const analytics = installRecordingAnalytics();
         const logger = installRecordingLogger();
         try {
           for (const subject of subjects) {
-            const response = await route.handle(
+            const response = await route.fetch(
               new Request("http://localhost/sanctions/search", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -1308,10 +1396,6 @@ describe("public sanctions search parity", () => {
           analytics.restore();
           logger.restore();
         }
-        // The worker phase reads and compiles the full corpus. Retire it before
-        // the product phase compiles the independently loaded, digest-checked rows.
-        await pool.close();
-        pools.delete(pool);
         const parityCaches = {
           product: createSanctionsIndexCache({
             build: (lists) => {
@@ -1377,20 +1461,51 @@ describe("public sanctions search parity", () => {
           ),
         ).toEqual(Array.from({ length: 8 }, (_, index) => `costly-${index}`));
         expect(expensive.status).toBe("possible-match");
-        const partial = await parity({
+        const complete = await parity({
           type: "organization",
           name: "Mohammed Ali",
           companyId: null,
         });
-        expect(
-          partial.lists.find(({ source }) => source === "eu"),
-        ).toMatchObject({
+        expect(complete.lists.find(({ source }) => source === "eu")).toEqual({
+          source: "eu",
+          issuer: "EU",
+          classification: "binding",
+          editionId: activeEdition("eu"),
+          publishedAt: "2026-09-19",
+          verifiedAt: VERIFIED_AT.toISOString(),
+          pendingUpdate: null,
+          status: "clear",
+          reason: null,
+          truncated: false,
+          totalMatches: 0,
+          possibleMatches: [],
+        });
+        expect(complete.status).toBe("clear");
+
+        const incompleteSubject = {
+          type: "organization",
+          name: INCOMPLETE_SCAN_NAME,
+          companyId: null,
+        } as const;
+        const incompleteResponse =
+          publicResponses.get(JSON.stringify(incompleteSubject)) ??
+          panic("Missing bounded worker response");
+        const incomplete = publicAnswer(await incompleteResponse.json());
+        expect(incomplete.lists.find(({ source }) => source === "ch")).toEqual({
+          source: "ch",
+          issuer: "CH",
+          classification: "informational",
+          editionId: activeEdition("ch"),
+          publishedAt: "2026-09-19",
+          verifiedAt: VERIFIED_AT.toISOString(),
+          pendingUpdate: null,
           status: "incomplete",
           reason: null,
           truncated: true,
+          totalMatches: 0,
           possibleMatches: [],
         });
-        expect(partial.status).toBe("incomplete");
+        expect(incomplete.status).toBe("incomplete");
       } finally {
         context.kill();
         await pool.close();

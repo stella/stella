@@ -27,11 +27,11 @@ import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
-import type {
-  OriginalClaimMark,
-  OriginalScrollTarget,
-} from "@/features/avt/original-docx-view";
+import type { OriginalClaimMark } from "@/features/avt/original-claims";
+import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
+import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -61,6 +61,7 @@ import {
 } from "@/features/avt/verdict";
 import {
   claimMark,
+  originalKind,
   selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
@@ -73,21 +74,42 @@ const OriginalDocxView = React.lazy(async () => {
   const m = await import("@/features/avt/original-docx-view");
   return { default: m.OriginalDocxView };
 });
+const OriginalPdfView = React.lazy(async () => {
+  const m = await import("@/features/avt/original-pdf-view");
+  return { default: m.OriginalPdfView };
+});
 
-/** The reader's text of the stored blocks, or the file as Folio lays it out. */
+/** The reader's text of the stored blocks, or the file as it is laid out. */
 type DocumentView = "reading" | "original";
 
 type VerdictFilter =
-  | "all"
-  | "conflicts"
-  | "needsreview"
-  | "reviewed"
-  | ClaimState;
+  "all" | "conflicts" | "needsreview" | "reviewed" | ClaimState;
 
 type VerificationViewProps = {
   workspaceId: string;
   run: VerificationRun;
 };
+
+type OriginalDocumentProps = React.ComponentProps<typeof OriginalDocxView> & {
+  kind: "docx" | "pdf";
+};
+
+/** The file as it is laid out, with the claims drawn over it. */
+const OriginalDocument = ({
+  kind,
+  scrollTarget,
+  ...props
+}: OriginalDocumentProps) => (
+  <div className="min-h-0 flex-1">
+    <React.Suspense fallback={<Skeleton className="h-full w-full" />}>
+      {kind === "pdf" ? (
+        <OriginalPdfView {...props} />
+      ) : (
+        <OriginalDocxView {...props} scrollTarget={scrollTarget} />
+      )}
+    </React.Suspense>
+  </div>
+);
 
 export const VerificationView = ({
   workspaceId,
@@ -116,16 +138,13 @@ export const VerificationView = ({
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
   const [documentView, setDocumentView] =
     React.useState<DocumentView>("reading");
-  // Where the original should bring the reader next. It is held, not fired,
-  // so a step taken while the original is still loading lands once the
-  // viewer has the document.
+  // Where the DOCX original should bring the reader next. It is held, not
+  // fired, so a step taken while the original is still loading lands once
+  // the viewer has the document.
   const [originalScroll, setOriginalScroll] =
     React.useState<OriginalScrollTarget | null>(null);
-  // Only a DOCX read through Folio has an original to lay the claims over
-  // here; a PDF's page text has no block ids.
-  const hasOriginal =
-    run.blocks.length > 0 &&
-    run.blocks.every((block) => block.kind === "docx-block");
+  const original = originalKind(run.blocks);
+  const hasOriginal = original !== null;
   const view = hasOriginal ? documentView : "reading";
 
   const matches = (claim: VerificationClaim, value: VerdictFilter) =>
@@ -160,17 +179,47 @@ export const VerificationView = ({
   const goToMatch = (id: VerificationClaim["id"]) => {
     setSelected(id);
     if (view === "original") {
-      const anchor = claimById.get(id)?.anchor;
-      if (anchor?.type === "docx-block") {
-        // A new target for every step, so stepping back onto the same block
-        // scrolls again.
-        setOriginalScroll({ blockId: anchor.blockId });
+      const claim = claimById.get(id);
+      if (claim !== undefined) {
+        scrollOriginalToClaim(claim);
       }
       return;
     }
     document
       .querySelector(`#${claimDomId(id)}`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  // Bring the original to a claim's block or page. Both requests are held
+  // while the document is still loading: the block as state the DOCX view
+  // applies once Folio has the document, the page in the inspector store the
+  // PDF viewer reads. On a PDF the claim's box brings itself into view once
+  // its page is drawn; when the box is already drawn it alone scrolls, since
+  // a page request would realign the page top over it.
+  const scrollOriginalToClaim = (claim: VerificationClaim) => {
+    if (claim.anchor.type === "pdf-page") {
+      if (isPdfClaimBoxDrawn(claim.id)) {
+        return;
+      }
+      useInspectorCommandStore.getState().requestPdfPageScroll({
+        tabId: run.fileFieldId,
+        pageNumber: claim.anchor.pageNumber,
+      });
+      return;
+    }
+    // A new target for every request, so stepping back onto the same block
+    // scrolls again.
+    setOriginalScroll({ blockId: claim.anchor.blockId });
+  };
+
+  // The original opens on the selected claim, as the reading view shows it;
+  // a step taken in an earlier visit is not replayed.
+  const openDocumentView = (next: DocumentView) => {
+    setDocumentView(next);
+    setOriginalScroll(null);
+    if (next === "original" && selectedClaim !== undefined) {
+      scrollOriginalToClaim(selectedClaim);
+    }
   };
 
   const stepper = matchStepper({
@@ -334,15 +383,7 @@ export const VerificationView = ({
               )}
             >
               {hasOriginal && (
-                <Tabs
-                  onValueChange={(next: DocumentView) => {
-                    // A step taken in an earlier visit is not replayed when
-                    // the original mounts again.
-                    setOriginalScroll(null);
-                    setDocumentView(next);
-                  }}
-                  value={view}
-                >
+                <Tabs onValueChange={openDocumentView} value={view}>
                   <TabsList
                     aria-label={t("avt.verification.documentView.label")}
                   >
@@ -358,20 +399,17 @@ export const VerificationView = ({
               {stepper.total > 0 && <MatchStepper stepper={stepper} />}
             </div>
           )}
-          {view === "original" ? (
-            <div className="min-h-0 flex-1">
-              <React.Suspense fallback={<Skeleton className="h-full w-full" />}>
-                <OriginalDocxView
-                  claims={claims}
-                  markOf={originalMark}
-                  onSelect={setSelected}
-                  run={run}
-                  scrollTarget={originalScroll}
-                  selected={selected}
-                  workspaceId={workspaceId}
-                />
-              </React.Suspense>
-            </div>
+          {view === "original" && original !== null ? (
+            <OriginalDocument
+              claims={claims}
+              kind={original}
+              markOf={originalMark}
+              onSelect={setSelected}
+              run={run}
+              scrollTarget={originalScroll}
+              selected={selected}
+              workspaceId={workspaceId}
+            />
           ) : (
             <ReadingDocument
               presentation={presentation}

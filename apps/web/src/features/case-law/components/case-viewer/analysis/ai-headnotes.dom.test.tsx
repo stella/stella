@@ -54,24 +54,45 @@ const blocks = [
 ] satisfies Block[];
 
 const analysis = {
-  version: 3,
+  version: 4,
   generatedAt: "2026-10-18T00:00:00Z",
   model: "fixture-model",
   inputFingerprint: "fixture-document",
   tree: [],
   holding: {
-    text: "The agreement is invalid.",
-    language: "en",
-    anchors: [
-      { startAnchorId: "p-4", endAnchorId: "p-4" },
-      { startAnchorId: "p-2", endAnchorId: "p-3" },
-      { startAnchorId: "p-4", endAnchorId: "p-4" },
-      { startAnchorId: "p-1", endAnchorId: "p-1" },
+    spans: [
+      {
+        text: "The agreement is invalid",
+        anchors: [
+          { startAnchorId: "p-4", endAnchorId: "p-4" },
+          { startAnchorId: "p-2", endAnchorId: "p-3" },
+          { startAnchorId: "p-4", endAnchorId: "p-4" },
+          { startAnchorId: "p-1", endAnchorId: "p-1" },
+        ],
+      },
+      { text: ", so the claim fails.", anchors: [] },
     ],
+    language: "en",
   },
-  abstract: { text: "A summary.", language: "en" },
+  abstract: {
+    spans: [
+      {
+        text: "The parties signed an agreement ",
+        anchors: [{ startAnchorId: "p-2", endAnchorId: "p-2" }],
+      },
+      {
+        text: "that the court held invalid.",
+        anchors: [{ startAnchorId: "p-4", endAnchorId: "p-4" }],
+      },
+    ],
+    language: "en",
+  },
   topics: [],
 } satisfies DecisionAnalysis;
+
+/** The passage a citation button sits in, read as one string. */
+const passageOf = (button: HTMLElement): string | null | undefined =>
+  button.closest("p")?.textContent;
 
 test("holding cites sorted source paragraphs inline with numbered and position labels", () => {
   const jumps: string[] = [];
@@ -82,6 +103,7 @@ test("holding cites sorted source paragraphs inline with numbered and position l
           <AiHeadnotes
             analysis={analysis}
             blocks={blocks}
+            language="en"
             onAnchorClick={(startAnchorId, endAnchorId) => {
               jumps.push(startAnchorId);
               const start = blocks.findIndex(
@@ -108,21 +130,21 @@ test("holding cites sorted source paragraphs inline with numbered and position l
     </IntlProvider>,
   );
 
-  const holding = view.getByText("The agreement is invalid.").parentElement;
-  expect(holding?.textContent).toBe(
-    "The agreement is invalid. [¶1] [9]-[12] [57]",
+  const holdingCitation = view.getByRole("button", { name: "Paragraph ¶1" });
+  // The claim's citations sit where the claim ends, inside the sentence.
+  expect(passageOf(holdingCitation)).toBe(
+    "The agreement is invalid [¶1] [9]-[12] [57], so the claim fails.",
   );
+  const holding = holdingCitation.closest("p");
   expect(view.queryByText("Go to paragraph")).toBeNull();
   expect(within(holding!).getAllByRole("button")).toHaveLength(3);
-  expect(view.getByRole("button", { name: "Paragraph 57" }).textContent).toBe(
-    "[57]",
-  );
+  expect(
+    within(holding!).getByRole("button", { name: "Paragraph 57" }).textContent,
+  ).toBe("[57]");
   expect(view.getByRole("button", { name: "Paragraph 9–12" }).textContent).toBe(
     "[9]-[12]",
   );
-  expect(view.getByRole("button", { name: "Paragraph ¶1" }).textContent).toBe(
-    "[¶1]",
-  );
+  expect(holdingCitation.textContent).toBe("[¶1]");
 
   fireEvent.click(view.getByRole("button", { name: "Paragraph 9–12" }));
   expect(jumps).toEqual(["p-2"]);
@@ -151,6 +173,7 @@ test("paragraph references use the configured numbering system", () => {
           <AiHeadnotes
             analysis={analysis}
             blocks={blocks}
+            language="en"
             onAnchorClick={() => undefined}
           />
         </WebReaderPresentationProvider>
@@ -158,9 +181,9 @@ test("paragraph references use the configured numbering system", () => {
     </IntlProvider>,
   );
 
-  expect(view.getByRole("button", { name: "Paragraph ٥٧" }).textContent).toBe(
-    "[٥٧]",
-  );
+  expect(
+    view.getAllByRole("button", { name: "Paragraph ٥٧" }).at(0)?.textContent,
+  ).toBe("[٥٧]");
   expect(view.getByRole("button", { name: "Paragraph ٩–١٢" }).textContent).toBe(
     "[٩]-[١٢]",
   );
@@ -169,15 +192,41 @@ test("paragraph references use the configured numbering system", () => {
   );
 });
 
+test("the abstract cites each claim, after its last word and before the space", () => {
+  const view = render(
+    <IntlProvider locale="en" messages={english} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <AiHeadnotes
+            analysis={analysis}
+            blocks={blocks}
+            language="en"
+            onAnchorClick={() => undefined}
+          />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+
+  expect(passageOf(view.getByRole("button", { name: "Paragraph 9" }))).toBe(
+    "The parties signed an agreement [9] that the court held invalid. [57]",
+  );
+});
+
 test("a range listed twice around another range from the same start shows once", () => {
   const interleaved = {
     ...analysis,
     holding: {
       ...analysis.holding,
-      anchors: [
-        { startAnchorId: "p-2", endAnchorId: "p-3" },
-        { startAnchorId: "p-2", endAnchorId: "p-4" },
-        { startAnchorId: "p-2", endAnchorId: "p-3" },
+      spans: [
+        {
+          text: "The agreement is invalid.",
+          anchors: [
+            { startAnchorId: "p-2", endAnchorId: "p-3" },
+            { startAnchorId: "p-2", endAnchorId: "p-4" },
+            { startAnchorId: "p-2", endAnchorId: "p-3" },
+          ],
+        },
       ],
     },
   } satisfies DecisionAnalysis;
@@ -188,6 +237,7 @@ test("a range listed twice around another range from the same start shows once",
           <AiHeadnotes
             analysis={interleaved}
             blocks={blocks}
+            language="en"
             onAnchorClick={() => undefined}
           />
         </WebReaderPresentationProvider>
@@ -195,8 +245,7 @@ test("a range listed twice around another range from the same start shows once",
     </IntlProvider>,
   );
 
-  const holding = view.getByText("The agreement is invalid.").parentElement;
-  expect(holding?.textContent).toBe(
+  expect(passageOf(view.getByRole("button", { name: "Paragraph 9–57" }))).toBe(
     "The agreement is invalid. [9]-[12] [9]-[57]",
   );
 });

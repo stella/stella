@@ -14,8 +14,8 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import {
-  RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
+  RESOURCE_PATH_PATTERN,
 } from "@/api/lib/agent-skills/resource-path";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";
@@ -220,7 +220,7 @@ const withPreCutoverDatabase = async (
               });
               expect(result.status).toBe("applied");
             } finally {
-              connection.release();
+              await connection.release();
             }
             await verify(scratchUrl);
           },
@@ -242,11 +242,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const client = openClient().sql;
           await client.begin(async (tx) => {
-            expect(
-              await tx.unsafe<{ character_maximum_length: number }[]>(
+            expect([
+              ...(await tx.unsafe<{ character_maximum_length: number }[]>(
                 "SELECT character_maximum_length FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'agent_skill_resources' AND column_name = 'path'",
-              ),
-            ).toEqual([{ character_maximum_length: 512 }]);
+              )),
+            ]).toEqual([{ character_maximum_length: 512 }]);
             await tx.unsafe(
               "INSERT INTO organization (id, name, slug, created_at) VALUES ('folder-org', 'Fixture', 'folder-org', now())",
             );
@@ -415,7 +415,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                   ),
                 ).size,
               ).toBe(migratedResources.length);
-              expect(migratedResources).toEqual(
+              expect([...migratedResources]).toEqual(
                 fixture.renamed.toSorted((a, b) =>
                   compareCodeUnit(a.path, b.path),
                 ),
@@ -425,15 +425,15 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 body: fixture.newBody,
                 resources: migratedResources,
               });
-              expect(
-                await tx.unsafe<{ body: string; content_hash: string }[]>(
+              expect([
+                ...(await tx.unsafe<{ body: string; content_hash: string }[]>(
                   "SELECT body, content_hash FROM agent_skills WHERE id = $1",
                   [fixture.id],
-                ),
-              ).toEqual([{ body: fixture.newBody, content_hash: newHash }]);
+                )),
+              ]).toEqual([{ body: fixture.newBody, content_hash: newHash }]);
               const bodyChanged = fixture.body !== fixture.newBody;
-              expect(
-                await tx.unsafe<
+              expect([
+                ...(await tx.unsafe<
                   {
                     revision_number: number;
                     body: string;
@@ -442,8 +442,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 >(
                   "SELECT revision_number, body, content_hash FROM agent_skill_revisions WHERE skill_id = $1 ORDER BY revision_number",
                   [fixture.id],
-                ),
-              ).toEqual([
+                )),
+              ]).toEqual([
                 {
                   revision_number: 1,
                   body: "Older instructions",
@@ -465,21 +465,21 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                   : []),
               ]);
             }
-            expect(
-              await tx.unsafe<{ count: number }[]>(
+            expect([
+              ...(await tx.unsafe<{ count: number }[]>(
                 "SELECT count(*)::integer AS count FROM agent_skill_resources WHERE char_length(path) > 512",
-              ),
-            ).toEqual([{ count: 0 }]);
-            expect(
-              await tx.unsafe<{ count: number }[]>(
+              )),
+            ]).toEqual([{ count: 0 }]);
+            expect([
+              ...(await tx.unsafe<{ count: number }[]>(
                 "SELECT count(*)::integer AS count FROM agent_skill_resources WHERE size_bytes <> octet_length(convert_to(content, 'UTF8'))",
-              ),
-            ).toEqual([{ count: 0 }]);
-            expect(
-              await tx.unsafe<{ column_name: string }[]>(
+              )),
+            ]).toEqual([{ count: 0 }]);
+            expect([
+              ...(await tx.unsafe<{ column_name: string }[]>(
                 "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'agent_skill_resources' AND column_name = 'kind'",
-              ),
-            ).toEqual([]);
+              )),
+            ]).toEqual([]);
           });
         });
       });

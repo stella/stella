@@ -2,8 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
-  mkdirSync,
   linkSync,
+  mkdirSync,
   readFileSync,
   renameSync,
   rmSync,

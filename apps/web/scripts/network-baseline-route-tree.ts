@@ -1,7 +1,7 @@
 import { Generator, getConfig } from "@tanstack/router-generator";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -31,6 +31,61 @@ const git = (repository: string, args: string[]) => {
   return child.stdout;
 };
 
+// A blob-filtered checkout holds only the checked-out revision's blobs. Reading
+// another revision then fetches each blob separately; one batched fetch of the
+// missing blobs replaces a network round trip per route file.
+const prefetchMissingBlobs = (repository: string, blobs: readonly string[]) => {
+  if (blobs.length === 0) {
+    return;
+  }
+  const encoder = new TextEncoder();
+  const check = Bun.spawnSync(
+    ["git", "-C", repository, "cat-file", "--batch-check=%(objectname)"],
+    {
+      env: { ...process.env, GIT_NO_LAZY_FETCH: "1" },
+      stdin: encoder.encode(`${blobs.join("\n")}\n`),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  if (!check.success) {
+    fail(`git cat-file --batch-check failed: ${check.stderr.toString()}`);
+  }
+  const missing = check.stdout
+    .toString()
+    .split("\n")
+    .flatMap((line) => /^([a-f0-9]{40}) missing$/u.exec(line)?.[1] ?? []);
+  if (missing.length === 0) {
+    return;
+  }
+  const fetch = Bun.spawnSync(
+    [
+      "git",
+      "-C",
+      repository,
+      "-c",
+      "fetch.negotiationAlgorithm=noop",
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "--recurse-submodules=no",
+      "--filter=blob:none",
+      "--stdin",
+      "origin",
+    ],
+    {
+      stdin: encoder.encode(`${missing.join("\n")}\n`),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  if (!fetch.success) {
+    fail(
+      `fetching ${String(missing.length)} route sources failed: ${fetch.stderr.toString()}`,
+    );
+  }
+};
+
 type GenerateRevisionRouteTreeOptions = {
   repository: string;
   revision: string;
@@ -57,12 +112,20 @@ export const generateRevisionRouteTree = async ({
       "--",
       ROUTES_PREFIX,
     ]);
+    const listing = entries.toString().split("\0").filter(Boolean);
+    if (listing.length > MAX_ROUTE_FILES) {
+      fail("route sources exceed the file limit");
+    }
+    prefetchMissingBlobs(
+      repository,
+      listing.flatMap(
+        (entry) =>
+          /^(?:100644|100755) blob ([a-f0-9]{40})\t/u.exec(entry)?.[1] ?? [],
+      ),
+    );
     let bytes = 0;
     let files = 0;
-    for (const entry of entries.toString().split("\0")) {
-      if (!entry) {
-        continue;
-      }
+    for (const entry of listing) {
       files += 1;
       if (files > MAX_ROUTE_FILES) {
         fail("route sources exceed the file limit");

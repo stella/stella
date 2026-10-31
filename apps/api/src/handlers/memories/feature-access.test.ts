@@ -1,17 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
+import { createHttpApp } from "@/api/http/app";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   AI_MEMORY_FEATURE_ID,
   CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
 } from "@/api/lib/feature-access/registry";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import createMemory from "./create";
 import createFirmMemory from "./create-firm";
@@ -103,7 +106,10 @@ describe("memory feature admission", () => {
         method === "PATCH" || method === "DELETE"
           ? "/v1/memories/invalid-id"
           : "/v1/memories/";
-      const response = await memoriesRoute.handle(
+      await using server = serveForTest(
+        createHttpApp({ routes: memoriesRoute, middleware: [errorBoundary] }),
+      );
+      const response = await server.fetch(
         new Request(`http://localhost${path}`, { method }),
       );
       expect(response.status).toBe(404);

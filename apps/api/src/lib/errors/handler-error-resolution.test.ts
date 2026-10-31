@@ -1,19 +1,24 @@
 import { Panic, UnhandledException } from "better-result";
 import { expect, test } from "bun:test";
 
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_REFUSALS,
+  LIMITER_STORE_UNAVAILABLE,
+} from "@stll/api-contract/action-admission";
 import { DocxArchiveError } from "@stll/docx-utils";
 
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 
 import {
-  actionAdmissionRefusal,
   type ActionAdmissionError,
+  actionAdmissionRefusal,
 } from "./action-admission-error";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
   resolveHandlerError,
 } from "./handler-error-resolution";
+import { httpFailureAnswer, httpFailureBody } from "./http-failure-answer";
 import { HandlerError } from "./tagged-errors";
 
 test("archive errors keep their client status through handler wrappers", () => {
@@ -44,6 +49,7 @@ test("archive errors keep their client status through handler wrappers", () => {
   expect(resolveHandlerError(generic)).toBe(generic);
   const explicit = new HandlerError({
     status: 503,
+    code: "internal_error",
     message: "Retry later",
     cause: archive,
   });
@@ -56,22 +62,28 @@ const admissionReasons = {
   daily_exhausted: true,
   not_enabled: true,
   not_on_plan: true,
-  unavailable: true,
+  store_unavailable: true,
+  configuration_incomplete: true,
+  organization_state_unreadable: true,
+  lease_lost: true,
+  feature_disabled: true,
 } as const satisfies Record<ActionAdmissionError["reason"], true>;
 
 test("all admission refusals preserve the canonical contract through bounded wrappers", () => {
   const codes = new Set<string>();
   for (const reason of Object.keys(admissionReasons)) {
-    if (
-      !(
-        reason === "busy" ||
-        reason === "period_exhausted" ||
-        reason === "daily_exhausted" ||
-        reason === "not_enabled" ||
-        reason === "not_on_plan" ||
-        reason === "unavailable"
-      )
-    ) {
+    if (!(
+      reason === "busy" ||
+      reason === "period_exhausted" ||
+      reason === "daily_exhausted" ||
+      reason === "not_enabled" ||
+      reason === "not_on_plan" ||
+      reason === "store_unavailable" ||
+      reason === "configuration_incomplete" ||
+      reason === "organization_state_unreadable" ||
+      reason === "lease_lost" ||
+      reason === "feature_disabled"
+    )) {
       throw new Error("Unknown admission reason");
     }
     const refusal = actionAdmissionErrorFor(
@@ -113,7 +125,7 @@ test("all admission refusals preserve the canonical contract through bounded wra
       bounded = new Error("Domain wrapper", { cause: bounded });
     }
     expect(resolveHandlerError(bounded)).toMatchObject(
-      ACTION_ADMISSION_REFUSALS[refusal.code],
+      actionAdmissionRefusal(refusal),
     );
     expect(
       resolveHandlerError(new Error("Too deep", { cause: bounded })),
@@ -131,4 +143,48 @@ test("unavailable wrapper causes leave the generic boundary outcome intact", () 
     },
   });
   expect(resolveHandlerError(error)).toBeNull();
+});
+
+test("limiter storage refusals preserve their response through bounded wrappers", () => {
+  const refusal = new LimiterStoreUnavailableError({
+    message: LIMITER_STORE_UNAVAILABLE.message,
+    operation: "increment",
+  });
+  const generic = new HandlerError({
+    status: 500,
+    message: "Request failed",
+    cause: refusal,
+  });
+  for (const error of [
+    refusal,
+    generic,
+    new Error("Domain wrapper", { cause: refusal }),
+    new Panic({ message: "request", cause: generic }),
+    new UnhandledException({ cause: generic }),
+  ]) {
+    const resolved = resolveHandlerError(error);
+    expect(resolved).toMatchObject(LIMITER_STORE_UNAVAILABLE);
+    expect(resolved?.cause).toBe(refusal);
+    expect(httpFailureAnswer(error)).toEqual(LIMITER_STORE_UNAVAILABLE);
+    expect(httpFailureBody(httpFailureAnswer(error))).toEqual({
+      code: LIMITER_STORE_UNAVAILABLE.code,
+      message: LIMITER_STORE_UNAVAILABLE.message,
+      hint: LIMITER_STORE_UNAVAILABLE.hint,
+      retryable: true,
+    });
+  }
+  const explicit = new HandlerError({
+    status: 409,
+    message: "Conflict",
+    cause: refusal,
+  });
+  expect(resolveHandlerError(explicit)).toBe(explicit);
+  let bounded: unknown = refusal;
+  for (let depth = 0; depth < MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    bounded = new Error("Domain wrapper", { cause: bounded });
+  }
+  expect(resolveHandlerError(bounded)).toMatchObject(LIMITER_STORE_UNAVAILABLE);
+  expect(
+    resolveHandlerError(new Error("Too deep", { cause: bounded })),
+  ).toBeNull();
 });

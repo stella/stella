@@ -1,4 +1,4 @@
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { corpusIndexProjectionIntents } from "@/api/db/schema";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";

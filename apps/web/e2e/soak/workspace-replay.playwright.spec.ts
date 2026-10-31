@@ -2,8 +2,9 @@ import { expect, type TestInfo } from "@playwright/test";
 import { Result } from "better-result";
 import { readFile, writeFile } from "node:fs/promises";
 
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
+
 import { apiStatus } from "../helpers/api";
-import { setFixedBrowserTime } from "../helpers/clock";
 import {
   E2E_CLEANUP_TARGET_TYPE,
   registerDeferredE2eCleanup,
@@ -15,17 +16,17 @@ import { WORKSPACE_REPLAY_ENV } from "./env";
 import {
   BoundedEventTrail,
   MAX_REPLAY_STEPS,
+  parseReplayArtifact,
   REPLAY_ARTIFACT_VERSION,
   REPLAY_FIXTURE_NAME,
-  parseReplayArtifact,
-  serializeReplayArtifact,
   type ReplayArtifact,
   type ReplayEvent,
   type ReplayTrailEvent,
+  serializeReplayArtifact,
 } from "./replay-artifact";
 import {
-  SeededRandom,
   hasWorkspaceAction,
+  SeededRandom,
   selectWeightedAction,
 } from "./workspace-actions";
 import {

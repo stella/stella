@@ -122,8 +122,7 @@ export type SkippedProcessedField = {
  * below, which is where a blank `how` or justification fails to compile.
  */
 export type ProcessedFieldDisposition =
-  | ProvidedProcessedField
-  | SkippedProcessedField;
+  ProvidedProcessedField | SkippedProcessedField;
 
 /** Recorded publisher bytes the conformance suite parses for the claim. */
 const recordedEvidence = (
@@ -333,6 +332,14 @@ export const PROCESSED_FIELD_INVENTORY = {
       "parseEcjDecisionHtml reads the point number from the marker's id (point N) into ParagraphBlock.number",
       recordedEvidence(
         "src/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/62022CJ0128.en.html.gz",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.UK_FCL]: {
+    "court-paragraph-numbers": providedField(
+      "LegalDocML num values populate paragraph numbers.",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
       ),
     ),
   },

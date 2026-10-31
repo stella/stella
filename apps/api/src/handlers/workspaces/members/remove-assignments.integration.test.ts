@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test, setDefaultTimeout } from "bun:test";
+import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
@@ -18,6 +18,7 @@ import {
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import calendarTasks from "@/api/handlers/tasks/calendar/list";
 import { listTasksPage } from "@/api/handlers/tasks/list-query";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { isAccountDeletionActiveTaskStatus } from "@/api/lib/account-deletion-reassignment";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -204,6 +205,8 @@ test.each([
           expect(page.value.items.map(({ id }) => id)).toContain(taskId);
           const calendar = await calendarTasks.handler(
             asTestRaw<Parameters<typeof calendarTasks.handler>[0]>({
+              request: new Request("https://api.example.test/handler"),
+              route: "/v1/tasks/:workspaceId/calendar" satisfies ApiRoutePath,
               safeDb,
               workspaceId: ids.wsA2,
               user: { id: ids.userA2 },

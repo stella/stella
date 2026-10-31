@@ -4,9 +4,11 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { rootKeys } from "@/lib/auth-queries";
+import { getOauthHashFragment } from "@/lib/oauth-provider";
 import {
   afterOnboardingNavigation,
   afterSignInNavigation,
+  destinationNavigation,
   onboardingNavigation,
 } from "@/lib/redirect";
 import { Route as ProtectedRoute } from "@/routes/_protected";
@@ -96,10 +98,10 @@ const validateSearch = (
   return Object.fromEntries(Object.entries(parsed));
 };
 
-const location = (pathname: string, searchStr = "") => ({
+const location = (pathname: string, searchStr = "", hash = "") => ({
   pathname,
   searchStr,
-  hash: "",
+  hash,
 });
 
 const protectedRedirect = async (account: Account) =>
@@ -111,13 +113,14 @@ const protectedRedirect = async (account: Account) =>
 const organizationStep = async (
   account: Account,
   search: Record<string, unknown>,
+  hash = "",
 ) => {
   const parsed = validateSearch(OrganizationRoute, search);
   return {
     search: parsed,
     redirect: await runBeforeLoad(OrganizationRoute, {
       context: { session: sessionFor(account)?.session ?? null },
-      location: location("/auth/organization"),
+      location: location("/auth/organization", "", hash),
       search: parsed,
     }),
   };
@@ -213,7 +216,40 @@ describe("return path through sign-in, on the app's routes", () => {
     const organization = await organizationStep(account, {
       redirectTo: DESTINATION,
     });
-    expect(organization.redirect).toMatchObject({ to: DESTINATION });
+    expect(organization.redirect).toMatchObject({ href: DESTINATION });
+  });
+
+  test("an OAuth sign-in keeps its signed query through the organization step", async () => {
+    const oauthHash = getOauthHashFragment("client_id=app&state=s&sig=x");
+    const oauthReturn = `/auth/organization#${oauthHash}`;
+    const account: Account = { signedIn: true, organizationId: null };
+
+    // The code is accepted: the signed query rides in the destination.
+    expect(afterSignInNavigation(oauthReturn)).toMatchObject({
+      search: { redirectTo: oauthReturn },
+    });
+    const organization = await organizationStep(account, {
+      redirectTo: oauthReturn,
+    });
+    expect(organization.redirect).toBeNull();
+    expect(organization.search).toEqual({ redirectTo: oauthReturn });
+
+    // Choosing the organization goes on by href, fragment included.
+    expect(destinationNavigation(oauthReturn)).toEqual({
+      href: oauthReturn,
+      replace: true,
+    });
+
+    // A session that already has one is sent there the same way.
+    account.organizationId = "org_1";
+    const active = await organizationStep(account, {
+      redirectTo: oauthReturn,
+    });
+    expect(active.redirect).toMatchObject({ href: oauthReturn });
+
+    // There the signed query continues the OAuth flow instead of leaving.
+    const continued = await organizationStep(account, {}, oauthHash);
+    expect(continued.redirect).toBeNull();
   });
 
   test("a signed-in visit to sign-in forwards the destination", async () => {
@@ -263,7 +299,7 @@ describe("return path through sign-in, on the app's routes", () => {
       const organization = await organizationStep(account, {
         redirectTo: evil,
       });
-      expect(organization.redirect).toMatchObject({ to: "/" });
+      expect(organization.redirect).toMatchObject({ href: "/" });
     }
   });
 

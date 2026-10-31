@@ -9,10 +9,12 @@ import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import { loadPDF } from "@/lib/pdf/pdf-loader";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type PDFDocumentPageKey = {
   fileId: string;
+  pageSource: PDFPageSource;
 };
 
 type PDFDocumentCacheKey = PDFDocumentPageKey & {
@@ -23,8 +25,8 @@ type PDFDocumentQueryData = Result<PDFDocument, PDFViewerError>;
 
 const pdfDocumentKeys = {
   all: () => ["pdf-document"] as const,
-  byFile: ({ fileId, bufferId }: PDFDocumentCacheKey) =>
-    [...pdfDocumentKeys.all(), fileId, bufferId] as const,
+  byFile: ({ fileId, bufferId, pageSource }: PDFDocumentCacheKey) =>
+    [...pdfDocumentKeys.all(), fileId, bufferId, pageSource] as const,
 };
 
 // A parsed document belongs to the bytes it was parsed from: a new version
@@ -138,6 +140,7 @@ export const usePDFDocument = ({ key, context }: PDFDocumentOptionsInput) => {
   const queryKey = pdfDocumentKeys.byFile({
     fileId: key.fileId,
     bufferId: bufferIdentity(context.buffer),
+    pageSource: key.pageSource,
   });
 
   // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- keyed by file and buffer identity; a password change removes the query manually.
@@ -155,6 +158,7 @@ export const usePDFDocument = ({ key, context }: PDFDocumentOptionsInput) => {
         fileId: key.fileId,
         buffer: context.buffer,
         password: context.password,
+        pageSource: key.pageSource,
       });
       // Only a password answer is cached as data (the viewer prompts for
       // it). Any other failure rejects the query, so it holds an error that

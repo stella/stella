@@ -8,11 +8,11 @@ import {
   czechVatBandOf,
   effectiveVatRateBps,
   invoiceDescriptionOf,
+  type InvoiceExportRecord,
   quantityText,
   streetOf,
   variableSymbolOf,
   vatPercentText,
-  type InvoiceExportRecord,
 } from "./record";
 import { el, text, XML_DECLARATION } from "./xml";
 

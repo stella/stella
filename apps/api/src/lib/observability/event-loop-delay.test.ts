@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   EVENT_LOOP_STALL_THRESHOLD_MS,
-  startEventLoopDelayMonitor,
   type EventLoopDelayReport,
+  startEventLoopDelayMonitor,
 } from "@/api/lib/observability/event-loop-delay";
 import {
   emitEventLoopDelayMetric,
@@ -28,9 +28,12 @@ const startRecording = (options: {
 }) => {
   const reports: EventLoopDelayReport[] = [];
   const stalls: number[] = [];
+  let reportIntervals = 0;
   const monitor = startEventLoopDelayMonitor({
     ...options,
-    onReportInterval: () => {},
+    onReportInterval: () => {
+      reportIntervals += 1;
+    },
     onReport: (report) => {
       reports.push(report);
     },
@@ -38,7 +41,12 @@ const startRecording = (options: {
       stalls.push(stallMs);
     },
   });
-  return { monitor, reports, stalls };
+  return {
+    monitor,
+    reports,
+    stalls,
+    getReportIntervals: () => reportIntervals,
+  };
 };
 
 afterEach(() => {
@@ -77,7 +85,7 @@ describe("event-loop delay monitoring", () => {
   });
 
   test("a loop that is never held reports its delay and no stall", async () => {
-    const { monitor, reports, stalls } = startRecording({
+    const { monitor, reports, stalls, getReportIntervals } = startRecording({
       probeIntervalMs: 20,
       reportIntervalMs: 100,
     });
@@ -88,6 +96,7 @@ describe("event-loop delay monitoring", () => {
     }
 
     expect(stalls).toEqual([]);
+    expect(getReportIntervals()).toBeLessThanOrEqual(4);
     expect(reports.length).toBeGreaterThan(0);
     for (const report of reports) {
       expect(report.maxMs).toBeLessThan(EVENT_LOOP_STALL_THRESHOLD_MS);
@@ -115,27 +124,29 @@ describe("event-loop delay monitoring", () => {
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
     });
-    const originalSetInterval = globalThis.setInterval;
     let reportTick: (() => void) | undefined;
-    const interval = spyOn(globalThis, "setInterval").mockImplementation(
-      (
-        ...[handler, delay, ...args]: Parameters<typeof globalThis.setInterval>
-      ) => {
-        if (delay === 200 && typeof handler === "function") {
-          reportTick = () => handler(...args);
-        }
-        return originalSetInterval(handler, delay, ...args);
-      },
-    );
     const reports: EventLoopDelayReport[] = [];
     const monitor = startEventLoopDelayMonitor({
       reportIntervalMs: 200,
+      scheduleInterval: (tick) => {
+        reportTick = tick;
+        return { stop: () => {} };
+      },
       onReportInterval: () =>
         emitProcessMemoryLog({
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
-          uploadFinalizeInFlightBytes: 0,
+          workPools: {
+            "heavy-sidecar": {
+              inFlight: 8,
+              queued: 9,
+              bytesInFlight: 10,
+              refusedBusy: 11,
+              refusedMemory: 12,
+              deadlineCancelled: 13,
+            },
+          },
         }),
       onReport: (report) => {
         reports.push(report);
@@ -153,12 +164,16 @@ describe("event-loop delay monitoring", () => {
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
-          uploadFinalizeInFlightBytes: 0,
+          "work_pool.heavy-sidecar.inFlight": 8,
+          "work_pool.heavy-sidecar.queued": 9,
+          "work_pool.heavy-sidecar.bytesInFlight": 10,
+          "work_pool.heavy-sidecar.refusedBusy": 11,
+          "work_pool.heavy-sidecar.refusedMemory": 12,
+          "work_pool.heavy-sidecar.deadlineCancelled": 13,
         },
       ]);
     } finally {
       monitor.stop();
-      interval.mockRestore();
     }
   });
 
@@ -201,7 +216,7 @@ describe("event-loop delay monitoring", () => {
       rssBytes: 1_500_000_000,
       heapUsedBytes: 400_000_000,
       arrayBuffersBytes: 300_000_000,
-      uploadFinalizeInFlightBytes: 50_000_000,
+      workPools: {},
     });
 
     expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
@@ -211,7 +226,6 @@ describe("event-loop delay monitoring", () => {
         rssBytes: 1_500_000_000,
         heapUsedBytes: 400_000_000,
         arrayBuffersBytes: 300_000_000,
-        uploadFinalizeInFlightBytes: 50_000_000,
       },
     ]);
     expect(lines.at(0)?.length).toBeLessThan(300);

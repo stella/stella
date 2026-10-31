@@ -25,12 +25,7 @@ const panic: (message: string) => never = (message) => {
 
 export const UNKNOWN = Symbol("unknown");
 export type Value =
-  | string
-  | number
-  | boolean
-  | null
-  | Value[]
-  | { [key: string]: Value };
+  string | number | boolean | null | Value[] | { [key: string]: Value };
 export type Result = Value | typeof UNKNOWN;
 
 type Token =
@@ -368,8 +363,20 @@ const or3 = (left: Result, right: Result): Result => {
   return a === UNKNOWN || b === UNKNOWN ? UNKNOWN : right;
 };
 
-/** Evaluates an `if:` condition (with or without `${{ }}`) in a partial context. */
-export const evaluate = (source: string, context: Context): Result => {
+type ExpressionSemantics<T> = {
+  literal: (value: Value) => T;
+  reference: (path: string) => T;
+  call: (name: string, args: T[]) => T;
+  not: (value: T) => T;
+  compare: (operator: string, left: T, right: T) => T;
+  and: (left: T, right: T) => T;
+  or: (left: T, right: T) => T;
+};
+
+const parseExpression = <T>(
+  source: string,
+  semantics: ExpressionSemantics<T>,
+): T => {
   const trimmed = source.trim();
   const body = /^\$\{\{([\s\S]*)\}\}$/u.exec(trimmed)?.[1] ?? trimmed;
   const tokens = tokenize(body);
@@ -384,18 +391,9 @@ export const evaluate = (source: string, context: Context): Result => {
     return token;
   };
 
-  const lookup = (path: string): Result => {
-    if (Object.hasOwn(context.values, path)) {
-      return context.values[path] ?? null;
-    }
-    // A fallback's null is a known null (a missing property), not unknown.
-    const value = context.fallback?.(path);
-    return value === undefined ? UNKNOWN : value;
-  };
-
-  const call = (name: string): Result => {
+  const call = (name: string): T => {
     take("(");
-    const args: Result[] = [];
+    const args: T[] = [];
     while (peek()?.value !== ")") {
       args.push(or());
       if (peek()?.value === ",") {
@@ -403,13 +401,13 @@ export const evaluate = (source: string, context: Context): Result => {
       }
     }
     take(")");
-    return callFunction(name, args, context);
+    return semantics.call(name, args);
   };
 
-  const primary = (): Result => {
+  const primary = (): T => {
     const token = take();
     if (token.kind === "string" || token.kind === "number") {
-      return token.value;
+      return semantics.literal(token.value);
     }
     if (token.kind === "op" && token.value === "(") {
       const value = or();
@@ -417,46 +415,47 @@ export const evaluate = (source: string, context: Context): Result => {
       return value;
     }
     if (token.kind === "op" && token.value === "!") {
-      const truthy = isTruthy(primary());
-      return truthy === UNKNOWN ? UNKNOWN : !truthy;
+      return semantics.not(primary());
     }
     if (token.kind !== "word") {
       return panic(`unexpected '${token.value}' in: ${source}`);
     }
     if (token.value === "true" || token.value === "false") {
-      return token.value === "true";
+      return semantics.literal(token.value === "true");
     }
     if (token.value === "null") {
-      return null;
+      return semantics.literal(null);
     }
-    return peek()?.value === "(" ? call(token.value) : lookup(token.value);
+    return peek()?.value === "("
+      ? call(token.value)
+      : semantics.reference(token.value);
   };
 
-  const comparison = (): Result => {
+  const comparison = (): T => {
     let left = primary();
     let next = peek();
     while (next?.kind === "op" && COMPARISONS.has(next.value)) {
       take();
-      left = compare(next.value, left, primary());
+      left = semantics.compare(next.value, left, primary());
       next = peek();
     }
     return left;
   };
 
-  const and = (): Result => {
+  const and = (): T => {
     let left = comparison();
     while (peek()?.value === "&&") {
       take("&&");
-      left = and3(left, comparison());
+      left = semantics.and(left, comparison());
     }
     return left;
   };
 
-  const or = (): Result => {
+  const or = (): T => {
     let left = and();
     while (peek()?.value === "||") {
       take("||");
-      left = or3(left, and());
+      left = semantics.or(left, and());
     }
     return left;
   };
@@ -467,6 +466,76 @@ export const evaluate = (source: string, context: Context): Result => {
   }
   return value;
 };
+
+/** Evaluates an `if:` condition (with or without `${{ }}`) in a partial context. */
+export const evaluate = (source: string, context: Context): Result =>
+  parseExpression(source, {
+    literal: (value) => value,
+    reference: (path) => {
+      if (Object.hasOwn(context.values, path)) {
+        return context.values[path] ?? null;
+      }
+      // A fallback's null is a known null (a missing property), not unknown.
+      const value = context.fallback?.(path);
+      return value === undefined ? UNKNOWN : value;
+    },
+    call: (name, args) => callFunction(name, args, context),
+    not: (value) => {
+      const truthy = isTruthy(value);
+      return truthy === UNKNOWN ? UNKNOWN : !truthy;
+    },
+    compare,
+    and: and3,
+    or: or3,
+  });
+
+type ExpressionValueSource =
+  | { type: "literal"; value: Value }
+  | { type: "reference"; path: string }
+  | { type: "computed" };
+
+type ExpressionValueAlternative = {
+  source: ExpressionValueSource;
+  truthiness: "truthy" | "falsy";
+};
+
+const valueAlternatives = (
+  source: ExpressionValueSource,
+): ExpressionValueAlternative[] =>
+  source.type === "literal"
+    ? [{ source, truthiness: isTruthy(source.value) ? "truthy" : "falsy" }]
+    : [
+        { source, truthiness: "truthy" },
+        { source, truthiness: "falsy" },
+      ];
+
+/**
+ * Conservative value provenance through GitHub's operand-returning &&/||.
+ * Comparisons and negation return booleans; calls stay unproven. Conditions
+ * are never assumed constant or correlated, so unknown branches remain visible.
+ */
+export const expressionValueSources = (source: string) =>
+  parseExpression(source, {
+    literal: (value) => valueAlternatives({ type: "literal", value }),
+    reference: (path) => valueAlternatives({ type: "reference", path }),
+    call: () => valueAlternatives({ type: "computed" }),
+    not: () => [
+      ...valueAlternatives({ type: "literal", value: true }),
+      ...valueAlternatives({ type: "literal", value: false }),
+    ],
+    compare: () => [
+      ...valueAlternatives({ type: "literal", value: true }),
+      ...valueAlternatives({ type: "literal", value: false }),
+    ],
+    and: (left, right) => [
+      ...left.filter(({ truthiness }) => truthiness === "falsy"),
+      ...(left.some(({ truthiness }) => truthiness === "truthy") ? right : []),
+    ],
+    or: (left, right) => [
+      ...left.filter(({ truthiness }) => truthiness === "truthy"),
+      ...(left.some(({ truthiness }) => truthiness === "falsy") ? right : []),
+    ],
+  }).map(({ source: valueSource }) => valueSource);
 
 /** True only when the condition is false whatever the unpinned context holds. */
 export const definitelyFalse = (source: string, context: Context): boolean =>

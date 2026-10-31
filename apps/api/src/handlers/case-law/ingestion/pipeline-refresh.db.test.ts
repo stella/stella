@@ -36,8 +36,8 @@ import {
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";

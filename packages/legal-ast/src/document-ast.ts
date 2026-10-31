@@ -1,4 +1,4 @@
-// parser-output-unchanged: Validation actions are named for schema publication; accepted AST values are identical.
+// parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -18,6 +18,12 @@ import * as v from "valibot";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
+  DECISION_DOCUMENT_KIND,
+  DOCUMENT_ISSUER_TYPES,
+  GUIDANCE_KINDS,
+} from "./document-kind.js";
+import type { DocumentIssuer, GuidanceKind } from "./document-kind.js";
+import {
   inlineSchema,
   isKnownInlineType,
   persistedInlineArraySchema,
@@ -32,7 +38,10 @@ export type {
   InlineCitationPin,
   InlineCitationPinPart,
   InlineCitationTarget,
+  InlineDecisionCitation,
   InlineItalic,
+  InlineLegislationCitation,
+  InlineLegislationTarget,
   InlineLineBreak,
   InlineLink,
   InlinePageAnchor,
@@ -58,7 +67,11 @@ export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
  * persisted reader. A role added here reaches all three; a role added
  * anywhere else is a type error.
  */
-export const HEADING_ROLES = ["decision-title", "section-heading"] as const;
+export const HEADING_ROLES = [
+  "decision-title",
+  "section-heading",
+  "publisher-heading",
+] as const;
 
 export type HeadingRole = (typeof HEADING_ROLES)[number];
 
@@ -96,6 +109,8 @@ export const PARAGRAPH_ROLES = [
    * finer roles below do not name. Not the court's own words —
    * readers may fold it away. */
   "apparatus",
+  /** Publisher annotations printed after the decision, never head matter. */
+  "publisher-note",
   /** The publisher's official summary of the decision, printed with it
    * but not part of it. */
   "syllabus",
@@ -120,24 +135,22 @@ export type ParagraphRole = (typeof PARAGRAPH_ROLES)[number];
  * The publisher-authored roles a reader may fold away: everything around
  * the decision that the court did not write.
  *
- * `panel` is not one of them. The bench is a fact about the decision that
- * a reader looks for, not apparatus wrapped around it.
+ * `panel` and `counsel` are not among them. Participants are facts about
+ * the decision, not publisher apparatus wrapped around it.
  */
 export const APPARATUS_ROLES = [
   "apparatus",
   "syllabus",
   "headnotes",
   "summary",
-  "counsel",
 ] as const satisfies readonly ParagraphRole[];
 
 export type ApparatusRole = (typeof APPARATUS_ROLES)[number];
 
 /**
  * The apparatus roles that carry the publisher's own summary of the decision:
- * the text a reader recognises the case by. `apparatus` and `counsel` are
- * apparatus too and summarise nothing — the first is unnamed publisher
- * matter, the second is who appeared.
+ * the text a reader recognises the case by. `apparatus` is unnamed publisher
+ * matter and summarises nothing.
  *
  * One list, because two surfaces resolve over it and must not drift: the API
  * reads a decision's headnote from these paragraphs before it reads any
@@ -339,7 +352,16 @@ export type DocumentAstSource = {
   printUrl: string;
 };
 
-export type DocumentAstMetadata = {
+/**
+ * A decision's metadata.
+ *
+ * `type` is optional because every decision AST stored before guidance
+ * metadata existed omits it, and no decision parser writes it: absence means
+ * a decision. Writing it would change every stored decision's bytes and
+ * replay the corpus for a field that only names the default.
+ */
+export type DecisionMetadata = {
+  type?: typeof DECISION_DOCUMENT_KIND | undefined;
   caseNumber: string | null;
   ecli: string | null;
   court: string | null;
@@ -349,12 +371,35 @@ export type DocumentAstMetadata = {
   statutes: string[];
 };
 
-export type DocumentAst = {
+/** The metadata of guidance: a text an issuer publishes that decides no case. */
+export type GuidanceMetadata = {
+  type: "guidance";
+  kind: GuidanceKind;
+  title: string;
+  /** The issuer's own designation ("Guidelines 3/2025"), when it states one. */
+  reference: string | null;
+  /** ISO date the issuer adopted or published the text, when it states one. */
+  issuedOn: string | null;
+  issuer: DocumentIssuer;
+};
+
+export type DocumentAstMetadata = DecisionMetadata | GuidanceMetadata;
+
+/**
+ * A document read by any legal reader. A producer that only ever writes one
+ * kind of metadata (every decision parser) narrows `TMetadata`, so its own
+ * callers read decision fields without re-checking a union they cannot hold.
+ */
+export type DocumentAst<
+  TMetadata extends DocumentAstMetadata = DocumentAstMetadata,
+> = {
   version: 1;
   source: DocumentAstSource;
-  metadata: DocumentAstMetadata;
+  metadata: TMetadata;
   blocks: Block[];
 };
+
+export type DecisionDocumentAst = DocumentAst<DecisionMetadata>;
 
 /**
  * Flatten `inlines` into the character sequence a renderer walks: text
@@ -899,16 +944,39 @@ const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({
   printUrl: v.string(),
 });
 
-const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> =
-  v.object({
-    caseNumber: v.nullable(v.string()),
-    ecli: v.nullable(v.string()),
-    court: v.nullable(v.string()),
-    decisionDate: v.nullable(v.string()),
-    decisionType: v.nullable(v.string()),
-    keywords: v.array(v.string()),
-    statutes: v.array(v.string()),
-  });
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const decisionMetadataSchema: v.GenericSchema<DecisionMetadata> = v.object({
+  type: v.optional(v.literal(DECISION_DOCUMENT_KIND)),
+  caseNumber: v.nullable(v.string()),
+  ecli: v.nullable(v.string()),
+  court: v.nullable(v.string()),
+  decisionDate: v.nullable(v.string()),
+  decisionType: v.nullable(v.string()),
+  keywords: v.array(v.string()),
+  statutes: v.array(v.string()),
+});
+
+const guidanceMetadataSchema: v.GenericSchema<GuidanceMetadata> = v.object({
+  type: v.literal("guidance"),
+  kind: v.picklist(GUIDANCE_KINDS),
+  title: v.pipe(v.string(), v.nonEmpty()),
+  reference: v.nullable(v.pipe(v.string(), v.nonEmpty())),
+  issuedOn: v.nullable(v.pipe(v.string(), v.regex(ISO_DATE))),
+  issuer: v.object({
+    type: v.picklist(DOCUMENT_ISSUER_TYPES),
+    name: v.pipe(v.string(), v.nonEmpty()),
+    jurisdiction: v.pipe(v.string(), v.nonEmpty()),
+  }),
+});
+
+/**
+ * Guidance first: its `type` is required, so a guidance object can never be
+ * read as a decision whose `type` is merely absent.
+ */
+const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> = v.union(
+  [guidanceMetadataSchema, decisionMetadataSchema],
+);
 
 const footnoteOf = (block: Block): ParagraphNote | null =>
   (block.type === "paragraph" || block.type === "table") &&
@@ -943,6 +1011,104 @@ export const footnoteGroupsShareLabels = (
   return true;
 };
 
+/** Block and anchor identities address one location each within a document. */
+const hasUniqueBlockIdentities = (blocks: readonly Block[]): boolean => {
+  const ids = new Set<string>();
+  const anchors = new Set<string>();
+  for (const { anchorId, id } of blocks) {
+    if (ids.has(id) || anchors.has(anchorId)) {
+      return false;
+    }
+    ids.add(id);
+    anchors.add(anchorId);
+  }
+  return true;
+};
+
+/** Every paragraph role explicitly declares whether it starts the decision body. */
+const PARAGRAPH_STARTS_BODY = {
+  "case-number": false,
+  intro: false,
+  history: false,
+  argumentation: true,
+  holding: true,
+  dissent: true,
+  closing: true,
+  signature: true,
+  quote: true,
+  parties: false,
+  "front-matter": false,
+  apparatus: false,
+  "publisher-note": true,
+  syllabus: false,
+  headnotes: false,
+  summary: false,
+  counsel: false,
+  panel: false,
+  unknown: true,
+} as const satisfies Record<ParagraphRole, boolean>;
+
+const HEADING_STARTS_BODY = {
+  "decision-title": false,
+  "section-heading": true,
+  "publisher-heading": false,
+} as const satisfies Record<HeadingRole, boolean>;
+
+const TABLE_STARTS_BODY = {
+  "related-proceedings": false,
+  "metadata-table": false,
+} as const satisfies Record<TableRole, boolean>;
+
+/** Shared positional boundary for parsers and persisted-reader validation. */
+export const startsDecisionBody = (block: Block): boolean => {
+  if (footnoteOf(block) !== null) {
+    return false;
+  }
+  switch (block.type) {
+    case "paragraph":
+      return block.role === undefined || PARAGRAPH_STARTS_BODY[block.role];
+    case "heading":
+      return block.role === undefined || HEADING_STARTS_BODY[block.role];
+    case "table":
+      return block.role === undefined || TABLE_STARTS_BODY[block.role];
+    case "image":
+      return false;
+    default:
+      block satisfies never;
+      return panic(`Unhandled block type: ${String(block)}`);
+  }
+};
+
+/** The publisher blocks validated and folded as one head-matter region. */
+export const isHeadMatterBlock = (block: Block): boolean =>
+  (block.type === "paragraph" &&
+    block.note === undefined &&
+    isApparatusRole(block.role)) ||
+  (block.type === "heading" && block.role === "publisher-heading");
+
+/** Publisher head matter may precede, but never interrupt or follow, the body.
+ * Notes retain their own placement and are never a head-matter region. */
+export const headMatterPrecedesBody = (blocks: readonly Block[]): boolean => {
+  let bodyStarted = false;
+  for (const block of blocks) {
+    if (footnoteOf(block) !== null) {
+      continue;
+    }
+    if (bodyStarted && isHeadMatterBlock(block)) {
+      return false;
+    }
+    bodyStarted ||= startsDecisionBody(block);
+  }
+  return true;
+};
+
+const HEAD_MATTER_ORDER_MESSAGE = "Head matter must precede the decision body";
+
+const headMatterOrderCheck = v.check(
+  ({ blocks }: DocumentAst) => headMatterPrecedesBody(blocks),
+  HEAD_MATTER_ORDER_MESSAGE,
+);
+
 export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.object({
     version: v.literal(1),
@@ -950,9 +1116,14 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
     metadata: documentAstMetadataSchema,
     blocks: v.array(blockSchema),
   }),
+  headMatterOrderCheck,
   v.check(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
     "Adjacent footnote blocks sharing a noteId must repeat one label",
+  ),
+  v.check(
+    ({ blocks }) => hasUniqueBlockIdentities(blocks),
+    "Block ids and anchorIds must be unique",
   ),
 );
 
@@ -1003,6 +1174,11 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
         block === null ? [] : [fillBlockPlainText(block)],
       ),
     })),
+    headMatterOrderCheck,
+    v.check(
+      ({ blocks }) => hasUniqueBlockIdentities(blocks),
+      "Block ids and anchorIds must be unique",
+    ),
   );
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>

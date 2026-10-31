@@ -11,6 +11,7 @@ import type {
   TextMarkTone,
   TextMarkVariant,
 } from "@stll/ui/text-mark";
+import { cn } from "@stll/ui/utils";
 
 import type { TextAnchor } from "./document-ast-text";
 
@@ -61,33 +62,46 @@ const annotationMark = ({
         tone: COLOR_TONE[color ?? "yellow"],
       };
 
+/**
+ * A reader's highlight is a lighter wash than a found word's: it stays on the
+ * page through the whole read, so it marks the passage without outweighing
+ * the text around it. Merged over the fill's own wash by `cn`.
+ */
+const READER_HIGHLIGHT_WASH = "bg-(--text-mark)/18 dark:bg-(--text-mark)/14";
+
 const renderAnnotation = (
   annotation: AnnotationAnchorSource,
   children: ReactNode,
-): ReactElement => (
-  <TextMark
-    {...annotationMark(annotation)}
-    className="cursor-pointer"
-    data-annotation-id={annotation.id}
-    aria-label={annotation.activationLabel}
-    role={annotation.activationLabel === undefined ? undefined : "button"}
-    tabIndex={annotation.activationLabel === undefined ? undefined : 0}
-    onKeyDown={
-      annotation.activationLabel === undefined
-        ? undefined
-        : (event) => {
-            if (event.key !== "Enter" && event.key !== " ") {
-              return;
+): ReactElement => {
+  const mark = annotationMark(annotation);
+  return (
+    <TextMark
+      {...mark}
+      className={cn(
+        "cursor-pointer",
+        mark.variant === "fill" && READER_HIGHLIGHT_WASH,
+      )}
+      data-annotation-id={annotation.id}
+      aria-label={annotation.activationLabel}
+      role={annotation.activationLabel === undefined ? undefined : "button"}
+      tabIndex={annotation.activationLabel === undefined ? undefined : 0}
+      onKeyDown={
+        annotation.activationLabel === undefined
+          ? undefined
+          : (event) => {
+              if (event.key !== "Enter" && event.key !== " ") {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.click();
             }
-            event.preventDefault();
-            event.stopPropagation();
-            event.currentTarget.click();
-          }
-    }
-  >
-    {children}
-  </TextMark>
-);
+      }
+    >
+      {children}
+    </TextMark>
+  );
+};
 
 /** One text run, its normal mark, and independently activatable answers. */
 export type AnnotationSegment = {

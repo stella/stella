@@ -44,12 +44,23 @@ describe("browser storage ownership", () => {
       "apps/web/src/lib/account/session-signal.ts",
       "apps/web/src/lib/account/browser-storage.ts",
     ]);
-    for (const owner of STORAGE_OWNERS) {
-      expect(await lint(rawReferences, owner)).toEqual([]);
-      expect(
-        await lint(rawReferences, owner.replace("/account/", "/other/")),
-      ).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 19]);
-    }
+    const cases = STORAGE_OWNERS.flatMap((owner) => [
+      { label: owner, sourcePath: owner, expected: [] },
+      {
+        label: `${owner} outside owner`,
+        sourcePath: owner.replace("/account/", "/other/"),
+        expected: [1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 19],
+      },
+    ]);
+    const results = await Promise.all(
+      cases.map(async ({ label, sourcePath }) => ({
+        label,
+        result: await lint(rawReferences, sourcePath),
+      })),
+    );
+    expect(results).toEqual(
+      cases.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("guards test consumers without reporting storage fixture declarations", async () => {

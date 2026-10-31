@@ -1,232 +1,205 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
+import { afterEach, describe, expect, test } from "bun:test";
 
+import { apiPipeline } from "@/api/api-pipeline";
+import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import type { HttpApp } from "@/api/http/app";
+import { cors } from "@/api/http/cors";
+import { routes } from "@/api/http/route";
+import type {
+  Middleware,
+  RouteAccess,
+  RouteDefinition,
+  RouteEntry,
+  RouteRequest,
+} from "@/api/http/route";
 import { resolveClientAddress } from "@/api/lib/client-ip";
+import { sendServedRequest } from "@/api/tests/helpers/served-request";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   ActionSizeError,
   getTenantActionSizePolicy,
 } from "./action-size-limits";
+import type { ActionSizePolicy } from "./action-size-limits";
 import {
-  createTenantActionClassifier,
-  runTenantHttpAction,
-  TENANT_ACTION_DETAIL,
+  isTenantAction,
+  tenantActionAdmission,
 } from "./tenant-action-boundary";
 
-const tenantHooks = {
-  detail: { summary: "Tenant action fixture", [TENANT_ACTION_DETAIL]: true },
-};
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const limits = { requestBytes: 8, responseBytes: 512, pageSize: 3 };
 const bytes = new TextEncoder();
 
-describe("tenant route classification", () => {
-  for (const aot of [true, false]) {
-    for (const strictPath of [true, false]) {
-      test(`matches framework dispatch without running handlers (aot=${aot}, strict=${strictPath})`, async () => {
-        let dispatched = 0;
-        const tenant = () => {
-          dispatched += 1;
-          return "tenant";
-        };
-        const exempt = () => {
-          dispatched += 1;
-          return "exempt";
-        };
-        const app = new Elysia({ aot, strictPath })
-          .all("/fixed", exempt)
-          .get("/:id", tenant, tenantHooks)
-          .post("/write", tenant, tenantHooks)
-          .get("/public/*", exempt)
-          .get("/tenant/*", tenant, tenantHooks)
-          .get("/encoded space", tenant, tenantHooks)
-          .get("/optional/:id?", tenant, tenantHooks);
-        const classify = createTenantActionClassifier({
-          routes: app.routes,
-          staticRoutes: app.router.static,
-          strictPath: app.config.strictPath,
-          aot: app.config.aot,
-        });
-        const cases = [
-          ["GET", "/fixed"],
-          ["POST", "/fixed"],
-          ["DELETE", "/fixed"],
-          ["GET", "/fixed/"],
-          ["GET", "/value"],
-          ["POST", "/value"],
-          ["POST", "/write"],
-          ["POST", "/write/"],
-          ["GET", "/write"],
-          ["GET", "/public/a/b"],
-          ["POST", "/public/a/b"],
-          ["GET", "/tenant/a/b"],
-          ["GET", "/encoded%20space"],
-          ["GET", "/encoded%20space/"],
-          ["GET", "/optional"],
-          ["GET", "/optional/item"],
-          ["GET", "/optional/item/"],
-          ["GET", "/tenant/a%2Fb?ignored=1"],
-          ["DELETE", "/missing"],
-        ] as const;
-        expect(dispatched).toBe(0);
-        for (const [method, path] of cases) {
-          const request = new Request(`http://localhost${path}`, { method });
-          const before = dispatched;
-          const decision = classify(request);
-          expect(dispatched).toBe(before);
-          const response = await app.handle(request);
-          expect(decision).toBe(
-            response.status === 200 && (await response.text()) === "tenant",
-          );
-        }
-        // AOT's static ALL route precedes dynamic GET; dynamic dispatch reverses it.
-        expect(classify(new Request("http://localhost/fixed"))).toBe(!aot);
-        for (const upgrade of ["websocket", "WebSocket"]) {
-          const request = new Request("http://localhost/value", {
-            headers: { upgrade },
-          });
-          const response = await app.handle(request);
-          expect(classify(request)).toBe(
-            response.status === 200 && (await response.text()) === "tenant",
-          );
-        }
-      });
-    }
-  }
+const definition = (
+  access: RouteAccess,
+  answer: (request: RouteRequest) => unknown,
+): RouteDefinition => ({
+  access,
+  config: {},
+  run: async (request) => await answer(request),
+});
 
-  test("derives upgrade dispatch from the same static and dynamic websocket registry", async () => {
-    for (const aot of [true, false]) {
-      const app = new Elysia({ aot })
-        .get("/socket", () => "tenant", tenantHooks)
-        .route("WS", "/socket", () => "exempt")
-        .get("/live/:id", () => "tenant", tenantHooks)
-        .route("WS", "/live/:id", () => "exempt");
-      const classify = createTenantActionClassifier({
-        routes: app.routes,
-        staticRoutes: app.router.static,
-        strictPath: app.config.strictPath,
-        aot: app.config.aot,
-      });
-      for (const path of ["/socket", "/live/item"]) {
-        for (const upgrade of [undefined, "websocket", "WebSocket"]) {
-          const headers = new Headers();
-          if (upgrade !== undefined) {
-            headers.set("upgrade", upgrade);
-          }
-          const request = new Request(`http://localhost${path}`, { headers });
-          const response = await app.handle(request);
-          expect(classify(request)).toBe(
-            response.status === 200 && (await response.text()) === "tenant",
-          );
-        }
-      }
-    }
+const servers: TestServer[] = [];
+afterEach(async () => {
+  await Promise.all(
+    servers.splice(0).map(async (server) => await server.stop()),
+  );
+});
+
+const serve = (app: HttpApp): TestServer => {
+  const server = serveForTest(app);
+  servers.push(server);
+  return server;
+};
+
+type AdmissionOptions = {
+  readonly enabled?: boolean;
+  readonly policy?: () => Result<ActionSizePolicy | undefined, ActionSizeError>;
+  readonly outer?: readonly Middleware[];
+  readonly inner?: readonly Middleware[];
+};
+
+const admissionApp = (
+  table: Parameters<typeof routes>[0],
+  {
+    enabled = true,
+    policy = () => Result.ok(limits),
+    outer = [],
+    inner = [],
+  }: AdmissionOptions = {},
+): HttpApp =>
+  createHttpApp({
+    middleware: [
+      ...outer,
+      tenantActionAdmission({ enabled: () => enabled, policy }),
+      ...inner,
+    ],
+    routes: routes(table),
   });
 
-  test("preserves the first static path group's ownership of colliding loose aliases", async () => {
-    for (const reverse of [false, true]) {
-      const app = new Elysia({ aot: true, strictPath: false });
-      if (reverse) {
-        app
-          .post("/same/", () => "exempt")
-          .all("/same", () => "tenant", tenantHooks);
-      } else {
-        app
-          .all("/same", () => "tenant", tenantHooks)
-          .post("/same/", () => "exempt");
-      }
-      const classify = createTenantActionClassifier({
-        routes: app.routes,
-        staticRoutes: app.router.static,
-        strictPath: app.config.strictPath,
-        aot: app.config.aot,
-      });
-      for (const path of ["/same", "/same/"]) {
-        for (const method of ["GET", "POST"]) {
-          const request = new Request(`http://localhost${path}`, { method });
-          const response = await app.handle(request);
-          expect({
-            reverse,
-            path,
-            method,
-            classified: classify(request),
-          }).toEqual({
-            reverse,
-            path,
-            method,
-            classified:
-              response.status === 200 && (await response.text()) === "tenant",
-          });
-        }
-      }
-    }
+describe("tenant route classification", () => {
+  const entryWith = (access: RouteAccess): RouteEntry => ({
+    method: "GET",
+    path: "/fixture",
+    middleware: [],
+    definition: definition(access, () => "ok"),
+  });
+
+  test.each([
+    ["member", true],
+    ["workspace", true],
+    ["session", false],
+    ["token", false],
+    ["public", false],
+  ] as const)("a %s route is a tenant action: %p", (access, expected) => {
+    expect(isTenantAction(entryWith(access))).toBe(expected);
+  });
+
+  test("a request no route serves is no tenant action", () => {
+    expect(isTenantAction(undefined)).toBe(false);
+  });
+
+  test("the route the router matched decides, not the path", async () => {
+    const answer = () => ({ value: "é".repeat(300) });
+    const server = serve(
+      admissionApp({
+        "/items/:id": { GET: definition("member", answer) },
+        "/items/public": { GET: definition("public", answer) },
+      }),
+    );
+
+    const tenant = await server.fetch("http://localhost/items/item-1");
+    const exempt = await server.fetch("http://localhost/items/public");
+
+    expect(tenant.status).toBe(413);
+    expect(exempt.status).toBe(200);
+    expect(await exempt.json()).toEqual(answer());
   });
 });
 
 describe("tenant HTTP action boundary", () => {
-  test("disabled and anonymous actions preserve the request and response without reading limits", async () => {
+  test("disabled and anonymous actions pass the request and response through without reading limits", async () => {
     for (const mode of ["disabled", "anonymous"] as const) {
-      const request = new Request("http://localhost/public", {
-        method: "POST",
+      let policyReads = 0;
+      const seen: { policy: ActionSizePolicy | undefined; body: string }[] = [];
+      const route = definition(
+        mode === "disabled" ? "member" : "public",
+        async ({ ctx }) => {
+          seen.push({
+            policy: getTenantActionSizePolicy(),
+            body: await ctx.request.text(),
+          });
+          return { unchanged: "😀".repeat(200) };
+        },
+      );
+      const app = admissionApp(
+        { "/action": { POST: route } },
+        {
+          enabled: mode !== "disabled",
+          policy: () => {
+            policyReads += 1;
+            return Result.ok(limits);
+          },
+        },
+      );
+
+      const response = await sendServedRequest(app, {
+        path: "/action",
         body: "oversized payload",
       });
-      const response = Response.json({ unchanged: "😀" });
-      let classifications = 0;
-      let policyReads = 0;
-      const result = await runTenantHttpAction(request, {
-        enabled: mode !== "disabled",
-        isTenantAction: () => {
-          classifications += 1;
-          return false;
-        },
-        policy: () => {
-          policyReads += 1;
-          return Result.ok(limits);
-        },
-        handleRequest: (received) => {
-          expect(received).toBe(request);
-          expect(getTenantActionSizePolicy()).toBeUndefined();
-          return response;
-        },
+
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({
+        unchanged: "😀".repeat(200),
       });
-      expect(result).toBe(response);
       expect(policyReads).toBe(0);
-      expect(classifications).toBe(mode === "disabled" ? 0 : 1);
-      expect(request.bodyUsed).toBe(false);
-      expect(response.bodyUsed).toBe(false);
+      expect(seen).toEqual([{ policy: undefined, body: "oversized payload" }]);
     }
   });
 
-  test("rejects actual oversized bodies before authentication or handler work and decorates refusals", async () => {
+  test("rejects actual oversized bodies before authentication or handler work, and outer stages still answer", async () => {
     let authCalls = 0;
     let workCalls = 0;
-    const app = new Elysia()
-      .onRequest(() => {
-        authCalls += 1;
-      })
-      .post("/action", () => {
-        workCalls += 1;
-        return { success: true };
-      });
-    const request = new Request("http://localhost/action", {
+    const authentication: Middleware = async (_ctx, inner) => {
+      authCalls += 1;
+      return await inner();
+    };
+    const server = serve(
+      admissionApp(
+        {
+          "/action": {
+            POST: definition("member", () => {
+              workCalls += 1;
+              return { success: true };
+            }),
+          },
+        },
+        {
+          outer: [
+            cors({
+              isAllowedOrigin: (origin) => origin === "https://example.test",
+              methods: ["POST"],
+              allowedHeaders: [],
+              exposedHeaders: [],
+              maxAgeSeconds: 60,
+            }),
+          ],
+          inner: [authentication],
+        },
+      ),
+    );
+
+    const response = await server.fetch("http://localhost/action", {
       method: "POST",
       body: "😀😀😀",
-      headers: { "content-length": "1" },
+      headers: { "content-length": "1", origin: "https://example.test" },
     });
-    const response = await runTenantHttpAction(request, {
-      enabled: true,
-      isTenantAction: () => true,
-      policy: () => Result.ok(limits),
-      handleRequest: async (received) => app.handle(received),
-      decorateRefusal: (refusal, original) => {
-        expect(original).toBe(request);
-        refusal.headers.set(
-          "access-control-allow-origin",
-          "https://example.test",
-        );
-        return refusal;
-      },
-    });
+
     expect(response.status).toBe(413);
     expect(authCalls).toBe(0);
     expect(workCalls).toBe(0);
@@ -235,148 +208,164 @@ describe("tenant HTTP action boundary", () => {
     );
   });
 
-  test("invalid enabled configuration refuses before reading the body or dispatching", async () => {
-    const request = new Request("http://localhost/action", {
+  test("invalid enabled configuration refuses before dispatching", async () => {
+    let dispatched = 0;
+    const server = serve(
+      admissionApp(
+        {
+          "/action": {
+            POST: definition("member", () => {
+              dispatched += 1;
+              return { success: true };
+            }),
+          },
+        },
+        {
+          policy: () =>
+            Result.err(
+              new ActionSizeError({
+                message: "Invalid size limits",
+                reason: "configuration",
+              }),
+            ),
+        },
+      ),
+    );
+
+    const response = await server.fetch("http://localhost/action", {
       method: "POST",
       body: "body",
     });
-    let dispatched = 0;
-    const response = await runTenantHttpAction(request, {
-      enabled: true,
-      isTenantAction: () => true,
-      policy: () =>
-        Result.err(
-          new ActionSizeError({
-            message: "Invalid size limits",
-            reason: "configuration",
-          }),
-        ),
-      handleRequest: () => {
-        dispatched += 1;
-        return Response.json({ success: true });
-      },
-    });
+
     expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      code: "service_unavailable",
+      message: "Invalid size limits",
+    });
     expect(dispatched).toBe(0);
-    expect(request.bodyUsed).toBe(false);
   });
 
-  test("preserves exact UTF-8 request bytes and tenant policy through asynchronous framework execution", async () => {
+  test("preserves exact UTF-8 request bytes and the tenant policy through the route", async () => {
     const body = "😀😀";
-    const request = new Request("http://localhost/action", {
-      method: "POST",
-      body,
-    });
-    const response = await runTenantHttpAction(request, {
-      enabled: true,
-      isTenantAction: () => true,
-      policy: () => Result.ok(limits),
-      handleRequest: async (received) => {
-        expect(received).toBe(request);
-        expect(received.headers.get("content-length")).toBe("8");
-        expect(await received.text()).toBe(body);
-        expect(getTenantActionSizePolicy()).toBe(limits);
-        return Response.json({ body });
+    const app = admissionApp({
+      "/action": {
+        POST: definition("member", async ({ ctx }) => ({
+          contentLength: ctx.request.headers.get("content-length"),
+          body: await ctx.request.text(),
+          policy: getTenantActionSizePolicy() === limits,
+        })),
       },
     });
+
+    const response = await sendServedRequest(app, { path: "/action", body });
+
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ body });
+    expect(JSON.parse(response.body)).toEqual({
+      contentLength: "8",
+      body,
+      policy: true,
+    });
     expect(getTenantActionSizePolicy()).toBeUndefined();
   });
 
-  test("retains the native peer address while metering accepted bodies", async () => {
-    const server = Bun.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      fetch: async (request, nativeServer) =>
-        await runTenantHttpAction(request, {
-          enabled: true,
-          isTenantAction: () => true,
-          policy: () => Result.ok(limits),
-          handleRequest: async (received) => {
-            const address = resolveClientAddress(received, nativeServer);
-            return Response.json({
-              address: address?.address,
-              body: await received.text(),
-            });
-          },
-        }),
+  test("resolves the sealed peer address behind the production pipeline after re-framing the body", async () => {
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
+    testState.setConfig("ACTION_REQUEST_MAX_BYTES", limits.requestBytes);
+    testState.setConfig("ACTION_RESPONSE_MAX_BYTES", limits.responseBytes);
+    testState.setConfig("ACTION_PAGE_SIZE_MAX", limits.pageSize);
+    const app = createHttpApp({
+      middleware: apiPipeline,
+      routes: routes({
+        "/": {
+          POST: definition("member", async ({ ctx }) => ({
+            address: resolveClientAddress(ctx.request, ctx.server)?.address,
+            body: await ctx.request.text(),
+            contentLength: ctx.request.headers.get("content-length"),
+          })),
+        },
+      }),
     });
-    try {
-      const response = await fetch(server.url, { method: "POST", body: "é" });
-      expect(await response.json()).toEqual({
-        address: "127.0.0.1",
-        body: "é",
-      });
-    } finally {
-      await server.stop(true);
-    }
+    // Served on IPv4 loopback, so the peer is not reported as a mapped address.
+    const response = await sendServedRequest(app, { path: "/", body: "é" });
+    expect(JSON.parse(response.body)).toEqual({
+      address: "127.0.0.1",
+      body: "é",
+      contentLength: "2",
+    });
   });
 
   test("retains successful mutation statuses, headers and whole bodies above the response ceiling", async () => {
     const payload = { result: "é".repeat(300) };
-    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
-      let applied = 0;
-      const response = await runTenantHttpAction(
-        new Request("http://localhost/action", { method }),
-        {
-          enabled: true,
-          isTenantAction: () => true,
-          policy: () => Result.ok(limits),
-          handleRequest: () => {
-            applied += 1;
-            return Response.json(payload, {
-              status: 201,
-              headers: { "x-request-id": "completed-action" },
-            });
-          },
+    let applied = 0;
+    const mutation = definition("member", () => {
+      applied += 1;
+      return Response.json(payload, {
+        status: 201,
+        headers: { "x-request-id": "completed-action" },
+      });
+    });
+    const server = serve(
+      admissionApp({
+        "/action": {
+          POST: mutation,
+          PUT: mutation,
+          PATCH: mutation,
+          DELETE: mutation,
         },
-      );
-      expect(applied).toBe(1);
+      }),
+    );
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      const response = await server.fetch("http://localhost/action", {
+        method,
+      });
       expect(response.status).toBe(201);
       expect(response.headers.get("x-request-id")).toBe("completed-action");
       expect(await response.json()).toEqual(payload);
     }
+    expect(applied).toBe(4);
   });
 
-  test("bounds whole serialized JSON bytes after framework encoding and preserves SSE", async () => {
+  test("bounds whole serialized JSON bytes after encoding and preserves event streams", async () => {
     const payload = { text: "😀é", nested: { escaped: '\\"\n' } };
     const serialized = JSON.stringify(payload);
     const exactBytes = bytes.encode(serialized).byteLength;
     let handlerCalls = 0;
-    const app = new Elysia().get("/action", () => {
-      handlerCalls += 1;
-      return payload;
-    });
-    for (const responseBytes of [exactBytes, exactBytes - 1]) {
-      const response = await runTenantHttpAction(
-        new Request("http://localhost/action"),
+    let responseBytes = exactBytes;
+    const server = serve(
+      admissionApp(
         {
-          enabled: true,
-          isTenantAction: () => true,
-          policy: () => Result.ok({ ...limits, responseBytes }),
-          handleRequest: async (request) => app.handle(request),
+          "/action": {
+            GET: definition("member", () => {
+              handlerCalls += 1;
+              return payload;
+            }),
+          },
+          "/events": {
+            GET: definition(
+              "member",
+              () =>
+                new Response("data: 😀😀😀\n\n", {
+                  headers: { "content-type": "text/event-stream" },
+                }),
+            ),
+          },
         },
-      );
-      expect(response.status).toBe(responseBytes === exactBytes ? 200 : 413);
+        { policy: () => Result.ok({ ...limits, responseBytes }) },
+      ),
+    );
+    for (const ceiling of [exactBytes, exactBytes - 1]) {
+      responseBytes = ceiling;
+      const response = await server.fetch("http://localhost/action");
+      expect(response.status).toBe(ceiling === exactBytes ? 200 : 413);
       if (response.status === 200) {
         expect(await response.text()).toBe(serialized);
       }
     }
     expect(handlerCalls).toBe(2);
-    const eventStream = new Response("data: 😀😀😀\n\n", {
-      headers: { "content-type": "text/event-stream" },
-    });
-    const response = await runTenantHttpAction(
-      new Request("http://localhost/action"),
-      {
-        enabled: true,
-        isTenantAction: () => true,
-        policy: () => Result.ok({ ...limits, responseBytes: 1 }),
-        handleRequest: () => eventStream,
-      },
-    );
-    expect(response).toBe(eventStream);
-    expect(eventStream.bodyUsed).toBe(false);
+
+    responseBytes = 1;
+    const stream = await server.fetch("http://localhost/events");
+    expect(stream.status).toBe(200);
+    expect(await stream.text()).toBe("data: 😀😀😀\n\n");
   });
 });

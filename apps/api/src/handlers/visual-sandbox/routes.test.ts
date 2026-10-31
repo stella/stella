@@ -1,15 +1,21 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { frontendOrigins } from "@/api/lib/dev-origins";
 import { runtimeMode } from "@/api/runtime-mode";
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { VISUAL_INNER_POLICY } from "./document";
 
+const api = serveForTest(apiApp);
+afterAll(async () => {
+  await api.stop();
+});
+
 describe("visual sandbox page", () => {
   test("serves a private frame shell under global API response headers", async () => {
-    const response = await api.handle(
+    const response = await api.fetch(
       new Request("http://localhost/visual-sandbox"),
     );
     expect(response.status).toBe(200);
@@ -42,10 +48,10 @@ describe("visual sandbox page", () => {
   });
 
   test("query parameters do not change the bundled page or its policy", async () => {
-    const plain = await api.handle(
+    const plain = await api.fetch(
       new Request("http://localhost/visual-sandbox"),
     );
-    const query = await api.handle(
+    const query = await api.fetch(
       new Request("http://localhost/visual-sandbox?title=Timeline"),
     );
     expect(await query.text()).toBe(await plain.text());

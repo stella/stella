@@ -47,8 +47,98 @@ type RunningLockReservationInput = {
 };
 
 type RunningLockReservation =
-  | { status: "reserve"; expectedRunningValue: string }
-  | { status: "skip" };
+  { status: "reserve"; expectedRunningValue: string } | { status: "skip" };
+
+export type PendingCellOwner = {
+  ownerRunId: string | null;
+  deadlineAt: Date | null;
+  attempt: 0 | 1 | null;
+};
+
+export type PendingCellRecovery =
+  | { type: "leave-owned" }
+  | { type: "retry"; attempt: 1; delayMs: number }
+  | { type: "error"; retry: "manual" };
+
+/**
+ * Decide one pending cell independently of every other cell in its workspace.
+ * A live job for a different run cannot shelter this owner, and a live owner
+ * cannot shelter a cell after its own deadline. Legacy unowned rows receive
+ * the same single bounded retry as an owned attempt-zero cell.
+ */
+export const pendingCellRecovery = (
+  cell: PendingCellOwner,
+  currentRunId: string | null,
+  now: Date,
+): PendingCellRecovery => {
+  const ownerIsCurrent =
+    cell.ownerRunId !== null && cell.ownerRunId === currentRunId;
+  const beforeDeadline = cell.deadlineAt !== null && cell.deadlineAt > now;
+  if (ownerIsCurrent && beforeDeadline) {
+    return { type: "leave-owned" };
+  }
+  if (
+    (cell.ownerRunId !== null && cell.attempt === 0) ||
+    (cell.ownerRunId === null && cell.attempt === null)
+  ) {
+    return { type: "retry", attempt: 1, delayMs: 1000 };
+  }
+  return { type: "error", retry: "manual" };
+};
+
+export type PendingCellCandidate = PendingCellOwner & {
+  id: string;
+  workspaceId: string;
+};
+
+type ReconcilePendingCellsOptions<T extends PendingCellCandidate> = {
+  now: Date;
+  pageSize: number;
+  selectPage: (cursor: string | null, limit: number) => Promise<readonly T[]>;
+  currentRunId: (workspaceKey: string) => Promise<string | null>;
+  retry: (cell: T, attempt: 1, delayMs: number) => Promise<void>;
+  error: (cell: T) => Promise<void>;
+};
+
+/**
+ * Run the scheduled, per-cell recovery policy over bounded keyset pages.
+ * Advancing the cursor from the selected page, rather than from mutations,
+ * makes the scan stable when a retry immediately replaces a pending row.
+ */
+export const reconcilePendingCells = async <T extends PendingCellCandidate>({
+  now,
+  pageSize,
+  selectPage,
+  currentRunId,
+  retry,
+  error,
+}: ReconcilePendingCellsOptions<T>): Promise<void> => {
+  let cursor: string | null = null;
+  const currentRuns = new Map<string, string | null>();
+  while (true) {
+    const page = await selectPage(cursor, pageSize);
+    if (page.length === 0) {
+      return;
+    }
+    for (const cell of page) {
+      let runId = currentRuns.get(cell.workspaceId);
+      if (runId === undefined) {
+        runId = await currentRunId(cell.workspaceId);
+        currentRuns.set(cell.workspaceId, runId);
+      }
+      const decision = pendingCellRecovery(cell, runId, now);
+      if (decision.type === "retry") {
+        await retry(cell, decision.attempt, decision.delayMs);
+      } else if (decision.type === "error") {
+        await error(cell);
+      }
+    }
+    cursor = page.at(-1)?.id ?? null;
+    if (page.length < pageSize) {
+      return;
+    }
+  }
+};
 
 /**
  * A candidate workspace (one holding a `running` lock or owning `pending`

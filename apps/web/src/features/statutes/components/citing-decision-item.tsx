@@ -11,9 +11,8 @@ import { TextMark } from "@stll/ui/text-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
-import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { CitedDecisionChip } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
-import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
 
@@ -23,10 +22,8 @@ import type { CitingDecisionRow } from "./provision-citing-decisions";
 export const CitingDecisionItem = ({
   currentVersionValidFrom,
   decision,
-  presentation,
 }: {
   decision: CitingDecisionRow;
-  presentation?: DecisionCitationPresentation | undefined;
   currentVersionValidFrom: string | null;
 }) => {
   const t = useTranslations();
@@ -82,49 +79,85 @@ export const CitingDecisionItem = ({
       ? citation
       : null;
 
+  // Four parts, each once: which decision, when and how often, what it says,
+  // and the one action on what it says. The case number is the decision's
+  // own trigger, so no badge repeats it.
   return (
-    <div className="flex flex-col items-start">
-      <CitedDecisionLink
-        className="hover:bg-accent -mx-2 flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
-        presentation={presentation}
-        passage={snippet === null ? undefined : { type: "text", text: snippet }}
-        decision={{
-          caseNumber: decision.caseNumber,
-          country: decision.country,
-          court: decision.court,
-          courtAbbreviation: decision.courtAbbreviation,
-          sourceUrl: decision.sourceUrl,
-          decisionDate: decision.decisionDate,
-          id: decision.decisionId,
-          language: decision.language,
-          languageAlternates: decision.languageAlternates,
-          slug: decision.slug,
-        }}
-      >
-        <span className="text-2xs flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <BidiText as="span" className="text-foreground font-medium">
-            {decision.caseNumber}
-          </BidiText>
-          <CourtName
-            abbreviation={decision.courtAbbreviation}
-            className="text-muted-foreground"
-            court={decision.court}
-            tier={decision.courtTier}
+    <div className="flex min-w-0 flex-col gap-0.5 py-2.5">
+      <div className="flex min-w-0 items-center gap-2 text-xs">
+        <span className="text-foreground shrink-0 font-medium">
+          <CitedDecisionChip
+            decision={{
+              caseNumber: decision.caseNumber,
+              country: decision.country,
+              court: decision.court,
+              courtAbbreviation: decision.courtAbbreviation,
+              sourceUrl: decision.sourceUrl,
+              decisionDate: decision.decisionDate,
+              id: decision.decisionId,
+              language: decision.language,
+              languageAlternates: decision.languageAlternates,
+              slug: decision.slug,
+            }}
+            label={<BidiText as="span">{decision.caseNumber}</BidiText>}
+            passage={
+              snippet === null ? undefined : { type: "text", text: snippet }
+            }
           />
-          {decided !== null && (
-            <BidiText className="text-muted-foreground">{decided}</BidiText>
-          )}
-          <BidiText className="text-muted-foreground tabular-nums">
-            {t("statutes.citingDecisionMentionCount", {
-              count: format.number(decision.mentionCount),
-            })}
-          </BidiText>
         </span>
-        {snippet !== null && (
+        <CourtName
+          abbreviation={decision.courtAbbreviation}
+          className="text-muted-foreground"
+          court={decision.court}
+          tier={decision.courtTier}
+        />
+      </div>
+      <div className="text-muted-foreground text-2xs flex min-h-5 flex-wrap items-center gap-x-1.5">
+        {decided !== null && (
+          <>
+            <BidiText>{decided}</BidiText>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
+        <BidiText className="tabular-nums">
+          {t("statutes.citingDecisionMentionCount", {
+            count: format.number(decision.mentionCount),
+          })}
+        </BidiText>
+        {citesOlderVersion && (
+          <>
+            <span aria-hidden="true">·</span>
+            <Tooltip>
+              {/* A fact about the citation, read like the facts beside it:
+                  inline text whose dotted rule says there is more on hover. */}
+              <TooltipTrigger
+                render={
+                  <button
+                    className="text-foreground-strong-muted decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
+                    type="button"
+                  />
+                }
+              >
+                {t("statutes.citingDecisionOlderVersion")}
+              </TooltipTrigger>
+              <TooltipPopup>
+                <div className="flex flex-col gap-1">
+                  <ProvisionVersionBasisLabel basis={decision.versionBasis} />
+                  <span>
+                    {formatValidityDate(appliedAsOf, format) ?? appliedAsOf}
+                  </span>
+                </div>
+              </TooltipPopup>
+            </Tooltip>
+          </>
+        )}
+      </div>
+      {snippet !== null && snippet.length > 0 && (
+        <div className="flex flex-col items-start gap-0.5">
           <BidiText
-            as="span"
+            as="p"
             className={cn(
-              "text-foreground-strong-muted text-2xs leading-snug",
+              "text-foreground-strong-muted text-2xs m-0 leading-snug",
               isSnippetExpanded ? "whitespace-pre-wrap" : "line-clamp-2",
             )}
             id={snippetId}
@@ -141,35 +174,19 @@ export const CitingDecisionItem = ({
               snippet
             )}
           </BidiText>
-        )}
-      </CitedDecisionLink>
-      {citesOlderVersion && (
-        <Tooltip>
-          <TooltipTrigger render={<Button size="xs" variant="muted" />}>
-            {t("statutes.citingDecisionOlderVersion")}
-          </TooltipTrigger>
-          <TooltipPopup>
-            <div className="flex flex-col gap-1">
-              <ProvisionVersionBasisLabel basis={decision.versionBasis} />
-              <span>
-                {formatValidityDate(appliedAsOf, format) ?? appliedAsOf}
-              </span>
-            </div>
-          </TooltipPopup>
-        </Tooltip>
-      )}
-      {snippet !== null && snippet.length > 0 && (
-        <Button
-          aria-controls={snippetId}
-          aria-expanded={isSnippetExpanded}
-          onClick={() => setIsSnippetExpanded((expanded) => !expanded)}
-          size="sm"
-          variant="ghost"
-        >
-          {isSnippetExpanded
-            ? t("statutes.citingDecisionHideSnippet")
-            : t("statutes.citingDecisionShowSnippet")}
-        </Button>
+          <Button
+            aria-controls={snippetId}
+            aria-expanded={isSnippetExpanded}
+            className="-ms-2"
+            onClick={() => setIsSnippetExpanded((expanded) => !expanded)}
+            size="xs"
+            variant="muted"
+          >
+            {isSnippetExpanded
+              ? t("statutes.citingDecisionHideSnippet")
+              : t("statutes.citingDecisionShowSnippet")}
+          </Button>
+        </div>
       )}
     </div>
   );

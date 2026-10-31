@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import { readCappedBytes } from "@stll/skills/streaming";
@@ -9,10 +10,10 @@ import {
   bindAnswer,
   createDecisionFetch,
   hasEveryAnswer,
-  SystemOneError,
   SYSTEM_ONE_MAX_CHOICE_OPTIONS,
   SYSTEM_ONE_MAX_QUESTIONS,
   SYSTEM_ONE_MAX_REQUEST_BYTES,
+  SystemOneError,
 } from "@/api/lib/workflow/decisions/system-one";
 import type {
   DecisionFetcher,
@@ -20,9 +21,9 @@ import type {
   SystemOneAnswer,
   SystemOneClient,
   SystemOneEntry,
+  SystemOneErrorKind,
   SystemOneQuestions,
   SystemOneState,
-  SystemOneErrorKind,
 } from "@/api/lib/workflow/decisions/system-one";
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -117,8 +118,7 @@ type OpenAIDecisionsClientOptions = {
   /** Per-attempt deadline; defaults to the shared transport timeout. */
   timeoutMs?: number | undefined;
   sleep?:
-    | ((ms: number, abortSignal?: AbortSignal) => Promise<void>)
-    | undefined;
+    ((ms: number, abortSignal?: AbortSignal) => Promise<void>) | undefined;
 };
 
 const sleepWithSignal = async (
@@ -280,11 +280,12 @@ export const createOpenAIDecisionsClient = ({
         );
       }
       const retryAfter = headers.get("retry-after");
-      const seconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+      const seconds =
+        retryAfter === null
+          ? null
+          : parseDecimalToken(retryAfter, { sign: "unsigned" }).unwrapOr(null);
       const delay = Math.min(
-        Number.isFinite(seconds) && seconds >= 0
-          ? seconds * 1000
-          : RETRY_BASE_DELAY_MS * 2 ** attempt,
+        seconds !== null ? seconds * 1000 : RETRY_BASE_DELAY_MS * 2 ** attempt,
         MAX_RETRY_DELAY_MS,
       );
       const waited = await Result.tryPromise({

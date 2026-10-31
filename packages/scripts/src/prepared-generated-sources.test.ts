@@ -2,10 +2,10 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   lstatSync,
-  readlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -20,13 +20,13 @@ import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedSources,
+  preparedGeneratedFile,
+  preparedManifestPath,
   requireUnchangedGeneratedInputs,
+  restorePreparedGeneratedSources,
   validatePreparedManifest,
   verifyPreparedGeneratedFiles,
-  restorePreparedGeneratedSources,
-  preparedManifestPath,
-  preparedGeneratedFile,
-  hasPreparedGeneratedSources,
 } from "./prepared-generated-sources";
 
 const fixture = () => {

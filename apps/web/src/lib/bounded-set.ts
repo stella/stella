@@ -30,6 +30,10 @@ export class BoundedSet<T> {
   delete(value: T) {
     return this.values.delete(value);
   }
+
+  clear() {
+    this.values.clear();
+  }
 }
 
 export class BoundedMap<K, V> {

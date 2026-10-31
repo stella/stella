@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -13,17 +13,17 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
-export const timerParams = t.Object({ id: tSafeId("timeTimer") });
-export const timerDetails = t.Object({
-  matterId: t.Optional(t.Nullable(tSafeId("workspace"))),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+export const timerParams = v.object({ id: resourceIdSchema("timeTimer") });
+export const timerDetails = v.object({
+  matterId: v.optional(v.nullable(resourceIdSchema("workspace"))),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
 });
 
 export type TimerOwner = {
@@ -136,6 +136,31 @@ type UnexpectedTimerColumn = UnbackedProjectionKeys<
 true satisfies MissingTimerColumn extends never ? true : never;
 true satisfies UnexpectedTimerColumn extends never ? true : never;
 
+// A migrated timer runs on its original draft entry. Submitting or approving
+// that entry takes this owner lock and refuses a running timer, so under the
+// lock a resume sees whether the entry is still a draft it may run on.
+const linkedEntryIsDraft = async (
+  tx: Transaction,
+  owner: TimerOwner,
+  timer: typeof timeTimers.$inferSelect,
+) => {
+  if (timer.legacyTimeEntryId === null) {
+    return true;
+  }
+  const [entry] = await tx
+    .select({ status: timeEntries.status })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.id, timer.legacyTimeEntryId),
+        eq(timeEntries.organizationId, owner.organizationId),
+        eq(timeEntries.userId, owner.userId),
+      ),
+    )
+    .limit(1);
+  return entry === undefined || entry.status === BILLING_STATUS.DRAFT;
+};
+
 type ChangeTimerStateOptions = {
   tx: Transaction;
   owner: TimerOwner;
@@ -157,6 +182,16 @@ const changeTimerState = async ({
   }
   if (timer.state === state) {
     return Result.ok(timerItem(timer));
+  }
+  if (state === "running" && !(await linkedEntryIsDraft(tx, owner, timer))) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "timer_original_entry_changed",
+        message: "The original timer entry has changed",
+        hint: "The entry this timer runs on was submitted or approved. Confirm or discard the timer instead of resuming it.",
+      }),
+    );
   }
   const now = new Date();
   if (state === "running") {

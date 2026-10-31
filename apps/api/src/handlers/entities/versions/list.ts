@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
-import { t } from "elysia";
+import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import {
@@ -11,18 +12,18 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const readVersionsParamsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
+  entityId: resourceIdSchema("entity"),
 });
 
-const readVersionsQuerySchema = t.Object({
-  before: t.Optional(t.String()),
-  filePropertyId: t.Optional(tSafeId("property")),
+const readVersionsQuerySchema = v.object({
+  before: v.optional(v.string()),
+  filePropertyId: v.optional(resourceIdSchema("property")),
 });
 
 type ReadVersionsHandlerProps = {
@@ -32,6 +33,47 @@ type ReadVersionsHandlerProps = {
   before: string | undefined;
   filePropertyId: SafeId<"property"> | undefined;
 };
+
+type ReadVersionFileMetadataOptions = {
+  workspaceId: SafeId<"workspace">;
+  pageVersionIds: SafeId<"entityVersion">[];
+  filePropertyId: SafeId<"property"> | undefined;
+  pageSize: number;
+};
+
+export const readVersionFileMetadata = (
+  tx: Transaction,
+  {
+    workspaceId,
+    pageVersionIds,
+    filePropertyId,
+    pageSize,
+  }: ReadVersionFileMetadataOptions,
+) =>
+  tx
+    .selectDistinctOn([fields.entityVersionId], {
+      id: fields.id,
+      entityVersionId: fields.entityVersionId,
+      propertyId: fields.propertyId,
+      fileName: sql<string>`${fields.content}->>'fileName'`,
+      mimeType: sql<string>`${fields.content}->>'mimeType'`,
+      sizeBytes: sql<number>`(${fields.content}->>'sizeBytes')::double precision`,
+    })
+    .from(fields)
+    .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
+    .where(
+      and(
+        inArray(fields.entityVersionId, pageVersionIds),
+        eq(fields.workspaceId, workspaceId),
+        sql`${fields.content}->>'type' = 'file'`,
+        isNull(entityVersions.deletedAt),
+        filePropertyId === undefined
+          ? undefined
+          : eq(fields.propertyId, filePropertyId),
+      ),
+    )
+    .orderBy(fields.entityVersionId, fields.id)
+    .limit(pageSize);
 
 const readVersionsHandler = async function* ({
   safeDb,
@@ -131,7 +173,7 @@ const readVersionsHandler = async function* ({
         };
       }
 
-      const pageVersionIds = versions.map((v) => v.id);
+      const pageVersionIds = versions.map((version) => version.id);
 
       // Get finalized sessions for this page to map version → author (for v2+).
       const sessions = await tx
@@ -160,11 +202,11 @@ const readVersionsHandler = async function* ({
       // Collect all unique author user IDs.
       // Priority: version.createdBy > session author > entity.createdBy
       const authorUserIds = new Set<string>();
-      for (const v of versions) {
-        if (v.createdBy) {
-          authorUserIds.add(v.createdBy);
+      for (const version of versions) {
+        if (version.createdBy) {
+          authorUserIds.add(version.createdBy);
         } else {
-          const sessionAuthor = sessionAuthorMap.get(v.id);
+          const sessionAuthor = sessionAuthorMap.get(version.id);
           if (sessionAuthor) {
             authorUserIds.add(sessionAuthor);
           }
@@ -192,29 +234,12 @@ const readVersionsHandler = async function* ({
       // pinning the fields read to a live version too closes the same-tx window
       // where a version tombstoned mid-request could still surface its field
       // content here.
-      const versionFields = await tx
-        .select({
-          id: fields.id,
-          entityVersionId: fields.entityVersionId,
-          propertyId: fields.propertyId,
-          content: fields.content,
-        })
-        .from(fields)
-        .innerJoin(
-          entityVersions,
-          eq(entityVersions.id, fields.entityVersionId),
-        )
-        .where(
-          and(
-            inArray(fields.entityVersionId, pageVersionIds),
-            eq(fields.workspaceId, workspaceId),
-            isNull(entityVersions.deletedAt),
-            filePropertyId === undefined
-              ? undefined
-              : eq(fields.propertyId, filePropertyId),
-          ),
-        )
-        .limit(LIMITS.versionFieldsScanLimit);
+      const versionFields = await readVersionFileMetadata(tx, {
+        workspaceId,
+        pageVersionIds,
+        filePropertyId,
+        pageSize,
+      });
 
       return {
         kind: "ok" as const,
@@ -263,9 +288,7 @@ const readVersionsHandler = async function* ({
     });
   }
 
-  // Build version → file field map. Without a property request this preserves
-  // the historical first-file metadata; callers with a selected file property
-  // receive only that property's file from every version.
+  // One deterministic file per version; a selected property narrows that file.
   const versionFileMap = new Map<
     string,
     {
@@ -278,34 +301,32 @@ const readVersionsHandler = async function* ({
   >();
 
   for (const f of versionFields) {
-    if (f.content.type === "file" && !versionFileMap.has(f.entityVersionId)) {
-      versionFileMap.set(f.entityVersionId, {
-        fieldId: f.id,
-        propertyId: f.propertyId,
-        fileName: f.content.fileName,
-        mimeType: f.content.mimeType,
-        sizeBytes: f.content.sizeBytes,
-      });
-    }
+    versionFileMap.set(f.entityVersionId, {
+      fieldId: f.id,
+      propertyId: f.propertyId,
+      fileName: f.fileName,
+      mimeType: f.mimeType,
+      sizeBytes: f.sizeBytes,
+    });
   }
 
   // Assemble response
-  const versionsList = versions.map((v) => {
-    const sessionAuthorId = sessionAuthorMap.get(v.id);
-    const authorId = v.createdBy ?? sessionAuthorId ?? entity.createdBy;
+  const versionsList = versions.map((version) => {
+    const sessionAuthorId = sessionAuthorMap.get(version.id);
+    const authorId = version.createdBy ?? sessionAuthorId ?? entity.createdBy;
     const authorUser = authorId ? userMap.get(authorId) : null;
-    const file = versionFileMap.get(v.id) ?? null;
+    const file = versionFileMap.get(version.id) ?? null;
 
     return {
-      id: v.id,
-      versionNumber: v.versionNumber,
-      stamp: v.stamp,
-      label: v.label,
-      description: v.description,
-      diffWordsAdded: v.diffWordsAdded,
-      diffWordsRemoved: v.diffWordsRemoved,
-      sourceKind: v.source?.kind ?? null,
-      createdAt: v.createdAt.toISOString(),
+      id: version.id,
+      versionNumber: version.versionNumber,
+      stamp: version.stamp,
+      label: version.label,
+      description: version.description,
+      diffWordsAdded: version.diffWordsAdded,
+      diffWordsRemoved: version.diffWordsRemoved,
+      sourceKind: version.source?.kind ?? null,
+      createdAt: version.createdAt.toISOString(),
       author: authorUser
         ? { id: authorUser.id, name: authorUser.name, image: authorUser.image }
         : null,

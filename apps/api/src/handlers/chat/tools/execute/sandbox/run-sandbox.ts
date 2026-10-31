@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import type {
   QuickJSAsyncContext,
   QuickJSDeferredPromise,
@@ -12,12 +12,12 @@ import { Temporal } from "@stll/time";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import {
+  buildHostBridgePrelude,
+  buildNameGuidePrelude,
   SANDBOX_CONSOLE_BRIDGE_GLOBAL,
   SANDBOX_HOST_BRIDGE_GLOBAL,
   SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL,
   SANDBOX_NAME_GUIDE_ERROR_NAME,
-  buildHostBridgePrelude,
-  buildNameGuidePrelude,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 import { transpileSandboxSource } from "@/api/handlers/chat/tools/execute/sandbox/transpile";
 import { SandboxError } from "@/api/lib/errors/tagged-errors";
@@ -132,6 +132,13 @@ type SandboxAdmissionWaiter = {
 let activeSandboxCount = 0;
 const activeSandboxCountByKey = new Map<string, number>();
 const sandboxAdmissionQueue: SandboxAdmissionWaiter[] = [];
+// Test-only observers of queue changes; see `whenSandboxAdmissionQueued`.
+const sandboxAdmissionQueueListeners = new Set<() => void>();
+const notifySandboxAdmissionQueueListeners = (): void => {
+  for (const listener of sandboxAdmissionQueueListeners) {
+    listener();
+  }
+};
 
 // Every in-flight host-call promise (see `runHostCall`), tracked at module
 // scope purely so tests can await the full unwind of a run. A timed-out run
@@ -223,16 +230,36 @@ const raceHostWorkAgainstDeadline = async (
 };
 
 /**
- * Test-only: read the live admission counters. Concurrency tests use this to
- * observe "a run is QUEUED behind the cap" as a state transition instead of
- * sleeping a fixed interval and hoping the queue has settled — a fixed sleep is
- * exactly what flakes on a loaded CI runner. The waiter push and the admission
- * flush both happen synchronously inside `runSandbox`'s first await, so polling
- * this snapshot for `queuedWaiters` is a guaranteed-eventual observation, never
- * a timing bet.
+ * Test-only: resolves once a run for `concurrencyKey` waits in the admission
+ * queue. Concurrency tests use it to observe "this run is QUEUED behind the
+ * cap" as the state transition itself, instead of sleeping or polling the
+ * counters. The waiter push and admission flush both happen synchronously
+ * inside `runSandbox`'s first await, and every queue change notifies listeners,
+ * so the promise settles in the same task as the transition.
  */
-export const getSandboxAdmissionSnapshot = (): SandboxAdmissionSnapshot =>
-  snapshotSandboxAdmission();
+export const whenSandboxAdmissionQueued = async (
+  concurrencyKey: string,
+): Promise<void> => {
+  const isQueued = () =>
+    sandboxAdmissionQueue.some(
+      (waiter) => waiter.concurrencyKey === concurrencyKey,
+    );
+  if (isQueued()) {
+    return;
+  }
+  const reached = Promise.withResolvers<undefined>();
+  const listener = () => {
+    if (isQueued()) {
+      reached.resolve(undefined);
+    }
+  };
+  sandboxAdmissionQueueListeners.add(listener);
+  try {
+    await reached.promise;
+  } finally {
+    sandboxAdmissionQueueListeners.delete(listener);
+  }
+};
 
 /**
  * Test-only: leave a stranded entry (a host promise that never settles) in the
@@ -312,8 +339,7 @@ const buildSandboxScript = (
  * {@link waitForHostProgress}, which owns the only suspension.
  */
 type SandboxScriptBudget =
-  | { status: "spending" }
-  | { status: "suspended"; suspendedAtMs: number };
+  { status: "spending" } | { status: "suspended"; suspendedAtMs: number };
 
 /**
  * The two wall clocks a run answers to. `scriptDeadlineMs` is the script's own
@@ -649,6 +675,7 @@ const createSandboxAdmissionRelease = (
     released = true;
     decrementSandboxAdmissionCounts(concurrencyKey);
     flushSandboxAdmissionQueue();
+    notifySandboxAdmissionQueueListeners();
   };
 };
 
@@ -685,6 +712,7 @@ const acquireSandboxAdmission = async (
       resolve,
     });
     flushSandboxAdmissionQueue();
+    notifySandboxAdmissionQueueListeners();
   });
 
 export const runSandbox = async ({

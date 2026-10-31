@@ -44,10 +44,18 @@ while IFS=$'\t' read -r id run_id; do
     recording_unavailable "recording payload invalid"
     continue
   fi
+  if git cat-file -e "$base_sha:apps/web/scripts/route-template-manifest.ts" 2>/dev/null &&
+    [[ ! -f "$bundle/data/route-templates.gen.ts" ]]; then
+    recording_unavailable "route template projection missing"
+    continue
+  fi
   mkdir -p "$base_dir/apps/web/src/generated"
   cp "$bundle/data/typecheck-base.json" "$RUNNER_TEMP/typecheck-base.json"
   cp "$bundle/data/api-routes.gen.ts" "$base_dir/apps/web/src/generated/api-routes.gen.ts"
   cp "$bundle/data/routeTree.gen.ts" "$base_dir/apps/web/src/routeTree.gen.ts"
+  if [[ -f "$bundle/data/route-templates.gen.ts" ]]; then
+    cp "$bundle/data/route-templates.gen.ts" "$base_dir/apps/web/src/route-templates.gen.ts"
+  fi
   echo "Typecheck baseline: main recording at $base_sha" >> "$GITHUB_STEP_SUMMARY"
   exit 0
 done <<< "$candidates"
@@ -86,7 +94,8 @@ git -C "$base_dir" submodule update --init --recursive
       bun --filter @stll/api gen:web-api-types
     fi
   fi
-  if [[ ! -f apps/web/src/routeTree.gen.ts ]]; then
+  if [[ ! -f apps/web/src/routeTree.gen.ts ]] ||
+    { [[ -f apps/web/scripts/route-template-manifest.ts ]] && [[ ! -f apps/web/src/route-templates.gen.ts ]]; }; then
     bun --filter @stll/web generate:route-tree
   fi
   bun run typegen

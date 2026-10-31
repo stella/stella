@@ -12,6 +12,7 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -20,8 +21,8 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
@@ -39,18 +40,27 @@ const COUNTRY = "ZZP";
 const uniqueLanguage = (): string =>
   `x${Bun.randomUUIDv7().replaceAll("-", "").slice(-7)}`;
 
-/** Wait until `pid` is blocked on a lock, so timing cannot make a test vacuous. */
-const waitUntilBlocked = async (observer: SQL, pid: number) => {
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    const [row] =
-      await observer`SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
-    if (row?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  throw new Error(`backend ${String(pid)} never blocked`);
+/** Observe server state before exercising or asserting a session transition. */
+const waitForBackendState = async (
+  observer: SQL,
+  { pid, state }: { pid: number; state: "blocked" | "sleeping" | "closed" },
+) => {
+  await waitForExternalState({
+    description: `backend ${String(pid)} is ${state}`,
+    timeoutMs: 3000,
+    read: async () => {
+      const [row] = await observer`
+        SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked,
+          EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+              AND state = 'active' AND query = 'SELECT pg_sleep(30)'
+          ) AS sleeping,
+          NOT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+          ) AS closed`;
+      return row?.[state] === true;
+    },
+  });
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
@@ -263,7 +273,7 @@ if (!databaseUrl || !runPostgresTests) {
             await activated.promise;
             const pid = await backendPid(writer.sql);
             const write = insertDecision(writer.sql, fixture, language);
-            await waitUntilBlocked(observer, pid);
+            await waitForBackendState(observer, { pid, state: "blocked" });
             release.resolve(undefined);
             // swallow-ok: deliberate activation rollback is distinguished by the scope and decision-state assertions below
             await transition.catch(() => undefined);
@@ -507,7 +517,7 @@ if (!databaseUrl || !runPostgresTests) {
           // Started now: a Bun SQL query runs only once awaited.
           const ensuring = (async () =>
             await caller`SELECT ensure_case_law_provision_extraction_state(ARRAY[${id}::uuid], 'reconcile') AS written`)();
-          await waitUntilBlocked(observer, pid);
+          await waitForBackendState(observer, { pid, state: "blocked" });
           const [free] = await observer.begin(
             async (tx) =>
               await tx`
@@ -561,7 +571,7 @@ if (!databaseUrl || !runPostgresTests) {
           const running = (async () =>
             await runner`SELECT run_case_law_provision_scope_transition_page(
               ${COUNTRY}, ${language}, ${activeGeneration}::bigint) AS more`)();
-          await waitUntilBlocked(observer, pid);
+          await waitForBackendState(observer, { pid, state: "blocked" });
 
           const retiredGeneration = await observer.begin(async (tx) => {
             const [retired] = await tx`
@@ -611,11 +621,7 @@ if (!databaseUrl || !runPostgresTests) {
             execute: async (
               query: string,
               params: readonly (
-                | string
-                | number
-                | bigint
-                | boolean
-                | null
+                string | number | bigint | boolean | null
               )[] = [],
             ) => {
               await reserved.unsafe(query, [...params]);
@@ -623,11 +629,7 @@ if (!databaseUrl || !runPostgresTests) {
             query: async (
               query: string,
               params: readonly (
-                | string
-                | number
-                | bigint
-                | boolean
-                | null
+                string | number | bigint | boolean | null
               )[] = [],
             ): Promise<readonly unknown[]> =>
               await reserved.unsafe(query, [...params]),
@@ -652,7 +654,7 @@ if (!databaseUrl || !runPostgresTests) {
             WHERE conname LIKE 'provision_citations_%' AND NOT convalidated`;
           expect(pending?.count).toBe(0);
         } finally {
-          reserved.release();
+          await reserved.release();
         }
       });
     }, 120_000);
@@ -696,7 +698,15 @@ if (!databaseUrl || !runPostgresTests) {
                     [lockKey],
                   ),
               );
-              await waitUntilBlocked(observer, Number(reservedPid));
+              if (typeof reservedPid !== "number") {
+                throw new TypeError(
+                  "Expected the reserved PostgreSQL backend pid",
+                );
+              }
+              await waitForBackendState(observer, {
+                pid: reservedPid,
+                state: "blocked",
+              });
               controller.abort();
               return await blocked;
             },
@@ -710,10 +720,16 @@ if (!databaseUrl || !runPostgresTests) {
               message: "canceling statement due to user request",
             });
           }
-          const [alive] = await observer`
-          SELECT count(*)::int AS count FROM pg_stat_activity
-          WHERE pid = ${Number(reservedPid)}`;
-          expect(alive?.count).toBe(0);
+          if (typeof reservedPid !== "number") {
+            throw new TypeError(
+              "Expected the discarded PostgreSQL backend pid",
+            );
+          }
+          expect(await backendPid(pool)).not.toBe(reservedPid);
+          await waitForBackendState(observer, {
+            pid: reservedPid,
+            state: "closed",
+          });
         } finally {
           try {
             await holder`SELECT pg_advisory_unlock(hashtextextended(${lockKey}, 0))`;

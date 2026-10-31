@@ -81,6 +81,7 @@ export const MCP_STATIC_TOOL_NAMES = [
   "describe_capability",
   "read_capability",
   "write_capability",
+  "mint_web_handoff",
 ] as const;
 
 export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];

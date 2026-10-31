@@ -35,6 +35,54 @@ Object.defineProperty(globalThis, "Highlight", {
   value: ReaderHighlight,
 });
 
+// Happy DOM never reports an intersection. These readers are a few
+// paragraphs long, so the whole text sits on screen: every block the find
+// watches is reported visible, as a browser's first observation would.
+class OnScreenObserver implements IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
+  readonly thresholds = [0];
+  private readonly callback: IntersectionObserverCallback;
+  private connected = true;
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+  observe(target: Element) {
+    queueMicrotask(() => {
+      if (!this.connected) {
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      this.callback(
+        [
+          {
+            boundingClientRect: rect,
+            intersectionRatio: 1,
+            intersectionRect: rect,
+            isIntersecting: true,
+            rootBounds: null,
+            target,
+            time: 0,
+          },
+        ],
+        this,
+      );
+    });
+  }
+  disconnect() {
+    this.connected = false;
+  }
+  takeRecords() {
+    return [];
+  }
+  unobserve() {}
+}
+Object.defineProperty(globalThis, "IntersectionObserver", {
+  configurable: true,
+  value: OnScreenObserver,
+});
+
 const { useRef } = await import("react");
 const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");

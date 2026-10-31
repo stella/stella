@@ -14,12 +14,13 @@ import {
   properties,
   propertyDependencies,
   workspaceMembers,
-  workspaceViews,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -44,6 +45,15 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 import { createDuplicateWorkspace } from "./duplicate";
+
+beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+});
 
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
@@ -221,7 +231,7 @@ const createContext = ({
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/duplicate",
+    route: "/v1/workspaces/:workspaceId/duplicate" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },
@@ -809,7 +819,7 @@ describe("duplicateWorkspace", () => {
     expect(requestKeys("GET")).toEqual([]);
   });
 
-  test("marks the copies extraction will not index, inside the transaction", async () => {
+  test("marks every copy for name indexing inside the transaction", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
@@ -1008,12 +1018,12 @@ describe("duplicateWorkspace", () => {
       throw new Error("Expected both copies to be inserted");
     }
 
-    // The task has no extraction run to index it, so its mark is written
-    // with the copies themselves; the document's projection arrives with the
-    // extraction that owns it, and marking it too would index it twice.
+    // Both names are indexed immediately; native extraction independently
+    // adds the document content to the same source-fenced projection.
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
       copiedTaskId,
+      copiedDocumentId,
     ]);
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([

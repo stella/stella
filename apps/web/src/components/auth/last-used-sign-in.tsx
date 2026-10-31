@@ -1,8 +1,7 @@
-import { useId } from "react";
-import type { ReactNode } from "react";
-
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+
+import { FieldDescription } from "@stll/ui/field";
 
 import { authClient } from "@/lib/auth-client";
 
@@ -14,30 +13,26 @@ import { authClient } from "@/lib/auth-client";
 export const readLastUsedLoginMethod = (): string | null =>
   Result.try(() => authClient.getLastUsedLoginMethod()).unwrapOr(null);
 
+/** Where the "Last used" badge sits: over the top end corner of its control. */
+export const LAST_USED_BADGE_POSITION_CLASS_NAME =
+  "pointer-events-none absolute end-3 -top-2.5";
+
+/** The badge itself: a small pill. */
+export const LAST_USED_BADGE_PILL_CLASS_NAME =
+  "border-border bg-background text-foreground text-3xs rounded-full border px-2 py-0.5 font-medium shadow-xs";
+
 /**
- * Wraps one sign-in action and, when it is the last-used method, pins a
- * "Last used" badge to its corner and links it as the action's description.
+ * The "Last used" badge for a method typed into a form: pinned to the corner
+ * of its email field (the field must be `relative`) and announced as the
+ * field's description, which the field links to its input.
  */
-export const LastUsedSignInFrame = ({
-  lastUsed,
-  children,
-}: {
-  lastUsed: boolean;
-  children: (describedBy: string | undefined) => ReactNode;
-}) => {
+export const LastUsedFieldBadge = () => {
   const t = useTranslations();
-  const badgeId = useId();
   return (
-    <div className="relative">
-      {children(lastUsed ? badgeId : undefined)}
-      {lastUsed && (
-        <span
-          className="border-border bg-background text-foreground text-3xs pointer-events-none absolute end-3 -top-2.5 rounded-full border px-2 py-0.5 font-medium shadow-xs"
-          id={badgeId}
-        >
-          {t("auth.lastUsed")}
-        </span>
-      )}
-    </div>
+    <FieldDescription className={LAST_USED_BADGE_POSITION_CLASS_NAME}>
+      <span className={LAST_USED_BADGE_PILL_CLASS_NAME}>
+        {t("auth.lastUsed")}
+      </span>
+    </FieldDescription>
   );
 };

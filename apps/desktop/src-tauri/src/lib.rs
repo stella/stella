@@ -1,5 +1,7 @@
+mod accessibility_guide;
 mod account;
 mod activity;
+mod activity_calls;
 mod activity_commands;
 mod activity_details;
 mod activity_store;
@@ -8,6 +10,8 @@ mod app_lifecycle;
 mod app_window;
 mod autostart;
 mod bridge;
+mod chatgpt_auth;
+mod chatgpt_auth_commands;
 mod clipboard;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
@@ -17,6 +21,7 @@ mod clipboard_shortcut;
 mod clipboard_store;
 mod clipboard_welcome;
 mod clipboard_window;
+mod codex_managed_token_broker;
 mod commands;
 mod config;
 mod deep_link;
@@ -33,6 +38,10 @@ mod feature_gate;
 mod foreground_app;
 mod foreground_app_visual;
 mod handoff;
+mod harness_archive;
+mod harness_commands;
+mod harness_installation;
+mod harness_release;
 mod http_client;
 mod i18n;
 mod idle_time;
@@ -40,7 +49,9 @@ mod keychain;
 mod local_store;
 mod local_window;
 mod logging;
+mod managed_policy;
 mod marker_file;
+mod onboarding;
 mod pdf_signing;
 mod permissions;
 mod presence;
@@ -75,6 +86,13 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
+
+/// Runs the managed Codex token helper when the process was started as one,
+/// and returns its exit code; `None` for an ordinary launch.
+pub fn run_codex_token_helper() -> Option<i32> {
+  let args = std::env::args_os().collect::<Vec<_>>();
+  codex_managed_token_broker::run_token_helper(&args)
+}
 
 pub fn run() {
   logging::init();
@@ -143,7 +161,12 @@ pub fn run() {
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
-    .manage(feature_gate::FeatureGates::default())
+    .manage::<onboarding::OnboardingState>(std::sync::Mutex::new(
+      onboarding::Onboarding::load(),
+    ))
+    .manage(feature_gate::FeatureGates::blocking(
+      managed_policy::current().blocked_features(),
+    ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
@@ -165,7 +188,8 @@ pub fn run() {
         );
       // Clipboard history initializes on a dedicated thread because the OS
       // keychain can block on authorization and the watcher runs continuously.
-      {
+      // Managed policy can turn it off: then nothing is read or recorded.
+      if !managed_policy::current().clipboard_disabled {
         let clipboard_manager = Arc::clone(&clipboard_manager);
         let clipboard_handle = handle.clone();
         let watcher_telemetry = desktop_telemetry.clone();
@@ -193,7 +217,7 @@ pub fn run() {
       // Registration is intentionally non-fatal: the shortcut may already be
       // taken, and the clipboard stays reachable from the tray.
       if clipboard_shortcut::register_at_launch(&handle)
-        != clipboard_shortcut::ShortcutRegistration::Active
+        == clipboard_shortcut::ShortcutRegistration::Unavailable
       {
         desktop_telemetry.capture(desktop_telemetry::DesktopErrorReport {
           window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
@@ -207,6 +231,10 @@ pub fn run() {
         clipboard_window::show_on_launch(&handle);
       }
 
+      if let Some(installation) = harness_installation::HarnessInstallation::open_default() {
+        app.manage(installation);
+      }
+      chatgpt_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
       {
         let manager = Arc::clone(&manager);
@@ -215,6 +243,9 @@ pub fn run() {
           Arc::new(move |app, feature, enabled| match feature {
             feature_gate::DesktopFeature::ActivityTimeline => {
               activity::apply_feature_gate(app, enabled);
+              if enabled {
+                onboarding::feature_enabled(app, feature);
+              }
               let manager = Arc::clone(&manager);
               let app = app.clone();
               tauri::async_runtime::spawn(async move {
@@ -225,6 +256,10 @@ pub fn run() {
             feature_gate::DesktopFeature::TimeBilling => {
               use tauri::Emitter;
               let _ = app.emit(activity::CHANGED_EVENT, ());
+            }
+            feature_gate::DesktopFeature::LocalAgents => {
+              harness_commands::apply_feature_gate(app, enabled);
+              chatgpt_auth_commands::apply_feature_gate(app, enabled);
             }
           }),
         );
@@ -334,6 +369,9 @@ pub fn run() {
                   updater::CheckOutcome::Failed(msg) => {
                     tracing::warn!(error = %msg, "tray-triggered updater check failed");
                   }
+                  updater::CheckOutcome::Disabled => {
+                    tracing::debug!("tray updater check skipped: updates are managed");
+                  }
                 }
               }
               tray::MenuAction::OpenEditRoot => {
@@ -362,17 +400,17 @@ pub fn run() {
                 let mut mgr = manager.lock().await;
                 if mgr.finish_session(&id) {
                   mgr.persist_sessions_public().await;
-                  mgr.retry_session(&id).await;
+                  drop(mgr);
+                  crate::session_manager::retry_session(Arc::clone(&manager), &id).await;
                 }
-                drop(mgr);
               }
               tray::MenuAction::RetrySession(id) => {
                 let mut mgr = manager.lock().await;
                 if mgr.retry_session_now(&id) {
                   mgr.persist_sessions_public().await;
-                  mgr.retry_session(&id).await;
+                  drop(mgr);
+                  crate::session_manager::retry_session(Arc::clone(&manager), &id).await;
                 }
-                drop(mgr);
               }
             }
           });
@@ -428,6 +466,13 @@ pub fn run() {
       {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory);
       }
+
+      onboarding::show_if_pending(
+        &handle,
+        launch_args
+          .iter()
+          .any(|arg| arg == app_lifecycle::BACKGROUND_LAUNCH_ARGUMENT),
+      );
 
       // Register deep link handler
       {
@@ -499,7 +544,12 @@ pub fn run() {
     });
 }
 
-fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
+/// The settings window's size. The browser harness reads these lines and
+/// renders the window at this size (`tests/desktop-window-sizes.ts`).
+const SETTINGS_WINDOW_WIDTH: f64 = 480.0;
+const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
+
+pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
   let _ = handle.show();
@@ -513,12 +563,12 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
 
   let builder = crate::app_window::builder(handle, "main", "index.html")
     .title("stella desktop")
-    .inner_size(480.0, 460.0)
+    .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
     .resizable(false);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,
-    tauri::LogicalSize::new(480.0, 460.0),
+    tauri::LogicalSize::new(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT),
   );
 
   #[cfg(target_os = "macos")]
@@ -550,3 +600,8 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
     }
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+pub use clipboard::allocation_harness as clipboard_allocation_harness;
+#[cfg(feature = "allocation-tests")]
+pub use session_manager::allocation_harness as session_allocation_harness;

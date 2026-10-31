@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  type SkDocumentFetchErrorKind,
   skDocumentErrorDiagnostics,
+  type SkDocumentFetchErrorKind,
   skDocumentResponseDiagnostics,
 } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 

@@ -42,8 +42,8 @@ import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";

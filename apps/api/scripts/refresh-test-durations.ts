@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 

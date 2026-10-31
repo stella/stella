@@ -34,7 +34,8 @@
 # Wired into CI in .github/workflows/ci.yml and scripts/verify.sh.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/scripts/detect-desktop-release-changes.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT="$SCRIPT_DIR/detect-desktop-release-changes.sh"
 
 WORK="$(mktemp -d)"
 STUB_BIN="$WORK/bin"
@@ -124,9 +125,9 @@ expect_case() {
          bash "$SCRIPT" "$tag" 2>/dev/null
   )"
 
-  got_build="$(printf '%s\n' "$out" | grep '^should_build=' | head -n1)"
+  got_build="$(grep -m 1 '^should_build=' <<<"$out")"
   got_build="${got_build#should_build=}"
-  got_prev="$(printf '%s\n' "$out" | grep '^previous_tag=' | head -n1)"
+  got_prev="$(grep -m 1 '^previous_tag=' <<<"$out")"
   got_prev="${got_prev#previous_tag=}"
 
   if [[ "$got_build" != "$want_build" || "$got_prev" != "$want_prev" ]]; then

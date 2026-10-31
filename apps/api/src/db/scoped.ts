@@ -9,13 +9,13 @@ import { DrizzleQueryError, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import {
-  SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
+  SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_MODE,
   stella,
   stellaIngestion,
+  WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";

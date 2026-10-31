@@ -5,7 +5,7 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: Publisher availability uses the shared contract without changing parsed values.
 // parser-output-unchanged: [sk-us] failed and refused publisher reads are typed outcomes; served and 404 reads build the same decision.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
@@ -99,27 +99,27 @@ import {
   readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   normalizeMetadataValues,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
-  READ_OUTCOME_METADATA_KEY,
-  readPresent,
-  readUnavailable,
   type AbsenceEvidence,
+  READ_OUTCOME_METADATA_KEY,
   type ReadOutcome,
+  readPresent,
   type ReadRefusal,
   type ReadRefusalScope,
+  readUnavailable,
   type ReadUnavailableCause,
 } from "@/api/lib/errors/read-outcome";
 import {
@@ -214,8 +214,7 @@ const FIELDS_TO_RETURN: string[] = [];
 // ── Cursor helpers ──────────────────────────────────────────
 
 type YearCursor = { year: number; offset: number } & (
-  | { status: "walking" }
-  | { status: "refused-frontier" }
+  { status: "walking" } | { status: "refused-frontier" }
 );
 
 const parseCursor = (cursor: string | null): YearCursor => {

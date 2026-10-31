@@ -1,8 +1,11 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, ne, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { and, asc, eq, gt, gte, lte, ne, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
+import { compareCodeUnit } from "@stll/collation";
 import { parsePlainDate } from "@stll/time";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
@@ -10,7 +13,10 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { leftTodayMinutes } from "@/api/lib/billing/daily-target";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -38,10 +44,12 @@ const myTimeEntryColumns = {
   durationMinutes: timeEntries.durationMinutes,
   billedMinutes: timeEntries.billedMinutes,
   narrative: timeEntries.narrative,
+  narrativeLanguage: timeEntries.narrativeLanguage,
   billable: timeEntries.billable,
   status: timeEntries.status,
   source: timeEntries.source,
   timerStartedAt: timeEntries.timerStartedAt,
+  returnComment: timeEntries.returnComment,
 };
 
 type MyTimeEntrySourceRow = typeof timeEntries.$inferSelect & {
@@ -58,10 +66,12 @@ const toMyTimeEntryItem = (
     durationMinutes: row.durationMinutes,
     billedMinutes: row.billedMinutes,
     narrative: row.narrative,
+    narrativeLanguage: row.narrativeLanguage,
     billable: row.billable,
     status: row.status,
     source: row.source,
     timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
+    returnComment: row.returnComment,
   };
   switch (row.activityGroup) {
     case TIME_ENTRY_ACTIVITY_GROUP.CLIENT:
@@ -103,8 +113,6 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "rateAtEntry",
   "currency",
   "invoiceNarrative",
-  // Language metadata is used by the editing form, not this read-only summary.
-  "narrativeLanguage",
   "noCharge",
   "taskCode",
   "activityCode",
@@ -122,7 +130,6 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "approvedAt",
   "returnedByUserId",
   "returnedAt",
-  "returnComment",
 ] as const satisfies readonly (keyof MyTimeEntrySourceRow)[];
 
 type MissingMyTimeEntryColumn = UnprojectedColumns<
@@ -142,10 +149,11 @@ true satisfies UnexpectedMyTimeEntryColumn extends never ? true : never;
 const config = {
   contract: "patch",
   description:
-    "List the signed-in user's client and internal time entries for one work date " +
-    "in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
+    "List the signed-in user's client and internal time entries for one work date, or for date " +
+    "through endDate (at most seven days), in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
     "Follow the cursor for the next page. Logged minutes, daily target and remaining minutes cover all " +
-    "accessible entries for the date, independently of pagination. Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set.",
+    "accessible entries for the dates, independently of pagination, and days gives logged and billable minutes per work date that has entries. " +
+    "Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set, and remaining minutes are null for a range of more than one date.",
   permissions: { timeEntry: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
@@ -156,13 +164,27 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    date: t.String({
-      format: "date",
-      description: "Work date in YYYY-MM-DD format",
-    }),
-    limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
-    cursor: t.Optional(tPaginationCursor()),
+  query: v.object({
+    date: v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description("Work date in YYYY-MM-DD format"),
+    ),
+    endDate: v.optional(
+      v.pipe(
+        v.string(),
+        v.isoDate(),
+        API_CALENDAR_DATE_CHECK,
+        v.description(
+          "Last work date in YYYY-MM-DD format, on or after date and at most six days later; defaults to date",
+        ),
+      ),
+    ),
+    limit: v.optional(
+      numberFromString(paginationLimitSchema(LIMITS.timeEntriesPageSizeMax)),
+    ),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 
@@ -175,13 +197,23 @@ const decodeCursor = (cursor: string): SafeId<"timeEntry"> | null => {
 const listMyTimeEntries = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user }) {
-    if (parsePlainDate(query.date) === null) {
+    const startDate = parsePlainDate(query.date);
+    const endDate = parsePlainDate(query.endDate ?? query.date);
+    const rangeDays =
+      startDate === null || endDate === null
+        ? null
+        : startDate.until(endDate, { largestUnit: "days" }).days + 1;
+    if (
+      rangeDays === null ||
+      rangeDays < 1 ||
+      rangeDays > LIMITS.timeRangeDaysMax
+    ) {
       return Result.err(
         new HandlerError({
           status: 400,
           code: "invalid_date_worked",
-          message: "Date must be a valid calendar date",
-          hint: "Use a calendar date in YYYY-MM-DD format.",
+          message: `Work dates must be valid and span 1 to ${LIMITS.timeRangeDaysMax} days`,
+          hint: "Use YYYY-MM-DD dates, with endDate on or after date and at most six days later.",
         }),
       );
     }
@@ -203,7 +235,8 @@ const listMyTimeEntries = createSafeRootHandler(
     const dayScope = and(
       eq(timeEntries.organizationId, session.activeOrganizationId),
       eq(timeEntries.userId, user.id),
-      eq(timeEntries.dateWorked, query.date),
+      gte(timeEntries.dateWorked, query.date),
+      lte(timeEntries.dateWorked, query.endDate ?? query.date),
       or(
         eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
         and(
@@ -249,11 +282,40 @@ const listMyTimeEntries = createSafeRootHandler(
             ),
           )
           .where(dayScope);
+        const days = await tx
+          .select({
+            dateWorked: timeEntries.dateWorked,
+            loggedMinutes:
+              sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)`.mapWith(
+                Number,
+              ),
+            billableMinutes:
+              sql<number>`coalesce(sum(${timeEntries.durationMinutes}) FILTER (WHERE ${timeEntries.billable}), 0)`.mapWith(
+                Number,
+              ),
+          })
+          .from(timeEntries)
+          .leftJoin(
+            workspaces,
+            and(
+              eq(timeEntries.workspaceId, workspaces.id),
+              eq(timeEntries.organizationId, workspaces.organizationId),
+            ),
+          )
+          .where(dayScope)
+          // One row per work date of a range of at most timeRangeDaysMax days.
+          .groupBy(timeEntries.dateWorked);
         const summary = summaries.at(0);
         if (summary === undefined) {
           return panic("Daily time aggregate returned no row");
         }
-        return { rows, summary };
+        return {
+          rows,
+          summary,
+          days: days.toSorted((left, right) =>
+            compareCodeUnit(left.dateWorked, right.dateWorked),
+          ),
+        };
       }),
     );
 
@@ -265,12 +327,17 @@ const listMyTimeEntries = createSafeRootHandler(
     return Result.ok({
       ...page,
       items: page.items.map(toMyTimeEntryItem),
+      days: day.days,
       loggedTodayMinutes: day.summary.loggedMinutes,
       dailyTargetMinutes: day.summary.dailyTargetMinutes,
-      leftTodayMinutes: leftTodayMinutes(
-        day.summary.dailyTargetMinutes,
-        day.summary.loggedMinutes,
-      ),
+      // The target is per day, so remaining minutes exist only for one date.
+      leftTodayMinutes:
+        rangeDays === 1
+          ? leftTodayMinutes(
+              day.summary.dailyTargetMinutes,
+              day.summary.loggedMinutes,
+            )
+          : null,
     });
   },
 );

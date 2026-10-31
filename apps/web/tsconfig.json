@@ -31,6 +31,7 @@
   "include": [
     "src",
     "tests",
+    "public/handoff-init.js",
     "vite.config.ts",
     "vite.config.test.ts",
     "../../types"

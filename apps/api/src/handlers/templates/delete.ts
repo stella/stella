@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templateDeletionCleanupRequests, templates } from "@/api/db/schema";
@@ -9,11 +9,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const deleteTemplateParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const deleteTemplateParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 export type DeleteTemplateProps = {
@@ -57,8 +57,8 @@ export const deleteTemplateHandler = async function* ({
       // cascade delete removes the version rows.
       const s3Keys = new Set<string>();
       s3Keys.add(existing.s3Key);
-      for (const v of existing.versions) {
-        s3Keys.add(v.s3Key);
+      for (const version of existing.versions) {
+        s3Keys.add(version.s3Key);
       }
 
       // Storage cannot join the database transaction. Record the exact keys

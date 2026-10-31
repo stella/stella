@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
@@ -44,35 +44,38 @@ import {
   LIST_ITEM_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   loadCallerFeature,
   useCallerFeatureEnabled,
 } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import {
   legalListActivityOptions,
-  legalListItemsOptions,
   legalListCandidatesOptions,
   legalListGenerationsOptions,
+  legalListItemsOptions,
   legalListKeys,
   legalListOptions,
-  legalListSourcesOptions,
   legalListsOptions,
+  legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { routeSearchSchema } from "@/route-search-params";
 import { ListSourceAction } from "@/routes/_protected.workspaces/$workspaceId/-components/list-source-action";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   list: v.optional(v.string()),
 });
 
@@ -124,6 +127,7 @@ function DisabledListsRedirect() {
 }
 
 function LegalListsPage() {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = Route.useNavigate();
@@ -143,9 +147,12 @@ function LegalListsPage() {
     }
     setCreatingList(true);
     const result = await Result.tryPromise(async () => {
-      const response = await api
-        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ name });
+      const response = await submit.run({
+        operation: `lists.create:${workspaceId}`,
+        body: { name },
+        send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .put,
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -153,7 +160,13 @@ function LegalListsPage() {
     });
     setCreatingList(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListsPage.createList:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListsPage.createList:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -246,7 +259,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const formatter = useFormatter();
   const queryClient = useQueryClient();
   const list = useQuery(legalListOptions(workspaceId, listId));
-  const listView = useQueryView(list);
+  const listView = queryView(list);
   const listData = listView.type === "items" ? listView.items : undefined;
   const items = useInfiniteQuery(
     legalListItemsOptions({
@@ -255,16 +268,16 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       viewer: { userId: user.id, organizationId: user.activeOrganizationId },
     }),
   );
-  const itemsView = useQueryView(items);
+  const itemsView = queryView(items);
   const itemsData = itemsView.type === "items" ? itemsView.items : undefined;
   const properties = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(properties, { isEmpty: () => false });
+  const propertiesView = queryView(properties, { isEmpty: () => false });
   const propertiesData =
     propertiesView.type === "items" ? propertiesView.items : undefined;
   const generations = useQuery(
     legalListGenerationsOptions(workspaceId, listId),
   );
-  const generationsView = useQueryView(generations);
+  const generationsView = queryView(generations);
   const generationsData =
     generationsView.type === "items" ? generationsView.items : undefined;
   const reviewRun = generationsData?.items.find(
@@ -273,9 +286,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const candidates = useQuery(
     legalListCandidatesOptions(workspaceId, listId, reviewRun?.id ?? ""),
   );
-  const candidatesView = useQueryView(candidates);
+  const candidatesView = queryView(candidates);
   const candidatesData =
     candidatesView.type === "items" ? candidatesView.items : undefined;
+  const submit = useIdempotentSubmit();
   const [name, setName] = useState("");
   const [itemType, setItemType] = useState<ListItemType>("task");
   const [sectionName, setSectionName] = useState("");
@@ -294,23 +308,34 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     }
     setCreating(true);
     const result = await Result.tryPromise(async () => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
+      const response = await submit.run({
+        operation: `tasks.create:${workspaceId}`,
+        body: {
           name: itemName,
           listId: toSafeId<"legalList">(listId),
           listItemType: itemType,
           ...(selectedSectionId !== NO_SECTION_VALUE && {
             listSectionId: toSafeId<"legalListSection">(selectedSectionId),
           }),
-        });
+        },
+        send: async (body) =>
+          api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .put(body),
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
     });
     setCreating(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.createItem:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListDetail.createItem:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -342,12 +367,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     if (nextSectionName.length === 0) {
       return;
     }
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .sections.post({
+    const response = await submit.run({
+      operation: `lists.sections.create:${workspaceId}`,
+      body: {
         listId: toSafeId<"legalList">(listId),
         name: nextSectionName,
-      });
+      },
+      send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .sections.post,
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
@@ -362,12 +390,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     if (selectedPropertyId === NO_COLUMN_VALUE) {
       return;
     }
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .columns.post({
+    const response = await submit.run({
+      operation: `lists.columns.create:${workspaceId}`,
+      body: {
         listId: toSafeId<"legalList">(listId),
         propertyId: toSafeId<"property">(selectedPropertyId),
-      });
+      },
+      send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .columns.post,
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
@@ -403,15 +434,29 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const result = await Result.tryPromise(async () => {
       const response =
         decision === "accept"
-          ? await endpoint.accept.post(input)
-          : await endpoint.reject.post(input);
+          ? await submit.run({
+              operation: `lists.generation-candidates.accept:${workspaceId}`,
+              body: input,
+              send: endpoint.accept.post,
+            })
+          : await submit.run({
+              operation: `lists.generation-candidates.reject:${workspaceId}`,
+              body: input,
+              send: endpoint.reject.post,
+            });
       if (response.error) {
         throw toAPIError(response.error);
       }
     });
     setDecidingCandidateId(null);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.decideCandidate:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListDetail.decideCandidate:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -872,7 +917,7 @@ const ItemSourcesPanel = ({
       viewer: { userId: user.id, organizationId: user.activeOrganizationId },
     }),
   );
-  const activityView = useQueryView(activity);
+  const activityView = queryView(activity);
   const activityData =
     activityView.type === "items" ? activityView.items : undefined;
 

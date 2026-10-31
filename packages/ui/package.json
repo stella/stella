@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.49.1",
+  "version": "0.55.1",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -22,7 +22,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES"
   ],
   "type": "module",
   "sideEffects": [
@@ -30,6 +31,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./browser-clock": "./src/testing/browser-clock.ts",
     "./toolbar-icon-action": "./src/components/toolbar-icon-action.tsx",
     "./view-toolbar": "./src/components/view-toolbar.tsx",
     "./accordion": "./src/components/accordion.tsx",
@@ -37,15 +39,20 @@
     "./alert-dialog": "./src/components/alert-dialog.tsx",
     "./workspace-shell": "./src/components/workspace-shell.tsx",
     "./avatar": "./src/components/avatar.tsx",
+    "./badge": "./src/components/badge.tsx",
     "./bidi-text": "./src/components/bidi-text.tsx",
     "./brand-icons": "./src/components/brand-icons.tsx",
     "./breadcrumb": "./src/components/breadcrumb.tsx",
-    "./button": "./src/components/button.tsx",
+    "./button": {
+      "react-native": "./src/components/button.native.tsx",
+      "default": "./src/components/button.tsx"
+    },
     "./checkbox": "./src/components/checkbox.tsx",
     "./color-picker": "./src/components/color-picker.tsx",
     "./combobox": "./src/components/combobox.tsx",
     "./command": "./src/components/command.tsx",
     "./composer": "./src/components/composer.tsx",
+    "./composer-tokens": "./src/components/composer-tokens.ts",
     "./context-menu": "./src/components/context-menu.tsx",
     "./document-identity-badge": "./src/components/document-identity-badge.tsx",
     "./document-identity-badge.logic": "./src/components/document-identity-badge.logic.ts",
@@ -67,7 +74,10 @@
     "./frame": "./src/components/frame.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
-    "./input": "./src/components/input.tsx",
+    "./input": {
+      "react-native": "./src/components/input.native.tsx",
+      "default": "./src/components/input.tsx"
+    },
     "./inline-rename": "./src/components/inline-rename.tsx",
     "./inline-reorder": "./src/lib/inline-reorder.ts",
     "./inline-drop-indicator": "./src/components/inline-drop-indicator.tsx",
@@ -77,7 +87,10 @@
     "./list": "./src/components/list.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
-    "./matter-icon": "./src/components/matter-icon.tsx",
+    "./matter-icon": {
+      "react-native": "./src/components/matter-icon.native.tsx",
+      "default": "./src/components/matter-icon.tsx"
+    },
     "./matter-colors": "./src/lib/matter-colors.ts",
     "./menu": "./src/components/menu.tsx",
     "./menu-section": "./src/components/menu-section.tsx",
@@ -85,9 +98,11 @@
     "./option-color": "./src/lib/option-color.ts",
     "./outline-rail": "./src/components/outline-rail.tsx",
     "./overlay-layer": "./src/lib/overlay-layer.ts",
+    "./scroll-edge-fade": "./src/lib/scroll-edge-fade.ts",
     "./panel-inset": "./src/lib/panel-inset.ts",
     "./pagination": "./src/components/pagination.tsx",
     "./popover": "./src/components/popover.tsx",
+    "./steps": "./src/components/steps.tsx",
     "./positioner-sizing": "./src/lib/positioner-sizing.ts",
     "./preview-card": "./src/components/preview-card.tsx",
     "./preview-pane": "./src/components/preview-pane.tsx",
@@ -102,6 +117,7 @@
     "./review-status-badge": "./src/review/review-status-badge.tsx",
     "./text-mark": "./src/review/text-mark.tsx",
     "./scroll-area": "./src/components/scroll-area.tsx",
+    "./horizontal-scroller": "./src/components/horizontal-scroller.tsx",
     "./scroll-to-top": "./src/components/scroll-to-top.tsx",
     "./search-field": "./src/components/search-field.tsx",
     "./secret-input": "./src/components/secret-input.tsx",
@@ -109,22 +125,45 @@
     "./segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./select": "./src/components/select.tsx",
     "./split-button": "./src/components/split-button.tsx",
-    "./switch": "./src/components/switch.tsx",
-    "./separator": "./src/components/separator.tsx",
-    "./sheet": "./src/components/sheet.tsx",
+    "./switch": {
+      "react-native": "./src/components/switch.native.tsx",
+      "default": "./src/components/switch.tsx"
+    },
+    "./separator": {
+      "react-native": "./src/components/separator.native.tsx",
+      "default": "./src/components/separator.tsx"
+    },
+    "./sheet": {
+      "react-native": "./src/components/sheet.native.tsx",
+      "default": "./src/components/sheet.tsx"
+    },
     "./sidebar": "./src/components/sidebar.tsx",
-    "./loader": "./src/components/loader.tsx",
+    "./loader": {
+      "react-native": "./src/components/loader.native.tsx",
+      "default": "./src/components/loader.tsx"
+    },
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
     "./stella-mark": "./src/components/stella-mark.tsx",
-    "./stella-wordmark": "./src/components/stella-wordmark.tsx",
+    "./stella-wordmark": {
+      "react-native": "./src/components/stella-wordmark.native.tsx",
+      "default": "./src/components/stella-wordmark.tsx"
+    },
     "./table": "./src/components/table.tsx",
     "./table-chart": "./src/components/table-chart.tsx",
     "./tabs": "./src/components/tabs.tsx",
-    "./textarea": "./src/components/textarea.tsx",
+    "./textarea": {
+      "react-native": "./src/components/textarea.native.tsx",
+      "default": "./src/components/textarea.tsx"
+    },
+    "./text": {
+      "react-native": "./src/components/text.native.tsx",
+      "default": "./src/components/text.tsx"
+    },
     "./toast": "./src/components/toast.tsx",
     "./tooltip": "./src/components/tooltip.tsx",
+    "./truncated-text": "./src/components/truncated-text.tsx",
     "./typed-character": "./src/lib/typed-character.ts",
     "./use-contained-handler": "./src/hooks/use-contained-handler.ts",
     "./use-content-dir": "./src/hooks/use-content-dir.ts",
@@ -147,7 +186,10 @@
     "./components/ai-label": "./src/components/ai-label.tsx",
     "./components/brand-icons": "./src/components/brand-icons.tsx",
     "./components/breadcrumb": "./src/components/breadcrumb.tsx",
-    "./components/button": "./src/components/button.tsx",
+    "./components/button": {
+      "react-native": "./src/components/button.native.tsx",
+      "default": "./src/components/button.tsx"
+    },
     "./components/checkbox": "./src/components/checkbox.tsx",
     "./components/color-picker": "./src/components/color-picker.tsx",
     "./components/combobox": "./src/components/combobox.tsx",
@@ -161,7 +203,10 @@
     "./components/form": "./src/components/form.tsx",
     "./components/frame": "./src/components/frame.tsx",
     "./components/hex-color-picker": "./src/components/hex-color-picker.tsx",
-    "./components/input": "./src/components/input.tsx",
+    "./components/input": {
+      "react-native": "./src/components/input.native.tsx",
+      "default": "./src/components/input.tsx"
+    },
     "./components/input-group": "./src/components/input-group.tsx",
     "./components/input-otp": "./src/components/input-otp.tsx",
     "./components/label": "./src/components/label.tsx",
@@ -174,20 +219,33 @@
     "./components/preview-card": "./src/components/preview-card.tsx",
     "./components/preview-pane": "./src/components/preview-pane.tsx",
     "./components/scroll-area": "./src/components/scroll-area.tsx",
+    "./components/horizontal-scroller": "./src/components/horizontal-scroller.tsx",
     "./components/scroll-to-top": "./src/components/scroll-to-top.tsx",
     "./components/secret-input": "./src/components/secret-input.tsx",
     "./components/file-input": "./src/components/file-input.tsx",
     "./components/segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./components/select": "./src/components/select.tsx",
-    "./components/separator": "./src/components/separator.tsx",
-    "./components/sheet": "./src/components/sheet.tsx",
+    "./components/separator": {
+      "react-native": "./src/components/separator.native.tsx",
+      "default": "./src/components/separator.tsx"
+    },
+    "./components/sheet": {
+      "react-native": "./src/components/sheet.native.tsx",
+      "default": "./src/components/sheet.tsx"
+    },
     "./components/sidebar": "./src/components/sidebar.tsx",
     "./components/skeleton": "./src/components/skeleton.tsx",
     "./components/stella-mark": "./src/components/stella-mark.tsx",
-    "./components/stella-wordmark": "./src/components/stella-wordmark.tsx",
+    "./components/stella-wordmark": {
+      "react-native": "./src/components/stella-wordmark.native.tsx",
+      "default": "./src/components/stella-wordmark.tsx"
+    },
     "./components/table": "./src/components/table.tsx",
     "./components/tabs": "./src/components/tabs.tsx",
-    "./components/textarea": "./src/components/textarea.tsx",
+    "./components/textarea": {
+      "react-native": "./src/components/textarea.native.tsx",
+      "default": "./src/components/textarea.tsx"
+    },
     "./components/toast": "./src/components/toast.tsx",
     "./components/tooltip": "./src/components/tooltip.tsx",
     "./hooks/use-contained-handler": "./src/hooks/use-contained-handler.ts",
@@ -209,12 +267,12 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:unit",
     "test:unit": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ui",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ui",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"
   },
   "dependencies": {
@@ -230,11 +288,15 @@
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "catalog:",
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
+    "@stll/playwright-tools": "workspace:*",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@tanstack/react-virtual": "^3.14.13",
+    "@tanstack/react-virtual": "^3.14.21",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
@@ -242,24 +304,45 @@
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
     "tsdown": "catalog:",
+    "tsrs": "catalog:",
     "vite": "catalog:"
   },
   "peerDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "^1.7.0",
+    "@playwright/test": "^1.63.0",
     "@tanstack/react-virtual": "^3.14.13",
     "@types/react": ">=19",
     "@types/react-dom": ">=19",
+    "lucide-react-native": ">=1.41.0",
     "react": ">=19",
     "react-dom": ">=19",
-    "tailwindcss": "^4.3.0"
+    "react-native": ">=0.88.0",
+    "react-native-svg": ">=15.16.0",
+    "tailwindcss": "^4.3.0",
+    "uniwind": ">=1.13.0"
   },
   "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    },
     "@types/react": {
       "optional": true
     },
     "@types/react-dom": {
+      "optional": true
+    },
+    "lucide-react-native": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "react-native-svg": {
+      "optional": true
+    },
+    "uniwind": {
       "optional": true
     }
   }

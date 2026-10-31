@@ -7,8 +7,8 @@ import type {
 } from "@stll/api-contract/correspondence";
 
 import type { TranslationKey } from "@/i18n/types";
-import { correspondenceApi } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { api } from "@/lib/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 import { correspondenceKeys } from "./correspondence";
@@ -44,7 +44,7 @@ export const correspondenceDropsOptions = (workspaceId: string) =>
       pageParam,
       signal,
     }): Promise<CorrespondenceDropsPage> => {
-      const response = await correspondenceApi
+      const response = await api
         .workspaces({ workspaceId })
         .correspondence.drops.get({
           query: {
@@ -53,7 +53,7 @@ export const correspondenceDropsOptions = (workspaceId: string) =>
           },
           fetch: { signal },
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });

@@ -1,11 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -17,8 +16,8 @@ import {
   chatThreads,
   entities,
   entityVersions,
-  fileChatThreads,
   fields,
+  fileChatThreads,
   workspaces,
 } from "@/api/db/schema";
 import {
@@ -42,7 +41,11 @@ import {
 import { hasPersistedGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  fileSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { insertNamedEntity } from "@/api/lib/entities/sibling-name-insert";
@@ -66,14 +69,15 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import {
-  organizationFileUsageHandlerError,
   OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
-import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -94,22 +98,20 @@ const cleanupSettlementFailure = failureSink({
   expected: [],
 });
 
-const uploadEntityBodySchema = t.Object({
-  file: t.File({
-    maxSize: FILE_SIZE_LIMITS.document,
-  }),
-  name: tDefaultVarchar,
-  propertyId: tSafeId("property"),
+const uploadEntityBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  name: defaultVarcharSchema,
+  propertyId: resourceIdSchema("property"),
 });
 
-const uploadGeneratedDocumentBodySchema = t.Object({
-  ...uploadEntityBodySchema.properties,
-  contentSha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
-  draftChatThreadId: t.Optional(tSafeId("chatThread")),
-  messageId: tSafeId("chatMessage"),
-  threadId: tSafeId("chatThread"),
-  threadWorkspaceId: t.Optional(tSafeId("workspace")),
-  toolCallId: t.String(),
+const uploadGeneratedDocumentBodySchema = v.object({
+  ...uploadEntityBodySchema.entries,
+  contentSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+  draftChatThreadId: v.optional(resourceIdSchema("chatThread")),
+  messageId: resourceIdSchema("chatMessage"),
+  threadId: resourceIdSchema("chatThread"),
+  threadWorkspaceId: v.optional(resourceIdSchema("workspace")),
+  toolCallId: v.string(),
 });
 
 type UploadEntityHandlerProps = {
@@ -120,7 +122,7 @@ type UploadEntityHandlerProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof uploadEntityBodySchema> & {
+  body: v.InferOutput<typeof uploadEntityBodySchema> & {
     origin: (typeof UPLOAD_ENTITY_ORIGIN)[keyof typeof UPLOAD_ENTITY_ORIGIN];
   };
   generatedDraft?:
@@ -308,11 +310,14 @@ const cleanupUploadedS3Keys = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, {
-      operation: "upload-s3-cleanup",
-      fileId,
-      workspaceId,
-    });
+    captureError(
+      cleanup.error,
+      handlerErrorContext("entities.cleanupUploadedS3Keys.cleanup_error", {
+        operation: "upload-s3-cleanup",
+        fileId,
+        workspaceId,
+      }),
+    );
   }
   return Result.isOk(cleanup);
 };
@@ -870,7 +875,10 @@ export const uploadEntityHandler = async function* ({
 
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: file.type, scanned }),
-    { mimeType: file.type, sizeBytes: String(fileBuffer.byteLength) },
+    handlerErrorContext("entityUpload.detectEncryption", {
+      mimeType: file.type,
+      sizeBytes: String(fileBuffer.byteLength),
+    }),
   );
   if (encryption === null) {
     return Result.err(
@@ -1232,7 +1240,13 @@ export const uploadEntityHandler = async function* ({
     const fileName = writeResult.resolvedName;
 
     await processEntity(entityId).catch((error: unknown) =>
-      captureError(error, { entityId, mimeType: file.type }),
+      captureError(
+        error,
+        handlerErrorContext("entityUpload.processExtraction", {
+          entityId,
+          mimeType: file.type,
+        }),
+      ),
     );
 
     if (uploadTriggeredFlowPolicy(origin) === "start") {
@@ -1242,7 +1256,13 @@ export const uploadEntityHandler = async function* ({
         organizationId,
         fileName: fileName.value,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, workspaceId });
+        captureError(
+          error,
+          handlerErrorContext("entityUpload.startFlows", {
+            entityId,
+            workspaceId,
+          }),
+        );
       });
     }
 
@@ -1255,11 +1275,14 @@ export const uploadEntityHandler = async function* ({
       userId,
       workspaceId,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId,
-        fieldId,
-        mimeType: file.type,
-      });
+      captureError(
+        error,
+        handlerErrorContext("entityUpload.enqueuePdfDerivative", {
+          entityId,
+          fieldId,
+          mimeType: file.type,
+        }),
+      );
     });
 
     enqueueImageThumbnailOrMarkFailed({
@@ -1271,11 +1294,14 @@ export const uploadEntityHandler = async function* ({
       userId,
       workspaceId,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId,
-        fieldId,
-        mimeType: file.type,
-      });
+      captureError(
+        error,
+        handlerErrorContext("entityUpload.enqueueThumbnail", {
+          entityId,
+          fieldId,
+          mimeType: file.type,
+        }),
+      );
     });
 
     return Result.ok({

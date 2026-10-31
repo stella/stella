@@ -1,7 +1,7 @@
 import type {
   ChatProjectableToolName,
-  RegistryReadToolName,
   READ_TOOL_REF_FIELD_MAP,
+  RegistryReadToolName,
 } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import type { ThirdPartyOutboundReadToolName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 

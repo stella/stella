@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import type {
   FinishedStatus,
-  JobState,
   JobsOptions,
+  JobState,
   RetryOptions,
 } from "bullmq";
 

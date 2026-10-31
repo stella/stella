@@ -8,12 +8,12 @@ import {
 } from "@stll/property-testing";
 
 import {
-  expectRegistryResponse,
-  registryString,
-  registryExtras,
-  forEachRegistryMutation,
-  expectRegistryOutcome,
   expectNullableString,
+  expectRegistryOutcome,
+  expectRegistryResponse,
+  forEachRegistryMutation,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import {
   lookupByCompanyNumber,

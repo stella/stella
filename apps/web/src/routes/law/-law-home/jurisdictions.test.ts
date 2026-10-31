@@ -106,7 +106,7 @@ describe("law home jurisdictions", () => {
 
   test("statuteCountryOf answers only for jurisdictions the browser covers", () => {
     expect(statuteCountryOf("CZE")).toBe("cze");
-    expect(statuteCountryOf("SVK")).toBeNull();
+    expect(statuteCountryOf("SVK")).toBe("svk");
     expect(statuteCountryOf("POL")).toBeNull();
     expect(statuteCountryOf("EU")).toBeNull();
     expect(statuteCountryOf(undefined)).toBeNull();

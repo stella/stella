@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -32,53 +32,71 @@ const [czechCompanyId, slovakCompanyId] =
   ];
 
 // A POST body keeps a person's name and birth date out of URLs and access logs.
-const bodySchema = t.Object({
-  check: t.UnionEnum(COUNTERPARTY_CHECK_KINDS, {
-    description:
+const bodySchema = v.object({
+  check: v.pipe(
+    v.picklist(COUNTERPARTY_CHECK_KINDS),
+    v.description(
       "Which official source to screen the subject against; 'sanctions' " +
-      "screens every sanctions list and answers per list",
-  }),
-  subjectType: t.UnionEnum(COUNTERPARTY_CHECK_SUBJECT_TYPES, {
-    description:
+        "screens every sanctions list and answers per list",
+    ),
+  ),
+  subjectType: v.pipe(
+    v.picklist(COUNTERPARTY_CHECK_SUBJECT_TYPES),
+    v.description(
       "'company-id' screens a registered business by its national ID; " +
-      "'tax-id' a taxpayer by its tax ID; 'person' a natural person by " +
-      "name and birth date; 'organization' an organization by name " +
-      "(sanctions only)",
-  }),
-  companyId: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 32,
-      description: "National business ID",
-    }),
+        "'tax-id' a taxpayer by its tax ID; 'person' a natural person by " +
+        "name and birth date; 'organization' an organization by name " +
+        "(sanctions only)",
+    ),
   ),
-  country: t.Optional(
-    t.Union([t.Literal(czechCompanyId), t.Literal(slovakCompanyId)], {
-      description:
+  companyId: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description("National business ID"),
+    ),
+  ),
+  country: v.optional(
+    v.pipe(
+      v.union([v.literal(czechCompanyId), v.literal(slovakCompanyId)]),
+      v.description(
         "Country that issued the company ID; defaults to CZ. The register " +
-        "checks cover CZ only",
-    }),
+          "checks cover CZ only",
+      ),
+    ),
   ),
-  taxId: t.Optional(
-    t.String({ minLength: 1, maxLength: 32, description: "Tax ID" }),
+  taxId: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description("Tax ID"),
+    ),
   ),
-  name: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 512,
-      description: "Organization name, for the 'organization' subject type",
-    }),
+  name: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(512),
+      v.description("Organization name, for the 'organization' subject type"),
+    ),
   ),
-  firstName: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
-  lastName: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
-  birthDate: t.Optional(
-    t.String({ format: "date", description: "Birth date, YYYY-MM-DD" }),
+  firstName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(100))),
+  lastName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(100))),
+  birthDate: v.optional(
+    v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description("Birth date, YYYY-MM-DD"),
+    ),
   ),
-  dateOfBirth: t.Optional(dateOfBirthSchema),
-  nationalityCodes: t.Optional(nationalityCodesSchema),
+  dateOfBirth: v.optional(dateOfBirthSchema),
+  nationalityCodes: v.optional(nationalityCodesSchema),
 });
 
-type CheckBody = Static<typeof bodySchema>;
+type CheckBody = v.InferOutput<typeof bodySchema>;
 
 const missingSubjectFields = (fields: string) =>
   Result.err(

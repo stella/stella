@@ -10,8 +10,8 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -186,12 +186,14 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       const legacyFailure: unknown = await db
-        .execute(sql`
+        .execute(
+          sql`
           UPDATE ${caseLawDecisions}
           SET source_hash = 'legacy-fence-stale'
           WHERE source_id = ${sourceId}
             AND case_number = ${caseNumber}
-        `)
+        `,
+        )
         .then(
           () => null,
           (error: unknown) => error,

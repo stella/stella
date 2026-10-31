@@ -4,6 +4,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { deferred } from "@stll/test-kit";
 
@@ -13,13 +14,13 @@ import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   bindChatTurnRunId,
+  CHAT_TURN_RUN_LEASE_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
   isChatTurnRunIdTaken,
   OWNER_LOST_OUTCOME,
   reapOwnerlessChatTurnOnTx,
-  CHAT_TURN_RUN_LEASE_MS,
   settleChatTurnOnTx,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -35,6 +36,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -269,6 +271,7 @@ const produceUntilCut = ({
   const response = run.produce(
     output(),
     memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
   );
   return { response, run, stored };
 };
@@ -317,6 +320,7 @@ describe("a producing run", () => {
     const response = run.produce(
       output(),
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     try {
       await stalled.promise;
@@ -371,23 +375,16 @@ describe("a producing run", () => {
       const client = await fetch(server.url, {
         signal: AbortSignal.timeout(10_000),
       });
-      const reader = (
-        client.body ?? panic("Expected HTTP turn delivery")
-      ).getReader();
+      const body = client.body ?? panic("Expected HTTP turn delivery");
       const decoder = new TextDecoder();
       const delivered: string[] = [];
       clientConnected.resolve(undefined);
-      while (true) {
-        const next = await reader.read();
-        if (next.done) {
-          break;
-        }
-        delivered.push(decoder.decode(next.value, { stream: true }));
+      for await (const chunk of body) {
+        delivered.push(decoder.decode(chunk, { stream: true }));
         // Real socket progress must continue between reads, even for a slower viewer.
         await Bun.sleep(1);
       }
       delivered.push(decoder.decode());
-      reader.releaseLock();
       expect(delivered.join("")).toContain(encodedSnapshot);
       expect(await run.settled).toBe("stored");
       expect(run.control.abortController.signal.aborted).toBe(false);
@@ -589,13 +586,16 @@ describe("a producing run", () => {
       heartbeat: { intervalMs: 5, renewEvery: 2 },
       threadId,
     });
-    for (let poll = 0; poll < 400; poll += 1) {
-      const { leaseExpiresAt } = await readTurn(execution.id);
-      if (leaseExpiresAt !== null && leaseExpiresAt > new Date()) {
-        break;
-      }
-      await Bun.sleep(5);
-    }
+    await waitForExternalState({
+      description: "the heartbeat renews the lease past now",
+      intervalMs: 5,
+      read: async () => {
+        const { leaseExpiresAt } = await readTurn(execution.id);
+        return leaseExpiresAt !== null && leaseExpiresAt > new Date();
+      },
+      // The reaper below decides the outcome either way.
+      onTimeout: () => undefined,
+    });
     // Renewed past now: the reaper leaves a live owner's turn alone.
     unwrap(
       await safeDb(
@@ -683,6 +683,7 @@ describe("a producing run", () => {
     const response = run.produce(
       output(),
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     await response.text();
 
@@ -720,13 +721,18 @@ describe("a producing run", () => {
     );
 
     const relinquished = ownership.relinquish();
-    for (let poll = 0; poll < 400; poll += 1) {
-      const { leaseExpiresAt } = await readTurn(execution.id);
-      if ((leaseExpiresAt?.getTime() ?? 0) < (claimedLease?.getTime() ?? 0)) {
-        break;
-      }
-      await Bun.sleep(5);
-    }
+    await waitForExternalState({
+      description: "the relinquished claim shortens the lease",
+      intervalMs: 5,
+      read: async () => {
+        const { leaseExpiresAt } = await readTurn(execution.id);
+        return (
+          (leaseExpiresAt?.getTime() ?? 0) < (claimedLease?.getTime() ?? 0)
+        );
+      },
+      // The assertion below reports a lease that stayed long.
+      onTimeout: () => undefined,
+    });
     expect(
       (await readTurn(execution.id)).leaseExpiresAt?.getTime() ?? 0,
     ).toBeLessThanOrEqual(Date.now() + CHAT_TURN_RUN_LEASE_MS);
@@ -843,7 +849,11 @@ describe("a producing run", () => {
       yield* [];
     };
     await run
-      .produce(output(), memoryStream({ runId: Bun.randomUUIDv7() }))
+      .produce(
+        output(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
+      )
       .text();
     expect(ownership.run(execution.executionId)).toBeUndefined();
 

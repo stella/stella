@@ -35,6 +35,91 @@ const collectFindings = (): MatterAccessFinding[] => {
   return findings;
 };
 
+const EXTRACTED_CONTENT_OWNER =
+  "apps/api/src/lib/document-content-provenance.ts";
+const EXTRACTED_PAYLOAD_COLUMN =
+  /\b(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\b/u;
+const INCLUSION_COLUMNS = /^\s*(?:[A-Za-z_$][\w$]*\s*:\s*true\s*,?\s*)+$/u;
+const METADATA_COLUMNS_ONLY = /^\{\s*columns\s*:\s*\{([^{}]*)\}\s*,?\s*\}$/u;
+
+/** The balanced `{...}` block starting at `start`, or null when unbalanced. */
+const braceBlock = (source: string, start: number): string | null => {
+  let depth = 0;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+  return null;
+};
+
+// A relation selection outside the owner may name extracted content only to
+// exclude it or to select metadata columns. Any other form (`true`, a nested
+// selection, a spread) could load the payload, wherever the object is written
+// and however it later reaches a query.
+const selectsExtractedRelationPayload = (source: string): boolean =>
+  [...source.matchAll(/\bextractedContent\s*:\s*(true\b|\{)/gu)].some(
+    (match) => {
+      if (match[1] === "true") {
+        return true;
+      }
+      const block = braceBlock(source, match.index + match[0].length - 1);
+      const columns = block === null ? null : METADATA_COLUMNS_ONLY.exec(block);
+      // Only an inclusion list is metadata-only: a `false` entry makes Drizzle
+      // return every other column, the payload included.
+      return (
+        columns === null ||
+        !INCLUSION_COLUMNS.test(columns[1] ?? "") ||
+        EXTRACTED_PAYLOAD_COLUMN.test(columns[1] ?? "")
+      );
+    },
+  );
+
+const collectExtractedContentReaders = () => {
+  const violations: string[] = [];
+  for (const file of new Glob("apps/api/src/**/*.ts").scanSync({
+    cwd: repoRoot,
+  })) {
+    if (!isProductionSource(file) || file === EXTRACTED_CONTENT_OWNER) {
+      continue;
+    }
+    const source = readFileSync(path.join(repoRoot, file), "utf-8");
+    const selectsPayloadColumn =
+      /\bextractedContent\.(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\b/u.test(
+        source,
+      ) ||
+      /\bquery\.extractedContent\.find(?:First|Many)\s*\([\s\S]{0,3000}\b(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\s*:\s*true\b/u.test(
+        source,
+      ) ||
+      (/\bquery\.extractedContent\.find(?:First|Many)\s*\(\s*\{[\s\S]{0,1000}\.\.\.[A-Za-z_$][\w$]*/u.test(
+        source,
+      ) &&
+        /\b(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\s*:\s*true\b/u.test(
+          source,
+        )) ||
+      /\bselect\b[\s\S]{0,300}\b(?:ciphertext|iv|ocr_payload_ciphertext|ocr_payload_iv)\b[\s\S]{0,300}\bfrom\s+extracted_content\b/iu.test(
+        source,
+      );
+    if (
+      selectsPayloadColumn ||
+      // Schema modules define the relation itself; they select nothing.
+      (!file.startsWith("apps/api/src/db/schema/") &&
+        selectsExtractedRelationPayload(source)) ||
+      (/\bextractedContent\b|\bextracted_content\b/u.test(source) &&
+        /\bdecryptContent\s*\(/u.test(source))
+    ) {
+      violations.push(file);
+    }
+  }
+  return violations;
+};
+
 // Modules that hand request and MCP code the actor's workspace set. They
 // must take it from the owner module; a local query would be a second source.
 const WORKSPACE_SET_PRODUCERS = [
@@ -68,6 +153,73 @@ describe("matter access census", () => {
       expect(source).toContain(`from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}"`);
       expect(source).toContain("readAuthorizedWorkspaces(tx");
     }
+  });
+
+  test("only the checked reader produces authorized workspace ids", () => {
+    const violations: string[] = [];
+    for (const file of new Glob("apps/api/src/**/*.ts").scanSync({
+      cwd: repoRoot,
+    })) {
+      if (
+        !isProductionSource(file) ||
+        file === AUTHORIZED_WORKSPACE_OWNER_FILE
+      ) {
+        continue;
+      }
+      const source = readFileSync(path.join(repoRoot, file), "utf-8");
+      if (
+        /\bauthorizeWorkspaceIds\b|\bmintAuthorizedWorkspaceIds\b|\bfromPermissionCheck\b|new\s+AuthorizedWorkspaceId(?:s|List)\b/u.test(
+          source,
+        )
+      ) {
+        violations.push(file);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  test("relation selections name extracted content only to exclude it or select metadata", () => {
+    // An exported selection is caught where it is written, before any module
+    // passes it to a query.
+    expect(
+      selectsExtractedRelationPayload(
+        "export const relations = { extractedContent: true };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { columns: { ciphertext: true } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { columns: { ...rest } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { with: { entity: true } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "export const relations = { extractedContent: { columns: { entityId: false } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { columns: { sourceFieldId: true, extractedAt: true } } };",
+      ),
+    ).toBe(false);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: false }; type T = { extractedContent: Provenance | null };",
+      ),
+    ).toBe(false);
+  });
+
+  test("only the extracted-content owner reads encrypted document payloads", () => {
+    expect(collectExtractedContentReaders()).toEqual([]);
   });
 
   test("every allowlist entry states a reason", () => {

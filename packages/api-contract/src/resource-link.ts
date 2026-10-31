@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
   type ResourceRef,
+  resourceRef,
   type ResourceType,
 } from "./resource-ref";
 import { encodeRfc3986Component } from "./rfc3986";

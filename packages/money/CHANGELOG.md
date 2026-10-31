@@ -40,8 +40,8 @@
   for JPY. The locale is always a parameter because a package cannot read the
   reader's.
 
-- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency. `toMinorUnits({
-  amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
+- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency.
+  `toMinorUnits({ amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
   currency's own exponent (100 for USD, 1 for JPY, 1000 for KWD), and
   `formatMoneyCents` takes an optional `fractionDigits` for a rounded summary.
 
@@ -51,8 +51,8 @@
   an amount it cannot store; `tryToMinorUnits` returns null instead, for callers
   holding text nobody has vouched for yet.
 
-  BREAKING: `cents()` now rejects an integer outside the safe range, where `x + 1
-  === x` and a running total silently stops moving. `@stll/workspace-ui` no
+  BREAKING: `cents()` now rejects an integer outside the safe range, where
+  `x + 1 === x` and a running total silently stops moving. `@stll/workspace-ui` no
   longer re-exports `currencyMinorUnitDigits`, `formatMoneyCents`, or
   `FormatMoneyCentsParams`; import them from `@stll/money`.
 

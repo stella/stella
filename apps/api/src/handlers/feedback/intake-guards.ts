@@ -27,7 +27,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 type RedisLike = {
   send: (command: string, args: string[]) => Promise<unknown>;

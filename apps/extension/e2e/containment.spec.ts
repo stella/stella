@@ -4,9 +4,9 @@ import { BROWSER_CONTROL_ERROR_CODE } from "@stll/api-contract/browser-control";
 
 import {
   createCommandSender,
-  openInNewControlledTab,
   elementNamed,
   launchExtensionHarness,
+  openInNewControlledTab,
   successful,
   targetOf,
 } from "./fixtures/harness";

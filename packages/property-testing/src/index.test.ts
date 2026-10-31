@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  drawPropertySamples,
   PROPERTY_TEST_SEED_ENV,
   PROPERTY_TEST_TIMEOUT_BASE_MS_ENV,
-  PropertyTestConfigError,
-  drawPropertySamples,
   propertyConfig,
   propertySeed,
+  PropertyTestConfigError,
   propertyTestDefaultTimeout,
   propertyTestTimeout,
 } from "./index";

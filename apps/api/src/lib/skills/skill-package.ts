@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import type JSZip from "jszip";
 
 import {
-  isSkillResourceFolder,
   isAllowedResourcePath,
+  isSkillResourceFolder,
   normalizeResourcePath,
   validateSkillPackage,
 } from "@stll/skills";
@@ -13,12 +13,12 @@ import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { loadDocx } from "@/api/lib/docx-archive";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -46,8 +46,7 @@ const GITHUB_FETCH_HEADERS = {
 const USER_GITHUB_FETCH_ACCESS = { source: "user" } as const;
 
 type GithubSkillFetchAccess =
-  | { source: "catalogue"; githubToken?: string }
-  | { source: "user" };
+  { source: "catalogue"; githubToken?: string } | { source: "user" };
 
 const githubSkillFetchHeaders = ({
   access,
@@ -1338,6 +1337,7 @@ const fetchSafeBytes = async ({
     return Result.err(
       new HandlerError({
         status: access.source === "catalogue" ? 503 : 400,
+        code: "internal_error",
         message: response.error.message,
         cause: response.error,
       }),
@@ -1350,6 +1350,7 @@ const fetchSafeBytes = async ({
           access.source === "catalogue"
             ? catalogueUpstreamStatus(response.value.status)
             : 400,
+        code: "internal_error",
         message: `Skill source returned HTTP ${response.value.status}`,
       }),
     );
@@ -2278,6 +2279,7 @@ const toCatalogueHandlerError = (cause: unknown): HandlerError => {
   }
   return new HandlerError({
     status: 502,
+    code: "internal_error",
     message: "Catalogue skill package is invalid",
     cause,
   });

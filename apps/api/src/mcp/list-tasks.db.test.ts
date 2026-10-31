@@ -18,9 +18,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { TASK_ASSIGNEE_FILTER } from "@/api/lib/tasks/assigned";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -107,7 +107,7 @@ const createContext = async ({
   userId,
   memberRole,
   accessibleWorkspaceIds,
-}: ContextOptions): Promise<McpRequestContext> => {
+}: ContextOptions): Promise<AuthorizedMcpRequestContext> => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   const scopedDb = asTestRaw<ScopedDb>(
     createMembershipScopedDb(testDb, identity),
@@ -122,7 +122,7 @@ const createContext = async ({
   });
   const workspaceIds =
     accessibleWorkspaceIds ?? usable.map((workspace) => workspace.id);
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(
@@ -144,7 +144,7 @@ type ListedTask = { id: string; matterId: string };
 type ListedPage = { tasks: ListedTask[]; nextCursor: string | null };
 
 const listTasks = async (
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
   args: Record<string, unknown>,
 ): Promise<ListedPage> => {
   const response = await MATTER_TOOL_HANDLERS.list_tasks({ args, context });

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -181,6 +182,7 @@ const createRepository = (directory: string) => {
     GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z",
     GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z",
     PROOF_TEST_RESPONSES: responses,
+    PROOF_TEST_TARGET: "",
     GH_RETRY_SCRIPT: path.join(directory, "gh-retry.sh"),
   };
   const git = (...args: string[]) => {
@@ -192,11 +194,13 @@ const createRepository = (directory: string) => {
     return result.stdout.toString().trim();
   };
   git("init", "--quiet", "--initial-branch=main", "--template=");
+  mkdirSync(path.join(directory, "docs/changelog"), { recursive: true });
   writeFileSync(path.join(directory, "VERSION"), "1.2.2\n");
-  git("add", "VERSION");
+  writeFileSync(path.join(directory, "bun.lock"), "{}\n");
+  git("add", "VERSION", "bun.lock");
   const commit = (contents: string, message: string) => {
-    writeFileSync(path.join(directory, "release.txt"), contents);
-    git("add", "release.txt", "VERSION");
+    writeFileSync(path.join(directory, "docs/changelog/v1.2.3.md"), contents);
+    git("add", "docs/changelog/v1.2.3.md", "VERSION");
     git("commit", "--quiet", "--message", message);
     return git("rev-parse", "HEAD");
   };
@@ -209,6 +213,7 @@ const createRepository = (directory: string) => {
   git("checkout", "--quiet", "main");
   writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
   const target = commit("b", "squash release");
+  environment.PROOF_TEST_TARGET = target;
   git("update-ref", "refs/remotes/origin/main", target);
   const publishCommit = (sha: string) => {
     writeFileSync(
@@ -226,6 +231,7 @@ const createRepository = (directory: string) => {
     html_url: `https://github.com/${repository}/pull/1`,
     number: 1,
     title: "chore: release v1.2.3",
+    draft: false,
     state: "closed",
     merged_at: "2026-01-01T00:00:00Z",
     merge_commit_sha: target,
@@ -325,6 +331,40 @@ case "$endpoint" in
       jq -c 'add // []' "$PROOF_TEST_RESPONSES/$sha-pulls"
     fi
     ;;
+  query=*ReleaseCommitHistory*)
+    jq -nc \
+      --arg sha "$PROOF_TEST_TARGET" \
+      --slurpfile pulls "$PROOF_TEST_RESPONSES/$PROOF_TEST_TARGET-pulls" \
+      --slurpfile timeline "$PROOF_TEST_RESPONSES/timeline-1" \
+      --slurpfile runs "$PROOF_TEST_RESPONSES/$PROOF_TEST_TARGET-merge-group-runs" '
+      {
+        data: {
+          repository: {
+            c0: {
+              oid: $sha,
+              associatedPullRequests: {
+                pageInfo: {hasNextPage: false},
+                nodes: ($pulls[0][0] | map({
+                  number,
+                  title,
+                  url: .html_url,
+                  mergedAt: .merged_at,
+                  mergeCommit: {oid: .merge_commit_sha},
+                  timelineItems: $timeline[0].data.repository.pullRequest.timelineItems
+                }))
+              },
+              checkSuites: {
+                pageInfo: {hasNextPage: false, endCursor: null},
+                nodes: ($runs[0].workflow_runs | map({
+                  conclusion: (if .conclusion == "success" then "SUCCESS" else (.conclusion | ascii_upcase) end),
+                  workflowRun: {event, file: {path: ".github/workflows/ci.yml"}}
+                }))
+              }
+            }
+          }
+        }
+      }'
+    ;;
   number=*)
     cat "$PROOF_TEST_RESPONSES/timeline-\${endpoint#number=}"
     ;;
@@ -384,7 +424,7 @@ esac
         {
           context: "staging/verified",
           workflow: "deploy-staging.yml",
-          title: "Staging release proof ",
+          title: "Staging release proof v1.2.3-rc.1 ",
           id: 100,
         },
         {
@@ -523,8 +563,8 @@ esac
         env: environment,
       },
     );
-  const prepareReleaseTag = () =>
-    Bun.spawnSync(["bash", prepareTag, "--repo", repository], {
+  const selectReleaseCandidate = (sha: string) =>
+    Bun.spawnSync(["bash", prepareTag, "--repo", repository, "--sha", sha], {
       cwd: directory,
       env: environment,
     });
@@ -538,7 +578,7 @@ esac
     environment,
     git,
     mergedPullRequest,
-    prepareReleaseTag,
+    selectReleaseCandidate,
     proof,
     publishCommit,
     publishPullRequests,
@@ -554,6 +594,27 @@ esac
 };
 
 describe("release proof trust boundary", () => {
+  // The proof resolves its release PR tree verifier beside itself, so a step
+  // that relocates the proof without it refuses every release PR head.
+  test("every step that relocates the proof relocates its tree verifier beside it", () => {
+    const workflows = path.join(import.meta.dir, "../.github/workflows");
+    const relocatedProof = /"\$RUNNER_TEMP\/verify-release-tree-proof\.sh"$/mu;
+    const relocatedVerifier =
+      /"\$RUNNER_TEMP\/verify-release-candidate-tree\.mjs"$/mu;
+    const missing = readdirSync(workflows)
+      .filter((file) => file.endsWith(".yml"))
+      .flatMap((file) =>
+        readFileSync(path.join(workflows, file), "utf-8")
+          .split("\n      - name: ")
+          .filter(
+            (step) =>
+              relocatedProof.test(step) && !relocatedVerifier.test(step),
+          )
+          .map((step) => `${file}: ${step.slice(0, step.indexOf("\n"))}`),
+      );
+    expect(missing).toEqual([]);
+  });
+
   test("accepts identical trees when the same repository verifies the squash parent and PR head", async () =>
     withRepository(({ git, proof, target, verify }) => {
       expect(proof).not.toBe(target);
@@ -745,7 +806,7 @@ describe("release proof trust boundary", () => {
       expect(verify(reverted, target).exitCode).not.toBe(0);
     }));
 
-  test("accepts an open same-repository release PR only against the tested main tip", async () =>
+  test("accepts an open same-repository release PR against its merge-base with advancing main", async () =>
     withRepository(
       ({
         base,
@@ -765,9 +826,10 @@ describe("release proof trust boundary", () => {
         publishPullRequests(proof, [openPullRequest]);
         git("update-ref", "refs/remotes/origin/main", base);
         expect(verify(proof, proof, true).exitCode).toBe(0);
-        expect(verify(proof, proof).exitCode).not.toBe(0);
+        expect(verify(proof, proof).exitCode).toBe(0);
         git("update-ref", "refs/remotes/origin/main", target);
-        expect(verify(proof, proof, true).exitCode).not.toBe(0);
+        const advancedMain = verify(proof, proof, true);
+        expect(advancedMain.exitCode, advancedMain.stderr.toString()).toBe(0);
       },
     ));
 });
@@ -828,6 +890,33 @@ describe("release health with reused proof", () => {
         expect(discoveredResult.stderr.toString()).toContain("missing");
       }),
   );
+
+  test("refuses a draft release PR as a candidate proof", async () =>
+    withRepository(
+      ({
+        base,
+        git,
+        mergedPullRequest,
+        proof,
+        publishPullRequests,
+        verify,
+      }) => {
+        publishPullRequests(proof, [
+          { ...mergedPullRequest, state: "open", merged_at: null },
+        ]);
+        git("update-ref", "refs/remotes/origin/main", base);
+        const ready = verify(proof, proof, true);
+        expect(ready.exitCode, ready.stderr.toString()).toBe(0);
+        publishPullRequests(proof, [
+          { ...mergedPullRequest, state: "open", merged_at: null, draft: true },
+        ]);
+        const draft = verify(proof, proof, true);
+        expect(draft.exitCode).not.toBe(0);
+        expect(draft.stderr.toString()).toContain(
+          "release PR head relation is unverified",
+        );
+      },
+    ));
 });
 
 describe("merge-group receipt in place of the heavy statuses", () => {
@@ -865,10 +954,6 @@ describe("merge-group receipt in place of the heavy statuses", () => {
         const health = checkHealth(true);
         expect(health.exitCode, health.stderr.toString()).toBe(0);
         expect(health.stdout.toString()).toBe("");
-        const tag = fixture.prepareReleaseTag();
-        expect(tag.exitCode, tag.stderr.toString()).toBe(0);
-        expect(tag.stdout.toString()).toContain(`sha=${fixture.target}\n`);
-        expect(tag.stdout.toString()).not.toContain("proof-sha=");
       }),
     30_000,
   );
@@ -880,8 +965,6 @@ describe("merge-group receipt in place of the heavy statuses", () => {
         fixture.publishTargetStatus("staging/verified", state);
         expect(fixture.checkReceipt().exitCode).toBe(0);
         expect(fixture.checkHealth(true).exitCode).not.toBe(0);
-        const tag = fixture.prepareReleaseTag();
-        expect(tag.exitCode).not.toBe(0);
       }
     }));
 
@@ -977,7 +1060,6 @@ describe("merge-group receipt in place of the heavy statuses", () => {
         "MERGE_GROUP_RECEIPT_REFUSED",
       );
       expect(fixture.checkHealth(true).exitCode).not.toBe(0);
-      expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
     }),
   );
 
@@ -1034,9 +1116,6 @@ describe("merge-group receipt in place of the heavy statuses", () => {
           fixture.proof,
         );
         expect(fixture.checkHealth(true).exitCode).toBe(0);
-        const tag = fixture.prepareReleaseTag();
-        expect(tag.exitCode, tag.stderr.toString()).toBe(0);
-        expect(tag.stdout.toString()).toContain(`proof-sha=${fixture.proof}\n`);
         // The staging proof keeps its binding to the squash parent.
         fixture.recordTestedBase(fixture.proof);
         expect(fixture.verify().exitCode).not.toBe(0);
@@ -1085,9 +1164,6 @@ describe("merge-group receipt and the history since the previous release", () =>
         "validated queue history since v1.2.2 stand in for main/heavy and main/pr-depth",
       );
       expect(health.stdout.toString()).toBe("");
-      const tag = fixture.prepareReleaseTag();
-      expect(tag.exitCode, tag.stderr.toString()).toBe(0);
-      expect(tag.stdout.toString()).toContain(`sha=${fixture.target}\n`);
     }));
 
   test(
@@ -1103,7 +1179,6 @@ describe("merge-group receipt and the history since the previous release", () =>
         );
         expect(refused.stderr.toString()).toContain("#1 chore: release v1.2.3");
         expect(refused.stderr.toString()).toContain("RELEASE_HEAVY_NOT_GREEN");
-        expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
         // Trusted main/heavy and main/pr-depth still release the commit.
         fixture.publishStatuses();
         const health = fixture.checkHealth();
@@ -1155,7 +1230,6 @@ describe("merge-group receipt and the history since the previous release", () =>
         "does not stand in for main/heavy and main/pr-depth",
       );
       expect(health.stderr.toString()).toContain("RELEASE_HEAVY_NOT_GREEN");
-      expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
     }),
   );
 
@@ -1201,7 +1275,6 @@ describe("merge-group receipt and the history since the previous release", () =>
         );
         // Discovery may still name the release head; validation refuses it.
         expect(fixture.checkHealth(true).exitCode).not.toBe(0);
-        expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
         // Once the queue validated the history, the receipt replaces them.
         fixture.publishQueueTimeline(["AddedToMergeQueueEvent", "MergedEvent"]);
         const covered = fixture.checkHealth();
@@ -1311,15 +1384,74 @@ exec bash ${JSON.stringify(verifier)} "$@"
     }));
 });
 
-describe("release tag selection with reused proof", () => {
-  test("selects the squash commit using the green tree-identical release head", async () =>
-    withRepository(({ prepareReleaseTag, proof, publishStatuses, target }) => {
-      publishStatuses();
-      const result = prepareReleaseTag();
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.toString()).toContain(`sha=${target}\n`);
-      expect(result.stdout.toString()).toContain(`proof-sha=${proof}\n`);
-      expect(result.stdout.toString()).toContain("tag=v1.2.3\n");
+describe("RC identity selection excludes merged proof", () => {
+  test("green reused evidence does not make a squash commit an open release PR head", async () =>
+    withRepository((fixture) => {
+      fixture.publishStatuses();
+      const health = fixture.checkHealth();
+      expect(health.exitCode, health.stderr.toString()).toBe(0);
+      const selection = fixture.selectReleaseCandidate(fixture.target);
+      expect(selection.exitCode).not.toBe(0);
+      expect(selection.stderr.toString()).toContain(
+        "release PR head relation is unverified",
+      );
+      expect(selection.stdout.toString()).toBe("");
+      const source = readFileSync(verifier, "utf-8");
+      const mutant = source.replace(
+        'if [[ "$allow_pr_head" == false && ',
+        "if [[ ",
+      );
+      expect(mutant).not.toBe(source);
+      const unchecked = path.join(
+        fixture.directory,
+        "unchecked-rc-selector.sh",
+      );
+      writeFileSync(unchecked, mutant);
+      const uncheckedSelection = Bun.spawnSync(
+        ["bash", prepareTag, "--repo", repository, "--sha", fixture.target],
+        {
+          cwd: fixture.directory,
+          env: {
+            ...fixture.environment,
+            RELEASE_TREE_PROOF_VERIFIER: unchecked,
+          },
+        },
+      );
+      expect(
+        uncheckedSelection.exitCode,
+        uncheckedSelection.stderr.toString(),
+      ).toBe(0);
+      expect(uncheckedSelection.stdout.toString()).toContain(
+        `sha=${fixture.target}\n`,
+      );
+    }));
+
+  test("an ordinary main commit without an open release PR is refused", async () =>
+    withRepository((fixture) => {
+      const main = fixture.commit("c", "ordinary main change");
+      fixture.git("update-ref", "refs/remotes/origin/main", main);
+      fixture.publishCommit(main);
+      fixture.publishPullRequests(main, []);
+      const selection = fixture.selectReleaseCandidate(main);
+      expect(selection.exitCode).not.toBe(0);
+      expect(selection.stderr.toString()).toContain(
+        "release PR head relation is unverified",
+      );
+      expect(selection.stdout.toString()).toBe("");
+    }));
+
+  test("a proven merged release head cannot be selected for another RC", async () =>
+    withRepository((fixture) => {
+      fixture.publishStatuses();
+      fixture.git("tag", "v1.2.3-rc.1", fixture.proof);
+      const health = fixture.checkHealth();
+      expect(health.exitCode, health.stderr.toString()).toBe(0);
+      const selection = fixture.selectReleaseCandidate(fixture.proof);
+      expect(selection.exitCode).not.toBe(0);
+      expect(selection.stderr.toString()).toContain(
+        "release PR head relation is unverified",
+      );
+      expect(selection.stdout.toString()).toBe("");
     }));
 });
 
@@ -1432,7 +1564,6 @@ describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
         expect(output.proof).toBeUndefined();
         expect(publishes).toBe(true);
         expect(fixture.verify(changedTarget).exitCode).not.toBe(0);
-        expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
       }));
 
     test("an unavailable proof API forces fresh suites without emitting reusable evidence", async () =>

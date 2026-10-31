@@ -1,10 +1,15 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { timeTimers, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -87,9 +92,11 @@ const listRunningMemberTimers = createSafeRootHandler(
       reason: "billing_admin",
       consumesServices: false,
     },
-    query: t.Object({
-      limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
-      cursor: t.Optional(tPaginationCursor()),
+    query: v.object({
+      limit: v.optional(
+        numberFromString(paginationLimitSchema(LIMITS.timeEntriesPageSizeMax)),
+      ),
+      cursor: v.optional(paginationCursorSchema()),
     }),
   },
   async function* ({ safeDb, session, user, memberRole, query }) {

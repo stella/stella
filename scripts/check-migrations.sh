@@ -3,6 +3,12 @@
 # Guard against schema changes landing without migration files.
 #
 set -euo pipefail
+# Resolved without dirname: callers may run this with only bash and git.
+script_dir="${BASH_SOURCE[0]%/*}"
+if [[ "$script_dir" == "${BASH_SOURCE[0]}" ]]; then
+  script_dir=.
+fi
+retry_script="$script_dir/retry.sh"
 
 BASE_REF="${BASE_REF:-}"
 
@@ -16,7 +22,7 @@ fi
 
 if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   echo "Base ref '$BASE_REF' is not available; fetching origin/main."
-  git fetch origin main --depth=1
+  "$BASH" "$retry_script" git fetch origin main --depth=1
   BASE_REF="origin/main"
 fi
 
@@ -25,6 +31,7 @@ CHANGED_FILES="$(git diff --name-only "$BASE_REF"...HEAD)"
 # The folder name identifies a migration in the deployed ledger. Reject
 # deletion or renaming of a migration already present at the merge base.
 bun scripts/check-migration-order.ts "$BASE_REF"
+bun scripts/check-migration-locks.ts --base "$BASE_REF"
 
 extract_schema_files() {
   local source_file="$1"
@@ -102,7 +109,11 @@ schema_file_has_migration_relevant_diff() {
   bun -e '
     const { spawnSync } = require("node:child_process");
     const fs = require("node:fs");
-    const ts = require("typescript6");
+    const { parseSource, walk } = require("@stll/scripts/src/syntax-tree");
+    const transpiler = new Bun.Transpiler({
+      loader: "ts",
+      tsconfig: { compilerOptions: { verbatimModuleSyntax: true } },
+    });
 
     const baseRef = process.argv.at(1);
     const changedFile = process.argv.at(2);
@@ -110,44 +121,34 @@ schema_file_has_migration_relevant_diff() {
     const normalizeSchemaSource = (source) => {
       // Type-only imports and zero-argument `$type<T>()` calls do not alter DDL.
       // AST erasure preserves runtime calls and SQL text around nested types.
-      const parsed = ts.createSourceFile(
-        changedFile,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      const transformed = ts.transform(parsed, [(context) => {
-        const visit = (node) => {
-          if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) {
-            return undefined;
-          }
-          if (ts.isImportSpecifier(node) && node.isTypeOnly) {
-            return undefined;
-          }
-          if (
-            ts.isCallExpression(node) &&
-            node.arguments.length === 0 &&
-            node.typeArguments?.length > 0 &&
-            !node.questionDotToken &&
-            ts.isPropertyAccessExpression(node.expression) &&
-            !node.expression.questionDotToken &&
-            node.expression.name.text === "$type"
-          ) {
-            return ts.visitNode(node.expression.expression, visit);
-          }
-          // Ignore source line breaks after removing a type-only chain link.
-          return ts.setTextRange(ts.visitEachChild(node, visit, context), {
-            pos: -1,
-            end: -1,
-          });
-        };
-        return (root) => ts.visitNode(root, visit);
-      }]);
-      const normalized = ts.createPrinter({ removeComments: true }).printFile(
-        transformed.transformed[0],
-      );
-      transformed.dispose();
-      return normalized;
+      const parsed = parseSource(changedFile, source);
+      const edits = [];
+      walk(parsed.program, (node) => {
+        if (
+          node.type === "CallExpression" &&
+          node.arguments.length === 0 &&
+          node.typeArguments?.params.length > 0 &&
+          !node.optional &&
+          node.callee.type === "MemberExpression" &&
+          !node.callee.computed &&
+          !node.callee.optional &&
+          node.callee.property.type === "Identifier" &&
+          node.callee.property.name === "$type"
+        ) {
+          edits.push({ start: node.callee.object.end, end: node.end });
+        }
+      });
+      let erased = source;
+      // Keep offsets stable while removing comments Bun would otherwise preserve.
+      for (const { start, end } of parsed.comments.toReversed()) {
+        erased = erased.slice(0, start)
+          + source.slice(start, end).replace(/[^\r\n]/g, " ")
+          + erased.slice(end);
+      }
+      for (const { start, end } of edits.toSorted((a, b) => b.start - a.start)) {
+        erased = erased.slice(0, start) + erased.slice(end);
+      }
+      return transpiler.transformSync(erased);
     };
 
     const currentSource = fs.readFileSync(changedFile, "utf8");

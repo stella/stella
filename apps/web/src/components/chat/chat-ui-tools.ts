@@ -11,6 +11,7 @@ import {
   CREATE_DOCUMENT_TOOL_NAME,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
+import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   isApprovalGatedBuiltInChatTool,
@@ -20,6 +21,7 @@ import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
 import type { TranslationKey } from "@/i18n/types";
+import type { WebApiRoutes } from "@/lib/api";
 import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
@@ -27,7 +29,6 @@ import type {
   ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@/lib/api-contract";
-import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError } from "@/lib/errors/api";
 import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
@@ -79,8 +80,7 @@ export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
  * unknown.
  */
 export type RegisteredChatUIToolCallPart =
-  | BuiltInChatToolCallPart
-  | ExternalMcpChatToolCallPart;
+  BuiltInChatToolCallPart | ExternalMcpChatToolCallPart;
 type RegisteredFolioAgentToolName = Extract<
   keyof ChatUITools,
   FolioAgentToolName
@@ -96,11 +96,9 @@ export type RegisteredFolioAgentToolCallPart<
   };
 }[TName];
 export type ChatUIToolCallPart =
-  | RegisteredChatUIToolCallPart
-  | OpaquePersistedChatToolCallPart;
+  RegisteredChatUIToolCallPart | OpaquePersistedChatToolCallPart;
 export type ChatUIPart =
-  | Exclude<TanStackChatPart, { type: "tool-call" }>
-  | ChatUIToolCallPart;
+  Exclude<TanStackChatPart, { type: "tool-call" }> | ChatUIToolCallPart;
 export type ChatUIMessage = Omit<PersistedChatMessage, "parts"> & {
   parts: ChatUIPart[];
 };
@@ -122,13 +120,12 @@ export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
 // handle the interaction.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
-  "ask-user" | "create-document" | "request_secret"
+  "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
-  | ApprovalToolName
-  | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
+  ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
 export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
   name: ApprovalToolName;
   approval: {
@@ -148,13 +145,11 @@ type ToolNameWithPolicyKind<K extends string> = {
     Name in keyof BuiltInChatToolPolicyKindByName
   ]: BuiltInChatToolPolicyKindByName[Name] extends K ? Name : never;
 }[keyof BuiltInChatToolPolicyKindByName];
-type PublicOfficialToolName = Extract<
-  BuiltInApprovalToolName,
-  ToolNameWithPolicyKind<"public_official">
->;
+// Tools that send model-chosen arguments to a third party show them on the
+// approval card, official public registries included.
 type ExternalInputToolName = Extract<
   BuiltInApprovalToolName,
-  ToolNameWithPolicyKind<"external">
+  ToolNameWithPolicyKind<"external" | "public_official">
 >;
 const TOOL_CALL_STATE_IS_RUNNING = {
   "awaiting-input": true,
@@ -172,7 +167,13 @@ const isChatToolCallState = (
 const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
+  [CONNECT_CONNECTOR_TOOL_NAME]: true,
 } as const satisfies Record<string, true>;
+export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
+
+export const isUserInputChatToolName = (
+  name: string,
+): name is UserInputChatToolName => Object.hasOwn(USER_INPUT_TOOL_NAMES, name);
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
 // approval click: the read tools, plus the queue-only registration of
@@ -232,6 +233,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   request_secret: "chat.tool.request_secret",
+  connect_connector: "chat.tool.connect_connector",
   use_connector_secret: "chat.tool.use_connector_secret",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
@@ -267,6 +269,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   get_document_outline: "chat.tool.get_document_outline",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   link_matter_contact: "chat.tool.link_matter_contact",
+  list_connectable_connectors: "catalogue.filter.mcps",
   list_stories: "chat.tool.list_stories",
   list_templates: "chat.tool.list_templates",
   add_matter_member: "chat.tool.add_matter_member",
@@ -347,20 +350,17 @@ const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
   "chat.tool.unknown" satisfies TranslationKey;
 
-const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
+const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_find_related_laws: true,
   boe_get_law: true,
   boe_get_law_block: true,
   boe_get_law_structure: true,
+  boe_search_legislation: true,
   borme_get_summary: true,
   business_registry_lookup: true,
   counterparty_check: true,
-  infosoud_lookup_case: true,
-} as const satisfies Record<PublicOfficialToolName, true>;
-
-const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
-  boe_search_legislation: true,
   fetch_url: true,
+  infosoud_lookup_case: true,
   use_connector_secret: true,
   "use-browser": true,
   web_search: true,
@@ -407,11 +407,6 @@ export const isToolApprovedByGrant = (
   toolName: ApprovalToolName,
 ) => grants.has(toolName) || grants.has(getToolApprovalGrant(toolName));
 
-export const isPublicOfficialChatToolName = (
-  toolName: string,
-): toolName is PublicOfficialToolName =>
-  toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
-
 // The grant policy is shared with the API, which enforces it when storing a
 // grant and when deciding which calls skip the approval prompt.
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
@@ -431,7 +426,14 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   add_comment: false,
+  boe_find_related_laws: false,
+  boe_get_law: false,
+  boe_get_law_block: false,
+  boe_get_law_structure: false,
   boe_search_legislation: false,
+  borme_get_summary: false,
+  business_registry_lookup: false,
+  counterparty_check: false,
   "create-current-skill-resource": false,
   create_matter_document: false,
   create_reader_annotation: true,
@@ -444,6 +446,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   delete_time_entry: true,
   fetch_url: false,
   fill_template: true,
+  infosoud_lookup_case: false,
   link_matter_contact: true,
   add_matter_member: true,
   remove_matter_member: true,
@@ -536,7 +539,8 @@ export const isApprovalToolName = (
     isChatToolName(toolName) &&
     toolName !== "ask-user" &&
     toolName !== "create-document" &&
-    toolName !== "request_secret"
+    toolName !== "request_secret" &&
+    toolName !== "connect_connector"
   );
 };
 
@@ -1012,9 +1016,7 @@ type ServerChatTurnOutcome = NonNullable<
 >;
 
 export type ResolvedChatAssistantTurnOutcome =
-  | ServerChatTurnOutcome
-  | { type: "incomplete" }
-  | { type: "legacy-completed" };
+  ServerChatTurnOutcome | { type: "incomplete" } | { type: "legacy-completed" };
 
 type ChatAssistantTurnMessage = Pick<ChatMessage, "metadata" | "role"> & {
   parts: readonly ChatPart[];
@@ -1128,16 +1130,46 @@ const isCanonicalBuiltInToolCall = (
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isCanonicalChatUIMessage = (
+const isCanonicalChatUIPart = (part: PersistedChatPart): boolean =>
+  part.type !== "tool-call" ||
+  isExternalMcpToolName(part.name) ||
+  isOpaquePersistedChatToolCallPart(part) ||
+  isCanonicalBuiltInToolCall(part);
+
+/** Whether every part of `message` is canonical, checked afresh. */
+export const isCanonicalChatUIMessage = (
   message: PersistedChatMessage,
-): message is ChatUIMessage =>
-  message.parts.every(
-    (part) =>
-      part.type !== "tool-call" ||
-      isExternalMcpToolName(part.name) ||
-      isOpaquePersistedChatToolCallPart(part) ||
-      isCanonicalBuiltInToolCall(part),
-  );
+): message is ChatUIMessage => message.parts.every(isCanonicalChatUIPart);
+
+/** Messages and parts already checked. The client replaces an object rather
+ *  than changing it, so a streamed chunk checks only the parts it replaced,
+ *  and a message rebuilt around the same parts reads none of them. */
+const canonicalChatUIMessages = new WeakSet<PersistedChatMessage>();
+const canonicalChatUIParts = new WeakSet<PersistedChatPart>();
+
+const isKnownCanonicalChatUIPart = (part: PersistedChatPart): boolean => {
+  if (canonicalChatUIParts.has(part)) {
+    return true;
+  }
+  if (!isCanonicalChatUIPart(part)) {
+    return false;
+  }
+  canonicalChatUIParts.add(part);
+  return true;
+};
+
+const isKnownCanonicalChatUIMessage = (
+  message: PersistedChatMessage,
+): message is ChatUIMessage => {
+  if (canonicalChatUIMessages.has(message)) {
+    return true;
+  }
+  if (!message.parts.every(isKnownCanonicalChatUIPart)) {
+    return false;
+  }
+  canonicalChatUIMessages.add(message);
+  return true;
+};
 
 /**
  * Project known tool names and protocol-shaped payloads into the UI.
@@ -1151,7 +1183,7 @@ export const projectCanonicalChatUIMessages = (
 ): ChatUIMessage[] => {
   const projected: ChatUIMessage[] = [];
   for (const message of messages) {
-    if (!isCanonicalChatUIMessage(message)) {
+    if (!isKnownCanonicalChatUIMessage(message)) {
       return panic("Chat runtime produced a non-canonical tool call");
     }
     projected.push(message);

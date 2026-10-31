@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -10,13 +10,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { NATIVE_TOOL_SLUGS } from "@/api/lib/mcp-connectors/catalog-metadata";
 
-const routeParams = t.Object({
-  slug: t.String({ minLength: 1, maxLength: 64 }),
+const routeParams = v.object({
+  slug: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
 
-const requestBody = t.Object({
-  enabled: t.Boolean(),
-});
+const requestBody = v.object({ enabled: v.boolean() });
 
 const config = {
   contract: "patch",

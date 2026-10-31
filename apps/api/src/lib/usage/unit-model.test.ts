@@ -11,9 +11,9 @@ import { MODEL_RATES } from "@stll/ai-catalog";
 
 import {
   computeRawUsageMicroUnits,
+  MICRO_UNITS_PER_USAGE_UNIT,
   normalizeProviderPromptTokens,
   usageUnitsFromTokens,
-  MICRO_UNITS_PER_USAGE_UNIT,
 } from "@/api/lib/usage/unit-model";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -217,16 +217,22 @@ describe("computeRawUsageMicroUnits", () => {
         expect(units).toBeLessThanOrEqual(baseline);
       }
     }
-    // The repeat throttle collapses the run of anomalies into the first one.
-    expect(
-      analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
-      {
+    // Repeated values share an issue, while each malformed field owns one.
+    const exceptions = analytics.exceptions();
+    expect(exceptions.map((event) => event.properties)).toMatchObject(
+      fields.map((field) => ({
         "error.class": "TelemetryError",
-        anomaly: "invalid-uncachedInputTokens",
+        anomaly: `invalid-${field}`,
         source: "usage-unit-model",
-      },
-    ]);
+      })),
+    );
+    expect(
+      new Set(
+        exceptions.map(
+          ({ properties }) => properties["$exception_fingerprint"],
+        ),
+      ).size,
+    ).toBe(fields.length);
 
     // +Infinity is an oversized positive count, not an absent one: it must
     // clamp to the ceiling (over-metering), never coerce to zero.
@@ -393,12 +399,15 @@ describe("normalizeProviderPromptTokens", () => {
   });
 
   test("malformed provider counts coerce conservatively and report", () => {
-    const normalized = normalizeProviderPromptTokens({
-      provider: "anthropic",
-      modelId: "claude-sonnet-5-malformed-shape",
+    const counts = {
       promptTokens: Number.NaN,
       cacheReadTokens: -512,
       cacheWriteTokens: 96.4,
+    };
+    const normalized = normalizeProviderPromptTokens({
+      provider: "anthropic",
+      modelId: "claude-sonnet-5-malformed-shape",
+      ...counts,
     });
 
     // NaN and negative meter as 0; fractional rounds up.
@@ -409,13 +418,13 @@ describe("normalizeProviderPromptTokens", () => {
     });
     expect(
       analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
-      {
-        anomaly: "invalid-promptTokens",
+    ).toMatchObject(
+      Object.keys(counts).map((field) => ({
+        anomaly: `invalid-${field}`,
         modelId: "claude-sonnet-5-malformed-shape",
         source: "usage-unit-model",
-      },
-    ]);
+      })),
+    );
   });
 
   test("anomaly telemetry dedupes per model id and anomaly", () => {

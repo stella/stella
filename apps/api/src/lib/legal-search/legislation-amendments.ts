@@ -4,6 +4,7 @@ import { brand, custom, parse, pipe } from "valibot";
 import type { Brand } from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { declareFingerprintFields } from "@stll/errors";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -71,7 +72,11 @@ export class LegislationAmendmentObservationError extends TaggedError(
 )<{
   message: string;
   reason: LegislationAmendmentObservationErrorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const isLegislationAmendmentSnapshot = (
   value: unknown,

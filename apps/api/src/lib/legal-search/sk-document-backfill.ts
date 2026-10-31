@@ -1,3 +1,4 @@
+// parser-output-unchanged: retain fetched PDF bodies and settle their raw pointers; parsing is unchanged.
 // parser-output-unchanged: document writes coordinate with source ownership; parsing is unchanged.
 // parser-output-unchanged: bound the deferred queue scan; fetch processing and parsing are unchanged.
 // parser-output-unchanged: fetch processing uses the atomic claim snapshot; parsing is unchanged.
@@ -43,7 +44,7 @@ import {
 } from "drizzle-orm";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
-import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_OUTCOME,
   type DocumentFetchOutcome,
@@ -63,8 +64,8 @@ import { corpusStorageMode } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
@@ -80,6 +81,7 @@ import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   type ActiveCorpusProjectionSourceLock,
   lockActiveCorpusProjectionSourceTx,
@@ -109,9 +111,10 @@ import {
   withDeferredDocumentSourceOwnership,
 } from "@/api/lib/legal-search/deferred-document-source-ownership";
 import {
-  withDocumentStageObserver,
   recordDocumentStageError,
+  withDocumentStageObserver,
 } from "@/api/lib/legal-search/document-stage-observation";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -121,6 +124,10 @@ import {
   isUnreadablePdfError,
   parseSkDecisionPdf,
 } from "@/api/lib/legal-search/parsers/sk-courts";
+import {
+  openRawSourceWriteWindow,
+  type RawSourceWriteWindow,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
@@ -134,10 +141,17 @@ import {
 } from "@/api/lib/legal-search/sk-document-pending-sql";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import {
+  type CapturedSkDocumentRaw,
+  captureSkDocumentRaw,
+  type SkDocumentRawStorage,
+  skDocumentRawStorage,
+} from "@/api/lib/legal-search/sk-document-raw";
+import {
   createRemainingDocumentScan,
   DOCUMENT_SCAN_PAGE_LIMIT,
   DOCUMENT_SCAN_REPROBE_MS,
 } from "@/api/lib/legal-search/sk-document-remaining-scan";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -161,6 +175,10 @@ const claimedPendingDocument = Symbol("claimedPendingDocument");
 type ClaimedPendingDocument = PendingDocument & {
   readonly [claimedPendingDocument]: true;
   readonly sourceHash: string | null;
+  readonly sourceRawS3Key: string | null;
+  readonly sourceRawContentType: string | null;
+  readonly sourceRaw: string | null;
+  readonly rawWriteWindow: RawSourceWriteWindow;
   readonly attempts: number;
   /** Settlement refuses once a decision merge ran after this claim. */
   readonly mergeEpoch: bigint;
@@ -182,10 +200,26 @@ export type SkDocumentFetch = (
   init: { signal?: AbortSignal },
 ) => Promise<SkDocumentRead>;
 
+/**
+ * The retention check for a document the drain stores, supplied by the
+ * caller. These documents are parsed and written here, outside the
+ * pipeline, so its retention check never sees them; the check and the
+ * source's projection of the PDF live in the ingestion slice, which `lib` may
+ * not import. Required for the reason `SkDocumentFetch` is: a call site that
+ * forgot it would store documents nothing measured. It only starts the
+ * check, off the drain's path: re-reading a PDF must not spend the fetch
+ * deadline or hold the store it follows.
+ */
+export type SkDocumentRetentionCheck = (input: {
+  readonly decision: PendingDocument;
+  /** The PDF bytes the document was parsed from. */
+  readonly pdfBytes: Uint8Array;
+  readonly blocks: Block[];
+}) => void;
+
 /** What one gated download established. */
 export type SkDocumentRead =
-  | ReadOutcome<Response>
-  | { type: "refused-target"; reason: string };
+  ReadOutcome<Response> | { type: "refused-target"; reason: string };
 
 export type FetchPdfBytesOptions = {
   documentUrl: string;
@@ -427,7 +461,7 @@ const publisherStatusPdf = (status: number): PdfFetchResult => {
 
 export type BackfilledDocument = {
   fulltext: string;
-  documentAst: DocumentAst;
+  documentAst: DocumentAst | EmptyAst;
   sections: ReturnType<typeof segmentDecision>;
 };
 
@@ -467,10 +501,8 @@ export const parsePendingDocument = async (
   });
 
   const fulltext = sanitized.fulltext ?? "";
-  // `sanitizeResult` drops an AST it cannot round-trip, so a sanitized
-  // document that lost its blocks is treated as unparseable rather
-  // than stored half-formed.
-  if (fulltext === "" || !isDocumentAst(sanitized.documentAst)) {
+  // Text remains readable even when the reader rejects its structure.
+  if (fulltext === "") {
     return undefined;
   }
 
@@ -982,6 +1014,7 @@ export const corpusBackfillTransfer = (): CorpusTransfer | null =>
 export type StoreBackfilledDocumentOptions = {
   decision: ClaimedPendingDocument;
   document: BackfilledDocument;
+  capturedRaw?: CapturedSkDocumentRaw | undefined;
   scopedDb: ScopedDb;
   /**
    * Seam for tests, which drive the corpus path without a bucket and
@@ -1035,10 +1068,16 @@ const storedForCorpusOutcome = (
       if (isDeferredDocumentOwnershipLost(outcome.error)) {
         throw outcome.error;
       }
-      captureError(outcome.error, {
-        decisionId,
-        step: "storeBackfilledDocument.corpusBatchWrite",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "legalsearch.storedForCorpusOutcome.outcome_error",
+          {
+            decisionId,
+            step: "storeBackfilledDocument.corpusBatchWrite",
+          },
+        ),
+      );
       return false;
     default:
       outcome satisfies never;
@@ -1082,7 +1121,8 @@ const storedForCorpusOutcome = (
  */
 const storeBackfilledDocumentOwned = async ({
   decision,
-  document,
+  document: uncheckedDocument,
+  capturedRaw,
   transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
   fence,
@@ -1090,6 +1130,14 @@ const storeBackfilledDocumentOwned = async ({
   fence: DeferredDocumentSourceFence;
 }): Promise<"stored" | "superseded"> => {
   const { scopedDb } = fence;
+  const document = {
+    ...uncheckedDocument,
+    documentAst: prepareCorpusAst({
+      ast: uncheckedDocument.documentAst,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      source: ADAPTER_KEYS.SK_COURTS,
+    }).ast,
+  };
   const sections = document.sections.length > 0 ? document.sections : null;
   const ownerPredicate = and(
     eq(caseLawDecisions.id, decision.id),
@@ -1102,6 +1150,9 @@ const storeBackfilledDocumentOwned = async ({
     // overwrite it.
     storesNoCorpusDocument,
     holdsClaimedSource(decision.sourceHash),
+    capturedRaw === undefined
+      ? undefined
+      : sql`${caseLawDecisions.sourceRawS3Key} IS NOT DISTINCT FROM ${decision.sourceRawS3Key}`,
   );
 
   const storedPayloadColumns = {
@@ -1130,6 +1181,7 @@ const storeBackfilledDocumentOwned = async ({
       .update(caseLawDecisions)
       .set({
         ...payloadColumns,
+        ...capturedRaw,
         parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
         documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${decision.attempts}::int)`,
         ...corpusMirrorColumns({
@@ -1258,10 +1310,16 @@ const storeBackfilledDocumentOwned = async ({
     // backfill reselects while the row is missing. Failing the store here
     // would make the queue fetch and parse the document again only to find
     // the row already filled.
-    captureError(indexed.error, {
-      decisionId: decision.id,
-      step: "storeBackfilledDocument.indexDecision",
-    });
+    captureError(
+      indexed.error,
+      handlerErrorContext(
+        "legalsearch.storeBackfilledDocumentOwned.indexed_error",
+        {
+          decisionId: decision.id,
+          step: "storeBackfilledDocument.indexDecision",
+        },
+      ),
+    );
     logger.error("case_law.search_index.store_projection_failed", {
       decisionId: decision.id,
       ...errorSystemFields(indexed.error),
@@ -1275,28 +1333,34 @@ const storeBackfilledDocumentOwned = async ({
   return stored ? "stored" : "superseded";
 };
 
-type WriteFetchBookkeepingOptions = {
+type WriteDeferredDocumentStateOptions = {
   set: {
     documentFetchRequestedAt?: SQL;
     documentFetchAttempts?: number | SQL;
+    raw?: CapturedSkDocumentRaw;
   };
   where: SQL | undefined;
 };
 
 /**
- * The one writer of the queue's own bookkeeping on a decision: who asked for
- * it and how many attempts it has had. None of it is a change to the
- * decision, so `updated_at` is held where it is; the public reads key their
- * freshness off it. Returns the ids it wrote.
+ * The deferred queue's writer of attempts, requests and captured raw pointers.
+ * These observations preserve the decision's public freshness timestamp.
+ * Returns the ids it wrote.
  */
-const writeFetchBookkeeping = async (
+const writeDeferredDocumentState = async (
   tx: Transaction,
-  { set, where }: WriteFetchBookkeepingOptions,
+  { set, where }: WriteDeferredDocumentStateOptions,
 ): Promise<{ id: SafeId<"caseLawDecision"> }[]> =>
   // audit: skip — queue bookkeeping on public case-law rows; no user action
   await tx
     .update(caseLawDecisions)
-    .set({ ...set, updatedAt: sql`${caseLawDecisions.updatedAt}` })
+    .set({
+      documentFetchRequestedAt: set.documentFetchRequestedAt,
+      documentFetchAttempts: set.documentFetchAttempts,
+      sourceRawS3Key: set.raw?.sourceRawS3Key,
+      sourceRawContentType: set.raw?.sourceRawContentType,
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    })
     .where(where)
     .returning({ id: caseLawDecisions.id });
 
@@ -1311,7 +1375,7 @@ export const recordDocumentFetchRequest = async (
 ): Promise<void> => {
   await scopedDb(
     async (tx) =>
-      await writeFetchBookkeeping(tx, {
+      await writeDeferredDocumentState(tx, {
         set: { documentFetchRequestedAt: sql`now()` },
         where: and(
           eq(caseLawDecisions.id, decisionId),
@@ -1367,8 +1431,9 @@ const claimDocumentFetchOwned = async ({
   decisionId: SafeId<"caseLawDecision">;
   fence: DeferredDocumentSourceFence;
   attemptPolicy: "count" | "reserve-final-attempt";
-}): Promise<DocumentFetchClaim> =>
-  await fence.scopedDb(async (tx) => {
+}): Promise<DocumentFetchClaim> => {
+  const rawWriteWindow = openRawSourceWriteWindow();
+  return await fence.scopedDb(async (tx) => {
     const lockResult: unknown = await tx.execute(
       sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext(${decisionId})) AS locked`,
     );
@@ -1422,6 +1487,9 @@ const claimDocumentFetchOwned = async ({
         .returning({
           ...PENDING_DOCUMENT_COLUMNS,
           sourceHash: caseLawDecisions.sourceHash,
+          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+          sourceRawContentType: caseLawDecisions.sourceRawContentType,
+          sourceRaw: caseLawDecisions.sourceRaw,
         })
     ).at(0);
     if (claimedRow === undefined) {
@@ -1434,11 +1502,13 @@ const claimDocumentFetchOwned = async ({
         ...snapshot,
         attempts: nextAttempts,
         mergeEpoch: fence.mergeEpoch,
+        rawWriteWindow,
         [claimedPendingDocument]: true,
       },
       attempts: nextAttempts,
     };
   });
+};
 
 /** A write decided by one claimed fetch of one decision. */
 type ClaimedFetchWriteOptions = {
@@ -1525,7 +1595,7 @@ const parkDocumentFetchOwned = async ({
   const { scopedDb } = fence;
   const parked = await scopedDb(
     async (tx) =>
-      await writeFetchBookkeeping(tx, {
+      await writeDeferredDocumentState(tx, {
         set: {
           documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${MAX_DOCUMENT_FETCH_ATTEMPTS}::int)`,
         },
@@ -1632,7 +1702,7 @@ export const requeueParkedDocuments = async ({
   }
   return await scopedDb(async (tx) => {
     const parked = parkedDocumentIdsQuery({ limit, sourceId, tx });
-    const requeued = await writeFetchBookkeeping(tx, {
+    const requeued = await writeDeferredDocumentState(tx, {
       set: { documentFetchAttempts: 0 },
       where: inArray(caseLawDecisions.id, parked),
     });
@@ -1676,10 +1746,13 @@ export type DecisionDocumentOutcome =
 export const DOCUMENT_FETCH_BUDGET_MS = 60_000;
 
 export type FetchDecisionDocumentOptions = {
+  rawStorage?: SkDocumentRawStorage | undefined;
   onDocumentObservation?: DocumentStageObserver | undefined;
   decisionId: SafeId<"caseLawDecision">;
   /** The publisher's gate, supplied by the caller. See `SkDocumentFetch`. */
   fetchDocument: SkDocumentFetch;
+  /** Measures each stored document. See `SkDocumentRetentionCheck`. */
+  checkRetention: SkDocumentRetentionCheck;
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
@@ -1753,6 +1826,8 @@ const parseFetchedDocument = async ({
 const runDecisionDocumentFetch = async ({
   decisionId,
   fetchDocument,
+  checkRetention,
+  rawStorage,
   scopedDb,
   signal,
   fence,
@@ -1768,16 +1843,19 @@ const runDecisionDocumentFetch = async ({
     return { status: "claimed" };
   }
 
-  const result = await Result.tryPromise({
+  const processing = await Result.tryPromise({
     try: async () =>
       await processClaimedDocument({
         claim,
         fetchDocument,
+        checkRetention,
+        rawStorage,
         signal,
         fence,
       }),
     catch: (error) => error,
   });
+  const result = processing.andThen((outcome) => outcome);
   if (
     Result.isError(result) &&
     (isDeferredDocumentOwnershipLost(result.error) || signal.aborted)
@@ -1792,7 +1870,7 @@ const runDecisionDocumentFetch = async ({
   ) {
     await scopedDb(
       async (tx) =>
-        await writeFetchBookkeeping(tx, {
+        await writeDeferredDocumentState(tx, {
           set: {
             documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${claim.attempts}::int)`,
           },
@@ -1881,6 +1959,8 @@ const settleFetchedDocument = async ({
 type ProcessClaimedDocumentOptions = {
   claim: Extract<DocumentFetchClaim, { status: "claimed" }>;
   fetchDocument: SkDocumentFetch;
+  checkRetention: SkDocumentRetentionCheck;
+  rawStorage?: SkDocumentRawStorage | undefined;
   signal: AbortSignal;
   fence: DeferredDocumentSourceFence;
 };
@@ -1888,9 +1968,13 @@ type ProcessClaimedDocumentOptions = {
 const processClaimedDocument = async ({
   claim,
   fetchDocument,
+  checkRetention,
+  rawStorage = skDocumentRawStorage,
   signal,
   fence,
-}: ProcessClaimedDocumentOptions): Promise<DecisionDocumentOutcome> => {
+}: ProcessClaimedDocumentOptions): Promise<
+  Result<DecisionDocumentOutcome, unknown>
+> => {
   const { decision } = claim;
   const { documentUrl } = decision;
   const fetched: PdfFetchResult = documentUrl
@@ -1904,25 +1988,73 @@ const processClaimedDocument = async ({
       )
     : { type: "absent" };
 
-  const parsed = await settleFetchedDocument({
-    attempts: claim.attempts,
-    decision,
-    fetched,
-    fence,
+  const capture =
+    fetched.type === "document"
+      ? await captureSkDocumentRaw({
+          sourceId: fence.sourceId,
+          decisionId: decision.id,
+          storedKey: decision.sourceRawS3Key,
+          storedContentType: decision.sourceRawContentType,
+          inlineRaw: decision.sourceRaw,
+          window: decision.rawWriteWindow,
+          bytes: fetched.bytes,
+          signal,
+          storage: rawStorage,
+          beforeRemoteEffect: fence.beforeRemoteEffect,
+        })
+      : Result.ok(undefined);
+  if (Result.isError(capture)) {
+    return capture;
+  }
+  const capturedRaw = capture.value;
+  const retainCapturedRaw = async () => {
+    if (capturedRaw === undefined) {
+      return;
+    }
+    await fence.scopedDb(async (tx) => {
+      await writeDeferredDocumentState(tx, {
+        set: { raw: capturedRaw },
+        where: and(
+          eq(caseLawDecisions.id, decision.id),
+          eq(caseLawDecisions.sourceId, fence.sourceId),
+          isNull(caseLawDecisions.redactedAt),
+          holdsClaimedSource(decision.sourceHash),
+          sql`${caseLawDecisions.sourceRawS3Key} IS NOT DISTINCT FROM ${decision.sourceRawS3Key}`,
+        ),
+      });
+    });
+  };
+  const parsing = await Result.tryPromise({
+    try: async () =>
+      await settleFetchedDocument({
+        attempts: claim.attempts,
+        decision,
+        fetched,
+        fence,
+      }),
+    catch: (error) => error,
   });
+  if (Result.isError(parsing)) {
+    await retainCapturedRaw();
+    return parsing;
+  }
+  const parsed = parsing.value;
+  if (parsed.type !== "parsed" || parsed.document === undefined) {
+    await retainCapturedRaw();
+  }
   switch (parsed.type) {
     case "parsed":
       break;
     case "parked":
-      return {
+      return Result.ok({
         status: "parked",
         failure: DOCUMENT_FETCH_FAILURE.UNPARSEABLE,
         detail: parsed.detail,
-      };
+      });
     case "superseded":
-      return { status: "superseded" };
+      return Result.ok({ status: "superseded" });
     case "settled":
-      return parsed.outcome;
+      return Result.ok(parsed.outcome);
     default:
       parsed satisfies never;
       return panic(`Unhandled parse result: ${String(parsed)}`);
@@ -1934,19 +2066,29 @@ const processClaimedDocument = async ({
       decision,
       fence,
     });
-    return { status: "unavailable" };
+    return Result.ok({ status: "unavailable" });
   }
 
   const stored = await storeBackfilledDocumentOwned({
     decision,
     document,
-
+    capturedRaw,
     fence,
   });
   if (stored === "superseded") {
-    return { status: "superseded" };
+    return Result.ok({ status: "superseded" });
   }
-  return { status: "filled", document };
+  // Measured once stored, as the pipeline measures every document it writes:
+  // a document that fails the check is still the decision's text, and a
+  // superseded store is never reported. The check is only started here.
+  if (fetched.type === "document") {
+    checkRetention({
+      decision,
+      pdfBytes: fetched.bytes,
+      blocks: document.documentAst.blocks,
+    });
+  }
+  return Result.ok({ status: "filled", document });
 };
 
 type OwnedDocumentOperationOptions<T> = {

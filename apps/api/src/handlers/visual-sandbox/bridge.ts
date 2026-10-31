@@ -7,8 +7,8 @@ import {
   visualGuestPortMessageSchema,
 } from "@stll/api-contract/visual-sandbox";
 import {
-  visualThemeMessageSchema,
   type VisualTheme,
+  visualThemeMessageSchema,
 } from "@stll/api-contract/visual-theme";
 
 import { prepareGeneratedVisual } from "./prepare";

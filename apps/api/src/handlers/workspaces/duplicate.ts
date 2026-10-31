@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -17,7 +17,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -50,7 +50,10 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import type { CheckedFileCopy } from "@/api/lib/files/organization-file-usage";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -58,13 +61,19 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import {
+  copyObject,
+  headObject,
+  S3ObjectMissingError,
+  type S3PresignError,
+} from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -113,9 +122,7 @@ const config = {
     reason: "workflow_orchestration",
     consumesServices: true,
   },
-  body: t.Object({
-    includeContent: t.Boolean(),
-  }),
+  body: v.object({ includeContent: v.boolean() }),
 } satisfies WorkspaceHandlerConfig;
 
 const FILE_COPY_CONCURRENCY = 4;
@@ -367,7 +374,12 @@ const copyWorkspaceFiles = async ({
   organizationId: SafeId<"organization">;
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
-}) => {
+}): Promise<
+  Result<
+    undefined,
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
+> => {
   const prepareFile = async (copy: FileCopy) => {
     const sourceKey = createFileKey({
       organizationId,
@@ -441,7 +453,13 @@ const cleanupCopiedS3Keys = async ({
   );
 
   if (Result.isError(cleanupResult)) {
-    captureError(cleanupResult.error, { targetWorkspaceId });
+    captureError(
+      cleanupResult.error,
+      handlerErrorContext(
+        "workspaces.cleanupCopiedS3Keys.cleanupResult_error",
+        { targetWorkspaceId },
+      ),
+    );
   }
 };
 
@@ -671,8 +689,10 @@ export const createDuplicateWorkspace = (
           });
           return Result.err(
             new HandlerError({
-              status: 500,
-              message: "Failed to copy matter files",
+              status: S3ObjectMissingError.is(copyResult.error) ? 404 : 500,
+              message: S3ObjectMissingError.is(copyResult.error)
+                ? "Matter file not found"
+                : "Failed to copy matter files",
               cause: copyResult.error,
             }),
           );
@@ -1066,10 +1086,10 @@ export const createDuplicateWorkspace = (
           },
         });
 
-        await dependencies.enqueueEntitySearchRepairs(
-          tx,
-          duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
-        );
+        await dependencies.enqueueEntitySearchRepairs(tx, [
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.durableExtraction],
+        ]);
         const nativeExtractionRunIds =
           await dependencies.requestNativeExtractionRuns({
             requests: nativeExtractionRequests,
@@ -1100,17 +1120,32 @@ export const createDuplicateWorkspace = (
       // made durable: projection marks and immutable-source extraction runs.
       dependencies
         .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
-        .catch(captureError);
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("matterDuplicate.flushMatterSearch"),
+          ),
+        );
       dependencies
-        .flushEntitySearchRepairs(
-          txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
-        )
-        .catch(captureError);
+        .flushEntitySearchRepairs([
+          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
+          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.durableExtraction],
+        ])
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("matterDuplicate.flushEntitySearch"),
+          ),
+        );
 
       handoffCommittedDocumentProcessingRuns({
         enqueue: dependencies.enqueueDocumentProcessingRun,
         runIds: txResult.value.nativeExtractionRunIds,
-      }).catch(captureError);
+      }).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
+          ),
+        ),
+      );
 
       return Result.ok({ workspaceId: txResult.value.workspaceId });
     },

@@ -5,16 +5,16 @@ import type { RowSelectionState } from "@tanstack/react-table";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import {
-  TEXT_FIELD_TYPE,
   TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { ROW_FIRST_LINE } from "@/components/workspaces/table/select-row-content";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import type {
-  TableTreeNode,
   DecisionRowData,
+  TableTreeNode,
 } from "@/components/workspaces/table/types";
 import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
 import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
@@ -49,7 +49,10 @@ const { useInspectorTabsStore } =
 const { propertiesOptions } =
   await import("@/lib/workspaces/queries/properties");
 const { toSafeId } = await import("@/lib/safe-id");
-const { selectColId } = await import("./workspace-table/internals-helpers");
+const { selectColId, addPropertyColId, getWorkspaceGridColumnMetadata } =
+  await import("./workspace-table/internals-helpers");
+const { CellMetadataFlags } =
+  await import("@/components/workspaces/cell-metadata-flags");
 
 const wasOnline = onlineManager.isOnline();
 onlineManager.setOnline(false);
@@ -168,9 +171,32 @@ const entities: TableTreeNode[] = Array.from(
 
 // A value column beside the number, so the first line a host reserves in its
 // cells can be compared with the one its number sits on.
-const columns = [{ id: selectColId }, { id: "_value", cell: () => "Value" }];
+const fixtureCellText = { icon: "Icon", value: "Value" };
+const columns = [
+  { id: selectColId },
+  {
+    id: "_value",
+    cell: () => (
+      <>
+        <span data-slot="fixture-cell-icon">{fixtureCellText.icon}</span>
+        <span className="truncate" data-slot="fixture-cell-value">
+          {fixtureCellText.value}
+        </span>
+      </>
+    ),
+  },
+];
 
-type FixtureProps = { contentMode: TableContentMode; onOpen: () => void };
+type FixtureProps = {
+  contentMode: TableContentMode;
+  onOpen: () => void;
+  columnLayout:
+    | "with-value"
+    | "selection-only"
+    | "select-last"
+    | "selection-with-rail"
+    | "with-flags";
+};
 
 const PublicLawFixture = ({ contentMode, onOpen }: FixtureProps) => {
   const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
@@ -206,44 +232,87 @@ const PublicLawFixture = ({ contentMode, onOpen }: FixtureProps) => {
     ));
 };
 
-const EntityFixture = ({ contentMode }: FixtureProps) => {
+const EntityFixture = ({ contentMode, columnLayout }: FixtureProps) => {
   const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
   const lastSelectedIndex = useRef<number | null>(null);
   const table = useTable({
     features: workspaceTableFeatures,
     data: entities,
-    columns,
+    columns: (() => {
+      switch (columnLayout) {
+        case "selection-only":
+          return columns.slice(0, 1);
+        case "selection-with-rail":
+          return [
+            ...columns.slice(0, 1),
+            { id: addPropertyColId, cell: () => "Add property" },
+          ];
+        case "select-last":
+          return columns.toReversed();
+        case "with-flags":
+          return [
+            ...columns,
+            {
+              id: "_flags",
+              cell: () => (
+                <CellMetadataFlags
+                  workspaceId="selection-test"
+                  entityId="task-0"
+                  propertyId="property-test"
+                  metadata={undefined}
+                />
+              ),
+            },
+          ];
+        case "with-value":
+          return columns;
+        default:
+          return columnLayout satisfies never;
+      }
+    })(),
     getRowId: ({ entityId }) => entityId,
     state: { rowSelection },
     onRowSelectionChange,
   });
-  return table
-    .getRowModel()
-    .rows.map((row, index) => (
-      <DraggableRow
-        key={row.id}
-        row={row}
-        index={index}
-        rowLabel={String(index + 1)}
-        renderColumns={table.getVisibleLeafColumns()}
-        addPropertyColumn={null}
-        table={table}
-        contentMode={contentMode}
-        expandedCellId={null}
-        hasExpandedTableCell={false}
-        lastSelectedIndex={lastSelectedIndex}
-        measureElement={() => undefined}
-        onToggleExpandedCell={() => undefined}
-        workspaceId="selection-test"
-        activeEntityId={null}
-        activePropertyId={null}
-        activeTaskId={null}
-        editingEntityId={null}
-        onRename={() => undefined}
-        onStartEditing={() => undefined}
-        onStopEditing={() => undefined}
-      />
-    ));
+  const renderColumns = table
+    .getVisibleLeafColumns()
+    .filter(({ id }) => id !== addPropertyColId);
+  const addPropertyColumn =
+    table.getVisibleLeafColumns().find(({ id }) => id === addPropertyColId) ??
+    null;
+  const columnMetadata = getWorkspaceGridColumnMetadata({
+    renderColumns,
+    addPropertyColumn,
+  });
+  return (
+    <div role="grid" aria-colcount={columnMetadata.columnCount}>
+      {table.getRowModel().rows.map((row, index) => (
+        <DraggableRow
+          key={row.id}
+          row={row}
+          index={index}
+          rowLabel={String(index + 1)}
+          renderColumns={renderColumns}
+          addPropertyColumn={addPropertyColumn}
+          table={table}
+          contentMode={contentMode}
+          expandedCellId={null}
+          hasExpandedTableCell={false}
+          lastSelectedIndex={lastSelectedIndex}
+          measureElement={() => undefined}
+          onToggleExpandedCell={() => undefined}
+          workspaceId="selection-test"
+          activeEntityId={null}
+          activePropertyId={null}
+          activeTaskId={null}
+          editingEntityId={null}
+          onRename={() => undefined}
+          onStartEditing={() => undefined}
+          onStopEditing={() => undefined}
+        />
+      ))}
+    </div>
+  );
 };
 
 const fixtures = new Map<string, React.ComponentType<FixtureProps>>([
@@ -254,10 +323,15 @@ const fixtures = new Map<string, React.ComponentType<FixtureProps>>([
   ],
 ]);
 
-const renderHost = async (
-  host: string,
-  contentMode: TableContentMode = "tight",
-) => {
+const renderHost = async ({
+  host,
+  contentMode = "tight",
+  columnLayout = "with-value",
+}: {
+  host: string;
+  contentMode?: TableContentMode;
+  columnLayout?: FixtureProps["columnLayout"];
+}) => {
   const Fixture = fixtures.get(host);
   if (!Fixture) {
     throw new Error(`No selection-column fixture for ${host}`);
@@ -279,6 +353,7 @@ const renderHost = async (
         <div role="grid">
           <Fixture
             contentMode={contentMode}
+            columnLayout={columnLayout}
             onOpen={() => {
               openCount++;
             }}
@@ -333,12 +408,104 @@ const renderHost = async (
 };
 
 describe("every shared selection-column host", () => {
+  test.each([
+    { columnLayout: "with-value" },
+    { columnLayout: "selection-only" },
+    { columnLayout: "select-last" },
+    { columnLayout: "selection-with-rail" },
+  ] satisfies { columnLayout: FixtureProps["columnLayout"] }[])(
+    "entity actions have their own space outside the selection cell (%s)",
+    async ({ columnLayout }) => {
+      const { view, assertNotOpened } = await renderHost({
+        host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+        columnLayout,
+      });
+      const checkbox = view.getByRole("checkbox", { name: "1" });
+      const row = checkbox.closest('[role="row"]');
+      const actions = row?.querySelector('button[aria-label="Actions"]');
+      expect(actions).not.toBeNull();
+      expect(
+        actions?.closest('[role="gridcell"]') ===
+          checkbox.closest('[role="gridcell"]'),
+      ).toBe(false);
+      expect(
+        row?.querySelectorAll('button[aria-label="Actions"]'),
+      ).toHaveLength(1);
+      const actionsCell = actions?.closest('[role="gridcell"]');
+      expect(actionsCell).not.toBeNull();
+      expect(actionsCell?.getAttribute("aria-hidden")).not.toBe("true");
+      expect(actions?.className.split(" ")).toContain(
+        "pointer-coarse:opacity-100!",
+      );
+      expect(actions?.closest("span.sr-only")?.className.split(" ")).toContain(
+        "pointer-coarse:not-sr-only",
+      );
+      const grid = row?.closest('[role="grid"]');
+      const cells = [...(row?.querySelectorAll('[role="gridcell"]') ?? [])];
+      expect(
+        cells.map((cell) => Number(cell.getAttribute("aria-colindex"))),
+      ).toEqual(
+        Array.from(
+          { length: Number(grid?.getAttribute("aria-colcount")) },
+          (_, index) => index + 1,
+        ),
+      );
+      fireEvent.click(checkbox);
+      expect(checkbox.getAttribute("aria-checked")).toBe("true");
+      assertNotOpened();
+    },
+  );
+
+  test.each(TABLE_CONTENT_MODES)(
+    "entity renderer siblings remain direct flex children (%s)",
+    async (contentMode) => {
+      const { view } = await renderHost({
+        host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+        contentMode,
+      });
+      const icon = view.container.querySelector(
+        '[data-slot="fixture-cell-icon"]',
+      );
+      const value = view.container.querySelector(
+        '[data-slot="fixture-cell-value"]',
+      );
+      expect(icon?.parentElement).toBe(value?.parentElement);
+      expect(value?.parentElement?.className.split(" ")).toContain("flex");
+      expect(value?.parentElement?.className.split(" ")).toContain("gap-1.5");
+      expect(value?.className.split(" ")).toContain("truncate");
+    },
+  );
+
+  test("cell lock and verification controls remain visible to coarse pointers", async () => {
+    const { view } = await renderHost({
+      host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+      columnLayout: "with-flags",
+    });
+    const lock = view
+      .getAllByRole("button", { name: messages.workspaces.table.lock.lock })
+      .at(0);
+    const verified = view
+      .getAllByRole("button", { name: messages.common.verified })
+      .at(0);
+    for (const button of [lock, verified]) {
+      expect(button).toBeDefined();
+      expect(button?.className.split(" ")).toContain(
+        "pointer-coarse:opacity-100",
+      );
+      expect(button?.className.split(" ")).not.toContain(
+        "pointer-coarse:hidden",
+      );
+    }
+  });
+
   test("the exercised host set equals the imports in product source", () => {
     expect(selectionHosts.toSorted()).toEqual([...fixtures.keys()].toSorted());
   });
   for (const host of selectionHosts) {
     test(`${host}: number and empty cell clicks select without opening the row`, async () => {
-      const { view, assertNotOpened, assertOpened } = await renderHost(host);
+      const { view, assertNotOpened, assertOpened } = await renderHost({
+        host,
+      });
       const first = view.getByRole("checkbox", { name: "1" });
       fireEvent.click(view.getByText("1"));
       expect(first.getAttribute("aria-checked")).toBe("true");
@@ -355,7 +522,7 @@ describe("every shared selection-column host", () => {
     });
     for (const contentMode of TABLE_CONTENT_MODES) {
       test(`${host} (${contentMode}): the number, the checkbox and the row's cells share one first line`, async () => {
-        const { view } = await renderHost(host, contentMode);
+        const { view } = await renderHost({ host, contentMode });
         const number = view.getByText("1");
         expect(number.dataset["slot"]).toBe("table-row-number");
         const numberClasses = number.className.split(" ");
@@ -390,7 +557,7 @@ describe("every shared selection-column host", () => {
       });
     }
     test(`${host}: checkbox clicks toggle once and shift-click selects a range`, async () => {
-      const { view, assertNotOpened } = await renderHost(host);
+      const { view, assertNotOpened } = await renderHost({ host });
       const first = view.getByRole("checkbox", { name: "1" });
       const indicator = first.querySelector('[data-slot="checkbox"]');
       if (!indicator) {

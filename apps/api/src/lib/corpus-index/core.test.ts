@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import {
+  type IngestRequest,
   settleBoth,
   splitIngestRequests,
-  type IngestRequest,
 } from "@/api/lib/corpus-index/core";
 
 /**
