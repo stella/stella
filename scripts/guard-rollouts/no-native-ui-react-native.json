@@ -1,0 +1,26 @@
+{
+  "id": "no-native-ui-react-native",
+  "rules": [
+    "no-native-ui/no-native-loader",
+    "no-native-ui/no-native-sheet",
+    "no-native-ui/no-native-text"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-06T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-native-ui/no-native-loader",
+    "--deny",
+    "no-native-ui/no-native-sheet",
+    "--deny",
+    "no-native-ui/no-native-text",
+    "apps/mobile/src"
+  ]
+}
