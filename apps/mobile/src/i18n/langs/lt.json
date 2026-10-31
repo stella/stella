@@ -291,6 +291,29 @@
     "placeholder": "Ieškokite bylų ir pokalbių arba paleiskite komandą",
     "noResults": "Niekas neatitinka „{query}“"
   },
+  "search": {
+    "placeholder": "Ieškoti stella",
+    "clear": "Išvalyti paiešką",
+    "cancel": "Atšaukti",
+    "recent": "Naujausios paieškos",
+    "clearRecent": "Išvalyti",
+    "hint": "Ieškokite bylose, dokumentuose, užduotyse, pokalbiuose ir teismų praktikoje.",
+    "filters": "Filtrai",
+    "noResultsTitle": "Rezultatų nėra",
+    "noResults": "Niekas neatitinka „{query}“. Pabandykite kitus žodžius arba pašalinkite filtrą.",
+    "loadFailed": "Paieškos atlikti nepavyko.",
+    "retry": "Bandyti dar kartą",
+    "type": {
+      "document": "Dokumentai",
+      "matter": "Bylos",
+      "task": "Užduotys",
+      "caseLaw": "Teismų praktika",
+      "chat": "Pokalbiai",
+      "folder": "Aplankai",
+      "message": "El. laiškai",
+      "link": "Nuorodos"
+    }
+  },
   "pane": {
     "showList": "Rodyti sąrašą",
     "hideList": "Slėpti sąrašą"

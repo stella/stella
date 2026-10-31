@@ -22,8 +22,10 @@ import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
 import { APP_VARIANT, PUSH_NOTIFICATIONS } from "@/env";
+import { deviceAccountStore } from "@/native/account-store";
 import { currentPushDevice } from "@/native/push-device";
 import { unregisterPushDevice } from "@/state/push-devices";
+import { forgetRecentSearches } from "@/state/recent-searches";
 
 export type SessionState =
   | {
@@ -79,7 +81,12 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       ? { status: "signed-out", ended: false }
       : { status: "signed-in", source: restored },
   );
-  const [boundary] = useState(createSessionEndBoundary);
+  const [boundary] = useState(() => {
+    const created = createSessionEndBoundary();
+    // What the app keeps on the device for the account goes with its session.
+    created.register(forgetRecentSearches(deviceAccountStore));
+    return created;
+  });
   // Several requests can find the same session refused at once; its
   // handlers run for the first only.
   const [ending] = useState(() => new WeakSet<AccessTokenSource>());

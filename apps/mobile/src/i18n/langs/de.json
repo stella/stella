@@ -291,6 +291,29 @@
     "placeholder": "Akten und Chats suchen oder einen Befehl ausführen",
     "noResults": "Nichts passt zu „{query}“"
   },
+  "search": {
+    "placeholder": "stella durchsuchen",
+    "clear": "Suche löschen",
+    "cancel": "Abbrechen",
+    "recent": "Letzte Suchen",
+    "clearRecent": "Löschen",
+    "hint": "Durchsuchen Sie Akten, Dokumente, Aufgaben, Chats und Rechtsprechung.",
+    "filters": "Filter",
+    "noResultsTitle": "Keine Ergebnisse",
+    "noResults": "Nichts passt zu „{query}“. Versuchen Sie andere Wörter oder entfernen Sie einen Filter.",
+    "loadFailed": "Die Suche konnte nicht ausgeführt werden.",
+    "retry": "Erneut versuchen",
+    "type": {
+      "document": "Dokumente",
+      "matter": "Akten",
+      "task": "Aufgaben",
+      "caseLaw": "Rechtsprechung",
+      "chat": "Chats",
+      "folder": "Ordner",
+      "message": "E-Mails",
+      "link": "Links"
+    }
+  },
   "pane": {
     "showList": "Liste einblenden",
     "hideList": "Liste ausblenden"
