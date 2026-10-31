@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 
+import { ONLINE_WORK_DEPENDENCIES } from "../apps/api/src/db/online-migrations";
 import {
+  isMigrateReady,
   ONLINE_WORK_LIFECYCLE,
   type OnlineWorkLifecycle,
 } from "../apps/api/src/db/online-work-lifecycle";
@@ -161,6 +163,34 @@ export const checkOnlineWorkLifecycle = ({
   return problems;
 };
 
+/**
+ * Work every migrate run builds (finalized or deploy-blocking) may depend only
+ * on work every migrate run builds too: a pending prerequisite does not exist
+ * on a fresh database, and the dependent's reader or repair presupposes it.
+ */
+export const findUnreadyPrerequisites = (
+  lifecycle: Readonly<Record<string, OnlineWorkLifecycle>>,
+  dependencies: ReadonlyMap<string, readonly string[]>,
+): string[] =>
+  [...dependencies].flatMap(([name, prerequisites]) => {
+    const entry = lifecycle[name];
+    if (entry === undefined) {
+      return [`${name}: declares prerequisites but has no lifecycle entry`];
+    }
+    if (!isMigrateReady(entry)) {
+      return [];
+    }
+    return prerequisites.flatMap((prerequisite) => {
+      const prerequisiteEntry = lifecycle[prerequisite];
+      return prerequisiteEntry === undefined ||
+        !isMigrateReady(prerequisiteEntry)
+        ? [
+            `${name}: is ${CONSTANT_OF_STATE[entry.state]} but depends on ${prerequisite}, which is ${prerequisiteEntry === undefined ? "unregistered" : CONSTANT_OF_STATE[prerequisiteEntry.state]}; register the prerequisite DEPLOY_BLOCKING or FINALIZED first`,
+          ]
+        : [];
+    });
+  });
+
 const MIGRATE_COMMAND = /src\/db\/migrate\.ts|\bdb:migrate\b/u;
 const MIGRATE_MODE_VARIABLE = "STELLA_MIGRATE_ONLINE_WORK";
 
@@ -294,6 +324,12 @@ if (import.meta.main) {
       file,
       workflow: await parseWorkflowYaml(file),
     })),
+  );
+  problems.push(
+    ...findUnreadyPrerequisites(
+      ONLINE_WORK_LIFECYCLE,
+      ONLINE_WORK_DEPENDENCIES,
+    ),
   );
   problems.push(...findMigrateStepsWithoutMode(workflows));
   const shellScripts = requireGit(git, ["ls-files", "-z", "--", "*.sh"])

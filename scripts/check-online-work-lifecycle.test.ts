@@ -7,6 +7,7 @@ import {
   checkOnlineWorkLifecycle,
   findMigrateScriptsWithoutMode,
   findMigrateStepsWithoutMode,
+  findUnreadyPrerequisites,
   ONLINE_WORK_LIFECYCLE_PATH,
   type OnlineWorkLifecycleGit,
   parseOnlineWorkLifecycle,
@@ -67,6 +68,55 @@ const check = (current: States, options: FakeGitOptions) =>
     lifecycle: lifecycleOf(current),
     source: source(current),
   });
+
+describe("online work prerequisites", () => {
+  const dependencies = new Map([["tenant_key_repair", ["tenant_key_idx"]]]);
+
+  test("work every migrate run builds may not depend on pending work", () => {
+    for (const state of ["finalized", "deploy_blocking"] as const) {
+      expect(
+        findUnreadyPrerequisites(
+          lifecycleOf({ tenant_key_repair: state, tenant_key_idx: "pending" }),
+          dependencies,
+        ),
+      ).toEqual([
+        `tenant_key_repair: is ${CONSTANT[state]} but depends on tenant_key_idx, which is PENDING; register the prerequisite DEPLOY_BLOCKING or FINALIZED first`,
+      ]);
+    }
+  });
+
+  test("pending work may wait on pending work, and migrate-built work on migrate-built work", () => {
+    expect(
+      findUnreadyPrerequisites(
+        lifecycleOf({
+          tenant_key_repair: "pending",
+          tenant_key_idx: "pending",
+        }),
+        dependencies,
+      ),
+    ).toEqual([]);
+    expect(
+      findUnreadyPrerequisites(
+        lifecycleOf({
+          tenant_key_repair: "deploy_blocking",
+          tenant_key_idx: "finalized",
+        }),
+        dependencies,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a prerequisite the lifecycle does not register fails", () => {
+    expect(
+      findUnreadyPrerequisites(
+        lifecycleOf({ tenant_key_repair: "finalized" }),
+        dependencies,
+      ),
+    ).toEqual([
+      "tenant_key_repair: is FINALIZED but depends on tenant_key_idx, which is unregistered; register the prerequisite DEPLOY_BLOCKING or FINALIZED first",
+    ]);
+  });
+});
 
 describe("online work lifecycle release check", () => {
   test("finalizes work once a stable tag contains its registration", () => {
