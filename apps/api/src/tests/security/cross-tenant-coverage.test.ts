@@ -82,6 +82,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   legislation: WAIVER_REASON.preExistingGap,
   me: WAIVER_REASON.preExistingGap,
   "organization-settings": WAIVER_REASON.preExistingGap,
+  // Creation is account-scoped: it accepts no tenant identity and reads only
+  // the authenticated account's replay receipt, never another tenant's data.
+  organizations: WAIVER_REASON.noTenantReadSurface,
   playbooks: WAIVER_REASON.preExistingGap,
   properties: WAIVER_REASON.preExistingGap,
   reports: WAIVER_REASON.preExistingGap,

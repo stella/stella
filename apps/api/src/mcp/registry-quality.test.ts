@@ -739,9 +739,9 @@ describe("MCP registry access coherence", () => {
           tool.permissions.type === "delegated" &&
           isMcpToolVisibleTo(tool, "model"),
       );
-      expect(delegated.map(({ name }) => name).toSorted()).toEqual(
-        expectedDelegatedNames[mode],
-      );
+      expect(delegated.map(({ name }) => name).toSorted()).toEqual([
+        ...expectedDelegatedNames[mode],
+      ]);
       for (const tool of delegated) {
         expect(tool.readClass).toBeUndefined();
         if (tool.name === "create_organization") {

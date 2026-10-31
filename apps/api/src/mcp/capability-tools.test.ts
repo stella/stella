@@ -1046,7 +1046,7 @@ describe("account export capability authority", () => {
         ?.accountScope,
     ).toBe("stella:organization_create");
     for (const entry of accountEntries) {
-      expect(entry.scope).toBe(entry.accountScope);
+      expect(entry.accountScope).toBe(entry.scope);
     }
     expect(
       entries.filter(({ access }) => access === "write").map(({ id }) => id),
