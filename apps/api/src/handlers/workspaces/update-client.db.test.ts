@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
+import {
+  API_VERSION_CONFLICT_ERROR_CODE,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { searchProjectionRepairQueue, workspaces } from "@/api/db/schema";
@@ -31,6 +34,7 @@ beforeAll(async () => {
   await setupRlsTestData(testDb, ids);
   workspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: ids.orgA,
     clientId: ids.contactA,
@@ -47,12 +51,13 @@ afterAll(async () => {
 test("stale client preconditions preserve the latest assignment and skip side effects", async () => {
   const auditEvents: unknown[] = [];
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [workspaceId], ids.orgA, ids.userA1),
+    createSafeDb(testDb, [workspaceId], ids.orgA, ids.userAdmin),
   );
   const callUpdate = async (expectedClientId: string | null) =>
     await Result.gen(() =>
       updateWorkspaceHandler({
         safeDb,
+        actor: { userId: ids.userAdmin, managesOrganizationMatters: true },
         organizationId: ids.orgA,
         workspaceId,
         recordAuditEvent: async (_tx, event) => {
