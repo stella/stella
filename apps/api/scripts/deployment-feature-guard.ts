@@ -69,6 +69,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/dictation/transcribe",
+    "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
     "/v1/workspaces/:workspaceId/vocabulary",
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],
@@ -107,6 +111,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/presence",
     "Desktop account presence supports handoff on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/marked",
+    "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
   ],
   [
     "/v1/tasks",

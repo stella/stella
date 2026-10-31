@@ -1,5 +1,33 @@
 # @stll/ui
 
+## 0.59.1
+
+### Patch Changes
+
+- [#7301](https://github.com/stella/stella/pull/7301) [`db3c4a8`](https://github.com/stella/stella/commit/db3c4a84467e039acf34f980a5418b35db6c2454) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A scroll area's viewport is the containing block of what is positioned inside it, so an absolutely positioned descendant, such as a visually hidden label, stays inside the scroll instead of giving an ancestor a scrollbar of its own.
+
+## 0.59.0
+
+### Minor Changes
+
+- [#7305](https://github.com/stella/stella/pull/7305) [`92f36ca`](https://github.com/stella/stella/commit/92f36ca0d250a034df4624bab82b173618020099) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `TooltipFactTrigger` to `@stll/ui/tooltip`: an inline fact whose dotted underline opens a tooltip on hover or focus, keeping the colour and weight of the text it wraps.
+
+### Patch Changes
+
+- [#7575](https://github.com/stella/stella/pull/7575) [`9921a8c`](https://github.com/stella/stella/commit/9921a8c5bd913959aedeb011652319b3da45e4aa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `StellaMark` gains a React Native renderer (`@stll/ui/stella-mark` resolves to it under `react-native`), drawn from the same paths as the web's.
+
+## 0.58.0
+
+### Minor Changes
+
+- [#7347](https://github.com/stella/stella/pull/7347) [`d75e2c0`](https://github.com/stella/stella/commit/d75e2c0cca2ee7a0e9411a2a8754a046110cdad7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add nonfocusable context-menu anchors and full-name disclosure for clipped identity text. Preserve nested sidebar action boundaries and give sort controls a dedicated accessible label contract.
+
+- [#7542](https://github.com/stella/stella/pull/7542) [`e2e9d3d`](https://github.com/stella/stella/commit/e2e9d3d9718707b190c09db77c63f1c9ee9136a8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `DayCalendar` (`@stll/ui/day-calendar`): a vertical one-day calendar with caller-defined columns of time blocks (segments, merged `mixed` runs and entries in a matter or neutral tone), a 15, 30 or 60 minute grid, range selection by pointer drag or keyboard, a caller panel anchored beside the selected range, a now-line and locale-formatted hour labels. A `locked` column paints fixed placeholder bars behind a caller action and takes no blocks. `@stll/ui/day-calendar.logic` exports the day bounds, time-to-pixel mapping, snapping, overlap lanes and `mergeShortSegments`.
+
+### Patch Changes
+
+- [#7351](https://github.com/stella/stella/pull/7351) [`ed2a1a6`](https://github.com/stella/stella/commit/ed2a1a6c7d277f9c87034b3dd35b67042da9df05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep empty inline rename inputs wide enough to edit within their column.
+
 ## 0.57.0
 
 ### Minor Changes

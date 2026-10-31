@@ -36,6 +36,7 @@ export const createPublicCorpusGlobalRateLimitOptions = (
   return {
     duration,
     max,
+    refusalStatus: 503,
     ...createRedisBinding({
       failurePolicy: "fail_open_local",
       scope,
