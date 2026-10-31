@@ -814,8 +814,10 @@
       "deleteRateTable": "Kustuta määratabel",
       "editRateTable": "Muuda määratabelist",
       "effectiveFrom": "Kehtiv alates",
+      "effectiveRateRequired": "Selle toimiku, isiku ja kuupäeva jaoks pole kehtivat tunnihinda määratud. Lisage tunnihind või registreerige aeg mittearveldatavana.",
       "effectiveTo": "Kehtiv kuni",
       "hourlyRate": "Tunnimäär",
+      "logNonBillable": "Registreeri mittearveldatavana",
       "noRateEntries": "Määrakandeid pole veel",
       "noRateFound": "Määr seadistamata",
       "noRateTables": "Määratabeleid pole veel",
@@ -945,7 +947,8 @@
         "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
         "decisionNotFound": "Seda kohtulahendit ei leitud. Avage see uuesti otsingust.",
         "documentUnparseable": "Kohtulahendi tekst ei ole analüüsiks valmis. Lugege algallikat.",
-        "languageUnsupported": "Tehisintellekti analüüs ei toeta veel selle kohtulahendi keelt. Lugege kohtulahendi teksti või algallikat.",
+        "languageUnsupported": "AI-analüüs on saadaval ainult nendes keeltes lahenditele: {languages}.",
+        "openLanguageVersion": "Ava keeleversioon: {language}",
         "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
         "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
         "retryAfter": "Uuesti saate proovida alates {time}.",
@@ -1035,7 +1038,7 @@
     "coverage": {
       "allCurrent": "Kõik allikad on ajakohased",
       "completeness": "Täielikkus",
-      "completenessHelp": "Salvestatud lahendite arv võrrelduna avaldaja koguarvu, tema loendi või registreeritud koguarvuga.",
+      "completenessHelp": "Salvestatud lahendite arv võrrelduna avaldaja koguarvu, tema loendi või registreeritud koguarvuga. Avaldaja loendis olevaid lahendeid, mis võrdlemisel puudu leiti, ei arvestata.",
       "countryNavigation": "Vali riik",
       "courtsHeading": "Kohtute kaupa",
       "decisionYears": "Lahendite aastad",
@@ -1090,7 +1093,9 @@
     },
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
-      "remove": "Eemalda filter {filter}"
+      "countryMismatch": "Eemaldati filtrid, mis ei kuulu valitud riigi ({country}) juurde: {filters}.",
+      "remove": "Eemalda filter {filter}",
+      "showInCountry": "Kuva {filter} riigis {country}"
     },
     "languages": {
       "count": "{count, plural, one {# keel} other {# keelt}}",
@@ -1346,6 +1351,7 @@
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
     "activity": {
+      "newerVersion": "Seda sisu kuvatakse uuemas versioonis.",
       "review": "Ülevaatuse värskendus"
     },
     "aiPrompt": "AI sõnumiväli",
@@ -1442,6 +1448,14 @@
     "attachedImage": "Manustatud pilt",
     "attachment": "Manus",
     "audioContent": "Loodud heli",
+    "browserExtension": {
+      "connect": "Ühenda laiendus",
+      "connectDescription": "Klõpsa sellel vahekaardil brauseri tööriistaribal stella laienduse ikooni. Kui küsitakse, luba juurdepääs veebisaitidele ja ühenda see vahekaart.",
+      "connected": "Laiendus on ühendatud",
+      "description": "stella saab sinu palvel veebilehti eraldi vahekaardil avada ja lugeda.",
+      "install": "Paigalda laiendus",
+      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest."
+    },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
@@ -2576,6 +2590,7 @@
       "resultsSummary": "{created, plural, one {# loodud} other {# loodud}}, {skipped, plural, one {# vahele jäetud} other {# vahele jäetud}}",
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
+      "skippedDuplicateExternalRef": "Vahele jäetud: sama allikas ja väline ID esinevad kaks korda",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
       "skippedInFileDuplicate": "Vahele jäetud: kordab faili varasemat rida",
       "skippedInvalidRow": "Vahele jäetud: rida ei vasta impordireeglitele",
@@ -4537,6 +4552,7 @@
     "aiTitle": "Ühendage oma AI teenusepakkuja",
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
+    "browserExtensionCardDescription": "Laske vestlusel töötada juba kasutatavate veebisaitidega teie valitud Chrome'i vahekaardil.",
     "catalogueAlwaysOn": "Alati sees",
     "catalogueCommunityHeading": "Muud",
     "catalogueContinueWithCount": "{count, plural, one {Jätka # tööriistaga} other {Jätka # tööriistaga}}",
@@ -5016,7 +5032,6 @@
       "beta": "Beetafunktsioonid",
       "betaAvt": "AVT dokumentide kontroll",
       "betaAvtDescription": "Kontrolli toimiku dokumente väide väite haaval loendi faktide vastu",
-      "betaCaseLawDescription": "Kuva avalik kohtupraktika otsing ja lugeja külgribal",
       "betaDescription": "Proovige funktsioone, mis on alles arendamisel",
       "betaInbox": "Postkast ja teavitused",
       "betaInboxDescription": "Kuva postkast ja teavituste kell",
@@ -5052,6 +5067,8 @@
       "desktopCardConnectedTitle": "stella desktop on seotud",
       "desktopCardMissingDetail": "Paigaldage see või ühendage, kui see on selles arvutis juba paigaldatud.",
       "desktopCardMissingTitle": "stella desktop pole veel ühendatud",
+      "desktopCardOpeningDetail": "Seome selle arvuti kontoga <bdi>{identity}</bdi> serveris {host}. Kui brauser küsib, lubage tal stella desktop avada.",
+      "desktopCardOpeningTitle": "stella desktop avaneb...",
       "desktopCardOutdatedDetail": "Versioon {version} on seotud kontoga <bdi>{identity}</bdi>. Paigaldage uusim versioon, et dokumendid ja tegevus töötaksid edasi.",
       "desktopCardOutdatedTitle": "stella desktop vajab uuendust",
       "desktopClipboardDescription": "Avage, otsige, korraldage ja kasutage uuesti mis tahes rakendusest kopeeritud teksti.",
@@ -5071,6 +5088,7 @@
       "desktopInstallOpenStep": "Avage stella desktop üks kord. Lõikelaud ilmub kohe ja jääb kättesaadavaks macOS-i menüüribalt või Windowsi süsteemisalvest.",
       "desktopInstallTitle": "Installimine ja avamine",
       "desktopInstallWindowsStep": "Käivitage installer ja järgige juhiseid.",
+      "desktopOpenApp": "Ava stella desktop",
       "desktopPrivacyDescription": "Lõikelaua ajalugu krüpteeritakse ja talletatakse selles seadmes.",
       "desktopPrivacyTitle": "Vaikimisi privaatne",
       "desktopSelfHostDescription": "Usaldage seda stella URL-i allkirjastatud töölauarakenduses, et selle paigalduse dokumendid avaneksid lokaalselt.",
@@ -5144,6 +5162,10 @@
     "connections": {
       "accessTitle": "{clientName} saab",
       "browseIntegrations": "Lisa teenus",
+      "browserExtensionConnectHint": "Pärast installimist avage laiendus sellel stella vahekaardil, lubage juurdepääs veebisaitidele ja ühendage vahekaart.",
+      "browserExtensionDescription": "stella vestlus saab teie valitud Chrome'i vahekaardil veebisaite lugeda ja kasutada. Iga toiming ootab teie kinnitust.",
+      "browserExtensionInstall": "Lisa Chrome'i",
+      "browserExtensionTitle": "Brauserilaiendus",
       "cliDescription": "Installige stella käsurea klient ja logige sisse, et skriptida toimikuid, dokumente ja malle terminalist.",
       "cliInstallLabel": "Installimine",
       "cliLoginLabel": "Sisselogimine",
@@ -5394,7 +5416,7 @@
     },
     "inForceSince": "Kehtib alates {date}",
     "ineligibleVersion": "{range} ({label})",
-    "leadingDecisions": "Juhtivad lahendid",
+    "leadingDecision": "Juhtiv lahend",
     "leadingDecisionsExplanation": "Iga lahendi esimene viide, järjestatud viite kaalukuse järgi: kaalutud saabuvad viited, arvestades kohtu taset, viite polaarsust ja vanust.",
     "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
     "openEnded": "praeguseni",
@@ -5405,15 +5427,11 @@
     "pendingChanges": "Eelseisvad muudatused",
     "pendingChangesIncomplete": "Avaldaja andmed ei pruugi sisaldada kõiki eelseisvaid muudatusi.",
     "provisionAskContextPrompt": "\n\nSätet kohaldavad lõigud kõige autoriteetsemates lahendites:\n{passages}\n\nKasuta kohtupraktika tööriistu, et lugeda mõnda neist lahenditest tervikuna või leida teisi sätet viitavaid lahendeid.",
-    "provisionAskPlaceholder": "Küsi selle sätte kohta",
-    "provisionAskQuestionPrompt": "{subject} kohta: {question}",
     "provisionAskSummarize": "Võta kokku, kuidas kohtud seda sätet kohaldavad",
     "provisionAskSummarizePrompt": "Võta kokku, kuidas kohtud kohaldavad sätet {subject}, viidates lahenditele, millele tugined.",
     "provisionDetailsFor": "{provision} üksikasjad",
     "provisionEffectiveFrom": "kehtib alates {date}",
-    "provisionHistoryEarliest": "Varaseim teadaolev redaktsioon.",
     "provisionHistoryEmpty": "Selle sätte kohta ei ole ühtegi redaktsiooni.",
-    "provisionHistoryLoadOlder": "Laadi vanemad redaktsioonid võrdlemiseks.",
     "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
     "provisionPartTextUnavailable": "{provisionLabel} tekst ei ole saadaval",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
@@ -6238,8 +6256,10 @@
       "downloadAsZip": "Laadi alla .zip-fail",
       "downloadExtractedText": "Eraldatud tekst (.txt)",
       "downloadFailed": "Allalaadimine ebaõnnestus",
+      "downloadOriginal": "Originaalfail",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
+      "downloadWithComments": "Laadi alla koos kommentaaridega",
       "emptyFile": "Fail on tühi.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
@@ -6528,6 +6548,14 @@
           "started": "Alustas ülevaatust dokumendile"
         },
         "empty": "Selles toimikus pole veel tegevust.",
+        "fields": {
+          "dueDate": "tähtaeg",
+          "parentFolder": "ülemkaust",
+          "priority": "prioriteet",
+          "property": "omadus",
+          "schedule": "ajakava",
+          "sortOrder": "järjestus"
+        },
         "filterLabel": "Filtreeri tegevust",
         "filters": {
           "all": "Kogu tegevus",
@@ -6577,6 +6605,7 @@
           "translation": "tõlge"
         },
         "title": "Tegevus",
+        "updatedFields": "Uuendati: {fields}",
         "views": {
           "list": "Loendivaade",
           "timeline": "Ajajoone vaade"

@@ -30,6 +30,12 @@ minimumReleaseAgeExcludes = [
   # bun-types ships only declarations and must match the pinned Bun runtime.
   # body-parser 2.4.0 is the first release outside GHSA-27r3-jxmh-p828.
   "body-parser", # quarantine-expires: 2026-10-27T11:39:38.614Z
+  # joi 18.3.1 is the first release outside GHSA-4528-x5fx-h6hg.
+  "joi", # quarantine-expires: 2026-11-02T09:59:49.641Z
+  # node-forge 1.4.1 is the first release outside GHSA-5x38-2vff-x55p,
+  # GHSA-7wch-p9px-956x, GHSA-8hrf-8g6f-7xwp, GHSA-hqq3-7jhf-c5jx and
+  # GHSA-jc66-7q78-782g.
+  "node-forge", # quarantine-expires: 2026-11-01T04:44:07.718Z
   # happy-dom 21.0.4 carries the patched DOMStringMap override forward.
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
@@ -117,7 +123,6 @@ ignorePatterns = [
   ".tailwind-cache/**",
   "**/.oxlintrc.json",
   "**/dist/**",
-  "**/.react-email/**",
   "apps/api/src/db/schema.ts",
   "packages/template-packs/content/**",
   "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",

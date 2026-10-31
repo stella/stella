@@ -814,8 +814,10 @@
       "deleteRateTable": "Excluir tabela de taxas",
       "editRateTable": "Editar tabela de taxas",
       "effectiveFrom": "Vigente a partir de",
+      "effectiveRateRequired": "Não há uma taxa vigente para este caso, esta pessoa e esta data. Adicione uma taxa ou registre o tempo como não faturável.",
       "effectiveTo": "Vigente até",
       "hourlyRate": "Valor por hora",
+      "logNonBillable": "Registrar como não faturável",
       "noRateEntries": "Ainda não há entradas de taxas",
       "noRateFound": "Nenhuma taxa configurada",
       "noRateTables": "Ainda não há tabelas de taxas",
@@ -945,7 +947,8 @@
         "answerIncomplete": "{source, select, organization {A chave {provider} da sua organização retornou uma resposta incompleta.} other {O modelo de IA retornou uma resposta incompleta.}}",
         "decisionNotFound": "Esta decisão não foi encontrada. Abra-a novamente pela busca.",
         "documentUnparseable": "O texto da decisão não está pronto para análise. Consulte a fonte original.",
-        "languageUnsupported": "A análise por IA ainda não oferece suporte ao idioma desta decisão. Leia o texto da decisão ou consulte a fonte original.",
+        "languageUnsupported": "A análise por IA só está disponível para decisões nestes idiomas: {languages}.",
+        "openLanguageVersion": "Abrir a versão no idioma: {language}",
         "providerRefused": "{source, select, organization {{provider} recusou a solicitação feita com a chave da sua organização. Verifique a chave, a cota e o faturamento nas configurações da organização.} other {O provedor de IA recusou a solicitação.}}",
         "providerUnavailable": "{source, select, organization {{provider} está indisponível no momento para a chave da sua organização.} other {O provedor de IA está indisponível no momento.}}",
         "retryAfter": "Você poderá tentar novamente a partir de {time}.",
@@ -1035,7 +1038,7 @@
     "coverage": {
       "allCurrent": "Todas as fontes estão em dia",
       "completeness": "Completude",
-      "completenessHelp": "Decisões armazenadas em relação ao total informado pelo publicador, à sua listagem ou a uma contagem registrada.",
+      "completenessHelp": "Decisões armazenadas em relação ao total informado pelo publicador, à sua listagem ou a uma contagem registrada. Decisões listadas pelo publicador que a conciliação apontou como ausentes não são contadas.",
       "countryNavigation": "Ir para um país",
       "courtsHeading": "Por tribunal",
       "decisionYears": "Anos das decisões",
@@ -1090,7 +1093,9 @@
     },
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
-      "remove": "Remover o filtro {filter}"
+      "countryMismatch": "Filtros removidos porque não correspondem a {country}: {filters}.",
+      "remove": "Remover o filtro {filter}",
+      "showInCountry": "Mostrar {filter} em {country}"
     },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
@@ -1346,6 +1351,7 @@
       "toastTitle": "Visualização completa ainda não disponível"
     },
     "activity": {
+      "newerVersion": "Este conteúdo é exibido em uma versão mais recente.",
       "review": "Atualização da revisão"
     },
     "aiPrompt": "Campo de mensagem de IA",
@@ -1442,6 +1448,14 @@
     "attachedImage": "Imagem anexada",
     "attachment": "Anexo",
     "audioContent": "Áudio gerado",
+    "browserExtension": {
+      "connect": "Conectar extensão",
+      "connectDescription": "Nesta aba, clique no ícone da extensão stella na barra do navegador. Se solicitado, permita o acesso aos sites e conecte esta aba.",
+      "connected": "Extensão conectada",
+      "description": "A stella pode abrir e ler sites para você em outra aba quando você pedir.",
+      "install": "Instalar extensão",
+      "installDescription": "Com a extensão stella, a stella pode abrir e ler sites para você em outra aba quando você pedir. Instale pela Chrome Web Store."
+    },
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
     "chatAbout": "Converse sobre isso",
@@ -2576,6 +2590,7 @@
       "resultsSummary": "{created, plural, one {# criado} other {# criados}}, {skipped, plural, one {# ignorado} other {# ignorados}}",
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Ignorado: ID de contato duplicado",
+      "skippedDuplicateExternalRef": "Ignorado: a mesma origem e o mesmo ID externo aparecem duas vezes",
       "skippedDuplicateTaxId": "Ignorado: CPF/CNPJ duplicado",
       "skippedInFileDuplicate": "Ignorado: repete uma linha anterior do arquivo",
       "skippedInvalidRow": "Ignorado: a linha não atende às regras de importação",
@@ -4537,6 +4552,7 @@
     "aiTitle": "Conecte seu provedor de IA",
     "appsSubtitle": "A stella também funciona fora do navegador: no seu computador e no seu assistente de IA. Você pode voltar a esta configuração a qualquer momento.",
     "appsTitle": "Leve a stella para todo lugar",
+    "browserExtensionCardDescription": "Deixe o chat trabalhar com os sites que você já usa, em uma guia do Chrome que você escolher.",
     "catalogueAlwaysOn": "Sempre ativo",
     "catalogueCommunityHeading": "Outros",
     "catalogueContinueWithCount": "{count, plural, one {Continuar com # ferramenta} other {Continuar com # ferramentas}}",
@@ -5016,7 +5032,6 @@
       "beta": "Recursos beta",
       "betaAvt": "Verificação de documentos AVT",
       "betaAvtDescription": "Conferir os documentos de um caso, afirmação por afirmação, com os fatos de uma lista",
-      "betaCaseLawDescription": "Mostrar a pesquisa e o leitor de jurisprudência pública na barra lateral",
       "betaDescription": "Experimente recursos que ainda estão em desenvolvimento",
       "betaInbox": "Caixa de entrada e notificações",
       "betaInboxDescription": "Mostrar a caixa de entrada e o sino de notificações",
@@ -5052,6 +5067,8 @@
       "desktopCardConnectedTitle": "stella desktop está vinculado",
       "desktopCardMissingDetail": "Instale-o, ou conecte-o se já estiver instalado neste computador.",
       "desktopCardMissingTitle": "stella desktop ainda não está vinculado",
+      "desktopCardOpeningDetail": "Vinculando este computador a <bdi>{identity}</bdi> em {host}. Se o navegador pedir, permita que ele abra o stella desktop.",
+      "desktopCardOpeningTitle": "Abrindo stella desktop...",
       "desktopCardOutdatedDetail": "A versão {version} está vinculada a <bdi>{identity}</bdi>. Instale a versão mais recente para que documentos e atividade continuem funcionando.",
       "desktopCardOutdatedTitle": "stella desktop precisa de atualização",
       "desktopClipboardDescription": "Abra, pesquise, organize e reutilize textos copiados de qualquer aplicativo.",
@@ -5071,6 +5088,7 @@
       "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
       "desktopInstallTitle": "Instalar e abrir",
       "desktopInstallWindowsStep": "Execute o instalador e siga as instruções.",
+      "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "O histórico da área de transferência é criptografado e armazenado neste dispositivo.",
       "desktopPrivacyTitle": "Privado por padrão",
       "desktopSelfHostDescription": "Confie nesta URL da stella no app desktop assinado para abrir localmente os documentos desta instalação.",
@@ -5144,6 +5162,10 @@
     "connections": {
       "accessTitle": "{clientName} pode",
       "browseIntegrations": "Adicionar um serviço",
+      "browserExtensionConnectHint": "Depois de instalar, abra a extensão nesta guia da stella, permita o acesso aos sites e conecte a guia.",
+      "browserExtensionDescription": "O chat da stella pode ler e usar sites em uma guia do Chrome que você escolher. Cada ação aguarda sua aprovação.",
+      "browserExtensionInstall": "Adicionar ao Chrome",
+      "browserExtensionTitle": "Extensão do navegador",
       "cliDescription": "Instale o cliente de linha de comando da stella e faça login para automatizar casos, documentos e modelos a partir de um terminal.",
       "cliInstallLabel": "Instalação",
       "cliLoginLabel": "Login",
@@ -5394,7 +5416,7 @@
     },
     "inForceSince": "Em vigor desde {date}",
     "ineligibleVersion": "{range} ({label})",
-    "leadingDecisions": "Decisões de referência",
+    "leadingDecision": "Decisão de referência",
     "leadingDecisionsExplanation": "A primeira menção em cada decisão, classificada pela autoridade da citação: citações recebidas ponderadas, ajustadas pelo nível do tribunal, pela polaridade da citação e pela idade.",
     "noVersionInForce": "Nenhuma versão desta norma estava em vigor na data escolhida.",
     "openEnded": "hoje",
@@ -5405,15 +5427,11 @@
     "pendingChanges": "Próximas alterações",
     "pendingChangesIncomplete": "Os dados do editor podem não incluir todas as próximas alterações.",
     "provisionAskContextPrompt": "\n\nTrechos que aplicam o dispositivo nas decisões de maior autoridade:\n{passages}\n\nUse as ferramentas de jurisprudência para ler qualquer uma dessas decisões na íntegra ou encontrar outras decisões que citem o dispositivo.",
-    "provisionAskPlaceholder": "Pergunte sobre este dispositivo",
-    "provisionAskQuestionPrompt": "Sobre {subject}: {question}",
     "provisionAskSummarize": "Resumir como os tribunais aplicam este dispositivo",
     "provisionAskSummarizePrompt": "Resuma como os tribunais aplicam {subject}, citando as decisões em que se basear.",
     "provisionDetailsFor": "Detalhes de {provision}",
     "provisionEffectiveFrom": "em vigor desde {date}",
-    "provisionHistoryEarliest": "Versão mais antiga disponível.",
     "provisionHistoryEmpty": "Não há nenhuma versão deste dispositivo.",
-    "provisionHistoryLoadOlder": "Carregue versões anteriores para comparar.",
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
     "provisionPartTextUnavailable": "O texto de {provisionLabel} não está disponível",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
@@ -6238,8 +6256,10 @@
       "downloadAsZip": "Baixe como ZIP",
       "downloadExtractedText": "Texto extraído (.txt)",
       "downloadFailed": "Falha ao baixar",
+      "downloadOriginal": "Arquivo original",
       "downloadPdf": "Baixar como PDF",
       "downloadSearchablePdf": "PDF pesquisável",
+      "downloadWithComments": "Baixar com comentários",
       "emptyFile": "O arquivo está vazio.",
       "includeReferenceNumber": "Incluir número de referência",
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
@@ -6528,6 +6548,14 @@
           "started": "Iniciou uma revisão de"
         },
         "empty": "Ainda não há atividade neste caso.",
+        "fields": {
+          "dueDate": "data de vencimento",
+          "parentFolder": "pasta principal",
+          "priority": "prioridade",
+          "property": "propriedade",
+          "schedule": "programação",
+          "sortOrder": "ordem"
+        },
         "filterLabel": "Filtrar atividade",
         "filters": {
           "all": "Toda a atividade",
@@ -6577,6 +6605,7 @@
           "translation": "tradução"
         },
         "title": "Atividade",
+        "updatedFields": "Atualizado: {fields}",
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"
