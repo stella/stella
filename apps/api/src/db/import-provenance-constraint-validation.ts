@@ -8,7 +8,8 @@ export const IMPORT_PROVENANCE_CONSTRAINTS = IMPORT_PROVENANCE_TABLES.map(
   (tableName) =>
     ({
       tableName,
-      constraintName: `${tableName}_external_ref_check`,
+      // Literal, so each validation's name is a registered online work name.
+      constraintName: `${tableName}_external_ref_check` as const,
       introducedBy: "20261031001825_import_provenance",
     }) satisfies OnlineConstraintValidation & { introducedBy: string },
 );

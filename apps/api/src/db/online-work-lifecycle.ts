@@ -182,6 +182,18 @@ export const ONLINE_WORK_LIFECYCLE = {
   "document-review-finding-decisions": PENDING,
   case_law_provision_citations_work_citing_idx: PENDING,
   case_law_provision_citations_eli_citing_idx: PENDING,
+  contacts_org_external_uidx: PENDING,
+  workspaces_org_external_uidx: PENDING,
+  time_entries_org_external_uidx: PENDING,
+  expenses_org_external_uidx: PENDING,
+  invoices_org_external_uidx: PENDING,
+  correspondence_org_external_uidx: PENDING,
+  contacts_external_ref_check: PENDING,
+  workspaces_external_ref_check: PENDING,
+  time_entries_external_ref_check: PENDING,
+  expenses_external_ref_check: PENDING,
+  invoices_external_ref_check: PENDING,
+  correspondence_external_ref_check: PENDING,
 } as const satisfies Record<string, OnlineWorkLifecycle>;
 
 declare const finalizedWorkBrand: unique symbol;
