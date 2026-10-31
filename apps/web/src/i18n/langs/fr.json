@@ -6113,6 +6113,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ce dossier est archivé et en lecture seule.",
     "calculations": {
       "choose": "Calculer",
       "kinds": {
@@ -6950,6 +6951,7 @@
       "aiModel": "Modèle IA",
       "manualInput": "Manuellement"
     },
+    "unarchiveBeforeDelete": "Désarchivez ce dossier avant de le supprimer.",
     "unarchiveMatter": "Désarchiver",
     "uploadDocuments": "Importer des documents",
     "views": {

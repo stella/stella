@@ -6,11 +6,24 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { eq } from "drizzle-orm";
 
+import {
+  member as memberTable,
+  organization,
+  user,
+} from "@/api/db/auth-schema";
+import {
+  workspaceMembers,
+  workspaces as workspaceTable,
+} from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { workspaceCreationCapacity } from "@/api/lib/workspaces/creation-capacity";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -32,6 +45,34 @@ setDefaultTimeout(120_000);
 let testDb: TestDatabase;
 let ids: TestIds;
 
+const statusFilterIds = {
+  organization: mintAuthProviderId<"organization">(),
+  user: mintAuthProviderId<"user">(),
+  activeWorkspaces: [createSafeId<"workspace">(), createSafeId<"workspace">()],
+  archivedWorkspaces: [
+    createSafeId<"workspace">(),
+    createSafeId<"workspace">(),
+  ],
+};
+
+const statusFilterWorkspaceIds = [
+  ...statusFilterIds.activeWorkspaces,
+  ...statusFilterIds.archivedWorkspaces,
+];
+
+const capacityIds = {
+  organization: mintAuthProviderId<"organization">(),
+  user: mintAuthProviderId<"user">(),
+  activeWorkspaces: Array.from({ length: 999 }, () =>
+    createSafeId<"workspace">(),
+  ),
+  archivedWorkspace: createSafeId<"workspace">(),
+};
+const capacityWorkspaceIds = [
+  ...capacityIds.activeWorkspaces,
+  capacityIds.archivedWorkspace,
+];
+
 type ListedMember = {
   userId: string;
   userEmail: string | null;
@@ -47,18 +88,112 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+
+  await testDb.insert(user).values({
+    id: statusFilterIds.user,
+    name: "Matter status filter member",
+    email: `${statusFilterIds.user}@test.local`,
+  });
+  await testDb.insert(organization).values({
+    id: statusFilterIds.organization,
+    name: "Matter status filter organization",
+    slug: statusFilterIds.organization,
+    createdAt: new Date(),
+  });
+  await testDb.insert(memberTable).values({
+    id: Bun.randomUUIDv7(),
+    organizationId: statusFilterIds.organization,
+    userId: statusFilterIds.user,
+    role: "owner",
+    createdAt: new Date(),
+  });
+  await testDb.insert(workspaceTable).values([
+    ...statusFilterIds.activeWorkspaces.map((id, index) => ({
+      id,
+      organizationId: statusFilterIds.organization,
+      name: `Matter status filter ${index}`,
+      reference: `STATUS-${index}`,
+      status: "active" as const,
+    })),
+    ...statusFilterIds.archivedWorkspaces.map((id, index) => ({
+      id,
+      organizationId: statusFilterIds.organization,
+      name: `Archived matter status filter ${index}`,
+      reference: `ARCHIVED-STATUS-${index}`,
+      status: "archived" as const,
+    })),
+  ]);
+  await testDb.insert(workspaceMembers).values(
+    statusFilterWorkspaceIds.map((workspaceId) => ({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId: statusFilterIds.user,
+    })),
+  );
+
+  await testDb.insert(user).values({
+    id: capacityIds.user,
+    name: "Matter capacity member",
+    email: `${capacityIds.user}@test.local`,
+  });
+  await testDb.insert(organization).values({
+    id: capacityIds.organization,
+    name: "Matter capacity organization",
+    slug: capacityIds.organization,
+    createdAt: new Date(),
+  });
+  await testDb.insert(memberTable).values({
+    id: Bun.randomUUIDv7(),
+    organizationId: capacityIds.organization,
+    userId: capacityIds.user,
+    role: "owner",
+    createdAt: new Date(),
+  });
+  await testDb.insert(workspaceTable).values([
+    ...capacityIds.activeWorkspaces.map((id, index) => ({
+      id,
+      organizationId: capacityIds.organization,
+      name: `Capacity matter ${index}`,
+      reference: `CAPACITY-${index}`,
+      status: "active" as const,
+    })),
+    {
+      id: capacityIds.archivedWorkspace,
+      organizationId: capacityIds.organization,
+      name: "Archived capacity matter",
+      reference: "CAPACITY-ARCHIVED",
+      status: "archived" as const,
+    },
+  ]);
+  await testDb.insert(workspaceMembers).values(
+    capacityWorkspaceIds.map((workspaceId) => ({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId: capacityIds.user,
+    })),
+  );
 });
 
 afterAll(async () => {
+  await testDb
+    .delete(organization)
+    .where(eq(organization.id, statusFilterIds.organization));
+  await testDb.delete(user).where(eq(user.id, statusFilterIds.user));
+  await testDb
+    .delete(organization)
+    .where(eq(organization.id, capacityIds.organization));
+  await testDb.delete(user).where(eq(user.id, capacityIds.user));
   await releaseRlsFixture();
 });
 
 const listWorkspacesAs = async ({
   organizationId,
+  status,
   userId,
   workspaceIds,
 }: {
   organizationId: SafeId<"organization">;
+  status?: "active" | "archived";
   userId: SafeId<"user">;
   workspaceIds: SafeId<"workspace">[];
 }): Promise<ListedWorkspace[]> => {
@@ -66,6 +201,7 @@ const listWorkspacesAs = async ({
     asTestRaw<Parameters<typeof readWorkspaces.handler>[0]>({
       request: new Request("https://api.example.test/handler"),
       route: "/v1/workspaces" satisfies ApiRoutePath,
+      query: status ? { status } : {},
       memberRole: sessionMemberRole("owner"),
       safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
       session: { activeOrganizationId: organizationId },
@@ -75,10 +211,93 @@ const listWorkspacesAs = async ({
   return asTestRaw<{ workspaces: ListedWorkspace[] }>(result).workspaces;
 };
 
+type ListedWorkspaceResponse = {
+  creationCapacity: { canCreate: boolean; limit: number };
+  workspaces: ListedWorkspace[];
+};
+
+const listWorkspaceResponseAs = async (
+  options: Parameters<typeof listWorkspacesAs>[0],
+): Promise<ListedWorkspaceResponse> => {
+  const result = await readWorkspaces.handler(
+    asTestRaw<Parameters<typeof readWorkspaces.handler>[0]>({
+      request: new Request("https://api.example.test/handler"),
+      route: "/v1/workspaces" satisfies ApiRoutePath,
+      query: options.status ? { status: options.status } : {},
+      memberRole: sessionMemberRole("owner"),
+      safeDb: createSafeDb(
+        testDb,
+        options.workspaceIds,
+        options.organizationId,
+        options.userId,
+      ),
+      session: { activeOrganizationId: options.organizationId },
+      user: { id: options.userId },
+    }),
+  );
+  return asTestRaw<ListedWorkspaceResponse>(result);
+};
+
 const emailsIn = (workspaces: ListedWorkspace[]): (string | null)[] =>
   workspaces.flatMap((workspace) =>
     workspace.members.map((member) => member.userEmail),
   );
+
+describe("matter list status", () => {
+  test("counts 999 active and one archived matter against creation capacity", async () => {
+    const response = await listWorkspaceResponseAs({
+      organizationId: capacityIds.organization,
+      status: "archived",
+      userId: capacityIds.user,
+      workspaceIds: capacityWorkspaceIds,
+    });
+
+    expect(response.workspaces).toHaveLength(1);
+    expect(response.creationCapacity).toEqual(workspaceCreationCapacity(1000));
+    expect(response.creationCapacity).toEqual({
+      canCreate: false,
+      limit: 1000,
+    });
+  });
+
+  test("returns exactly archived matters when archived is requested", async () => {
+    const rows = await listWorkspacesAs({
+      organizationId: statusFilterIds.organization,
+      status: "archived",
+      userId: statusFilterIds.user,
+      workspaceIds: statusFilterWorkspaceIds,
+    });
+
+    expect(rows.map(({ id }) => id).toSorted()).toEqual(
+      statusFilterIds.archivedWorkspaces.toSorted(),
+    );
+  });
+
+  test("returns exactly active matters when active is requested", async () => {
+    const rows = await listWorkspacesAs({
+      organizationId: statusFilterIds.organization,
+      status: "active",
+      userId: statusFilterIds.user,
+      workspaceIds: statusFilterWorkspaceIds,
+    });
+
+    expect(rows.map(({ id }) => id).toSorted()).toEqual(
+      statusFilterIds.activeWorkspaces.toSorted(),
+    );
+  });
+
+  test("defaults the handler to active matters", async () => {
+    const rows = await listWorkspacesAs({
+      organizationId: statusFilterIds.organization,
+      userId: statusFilterIds.user,
+      workspaceIds: statusFilterWorkspaceIds,
+    });
+
+    expect(rows.map(({ id }) => id).toSorted()).toEqual(
+      statusFilterIds.activeWorkspaces.toSorted(),
+    );
+  });
+});
 
 describe("matter list member identities", () => {
   test("exposes exactly the users who are members of the organization's own matters", async () => {

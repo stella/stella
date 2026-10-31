@@ -6113,6 +6113,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ta sprawa jest zarchiwizowana i dostępna tylko do odczytu.",
     "calculations": {
       "choose": "Oblicz",
       "kinds": {
@@ -6950,6 +6951,7 @@
       "aiModel": "Model AI",
       "manualInput": "Ręcznie"
     },
+    "unarchiveBeforeDelete": "Przed usunięciem tej sprawy cofnij jej archiwizację.",
     "unarchiveMatter": "Przywróć z archiwum",
     "uploadDocuments": "Prześlij dokumenty",
     "views": {

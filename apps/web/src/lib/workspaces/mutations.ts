@@ -9,6 +9,7 @@ import { panic } from "better-result";
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import {
   shouldRetryAPIRequest,
@@ -199,6 +200,34 @@ export const useUpdateWorkspace = () => {
 
 type ArchiveWorkspaceVars = {
   workspaceId: string;
+};
+
+export const useArchiveWorkspace = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
+      await invokeCapability("matters.archive", async (request) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .archive.post({}, request);
+
+        return unwrapApiResponse(response);
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: workspacesKeys.all,
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useArchiveWorkspace:failure",
+        scope: { type: "handler", handlerId: "useArchiveWorkspace:failure" },
+      });
+    },
+  });
 };
 
 export const useUnarchiveWorkspace = () => {

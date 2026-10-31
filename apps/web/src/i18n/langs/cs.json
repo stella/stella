@@ -6113,6 +6113,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Tento spis je archivovaný a lze jej pouze číst.",
     "calculations": {
       "choose": "Vypočítat",
       "kinds": {
@@ -6950,6 +6951,7 @@
       "aiModel": "AI model",
       "manualInput": "Ručně"
     },
+    "unarchiveBeforeDelete": "Před odstraněním tohoto spisu zrušte jeho archivaci.",
     "unarchiveMatter": "Obnovit z archivu",
     "uploadDocuments": "Nahrát dokumenty",
     "views": {
