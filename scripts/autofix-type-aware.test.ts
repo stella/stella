@@ -51,11 +51,11 @@ test.each(cases)(
     const root = mkdtempSync(path.join(tmpdir(), "autofix-type-aware-"));
     const repo = path.resolve(import.meta.dirname, "..");
     const fixable =
-      'export const value = { name: "fixture" };\nexport const name = value["name"];\n';
-    const guarded = `${fixable}export const truth = value.name ? true : false;\nexport const reversed = 1 === value.name.length;\ndebugger;\n`;
+      'export type Names = Array<string>;\nexport const value = { name: "fixture" };\n';
+    const guarded = `${fixable}debugger;\n`;
     const source =
       failure === "unfixed"
-        ? fixable.replace('value["name"]', "value.name")
+        ? fixable.replace("Array<string>", "string[]")
         : guarded;
     try {
       symlinkSync(
@@ -105,7 +105,7 @@ test.each(cases)(
       }
       writeFileSync(
         path.join(root, "oxlint.config.ts"),
-        'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/dot-notation": "error", "no-debugger": "error", "no-unneeded-ternary": "error", "yoda": "error" } };\n',
+        'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/array-type": "error", "no-debugger": "error" } };\n',
       );
       for (const file of [
         "bunfig.toml",
@@ -150,7 +150,7 @@ test.each(cases)(
       if (failure !== "unfixed") {
         expect(finding.exitCode).toBe(1);
         expect(finding.stdout.toString() + finding.stderr.toString()).toContain(
-          "dot-notation",
+          "array-type",
         );
       }
       // Generated-source production is covered by its own integration tests;
@@ -206,7 +206,7 @@ exec '${process.execPath}' "$@"
           fixed.stdout.toString() + fixed.stderr.toString(),
         ).toBe(0);
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
-          source.replace('value["name"]', "value.name"),
+          source.replace("Array<string>", "string[]"),
         );
       } else if (failure === "unfixed") {
         expect(

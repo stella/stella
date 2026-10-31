@@ -49,8 +49,8 @@ if (import.meta.main) {
   const lintPaths = readNullSeparatedPaths(process.argv[3] ?? "");
   const decision = decideAutofixPreflight(
     {
-      generatorSelected: process.env["GENERATOR_SELECTED"] === "true",
-      toolReady: process.env["AUTOFIX_OXLINT_READY"] !== "false",
+      generatorSelected: process.argv[4] === "true",
+      toolReady: process.argv[5] !== "false",
       formatPaths,
       lintPaths,
     },
@@ -66,7 +66,7 @@ if (import.meta.main) {
         ]),
       lintClean: (paths) =>
         commandSucceeds([
-          process.env["AUTOFIX_OXLINT_BIN"] ?? "./node_modules/.bin/oxlint",
+          process.argv[6] || "./node_modules/.bin/oxlint",
           "-c",
           "oxlint.config.ts",
           "--no-error-on-unmatched-pattern",

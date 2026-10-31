@@ -528,28 +528,10 @@ jobs:
       - name: Select fix paths
         run: |
           set -euo pipefail
-          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
-          protected=()
-          while IFS= read -r pattern; do protected+=("$pattern"); done < "$RUNNER_TEMP/autofix-protected-paths"
-          : > "$RUNNER_TEMP/autofix-format-paths"
-          : > "$RUNNER_TEMP/autofix-lint-paths"
-          while IFS= read -r -d '' path; do
-            [[ -f "$path" && ! -L "$path" ]] || continue
-            if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then continue; fi
-            protected_path=false
-            if [[ "$path" != .changeset/README.md ]]; then
-              for pattern in "${protected[@]}"; do
-                # shellcheck disable=SC2254
-                case "$path" in $pattern) protected_path=true; break ;; esac
-              done
-            fi
-            [[ "$protected_path" == false ]] || continue
-            printf './%s\0' "$path" >> "$RUNNER_TEMP/autofix-format-paths"
-            # apps/landing has no native-compiler type graph.
-            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then
-              printf './%s\0' "$path" >> "$RUNNER_TEMP/autofix-lint-paths"
-            fi
-          done < "$RUNNER_TEMP/autofix-fix-paths"
+          bun scripts/autofix-select-paths.ts \
+            "$RUNNER_TEMP/autofix-fix-paths" \
+            "$RUNNER_TEMP/autofix-format-paths" \
+            "$RUNNER_TEMP/autofix-lint-paths"
 
       # Preflight runs before the workspace install. Build its linter from the
       # exact npm archives and integrity fields selected by the root lockfile.
@@ -582,14 +564,13 @@ jobs:
 
       - name: Check whether fixers can change files
         id: preflight
-        env:
-          GENERATOR_SELECTED: ${{ needs.regenerate-scope.outputs.run }}
-          AUTOFIX_OXLINT_READY: ${{ steps.preflight-oxlint.outcome == 'success' }}
-          AUTOFIX_OXLINT_BIN: ${{ steps.preflight-oxlint.outputs.bin }}
         run: >-
           bun --no-install --no-env-file scripts/autofix-preflight.ts
           "$RUNNER_TEMP/autofix-format-paths"
-          "$RUNNER_TEMP/autofix-lint-paths" >> "$GITHUB_OUTPUT"
+          "$RUNNER_TEMP/autofix-lint-paths"
+          "${{ needs.regenerate-scope.outputs.run }}"
+          "${{ steps.preflight-oxlint.outcome == 'success' }}"
+          "${{ steps.preflight-oxlint.outputs.bin }}" >> "$GITHUB_OUTPUT"
 
       - name: Align Tauri counterparts
         if: steps.preflight.outputs.run == 'true'
