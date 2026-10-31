@@ -424,10 +424,6 @@
     "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::maxLength:10000::1",
-    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::maxLength:1000::1",
     "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -449,10 +445,6 @@
   },
   {
     "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::minLength:1::3",
-    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::minLength:1::4",
     "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -896,10 +888,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/inspector/file-download-service.logic.ts::DOWNLOAD_RENDITIONS::domain:[\"reference\",\"pdf\",\"scrubbed\"]::1",
-    "reason": "Existing DOWNLOAD_RENDITIONS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/inspector/inspector-group-controls.tsx::InspectorGroupEditor::maxLength:80::1",
     "reason": "Existing InspectorGroupEditor UI validation or presentation bound; contract migration pending."
   },
@@ -1114,10 +1102,6 @@
   {
     "id": "apps/web/src/features/case-law/case-decision-inspector.logic.test.ts::<module>::minLength:1::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/case-law/case-law-index-search.logic.ts::CASE_LAW_FILTER_KEYS::domain:[\"court\",\"lang\",\"sourceId\",\"type\"]::1",
-    "reason": "Existing CASE_LAW_FILTER_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/features/case-law/citation-format.ts::INDIGOBOOK_MONTHS::domain:[\"Jan.\",\"Feb.\",\"Mar.\",\"Apr.\",\"May\",\"June\",\"July\",\"Aug.\",\"Sept.\",\"Oct.\",\"Nov.\",\"Dec.\"]::1",
@@ -1366,10 +1350,6 @@
   {
     "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::sideDiff::maxLength:6::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-filters.logic.ts::STATUTE_FILTER_KEYS::domain:[\"type\",\"validity\"]::1",
-    "reason": "Existing STATUTE_FILTER_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::FontField::maxLength:128::1",
@@ -1657,10 +1637,6 @@
   },
   {
     "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:2::1",
-    "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:2::2",
     "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
   },
   {
@@ -2104,7 +2080,7 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx::DOWNLOAD_TARGETS::domain:[\"desktop\",\"assistant\"]::1",
+    "id": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx::DOWNLOAD_TARGETS::domain:[\"desktop\",\"assistant\",\"browser\"]::1",
     "reason": "Existing DOWNLOAD_TARGETS domain; contract ownership pending migration."
   },
   {

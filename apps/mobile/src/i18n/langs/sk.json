@@ -22,7 +22,8 @@
     "toolUsed": "Použité: {tool}",
     "threadTitle": "Konverzácia",
     "threadLoadFailed": "Túto konverzáciu sa nepodarilo načítať.",
-    "threadEmptyDescription": "Táto konverzácia zatiaľ nemá žiadne správy.",
+    "greeting": "Na čom chcete pracovať?",
+    "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "sections": {
       "today": "Dnes",
       "yesterday": "Včera",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Táto odpoveď čaká na váš vstup. Pokračujte v nej vo webovej aplikácii stella.",
     "answerFailed": "Odpoveď sa nepodarilo dokončiť.",
     "composerMenu": "Otvoriť ponuku príloh a nástrojov",
+    "attachFile": "Priložiť súbor",
+    "attachment": "Príloha",
+    "fileTooLarge": "Súbor prekračuje limit {maxSize}",
+    "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "unsupportedFileType": "Nepodporovaný typ súboru",
+    "uploadFailed": "Spracovanie súboru zlyhalo",
+    "scanDocument": "Naskenovať dokument",
+    "removeAttachment": "Odstrániť {name}",
+    "attachmentReading": "Pripravujem…",
+    "attachmentUploading": "Nahrávam…",
+    "pickFailed": "Výber súborov sa nepodarilo otvoriť. Skúste to znova.",
+    "sendFileRefused": "Súbor sa nepodarilo odoslať, takže sa správa neodoslala. Odstráňte súbor a skúste to znova.",
+    "sendFileNotAnonymizable": "Táto konverzácia je anonymizovaná a stella nedokázala anonymizovať jeden zo súborov, takže sa nič neodoslalo. Odstráňte súbor a skúste to znova.",
     "pickTitle": "Vyberte konverzáciu",
     "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +."
   },
@@ -75,7 +89,14 @@
     "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova.",
     "pickTitle": "Vyberte úlohu",
     "pickDescription": "Vyberte úlohu zo zoznamu a zobrazí sa tu.",
-    "openMatter": "Otvoriť spis"
+    "openMatter": "Otvoriť spis",
+    "assignedTo": "Riešiteľ",
+    "nobody": "Nepriradené",
+    "assign": "Priradiť",
+    "doneAssigning": "Hotovo",
+    "someone": "Niekto",
+    "membersFailed": "Členov spisu sa nepodarilo načítať.",
+    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",
@@ -119,13 +140,31 @@
     },
     "add": "Pridať",
     "scanDocument": "Naskenovať dokument",
-    "newTask": "Nová úloha"
+    "newTask": "Nová úloha",
+    "uploadDocument": "Nahrať dokument",
+    "uploadFailed": "Dokument sa nepodarilo nahrať. Skúste to znova."
   },
   "entity": {
     "type": "Typ",
     "reference": "Spisová značka",
     "currentVersion": "Aktuálna verzia",
     "loadFailed": "Položku sa nepodarilo načítať."
+  },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dokument sa nedá otvoriť",
+    "failure": {
+      "offline": "Ste offline. Pripojte sa na internet a skúste to znova.",
+      "noFile": "Tento dokument zatiaľ nemá súbor.",
+      "failed": "Pri otváraní sa niečo pokazilo. Skúste to o chvíľu znova.",
+      "unsupported": "Na otváranie dokumentov aktualizujte aplikáciu.",
+      "android": "V aplikácii pre Android zatiaľ dokumenty nemožno otvoriť."
+    },
+    "retry": "Skúsiť znova",
+    "preview": "Otvoriť náhľad",
+    "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
+    "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
+    "details": "Podrobnosti"
   },
   "signIn": {
     "beta": "Beta",
@@ -163,11 +202,11 @@
     "newest": "Najnovšie rozhodnutia",
     "noResults": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá.",
     "noResultsHint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
-    "unavailable": "Vyhľadávanie je dočasne nedostupné",
     "retry": "Skúsiť znova",
     "headnote": "Právna veta",
     "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
     "openSource": "Otvoriť originál",
+    "openFailed": "Odkaz sa nepodarilo otvoriť.",
     "loadFailed": "Judikatúru sa nepodarilo načítať.",
     "share": "Zdieľať"
   },
@@ -179,6 +218,14 @@
   "writes": {
     "consentNeeded": "Aby aplikácia mohla robiť zmeny, stella potrebuje vaše povolenie. Prihláste sa znova a udeľte ho.",
     "signInAgain": "Prihlásiť sa znova"
+  },
+  "loads": {
+    "offline": "stella sa nepodarilo spojiť s vaším serverom. Skontrolujte pripojenie a skúste to znova.",
+    "outdated": "Server odpovedal vo formáte, ktorému táto verzia aplikácie nerozumie. Aktualizujte aplikáciu, prípadne server, ak ho spravujete.",
+    "consent": "Toto prihlásenie aplikácii nedovoľuje tento obsah čítať. Prihláste sa znova a prístup povoľte.",
+    "session": "Vaše prihlásenie vypršalo. Prihláste sa znova.",
+    "server": "Na serveri nastala chyba (kód {status}). Skúste to o chvíľu znova.",
+    "refused": "Server požiadavku odmietol (kód {status})."
   },
   "timers": {
     "title": "Časovače",
@@ -213,7 +260,27 @@
     "matterTitle": "Spis",
     "uploadFailed": "Sken sa nepodarilo nahrať. Skúste to znova.",
     "failedTitle": "Skenovanie zlyhalo",
-    "failed": "Fotoaparát sken neuložil. Skúste to znova."
+    "failed": "Fotoaparát sken neuložil. Skúste to znova.",
+    "save": "Uložiť",
+    "saveTitle": "Uložiť do spisu",
+    "share": "Zdieľať",
+    "addPages": "Pridať strany",
+    "page": "Strana {number}",
+    "rotatePage": "Otočiť stranu {number}",
+    "removePage": "Odobrať stranu {number}",
+    "deletePage": "Vymazať",
+    "movePage": "Presunúť stranu {number}",
+    "moveUp": "Posunúť nahor",
+    "moveDown": "Posunúť nadol",
+    "noPages": "Nezostali žiadne strany. Ďalšie naskenujete tlačidlom Pridať strany.",
+    "kilobytes": "{size} kB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "PDF sa nepodarilo vytvoriť. Skúste to znova.",
+    "shareFailed": "PDF sa nepodarilo zdieľať. Skúste to znova.",
+    "discardTitle": "Zahodiť tento sken?",
+    "discardMessage": "Strany nie sú uložené v spise a z tohto zariadenia sa vymažú.",
+    "discard": "Zahodiť",
+    "keepEditing": "Pokračovať v úpravách"
   },
   "shortcuts": {
     "search": "Hľadať",

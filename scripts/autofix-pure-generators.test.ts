@@ -25,6 +25,9 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  "db-registry-entries": "scripts/db-registry-entries.ts",
+  // Reads canonical source-entry JSON; Git staging never changes the literal maps.
+  "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
@@ -37,6 +40,9 @@ const PURE_AUTOFIX = {
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
   "bun-toolchain": "scripts/generate-bun-toolchain.ts",
+  // Parses the committed CI workflow and formats a deterministic JSON map.
+  "main-heavy-infrastructure-steps":
+    "scripts/generate-main-heavy-infrastructure-steps.ts",
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
@@ -66,6 +72,8 @@ const PURE_AUTOFIX = {
   // and copies lucide-static's outlines, pinned by the lockfile, into the
   // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
+  // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
+  "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.

@@ -22,7 +22,8 @@
     "toolUsed": "Použito: {tool}",
     "threadTitle": "Konverzace",
     "threadLoadFailed": "Tuto konverzaci se nepodařilo načíst.",
-    "threadEmptyDescription": "Tato konverzace zatím nemá žádné zprávy.",
+    "greeting": "Na čem chcete pracovat?",
+    "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "sections": {
       "today": "Dnes",
       "yesterday": "Včera",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Tato odpověď čeká na váš vstup. Pokračujte v ní ve webové aplikaci stella.",
     "answerFailed": "Odpověď se nepodařilo dokončit.",
     "composerMenu": "Otevřít nabídku příloh a nástrojů",
+    "attachFile": "Připojit soubor",
+    "attachment": "Příloha",
+    "fileTooLarge": "Soubor překračuje limit {maxSize}",
+    "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
+    "unsupportedFileType": "Nepodporovaný typ souboru",
+    "uploadFailed": "Zpracování souboru selhalo",
+    "scanDocument": "Naskenovat dokument",
+    "removeAttachment": "Odebrat {name}",
+    "attachmentReading": "Připravuji…",
+    "attachmentUploading": "Nahrávám…",
+    "pickFailed": "Výběr souborů se nepodařilo otevřít. Zkuste to znovu.",
+    "sendFileRefused": "Soubor se nepodařilo odeslat, takže se zpráva neodeslala. Odeberte soubor a zkuste to znovu.",
+    "sendFileNotAnonymizable": "Tato konverzace je anonymizovaná a stella nedokázala anonymizovat jeden ze souborů, takže se nic neodeslalo. Odeberte soubor a zkuste to znovu.",
     "pickTitle": "Vyberte konverzaci",
     "pickDescription": "Vyberte vlákno ze seznamu nebo začněte nové tlačítkem +."
   },
@@ -75,7 +89,14 @@
     "statusFailed": "Úkol se nepodařilo změnit. Zkuste to znovu.",
     "pickTitle": "Vyberte úkol",
     "pickDescription": "Vyberte úkol ze seznamu a zobrazí se zde.",
-    "openMatter": "Otevřít spis"
+    "openMatter": "Otevřít spis",
+    "assignedTo": "Řešitel",
+    "nobody": "Nepřiřazeno",
+    "assign": "Přiřadit",
+    "doneAssigning": "Hotovo",
+    "someone": "Někdo",
+    "membersFailed": "Členy spisu se nepodařilo načíst.",
+    "assignFailed": "Úkol se nepodařilo přidělit. Zkuste to znovu."
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",
@@ -119,13 +140,31 @@
     },
     "add": "Přidat",
     "scanDocument": "Naskenovat dokument",
-    "newTask": "Nový úkol"
+    "newTask": "Nový úkol",
+    "uploadDocument": "Nahrát dokument",
+    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu."
   },
   "entity": {
     "type": "Typ",
     "reference": "Číslo jednací",
     "currentVersion": "Aktuální verze",
     "loadFailed": "Položku se nepodařilo načíst."
+  },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dokument nelze otevřít",
+    "failure": {
+      "offline": "Jste offline. Připojte se k internetu a zkuste to znovu.",
+      "noFile": "Tento dokument zatím nemá soubor.",
+      "failed": "Při otevírání se něco pokazilo. Zkuste to za chvíli znovu.",
+      "unsupported": "Pro otevírání dokumentů aktualizujte aplikaci.",
+      "android": "V aplikaci pro Android zatím dokumenty otevřít nelze."
+    },
+    "retry": "Zkusit znovu",
+    "preview": "Otevřít náhled",
+    "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
+    "unrendered": "Tento dokument zde nelze zobrazit, systémový náhled ho ale možná otevře.",
+    "details": "Podrobnosti"
   },
   "signIn": {
     "beta": "Beta",
@@ -163,11 +202,11 @@
     "newest": "Nejnovější rozhodnutí",
     "noResults": "Slovům, která hledání vyžadovalo, nic neodpovídá.",
     "noResultsHint": "Zkuste méně slov nebo jiná: výrazy, které by použilo rozhodnutí, ne větu, kterou se otázka pokládá.",
-    "unavailable": "Vyhledávání je dočasně nedostupné",
     "retry": "Zkusit znovu",
     "headnote": "Právní věta",
     "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
     "openSource": "Otevřít originál",
+    "openFailed": "Odkaz se nepodařilo otevřít.",
     "loadFailed": "Judikaturu se nepodařilo načíst.",
     "share": "Sdílet"
   },
@@ -179,6 +218,14 @@
   "writes": {
     "consentNeeded": "Aby aplikace mohla provádět změny, potřebuje stella vaše svolení. Přihlaste se znovu a udělte ho.",
     "signInAgain": "Přihlásit se znovu"
+  },
+  "loads": {
+    "offline": "stella se nepodařilo spojit s vaším serverem. Zkontrolujte připojení a zkuste to znovu.",
+    "outdated": "Server odpověděl ve formátu, kterému tato verze aplikace nerozumí. Aktualizujte aplikaci, případně server, pokud ho spravujete.",
+    "consent": "Toto přihlášení aplikaci nedovoluje tento obsah číst. Přihlaste se znovu a přístup povolte.",
+    "session": "Vaše přihlášení vypršelo. Přihlaste se znovu.",
+    "server": "Na serveru došlo k chybě (kód {status}). Zkuste to za chvíli znovu.",
+    "refused": "Server požadavek odmítl (kód {status})."
   },
   "timers": {
     "title": "Časovače",
@@ -213,7 +260,27 @@
     "matterTitle": "Spis",
     "uploadFailed": "Sken se nepodařilo nahrát. Zkuste to znovu.",
     "failedTitle": "Skenování selhalo",
-    "failed": "Fotoaparát sken neuložil. Zkuste to znovu."
+    "failed": "Fotoaparát sken neuložil. Zkuste to znovu.",
+    "save": "Uložit",
+    "saveTitle": "Uložit do spisu",
+    "share": "Sdílet",
+    "addPages": "Přidat strany",
+    "page": "Strana {number}",
+    "rotatePage": "Otočit stranu {number}",
+    "removePage": "Odebrat stranu {number}",
+    "deletePage": "Smazat",
+    "movePage": "Přesunout stranu {number}",
+    "moveUp": "Posunout nahoru",
+    "moveDown": "Posunout dolů",
+    "noPages": "Nezbyly žádné strany. Další naskenujete tlačítkem Přidat strany.",
+    "kilobytes": "{size} kB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "PDF se nepodařilo vytvořit. Zkuste to znovu.",
+    "shareFailed": "PDF se nepodařilo sdílet. Zkuste to znovu.",
+    "discardTitle": "Zahodit tento sken?",
+    "discardMessage": "Strany nejsou uložené ve spisu a z tohoto zařízení se smažou.",
+    "discard": "Zahodit",
+    "keepEditing": "Pokračovat v úpravách"
   },
   "shortcuts": {
     "search": "Hledat",
