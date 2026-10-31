@@ -32,6 +32,12 @@ export const LEGISLATION_PARTIAL_WRITERS = {
   "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": [
     "projectionEpoch",
   ],
+  // Derived from the stored body, never part of it: the summary records the
+  // payload revision it was computed from instead of advancing one.
+  "apps/api/src/lib/legal-search/legislation-version-changes.ts": [
+    "changeSummary",
+    "updatedAt",
+  ],
 } as const;
 const MUTATION_METHODS = new Set(["insert", "update", "delete"]);
 

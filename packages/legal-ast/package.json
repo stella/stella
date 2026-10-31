@@ -71,6 +71,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./document-search-pieces": {
+      "types": "./src/document-search-pieces.ts",
+      "import": "./src/document-search-pieces.ts"
+    },
     "./heading-designator-levels": {
       "types": "./src/heading-designator-levels.ts",
       "import": "./src/heading-designator-levels.ts"
@@ -154,6 +158,18 @@
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"
+    },
+    "./statute-compare": {
+      "types": "./src/statute-compare.ts",
+      "import": "./src/statute-compare.ts"
+    },
+    "./statute-comparison-adapter": {
+      "types": "./src/statute-comparison-adapter.ts",
+      "import": "./src/statute-comparison-adapter.ts"
+    },
+    "./statute-diff-marks": {
+      "types": "./src/statute-diff-marks.ts",
+      "import": "./src/statute-diff-marks.ts"
     },
     "./statute-list": {
       "types": "./src/statute-list.ts",

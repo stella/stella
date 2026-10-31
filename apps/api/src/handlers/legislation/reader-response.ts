@@ -6,7 +6,9 @@ import {
   LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
+import { statuteChangeCountsSchema } from "@stll/api-contract/statute-version-changes";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
 
 import type { provisionPreviewOutput } from "@/api/lib/chat/decision-reader-projections";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -164,6 +166,12 @@ const statuteVersionSchema = v.object({
   ...versionFields,
   isDefault: v.boolean(),
   amendedBy: v.union([statuteAmendmentPageSchema, v.null()]),
+  /**
+   * What this consolidation changed against the eligible one before it;
+   * null for the first, for one not yet counted, and for one whose wording
+   * could not be compared.
+   */
+  changes: v.union([statuteChangeCountsSchema, v.null()]),
 });
 export const statuteVersionsSuccessResponseSchema = v.pipe(
   v.object({
@@ -271,11 +279,13 @@ export const provisionPreviewSuccessResponseSchema = v.object(
 );
 
 type Version = v.InferOutput<typeof statuteVersionSchema>;
-type VersionRow = Omit<Version, "amendedBy"> & {
+type VersionRow = Omit<Version, "amendedBy" | "changes"> & {
   amendedBy?: StatuteAmendmentPage | null;
+  changes?: StatuteChangeCounts | null;
 };
 export const projectStatuteVersion = (row: VersionRow): Version => ({
   amendedBy: row.amendedBy ?? null,
+  changes: row.changes ?? null,
   id: row.id,
   expressionKind: row.expressionKind,
   windowDisposition: row.windowDisposition,
@@ -311,6 +321,7 @@ export const projectStatuteReader = (row: ReaderRow): Reader => {
   const {
     isDefault: _isDefault,
     amendedBy: _amendedBy,
+    changes: _changes,
     ...metadata
   } = projectStatuteVersion({
     ...row,
