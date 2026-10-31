@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -52,7 +53,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   sourceTotalRead,
@@ -1178,9 +1178,16 @@ const FINDOK_SOURCE_FIELDS_LIST = [
 
 type FindokSourceField = (typeof FINDOK_SOURCE_FIELDS_LIST)[number];
 
-const SEGMENT_BOOKKEEPING = legacyExcludedSourceField(
-  "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
-);
+const SEGMENT_BOOKKEEPING = {
+  disposition: "stored",
+  target: {
+    type: "raw",
+    part: FINDOK_PART.DOCUMENT_XML,
+    path: [],
+    reason:
+      "The stored XML preserves segment identifiers, version dates and their original grouping.",
+  },
+} as const satisfies SourceFieldDisposition;
 
 type FindokPublisherRecord = Readonly<Record<FindokSourceField, unknown>>;
 
@@ -1195,9 +1202,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionType" },
   },
-  gueltig: legacyExcludedSourceField(
-    "the service's own inventory flag: a row it marks invalid is never ingested, so every stored row would carry the same value",
-  ),
+  gueltig: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.LISTING,
+      path: ["gueltig"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   gueltigAb: {
     disposition: "stored",
     target: { type: "metadata", key: "validFrom" },
@@ -1206,9 +1220,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "caseNumber" },
   },
-  inFindokSeit: legacyExcludedSourceField(
-    "a rendering of the timestamp the row states beside it in a sortable form",
-  ),
+  inFindokSeit: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.LISTING,
+      path: ["inFindokSeit"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   inFindokSeitDate: {
     disposition: "stored",
     target: { type: "metadata", key: "inFindokSince" },
@@ -1229,9 +1250,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  "Grundk/appdat": legacyExcludedSourceField(
-    "the manifest row states the decision date",
-  ),
+  "Grundk/appdat": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/appdatbis": {
     disposition: "stored",
     target: { type: "metadata", key: "validUntil" },
@@ -1240,16 +1268,30 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "officiallyPublished" },
   },
-  "Grundk/behoerde": legacyExcludedSourceField(
-    "the manifest row states the deciding authority",
-  ),
+  "Grundk/behoerde": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/betreff": {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  "Grundk/doktyptxt": legacyExcludedSourceField(
-    "the manifest row states the same decision type",
-  ),
+  "Grundk/doktyptxt": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/ecli": {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
@@ -1266,7 +1308,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "findokGid" },
   },
-  "Grundk/gz": legacyExcludedSourceField("the manifest row states the docket"),
+  "Grundk/gz": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/lastchangedat": {
     disposition: "stored",
     target: { type: "metadata", key: "modified" },
@@ -1283,9 +1334,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "statutes" },
   },
-  "Grundk/stammnr": legacyExcludedSourceField(
-    "the manifest row states the same serial, which is also the archive's entry name",
-  ),
+  "Grundk/stammnr": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/uebersex_net": {
     disposition: "stored",
     target: { type: "document" },
@@ -1295,9 +1353,16 @@ const FINDOK_SOURCE_FIELDS = {
     target: { type: "metadata", key: "published" },
   },
   "Segk/dok_fassungsnr": SEGMENT_BOOKKEEPING,
-  "Segk/dokformat": legacyExcludedSourceField(
-    "the media type of the body element beside it, which is the one this parser reads",
-  ),
+  "Segk/dokformat": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Segk/fsgnr": SEGMENT_BOOKKEEPING,
   "Segk/gid": SEGMENT_BOOKKEEPING,
   "Segk/id_multifassung": SEGMENT_BOOKKEEPING,
