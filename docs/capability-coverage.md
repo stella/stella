@@ -487,7 +487,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `search.results.list` | read | stella:read | — | curated tool `search` |
+| `search.results.list` | read | stella:read | — | generic invoke → `stella capability search results-list` |
 
 ## search-history
 
