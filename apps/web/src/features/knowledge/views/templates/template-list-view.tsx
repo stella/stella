@@ -22,6 +22,7 @@ import type {
   TemplateDensity,
   TemplateTagFilter,
 } from "@/features/knowledge/views/templates/templates-seam";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { deviceStorage } from "@/lib/account/browser-storage";
@@ -64,11 +65,14 @@ const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes("Files");
 
 const DENSITY_STORAGE_KEY = "stella.templates.density";
 
-/** Persisted list density; defaults to compact for fast scanning. */
+/** Compact by default, for fast scanning. */
+const DEFAULT_TEMPLATE_DENSITY: TemplateDensity = "compact";
+
+/** Persisted list density. */
 const readTemplateDensity = (): TemplateDensity =>
   deviceStorage("local").getItem(DENSITY_STORAGE_KEY) === "comfortable"
     ? "comfortable"
-    : "compact";
+    : DEFAULT_TEMPLATE_DENSITY;
 
 const writeTemplateDensity = (density: TemplateDensity): void => {
   deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
@@ -283,13 +287,16 @@ type TemplateListLayout =
 
 // Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
 // pane with count/new-template toolbar and divided rows) so the page keeps its
-// shape while templates load; only the values fade in.
+// shape while templates load; only the values fade in. The server renders it
+// while the session is unknown, so the stored density applies only after
+// hydration: the server and the hydrating browser both draw the default.
 export const TemplateListSkeleton = ({
   layout,
 }: {
   layout: TemplateListLayout;
 }) => {
-  const density = readTemplateDensity();
+  const hydrated = useHydrated();
+  const density = hydrated ? readTemplateDensity() : DEFAULT_TEMPLATE_DENSITY;
   const hasLibraryChrome = layout === TEMPLATE_LIST_LAYOUT.library;
   const t = useTranslations();
   return (
@@ -349,7 +356,11 @@ export const TemplateListSkeleton = ({
                     density === "compact" ? "h-5" : "h-6",
                   )}
                 />
-                <Skeleton className="h-4 w-32 max-w-full" />
+                {/* The category, and in comfortable rows the guidance line:
+                    catalogue rows carry neither, so they never render it. */}
+                {hasLibraryChrome && (
+                  <Skeleton className="h-4 w-32 max-w-full" />
+                )}
                 {density === "comfortable" && (
                   <Skeleton className="h-4 w-40 max-w-full" />
                 )}
